@@ -1,8 +1,9 @@
 use core::panic;
 use std::{env, time::Duration};
 
+use actix_cors::Cors;
 use actix_web::{
-    get, post,
+    get, http, post,
     web::{self, Json},
     App, HttpServer, Responder,
 };
@@ -542,7 +543,17 @@ async fn main() -> std::io::Result<()> {
             String::from("http://127.0.0.1:9000")
         };
 
+        let cors = Cors::default()
+            .allowed_origin("http://127.0.0.1:3000")
+            .allowed_origin("http://localhost:3000")
+            .allowed_methods(vec!["GET", "POST"])
+            .allowed_headers(vec![http::header::AUTHORIZATION, http::header::ACCEPT])
+            .allowed_header(http::header::CONTENT_TYPE)
+            .supports_credentials()
+            .max_age(3600);
+
         App::new()
+            .wrap(cors)
             .app_data(web::Data::new(AppState {
                 proxy_url: proxy_url.clone(),
                 proxy_client: awc::Client::default(),
