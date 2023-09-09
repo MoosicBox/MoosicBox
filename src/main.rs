@@ -88,6 +88,68 @@ enum GetPlayersResponse {
     ResponseDataWrapper(GetPlayersResponseDataWrapper),
 }
 
+async fn player_pause(player_id: String, data: web::Data<AppState>) -> serde_json::Result<Value> {
+    let proxy_url = &data.proxy_url;
+    let request_url = format!("{proxy_url}/jsonrpc.js");
+
+    let request = serde_json::json!({
+        "id": 0,
+        "method": "slim.request",
+        "params": [
+            player_id,
+            [
+                "pause",
+            ]
+        ],
+    });
+
+    let client = awc::Client::default();
+
+    let response = match client.post(request_url).send_json(&request).await {
+        Ok(mut res) => match res.json::<serde_json::Value>().await {
+            Ok(json) => json,
+            Err(error) => panic!(
+                "Failed to deserialize set player status response: {:?}",
+                error
+            ),
+        },
+        Err(error) => panic!("Request failure: {:?}", error),
+    };
+
+    Ok(response)
+}
+
+async fn player_play(player_id: String, data: web::Data<AppState>) -> serde_json::Result<Value> {
+    let proxy_url = &data.proxy_url;
+    let request_url = format!("{proxy_url}/jsonrpc.js");
+
+    let request = serde_json::json!({
+        "id": 0,
+        "method": "slim.request",
+        "params": [
+            player_id,
+            [
+                "play",
+            ]
+        ],
+    });
+
+    let client = awc::Client::default();
+
+    let response = match client.post(request_url).send_json(&request).await {
+        Ok(mut res) => match res.json::<serde_json::Value>().await {
+            Ok(json) => json,
+            Err(error) => panic!(
+                "Failed to deserialize set player status response: {:?}",
+                error
+            ),
+        },
+        Err(error) => panic!("Request failure: {:?}", error),
+    };
+
+    Ok(response)
+}
+
 async fn set_player_status(
     player_id: String,
     status: String,
@@ -353,6 +415,44 @@ async fn get_players_endpoint(
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+struct PausePlayerQuery {
+    player_id: String,
+}
+
+#[post("/playback/pause")]
+async fn pause_player_endpoint(
+    query: web::Query<PausePlayerQuery>,
+    data: web::Data<AppState>,
+) -> serde_json::Result<impl Responder> {
+    match player_pause(query.player_id.clone(), data).await {
+        Ok(json) => json,
+        Err(_) => panic!("Failed to pause player"),
+    };
+
+    Ok(Json(serde_json::json!({"success": true})))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct PlayPlayerQuery {
+    player_id: String,
+}
+
+#[post("/playback/play")]
+async fn play_player_endpoint(
+    query: web::Query<PlayPlayerQuery>,
+    data: web::Data<AppState>,
+) -> serde_json::Result<impl Responder> {
+    match player_play(query.player_id.clone(), data).await {
+        Ok(json) => json,
+        Err(_) => panic!("Failed to play player"),
+    };
+
+    Ok(Json(serde_json::json!({"success": true})))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 struct StartPlayerQuery {
     player_id: String,
 }
@@ -449,6 +549,8 @@ async fn main() -> std::io::Result<()> {
             }))
             .service(connect_endpoint)
             .service(ping_endpoint)
+            .service(pause_player_endpoint)
+            .service(play_player_endpoint)
             .service(get_players_endpoint)
             .service(start_player_endpoint)
             .service(stop_player_endpoint)
