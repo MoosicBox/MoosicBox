@@ -1,5 +1,5 @@
 use core::panic;
-use std::time::Duration;
+use std::{env, time::Duration};
 
 use actix_web::{
     get, post,
@@ -431,9 +431,17 @@ async fn proxy_endpoint(
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     HttpServer::new(|| {
+        let args: Vec<String> = env::args().collect();
+
+        let proxy_url = if args.len() > 1 {
+            args[1].clone()
+        } else {
+            String::from("http://127.0.0.1:9000")
+        };
+
         App::new()
             .app_data(web::Data::new(AppState {
-                proxy_url: String::from("http://127.0.0.1:9000"),
+                proxy_url: proxy_url.clone(),
                 proxy_client: awc::Client::default(),
             }))
             .service(connect_endpoint)
