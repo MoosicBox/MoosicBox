@@ -113,9 +113,12 @@ async fn set_player_status(
     let response = match client.post(request_url).send_json(&request).await {
         Ok(mut res) => match res.json::<serde_json::Value>().await {
             Ok(json) => json,
-            Err(_) => panic!("Deserialization failure"),
+            Err(error) => panic!(
+                "Failed to deserialize set player status response: {:?}",
+                error
+            ),
         },
-        Err(_) => panic!("Request failure"),
+        Err(error) => panic!("Request failure: {:?}", error),
     };
 
     Ok(response)
