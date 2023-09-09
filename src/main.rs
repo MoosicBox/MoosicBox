@@ -26,6 +26,27 @@ struct ConnectResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+struct StatusResponseResult {
+    #[serde(rename = "other player count")]
+    other_player_count: i32,
+
+    players_loop: Vec<PlayerResponse>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct Status {
+    players: Vec<Player>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct StatusResponse {
+    method: String,
+    result: StatusResponseResult,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct PingResponseStatus {
     timestamp: String,
@@ -43,7 +64,7 @@ struct PingResponseDataWrapper {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct PingResponseData {
-    players_loop: Vec<Player>,
+    players_loop: Vec<PlayerResponse>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -73,13 +94,24 @@ struct GetPlayersResponseDataWrapper {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct GetPlayersResponseData {
-    players_loop: Vec<Player>,
+    players_loop: Vec<PlayerResponse>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-struct Player {
+struct PlayerResponse {
     #[serde(rename = "playerid")]
     player_id: String,
+
+    #[serde(rename = "isplaying")]
+    is_playing: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct Player {
+    player_id: String,
+
+    is_playing: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -261,6 +293,50 @@ async fn connect(
     Ok(connect_response)
 }
 
+async fn get_status(data: web::Data<AppState>) -> serde_json::Result<Status> {
+    let proxy_url = &data.proxy_url;
+    let status_url = format!("{proxy_url}/jsonrpc.js");
+
+    let status_request = serde_json::json!({
+        "id": 0,
+        "method": "slim.request",
+        "params": [
+            "",
+            [
+                "serverstatus",
+                0,
+                100
+            ]
+        ]
+    });
+
+    let status_response = match data
+        .proxy_client
+        .post(status_url)
+        .timeout(Duration::from_secs(100))
+        .send_json(&status_request)
+        .await
+    {
+        Ok(mut res) => match res.json::<StatusResponse>().await {
+            Ok(json) => json,
+            Err(error) => panic!("Failed to deserialize status response: {:?}", error),
+        },
+        Err(error) => panic!("Request failure: {:?}", error),
+    };
+
+    Ok(Status {
+        players: status_response
+            .result
+            .players_loop
+            .iter()
+            .map(|p| Player {
+                player_id: p.player_id.clone(),
+                is_playing: p.is_playing == 1,
+            })
+            .collect(),
+    })
+}
+
 async fn ping(
     client_id: String,
     data: web::Data<AppState>,
@@ -297,7 +373,7 @@ async fn ping(
 async fn get_players(
     client_id: String,
     data: web::Data<AppState>,
-) -> serde_json::Result<Vec<Player>> {
+) -> serde_json::Result<Vec<PlayerResponse>> {
     let proxy_url = &data.proxy_url;
     let get_players_url = format!("{proxy_url}/cometd");
 
@@ -365,6 +441,23 @@ async fn connect_endpoint(data: web::Data<AppState>) -> serde_json::Result<impl 
         "clientId": client_id,
         "players": player_ids,
     })))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct StatusRequest {}
+
+#[get("/status")]
+async fn status_endpoint(
+    _query: web::Query<StatusRequest>,
+    data: web::Data<AppState>,
+) -> serde_json::Result<impl Responder> {
+    let status_response = match get_status(data).await {
+        Ok(resp) => resp,
+        Err(error) => panic!("Failed to get status: {:?}", error),
+    };
+
+    Ok(Json(status_response))
 }
 
 #[derive(Deserialize, Clone)]
@@ -559,6 +652,7 @@ async fn main() -> std::io::Result<()> {
                 proxy_client: awc::Client::default(),
             }))
             .service(connect_endpoint)
+            .service(status_endpoint)
             .service(ping_endpoint)
             .service(pause_player_endpoint)
             .service(play_player_endpoint)
