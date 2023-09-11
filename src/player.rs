@@ -72,6 +72,30 @@ pub struct HandshakeResponse {
     pub client_id: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Album {
+    pub text: String,
+    pub icon: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AlbumResponse {
+    pub text: String,
+    pub icon: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetAlbumsResponseResult {
+    pub item_loop: Vec<AlbumResponse>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GetAlbumsResponse {
+    pub method: String,
+    pub result: GetAlbumsResponseResult,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetPlayersResponseStatus {
@@ -366,6 +390,54 @@ pub async fn ping(
     };
 
     Ok(ping_response)
+}
+
+pub async fn get_albums(
+    player_id: String,
+    data: web::Data<AppState>,
+) -> serde_json::Result<Vec<Album>> {
+    let proxy_url = &data.proxy_url;
+    let get_albums_url = format!("{proxy_url}/jsonrpc.js");
+
+    let get_albums_request = serde_json::json!({
+        "id": 4,
+        "method": "slim.request",
+        "params": [
+            player_id,
+            [
+                "myapps",
+                "items",
+                0,
+                25000,
+                "menu:myapps",
+                "item_id:6b154c36.4.1.2"
+            ]
+        ]
+    });
+
+    let album_items = match data
+        .proxy_client
+        .post(get_albums_url)
+        .timeout(Duration::from_secs(100))
+        .send_json(&get_albums_request)
+        .await
+    {
+        Ok(mut res) => match res.json::<GetAlbumsResponse>().await {
+            Ok(json) => json.result.item_loop,
+            Err(error) => panic!("Failed to deserialize GetAlbumsResponse: {:?}", error),
+        },
+        Err(error) => panic!("Request failure: {:?}", error),
+    };
+
+    let albums = album_items
+        .iter()
+        .map(|item| Album {
+            text: item.text.clone(),
+            icon: item.icon.clone(),
+        })
+        .collect();
+
+    Ok(albums)
 }
 
 pub async fn get_players(

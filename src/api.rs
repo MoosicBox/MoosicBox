@@ -1,5 +1,5 @@
 use crate::player::{
-    connect, get_players, get_status, handshake, ping, player_pause, player_play,
+    connect, get_albums, get_players, get_status, handshake, ping, player_pause, player_play,
     set_player_status, PingResponse,
 };
 
@@ -79,6 +79,25 @@ pub async fn ping_endpoint(
     };
 
     Ok(Json(serde_json::json!({"success": successful})))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GetAlbumsQuery {
+    player_id: String,
+}
+
+#[get("/albums")]
+pub async fn get_albums_endpoint(
+    query: web::Query<GetAlbumsQuery>,
+    data: web::Data<AppState>,
+) -> Result<impl Responder> {
+    let albums = match get_albums(query.player_id.clone(), data).await {
+        Ok(resp) => resp,
+        Err(error) => panic!("Failed to get albums: {:?}", error),
+    };
+
+    Ok(Json(albums))
 }
 
 #[derive(Deserialize, Clone)]
