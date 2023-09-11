@@ -4,6 +4,7 @@ use core::panic;
 use std::time::Duration;
 
 use actix_web::web;
+use futures::future;
 use serde::{de::Error, Deserialize, Serialize};
 use serde_json::Value;
 
@@ -111,7 +112,15 @@ pub struct HandshakeResponse {
 pub struct Album {
     pub title: String,
     pub artist: String,
+    pub year: Option<i32>,
     pub icon: String,
+    pub source: AlbumSource,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum AlbumSource {
+    Tidal,
+    Qobuz,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -588,7 +597,20 @@ pub async fn ping(
     Ok(ping_response)
 }
 
-pub async fn get_albums(
+pub async fn get_all_albums(
+    player_id: &str,
+    data: web::Data<AppState>,
+) -> serde_json::Result<Vec<Album>> {
+    let (tidal, qobuz) = future::join(
+        get_tidal_albums(player_id, data.clone()),
+        get_qobuz_albums(player_id, data),
+    )
+    .await;
+
+    Ok([tidal.unwrap(), qobuz.unwrap()].concat())
+}
+
+pub async fn get_tidal_albums(
     player_id: &str,
     data: web::Data<AppState>,
 ) -> serde_json::Result<Vec<Album>> {
@@ -632,7 +654,72 @@ pub async fn get_albums(
             Album {
                 title: String::from(text_parts[0]),
                 artist: String::from(text_parts[1]),
+                year: None,
                 icon: item.icon.clone(),
+                source: AlbumSource::Tidal,
+            }
+        })
+        .collect();
+
+    Ok(albums)
+}
+
+pub async fn get_qobuz_albums(
+    player_id: &str,
+    data: web::Data<AppState>,
+) -> serde_json::Result<Vec<Album>> {
+    let proxy_url = &data.proxy_url;
+    let get_albums_url = format!("{proxy_url}/jsonrpc.js");
+
+    let get_albums_request = serde_json::json!({
+        "id": 4,
+        "method": "slim.request",
+        "params": [
+            player_id,
+            [
+                "qobuz",
+                "items",
+                0,
+                25000,
+                "menu:qobuz",
+                "item_id:2.0"
+            ]
+        ]
+    });
+
+    let album_items = match data
+        .proxy_client
+        .post(get_albums_url)
+        .timeout(Duration::from_secs(100))
+        .send_json(&get_albums_request)
+        .await
+    {
+        Ok(mut res) => match res.json::<GetAlbumsResponse>().await {
+            Ok(json) => json.result.item_loop,
+            Err(error) => panic!("Failed to deserialize GetAlbumsResponse: {:?}", error),
+        },
+        Err(error) => panic!("Request failure: {:?}", error),
+    };
+
+    let albums = album_items
+        .iter()
+        .map(|item| {
+            let text_parts = item.text.split('\n').collect::<Vec<&str>>();
+            let artist_and_year = String::from(text_parts[1]);
+            let artist = &artist_and_year[..artist_and_year.len() - 7];
+            let year = &artist_and_year[artist.len() + 2..artist_and_year.len() - 1];
+            let proxy_icon_url = item.icon.clone();
+            let title_and_maybe_star = String::from(text_parts[0]);
+            let title = match title_and_maybe_star.strip_prefix("* ") {
+                Some(title) => String::from(title),
+                None => title_and_maybe_star,
+            };
+            Album {
+                title,
+                artist: String::from(artist),
+                year: String::from(year).parse::<i32>().ok(),
+                icon: format!("{proxy_url}{proxy_icon_url}"),
+                source: AlbumSource::Qobuz,
             }
         })
         .collect();
