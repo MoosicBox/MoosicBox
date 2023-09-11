@@ -1,6 +1,6 @@
 use crate::player::{
-    connect, get_albums, get_players, get_status, handshake, ping, player_pause, player_play,
-    set_player_status, Album, PingResponse,
+    connect, get_albums, get_players, get_status, handshake, ping, player_next_track, player_pause,
+    player_play, player_previous_track, set_player_status, Album, PingResponse,
 };
 
 use crate::app::AppState;
@@ -177,6 +177,44 @@ pub async fn play_player_endpoint(
     match player_play(query.player_id.clone(), data).await {
         Ok(json) => json,
         Err(_) => panic!("Failed to play player"),
+    };
+
+    Ok(Json(serde_json::json!({"success": true})))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayerNextTrackQuery {
+    player_id: String,
+}
+
+#[post("/playback/next-track")]
+pub async fn player_next_track_endpoint(
+    query: web::Query<PlayerNextTrackQuery>,
+    data: web::Data<AppState>,
+) -> Result<impl Responder> {
+    match player_next_track(query.player_id.clone(), data).await {
+        Ok(json) => json,
+        Err(_) => panic!("Failed to go to player next track"),
+    };
+
+    Ok(Json(serde_json::json!({"success": true})))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayerPreviousTrackQuery {
+    player_id: String,
+}
+
+#[post("/playback/previous-track")]
+pub async fn player_previous_track_endpoint(
+    query: web::Query<PlayerPreviousTrackQuery>,
+    data: web::Data<AppState>,
+) -> Result<impl Responder> {
+    match player_previous_track(query.player_id.clone(), data).await {
+        Ok(json) => json,
+        Err(_) => panic!("Failed to go to player previous track"),
     };
 
     Ok(Json(serde_json::json!({"success": true})))

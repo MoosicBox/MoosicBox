@@ -171,6 +171,78 @@ pub async fn player_pause(
     Ok(response)
 }
 
+pub async fn player_previous_track(
+    player_id: String,
+    data: web::Data<AppState>,
+) -> serde_json::Result<Value> {
+    let proxy_url = &data.proxy_url;
+    let request_url = format!("{proxy_url}/jsonrpc.js");
+
+    let request = serde_json::json!({
+        "id": 0,
+        "method": "slim.request",
+        "params": [
+            player_id,
+            [
+                "playlist",
+                "index",
+                "-1",
+            ]
+        ],
+    });
+
+    let client = awc::Client::default();
+
+    let response = match client.post(request_url).send_json(&request).await {
+        Ok(mut res) => match res.json::<serde_json::Value>().await {
+            Ok(json) => json,
+            Err(error) => panic!(
+                "Failed to deserialize player previous track response: {:?}",
+                error
+            ),
+        },
+        Err(error) => panic!("Request failure: {:?}", error),
+    };
+
+    Ok(response)
+}
+
+pub async fn player_next_track(
+    player_id: String,
+    data: web::Data<AppState>,
+) -> serde_json::Result<Value> {
+    let proxy_url = &data.proxy_url;
+    let request_url = format!("{proxy_url}/jsonrpc.js");
+
+    let request = serde_json::json!({
+        "id": 0,
+        "method": "slim.request",
+        "params": [
+            player_id,
+            [
+                "playlist",
+                "index",
+                "+1",
+            ]
+        ],
+    });
+
+    let client = awc::Client::default();
+
+    let response = match client.post(request_url).send_json(&request).await {
+        Ok(mut res) => match res.json::<serde_json::Value>().await {
+            Ok(json) => json,
+            Err(error) => panic!(
+                "Failed to deserialize player next track response: {:?}",
+                error
+            ),
+        },
+        Err(error) => panic!("Request failure: {:?}", error),
+    };
+
+    Ok(response)
+}
+
 pub async fn player_play(
     player_id: String,
     data: web::Data<AppState>,
