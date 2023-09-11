@@ -122,7 +122,9 @@ pub async fn get_albums_endpoint(
                 Err(error) => panic!("Failed to get albums: {:?}", error),
             }
         })
-        .await,
+        .await
+        .into_albums()
+        .unwrap(),
     ))
 }
 
