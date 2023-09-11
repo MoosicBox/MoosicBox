@@ -113,12 +113,13 @@ pub struct Album {
     pub title: String,
     pub artist: String,
     pub year: Option<i32>,
-    pub icon: String,
+    pub icon: Option<String>,
     pub source: AlbumSource,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum AlbumSource {
+    Local,
     Tidal,
     Qobuz,
 }
@@ -139,6 +140,28 @@ pub struct GetAlbumsResponseResult {
 pub struct GetAlbumsResponse {
     pub method: String,
     pub result: GetAlbumsResponseResult,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LocalAlbumResponse {
+    pub artists: Option<String>,
+    pub artist: String,
+    pub album: String,
+    pub artwork_track_id: Option<String>,
+    pub extid: Option<String>,
+    pub year: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetLocalAlbumsResponseResult {
+    pub albums_loop: Vec<LocalAlbumResponse>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GetLocalAlbumsResponse {
+    pub method: String,
+    pub result: GetLocalAlbumsResponseResult,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -601,13 +624,73 @@ pub async fn get_all_albums(
     player_id: &str,
     data: web::Data<AppState>,
 ) -> serde_json::Result<Vec<Album>> {
-    let (tidal, qobuz) = future::join(
+    let (local, tidal, qobuz) = future::join3(
+        get_local_albums(player_id, data.clone()),
         get_tidal_albums(player_id, data.clone()),
         get_qobuz_albums(player_id, data),
     )
     .await;
 
-    Ok([tidal.unwrap(), qobuz.unwrap()].concat())
+    Ok([local.unwrap(), tidal.unwrap(), qobuz.unwrap()].concat())
+}
+
+pub async fn get_local_albums(
+    player_id: &str,
+    data: web::Data<AppState>,
+) -> serde_json::Result<Vec<Album>> {
+    let proxy_url = &data.proxy_url;
+    let get_albums_url = format!("{proxy_url}/jsonrpc.js");
+
+    let get_albums_request = serde_json::json!({
+        "id": 4,
+        "method": "slim.request",
+        "params": [
+            player_id,
+            [
+                "albums",
+                "0",
+                25000,
+                "tags:aajlqsyKSSE",
+                "sort:album",
+                "menu:1",
+                "library_id:0",
+            ]
+        ]
+    });
+
+    let album_items = match data
+        .proxy_client
+        .post(get_albums_url)
+        .timeout(Duration::from_secs(100))
+        .send_json(&get_albums_request)
+        .await
+    {
+        Ok(mut res) => match res.json::<GetLocalAlbumsResponse>().await {
+            Ok(json) => json.result.albums_loop,
+            Err(error) => panic!("Failed to deserialize GetLocalAlbumsResponse: {:?}", error),
+        },
+        Err(error) => panic!("Request failure: {:?}", error),
+    };
+
+    let albums = album_items
+        .iter()
+        .filter(|item| item.extid.is_none())
+        .map(|item| {
+            let icon = item
+                .artwork_track_id
+                .as_ref()
+                .map(|track_id| format!("{proxy_url}/music/{track_id}/cover_300x300_f"));
+            Album {
+                title: item.album.clone(),
+                artist: item.artist.clone(),
+                year: Some(item.year),
+                icon,
+                source: AlbumSource::Local,
+            }
+        })
+        .collect();
+
+    Ok(albums)
 }
 
 pub async fn get_tidal_albums(
@@ -655,7 +738,7 @@ pub async fn get_tidal_albums(
                 title: String::from(text_parts[0]),
                 artist: String::from(text_parts[1]),
                 year: None,
-                icon: item.icon.clone(),
+                icon: Some(item.icon.clone()),
                 source: AlbumSource::Tidal,
             }
         })
@@ -714,11 +797,12 @@ pub async fn get_qobuz_albums(
                 Some(title) => String::from(title),
                 None => title_and_maybe_star,
             };
+            let icon = Some(format!("{proxy_url}{proxy_icon_url}"));
             Album {
                 title,
                 artist: String::from(artist),
                 year: String::from(year).parse::<i32>().ok(),
-                icon: format!("{proxy_url}{proxy_icon_url}"),
+                icon,
                 source: AlbumSource::Qobuz,
             }
         })
