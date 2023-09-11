@@ -1,10 +1,8 @@
-use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
-
+use crate::cache::{get_or_set_to_cache, CacheItems};
 use crate::player::{
     connect, get_albums, get_players, get_playlist_status, get_status, handshake, ping,
     player_next_track, player_pause, player_play, player_previous_track, player_start_track,
-    set_player_status, Album, PingResponse,
+    set_player_status, PingResponse,
 };
 
 use crate::app::AppState;
@@ -16,63 +14,8 @@ use actix_web::{
     web::{self, Json},
     Responder,
 };
-use futures::Future;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::Result;
-
-use std::sync::{Mutex, OnceLock};
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct CacheItem<T> {
-    expiration: u128,
-    data: T,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct Cache {
-    albums: Option<Vec<Album>>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-enum CacheItems {
-    Albums(Vec<Album>),
-}
-
-fn current_time_nanos() -> u128 {
-    let start = SystemTime::now();
-    let since_the_epoch = start
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards");
-    since_the_epoch.as_nanos()
-}
-
-async fn get_or_set_to_cache<Fut>(key: &str, compute: impl Fn() -> Fut) -> CacheItems
-where
-    Fut: Future<Output = CacheItems>,
-{
-    let info: HashMap<String, CacheItem<CacheItems>> = HashMap::new();
-
-    static CACHE_MAP: OnceLock<Mutex<HashMap<String, CacheItem<CacheItems>>>> = OnceLock::new();
-    let cache = CACHE_MAP.get_or_init(|| Mutex::new(info));
-
-    if let Some(entry) = cache.lock().unwrap().get(key) {
-        if entry.expiration > current_time_nanos() {
-            return entry.data.clone();
-        }
-    }
-
-    let value = compute().await;
-
-    cache.lock().unwrap().insert(
-        String::from(key),
-        CacheItem {
-            expiration: current_time_nanos() + 60 * 60 * 1000 * 1000 * 1000,
-            data: value.clone(),
-        },
-    );
-
-    value
-}
 
 #[post("/connect")]
 pub async fn connect_endpoint(data: web::Data<AppState>) -> Result<impl Responder> {
