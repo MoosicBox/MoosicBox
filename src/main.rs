@@ -39,6 +39,7 @@ async fn main() -> std::io::Result<()> {
             .service(api::ping_endpoint)
             .service(api::pause_player_endpoint)
             .service(api::play_player_endpoint)
+            .service(api::player_start_track_endpoint)
             .service(api::player_next_track_endpoint)
             .service(api::player_previous_track_endpoint)
             .service(api::get_albums_endpoint)

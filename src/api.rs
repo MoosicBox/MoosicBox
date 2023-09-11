@@ -1,7 +1,7 @@
 use crate::player::{
     connect, get_albums, get_players, get_playlist_status, get_status, handshake, ping,
-    player_next_track, player_pause, player_play, player_previous_track, set_player_status, Album,
-    PingResponse,
+    player_next_track, player_pause, player_play, player_previous_track, player_start_track,
+    set_player_status, Album, PingResponse,
 };
 
 use crate::app::AppState;
@@ -206,6 +206,25 @@ pub async fn play_player_endpoint(
 #[serde(rename_all = "camelCase")]
 pub struct PlayerNextTrackQuery {
     player_id: String,
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayerStartTrackQuery {
+    player_id: String,
+}
+
+#[post("/playback/start-track")]
+pub async fn player_start_track_endpoint(
+    query: web::Query<PlayerStartTrackQuery>,
+    data: web::Data<AppState>,
+) -> Result<impl Responder> {
+    match player_start_track(query.player_id.clone(), data).await {
+        Ok(json) => json,
+        Err(_) => panic!("Failed to go to player start track"),
+    };
+
+    Ok(Json(serde_json::json!({"success": true})))
 }
 
 #[post("/playback/next-track")]
