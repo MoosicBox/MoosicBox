@@ -46,18 +46,16 @@ fn current_time_nanos() -> u128 {
     since_the_epoch.as_nanos()
 }
 
-fn cache() -> &'static Mutex<HashMap<String, CacheItem<CacheItems>>> {
-    let info: HashMap<String, CacheItem<CacheItems>> = HashMap::new();
-
-    static ARRAY: OnceLock<Mutex<HashMap<String, CacheItem<CacheItems>>>> = OnceLock::new();
-    ARRAY.get_or_init(|| Mutex::new(info))
-}
-
 async fn get_or_set_to_cache<Fut>(key: &str, compute: impl Fn() -> Fut) -> CacheItems
 where
     Fut: Future<Output = CacheItems>,
 {
-    if let Some(entry) = cache().lock().unwrap().get(key) {
+    let info: HashMap<String, CacheItem<CacheItems>> = HashMap::new();
+
+    static CACHE_MAP: OnceLock<Mutex<HashMap<String, CacheItem<CacheItems>>>> = OnceLock::new();
+    let cache = CACHE_MAP.get_or_init(|| Mutex::new(info));
+
+    if let Some(entry) = cache.lock().unwrap().get(key) {
         if entry.expiration > current_time_nanos() {
             return entry.data.clone();
         }
@@ -65,7 +63,7 @@ where
 
     let value = compute().await;
 
-    cache().lock().unwrap().insert(
+    cache.lock().unwrap().insert(
         String::from(key),
         CacheItem {
             expiration: current_time_nanos() + 60 * 60 * 1000 * 1000 * 1000,
