@@ -1,6 +1,6 @@
 use crate::player::{
     connect, get_albums, get_players, get_status, handshake, ping, player_pause, player_play,
-    set_player_status, PingResponse,
+    set_player_status, Album, PingResponse,
 };
 
 use crate::app::AppState;
@@ -14,6 +14,21 @@ use actix_web::{
 };
 use serde::Deserialize;
 use serde_json::Result;
+
+use std::sync::{Mutex, OnceLock};
+
+struct Cache {
+    albums: Option<Vec<Album>>,
+}
+
+fn cache() -> &'static Mutex<Cache> {
+    static ARRAY: OnceLock<Mutex<Cache>> = OnceLock::new();
+    ARRAY.get_or_init(|| {
+        Mutex::new(Cache {
+            albums: Option::None,
+        })
+    })
+}
 
 #[post("/connect")]
 pub async fn connect_endpoint(data: web::Data<AppState>) -> Result<impl Responder> {
@@ -92,10 +107,16 @@ pub async fn get_albums_endpoint(
     query: web::Query<GetAlbumsQuery>,
     data: web::Data<AppState>,
 ) -> Result<impl Responder> {
+    if let Some(cached) = cache().lock().unwrap().albums.clone() {
+        return Ok(Json(cached));
+    }
+
     let albums = match get_albums(query.player_id.clone(), data).await {
         Ok(resp) => resp,
         Err(error) => panic!("Failed to get albums: {:?}", error),
     };
+
+    cache().lock().unwrap().albums = Some(albums.clone());
 
     Ok(Json(albums))
 }
