@@ -35,6 +35,7 @@ async fn main() -> std::io::Result<()> {
             }))
             .service(api::connect_endpoint)
             .service(api::status_endpoint)
+            .service(api::playlist_status_endpoint)
             .service(api::ping_endpoint)
             .service(api::pause_player_endpoint)
             .service(api::play_player_endpoint)

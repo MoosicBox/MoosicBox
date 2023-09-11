@@ -1,6 +1,7 @@
 use crate::player::{
-    connect, get_albums, get_players, get_status, handshake, ping, player_next_track, player_pause,
-    player_play, player_previous_track, set_player_status, Album, PingResponse,
+    connect, get_albums, get_players, get_playlist_status, get_status, handshake, ping,
+    player_next_track, player_pause, player_play, player_previous_track, set_player_status, Album,
+    PingResponse,
 };
 
 use crate::app::AppState;
@@ -70,6 +71,25 @@ pub async fn status_endpoint(
     };
 
     Ok(Json(status_response))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistStatusRequest {
+    player_id: String,
+}
+
+#[get("/playlist/status")]
+pub async fn playlist_status_endpoint(
+    query: web::Query<PlaylistStatusRequest>,
+    data: web::Data<AppState>,
+) -> Result<impl Responder> {
+    let playlist_status_response = match get_playlist_status(query.player_id.clone(), data).await {
+        Ok(resp) => resp,
+        Err(error) => panic!("Failed to get status: {:?}", error),
+    };
+
+    Ok(Json(playlist_status_response))
 }
 
 #[derive(Deserialize, Clone)]

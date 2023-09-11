@@ -40,6 +40,41 @@ pub struct StatusResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct PlaylistStatus {
+    pub tracks: Vec<Track>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Track {
+    pub title: String,
+    pub icon: String,
+    pub album: String,
+    pub artist: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistStatusResponse {
+    pub method: String,
+    pub result: PlaylistStatusResponseResult,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PlaylistStatusResponseResult {
+    pub playlist_loop: Vec<TrackResponse>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TrackResponse {
+    pub title: String,
+    pub artwork_url: String,
+    pub album: String,
+    pub artist: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct PingResponseStatus {
     pub timestamp: String,
     pub client_id: Option<String>,
@@ -426,6 +461,59 @@ pub async fn get_status(data: web::Data<AppState>) -> serde_json::Result<Status>
             .map(|p| Player {
                 player_id: p.player_id.clone(),
                 is_playing: p.is_playing == 1,
+            })
+            .collect(),
+    })
+}
+
+pub async fn get_playlist_status(
+    player_id: String,
+    data: web::Data<AppState>,
+) -> serde_json::Result<PlaylistStatus> {
+    let proxy_url = &data.proxy_url;
+    let playlist_status_url = format!("{proxy_url}/jsonrpc.js");
+
+    let playlist_status_request = serde_json::json!({
+        "id": 0,
+        "method": "slim.request",
+        "params": [
+            player_id,
+            [
+                "status",
+                "-",
+                1,
+                "tags:cdegiloqrstuyAABGIKNST"
+            ]
+        ]
+    });
+
+    let playlist_status_response = match data
+        .proxy_client
+        .post(playlist_status_url)
+        .timeout(Duration::from_secs(100))
+        .send_json(&playlist_status_request)
+        .await
+    {
+        Ok(mut res) => match res.json::<PlaylistStatusResponse>().await {
+            Ok(json) => json,
+            Err(error) => panic!(
+                "Failed to deserialize playlist status response: {:?}",
+                error
+            ),
+        },
+        Err(error) => panic!("Request failure: {:?}", error),
+    };
+
+    Ok(PlaylistStatus {
+        tracks: playlist_status_response
+            .result
+            .playlist_loop
+            .iter()
+            .map(|p| Track {
+                icon: p.artwork_url.clone(),
+                album: p.album.clone(),
+                artist: p.artist.clone(),
+                title: p.title.clone(),
             })
             .collect(),
     })
