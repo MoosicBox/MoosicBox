@@ -112,12 +112,28 @@ pub struct GetAlbumsQuery {
 pub async fn get_albums_endpoint(
     query: web::Query<GetAlbumsQuery>,
     data: web::Data<AppState>,
+    request: actix_web::HttpRequest,
 ) -> Result<impl Responder> {
     let proxy_url = &data.proxy_url;
     let player_id = &query.player_id;
+    let mut request_domain_parts = request
+        .headers()
+        .get("origin")
+        .map(|origin| origin.to_str().unwrap())
+        .unwrap_or(proxy_url)
+        .split(':');
+
+    let request_domain = format!(
+        "{}:{}",
+        request_domain_parts.next().unwrap(),
+        request_domain_parts.next().unwrap()
+    );
+
+    let port = proxy_url.split(':').last().unwrap();
+    let origin = format!("{}:{port}", request_domain);
     Ok(Json(
         get_or_set_to_cache(&format!("albums|{player_id}|{proxy_url}"), || async {
-            match get_all_albums(player_id, data.clone()).await {
+            match get_all_albums(player_id, data.clone(), origin.clone()).await {
                 Ok(resp) => CacheItemType::Albums(resp),
                 Err(error) => panic!("Failed to get albums: {:?}", error),
             }

@@ -10,6 +10,8 @@ use actix_cors::Cors;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    let service_port = 8000;
+
     let app = move || {
         let args: Vec<String> = env::args().collect();
 
@@ -35,6 +37,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(cors)
             .wrap(middleware::Compress::default())
             .app_data(web::Data::new(app::AppState {
+                service_port,
                 proxy_url: proxy_url.clone(),
                 proxy_client: client,
             }))
@@ -56,5 +59,8 @@ async fn main() -> std::io::Result<()> {
             .service(api::proxy_endpoint)
     };
 
-    HttpServer::new(app).bind(("0.0.0.0", 8000))?.run().await
+    HttpServer::new(app)
+        .bind(("0.0.0.0", service_port))?
+        .run()
+        .await
 }
