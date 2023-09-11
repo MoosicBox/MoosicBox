@@ -109,7 +109,8 @@ pub struct HandshakeResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Album {
-    pub text: String,
+    pub title: String,
+    pub artist: String,
     pub icon: String,
 }
 
@@ -626,9 +627,13 @@ pub async fn get_albums(
 
     let albums = album_items
         .iter()
-        .map(|item| Album {
-            text: item.text.clone(),
-            icon: item.icon.clone(),
+        .map(|item| {
+            let text_parts = item.text.split('\n').collect::<Vec<&str>>();
+            Album {
+                title: String::from(text_parts[0]),
+                artist: String::from(text_parts[1]),
+                icon: item.icon.clone(),
+            }
         })
         .collect();
 
