@@ -1,8 +1,8 @@
 use crate::cache::{get_or_set_to_cache, CacheItemType};
 use crate::player::{
     connect, get_all_albums, get_players, get_playlist_status, get_status, handshake, ping,
-    player_next_track, player_pause, player_play, player_previous_track, player_start_track,
-    set_player_status, PingResponse,
+    play_album, player_next_track, player_pause, player_play, player_previous_track,
+    player_start_track, set_player_status, PingResponse,
 };
 
 use crate::app::AppState;
@@ -184,6 +184,26 @@ pub async fn play_player_endpoint(
     match player_play(query.player_id.clone(), data).await {
         Ok(json) => json,
         Err(_) => panic!("Failed to play player"),
+    };
+
+    Ok(Json(serde_json::json!({"success": true})))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayAlbumQuery {
+    player_id: String,
+    album_id: String,
+}
+
+#[post("/playback/play-album")]
+pub async fn play_album_endpoint(
+    query: web::Query<PlayAlbumQuery>,
+    data: web::Data<AppState>,
+) -> Result<impl Responder> {
+    match play_album(query.player_id.clone(), query.album_id.clone(), data).await {
+        Ok(json) => json,
+        Err(error) => panic!("Failed to play album {:?}", error),
     };
 
     Ok(Json(serde_json::json!({"success": true})))

@@ -110,6 +110,7 @@ pub struct HandshakeResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Album {
+    pub id: String,
     pub title: String,
     pub artist: String,
     pub year: Option<i32>,
@@ -125,9 +126,34 @@ pub enum AlbumSource {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AlbumResponseParams {
+    #[serde(rename = "isContextMenu")]
+    is_context_menu: i32,
+
+    item_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AlbumResponseActionsGoParams {
+    item_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AlbumResponseActionsGo {
+    params: AlbumResponseActionsGoParams,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AlbumResponseActions {
+    go: AlbumResponseActionsGo,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AlbumResponse {
     pub text: String,
     pub icon: String,
+    pub params: Option<AlbumResponseParams>,
+    pub actions: Option<AlbumResponseActions>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -144,6 +170,7 @@ pub struct GetAlbumsResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LocalAlbumResponse {
+    pub id: i32,
     pub artists: Option<String>,
     pub artist: String,
     pub album: String,
@@ -339,6 +366,62 @@ pub async fn player_next_track(
                 "Failed to deserialize player next track response: {:?}",
                 error
             ),
+        },
+        Err(error) => panic!("Request failure: {:?}", error),
+    };
+
+    Ok(response)
+}
+
+pub async fn play_album(
+    player_id: String,
+    album_id: String,
+    data: web::Data<AppState>,
+) -> serde_json::Result<Value> {
+    let proxy_url = &data.proxy_url;
+    let request_url = format!("{proxy_url}/jsonrpc.js");
+
+    let request = if album_id.starts_with("album_id:") {
+        serde_json::json!({
+            "id": 0,
+            "method": "slim.request",
+            "params": [
+                player_id,
+                [
+                    "playlistcontrol",
+                    "cmd:load",
+                    album_id,
+                    "library_id:0",
+                ]
+            ],
+        })
+    } else {
+        serde_json::json!({
+            "id": 0,
+            "method": "slim.request",
+            "params": [
+                player_id,
+                [
+                    "myapps",
+                    "playlist",
+                    "play",
+                    "menu:myapps",
+                    "isContextMenu:1",
+                    album_id,
+                ]
+            ],
+        })
+    };
+
+    let response = match data
+        .proxy_client
+        .post(request_url)
+        .send_json(&request)
+        .await
+    {
+        Ok(mut res) => match res.json::<serde_json::Value>().await {
+            Ok(json) => json,
+            Err(error) => panic!("Failed to deserialize play album response: {:?}", error),
         },
         Err(error) => panic!("Request failure: {:?}", error),
     };
@@ -681,6 +764,7 @@ pub async fn get_local_albums(
                 .as_ref()
                 .map(|track_id| format!("{proxy_url}/music/{track_id}/cover_300x300_f"));
             Album {
+                id: format!("album_id:{:?}", item.id),
                 title: item.album.clone(),
                 artist: item.artist.clone(),
                 year: Some(item.year),
@@ -734,7 +818,15 @@ pub async fn get_tidal_albums(
         .iter()
         .map(|item| {
             let text_parts = item.text.split('\n').collect::<Vec<&str>>();
+            let id = if let Some(params) = &item.params {
+                format!("item_id:{}", params.item_id)
+            } else if let Some(actions) = &item.actions {
+                format!("item_id:{}", actions.go.params.item_id)
+            } else {
+                unreachable!()
+            };
             Album {
+                id,
                 title: String::from(text_parts[0]),
                 artist: String::from(text_parts[1]),
                 year: None,
@@ -779,7 +871,7 @@ pub async fn get_qobuz_albums(
     {
         Ok(mut res) => match res.json::<GetAlbumsResponse>().await {
             Ok(json) => json.result.item_loop,
-            Err(error) => panic!("Failed to deserialize GetAlbumsResponse: {:?}", error),
+            Err(error) => panic!("Failed to deserialize qobuz GetAlbumsResponse: {:?}", error),
         },
         Err(error) => panic!("Request failure: {:?}", error),
     };
@@ -798,7 +890,15 @@ pub async fn get_qobuz_albums(
                 None => title_and_maybe_star,
             };
             let icon = Some(format!("{proxy_url}{proxy_icon_url}"));
+            let id = if let Some(params) = &item.params {
+                format!("item_id:{}", params.item_id)
+            } else if let Some(actions) = &item.actions {
+                format!("item_id:{}", actions.go.params.item_id)
+            } else {
+                unreachable!()
+            };
             Album {
+                id,
                 title,
                 artist: String::from(artist),
                 year: String::from(year).parse::<i32>().ok(),
