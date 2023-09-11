@@ -3,7 +3,7 @@ mod app;
 mod cache;
 mod player;
 
-use actix_web::{http, web, App, HttpServer};
+use actix_web::{http, middleware, web, App, HttpServer};
 use std::env;
 
 use actix_cors::Cors;
@@ -30,6 +30,7 @@ async fn main() -> std::io::Result<()> {
 
         App::new()
             .wrap(cors)
+            .wrap(middleware::Compress::default())
             .app_data(web::Data::new(app::AppState {
                 proxy_url: proxy_url.clone(),
                 proxy_client: awc::Client::default(),
