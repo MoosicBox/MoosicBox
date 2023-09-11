@@ -78,7 +78,7 @@ pub async fn ping_endpoint(
         _ => panic!("Invalid ping response data"),
     };
 
-    Ok(Json(serde_json::json!({"success": successful})))
+    Ok(Json(serde_json::json!({"alive": successful})))
 }
 
 #[derive(Deserialize, Clone)]
