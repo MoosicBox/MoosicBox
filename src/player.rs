@@ -588,7 +588,7 @@ pub async fn ping(
 }
 
 pub async fn get_albums(
-    player_id: String,
+    player_id: &str,
     data: web::Data<AppState>,
 ) -> serde_json::Result<Vec<Album>> {
     let proxy_url = &data.proxy_url;

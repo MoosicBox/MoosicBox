@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use crate::player::{
     connect, get_albums, get_players, get_playlist_status, get_status, handshake, ping,
     player_next_track, player_pause, player_play, player_previous_track, player_start_track,
@@ -13,22 +16,64 @@ use actix_web::{
     web::{self, Json},
     Responder,
 };
-use serde::Deserialize;
+use futures::Future;
+use serde::{Deserialize, Serialize};
 use serde_json::Result;
 
 use std::sync::{Mutex, OnceLock};
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct CacheItem<T> {
+    expiration: u128,
+    data: T,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct Cache {
     albums: Option<Vec<Album>>,
 }
 
-fn cache() -> &'static Mutex<Cache> {
-    static ARRAY: OnceLock<Mutex<Cache>> = OnceLock::new();
-    ARRAY.get_or_init(|| {
-        Mutex::new(Cache {
-            albums: Option::None,
-        })
-    })
+#[derive(Debug, Serialize, Deserialize, Clone)]
+enum CacheItems {
+    Albums(Vec<Album>),
+}
+
+fn current_time_nanos() -> u128 {
+    let start = SystemTime::now();
+    let since_the_epoch = start
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards");
+    since_the_epoch.as_nanos()
+}
+
+fn cache() -> &'static Mutex<HashMap<String, CacheItem<CacheItems>>> {
+    let info: HashMap<String, CacheItem<CacheItems>> = HashMap::new();
+
+    static ARRAY: OnceLock<Mutex<HashMap<String, CacheItem<CacheItems>>>> = OnceLock::new();
+    ARRAY.get_or_init(|| Mutex::new(info))
+}
+
+async fn get_or_set_to_cache<Fut>(key: &str, compute: impl Fn() -> Fut) -> CacheItems
+where
+    Fut: Future<Output = CacheItems>,
+{
+    if let Some(entry) = cache().lock().unwrap().get(key) {
+        if entry.expiration > current_time_nanos() {
+            return entry.data.clone();
+        }
+    }
+
+    let value = compute().await;
+
+    cache().lock().unwrap().insert(
+        String::from(key),
+        CacheItem {
+            expiration: current_time_nanos() + 60 * 60 * 1000 * 1000 * 1000,
+            data: value.clone(),
+        },
+    );
+
+    value
 }
 
 #[post("/connect")]
@@ -127,18 +172,17 @@ pub async fn get_albums_endpoint(
     query: web::Query<GetAlbumsQuery>,
     data: web::Data<AppState>,
 ) -> Result<impl Responder> {
-    if let Some(cached) = cache().lock().unwrap().albums.clone() {
-        return Ok(Json(cached));
-    }
-
-    let albums = match get_albums(query.player_id.clone(), data).await {
-        Ok(resp) => resp,
-        Err(error) => panic!("Failed to get albums: {:?}", error),
-    };
-
-    cache().lock().unwrap().albums = Some(albums.clone());
-
-    Ok(Json(albums))
+    let proxy_url = &data.proxy_url;
+    let player_id = &query.player_id;
+    Ok(Json(
+        get_or_set_to_cache(&format!("albums|{player_id}|{proxy_url}"), || async {
+            match get_albums(player_id, data.clone()).await {
+                Ok(resp) => CacheItems::Albums(resp),
+                Err(error) => panic!("Failed to get albums: {:?}", error),
+            }
+        })
+        .await,
+    ))
 }
 
 #[derive(Deserialize, Clone)]
