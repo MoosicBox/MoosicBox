@@ -4,13 +4,13 @@ mod cache;
 mod player;
 
 use actix_web::{http, middleware, web, App, HttpServer};
-use std::env;
+use std::{env, time::Duration};
 
 use actix_cors::Cors;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| {
+    let app = move || {
         let args: Vec<String> = env::args().collect();
 
         let proxy_url = if args.len() > 1 {
@@ -18,6 +18,10 @@ async fn main() -> std::io::Result<()> {
         } else {
             String::from("http://127.0.0.1:9000")
         };
+
+        let client = awc::Client::builder()
+            .timeout(Duration::from_secs(120))
+            .finish();
 
         let cors = Cors::default()
             .allow_any_origin()
@@ -32,7 +36,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(middleware::Compress::default())
             .app_data(web::Data::new(app::AppState {
                 proxy_url: proxy_url.clone(),
-                proxy_client: awc::Client::default(),
+                proxy_client: client,
             }))
             .service(api::connect_endpoint)
             .service(api::status_endpoint)
@@ -50,8 +54,7 @@ async fn main() -> std::io::Result<()> {
             .service(api::stop_player_endpoint)
             .service(api::restart_player_endpoint)
             .service(api::proxy_endpoint)
-    })
-    .bind(("127.0.0.1", 8000))?
-    .run()
-    .await
+    };
+
+    HttpServer::new(app).bind(("0.0.0.0", 8000))?.run().await
 }
