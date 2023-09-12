@@ -334,7 +334,7 @@ pub async fn restart_player_endpoint(
 }
 
 #[post("/proxy/{proxy:.*}")]
-pub async fn proxy_endpoint(
+pub async fn proxy_post_endpoint(
     body: String,
     path: web::Path<(String,)>,
     data: web::Data<AppState>,
@@ -352,6 +352,34 @@ pub async fn proxy_endpoint(
     };
 
     Ok(Json(response))
+}
+
+#[get("/proxy/{proxy:.*}")]
+pub async fn proxy_get_endpoint(
+    path: web::Path<(String,)>,
+    data: web::Data<AppState>,
+) -> Result<impl Responder> {
+    let proxy_url = &data.proxy_url;
+    let proxy_value = path.into_inner().0;
+    let request_url = format!("{proxy_url}/{proxy_value}");
+
+    let mut res = match data.proxy_client.get(request_url).send().await {
+        Ok(res) => res,
+        Err(error) => panic!("Request failure {:?}", error),
+    };
+
+    let mut request_builder = HttpResponse::build(StatusCode::OK);
+
+    res.headers().iter().for_each(|header| {
+        request_builder.append_header(header);
+    });
+
+    let body = match res.body().await {
+        Ok(bytes) => bytes,
+        Err(error) => panic!("Deserialization failure {:?}", error),
+    };
+
+    Ok(request_builder.body(body))
 }
 
 #[get("/albums/{album_id}/{size}")]

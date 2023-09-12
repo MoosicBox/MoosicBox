@@ -56,8 +56,9 @@ async fn main() -> std::io::Result<()> {
             .service(api::start_player_endpoint)
             .service(api::stop_player_endpoint)
             .service(api::restart_player_endpoint)
-            .service(api::proxy_endpoint)
             .service(api::album_icon_endpoint)
+            .service(api::proxy_get_endpoint)
+            .service(api::proxy_post_endpoint)
     };
 
     HttpServer::new(app)
