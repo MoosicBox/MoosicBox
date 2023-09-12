@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use enum_as_inner::EnumAsInner;
 use futures::Future;
 use serde::{Deserialize, Serialize};
 
@@ -15,7 +14,8 @@ pub struct CacheItem {
     data: CacheItemType,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, EnumAsInner)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
 pub enum CacheItemType {
     Albums(Vec<Album>),
 }
