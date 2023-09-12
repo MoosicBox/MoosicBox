@@ -9,6 +9,8 @@ use crate::app::AppState;
 
 use core::panic;
 
+use actix_web::http::StatusCode;
+use actix_web::HttpResponse;
 use actix_web::{
     get, post,
     web::{self, Json},
@@ -116,24 +118,14 @@ pub async fn get_albums_endpoint(
 ) -> Result<impl Responder> {
     let proxy_url = &data.proxy_url;
     let player_id = &query.player_id;
-    let mut request_domain_parts = request
-        .headers()
-        .get("origin")
-        .map(|origin| origin.to_str().unwrap())
-        .unwrap_or(proxy_url)
-        .split(':');
-
-    let request_domain = format!(
-        "{}:{}",
-        request_domain_parts.next().unwrap(),
-        request_domain_parts.next().unwrap()
+    let host = format!(
+        "{}://{}",
+        request.connection_info().scheme(),
+        request.connection_info().host()
     );
-
-    let port = proxy_url.split(':').last().unwrap();
-    let origin = format!("{}:{port}", request_domain);
     Ok(Json(
         get_or_set_to_cache(&format!("albums|{player_id}|{proxy_url}"), || async {
-            match get_all_albums(player_id, data.clone(), origin.clone()).await {
+            match get_all_albums(player_id, data.clone(), host.clone()).await {
                 Ok(resp) => CacheItemType::Albums(resp),
                 Err(error) => panic!("Failed to get albums: {:?}", error),
             }
@@ -360,4 +352,43 @@ pub async fn proxy_endpoint(
     };
 
     Ok(Json(response))
+}
+
+#[get("/albums/{album_id}/{size}")]
+pub async fn album_icon_endpoint(
+    path: web::Path<(String, String)>,
+    data: web::Data<AppState>,
+) -> Result<impl Responder> {
+    let proxy_url = &data.proxy_url;
+    let paths = path.into_inner();
+    let album_id = paths.0;
+    let size = paths.1;
+
+    let dimensions = size.split('x').collect::<Vec<&str>>();
+
+    let width = dimensions[0].parse::<i32>().unwrap();
+    let height = dimensions[1].parse::<i32>().unwrap();
+
+    let request_url = format!("{proxy_url}/music/{album_id}/cover_{width}x{height}_f");
+
+    let mut res = match data.proxy_client.get(request_url).send().await {
+        Ok(res) => res,
+        Err(error) => panic!("Request failure {:?}", error),
+    };
+
+    let content_type = String::from(
+        res.headers()
+            .get("content_type")
+            .map(|ctype| ctype.to_str().unwrap())
+            .unwrap_or("image/jpeg"),
+    );
+
+    let body = match res.body().await {
+        Ok(bytes) => bytes,
+        Err(error) => panic!("Deserialization failure {:?}", error),
+    };
+
+    Ok(HttpResponse::build(StatusCode::OK)
+        .content_type(content_type)
+        .body(body))
 }

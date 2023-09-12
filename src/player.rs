@@ -706,10 +706,10 @@ pub async fn ping(
 pub async fn get_all_albums(
     player_id: &str,
     data: web::Data<AppState>,
-    origin: String,
+    host: String,
 ) -> serde_json::Result<Vec<Album>> {
     let (local, tidal, qobuz) = future::join3(
-        get_local_albums(player_id, data.clone(), origin),
+        get_local_albums(player_id, data.clone(), host),
         get_tidal_albums(player_id, data.clone()),
         get_qobuz_albums(player_id, data),
     )
@@ -721,7 +721,7 @@ pub async fn get_all_albums(
 pub async fn get_local_albums(
     player_id: &str,
     data: web::Data<AppState>,
-    origin: String,
+    host: String,
 ) -> serde_json::Result<Vec<Album>> {
     let proxy_url = &data.proxy_url;
     let get_albums_url = format!("{proxy_url}/jsonrpc.js");
@@ -764,7 +764,7 @@ pub async fn get_local_albums(
             let icon = item
                 .artwork_track_id
                 .as_ref()
-                .map(|track_id| format!("{origin}/music/{track_id}/cover_300x300_f"));
+                .map(|track_id| format!("{host}/albums/{track_id}/300x300"));
             Album {
                 id: format!("album_id:{:?}", item.id),
                 title: item.album.clone(),
