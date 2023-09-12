@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use std::sync::{Mutex, OnceLock};
 
-use crate::player::Album;
+use crate::menu::Album;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct CacheItem {

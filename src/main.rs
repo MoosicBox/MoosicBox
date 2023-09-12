@@ -1,6 +1,7 @@
 mod api;
 mod app;
 mod cache;
+mod menu;
 mod player;
 
 use actix_web::{http, middleware, web, App, HttpServer};

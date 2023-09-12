@@ -1,7 +1,8 @@
+use crate::menu::get_all_albums;
 use crate::player::{
-    connect, get_all_albums, get_players, get_playlist_status, get_status, handshake, ping,
-    play_album, player_next_track, player_pause, player_play, player_previous_track,
-    player_start_track, set_player_status, PingResponse,
+    connect, get_players, get_playlist_status, get_status, handshake, ping, play_album,
+    player_next_track, player_pause, player_play, player_previous_track, player_start_track,
+    set_player_status, PingResponse,
 };
 
 use crate::app::AppState;
