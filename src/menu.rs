@@ -208,7 +208,7 @@ pub async fn get_tidal_albums(
                     0,
                     25000,
                     "menu:myapps",
-                    "item_id:6b154c36.4.1.2"
+                    "item_id:7342f28d.4.1.2"
                 ]
             ]
         });
