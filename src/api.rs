@@ -1,4 +1,3 @@
-use crate::cache::{get_or_set_to_cache, CacheItemType};
 use crate::player::{
     connect, get_all_albums, get_players, get_playlist_status, get_status, handshake, ping,
     play_album, player_next_track, player_pause, player_play, player_previous_track,
@@ -117,17 +116,12 @@ pub async fn get_albums_endpoint(
     query: web::Query<GetAlbumsQuery>,
     data: web::Data<AppState>,
 ) -> Result<impl Responder> {
-    let proxy_url = &data.proxy_url;
     let player_id = &query.player_id;
-    Ok(Json(
-        get_or_set_to_cache(&format!("albums|{player_id}|{proxy_url}"), || async {
-            match get_all_albums(player_id, data.clone()).await {
-                Ok(resp) => CacheItemType::Albums(resp),
-                Err(error) => panic!("Failed to get albums: {:?}", error),
-            }
-        })
-        .await,
-    ))
+
+    match get_all_albums(player_id, data.clone()).await {
+        Ok(resp) => Ok(Json(resp)),
+        Err(error) => panic!("Failed to get albums: {:?}", error),
+    }
 }
 
 #[derive(Deserialize, Clone)]
