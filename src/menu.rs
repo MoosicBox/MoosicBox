@@ -53,7 +53,7 @@ pub struct AlbumResponseActions {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AlbumResponse {
     pub text: String,
-    pub icon: String,
+    pub icon: Option<String>,
     pub params: Option<AlbumResponseParams>,
     pub actions: Option<AlbumResponseActions>,
 }
@@ -154,7 +154,7 @@ pub async fn get_local_albums(
         };
 
         let albums = album_items
-            .iter()
+            .into_iter()
             .filter(|item| item.extid.is_none())
             .map(|item| {
                 let icon = item
@@ -228,7 +228,8 @@ pub async fn get_tidal_albums(
         };
 
         let albums = album_items
-            .iter()
+            .into_iter()
+            .filter(|item| item.params.is_some() || item.actions.is_some())
             .map(|item| {
                 let text_parts = item.text.split('\n').collect::<Vec<&str>>();
                 let id = if let Some(params) = &item.params {
@@ -243,7 +244,7 @@ pub async fn get_tidal_albums(
                     title: String::from(text_parts[0]),
                     artist: String::from(text_parts[1]),
                     year: None,
-                    icon: Some(item.icon.clone()),
+                    icon: item.icon.clone(),
                     source: AlbumSource::Tidal,
                 }
             })
@@ -305,7 +306,8 @@ pub async fn get_qobuz_albums(
         };
 
         let albums = album_items
-            .iter()
+            .into_iter()
+            .filter(|item| item.params.is_some() || item.actions.is_some())
             .map(|item| {
                 let text_parts = item.text.split('\n').collect::<Vec<&str>>();
                 let artist_and_year = String::from(text_parts[1]);
@@ -317,7 +319,7 @@ pub async fn get_qobuz_albums(
                     Some(title) => String::from(title),
                     None => title_and_maybe_star,
                 };
-                let icon = Some(format!("{proxy_url}{proxy_icon_url}"));
+                let icon = proxy_icon_url.map(|url| format!("{proxy_url}{url}"));
                 let id = if let Some(params) = &item.params {
                     format!("item_id:{}", params.item_id)
                 } else if let Some(actions) = &item.actions {
