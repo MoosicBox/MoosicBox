@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use enum_as_inner::EnumAsInner;
 use futures::Future;
@@ -31,6 +31,7 @@ pub fn current_time_nanos() -> u128 {
 
 pub struct CacheRequest {
     pub key: String,
+    pub expiration: Duration,
 }
 
 pub async fn get_or_set_to_cache<Fut>(
@@ -56,7 +57,7 @@ where
     cache.lock().unwrap().insert(
         request.key,
         CacheItem {
-            expiration: current_time_nanos() + 60 * 60 * 1000 * 1000 * 1000,
+            expiration: current_time_nanos() + request.expiration.as_nanos(),
             data: value.clone(),
         },
     );

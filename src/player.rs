@@ -727,6 +727,7 @@ pub async fn get_local_albums(
     let proxy_url = &data.proxy_url;
     let request = CacheRequest {
         key: format!("local_albums|{player_id}|{proxy_url}"),
+        expiration: Duration::from_secs(60 * 60),
     };
 
     match get_or_set_to_cache(request, || async {
@@ -803,6 +804,7 @@ pub async fn get_tidal_albums(
     let proxy_url = &data.proxy_url;
     let request = CacheRequest {
         key: format!("tidal_albums|{player_id}|{proxy_url}"),
+        expiration: Duration::from_secs(60 * 60),
     };
 
     match get_or_set_to_cache(request, || async {
@@ -879,6 +881,7 @@ pub async fn get_qobuz_albums(
     let proxy_url = &data.proxy_url;
     let request = CacheRequest {
         key: format!("qobuz_albums|{player_id}|{proxy_url}"),
+        expiration: Duration::from_secs(60 * 60),
     };
 
     match get_or_set_to_cache(request, || async {
