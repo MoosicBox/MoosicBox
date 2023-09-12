@@ -8,6 +8,8 @@ use crate::player::{
 use crate::app::AppState;
 
 use core::panic;
+use std::thread;
+use std::time::Duration;
 
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
@@ -318,6 +320,9 @@ pub async fn restart_player_endpoint(
     set_player_status(query.player_id.clone(), String::from("0"), data.clone())
         .await
         .unwrap();
+
+    thread::sleep(Duration::from_millis(500));
+
     set_player_status(query.player_id.clone(), String::from("1"), data.clone())
         .await
         .unwrap();
