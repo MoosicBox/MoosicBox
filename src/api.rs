@@ -382,6 +382,36 @@ pub async fn proxy_get_endpoint(
     Ok(request_builder.body(body))
 }
 
+#[get("/image/{url:.*}")]
+pub async fn image_proxy_endpoint(
+    path: web::Path<(String,)>,
+    data: web::Data<AppState>,
+) -> Result<impl Responder> {
+    let paths = path.into_inner();
+    let url = paths.0;
+
+    let mut res = match data.image_client.get(url).send().await {
+        Ok(res) => res,
+        Err(error) => panic!("Request failure {:?}", error),
+    };
+
+    let content_type = String::from(
+        res.headers()
+            .get("content_type")
+            .map(|ctype| ctype.to_str().unwrap())
+            .unwrap_or("image/jpeg"),
+    );
+
+    let body = match res.body().await {
+        Ok(bytes) => bytes,
+        Err(error) => panic!("Deserialization failure {:?}", error),
+    };
+
+    Ok(HttpResponse::build(StatusCode::OK)
+        .content_type(content_type)
+        .body(body))
+}
+
 #[get("/albums/{album_id}/{size}")]
 pub async fn album_icon_endpoint(
     path: web::Path<(String, String)>,

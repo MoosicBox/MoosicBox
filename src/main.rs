@@ -21,7 +21,11 @@ async fn main() -> std::io::Result<()> {
             String::from("http://127.0.0.1:9000")
         };
 
-        let client = awc::Client::builder()
+        let proxy_client = awc::Client::builder()
+            .timeout(Duration::from_secs(120))
+            .finish();
+
+        let image_client = awc::Client::builder()
             .timeout(Duration::from_secs(120))
             .finish();
 
@@ -38,8 +42,9 @@ async fn main() -> std::io::Result<()> {
             .wrap(middleware::Compress::default())
             .app_data(web::Data::new(app::AppState {
                 service_port,
-                proxy_url: proxy_url.clone(),
-                proxy_client: client,
+                proxy_url,
+                proxy_client,
+                image_client,
             }))
             .service(api::connect_endpoint)
             .service(api::status_endpoint)
@@ -56,6 +61,7 @@ async fn main() -> std::io::Result<()> {
             .service(api::start_player_endpoint)
             .service(api::stop_player_endpoint)
             .service(api::restart_player_endpoint)
+            .service(api::image_proxy_endpoint)
             .service(api::album_icon_endpoint)
             .service(api::proxy_get_endpoint)
             .service(api::proxy_post_endpoint)
