@@ -20,7 +20,7 @@ pub struct Album {
     pub source: AlbumSource,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub enum AlbumSource {
     Local,
     Tidal,
@@ -93,24 +93,55 @@ pub struct GetLocalAlbumsResponse {
     pub result: GetLocalAlbumsResponseResult,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AlbumFilters {
+    pub sources: Option<Vec<AlbumSource>>,
+}
+
+pub fn filter_albums(albums: Vec<Album>, filters: AlbumFilters) -> Vec<Album> {
+    albums
+        .into_iter()
+        .filter(|album| match &filters.sources {
+            Some(sources) => sources.iter().any(|s| album.source == *s),
+            None => true,
+        })
+        .collect()
+}
+
 pub async fn get_all_albums(
     player_id: &str,
     data: web::Data<AppState>,
 ) -> serde_json::Result<Vec<Album>> {
+    let filters = AlbumFilters {
+        sources: Some(vec![AlbumSource::Local]),
+    };
+
     let (local, tidal, qobuz) = future::join3(
-        get_local_albums(player_id, data.clone()),
-        get_tidal_albums(player_id, data.clone()),
-        get_qobuz_albums(player_id, data),
+        get_local_albums(player_id, data.clone(), filters.clone()),
+        get_tidal_albums(player_id, data.clone(), filters.clone()),
+        get_qobuz_albums(player_id, data, filters.clone()),
     )
     .await;
 
-    Ok([local.unwrap(), tidal.unwrap(), qobuz.unwrap()].concat())
+    Ok(filter_albums(
+        [local.unwrap(), tidal.unwrap(), qobuz.unwrap()].concat(),
+        filters,
+    ))
 }
 
 pub async fn get_local_albums(
     player_id: &str,
     data: web::Data<AppState>,
+    filters: AlbumFilters,
 ) -> serde_json::Result<Vec<Album>> {
+    if filters
+        .sources
+        .is_some_and(|s| !s.contains(&AlbumSource::Local))
+    {
+        return Ok(vec![]);
+    }
+
     let proxy_url = &data.proxy_url;
     let request = CacheRequest {
         key: format!("local_albums|{player_id}|{proxy_url}"),
@@ -187,7 +218,15 @@ pub async fn get_local_albums(
 pub async fn get_tidal_albums(
     player_id: &str,
     data: web::Data<AppState>,
+    filters: AlbumFilters,
 ) -> serde_json::Result<Vec<Album>> {
+    if filters
+        .sources
+        .is_some_and(|s| !s.contains(&AlbumSource::Tidal))
+    {
+        return Ok(vec![]);
+    }
+
     let proxy_url = &data.proxy_url;
     let request = CacheRequest {
         key: format!("tidal_albums|{player_id}|{proxy_url}"),
@@ -265,7 +304,15 @@ pub async fn get_tidal_albums(
 pub async fn get_qobuz_albums(
     player_id: &str,
     data: web::Data<AppState>,
+    filters: AlbumFilters,
 ) -> serde_json::Result<Vec<Album>> {
+    if filters
+        .sources
+        .is_some_and(|s| s.contains(&AlbumSource::Qobuz))
+    {
+        return Ok(vec![]);
+    }
+
     let proxy_url = &data.proxy_url;
     let request = CacheRequest {
         key: format!("qobuz_albums|{player_id}|{proxy_url}"),
