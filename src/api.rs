@@ -1,15 +1,14 @@
-use crate::menu::get_all_albums;
+use crate::menu::{get_all_albums, Album};
 use crate::player::{
     connect, get_players, get_playlist_status, get_status, handshake, ping, play_album,
     player_next_track, player_pause, player_play, player_previous_track, player_start_track,
-    set_player_status, PingResponse,
+    set_player_status, PingResponse, PlaylistStatus, Status,
 };
 
 use crate::app::AppState;
-use crate::sqlite::menu::get_album;
+use crate::sqlite::menu::{get_album, FullAlbum};
 
 use core::panic;
-use std::error::Error;
 use std::thread;
 use std::time::Duration;
 
@@ -18,14 +17,13 @@ use actix_web::HttpResponse;
 use actix_web::{
     get, post,
     web::{self, Json},
-    Responder,
+    Result,
 };
 use serde::Deserialize;
-
-type Result<T> = std::result::Result<T, Box<dyn Error>>;
+use serde_json::Value;
 
 #[post("/connect")]
-pub async fn connect_endpoint(data: web::Data<AppState>) -> Result<impl Responder> {
+pub async fn connect_endpoint(data: web::Data<AppState>) -> Result<Json<Value>> {
     let client_id = match handshake(data.clone()).await {
         Ok(handshake) => handshake.client_id.clone(),
         Err(error) => panic!("Failed to handshake: {:?}", error),
@@ -57,7 +55,7 @@ pub struct StatusRequest {}
 pub async fn status_endpoint(
     _query: web::Query<StatusRequest>,
     data: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<Json<Status>> {
     let status_response = match get_status(data).await {
         Ok(resp) => resp,
         Err(error) => panic!("Failed to get status: {:?}", error),
@@ -76,7 +74,7 @@ pub struct PlaylistStatusRequest {
 pub async fn playlist_status_endpoint(
     query: web::Query<PlaylistStatusRequest>,
     data: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<Json<PlaylistStatus>> {
     let playlist_status_response = match get_playlist_status(query.player_id.clone(), data).await {
         Ok(resp) => resp,
         Err(error) => panic!("Failed to get status: {:?}", error),
@@ -95,7 +93,7 @@ pub struct PingQuery {
 pub async fn ping_endpoint(
     query: web::Query<PingQuery>,
     data: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<Json<Value>> {
     let ping_response = match ping(query.client_id.clone(), data).await {
         Ok(resp) => resp,
         Err(error) => panic!("Failed to ping: {:?}", error),
@@ -120,7 +118,7 @@ pub struct GetAlbumQuery {
 pub async fn get_album_endpoint(
     query: web::Query<GetAlbumQuery>,
     data: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<Json<FullAlbum>> {
     let player_id = &query.player_id;
     let album_id = query.album_id;
 
@@ -140,7 +138,7 @@ pub struct GetAlbumsQuery {
 pub async fn get_albums_endpoint(
     query: web::Query<GetAlbumsQuery>,
     data: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<Json<Vec<Album>>> {
     let player_id = &query.player_id;
 
     match get_all_albums(player_id, data.clone()).await {
@@ -159,7 +157,7 @@ pub struct GetPlayersQuery {
 pub async fn get_players_endpoint(
     query: web::Query<GetPlayersQuery>,
     data: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<Json<Value>> {
     let player_ids: Vec<String> = get_players(query.client_id.clone(), data)
         .await
         .unwrap()
@@ -182,7 +180,7 @@ pub struct PausePlayerQuery {
 pub async fn pause_player_endpoint(
     query: web::Query<PausePlayerQuery>,
     data: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<Json<Value>> {
     match player_pause(query.player_id.clone(), data).await {
         Ok(json) => json,
         Err(_) => panic!("Failed to pause player"),
@@ -201,7 +199,7 @@ pub struct PlayPlayerQuery {
 pub async fn play_player_endpoint(
     query: web::Query<PlayPlayerQuery>,
     data: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<Json<Value>> {
     match player_play(query.player_id.clone(), data).await {
         Ok(json) => json,
         Err(_) => panic!("Failed to play player"),
@@ -221,7 +219,7 @@ pub struct PlayAlbumQuery {
 pub async fn play_album_endpoint(
     query: web::Query<PlayAlbumQuery>,
     data: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<Json<Value>> {
     match play_album(query.player_id.clone(), query.album_id.clone(), data).await {
         Ok(json) => json,
         Err(error) => panic!("Failed to play album {:?}", error),
@@ -246,7 +244,7 @@ pub struct PlayerStartTrackQuery {
 pub async fn player_start_track_endpoint(
     query: web::Query<PlayerStartTrackQuery>,
     data: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<Json<Value>> {
     match player_start_track(query.player_id.clone(), data).await {
         Ok(json) => json,
         Err(_) => panic!("Failed to go to player start track"),
@@ -259,7 +257,7 @@ pub async fn player_start_track_endpoint(
 pub async fn player_next_track_endpoint(
     query: web::Query<PlayerNextTrackQuery>,
     data: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<Json<Value>> {
     match player_next_track(query.player_id.clone(), data).await {
         Ok(json) => json,
         Err(_) => panic!("Failed to go to player next track"),
@@ -278,7 +276,7 @@ pub struct PlayerPreviousTrackQuery {
 pub async fn player_previous_track_endpoint(
     query: web::Query<PlayerPreviousTrackQuery>,
     data: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<Json<Value>> {
     match player_previous_track(query.player_id.clone(), data).await {
         Ok(json) => json,
         Err(_) => panic!("Failed to go to player previous track"),
@@ -297,7 +295,7 @@ pub struct StartPlayerQuery {
 pub async fn start_player_endpoint(
     query: web::Query<StartPlayerQuery>,
     data: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<Json<Value>> {
     match set_player_status(query.player_id.clone(), String::from("1"), data).await {
         Ok(json) => json,
         Err(_) => panic!("Failed to start player"),
@@ -316,7 +314,7 @@ pub struct StopPlayerQuery {
 pub async fn stop_player_endpoint(
     query: web::Query<StopPlayerQuery>,
     data: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<Json<Value>> {
     match set_player_status(query.player_id.clone(), String::from("0"), data).await {
         Ok(json) => json,
         Err(_) => panic!("Failed to stop player"),
@@ -335,7 +333,7 @@ pub struct RestartPlayerQuery {
 pub async fn restart_player_endpoint(
     query: web::Query<RestartPlayerQuery>,
     data: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<Json<Value>> {
     set_player_status(query.player_id.clone(), String::from("0"), data.clone())
         .await
         .unwrap();
@@ -354,7 +352,7 @@ pub async fn proxy_post_endpoint(
     body: String,
     path: web::Path<(String,)>,
     data: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<Json<Value>> {
     let proxy_url = &data.proxy_url;
     let proxy_value = path.into_inner().0;
     let request_url = format!("{proxy_url}/{proxy_value}");
@@ -374,7 +372,7 @@ pub async fn proxy_post_endpoint(
 pub async fn proxy_get_endpoint(
     path: web::Path<(String,)>,
     data: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<HttpResponse> {
     let proxy_url = &data.proxy_url;
     let proxy_value = path.into_inner().0;
     let request_url = format!("{proxy_url}/{proxy_value}");
@@ -402,7 +400,7 @@ pub async fn proxy_get_endpoint(
 pub async fn image_proxy_endpoint(
     path: web::Path<(String,)>,
     data: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<HttpResponse> {
     let paths = path.into_inner();
     let url = paths.0;
 
@@ -432,7 +430,7 @@ pub async fn image_proxy_endpoint(
 pub async fn album_icon_endpoint(
     path: web::Path<(String, String)>,
     data: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<HttpResponse> {
     let proxy_url = &data.proxy_url;
     let paths = path.into_inner();
     let album_id = paths.0;
