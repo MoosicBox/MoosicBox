@@ -6,12 +6,13 @@ use crate::player::{
 };
 
 use crate::app::AppState;
-use crate::sqlite::menu::{get_album, FullAlbum};
+use crate::sqlite::menu::{get_album, FullAlbum, GetAlbumError};
 
 use core::panic;
 use std::thread;
 use std::time::Duration;
 
+use actix_web::error::ErrorNotFound;
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
 use actix_web::{
@@ -124,7 +125,12 @@ pub async fn get_album_endpoint(
 
     match get_album(player_id, album_id, data.clone()).await {
         Ok(resp) => Ok(Json(resp)),
-        Err(error) => panic!("Failed to get album: {:?}", error),
+        Err(error) => match error {
+            GetAlbumError::AlbumNotFound { album_id } => {
+                Err(ErrorNotFound(format!("Album not found with id {album_id}")))
+            }
+            _ => panic!("Failed to get album: {:?}", error),
+        },
     }
 }
 
