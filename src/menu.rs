@@ -350,7 +350,6 @@ pub async fn get_tidal_albums(
                     } else {
                         unreachable!()
                     };
-                    println!("{}", item.text);
                     Album {
                         id,
                         title: String::from(text_parts[0]),
