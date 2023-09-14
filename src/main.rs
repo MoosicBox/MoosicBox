@@ -3,8 +3,10 @@ mod app;
 mod cache;
 mod menu;
 mod player;
+mod sqlite;
 
 use actix_web::{http, middleware, web, App, HttpServer};
+use app::Db;
 use std::{env, time::Duration};
 
 use actix_cors::Cors;
@@ -30,6 +32,8 @@ async fn main() -> std::io::Result<()> {
             .timeout(Duration::from_secs(120))
             .finish();
 
+        let library_db = ::sqlite::open("library.db").unwrap();
+
         let cors = Cors::default()
             .allow_any_origin()
             .allowed_methods(vec!["GET", "POST"])
@@ -46,6 +50,9 @@ async fn main() -> std::io::Result<()> {
                 proxy_url,
                 proxy_client,
                 image_client,
+                db: Db {
+                    library: library_db,
+                },
             }))
             .service(api::connect_endpoint)
             .service(api::status_endpoint)
@@ -57,6 +64,7 @@ async fn main() -> std::io::Result<()> {
             .service(api::player_start_track_endpoint)
             .service(api::player_next_track_endpoint)
             .service(api::player_previous_track_endpoint)
+            .service(api::get_album_endpoint)
             .service(api::get_albums_endpoint)
             .service(api::get_players_endpoint)
             .service(api::start_player_endpoint)

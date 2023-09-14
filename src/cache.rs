@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::error::Error;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use enum_as_inner::EnumAsInner;
@@ -8,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Mutex, OnceLock};
 
 use crate::menu::Album;
+use crate::sqlite::menu::FullAlbum;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct CacheItem {
@@ -19,6 +21,8 @@ struct CacheItem {
 #[serde(untagged)]
 pub enum CacheItemType {
     Albums(Vec<Album>),
+    Album(Album),
+    FullAlbum(FullAlbum),
 }
 
 pub fn current_time_nanos() -> u128 {
@@ -37,9 +41,9 @@ pub struct CacheRequest {
 pub async fn get_or_set_to_cache<Fut>(
     request: CacheRequest,
     compute: impl Fn() -> Fut,
-) -> CacheItemType
+) -> Result<CacheItemType, Box<dyn Error>>
 where
-    Fut: Future<Output = CacheItemType>,
+    Fut: Future<Output = Result<CacheItemType, Box<dyn Error>>>,
 {
     let info: HashMap<String, CacheItem> = HashMap::new();
 
@@ -48,11 +52,14 @@ where
 
     if let Some(entry) = cache.lock().unwrap().get(&request.key) {
         if entry.expiration > current_time_nanos() {
-            return entry.data.clone();
+            return Ok(entry.data.clone());
         }
     }
 
-    let value = compute().await;
+    let value = match compute().await {
+        Ok(x) => x,
+        Err(error) => return Err(error),
+    };
 
     cache.lock().unwrap().insert(
         request.key,
@@ -62,5 +69,5 @@ where
         },
     );
 
-    value
+    Ok(value)
 }

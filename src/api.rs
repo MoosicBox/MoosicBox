@@ -6,8 +6,10 @@ use crate::player::{
 };
 
 use crate::app::AppState;
+use crate::sqlite::menu::get_album;
 
 use core::panic;
+use std::error::Error;
 use std::thread;
 use std::time::Duration;
 
@@ -19,7 +21,8 @@ use actix_web::{
     Responder,
 };
 use serde::Deserialize;
-use serde_json::Result;
+
+type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 #[post("/connect")]
 pub async fn connect_endpoint(data: web::Data<AppState>) -> Result<impl Responder> {
@@ -104,6 +107,27 @@ pub async fn ping_endpoint(
     };
 
     Ok(Json(serde_json::json!({"alive": successful})))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GetAlbumQuery {
+    player_id: String,
+    album_id: i32,
+}
+
+#[get("/album")]
+pub async fn get_album_endpoint(
+    query: web::Query<GetAlbumQuery>,
+    data: web::Data<AppState>,
+) -> Result<impl Responder> {
+    let player_id = &query.player_id;
+    let album_id = query.album_id;
+
+    match get_album(player_id, album_id, data.clone()).await {
+        Ok(resp) => Ok(Json(resp)),
+        Err(error) => panic!("Failed to get album: {:?}", error),
+    }
 }
 
 #[derive(Deserialize, Clone)]

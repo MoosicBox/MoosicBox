@@ -3,12 +3,23 @@ use crate::{
     cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
 };
 
-use core::panic;
-use std::time::Duration;
+use std::{error::Error, time::Duration};
 
 use actix_web::web;
 use futures::future;
-use serde::{de::Error, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
+
+type Result<T> = std::result::Result<T, Box<dyn Error>>;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FullAlbum {
+    pub id: String,
+    pub title: String,
+    pub artist: String,
+    pub year: Option<i32>,
+    pub icon: Option<String>,
+    pub source: AlbumSource,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Album {
@@ -48,6 +59,38 @@ pub struct AlbumResponseActionsGo {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AlbumResponseActions {
     go: AlbumResponseActionsGo,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetAlbumResponse {
+    pub result: GetAlbumResponseResult,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetAlbumResponseResultTitle {
+    pub title: String,
+    pub duration: String,
+    pub disc: String,
+    pub compilation: String,
+    pub genre: String,
+    pub artist_id: String,
+    #[serde(rename = "tracknum")]
+    pub track_num: String,
+    pub url: String,
+    #[serde(rename = "albumartist")]
+    pub album_artist: String,
+    #[serde(rename = "trackartist")]
+    pub track_artist: String,
+    #[serde(rename = "albumartist_ids")]
+    pub album_artist_ids: String,
+    #[serde(rename = "trackartist_ids")]
+    pub track_artist_ids: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetAlbumResponseResult {
+    pub count: i32,
+    pub titles_loop: Vec<GetAlbumResponseResultTitle>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -99,12 +142,14 @@ pub struct AlbumFilters {
     pub sources: Option<Vec<AlbumSource>>,
 }
 
-pub fn filter_albums(albums: Vec<Album>, filters: AlbumFilters) -> Vec<Album> {
+pub fn filter_albums(albums: Vec<Album>, filters: &AlbumFilters) -> Vec<Album> {
     albums
         .into_iter()
-        .filter(|album| match &filters.sources {
-            Some(sources) => sources.iter().any(|s| album.source == *s),
-            None => true,
+        .filter(|album| {
+            !filters
+                .sources
+                .as_ref()
+                .is_some_and(|s| !s.contains(&album.source))
         })
         .collect()
 }
@@ -113,30 +158,43 @@ pub async fn get_all_albums(
     player_id: &str,
     data: web::Data<AppState>,
 ) -> serde_json::Result<Vec<Album>> {
-    let filters = AlbumFilters {
-        sources: Some(vec![AlbumSource::Local]),
-    };
+    let filters = AlbumFilters { sources: None };
 
     let (local, tidal, qobuz) = future::join3(
-        get_local_albums(player_id, data.clone(), filters.clone()),
-        get_tidal_albums(player_id, data.clone(), filters.clone()),
-        get_qobuz_albums(player_id, data, filters.clone()),
+        get_local_albums(player_id, data.clone(), &filters),
+        get_tidal_albums(player_id, data.clone(), &filters),
+        get_qobuz_albums(player_id, data, &filters),
     )
     .await;
 
     Ok(filter_albums(
-        [local.unwrap(), tidal.unwrap(), qobuz.unwrap()].concat(),
-        filters,
+        [
+            local.unwrap_or_else(|err| {
+                println!("Failed to get Local albums: {:?}", err);
+                vec![]
+            }),
+            tidal.unwrap_or_else(|err| {
+                println!("Failed to get Tidal albums: {:?}", err);
+                vec![]
+            }),
+            qobuz.unwrap_or_else(|err| {
+                println!("Failed to get Qobuz albums: {:?}", err);
+                vec![]
+            }),
+        ]
+        .concat(),
+        &filters,
     ))
 }
 
 pub async fn get_local_albums(
     player_id: &str,
     data: web::Data<AppState>,
-    filters: AlbumFilters,
-) -> serde_json::Result<Vec<Album>> {
+    filters: &AlbumFilters,
+) -> Result<Vec<Album>> {
     if filters
         .sources
+        .as_ref()
         .is_some_and(|s| !s.contains(&AlbumSource::Local))
     {
         return Ok(vec![]);
@@ -148,7 +206,7 @@ pub async fn get_local_albums(
         expiration: Duration::from_secs(60 * 60),
     };
 
-    match get_or_set_to_cache(request, || async {
+    Ok(get_or_set_to_cache(request, || async {
         let get_albums_url = format!("{proxy_url}/jsonrpc.js");
 
         let get_albums_request = serde_json::json!({
@@ -168,60 +226,47 @@ pub async fn get_local_albums(
             ]
         });
 
-        let album_items = match data
-            .proxy_client
-            .post(get_albums_url)
-            .timeout(Duration::from_secs(100))
-            .send_json(&get_albums_request)
-            .await
-        {
-            Ok(mut res) => match res.json::<GetLocalAlbumsResponse>().await {
-                Ok(json) => json.result.albums_loop,
-                Err(error) => {
-                    panic!("Failed to deserialize GetLocalAlbumsResponse: {:?}", error)
-                }
-            },
-            Err(error) => panic!("Request failure: {:?}", error),
-        };
-
-        let albums = album_items
-            .into_iter()
-            .filter(|item| item.extid.is_none())
-            .map(|item| {
-                let icon = item
-                    .artwork_track_id
-                    .as_ref()
-                    .map(|track_id| format!("albums/{track_id}/300x300"));
-                Album {
-                    id: format!("album_id:{:?}", item.id),
-                    title: item.album.clone(),
-                    artist: item.artist.clone(),
-                    year: Some(item.year),
-                    icon,
-                    source: AlbumSource::Local,
-                }
-            })
-            .collect();
-
-        CacheItemType::Albums(albums)
+        Ok(CacheItemType::Albums(
+            data.proxy_client
+                .post(get_albums_url)
+                .send_json(&get_albums_request)
+                .await?
+                .json::<GetLocalAlbumsResponse>()
+                .await?
+                .result
+                .albums_loop
+                .into_iter()
+                .filter(|item| item.extid.is_none())
+                .map(|item| {
+                    let icon = item
+                        .artwork_track_id
+                        .as_ref()
+                        .map(|track_id| format!("albums/{track_id}/300x300"));
+                    Album {
+                        id: format!("album_id:{:?}", item.id),
+                        title: item.album.clone(),
+                        artist: item.artist.clone(),
+                        year: Some(item.year),
+                        icon,
+                        source: AlbumSource::Local,
+                    }
+                })
+                .collect(),
+        ))
     })
-    .await
+    .await?
     .into_albums()
-    {
-        Ok(albums) => Ok(albums),
-        Err(error) => {
-            Err(format!("Error fetching albums: {:?}", error)).map_err(serde_json::Error::custom)
-        }
-    }
+    .unwrap())
 }
 
 pub async fn get_tidal_albums(
     player_id: &str,
     data: web::Data<AppState>,
-    filters: AlbumFilters,
-) -> serde_json::Result<Vec<Album>> {
+    filters: &AlbumFilters,
+) -> Result<Vec<Album>> {
     if filters
         .sources
+        .as_ref()
         .is_some_and(|s| !s.contains(&AlbumSource::Tidal))
     {
         return Ok(vec![]);
@@ -233,7 +278,7 @@ pub async fn get_tidal_albums(
         expiration: Duration::from_secs(60 * 60),
     };
 
-    match get_or_set_to_cache(request, || async {
+    Ok(get_or_set_to_cache(request, || async {
         let get_albums_url = format!("{proxy_url}/jsonrpc.js");
 
         let get_albums_request = serde_json::json!({
@@ -247,68 +292,58 @@ pub async fn get_tidal_albums(
                     0,
                     25000,
                     "menu:myapps",
-                    "item_id:7342f28d.4.1.2"
+                    "item_id:b26ac9e7.1.1.2"
                 ]
             ]
         });
 
-        let album_items = match data
-            .proxy_client
-            .post(get_albums_url)
-            .timeout(Duration::from_secs(100))
-            .send_json(&get_albums_request)
-            .await
-        {
-            Ok(mut res) => match res.json::<GetAlbumsResponse>().await {
-                Ok(json) => json.result.item_loop,
-                Err(error) => panic!("Failed to deserialize GetAlbumsResponse: {:?}", error),
-            },
-            Err(error) => panic!("Request failure: {:?}", error),
-        };
-
-        let albums = album_items
-            .into_iter()
-            .filter(|item| item.params.is_some() || item.actions.is_some())
-            .map(|item| {
-                let text_parts = item.text.split('\n').collect::<Vec<&str>>();
-                let id = if let Some(params) = &item.params {
-                    format!("item_id:{}", params.item_id)
-                } else if let Some(actions) = &item.actions {
-                    format!("item_id:{}", actions.go.params.item_id)
-                } else {
-                    unreachable!()
-                };
-                Album {
-                    id,
-                    title: String::from(text_parts[0]),
-                    artist: String::from(text_parts[1]),
-                    year: None,
-                    icon: item.icon.clone(),
-                    source: AlbumSource::Tidal,
-                }
-            })
-            .collect();
-
-        CacheItemType::Albums(albums)
+        Ok(CacheItemType::Albums(
+            data.proxy_client
+                .post(get_albums_url)
+                .send_json(&get_albums_request)
+                .await?
+                .json::<GetAlbumsResponse>()
+                .await?
+                .result
+                .item_loop
+                .into_iter()
+                .filter(|item| item.params.is_some() || item.actions.is_some())
+                .map(|item| {
+                    let text_parts = item.text.split('\n').collect::<Vec<&str>>();
+                    let id = if let Some(params) = &item.params {
+                        format!("item_id:{}", params.item_id)
+                    } else if let Some(actions) = &item.actions {
+                        format!("item_id:{}", actions.go.params.item_id)
+                    } else {
+                        unreachable!()
+                    };
+                    println!("{}", item.text);
+                    Album {
+                        id,
+                        title: String::from(text_parts[0]),
+                        artist: String::from(text_parts[1]),
+                        year: None,
+                        icon: item.icon.clone(),
+                        source: AlbumSource::Tidal,
+                    }
+                })
+                .collect(),
+        ))
     })
-    .await
+    .await?
     .into_albums()
-    {
-        Ok(albums) => Ok(albums),
-        Err(error) => {
-            Err(format!("Error fetching albums: {:?}", error)).map_err(serde_json::Error::custom)
-        }
-    }
+    .unwrap())
 }
 
 pub async fn get_qobuz_albums(
     player_id: &str,
     data: web::Data<AppState>,
-    filters: AlbumFilters,
-) -> serde_json::Result<Vec<Album>> {
+    filters: &AlbumFilters,
+) -> Result<Vec<Album>> {
     if filters
         .sources
-        .is_some_and(|s| s.contains(&AlbumSource::Qobuz))
+        .as_ref()
+        .is_some_and(|s| !s.contains(&AlbumSource::Qobuz))
     {
         return Ok(vec![]);
     }
@@ -319,7 +354,7 @@ pub async fn get_qobuz_albums(
         expiration: Duration::from_secs(60 * 60),
     };
 
-    match get_or_set_to_cache(request, || async {
+    Ok(get_or_set_to_cache(request, || async {
         let get_albums_url = format!("{proxy_url}/jsonrpc.js");
 
         let get_albums_request = serde_json::json!({
@@ -338,61 +373,49 @@ pub async fn get_qobuz_albums(
             ]
         });
 
-        let album_items = match data
-            .proxy_client
-            .post(get_albums_url)
-            .timeout(Duration::from_secs(100))
-            .send_json(&get_albums_request)
-            .await
-        {
-            Ok(mut res) => match res.json::<GetAlbumsResponse>().await {
-                Ok(json) => json.result.item_loop,
-                Err(error) => panic!("Failed to deserialize qobuz GetAlbumsResponse: {:?}", error),
-            },
-            Err(error) => panic!("Request failure: {:?}", error),
-        };
-
-        let albums = album_items
-            .into_iter()
-            .filter(|item| item.params.is_some() || item.actions.is_some())
-            .map(|item| {
-                let text_parts = item.text.split('\n').collect::<Vec<&str>>();
-                let artist_and_year = String::from(text_parts[1]);
-                let artist = &artist_and_year[..artist_and_year.len() - 7];
-                let year = &artist_and_year[artist.len() + 2..artist_and_year.len() - 1];
-                let proxy_icon_url = item.icon.clone();
-                let title_and_maybe_star = String::from(text_parts[0]);
-                let title = match title_and_maybe_star.strip_prefix("* ") {
-                    Some(title) => String::from(title),
-                    None => title_and_maybe_star,
-                };
-                let icon = proxy_icon_url.map(|url| format!("{proxy_url}{url}"));
-                let id = if let Some(params) = &item.params {
-                    format!("item_id:{}", params.item_id)
-                } else if let Some(actions) = &item.actions {
-                    format!("item_id:{}", actions.go.params.item_id)
-                } else {
-                    unreachable!()
-                };
-                Album {
-                    id,
-                    title,
-                    artist: String::from(artist),
-                    year: String::from(year).parse::<i32>().ok(),
-                    icon,
-                    source: AlbumSource::Qobuz,
-                }
-            })
-            .collect();
-
-        CacheItemType::Albums(albums)
+        Ok(CacheItemType::Albums(
+            data.proxy_client
+                .post(get_albums_url)
+                .send_json(&get_albums_request)
+                .await?
+                .json::<GetAlbumsResponse>()
+                .await?
+                .result
+                .item_loop
+                .into_iter()
+                .filter(|item| item.params.is_some() || item.actions.is_some())
+                .map(|item| {
+                    let text_parts = item.text.split('\n').collect::<Vec<&str>>();
+                    let artist_and_year = String::from(text_parts[1]);
+                    let artist = &artist_and_year[..artist_and_year.len() - 7];
+                    let year = &artist_and_year[artist.len() + 2..artist_and_year.len() - 1];
+                    let proxy_icon_url = item.icon.clone();
+                    let title_and_maybe_star = String::from(text_parts[0]);
+                    let title = match title_and_maybe_star.strip_prefix("* ") {
+                        Some(title) => String::from(title),
+                        None => title_and_maybe_star,
+                    };
+                    let icon = proxy_icon_url.map(|url| format!("{proxy_url}{url}"));
+                    let id = if let Some(params) = &item.params {
+                        format!("item_id:{}", params.item_id)
+                    } else if let Some(actions) = &item.actions {
+                        format!("item_id:{}", actions.go.params.item_id)
+                    } else {
+                        unreachable!()
+                    };
+                    Album {
+                        id,
+                        title,
+                        artist: String::from(artist),
+                        year: String::from(year).parse::<i32>().ok(),
+                        icon,
+                        source: AlbumSource::Qobuz,
+                    }
+                })
+                .collect(),
+        ))
     })
-    .await
+    .await?
     .into_albums()
-    {
-        Ok(albums) => Ok(albums),
-        Err(error) => {
-            Err(format!("Error fetching albums: {:?}", error)).map_err(serde_json::Error::custom)
-        }
-    }
+    .unwrap())
 }
