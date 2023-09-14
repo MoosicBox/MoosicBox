@@ -126,9 +126,7 @@ pub async fn get_album_endpoint(
     match get_album(player_id, album_id, data.clone()).await {
         Ok(resp) => Ok(Json(resp)),
         Err(error) => match error {
-            GetAlbumError::AlbumNotFound { album_id } => {
-                Err(ErrorNotFound(format!("Album not found with id {album_id}")))
-            }
+            GetAlbumError::AlbumNotFound { .. } => Err(ErrorNotFound(error.to_string())),
             _ => panic!("Failed to get album: {:?}", error),
         },
     }
