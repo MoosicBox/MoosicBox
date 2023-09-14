@@ -4,7 +4,7 @@ use crate::{
     menu::AlbumSource,
 };
 
-use std::{error::Error, time::Duration};
+use std::time::Duration;
 
 use actix_web::web;
 use serde::{Deserialize, Serialize};
@@ -28,17 +28,8 @@ pub enum GetAlbumError {
     TooManyAlbumsFound { album_id: i32 },
     #[error("Unknown source: {album_source:?}")]
     UnknownSource { album_source: String },
-    #[error("Unknown error: {error:?}")]
-    UnknownError { error: Box<dyn Error> },
-}
-
-fn unknown_error<E>(error: E) -> GetAlbumError
-where
-    E: Error + 'static,
-{
-    GetAlbumError::UnknownError {
-        error: Box::new(error),
-    }
+    #[error(transparent)]
+    SqliteError(#[from] sqlite::Error),
 }
 
 pub async fn get_album(
@@ -56,8 +47,7 @@ pub async fn get_album(
         let results: Vec<_> = data
             .db
             .library
-            .prepare("SELECT * from albums WHERE id = ?")
-            .map_err(unknown_error)?
+            .prepare("SELECT * from albums WHERE id = ?")?
             .into_iter()
             .bind((1, album_id as i64))
             .unwrap()

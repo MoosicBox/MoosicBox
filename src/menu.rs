@@ -3,7 +3,7 @@ use crate::{
     cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
 };
 
-use std::{error::Error, time::Duration};
+use std::time::Duration;
 
 use actix_web::web;
 use futures::future;
@@ -188,17 +188,10 @@ pub async fn get_all_albums(
 
 #[derive(Debug, Error)]
 pub enum GetLocalAlbumsError {
-    #[error("Unknown error: {error:?}")]
-    UnknownError { error: Box<dyn Error> },
-}
-
-fn unknown_error<E>(error: E) -> GetLocalAlbumsError
-where
-    E: Error + 'static,
-{
-    GetLocalAlbumsError::UnknownError {
-        error: Box::new(error),
-    }
+    #[error(transparent)]
+    RequestError(#[from] awc::error::SendRequestError),
+    #[error(transparent)]
+    JsonError(#[from] awc::error::JsonPayloadError),
 }
 
 pub async fn get_local_albums(
@@ -240,15 +233,13 @@ pub async fn get_local_albums(
             ]
         });
 
-        Ok(CacheItemType::Albums(
+        Ok::<CacheItemType, GetLocalAlbumsError>(CacheItemType::Albums(
             data.proxy_client
                 .post(get_albums_url)
                 .send_json(&get_albums_request)
-                .await
-                .map_err(unknown_error)?
+                .await?
                 .json::<GetLocalAlbumsResponse>()
-                .await
-                .map_err(unknown_error)?
+                .await?
                 .result
                 .albums_loop
                 .into_iter()
@@ -277,17 +268,10 @@ pub async fn get_local_albums(
 
 #[derive(Debug, Error)]
 pub enum GetTidalAlbumsError {
-    #[error("Unknown error: {error:?}")]
-    UnknownError { error: Box<dyn Error> },
-}
-
-fn unknown_tidal_error<E>(error: E) -> GetTidalAlbumsError
-where
-    E: Error + 'static,
-{
-    GetTidalAlbumsError::UnknownError {
-        error: Box::new(error),
-    }
+    #[error(transparent)]
+    RequestError(#[from] awc::error::SendRequestError),
+    #[error(transparent)]
+    JsonError(#[from] awc::error::JsonPayloadError),
 }
 
 pub async fn get_tidal_albums(
@@ -328,15 +312,13 @@ pub async fn get_tidal_albums(
             ]
         });
 
-        Ok(CacheItemType::Albums(
+        Ok::<CacheItemType, GetTidalAlbumsError>(CacheItemType::Albums(
             data.proxy_client
                 .post(get_albums_url)
                 .send_json(&get_albums_request)
-                .await
-                .map_err(unknown_tidal_error)?
+                .await?
                 .json::<GetAlbumsResponse>()
-                .await
-                .map_err(unknown_tidal_error)?
+                .await?
                 .result
                 .item_loop
                 .into_iter()
@@ -369,17 +351,10 @@ pub async fn get_tidal_albums(
 
 #[derive(Debug, Error)]
 pub enum GetQobuzAlbumsError {
-    #[error("Unknown error: {error:?}")]
-    UnknownError { error: Box<dyn Error> },
-}
-
-fn unknown_qobuz_error<E>(error: E) -> GetQobuzAlbumsError
-where
-    E: Error + 'static,
-{
-    GetQobuzAlbumsError::UnknownError {
-        error: Box::new(error),
-    }
+    #[error(transparent)]
+    RequestError(#[from] awc::error::SendRequestError),
+    #[error(transparent)]
+    JsonError(#[from] awc::error::JsonPayloadError),
 }
 
 pub async fn get_qobuz_albums(
@@ -420,15 +395,13 @@ pub async fn get_qobuz_albums(
             ]
         });
 
-        Ok(CacheItemType::Albums(
+        Ok::<CacheItemType, GetQobuzAlbumsError>(CacheItemType::Albums(
             data.proxy_client
                 .post(get_albums_url)
                 .send_json(&get_albums_request)
-                .await
-                .map_err(unknown_qobuz_error)?
+                .await?
                 .json::<GetAlbumsResponse>()
-                .await
-                .map_err(unknown_qobuz_error)?
+                .await?
                 .result
                 .item_loop
                 .into_iter()
