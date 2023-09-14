@@ -169,15 +169,15 @@ pub async fn get_all_albums(
     Ok(filter_albums(
         [
             local.unwrap_or_else(|err| {
-                println!("Failed to get Local albums: {:?}", err);
+                eprintln!("Failed to get Local albums: {:?}", err);
                 vec![]
             }),
             tidal.unwrap_or_else(|err| {
-                println!("Failed to get Tidal albums: {:?}", err);
+                eprintln!("Failed to get Tidal albums: {:?}", err);
                 vec![]
             }),
             qobuz.unwrap_or_else(|err| {
-                println!("Failed to get Qobuz albums: {:?}", err);
+                eprintln!("Failed to get Qobuz albums: {:?}", err);
                 vec![]
             }),
         ]
