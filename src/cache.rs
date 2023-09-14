@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use std::sync::{Mutex, OnceLock};
 
-use crate::menu::Album;
+use crate::slim::menu::Album;
 use crate::sqlite::menu::FullAlbum;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

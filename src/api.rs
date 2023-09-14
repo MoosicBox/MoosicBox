@@ -1,5 +1,5 @@
-use crate::menu::{get_all_albums, Album};
-use crate::player::{
+use crate::slim::menu::{get_all_albums, Album};
+use crate::slim::player::{
     connect, get_players, get_playlist_status, get_status, handshake, ping, play_album,
     player_next_track, player_pause, player_play, player_previous_track, player_start_track,
     set_player_status, PingResponse, PlaylistStatus, Status,

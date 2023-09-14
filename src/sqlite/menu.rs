@@ -1,7 +1,7 @@
 use crate::{
     app::AppState,
     cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
-    menu::AlbumSource,
+    slim::menu::AlbumSource,
 };
 
 use std::time::Duration;

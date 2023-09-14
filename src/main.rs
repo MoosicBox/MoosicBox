@@ -1,8 +1,7 @@
 mod api;
 mod app;
 mod cache;
-mod menu;
-mod player;
+mod slim;
 mod sqlite;
 
 use actix_web::{http, middleware, web, App, HttpServer};
