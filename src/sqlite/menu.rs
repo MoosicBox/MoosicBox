@@ -4,12 +4,11 @@ use crate::{
     menu::AlbumSource,
 };
 
-use std::{error::Error, fmt, time::Duration};
+use std::{error::Error, time::Duration};
 
 use actix_web::web;
 use serde::{Deserialize, Serialize};
-
-type Result<T> = std::result::Result<T, Box<dyn Error>>;
+use thiserror::Error;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FullAlbum {
@@ -21,69 +20,24 @@ pub struct FullAlbum {
     pub source: AlbumSource,
 }
 
-#[derive(Debug, Clone)]
-pub struct AlbumNotFound {
-    details: String,
-}
-impl AlbumNotFound {
-    fn new(msg: Option<&str>) -> AlbumNotFound {
-        AlbumNotFound {
-            details: msg.unwrap_or("Album not found").to_string(),
-        }
-    }
-}
-impl fmt::Display for AlbumNotFound {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.details)
-    }
-}
-impl Error for AlbumNotFound {
-    fn description(&self) -> &str {
-        &self.details
-    }
+#[derive(Debug, Error)]
+pub enum GetAlbumError {
+    #[error("Album not found with ID {album_id:?}")]
+    AlbumNotFound { album_id: i32 },
+    #[error("Too many albums found with ID {album_id:?}")]
+    TooManyAlbumsFound { album_id: i32 },
+    #[error("Unknown source: {album_source:?}")]
+    UnknownSource { album_source: String },
+    #[error("Unknown error: {error:?}")]
+    UnknownError { error: Box<dyn Error> },
 }
 
-#[derive(Debug, Clone)]
-pub struct TooManyAlbumsFound {
-    details: String,
-}
-impl TooManyAlbumsFound {
-    fn new(msg: Option<&str>) -> TooManyAlbumsFound {
-        TooManyAlbumsFound {
-            details: msg.unwrap_or("Too many albums found").to_string(),
-        }
-    }
-}
-impl fmt::Display for TooManyAlbumsFound {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.details)
-    }
-}
-impl Error for TooManyAlbumsFound {
-    fn description(&self) -> &str {
-        &self.details
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct UnknownSource {
-    details: String,
-}
-impl UnknownSource {
-    fn new(source: &str) -> UnknownSource {
-        UnknownSource {
-            details: format!("Unknown source '{source}'"),
-        }
-    }
-}
-impl fmt::Display for UnknownSource {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.details)
-    }
-}
-impl Error for UnknownSource {
-    fn description(&self) -> &str {
-        &self.details
+fn unknown_error<E>(error: E) -> GetAlbumError
+where
+    E: Error + 'static,
+{
+    GetAlbumError::UnknownError {
+        error: Box::new(error),
     }
 }
 
@@ -91,7 +45,7 @@ pub async fn get_album(
     player_id: &str,
     album_id: i32,
     data: web::Data<AppState>,
-) -> Result<FullAlbum> {
+) -> Result<FullAlbum, GetAlbumError> {
     let proxy_url = &data.proxy_url;
     let request = CacheRequest {
         key: format!("album|{player_id}|{proxy_url}|{album_id}"),
@@ -102,7 +56,8 @@ pub async fn get_album(
         let results: Vec<_> = data
             .db
             .library
-            .prepare("SELECT * from albums WHERE id = ?")?
+            .prepare("SELECT * from albums WHERE id = ?")
+            .map_err(unknown_error)?
             .into_iter()
             .bind((1, album_id as i64))
             .unwrap()
@@ -110,10 +65,10 @@ pub async fn get_album(
             .collect();
 
         if results.is_empty() {
-            return Err(AlbumNotFound::new(None).into());
+            return Err(GetAlbumError::AlbumNotFound { album_id });
         }
         if results.len() > 1 {
-            return Err(TooManyAlbumsFound::new(None).into());
+            return Err(GetAlbumError::TooManyAlbumsFound { album_id });
         }
 
         let row = &results[0];
@@ -125,7 +80,9 @@ pub async fn get_album(
                 } else if ext_id.starts_with("tidal:") {
                     AlbumSource::Tidal
                 } else {
-                    return Err(UnknownSource::new(ext_id).into());
+                    return Err(GetAlbumError::UnknownSource {
+                        album_source: ext_id.to_string(),
+                    });
                 }
             }
             None => AlbumSource::Local,

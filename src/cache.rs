@@ -38,12 +38,13 @@ pub struct CacheRequest {
     pub expiration: Duration,
 }
 
-pub async fn get_or_set_to_cache<Fut>(
+pub async fn get_or_set_to_cache<Fut, Err>(
     request: CacheRequest,
     compute: impl Fn() -> Fut,
-) -> Result<CacheItemType, Box<dyn Error>>
+) -> Result<CacheItemType, Err>
 where
-    Fut: Future<Output = Result<CacheItemType, Box<dyn Error>>>,
+    Err: Error,
+    Fut: Future<Output = Result<CacheItemType, Err>>,
 {
     let info: HashMap<String, CacheItem> = HashMap::new();
 

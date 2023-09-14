@@ -8,8 +8,7 @@ use std::{error::Error, time::Duration};
 use actix_web::web;
 use futures::future;
 use serde::{Deserialize, Serialize};
-
-type Result<T> = std::result::Result<T, Box<dyn Error>>;
+use thiserror::Error;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FullAlbum {
@@ -187,11 +186,26 @@ pub async fn get_all_albums(
     ))
 }
 
+#[derive(Debug, Error)]
+pub enum GetLocalAlbumsError {
+    #[error("Unknown error: {error:?}")]
+    UnknownError { error: Box<dyn Error> },
+}
+
+fn unknown_error<E>(error: E) -> GetLocalAlbumsError
+where
+    E: Error + 'static,
+{
+    GetLocalAlbumsError::UnknownError {
+        error: Box::new(error),
+    }
+}
+
 pub async fn get_local_albums(
     player_id: &str,
     data: web::Data<AppState>,
     filters: &AlbumFilters,
-) -> Result<Vec<Album>> {
+) -> Result<Vec<Album>, GetLocalAlbumsError> {
     if filters
         .sources
         .as_ref()
@@ -230,9 +244,11 @@ pub async fn get_local_albums(
             data.proxy_client
                 .post(get_albums_url)
                 .send_json(&get_albums_request)
-                .await?
+                .await
+                .map_err(unknown_error)?
                 .json::<GetLocalAlbumsResponse>()
-                .await?
+                .await
+                .map_err(unknown_error)?
                 .result
                 .albums_loop
                 .into_iter()
@@ -259,11 +275,26 @@ pub async fn get_local_albums(
     .unwrap())
 }
 
+#[derive(Debug, Error)]
+pub enum GetTidalAlbumsError {
+    #[error("Unknown error: {error:?}")]
+    UnknownError { error: Box<dyn Error> },
+}
+
+fn unknown_tidal_error<E>(error: E) -> GetTidalAlbumsError
+where
+    E: Error + 'static,
+{
+    GetTidalAlbumsError::UnknownError {
+        error: Box::new(error),
+    }
+}
+
 pub async fn get_tidal_albums(
     player_id: &str,
     data: web::Data<AppState>,
     filters: &AlbumFilters,
-) -> Result<Vec<Album>> {
+) -> Result<Vec<Album>, GetTidalAlbumsError> {
     if filters
         .sources
         .as_ref()
@@ -301,9 +332,11 @@ pub async fn get_tidal_albums(
             data.proxy_client
                 .post(get_albums_url)
                 .send_json(&get_albums_request)
-                .await?
+                .await
+                .map_err(unknown_tidal_error)?
                 .json::<GetAlbumsResponse>()
-                .await?
+                .await
+                .map_err(unknown_tidal_error)?
                 .result
                 .item_loop
                 .into_iter()
@@ -335,11 +368,26 @@ pub async fn get_tidal_albums(
     .unwrap())
 }
 
+#[derive(Debug, Error)]
+pub enum GetQobuzAlbumsError {
+    #[error("Unknown error: {error:?}")]
+    UnknownError { error: Box<dyn Error> },
+}
+
+fn unknown_qobuz_error<E>(error: E) -> GetQobuzAlbumsError
+where
+    E: Error + 'static,
+{
+    GetQobuzAlbumsError::UnknownError {
+        error: Box::new(error),
+    }
+}
+
 pub async fn get_qobuz_albums(
     player_id: &str,
     data: web::Data<AppState>,
     filters: &AlbumFilters,
-) -> Result<Vec<Album>> {
+) -> Result<Vec<Album>, GetQobuzAlbumsError> {
     if filters
         .sources
         .as_ref()
@@ -377,9 +425,11 @@ pub async fn get_qobuz_albums(
             data.proxy_client
                 .post(get_albums_url)
                 .send_json(&get_albums_request)
-                .await?
+                .await
+                .map_err(unknown_qobuz_error)?
                 .json::<GetAlbumsResponse>()
-                .await?
+                .await
+                .map_err(unknown_qobuz_error)?
                 .result
                 .item_loop
                 .into_iter()
