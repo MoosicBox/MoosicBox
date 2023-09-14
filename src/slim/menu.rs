@@ -153,49 +153,6 @@ pub fn filter_albums(albums: Vec<Album>, filters: &AlbumFilters) -> Vec<Album> {
         .collect()
 }
 
-#[test]
-fn filter_albums_empty_albums_returns_empty_albums() {
-    let albums = vec![];
-    let result = filter_albums(albums, &AlbumFilters { sources: None });
-    assert_eq!(result, vec![]);
-}
-
-#[test]
-fn filter_albums_filters_albums_of_sources_that_dont_match() {
-    let local = Album {
-        id: "".to_string(),
-        title: "".to_string(),
-        artist: "".to_string(),
-        year: None,
-        icon: None,
-        source: AlbumSource::Local,
-    };
-    let tidal = Album {
-        id: "".to_string(),
-        title: "".to_string(),
-        artist: "".to_string(),
-        year: None,
-        icon: None,
-        source: AlbumSource::Tidal,
-    };
-    let qobuz = Album {
-        id: "".to_string(),
-        title: "".to_string(),
-        artist: "".to_string(),
-        year: None,
-        icon: None,
-        source: AlbumSource::Qobuz,
-    };
-    let albums = vec![local.clone(), tidal, qobuz];
-    let result = filter_albums(
-        albums,
-        &AlbumFilters {
-            sources: Some(vec![AlbumSource::Local]),
-        },
-    );
-    assert_eq!(result, vec![local]);
-}
-
 pub async fn get_all_albums(
     player_id: &str,
     data: web::Data<AppState>,
@@ -483,4 +440,52 @@ pub async fn get_qobuz_albums(
     .await?
     .into_albums()
     .unwrap())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn filter_albums_empty_albums_returns_empty_albums() {
+        let albums = vec![];
+        let result = filter_albums(albums, &AlbumFilters { sources: None });
+        assert_eq!(result, vec![]);
+    }
+
+    #[test]
+    fn filter_albums_filters_albums_of_sources_that_dont_match() {
+        let local = Album {
+            id: "".to_string(),
+            title: "".to_string(),
+            artist: "".to_string(),
+            year: None,
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let tidal = Album {
+            id: "".to_string(),
+            title: "".to_string(),
+            artist: "".to_string(),
+            year: None,
+            icon: None,
+            source: AlbumSource::Tidal,
+        };
+        let qobuz = Album {
+            id: "".to_string(),
+            title: "".to_string(),
+            artist: "".to_string(),
+            year: None,
+            icon: None,
+            source: AlbumSource::Qobuz,
+        };
+        let albums = vec![local.clone(), tidal, qobuz];
+        let result = filter_albums(
+            albums,
+            &AlbumFilters {
+                sources: Some(vec![AlbumSource::Local]),
+            },
+        );
+        assert_eq!(result, vec![local]);
+    }
 }
