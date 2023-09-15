@@ -13,7 +13,7 @@ use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
 
-use actix_web::error::ErrorNotFound;
+use actix_web::error::{ErrorBadRequest, ErrorNotFound};
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
 use actix_web::{
@@ -148,17 +148,28 @@ pub async fn get_albums_endpoint(
 ) -> Result<Json<Vec<Album>>> {
     let player_id = &query.player_id;
     let filters = AlbumFilters {
-        sources: query.sources.clone().map(|sources| {
-            sources
-                .split(',')
-                .map(|s| s.trim())
-                .map(|s| AlbumSource::from_str(s).unwrap())
-                .collect()
-        }),
+        sources: query
+            .sources
+            .as_ref()
+            .map(|sources| {
+                sources
+                    .split(',')
+                    .map(|s| s.trim())
+                    .map(|s| {
+                        AlbumSource::from_str(s)
+                            .map_err(|_e| ErrorBadRequest(format!("Invalid sort value: {s}")))
+                    })
+                    .collect()
+            })
+            .transpose()?,
         sort: query
             .sort
-            .clone()
-            .map(|sort| AlbumSort::from_str(&sort).unwrap()),
+            .as_ref()
+            .map(|sort| {
+                AlbumSort::from_str(sort)
+                    .map_err(|_e| ErrorBadRequest(format!("Invalid sort value: {sort}")))
+            })
+            .transpose()?,
     };
 
     match get_all_albums(player_id, data.clone(), &filters).await {
