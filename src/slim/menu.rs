@@ -6,7 +6,7 @@ use crate::{
 use std::{str::FromStr, time::Duration};
 
 use actix_web::web;
-use futures::future;
+use futures::{future, FutureExt};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -201,39 +201,69 @@ pub fn sort_albums(mut albums: Vec<Album>, filters: &AlbumFilters) -> Vec<Album>
     albums
 }
 
+#[derive(Debug, Error)]
+pub enum GetAlbumsError {
+    #[error(transparent)]
+    Local(#[from] GetLocalAlbumsError),
+    #[error(transparent)]
+    Tidal(#[from] GetTidalAlbumsError),
+    #[error(transparent)]
+    Qobuz(#[from] GetQobuzAlbumsError),
+}
+
 pub async fn get_all_albums(
     player_id: &str,
     data: web::Data<AppState>,
     filters: &AlbumFilters,
-) -> serde_json::Result<Vec<Album>> {
-    let (local, tidal, qobuz) = future::join3(
-        get_local_albums(player_id, data.clone(), &filters),
-        get_tidal_albums(player_id, data.clone(), &filters),
-        get_qobuz_albums(player_id, data, &filters),
-    )
-    .await;
+) -> Result<Vec<Album>, GetAlbumsError> {
+    let albums = if filters.sources.as_ref().is_some_and(|s| s.len() == 1) {
+        let source = filters.sources.as_ref().unwrap();
+        get_albums_from_source(player_id, data, source[0].clone())
+            .await
+            .unwrap()
+    } else {
+        let sources = match &filters.sources {
+            Some(s) => s.clone(),
+            None => vec![AlbumSource::Local, AlbumSource::Tidal, AlbumSource::Qobuz],
+        };
 
-    Ok(sort_albums(
-        filter_albums(
-            [
-                local.unwrap_or_else(|err| {
-                    eprintln!("Failed to get Local albums: {:?}", err);
+        let requests = sources
+            .into_iter()
+            .map(|s| get_albums_from_source(player_id, data.clone(), s).boxed_local())
+            .collect::<Vec<_>>();
+
+        future::join_all(requests)
+            .await
+            .into_iter()
+            .map(|a: Result<Vec<Album>, GetAlbumsError>| {
+                a.unwrap_or_else(|err| {
+                    eprintln!("Failed to get albums: {err:?}");
                     vec![]
-                }),
-                tidal.unwrap_or_else(|err| {
-                    eprintln!("Failed to get Tidal albums: {:?}", err);
-                    vec![]
-                }),
-                qobuz.unwrap_or_else(|err| {
-                    eprintln!("Failed to get Qobuz albums: {:?}", err);
-                    vec![]
-                }),
-            ]
-            .concat(),
-            &filters,
-        ),
-        &filters,
-    ))
+                })
+            })
+            .collect::<Vec<_>>()
+            .concat()
+    };
+
+    Ok(sort_albums(filter_albums(albums, filters), filters))
+}
+
+pub async fn get_albums_from_source(
+    player_id: &str,
+    data: web::Data<AppState>,
+    source: AlbumSource,
+) -> Result<Vec<Album>, GetAlbumsError> {
+    match source {
+        AlbumSource::Local => get_local_albums(player_id, data)
+            .await
+            .map_err(GetAlbumsError::Local),
+        AlbumSource::Tidal => get_tidal_albums(player_id, data)
+            .await
+            .map_err(GetAlbumsError::Tidal),
+        AlbumSource::Qobuz => get_qobuz_albums(player_id, data)
+            .await
+            .map_err(GetAlbumsError::Qobuz),
+    }
 }
 
 #[derive(Debug, Error)]
@@ -247,16 +277,7 @@ pub enum GetLocalAlbumsError {
 pub async fn get_local_albums(
     player_id: &str,
     data: web::Data<AppState>,
-    filters: &AlbumFilters,
 ) -> Result<Vec<Album>, GetLocalAlbumsError> {
-    if filters
-        .sources
-        .as_ref()
-        .is_some_and(|s| !s.contains(&AlbumSource::Local))
-    {
-        return Ok(vec![]);
-    }
-
     let proxy_url = &data.proxy_url;
     let request = CacheRequest {
         key: format!("local_albums|{player_id}|{proxy_url}"),
@@ -327,16 +348,7 @@ pub enum GetTidalAlbumsError {
 pub async fn get_tidal_albums(
     player_id: &str,
     data: web::Data<AppState>,
-    filters: &AlbumFilters,
 ) -> Result<Vec<Album>, GetTidalAlbumsError> {
-    if filters
-        .sources
-        .as_ref()
-        .is_some_and(|s| !s.contains(&AlbumSource::Tidal))
-    {
-        return Ok(vec![]);
-    }
-
     let proxy_url = &data.proxy_url;
     let request = CacheRequest {
         key: format!("tidal_albums|{player_id}|{proxy_url}"),
@@ -410,16 +422,7 @@ pub enum GetQobuzAlbumsError {
 pub async fn get_qobuz_albums(
     player_id: &str,
     data: web::Data<AppState>,
-    filters: &AlbumFilters,
 ) -> Result<Vec<Album>, GetQobuzAlbumsError> {
-    if filters
-        .sources
-        .as_ref()
-        .is_some_and(|s| !s.contains(&AlbumSource::Qobuz))
-    {
-        return Ok(vec![]);
-    }
-
     let proxy_url = &data.proxy_url;
     let request = CacheRequest {
         key: format!("qobuz_albums|{player_id}|{proxy_url}"),
@@ -499,7 +502,13 @@ mod test {
     #[test]
     fn filter_albums_empty_albums_returns_empty_albums() {
         let albums = vec![];
-        let result = filter_albums(albums, &AlbumFilters { sources: None });
+        let result = filter_albums(
+            albums,
+            &AlbumFilters {
+                sources: None,
+                sort: None,
+            },
+        );
         assert_eq!(result, vec![]);
     }
 
@@ -534,6 +543,7 @@ mod test {
             albums,
             &AlbumFilters {
                 sources: Some(vec![AlbumSource::Local]),
+                sort: None,
             },
         );
         assert_eq!(result, vec![local]);
