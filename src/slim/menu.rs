@@ -260,7 +260,7 @@ pub async fn get_local_albums(
                     let icon = item
                         .artwork_track_id
                         .as_ref()
-                        .map(|track_id| format!("albums/{track_id}/300x300"));
+                        .map(|track_id| format!("/albums/{track_id}/300x300"));
                     Album {
                         id: format!("album_id:{:?}", item.id),
                         title: item.album.clone(),

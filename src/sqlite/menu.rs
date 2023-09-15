@@ -83,7 +83,7 @@ pub async fn get_album(
         let year = row.read::<Option<i64>, _>("year").map(|y| y as i32);
         let icon = row
             .read::<Option<&str>, _>("artwork")
-            .map(|a| format!("albums/{a}/300x300"));
+            .map(|a| format!("/albums/{a}/300x300"));
 
         let album = FullAlbum {
             id: album_id,
