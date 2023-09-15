@@ -1,4 +1,4 @@
-use crate::slim::menu::{get_all_albums, Album, AlbumFilters, AlbumSource};
+use crate::slim::menu::{get_all_albums, Album, AlbumFilters, AlbumSort, AlbumSource};
 use crate::slim::player::{
     connect, get_players, get_playlist_status, get_status, handshake, ping, play_album,
     player_next_track, player_pause, player_play, player_previous_track, player_start_track,
@@ -138,6 +138,7 @@ pub async fn get_album_endpoint(
 pub struct GetAlbumsQuery {
     player_id: String,
     sources: Option<String>,
+    sort: Option<String>,
 }
 
 #[get("/albums")]
@@ -154,6 +155,10 @@ pub async fn get_albums_endpoint(
                 .map(|s| AlbumSource::from_str(s).unwrap())
                 .collect()
         }),
+        sort: query
+            .sort
+            .clone()
+            .map(|sort| AlbumSort::from_str(&sort).unwrap()),
     };
 
     match get_all_albums(player_id, data.clone(), &filters).await {

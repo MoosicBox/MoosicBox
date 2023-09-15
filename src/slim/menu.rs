@@ -50,6 +50,24 @@ impl FromStr for AlbumSource {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub enum AlbumSort {
+    AlbumArtist,
+    AlbumName,
+}
+
+impl FromStr for AlbumSort {
+    type Err = ();
+
+    fn from_str(input: &str) -> Result<AlbumSort, Self::Err> {
+        match input.to_lowercase().as_str() {
+            "albumartist" => Ok(AlbumSort::AlbumArtist),
+            "albumname" => Ok(AlbumSort::AlbumName),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AlbumResponseParams {
     #[serde(rename = "isContextMenu")]
@@ -152,6 +170,7 @@ pub struct GetLocalAlbumsResponse {
 #[serde(rename_all = "camelCase")]
 pub struct AlbumFilters {
     pub sources: Option<Vec<AlbumSource>>,
+    pub sort: Option<AlbumSort>,
 }
 
 pub fn filter_albums(albums: Vec<Album>, filters: &AlbumFilters) -> Vec<Album> {
@@ -166,6 +185,16 @@ pub fn filter_albums(albums: Vec<Album>, filters: &AlbumFilters) -> Vec<Album> {
         .collect()
 }
 
+pub fn sort_albums(mut albums: Vec<Album>, filters: &AlbumFilters) -> Vec<Album> {
+    match filters.sort {
+        Some(AlbumSort::AlbumArtist) => albums.sort_by(|a, b| a.artist.cmp(&b.artist)),
+        Some(AlbumSort::AlbumName) => albums.sort_by(|a, b| a.title.cmp(&b.title)),
+        None => (),
+    }
+
+    albums
+}
+
 pub async fn get_all_albums(
     player_id: &str,
     data: web::Data<AppState>,
@@ -178,22 +207,25 @@ pub async fn get_all_albums(
     )
     .await;
 
-    Ok(filter_albums(
-        [
-            local.unwrap_or_else(|err| {
-                eprintln!("Failed to get Local albums: {:?}", err);
-                vec![]
-            }),
-            tidal.unwrap_or_else(|err| {
-                eprintln!("Failed to get Tidal albums: {:?}", err);
-                vec![]
-            }),
-            qobuz.unwrap_or_else(|err| {
-                eprintln!("Failed to get Qobuz albums: {:?}", err);
-                vec![]
-            }),
-        ]
-        .concat(),
+    Ok(sort_albums(
+        filter_albums(
+            [
+                local.unwrap_or_else(|err| {
+                    eprintln!("Failed to get Local albums: {:?}", err);
+                    vec![]
+                }),
+                tidal.unwrap_or_else(|err| {
+                    eprintln!("Failed to get Tidal albums: {:?}", err);
+                    vec![]
+                }),
+                qobuz.unwrap_or_else(|err| {
+                    eprintln!("Failed to get Qobuz albums: {:?}", err);
+                    vec![]
+                }),
+            ]
+            .concat(),
+            &filters,
+        ),
         &filters,
     ))
 }
