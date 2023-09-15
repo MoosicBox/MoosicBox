@@ -3,7 +3,7 @@ use crate::{
     cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
 };
 
-use std::time::Duration;
+use std::{str::FromStr, time::Duration};
 
 use actix_web::web;
 use futures::future;
@@ -35,6 +35,19 @@ pub enum AlbumSource {
     Local,
     Tidal,
     Qobuz,
+}
+
+impl FromStr for AlbumSource {
+    type Err = ();
+
+    fn from_str(input: &str) -> Result<AlbumSource, Self::Err> {
+        match input.to_lowercase().as_str() {
+            "local" => Ok(AlbumSource::Local),
+            "tidal" => Ok(AlbumSource::Tidal),
+            "qobuz" => Ok(AlbumSource::Qobuz),
+            _ => Err(()),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -158,7 +171,6 @@ pub async fn get_all_albums(
     data: web::Data<AppState>,
 ) -> serde_json::Result<Vec<Album>> {
     let filters = AlbumFilters { sources: None };
-
     let (local, tidal, qobuz) = future::join3(
         get_local_albums(player_id, data.clone(), &filters),
         get_tidal_albums(player_id, data.clone(), &filters),
