@@ -1,4 +1,4 @@
-use crate::slim::menu::{get_all_albums, Album};
+use crate::slim::menu::{get_all_albums, Album, AlbumFilters, AlbumSource};
 use crate::slim::player::{
     connect, get_players, get_playlist_status, get_status, handshake, ping, play_album,
     player_next_track, player_pause, player_play, player_previous_track, player_start_track,
@@ -9,6 +9,7 @@ use crate::app::AppState;
 use crate::sqlite::menu::{get_album, FullAlbum, GetAlbumError};
 
 use core::panic;
+use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
 
@@ -136,6 +137,7 @@ pub async fn get_album_endpoint(
 #[serde(rename_all = "camelCase")]
 pub struct GetAlbumsQuery {
     player_id: String,
+    sources: Option<String>,
 }
 
 #[get("/albums")]
@@ -144,8 +146,17 @@ pub async fn get_albums_endpoint(
     data: web::Data<AppState>,
 ) -> Result<Json<Vec<Album>>> {
     let player_id = &query.player_id;
+    let filters = AlbumFilters {
+        sources: query.sources.clone().map(|sources| {
+            sources
+                .split(',')
+                .map(|s| s.trim())
+                .map(|s| AlbumSource::from_str(s).unwrap())
+                .collect()
+        }),
+    };
 
-    match get_all_albums(player_id, data.clone()).await {
+    match get_all_albums(player_id, data.clone(), &filters).await {
         Ok(resp) => Ok(Json(resp)),
         Err(error) => panic!("Failed to get albums: {:?}", error),
     }

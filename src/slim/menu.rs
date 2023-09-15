@@ -169,8 +169,8 @@ pub fn filter_albums(albums: Vec<Album>, filters: &AlbumFilters) -> Vec<Album> {
 pub async fn get_all_albums(
     player_id: &str,
     data: web::Data<AppState>,
+    filters: &AlbumFilters,
 ) -> serde_json::Result<Vec<Album>> {
-    let filters = AlbumFilters { sources: None };
     let (local, tidal, qobuz) = future::join3(
         get_local_albums(player_id, data.clone(), &filters),
         get_tidal_albums(player_id, data.clone(), &filters),
