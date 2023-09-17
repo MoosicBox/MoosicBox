@@ -53,7 +53,9 @@ impl FromStr for AlbumSource {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub enum AlbumSort {
     ArtistAsc,
+    ArtistDesc,
     NameAsc,
+    NameDesc,
     YearAsc,
     YearDesc,
 }
@@ -64,7 +66,9 @@ impl FromStr for AlbumSort {
     fn from_str(input: &str) -> Result<AlbumSort, Self::Err> {
         match input.to_lowercase().as_str() {
             "artist-asc" | "artist" => Ok(AlbumSort::ArtistAsc),
+            "artist-desc" => Ok(AlbumSort::ArtistDesc),
             "name-asc" | "name" => Ok(AlbumSort::NameAsc),
+            "name-desc" => Ok(AlbumSort::NameDesc),
             "year-asc" | "year" => Ok(AlbumSort::YearAsc),
             "year-desc" => Ok(AlbumSort::YearDesc),
             _ => Err(()),
@@ -193,6 +197,23 @@ pub fn sort_albums(mut albums: Vec<Album>, filters: &AlbumFilters) -> Vec<Album>
     match filters.sort {
         Some(AlbumSort::ArtistAsc) => albums.sort_by(|a, b| a.artist.cmp(&b.artist)),
         Some(AlbumSort::NameAsc) => albums.sort_by(|a, b| a.title.cmp(&b.title)),
+        Some(AlbumSort::ArtistDesc) => albums.sort_by(|a, b| b.artist.cmp(&a.artist)),
+        Some(AlbumSort::NameDesc) => albums.sort_by(|a, b| b.title.cmp(&a.title)),
+        _ => (),
+    }
+    match filters.sort {
+        Some(AlbumSort::ArtistAsc) => {
+            albums.sort_by(|a, b| a.artist.to_lowercase().cmp(&b.artist.to_lowercase()))
+        }
+        Some(AlbumSort::NameAsc) => {
+            albums.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
+        }
+        Some(AlbumSort::ArtistDesc) => {
+            albums.sort_by(|a, b| b.artist.to_lowercase().cmp(&a.artist.to_lowercase()))
+        }
+        Some(AlbumSort::NameDesc) => {
+            albums.sort_by(|a, b| b.title.to_lowercase().cmp(&a.title.to_lowercase()))
+        }
         Some(AlbumSort::YearAsc) => albums.sort_by(|a, b| a.year.cmp(&b.year)),
         Some(AlbumSort::YearDesc) => albums.sort_by(|a, b| b.year.cmp(&a.year)),
         None => (),
