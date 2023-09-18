@@ -1,9 +1,9 @@
-import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 
 function formatSstSecretParameterName(
     app: string,
     name: string,
-    stage: string
+    stage: string,
 ) {
     return `/sst/${app}/${stage}/Secret/${name}/value`;
 }
@@ -13,7 +13,7 @@ async function fetchParameterValue(client: SSMClient, name: string) {
         new GetParameterCommand({
             Name: name,
             WithDecryption: true,
-        })
+        }),
     );
 
     if (!response.Parameter?.Value) {
@@ -28,13 +28,13 @@ export async function fetchSstSecret(
     app: string,
     name: string,
     stage: string,
-    checkFallback = true
+    checkFallback = true,
 ): Promise<string> {
     try {
         try {
             return await fetchParameterValue(
                 client,
-                formatSstSecretParameterName(app, name, stage)
+                formatSstSecretParameterName(app, name, stage),
             );
         } catch (e) {
             if (!checkFallback)
@@ -42,7 +42,7 @@ export async function fetchSstSecret(
 
             return await fetchParameterValue(
                 client,
-                formatSstSecretParameterName(app, name, ".fallback")
+                formatSstSecretParameterName(app, name, '.fallback'),
             );
         }
     } catch (e) {
