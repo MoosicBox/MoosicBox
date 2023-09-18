@@ -1,5 +1,4 @@
-pub mod api;
 pub mod app;
-pub mod cache;
+mod cache;
 pub mod slim;
 pub mod sqlite;

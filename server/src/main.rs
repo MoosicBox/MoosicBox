@@ -1,9 +1,8 @@
+mod api;
+
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App, HttpServer};
-use moosicbox_core::{
-    api,
-    app::{AppState, Db},
-};
+use moosicbox_core::app::{AppState, Db};
 use std::{env, time::Duration};
 
 #[actix_web::main]
