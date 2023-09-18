@@ -1,18 +1,11 @@
+use crate::app::AppState;
 use crate::slim::menu::{get_all_albums, Album, AlbumFilters, AlbumSort, AlbumSource};
 use crate::slim::player::{
     connect, get_players, get_playlist_status, get_status, handshake, ping, play_album,
     player_next_track, player_pause, player_play, player_previous_track, player_start_track,
     set_player_status, PingResponse, PlaylistStatus, Status,
 };
-
-use crate::app::AppState;
 use crate::sqlite::menu::{get_album, FullAlbum, GetAlbumError};
-
-use core::panic;
-use std::str::FromStr;
-use std::thread;
-use std::time::Duration;
-
 use actix_web::error::{ErrorBadRequest, ErrorNotFound};
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
@@ -21,8 +14,12 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
+use core::panic;
 use serde::Deserialize;
 use serde_json::Value;
+use std::str::FromStr;
+use std::thread;
+use std::time::Duration;
 
 #[post("/connect")]
 pub async fn connect_endpoint(data: web::Data<AppState>) -> Result<Json<Value>> {
@@ -124,7 +121,7 @@ pub async fn get_album_endpoint(
     let player_id = &query.player_id;
     let album_id = query.album_id;
 
-    match get_album(player_id, album_id, data.clone()).await {
+    match get_album(player_id, album_id, &data).await {
         Ok(resp) => Ok(Json(resp)),
         Err(error) => match error {
             GetAlbumError::AlbumNotFound { .. } => Err(ErrorNotFound(error.to_string())),
@@ -172,7 +169,7 @@ pub async fn get_albums_endpoint(
             .transpose()?,
     };
 
-    match get_all_albums(player_id, data.clone(), &filters).await {
+    match get_all_albums(player_id, &data, &filters).await {
         Ok(resp) => Ok(Json(resp)),
         Err(error) => panic!("Failed to get albums: {:?}", error),
     }

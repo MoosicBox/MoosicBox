@@ -1,11 +1,9 @@
 use crate::app::AppState;
-
-use core::panic;
-use std::time::Duration;
-
 use actix_web::web;
+use core::panic;
 use serde::{de::Error, Deserialize, Serialize};
 use serde_json::Value;
+use std::time::Duration;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]

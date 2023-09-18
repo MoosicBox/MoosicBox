@@ -1,15 +1,12 @@
-use std::collections::HashMap;
-use std::error::Error;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
+use crate::slim::menu::Album;
+use crate::sqlite::menu::FullAlbum;
 use enum_as_inner::EnumAsInner;
 use futures::Future;
 use serde::{Deserialize, Serialize};
-
+use std::collections::HashMap;
+use std::error::Error;
 use std::sync::{Mutex, OnceLock};
-
-use crate::slim::menu::Album;
-use crate::sqlite::menu::FullAlbum;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct CacheItem {

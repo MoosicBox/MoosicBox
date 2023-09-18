@@ -2,12 +2,9 @@ use crate::{
     app::AppState,
     cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
 };
-
-use std::{str::FromStr, time::Duration};
-
-use actix_web::web;
 use futures::{future, FutureExt};
 use serde::{Deserialize, Serialize};
+use std::{str::FromStr, time::Duration};
 use thiserror::Error;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -234,7 +231,7 @@ pub enum GetAlbumsError {
 
 pub async fn get_all_albums(
     player_id: &str,
-    data: web::Data<AppState>,
+    data: &AppState,
     filters: &AlbumFilters,
 ) -> Result<Vec<Album>, GetAlbumsError> {
     let albums = if filters.sources.as_ref().is_some_and(|s| s.len() == 1) {
@@ -250,7 +247,7 @@ pub async fn get_all_albums(
 
         let requests = sources
             .into_iter()
-            .map(|s| get_albums_from_source(player_id, data.clone(), s).boxed_local())
+            .map(|s| get_albums_from_source(player_id, data, s).boxed_local())
             .collect::<Vec<_>>();
 
         future::join_all(requests)
@@ -271,7 +268,7 @@ pub async fn get_all_albums(
 
 pub async fn get_albums_from_source(
     player_id: &str,
-    data: web::Data<AppState>,
+    data: &AppState,
     source: AlbumSource,
 ) -> Result<Vec<Album>, GetAlbumsError> {
     match source {
@@ -297,7 +294,7 @@ pub enum GetLocalAlbumsError {
 
 pub async fn get_local_albums(
     player_id: &str,
-    data: web::Data<AppState>,
+    data: &AppState,
 ) -> Result<Vec<Album>, GetLocalAlbumsError> {
     let proxy_url = &data.proxy_url;
     let request = CacheRequest {
@@ -368,7 +365,7 @@ pub enum GetTidalAlbumsError {
 
 pub async fn get_tidal_albums(
     player_id: &str,
-    data: web::Data<AppState>,
+    data: &AppState,
 ) -> Result<Vec<Album>, GetTidalAlbumsError> {
     let proxy_url = &data.proxy_url;
     let request = CacheRequest {
@@ -442,7 +439,7 @@ pub enum GetQobuzAlbumsError {
 
 pub async fn get_qobuz_albums(
     player_id: &str,
-    data: web::Data<AppState>,
+    data: &AppState,
 ) -> Result<Vec<Album>, GetQobuzAlbumsError> {
     let proxy_url = &data.proxy_url;
     let request = CacheRequest {

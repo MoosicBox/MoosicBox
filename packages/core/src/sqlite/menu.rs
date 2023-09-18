@@ -3,11 +3,8 @@ use crate::{
     cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
     slim::menu::AlbumSource,
 };
-
-use std::time::Duration;
-
-use actix_web::web;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use thiserror::Error;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -35,7 +32,7 @@ pub enum GetAlbumError {
 pub async fn get_album(
     player_id: &str,
     album_id: i32,
-    data: web::Data<AppState>,
+    data: &AppState,
 ) -> Result<FullAlbum, GetAlbumError> {
     let proxy_url = &data.proxy_url;
     let request = CacheRequest {
@@ -46,6 +43,8 @@ pub async fn get_album(
     Ok(get_or_set_to_cache(request, || async {
         let results: Vec<_> = data
             .db
+            .as_ref()
+            .unwrap()
             .library
             .prepare("SELECT * from albums WHERE id = ?")?
             .into_iter()

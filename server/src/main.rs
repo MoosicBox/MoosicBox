@@ -1,14 +1,10 @@
-mod api;
-mod app;
-mod cache;
-mod slim;
-mod sqlite;
-
-use actix_web::{http, middleware, web, App, HttpServer};
-use app::Db;
-use std::{env, time::Duration};
-
 use actix_cors::Cors;
+use actix_web::{http, middleware, web, App, HttpServer};
+use moosicbox_core::{
+    api,
+    app::{AppState, Db},
+};
+use std::{env, time::Duration};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -44,14 +40,14 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(cors)
             .wrap(middleware::Compress::default())
-            .app_data(web::Data::new(app::AppState {
+            .app_data(web::Data::new(AppState {
                 service_port,
                 proxy_url,
                 proxy_client,
                 image_client,
-                db: Db {
+                db: Some(Db {
                     library: library_db,
-                },
+                }),
             }))
             .service(api::connect_endpoint)
             .service(api::status_endpoint)
