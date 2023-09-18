@@ -413,7 +413,7 @@ pub async fn set_player_status(
     Ok(response)
 }
 
-pub async fn handshake(data: web::Data<AppState>) -> serde_json::Result<HandshakeResponse> {
+pub async fn handshake(data: &AppState) -> serde_json::Result<HandshakeResponse> {
     let proxy_url = &data.proxy_url;
     let handshake_url = format!("{proxy_url}/cometd/handshake");
 
@@ -452,10 +452,7 @@ pub async fn handshake(data: web::Data<AppState>) -> serde_json::Result<Handshak
     Ok(handshake_response)
 }
 
-pub async fn connect(
-    client_id: String,
-    data: web::Data<AppState>,
-) -> serde_json::Result<ConnectResponse> {
+pub async fn connect(client_id: &str, data: &AppState) -> serde_json::Result<ConnectResponse> {
     let proxy_url = &data.proxy_url;
     let connect_url = format!("{proxy_url}/cometd");
 
@@ -618,7 +615,7 @@ pub async fn ping(
 }
 
 pub async fn get_players(
-    client_id: String,
+    client_id: &str,
     data: web::Data<AppState>,
 ) -> serde_json::Result<Vec<PlayerResponse>> {
     let proxy_url = &data.proxy_url;

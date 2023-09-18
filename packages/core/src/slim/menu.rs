@@ -236,7 +236,7 @@ pub async fn get_all_albums(
 ) -> Result<Vec<Album>, GetAlbumsError> {
     let albums = if filters.sources.as_ref().is_some_and(|s| s.len() == 1) {
         let source = filters.sources.as_ref().unwrap();
-        get_albums_from_source(player_id, data, source[0].clone())
+        get_albums_from_source(player_id, data, &source[0])
             .await
             .unwrap()
     } else {
@@ -246,7 +246,7 @@ pub async fn get_all_albums(
         };
 
         let requests = sources
-            .into_iter()
+            .iter()
             .map(|s| get_albums_from_source(player_id, data, s).boxed_local())
             .collect::<Vec<_>>();
 
@@ -269,7 +269,7 @@ pub async fn get_all_albums(
 pub async fn get_albums_from_source(
     player_id: &str,
     data: &AppState,
-    source: AlbumSource,
+    source: &AlbumSource,
 ) -> Result<Vec<Album>, GetAlbumsError> {
     match source {
         AlbumSource::Local => get_local_albums(player_id, data)

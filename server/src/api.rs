@@ -23,21 +23,21 @@ use std::time::Duration;
 
 #[post("/connect")]
 pub async fn connect_endpoint(data: web::Data<AppState>) -> Result<Json<Value>> {
-    let client_id = match handshake(data.clone()).await {
-        Ok(handshake) => handshake.client_id.clone(),
+    let client_id = match handshake(&data).await {
+        Ok(handshake) => handshake.client_id,
         Err(error) => panic!("Failed to handshake: {:?}", error),
     };
 
-    match connect(client_id.clone(), data.clone()).await {
+    match connect(&client_id, &data).await {
         Ok(json) => json,
         Err(error) => panic!("Failed to connect: {:?}", error),
     };
 
-    let player_ids: Vec<String> = get_players(client_id.clone(), data)
+    let player_ids: Vec<String> = get_players(&client_id, data)
         .await
         .unwrap()
-        .iter()
-        .map(|p| p.player_id.clone())
+        .into_iter()
+        .map(|p| p.player_id)
         .collect();
 
     Ok(Json(serde_json::json!({
@@ -186,11 +186,11 @@ pub async fn get_players_endpoint(
     query: web::Query<GetPlayersQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<Value>> {
-    let player_ids: Vec<String> = get_players(query.client_id.clone(), data)
+    let player_ids: Vec<String> = get_players(&query.client_id, data)
         .await
         .unwrap()
-        .iter()
-        .map(|p| p.player_id.clone())
+        .into_iter()
+        .map(|p| p.player_id)
         .collect();
 
     Ok(Json(serde_json::json!({
