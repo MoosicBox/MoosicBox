@@ -12,7 +12,7 @@ pub struct FullAlbum {
     pub id: String,
     pub title: String,
     pub artist: String,
-    pub year: Option<i32>,
+    pub year: Option<i16>,
     pub icon: Option<String>,
     pub source: AlbumSource,
 }
@@ -22,7 +22,7 @@ pub struct Album {
     pub id: String,
     pub title: String,
     pub artist: String,
-    pub year: Option<i32>,
+    pub year: Option<i16>,
     pub icon: Option<String>,
     pub source: AlbumSource,
 }
@@ -156,7 +156,7 @@ pub struct LocalAlbumResponse {
     pub album: String,
     pub artwork_track_id: Option<String>,
     pub extid: Option<String>,
-    pub year: i32,
+    pub year: i16,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -173,32 +173,68 @@ pub struct GetLocalAlbumsResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct AlbumFilters {
+pub struct AlbumsRequest {
     pub sources: Option<Vec<AlbumSource>>,
     pub sort: Option<AlbumSort>,
+    pub filters: AlbumFilters,
 }
 
-pub fn filter_albums(albums: Vec<Album>, filters: &AlbumFilters) -> Vec<Album> {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AlbumFilters {
+    pub name: Option<String>,
+    pub artist: Option<String>,
+    pub year: Option<i16>,
+    pub search: Option<String>,
+}
+
+pub fn filter_albums(albums: Vec<Album>, request: &AlbumsRequest) -> Vec<Album> {
     albums
         .into_iter()
         .filter(|album| {
-            !filters
+            !request
                 .sources
                 .as_ref()
                 .is_some_and(|s| !s.contains(&album.source))
         })
+        .filter(|album| {
+            !request
+                .filters
+                .name
+                .as_ref()
+                .is_some_and(|s| !album.title.to_lowercase().contains(s))
+        })
+        .filter(|album| {
+            !request
+                .filters
+                .artist
+                .as_ref()
+                .is_some_and(|s| !album.artist.to_lowercase().contains(s))
+        })
+        .filter(|album| {
+            !request
+                .filters
+                .year
+                .as_ref()
+                .is_some_and(|y| !album.year.is_some_and(|album_year| &album_year == y))
+        })
+        .filter(|album| {
+            !request.filters.search.as_ref().is_some_and(|s| {
+                !(album.title.to_lowercase().contains(s) || album.artist.to_lowercase().contains(s))
+            })
+        })
         .collect()
 }
 
-pub fn sort_albums(mut albums: Vec<Album>, filters: &AlbumFilters) -> Vec<Album> {
-    match filters.sort {
+pub fn sort_albums(mut albums: Vec<Album>, request: &AlbumsRequest) -> Vec<Album> {
+    match request.sort {
         Some(AlbumSort::ArtistAsc) => albums.sort_by(|a, b| a.artist.cmp(&b.artist)),
         Some(AlbumSort::NameAsc) => albums.sort_by(|a, b| a.title.cmp(&b.title)),
         Some(AlbumSort::ArtistDesc) => albums.sort_by(|a, b| b.artist.cmp(&a.artist)),
         Some(AlbumSort::NameDesc) => albums.sort_by(|a, b| b.title.cmp(&a.title)),
         _ => (),
     }
-    match filters.sort {
+    match request.sort {
         Some(AlbumSort::ArtistAsc) => {
             albums.sort_by(|a, b| a.artist.to_lowercase().cmp(&b.artist.to_lowercase()))
         }
@@ -232,15 +268,15 @@ pub enum GetAlbumsError {
 pub async fn get_all_albums(
     player_id: &str,
     data: &AppState,
-    filters: &AlbumFilters,
+    request: &AlbumsRequest,
 ) -> Result<Vec<Album>, GetAlbumsError> {
-    let albums = if filters.sources.as_ref().is_some_and(|s| s.len() == 1) {
-        let source = filters.sources.as_ref().unwrap();
+    let albums = if request.sources.as_ref().is_some_and(|s| s.len() == 1) {
+        let source = request.sources.as_ref().unwrap();
         get_albums_from_source(player_id, data, &source[0])
             .await
             .unwrap()
     } else {
-        let sources = match &filters.sources {
+        let sources = match &request.sources {
             Some(s) => s.clone(),
             None => vec![AlbumSource::Local, AlbumSource::Tidal, AlbumSource::Qobuz],
         };
@@ -263,7 +299,7 @@ pub async fn get_all_albums(
             .concat()
     };
 
-    Ok(sort_albums(filter_albums(albums, filters), filters))
+    Ok(sort_albums(filter_albums(albums, request), request))
 }
 
 pub async fn get_albums_from_source(
@@ -500,7 +536,7 @@ pub async fn get_qobuz_albums(
                         id,
                         title,
                         artist: String::from(artist),
-                        year: String::from(year).parse::<i32>().ok(),
+                        year: String::from(year).parse::<i16>().ok(),
                         icon,
                         source: AlbumSource::Qobuz,
                     }
@@ -522,9 +558,15 @@ mod test {
         let albums = vec![];
         let result = filter_albums(
             albums,
-            &AlbumFilters {
+            &AlbumsRequest {
                 sources: None,
                 sort: None,
+                filters: AlbumFilters {
+                    name: None,
+                    artist: None,
+                    year: None,
+                    search: None,
+                },
             },
         );
         assert_eq!(result, vec![]);
@@ -559,11 +601,447 @@ mod test {
         let albums = vec![local.clone(), tidal, qobuz];
         let result = filter_albums(
             albums,
-            &AlbumFilters {
+            &AlbumsRequest {
                 sources: Some(vec![AlbumSource::Local]),
                 sort: None,
+                filters: AlbumFilters {
+                    name: None,
+                    artist: None,
+                    year: None,
+                    search: None,
+                },
             },
         );
         assert_eq!(result, vec![local]);
+    }
+
+    #[test]
+    fn filter_albums_filters_albums_of_year_that_dont_match() {
+        let album_2020 = Album {
+            id: "".to_string(),
+            title: "".to_string(),
+            artist: "".to_string(),
+            year: Some(2020),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let album_2021 = Album {
+            id: "".to_string(),
+            title: "".to_string(),
+            artist: "".to_string(),
+            year: Some(2021),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let album_2022 = Album {
+            id: "".to_string(),
+            title: "".to_string(),
+            artist: "".to_string(),
+            year: Some(2022),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let albums = vec![album_2020, album_2021.clone(), album_2022];
+        let result = filter_albums(
+            albums,
+            &AlbumsRequest {
+                sources: None,
+                sort: None,
+                filters: AlbumFilters {
+                    name: None,
+                    artist: None,
+                    year: Some(2021),
+                    search: None,
+                },
+            },
+        );
+        assert_eq!(result, vec![album_2021]);
+    }
+
+    #[test]
+    fn filter_albums_filters_albums_of_name_that_dont_match() {
+        let bob = Album {
+            id: "".to_string(),
+            title: "bob".to_string(),
+            artist: "".to_string(),
+            year: Some(2020),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let sally = Album {
+            id: "".to_string(),
+            title: "sally".to_string(),
+            artist: "".to_string(),
+            year: Some(2021),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let test = Album {
+            id: "".to_string(),
+            title: "test".to_string(),
+            artist: "".to_string(),
+            year: Some(2022),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let albums = vec![bob, sally, test.clone()];
+        let result = filter_albums(
+            albums,
+            &AlbumsRequest {
+                sources: None,
+                sort: None,
+                filters: AlbumFilters {
+                    name: Some("test".to_string()),
+                    artist: None,
+                    year: None,
+                    search: None,
+                },
+            },
+        );
+        assert_eq!(result, vec![test]);
+    }
+
+    #[test]
+    fn filter_albums_filters_albums_of_name_that_dont_match_and_searches_multiple_words() {
+        let bob = Album {
+            id: "".to_string(),
+            title: "bob".to_string(),
+            artist: "".to_string(),
+            year: Some(2020),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let sally = Album {
+            id: "".to_string(),
+            title: "sally".to_string(),
+            artist: "".to_string(),
+            year: Some(2021),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let test = Album {
+            id: "".to_string(),
+            title: "one test two".to_string(),
+            artist: "".to_string(),
+            year: Some(2022),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let albums = vec![bob, sally, test.clone()];
+        let result = filter_albums(
+            albums,
+            &AlbumsRequest {
+                sources: None,
+                sort: None,
+                filters: AlbumFilters {
+                    name: Some("test".to_string()),
+                    artist: None,
+                    year: None,
+                    search: None,
+                },
+            },
+        );
+        assert_eq!(result, vec![test]);
+    }
+
+    #[test]
+    fn filter_albums_filters_albums_of_artist_that_dont_match() {
+        let bob = Album {
+            id: "".to_string(),
+            title: "".to_string(),
+            artist: "bob".to_string(),
+            year: Some(2020),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let sally = Album {
+            id: "".to_string(),
+            title: "".to_string(),
+            artist: "sally".to_string(),
+            year: Some(2021),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let test = Album {
+            id: "".to_string(),
+            title: "".to_string(),
+            artist: "test".to_string(),
+            year: Some(2022),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let albums = vec![bob, sally, test.clone()];
+        let result = filter_albums(
+            albums,
+            &AlbumsRequest {
+                sources: None,
+                sort: None,
+                filters: AlbumFilters {
+                    name: None,
+                    artist: Some("test".to_string()),
+                    year: None,
+                    search: None,
+                },
+            },
+        );
+        assert_eq!(result, vec![test]);
+    }
+
+    #[test]
+    fn filter_albums_filters_albums_of_artist_that_dont_match_and_searches_multiple_words() {
+        let bob = Album {
+            id: "".to_string(),
+            title: "".to_string(),
+            artist: "bob".to_string(),
+            year: Some(2020),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let sally = Album {
+            id: "".to_string(),
+            title: "".to_string(),
+            artist: "sally".to_string(),
+            year: Some(2021),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let test = Album {
+            id: "".to_string(),
+            title: "".to_string(),
+            artist: "one test two".to_string(),
+            year: Some(2022),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let albums = vec![bob, sally, test.clone()];
+        let result = filter_albums(
+            albums,
+            &AlbumsRequest {
+                sources: None,
+                sort: None,
+                filters: AlbumFilters {
+                    name: None,
+                    artist: Some("test".to_string()),
+                    year: None,
+                    search: None,
+                },
+            },
+        );
+        assert_eq!(result, vec![test]);
+    }
+
+    #[test]
+    fn filter_albums_filters_albums_of_search_that_dont_match_artist() {
+        let bob = Album {
+            id: "".to_string(),
+            title: "".to_string(),
+            artist: "bob".to_string(),
+            year: Some(2020),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let sally = Album {
+            id: "".to_string(),
+            title: "".to_string(),
+            artist: "sally".to_string(),
+            year: Some(2021),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let test = Album {
+            id: "".to_string(),
+            title: "".to_string(),
+            artist: "test".to_string(),
+            year: Some(2022),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let albums = vec![bob, sally, test.clone()];
+        let result = filter_albums(
+            albums,
+            &AlbumsRequest {
+                sources: None,
+                sort: None,
+                filters: AlbumFilters {
+                    name: None,
+                    artist: None,
+                    year: None,
+                    search: Some("test".to_string()),
+                },
+            },
+        );
+        assert_eq!(result, vec![test]);
+    }
+
+    #[test]
+    fn filter_albums_filters_albums_of_search_that_dont_match_artist_and_searches_multiple_words() {
+        let bob = Album {
+            id: "".to_string(),
+            title: "".to_string(),
+            artist: "bob".to_string(),
+            year: Some(2020),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let sally = Album {
+            id: "".to_string(),
+            title: "".to_string(),
+            artist: "sally".to_string(),
+            year: Some(2021),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let test = Album {
+            id: "".to_string(),
+            title: "".to_string(),
+            artist: "one test two".to_string(),
+            year: Some(2022),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let albums = vec![bob, sally, test.clone()];
+        let result = filter_albums(
+            albums,
+            &AlbumsRequest {
+                sources: None,
+                sort: None,
+                filters: AlbumFilters {
+                    name: None,
+                    artist: None,
+                    year: None,
+                    search: Some("test".to_string()),
+                },
+            },
+        );
+        assert_eq!(result, vec![test]);
+    }
+
+    #[test]
+    fn filter_albums_filters_albums_of_search_that_dont_match_name() {
+        let bob = Album {
+            id: "".to_string(),
+            title: "bob".to_string(),
+            artist: "".to_string(),
+            year: Some(2020),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let sally = Album {
+            id: "".to_string(),
+            title: "sally".to_string(),
+            artist: "".to_string(),
+            year: Some(2021),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let test = Album {
+            id: "".to_string(),
+            title: "test".to_string(),
+            artist: "".to_string(),
+            year: Some(2022),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let albums = vec![bob, sally, test.clone()];
+        let result = filter_albums(
+            albums,
+            &AlbumsRequest {
+                sources: None,
+                sort: None,
+                filters: AlbumFilters {
+                    name: None,
+                    artist: None,
+                    year: None,
+                    search: Some("test".to_string()),
+                },
+            },
+        );
+        assert_eq!(result, vec![test]);
+    }
+
+    #[test]
+    fn filter_albums_filters_albums_of_search_that_dont_match_name_and_searches_multiple_words() {
+        let bob = Album {
+            id: "".to_string(),
+            title: "bob".to_string(),
+            artist: "".to_string(),
+            year: Some(2020),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let sally = Album {
+            id: "".to_string(),
+            title: "sally".to_string(),
+            artist: "".to_string(),
+            year: Some(2021),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let test = Album {
+            id: "".to_string(),
+            title: "one test two".to_string(),
+            artist: "".to_string(),
+            year: Some(2022),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let albums = vec![bob, sally, test.clone()];
+        let result = filter_albums(
+            albums,
+            &AlbumsRequest {
+                sources: None,
+                sort: None,
+                filters: AlbumFilters {
+                    name: None,
+                    artist: None,
+                    year: None,
+                    search: Some("test".to_string()),
+                },
+            },
+        );
+        assert_eq!(result, vec![test]);
+    }
+
+    #[test]
+    fn filter_albums_filters_albums_of_search_that_dont_match_and_searches_across_properties() {
+        let bob = Album {
+            id: "".to_string(),
+            title: "bob".to_string(),
+            artist: "test".to_string(),
+            year: Some(2020),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let sally = Album {
+            id: "".to_string(),
+            title: "sally".to_string(),
+            artist: "".to_string(),
+            year: Some(2021),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let test = Album {
+            id: "".to_string(),
+            title: "one test two".to_string(),
+            artist: "".to_string(),
+            year: Some(2022),
+            icon: None,
+            source: AlbumSource::Local,
+        };
+        let albums = vec![bob.clone(), sally, test.clone()];
+        let result = filter_albums(
+            albums,
+            &AlbumsRequest {
+                sources: None,
+                sort: None,
+                filters: AlbumFilters {
+                    name: None,
+                    artist: None,
+                    year: None,
+                    search: Some("test".to_string()),
+                },
+            },
+        );
+        assert_eq!(result, vec![bob, test]);
     }
 }
