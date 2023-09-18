@@ -5,7 +5,7 @@ use moosicbox_core::{
     slim::menu::{get_all_albums, Album, AlbumFilters, AlbumSort, AlbumSource},
 };
 use serde_json::{Map, Value};
-use std::{str::FromStr, time::Duration};
+use std::{env, str::FromStr, time::Duration};
 
 fn get_query_param_string(
     query: &Map<String, Value>,
@@ -64,7 +64,9 @@ pub async fn albums(
             .transpose()?,
     };
 
-    let proxy_url = String::from("http://192.168.254.137:9000");
+    let proxy_url = env::var("PROXY_HOST").map_err(|_e| MenuError::InternalServerError {
+        error: "Missing PROXY_HOST environment variable".to_string(),
+    })?;
 
     let proxy_client = awc::Client::builder()
         .timeout(Duration::from_secs(120))
