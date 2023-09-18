@@ -43,10 +43,8 @@ where
     Err: Error,
     Fut: Future<Output = Result<CacheItemType, Err>>,
 {
-    let info: HashMap<String, CacheItem> = HashMap::new();
-
     static CACHE_MAP: OnceLock<Mutex<HashMap<String, CacheItem>>> = OnceLock::new();
-    let cache = CACHE_MAP.get_or_init(|| Mutex::new(info));
+    let cache = CACHE_MAP.get_or_init(|| Mutex::new(HashMap::new()));
 
     if let Some(entry) = cache.lock().unwrap().get(&request.key) {
         if entry.expiration > current_time_nanos() {
