@@ -9,6 +9,7 @@ export async function API({ app, stack }: StackContext) {
         defaults: {
             function: {
                 runtime: 'rust',
+                timeout: '5 minutes',
                 environment: {
                     PROXY_HOST: await fetchSstSecret(
                         ssm,
