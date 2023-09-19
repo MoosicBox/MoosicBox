@@ -5,8 +5,11 @@ authors = ["Braden Steffaniak"]
 edition = "2021"
 
 [dependencies]
-actix-web = "4"
+actix-cors = "0.6.4"
+actix-files = "0.6.2"
+actix-web = "4.4.0"
 awc = "3.0.0-beta.9"
+lambda-web = { version = "0.2.1", features=["actix4"] }
 lambda_runtime = "0.8.2"
 moosicbox_core = { path = "../core" }
 serde = { version = "1.0", features = ["derive"] }

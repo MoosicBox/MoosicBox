@@ -59,7 +59,7 @@ async fn main() -> std::io::Result<()> {
             .service(api::player_next_track_endpoint)
             .service(api::player_previous_track_endpoint)
             .service(api::get_album_endpoint)
-            .service(api::get_albums_endpoint)
+            .service(moosicbox_menu::api::get_albums_endpoint)
             .service(api::get_players_endpoint)
             .service(api::start_player_endpoint)
             .service(api::stop_player_endpoint)

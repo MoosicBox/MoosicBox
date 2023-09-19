@@ -1,70 +1,59 @@
-mod handler;
-
-use actix_web::error::ErrorBadRequest;
-use lambda_runtime::{service_fn, Error, LambdaEvent};
-use moosicbox_core::slim::menu::Album;
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum MenuError {
-    #[error(transparent)]
-    BadRequest(#[from] actix_web::Error),
-    #[error("Internal server error: {error:?}")]
-    InternalServerError { error: String },
-    #[error("Not Found Error: {error:?}")]
-    NotFound { error: String },
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum MenuResponse {
-    Albums(Vec<Album>),
-    Error(Value),
-}
+use actix_cors::Cors;
+use actix_web::{
+    http, middleware,
+    web::{self},
+    Result,
+};
+use lambda_runtime::Error;
+use lambda_web::actix_web::{self, App, HttpServer};
+use lambda_web::{is_running_on_lambda, run_actix_on_lambda};
+use moosicbox_core::app::AppState;
+use moosicbox_menu::api::get_albums_endpoint;
+use std::{env, time::Duration};
 
 #[actix_web::main]
 async fn main() -> Result<(), Error> {
-    let func = service_fn(handler_wrapper);
-    lambda_runtime::run(func).await?;
-    Ok(())
-}
+    let service_port = 8000;
 
-fn to_lambda_response(error: MenuError) -> MenuResponse {
-    MenuResponse::Error(match error {
-        MenuError::BadRequest(error) => json!({
-            "body": error.to_string(),
-            "statusCode": 400
-        }),
-        MenuError::NotFound { error } => json!({
-            "body": error,
-            "statusCode": 404
-        }),
-        MenuError::InternalServerError { error } => json!({
-            "body": error.to_string(),
-            "statusCode": 500
-        }),
-    })
-}
+    let factory = move || {
+        let proxy_client = awc::Client::builder()
+            .timeout(Duration::from_secs(120))
+            .finish();
 
-async fn handler_wrapper(event: LambdaEvent<Value>) -> Result<MenuResponse, MenuError> {
-    return Ok(handler(event).await.unwrap_or_else(to_lambda_response));
-}
+        let proxy_url = env::var("PROXY_HOST")
+            .unwrap_or_else(|_e| panic!("Missing PROXY_HOST environment variable"));
 
-async fn handler(event: LambdaEvent<Value>) -> Result<MenuResponse, MenuError> {
-    let (event, context) = event.into_parts();
+        let image_client = awc::Client::builder()
+            .timeout(Duration::from_secs(120))
+            .finish();
 
-    let path = event["rawPath"]
-        .as_str()
-        .ok_or(MenuError::BadRequest(ErrorBadRequest("Bad request")))?;
+        let cors = Cors::default()
+            .allow_any_origin()
+            .allowed_methods(vec!["GET", "POST"])
+            .allowed_headers(vec![http::header::AUTHORIZATION, http::header::ACCEPT])
+            .allowed_header(http::header::CONTENT_TYPE)
+            .supports_credentials()
+            .max_age(3600);
 
-    match path.to_lowercase().as_str() {
-        "/albums" => handler::albums(&event, &context)
-            .await
-            .map(MenuResponse::Albums),
-        _ => Err(MenuError::NotFound {
-            error: format!("Resource '{path}' not found"),
-        }),
+        App::new()
+            .wrap(cors)
+            .wrap(middleware::Compress::default())
+            .app_data(web::Data::new(AppState {
+                service_port,
+                proxy_url,
+                proxy_client,
+                image_client,
+                db: None,
+            }))
+            .service(get_albums_endpoint)
+    };
+    if is_running_on_lambda() {
+        run_actix_on_lambda(factory).await?;
+    } else {
+        HttpServer::new(factory)
+            .bind(format!("0.0.0.0:{service_port}"))?
+            .run()
+            .await?;
     }
+    Ok(())
 }
