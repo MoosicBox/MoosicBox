@@ -1,6 +1,7 @@
 use crate::{
     app::AppState,
     cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
+    sqlite::db::{get_albums, DbError},
 };
 use futures::{future, FutureExt};
 use serde::{Deserialize, Serialize};
@@ -13,22 +14,25 @@ pub struct FullAlbum {
     pub title: String,
     pub artist: String,
     pub year: Option<i16>,
-    pub icon: Option<String>,
+    pub artwork: Option<String>,
     pub source: AlbumSource,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 pub struct Album {
     pub id: String,
     pub title: String,
     pub artist: String,
     pub year: Option<i16>,
-    pub icon: Option<String>,
+    pub date_released: Option<String>,
+    pub artwork: Option<String>,
+    pub directory: Option<String>,
     pub source: AlbumSource,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Default)]
 pub enum AlbumSource {
+    #[default]
     Local,
     Tidal,
     Qobuz,
@@ -53,8 +57,8 @@ pub enum AlbumSort {
     ArtistDesc,
     NameAsc,
     NameDesc,
-    YearAsc,
-    YearDesc,
+    ReleaseDateAsc,
+    ReleaseDateDesc,
 }
 
 impl FromStr for AlbumSort {
@@ -66,8 +70,8 @@ impl FromStr for AlbumSort {
             "artist-desc" => Ok(AlbumSort::ArtistDesc),
             "name-asc" | "name" => Ok(AlbumSort::NameAsc),
             "name-desc" => Ok(AlbumSort::NameDesc),
-            "year-asc" | "year" => Ok(AlbumSort::YearAsc),
-            "year-desc" => Ok(AlbumSort::YearDesc),
+            "release-date-asc" | "release-date" => Ok(AlbumSort::ReleaseDateAsc),
+            "release-date-desc" => Ok(AlbumSort::ReleaseDateDesc),
             _ => Err(()),
         }
     }
@@ -247,8 +251,18 @@ pub fn sort_albums(mut albums: Vec<Album>, request: &AlbumsRequest) -> Vec<Album
         Some(AlbumSort::NameDesc) => {
             albums.sort_by(|a, b| b.title.to_lowercase().cmp(&a.title.to_lowercase()))
         }
-        Some(AlbumSort::YearAsc) => albums.sort_by(|a, b| a.year.cmp(&b.year)),
-        Some(AlbumSort::YearDesc) => albums.sort_by(|a, b| b.year.cmp(&a.year)),
+        Some(AlbumSort::ReleaseDateAsc) => albums.sort_by(|a, b| {
+            a.clone()
+                .date_released
+                .or(a.year.map(|y| y.to_string()))
+                .cmp(&b.clone().date_released.or(b.year.map(|y| y.to_string())))
+        }),
+        Some(AlbumSort::ReleaseDateDesc) => albums.sort_by(|b, a| {
+            a.clone()
+                .date_released
+                .or(a.year.map(|y| y.to_string()))
+                .cmp(&b.clone().date_released.or(b.year.map(|y| y.to_string())))
+        }),
         None => (),
     }
 
@@ -263,6 +277,8 @@ pub enum GetAlbumsError {
     Tidal(#[from] GetTidalAlbumsError),
     #[error(transparent)]
     Qobuz(#[from] GetQobuzAlbumsError),
+    #[error(transparent)]
+    DbError(#[from] DbError),
 }
 
 pub async fn get_all_albums(
@@ -270,7 +286,10 @@ pub async fn get_all_albums(
     data: &AppState,
     request: &AlbumsRequest,
 ) -> Result<Vec<Album>, GetAlbumsError> {
-    let albums = if request.sources.as_ref().is_some_and(|s| s.len() == 1) {
+    #[allow(clippy::eq_op)]
+    let albums = if 1 == 1 {
+        get_albums(&data.db).await?
+    } else if request.sources.as_ref().is_some_and(|s| s.len() == 1) {
         let source = request.sources.as_ref().unwrap();
         get_albums_from_source(player_id, data, &source[0])
             .await
@@ -379,8 +398,9 @@ pub async fn get_local_albums(
                         title: item.album.clone(),
                         artist: item.artist.clone(),
                         year: Some(item.year),
-                        icon,
+                        artwork: icon,
                         source: AlbumSource::Local,
+                        ..Default::default()
                     }
                 })
                 .collect(),
@@ -453,8 +473,9 @@ pub async fn get_tidal_albums(
                         title: String::from(text_parts[0]),
                         artist: String::from(text_parts[1]),
                         year: None,
-                        icon: item.icon.clone(),
+                        artwork: item.icon.clone(),
                         source: AlbumSource::Tidal,
+                        ..Default::default()
                     }
                 })
                 .collect(),
@@ -537,8 +558,9 @@ pub async fn get_qobuz_albums(
                         title,
                         artist: String::from(artist),
                         year: String::from(year).parse::<i16>().ok(),
-                        icon,
+                        artwork: icon,
                         source: AlbumSource::Qobuz,
+                        ..Default::default()
                     }
                 })
                 .collect(),
@@ -579,24 +601,27 @@ mod test {
             title: "".to_string(),
             artist: "".to_string(),
             year: None,
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let tidal = Album {
             id: "".to_string(),
             title: "".to_string(),
             artist: "".to_string(),
             year: None,
-            icon: None,
+            artwork: None,
             source: AlbumSource::Tidal,
+            ..Default::default()
         };
         let qobuz = Album {
             id: "".to_string(),
             title: "".to_string(),
             artist: "".to_string(),
             year: None,
-            icon: None,
+            artwork: None,
             source: AlbumSource::Qobuz,
+            ..Default::default()
         };
         let albums = vec![local.clone(), tidal, qobuz];
         let result = filter_albums(
@@ -622,24 +647,27 @@ mod test {
             title: "".to_string(),
             artist: "".to_string(),
             year: Some(2020),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let album_2021 = Album {
             id: "".to_string(),
             title: "".to_string(),
             artist: "".to_string(),
             year: Some(2021),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let album_2022 = Album {
             id: "".to_string(),
             title: "".to_string(),
             artist: "".to_string(),
             year: Some(2022),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let albums = vec![album_2020, album_2021.clone(), album_2022];
         let result = filter_albums(
@@ -665,24 +693,27 @@ mod test {
             title: "bob".to_string(),
             artist: "".to_string(),
             year: Some(2020),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let sally = Album {
             id: "".to_string(),
             title: "sally".to_string(),
             artist: "".to_string(),
             year: Some(2021),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let test = Album {
             id: "".to_string(),
             title: "test".to_string(),
             artist: "".to_string(),
             year: Some(2022),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let albums = vec![bob, sally, test.clone()];
         let result = filter_albums(
@@ -708,24 +739,27 @@ mod test {
             title: "bob".to_string(),
             artist: "".to_string(),
             year: Some(2020),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let sally = Album {
             id: "".to_string(),
             title: "sally".to_string(),
             artist: "".to_string(),
             year: Some(2021),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let test = Album {
             id: "".to_string(),
             title: "one test two".to_string(),
             artist: "".to_string(),
             year: Some(2022),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let albums = vec![bob, sally, test.clone()];
         let result = filter_albums(
@@ -751,24 +785,27 @@ mod test {
             title: "".to_string(),
             artist: "bob".to_string(),
             year: Some(2020),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let sally = Album {
             id: "".to_string(),
             title: "".to_string(),
             artist: "sally".to_string(),
             year: Some(2021),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let test = Album {
             id: "".to_string(),
             title: "".to_string(),
             artist: "test".to_string(),
             year: Some(2022),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let albums = vec![bob, sally, test.clone()];
         let result = filter_albums(
@@ -794,24 +831,27 @@ mod test {
             title: "".to_string(),
             artist: "bob".to_string(),
             year: Some(2020),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let sally = Album {
             id: "".to_string(),
             title: "".to_string(),
             artist: "sally".to_string(),
             year: Some(2021),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let test = Album {
             id: "".to_string(),
             title: "".to_string(),
             artist: "one test two".to_string(),
             year: Some(2022),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let albums = vec![bob, sally, test.clone()];
         let result = filter_albums(
@@ -837,24 +877,27 @@ mod test {
             title: "".to_string(),
             artist: "bob".to_string(),
             year: Some(2020),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let sally = Album {
             id: "".to_string(),
             title: "".to_string(),
             artist: "sally".to_string(),
             year: Some(2021),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let test = Album {
             id: "".to_string(),
             title: "".to_string(),
             artist: "test".to_string(),
             year: Some(2022),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let albums = vec![bob, sally, test.clone()];
         let result = filter_albums(
@@ -880,24 +923,27 @@ mod test {
             title: "".to_string(),
             artist: "bob".to_string(),
             year: Some(2020),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let sally = Album {
             id: "".to_string(),
             title: "".to_string(),
             artist: "sally".to_string(),
             year: Some(2021),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let test = Album {
             id: "".to_string(),
             title: "".to_string(),
             artist: "one test two".to_string(),
             year: Some(2022),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let albums = vec![bob, sally, test.clone()];
         let result = filter_albums(
@@ -923,24 +969,27 @@ mod test {
             title: "bob".to_string(),
             artist: "".to_string(),
             year: Some(2020),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let sally = Album {
             id: "".to_string(),
             title: "sally".to_string(),
             artist: "".to_string(),
             year: Some(2021),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let test = Album {
             id: "".to_string(),
             title: "test".to_string(),
             artist: "".to_string(),
             year: Some(2022),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let albums = vec![bob, sally, test.clone()];
         let result = filter_albums(
@@ -966,24 +1015,27 @@ mod test {
             title: "bob".to_string(),
             artist: "".to_string(),
             year: Some(2020),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let sally = Album {
             id: "".to_string(),
             title: "sally".to_string(),
             artist: "".to_string(),
             year: Some(2021),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let test = Album {
             id: "".to_string(),
             title: "one test two".to_string(),
             artist: "".to_string(),
             year: Some(2022),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let albums = vec![bob, sally, test.clone()];
         let result = filter_albums(
@@ -1009,24 +1061,27 @@ mod test {
             title: "bob".to_string(),
             artist: "test".to_string(),
             year: Some(2020),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let sally = Album {
             id: "".to_string(),
             title: "sally".to_string(),
             artist: "".to_string(),
             year: Some(2021),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let test = Album {
             id: "".to_string(),
             title: "one test two".to_string(),
             artist: "".to_string(),
             year: Some(2022),
-            icon: None,
+            artwork: None,
             source: AlbumSource::Local,
+            ..Default::default()
         };
         let albums = vec![bob.clone(), sally, test.clone()];
         let result = filter_albums(

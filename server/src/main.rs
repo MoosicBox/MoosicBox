@@ -1,13 +1,23 @@
 mod api;
+mod scan;
 
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App, HttpServer};
-use moosicbox_core::app::{AppState, Db};
+use moosicbox_core::{
+    app::{AppState, Db},
+    sqlite::db::init_db,
+};
 use std::{env, time::Duration};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let service_port = 8000;
+
+    let library_db = ::sqlite::open("library.db").unwrap();
+    let db = Db {
+        library: library_db,
+    };
+    let _ = init_db(&db).await;
 
     let app = move || {
         let args: Vec<String> = env::args().collect();
@@ -27,6 +37,17 @@ async fn main() -> std::io::Result<()> {
             .finish();
 
         let library_db = ::sqlite::open("library.db").unwrap();
+        let db = Db {
+            library: library_db,
+        };
+
+        let app_data = AppState {
+            service_port,
+            proxy_url,
+            proxy_client,
+            image_client,
+            db,
+        };
 
         let cors = Cors::default()
             .allow_any_origin()
@@ -39,15 +60,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(cors)
             .wrap(middleware::Compress::default())
-            .app_data(web::Data::new(AppState {
-                service_port,
-                proxy_url,
-                proxy_client,
-                image_client,
-                db: Some(Db {
-                    library: library_db,
-                }),
-            }))
+            .app_data(web::Data::new(app_data))
             .service(api::connect_endpoint)
             .service(api::status_endpoint)
             .service(api::playlist_status_endpoint)
@@ -60,14 +73,17 @@ async fn main() -> std::io::Result<()> {
             .service(api::player_previous_track_endpoint)
             .service(api::get_album_endpoint)
             .service(moosicbox_menu::api::get_albums_endpoint)
+            .service(moosicbox_menu::api::get_album_tracks_endpoint)
+            .service(moosicbox_files::api::track_endpoint)
+            .service(moosicbox_files::api::album_artwork_endpoint)
             .service(api::get_players_endpoint)
             .service(api::start_player_endpoint)
             .service(api::stop_player_endpoint)
             .service(api::restart_player_endpoint)
             .service(api::image_proxy_endpoint)
-            .service(api::album_icon_endpoint)
             .service(api::proxy_get_endpoint)
             .service(api::proxy_post_endpoint)
+            .service(api::scan_endpoint)
     };
 
     HttpServer::new(app)

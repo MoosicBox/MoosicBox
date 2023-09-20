@@ -1,4 +1,5 @@
-use actix_web::error::ErrorNotFound;
+use crate::scan::scan;
+use actix_web::error::{ErrorInternalServerError, ErrorNotFound};
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
 use actix_web::{
@@ -444,4 +445,20 @@ pub async fn album_icon_endpoint(
     Ok(HttpResponse::build(StatusCode::OK)
         .content_type(content_type)
         .body(body))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanQuery {
+    location: String,
+}
+
+#[post("/scan")]
+pub async fn scan_endpoint(
+    query: web::Query<ScanQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<Value>> {
+    scan(&query.location, &data).map_err(|_e| ErrorInternalServerError("Failed to scan"))?;
+
+    Ok(Json(serde_json::json!({"success": true})))
 }

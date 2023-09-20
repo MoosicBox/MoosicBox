@@ -4,9 +4,10 @@ use actix_web::{
     Result,
 };
 use lambda_web::actix_web::{self, get};
-use moosicbox_core::app::AppState;
-use moosicbox_core::slim::menu::{
-    get_all_albums, Album, AlbumFilters, AlbumSort, AlbumSource, AlbumsRequest,
+use moosicbox_core::{app::AppState, slim::player::Track};
+use moosicbox_core::{
+    slim::menu::{get_all_albums, Album, AlbumFilters, AlbumSort, AlbumSource, AlbumsRequest},
+    sqlite::menu::get_album_tracks,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -89,5 +90,22 @@ pub async fn get_albums_endpoint(
     match get_all_albums(player_id, &data, &request).await {
         Ok(resp) => Ok(Json(resp)),
         Err(error) => panic!("Failed to get albums: {:?}", error),
+    }
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GetAlbumTracksQuery {
+    album_id: i32,
+}
+
+#[get("/album/tracks")]
+pub async fn get_album_tracks_endpoint(
+    query: web::Query<GetAlbumTracksQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<Vec<Track>>> {
+    match get_album_tracks(query.album_id, &data).await {
+        Ok(resp) => Ok(Json(resp)),
+        Err(error) => panic!("Failed to get album tracks: {:?}", error),
     }
 }

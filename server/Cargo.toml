@@ -8,11 +8,13 @@ edition = "2021"
 actix-cors = "0.6.4"
 actix-files = "0.6.2"
 actix-web = "4.4.0"
+audiotags = { path = "../../audiotags" }
 awc = "3.0.0-beta.9"
 enum-as-inner = "0.6.0"
 futures = "0.3"
 moosicbox_core = { path = "../packages/core" }
 moosicbox_menu = { path = "../packages/menu" }
+moosicbox_files = { path = "../packages/files" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.105"
 sqlite = "0.31.1"

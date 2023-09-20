@@ -1,4 +1,5 @@
 use crate::slim::menu::Album;
+use crate::slim::player::Track;
 use crate::sqlite::menu::FullAlbum;
 use enum_as_inner::EnumAsInner;
 use futures::Future;
@@ -18,6 +19,7 @@ struct CacheItem {
 #[serde(untagged)]
 pub enum CacheItemType {
     Albums(Vec<Album>),
+    AlbumTracks(Vec<Track>),
     Album(Album),
     FullAlbum(FullAlbum),
 }

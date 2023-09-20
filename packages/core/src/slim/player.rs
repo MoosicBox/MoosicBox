@@ -42,13 +42,15 @@ pub struct PlaylistStatus {
     pub tracks: Vec<Track>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Track {
+    pub id: Option<i32>,
     pub title: String,
-    pub icon: String,
+    pub icon: Option<String>,
     pub album: String,
     pub artist: String,
+    pub file: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -572,10 +574,11 @@ pub async fn get_playlist_status(
             .playlist_loop
             .iter()
             .map(|p| Track {
-                icon: p.artwork_url.clone(),
+                icon: Some(p.artwork_url.clone()),
                 album: p.album.clone(),
                 artist: p.artist.clone(),
                 title: p.title.clone(),
+                ..Default::default()
             })
             .collect(),
     })

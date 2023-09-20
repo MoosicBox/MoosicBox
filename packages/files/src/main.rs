@@ -8,7 +8,7 @@ use lambda_runtime::Error;
 use lambda_web::actix_web::{self, App, HttpServer};
 use lambda_web::{is_running_on_lambda, run_actix_on_lambda};
 use moosicbox_core::app::AppState;
-use moosicbox_menu::api;
+use moosicbox_files::api::track_endpoint;
 use std::{env, time::Duration};
 
 #[actix_web::main]
@@ -45,10 +45,8 @@ async fn main() -> Result<(), Error> {
                 image_client,
                 db: None,
             }))
-            .service(api::get_albums_endpoint)
-            .service(api::get_album_tracks_endpoint)
+            .service(track_endpoint)
     };
-
     if is_running_on_lambda() {
         run_actix_on_lambda(factory).await?;
     } else {

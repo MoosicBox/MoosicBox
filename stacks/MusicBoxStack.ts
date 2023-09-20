@@ -22,6 +22,7 @@ export async function API({ app, stack }: StackContext) {
         },
         routes: {
             'GET /albums': 'packages/menu/src/moosicbox_menu.handler',
+            'GET /track': 'packages/files/src/moosicbox_files.handler',
         },
     });
 

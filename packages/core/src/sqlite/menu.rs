@@ -1,10 +1,13 @@
 use crate::{
     app::AppState,
     cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
-    slim::menu::AlbumSource,
+    slim::{
+        menu::{Album, AlbumSource},
+        player::Track,
+    },
 };
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::{sync::PoisonError, time::Duration};
 use thiserror::Error;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -17,6 +20,12 @@ pub struct FullAlbum {
     pub source: AlbumSource,
 }
 
+impl<T> From<PoisonError<T>> for GetAlbumError {
+    fn from(_err: PoisonError<T>) -> Self {
+        Self::PoisonError
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum GetAlbumError {
     #[error("Album not found with ID {album_id:?}")]
@@ -25,6 +34,8 @@ pub enum GetAlbumError {
     TooManyAlbumsFound { album_id: i32 },
     #[error("Unknown source: {album_source:?}")]
     UnknownSource { album_source: String },
+    #[error("Poison error")]
+    PoisonError,
     #[error(transparent)]
     SqliteError(#[from] sqlite::Error),
 }
@@ -37,14 +48,12 @@ pub async fn get_album(
     let proxy_url = &data.proxy_url;
     let request = CacheRequest {
         key: format!("album|{player_id}|{proxy_url}|{album_id}"),
-        expiration: Duration::from_secs(60 * 60),
+        expiration: Duration::from_secs(5 * 60),
     };
 
     Ok(get_or_set_to_cache(request, || async {
         let results: Vec<_> = data
             .db
-            .as_ref()
-            .unwrap()
             .library
             .prepare("SELECT * from albums WHERE id = ?")?
             .into_iter()
@@ -97,5 +106,112 @@ pub async fn get_album(
     })
     .await?
     .into_full_album()
+    .unwrap())
+}
+
+impl<T> From<PoisonError<T>> for GetAlbumsError {
+    fn from(_err: PoisonError<T>) -> Self {
+        Self::PoisonError
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum GetAlbumsError {
+    #[error("Poison error")]
+    PoisonError,
+    #[error(transparent)]
+    JsonError(#[from] awc::error::JsonPayloadError),
+    #[error(transparent)]
+    SqliteError(#[from] sqlite::Error),
+}
+
+pub async fn get_albums(data: &AppState) -> Result<Vec<Album>, GetAlbumsError> {
+    let request = CacheRequest {
+        key: "sqlite|local_albums".to_string(),
+        expiration: Duration::from_secs(5 * 60),
+    };
+
+    Ok(get_or_set_to_cache(request, || async {
+        Ok::<CacheItemType, GetAlbumsError>(CacheItemType::Albums(
+            data.db
+                .library
+                .prepare("SELECT * from albums")?
+                .into_iter()
+                .filter_map(|row| row.ok())
+                .map(|row| {
+                    let id = String::from(row.read::<&str, _>("id"));
+                    let artist = String::from(row.read::<&str, _>("artist"));
+                    let title = String::from(row.read::<&str, _>("title"));
+                    let date_released = row
+                        .read::<Option<&str>, _>("date_released")
+                        .map(|date| date.to_string());
+                    let artwork = row
+                        .read::<Option<&str>, _>("artwork")
+                        .map(|_a| format!("/albums/{id}/300x300"));
+                    let directory = row
+                        .read::<Option<&str>, _>("directory")
+                        .map(|dir| dir.to_string());
+                    Album {
+                        id,
+                        title,
+                        artist,
+                        date_released,
+                        artwork,
+                        directory,
+                        ..Default::default()
+                    }
+                })
+                .collect(),
+        ))
+    })
+    .await?
+    .into_albums()
+    .unwrap())
+}
+
+impl<T> From<PoisonError<T>> for GetAlbumTracksError {
+    fn from(_err: PoisonError<T>) -> Self {
+        Self::PoisonError
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum GetAlbumTracksError {
+    #[error("Poison error")]
+    PoisonError,
+    #[error(transparent)]
+    JsonError(#[from] awc::error::JsonPayloadError),
+    #[error(transparent)]
+    SqliteError(#[from] sqlite::Error),
+}
+
+pub async fn get_album_tracks(
+    album_id: i32,
+    data: &AppState,
+) -> Result<Vec<Track>, GetAlbumTracksError> {
+    let request = CacheRequest {
+        key: format!("sqlite|local_album_tracks|{album_id}"),
+        expiration: Duration::from_secs(5 * 60),
+    };
+
+    Ok(get_or_set_to_cache(request, || async {
+        Ok::<CacheItemType, GetAlbumTracksError>(CacheItemType::AlbumTracks(
+            data.db
+                .library
+                .prepare("SELECT * from tracks WHERE album_id=?")?
+                .into_iter()
+                .bind((1, album_id as i64))?
+                .filter_map(|row| row.ok())
+                .map(|row| Track {
+                    id: Some(row.read::<i64, _>("id") as i32),
+                    title: String::from(row.read::<&str, _>("title")),
+                    file: row.read::<Option<&str>, _>("file").map(|f| f.to_string()),
+                    ..Default::default()
+                })
+                .collect(),
+        ))
+    })
+    .await?
+    .into_album_tracks()
     .unwrap())
 }
