@@ -20,7 +20,7 @@ pub struct StatusResponseResult {
     #[serde(rename = "other player count")]
     pub other_player_count: i32,
 
-    pub players_loop: Vec<PlayerResponse>,
+    pub players_loop: Option<Vec<PlayerResponse>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -91,7 +91,7 @@ pub struct PingResponseDataWrapper {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PingResponseData {
-    pub players_loop: Vec<PlayerResponse>,
+    pub players_loop: Option<Vec<PlayerResponse>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -121,7 +121,7 @@ pub struct GetPlayersResponseDataWrapper {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GetPlayersResponseData {
-    pub players_loop: Vec<PlayerResponse>,
+    pub players_loop: Option<Vec<PlayerResponse>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -521,12 +521,16 @@ pub async fn get_status(data: web::Data<AppState>) -> serde_json::Result<Status>
         players: status_response
             .result
             .players_loop
-            .iter()
-            .map(|p| Player {
-                player_id: p.player_id.clone(),
-                is_playing: p.is_playing == 1,
+            .map(|players| {
+                players
+                    .iter()
+                    .map(|p| Player {
+                        player_id: p.player_id.clone(),
+                        is_playing: p.is_playing == 1,
+                    })
+                    .collect()
             })
-            .collect(),
+            .unwrap_or(vec![]),
     })
 }
 
@@ -658,7 +662,7 @@ pub async fn get_players(
     };
 
     let players = match &get_players_response[1] {
-        GetPlayersResponse::ResponseDataWrapper(x) => x.data.players_loop.clone(),
+        GetPlayersResponse::ResponseDataWrapper(x) => x.data.players_loop.clone().unwrap_or(vec![]),
         _ => panic!("Invalid get players response data"),
     };
 
