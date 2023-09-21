@@ -104,8 +104,8 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
     let mut album = add_album_map_and_get_value(
         &data.db,
         HashMap::from([
-            ("title", SqliteValue::String(album_dir_name)),
-            ("artist", SqliteValue::String(artist_dir_name)),
+            ("title", SqliteValue::String(album)),
+            ("artist", SqliteValue::String(artist)),
             ("date_released", SqliteValue::StringOpt(date_released)),
             (
                 "directory",
