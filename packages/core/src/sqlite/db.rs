@@ -7,7 +7,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use sqlite::{Connection, CursorWithOwnership, Row};
-use std::sync::PoisonError;
+use std::{collections::HashMap, sync::PoisonError};
 use thiserror::Error;
 
 impl<T> From<PoisonError<T>> for DbError {
@@ -18,6 +18,8 @@ impl<T> From<PoisonError<T>> for DbError {
 
 #[derive(Debug, Error)]
 pub enum DbError {
+    #[error("Invalid Request")]
+    InvalidRequest,
     #[error("Poison Error")]
     PoisonError,
     #[error(transparent)]
@@ -107,7 +109,7 @@ pub async fn get_track(db: &Db, id: i32) -> Result<Option<Track>, DbError> {
 }
 
 #[derive(Clone)]
-enum SqliteValue {
+pub enum SqliteValue {
     String(String),
     StringOpt(Option<String>),
     Number(i64),
@@ -360,6 +362,7 @@ pub fn add_albums(db: &Db, albums: Vec<Album>) -> Result<Vec<i64>, DbError> {
             vec![
                 ("artist", SqliteValue::String(album.artist.clone())),
                 ("title", SqliteValue::String(album.title.clone())),
+                ("directory", SqliteValue::StringOpt(album.directory.clone())),
             ],
             vec![
                 ("artist", SqliteValue::String(album.artist)),
@@ -378,27 +381,53 @@ pub fn add_album_and_get_value(db: &Db, album: Album) -> Result<Album, DbError> 
     Ok(add_albums_and_get_values(db, vec![album])?[0].clone())
 }
 
+pub fn add_album_map_and_get_value(
+    db: &Db,
+    album: HashMap<&str, SqliteValue>,
+) -> Result<Album, DbError> {
+    Ok(add_album_maps_and_get_values(db, vec![album])?[0].clone())
+}
+
 pub fn add_albums_and_get_values(db: &Db, albums: Vec<Album>) -> Result<Vec<Album>, DbError> {
+    add_album_maps_and_get_values(
+        db,
+        albums
+            .into_iter()
+            .map(|album| {
+                HashMap::from([
+                    ("artist", SqliteValue::String(album.artist)),
+                    ("title", SqliteValue::String(album.title)),
+                    ("date_released", SqliteValue::StringOpt(album.date_released)),
+                    ("artwork", SqliteValue::StringOpt(album.artwork)),
+                    ("directory", SqliteValue::StringOpt(album.directory)),
+                ])
+            })
+            .collect(),
+    )
+}
+
+pub fn add_album_maps_and_get_values(
+    db: &Db,
+    albums: Vec<HashMap<&str, SqliteValue>>,
+) -> Result<Vec<Album>, DbError> {
     Ok(albums
-        .iter()
+        .into_iter()
         .map(|album| {
+            if !album.contains_key("artist") || !album.contains_key("title") {
+                return Err(DbError::InvalidRequest);
+            }
+            let mut filters = vec![
+                ("artist", album.get("artist").unwrap().clone()),
+                ("title", album.get("title").unwrap().clone()),
+            ];
+            if album.contains_key("directory") {
+                filters.push(("directory", album.get("directory").unwrap().clone()))
+            }
             let row = upsert_and_get_values(
                 &db.library,
                 "albums",
-                vec![
-                    ("artist", SqliteValue::String(album.artist.clone())),
-                    ("title", SqliteValue::String(album.title.clone())),
-                ],
-                vec![
-                    ("artist", SqliteValue::String(album.artist.clone())),
-                    ("title", SqliteValue::String(album.title.clone())),
-                    (
-                        "date_released",
-                        SqliteValue::StringOpt(album.date_released.clone()),
-                    ),
-                    ("artwork", SqliteValue::StringOpt(album.artwork.clone())),
-                    ("directory", SqliteValue::StringOpt(album.directory.clone())),
-                ],
+                filters,
+                album.into_iter().collect::<Vec<_>>(),
             )?;
 
             Ok::<_, DbError>(Album {

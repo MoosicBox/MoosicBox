@@ -1149,6 +1149,7 @@ dependencies = [
  "moosicbox_core",
  "moosicbox_files",
  "moosicbox_menu",
+ "regex",
  "serde",
  "serde_json",
  "sqlite",

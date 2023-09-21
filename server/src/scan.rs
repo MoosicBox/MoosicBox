@@ -1,11 +1,17 @@
-use audiotags::Tag;
+use audiotags::{AudioTag, Tag};
 use moosicbox_core::{
     app::AppState,
-    slim::{menu::Album, player::Track},
-    sqlite::db::{add_album_and_get_value, add_tracks, DbError, InsertTrack},
+    slim::player::Track,
+    sqlite::db::{
+        add_album_and_get_value, add_album_map_and_get_value, add_tracks, DbError, InsertTrack,
+        SqliteValue,
+    },
 };
+use regex::Regex;
 use std::{
-    fs::{self, DirEntry},
+    collections::HashMap,
+    fs::{self},
+    io::Write,
     num::ParseIntError,
     path::{Path, PathBuf},
 };
@@ -14,9 +20,11 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum ScanError {
     #[error(transparent)]
-    DbError(#[from] DbError),
+    Db(#[from] DbError),
     #[error(transparent)]
-    ParseIntError(#[from] ParseIntError),
+    ParseInt(#[from] ParseIntError),
+    #[error(transparent)]
+    Tag(#[from] audiotags::error::Error),
 }
 
 pub fn scan(directory: &str, data: &AppState) -> Result<(), ScanError> {
@@ -25,18 +33,44 @@ pub fn scan(directory: &str, data: &AppState) -> Result<(), ScanError> {
     })
 }
 
-fn search_for_artwork(path: PathBuf) -> Option<DirEntry> {
-    fs::read_dir(path)
+fn save_bytes_to_file(bytes: &[u8], path: &PathBuf) {
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(path)
+        .unwrap();
+
+    let _ = file.write_all(bytes);
+}
+
+fn search_for_artwork(path: PathBuf, tag: Box<dyn AudioTag>) -> Option<PathBuf> {
+    if let Some(cover_file) = fs::read_dir(path.clone())
         .unwrap()
         .filter_map(|p| p.ok())
         .find(|p| {
             let name = p.file_name().to_str().unwrap().to_lowercase();
             name.starts_with("cover.")
         })
+        .map(|dir| dir.path())
+    {
+        Some(cover_file)
+    } else if let Some(tag_cover) = tag.album_cover() {
+        let cover_file_path = match tag_cover.mime_type {
+            audiotags::MimeType::Png => path.join("cover.png"),
+            audiotags::MimeType::Jpeg => path.join("cover.jpg"),
+            audiotags::MimeType::Tiff => path.join("cover.tiff"),
+            audiotags::MimeType::Bmp => path.join("cover.bmp"),
+            audiotags::MimeType::Gif => path.join("cover.gif"),
+        };
+        save_bytes_to_file(tag_cover.data, &cover_file_path);
+        Some(cover_file_path)
+    } else {
+        None
+    }
 }
 
 fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
-    let tag = Tag::new().read_from_path(path.to_str().unwrap()).unwrap();
+    let tag = Tag::new().read_from_path(path.to_str().unwrap())?;
 
     let title = tag.title().unwrap().to_string();
     let album = tag.album_title().unwrap_or("(none)").to_string();
@@ -67,30 +101,24 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
     println!("date_released: {:?}", date_released);
     println!("contains cover: {:?}", tag.album_cover().is_some());
 
-    let mut album = add_album_and_get_value(
+    let mut album = add_album_map_and_get_value(
         &data.db,
-        Album {
-            title: album_dir_name,
-            artist: artist_dir_name,
-            date_released,
-            directory: path_album.to_str().map(|p| p.to_string()),
-            ..Default::default()
-        },
+        HashMap::from([
+            ("title", SqliteValue::String(album_dir_name)),
+            ("artist", SqliteValue::String(artist_dir_name)),
+            ("date_released", SqliteValue::StringOpt(date_released)),
+            (
+                "directory",
+                SqliteValue::StringOpt(path_album.to_str().map(|p| p.to_string())),
+            ),
+        ]),
     )?;
 
     println!("artwork: {:?}", album.artwork);
 
     if album.artwork.is_none() {
-        if let Some(artwork) = search_for_artwork(path_album.clone()) {
-            album.artwork = Some(
-                artwork
-                    .path()
-                    .file_name()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .to_string(),
-            );
+        if let Some(artwork) = search_for_artwork(path_album.clone(), tag) {
+            album.artwork = Some(artwork.file_name().unwrap().to_str().unwrap().to_string());
             println!(
                 "Found artwork for {}: {}",
                 path_album.to_str().unwrap(),
@@ -119,18 +147,15 @@ fn scan_dir<F>(path: PathBuf, fun: &F) -> Result<(), ScanError>
 where
     F: Fn(PathBuf) -> Result<(), ScanError>,
 {
+    let music_file_pattern = Regex::new(r".+\.(flac|m4a|mp3)").unwrap();
+
     for p in fs::read_dir(path).unwrap().filter_map(|p| p.ok()) {
         let metadata = p.metadata().unwrap();
 
         if metadata.is_dir() {
             scan_dir(p.path(), fun)?;
         } else if metadata.is_file()
-            && p.path()
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .ends_with(".flac")
+            && music_file_pattern.is_match(p.path().file_name().unwrap().to_str().unwrap())
         {
             fun(p.path())?;
         }
