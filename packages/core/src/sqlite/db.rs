@@ -7,7 +7,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use sqlite::{Connection, CursorWithOwnership, Row};
-use std::{collections::HashMap, sync::PoisonError};
+use std::{collections::HashMap, fmt::Display, sync::PoisonError};
 use thiserror::Error;
 
 impl<T> From<PoisonError<T>> for DbError {
@@ -108,11 +108,24 @@ pub async fn get_track(db: &Db, id: i32) -> Result<Option<Track>, DbError> {
         .next())
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum SqliteValue {
     String(String),
     StringOpt(Option<String>),
     Number(i64),
+}
+
+impl Display for SqliteValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(
+            match self {
+                SqliteValue::String(str) => str.to_string(),
+                SqliteValue::StringOpt(str_opt) => str_opt.clone().unwrap_or("NULL".to_string()),
+                SqliteValue::Number(num) => num.to_string(),
+            }
+            .as_str(),
+        )
+    }
 }
 
 fn select<'a>(
@@ -135,14 +148,14 @@ fn select<'a>(
     .collect())
 }
 
-fn find_id<'a>(
+fn find_row<'a>(
     connection: &'a Connection,
     table_name: &str,
     filters: &Vec<(&'a str, SqliteValue)>,
-) -> Result<Option<i64>, DbError> {
-    Ok(select(connection, table_name, filters, &["id"])?
-        .first()
-        .map(|row| row.read::<i64, _>("id")))
+) -> Result<Option<Row>, DbError> {
+    Ok(select(connection, table_name, filters, &["*"])?
+        .into_iter()
+        .next())
 }
 
 fn build_where_clause<'a>(values: &'a Vec<(&'a str, SqliteValue)>) -> String {
@@ -225,38 +238,21 @@ fn bind_values<'a>(
     Ok(cursor)
 }
 
-fn insert_and_get_id<'a>(
-    connection: &'a Connection,
-    table_name: &str,
-    values: Vec<(&'a str, SqliteValue)>,
-) -> Result<i64, DbError> {
-    let column_names = values
-        .clone()
-        .into_iter()
-        .map(|(key, _v)| key)
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    bind_values(
-        connection
-            .prepare(format!(
-                "INSERT INTO {table_name} ({}) {}",
-                column_names,
-                build_values_clause(&values),
-            ))?
-            .into_iter(),
-        &values,
-    )?
-    .next();
-
-    Ok(find_id(connection, table_name, &values)?.unwrap())
+fn get_value(row: &Row, key: &str, value: &SqliteValue) -> SqliteValue {
+    match value {
+        SqliteValue::String(_value) => SqliteValue::String(row.read::<&str, _>(key).to_string()),
+        SqliteValue::StringOpt(_value) => {
+            SqliteValue::StringOpt(row.read::<Option<&str>, _>(key).map(|s| s.to_string()))
+        }
+        SqliteValue::Number(_value) => SqliteValue::Number(row.read::<i64, _>(key)),
+    }
 }
 
-fn insert_and_get_values<'a>(
+fn insert_and_get_row<'a>(
     connection: &'a Connection,
     table_name: &str,
     values: Vec<(&'a str, SqliteValue)>,
-) -> Result<Option<Row>, DbError> {
+) -> Result<Row, DbError> {
     let column_names = values
         .clone()
         .into_iter()
@@ -278,14 +274,15 @@ fn insert_and_get_values<'a>(
 
     Ok(select(connection, table_name, &values, &["*"])?
         .into_iter()
-        .last())
+        .last()
+        .unwrap())
 }
 
-fn update_and_get_values<'a>(
+fn update_and_get_row<'a>(
     connection: &'a Connection,
     table_name: &str,
     id: i64,
-    values: Vec<(&'a str, SqliteValue)>,
+    values: &Vec<(&'a str, SqliteValue)>,
 ) -> Result<Option<Row>, DbError> {
     bind_values(
         connection
@@ -308,51 +305,60 @@ fn update_and_get_values<'a>(
     .next())
 }
 
-fn update_and_get_id<'a>(
-    connection: &'a Connection,
-    table_name: &str,
-    id: i64,
-    values: Vec<(&'a str, SqliteValue)>,
-) -> Result<i64, DbError> {
-    bind_values(
-        connection
-            .prepare(format!(
-                "UPDATE {table_name} {} WHERE id=?",
-                build_set_clause(&values)
-            ))?
-            .into_iter(),
-        &[values.clone(), vec![("id", SqliteValue::Number(id))]].concat(),
-    )?
-    .next();
-
-    Ok(id)
-}
-
 fn upsert<'a>(
     connection: &'a Connection,
     table_name: &str,
     filters: Vec<(&'a str, SqliteValue)>,
     values: Vec<(&'a str, SqliteValue)>,
-) -> Result<i64, DbError> {
-    match find_id(connection, table_name, &filters)? {
-        Some(id) => update_and_get_id(connection, table_name, id, values),
-        None => insert_and_get_id(connection, table_name, values),
+) -> Result<Row, DbError> {
+    match find_row(connection, table_name, &filters)? {
+        Some(row) => {
+            Ok(
+                update_and_get_row(connection, table_name, row.read::<i64, _>("id"), &values)?
+                    .unwrap(),
+            )
+        }
+        None => insert_and_get_row(connection, table_name, values),
     }
 }
 
-fn upsert_and_get_values<'a>(
+fn upsert_and_get_row<'a>(
     connection: &'a Connection,
     table_name: &str,
     filters: Vec<(&'a str, SqliteValue)>,
     values: Vec<(&'a str, SqliteValue)>,
 ) -> Result<Row, DbError> {
-    match find_id(connection, table_name, &filters)? {
-        Some(id) => Ok(update_and_get_values(connection, table_name, id, values)?.unwrap()),
-        None => Ok(insert_and_get_values(connection, table_name, values)?.unwrap()),
+    match find_row(connection, table_name, &filters)? {
+        Some(row) => {
+            let updated =
+                update_and_get_row(connection, table_name, row.read::<i64, _>("id"), &values)?
+                    .unwrap();
+
+            if values
+                .iter()
+                .filter(|(key, new_value)| {
+                    let old_value = &get_value(&row, key, new_value);
+
+                    if old_value != new_value {
+                        println!("Changed {key} from {old_value} to {new_value}");
+                        true
+                    } else {
+                        false
+                    }
+                })
+                .count()
+                == 0
+            {
+                println!("No updates to {table_name}");
+            }
+
+            Ok(updated)
+        }
+        None => Ok(insert_and_get_row(connection, table_name, values)?),
     }
 }
 
-pub fn add_albums(db: &Db, albums: Vec<Album>) -> Result<Vec<i64>, DbError> {
+pub fn add_albums(db: &Db, albums: Vec<Album>) -> Result<Vec<Row>, DbError> {
     let mut ids = Vec::new();
 
     for album in albums {
@@ -377,19 +383,19 @@ pub fn add_albums(db: &Db, albums: Vec<Album>) -> Result<Vec<i64>, DbError> {
     Ok(ids)
 }
 
-pub fn add_album_and_get_value(db: &Db, album: Album) -> Result<Album, DbError> {
-    Ok(add_albums_and_get_values(db, vec![album])?[0].clone())
+pub fn add_album_and_get_album(db: &Db, album: Album) -> Result<Album, DbError> {
+    Ok(add_albums_and_get_albums(db, vec![album])?[0].clone())
 }
 
-pub fn add_album_map_and_get_value(
+pub fn add_album_map_and_get_album(
     db: &Db,
     album: HashMap<&str, SqliteValue>,
 ) -> Result<Album, DbError> {
-    Ok(add_album_maps_and_get_values(db, vec![album])?[0].clone())
+    Ok(add_album_maps_and_get_albums(db, vec![album])?[0].clone())
 }
 
-pub fn add_albums_and_get_values(db: &Db, albums: Vec<Album>) -> Result<Vec<Album>, DbError> {
-    add_album_maps_and_get_values(
+pub fn add_albums_and_get_albums(db: &Db, albums: Vec<Album>) -> Result<Vec<Album>, DbError> {
+    add_album_maps_and_get_albums(
         db,
         albums
             .into_iter()
@@ -406,7 +412,7 @@ pub fn add_albums_and_get_values(db: &Db, albums: Vec<Album>) -> Result<Vec<Albu
     )
 }
 
-pub fn add_album_maps_and_get_values(
+pub fn add_album_maps_and_get_albums(
     db: &Db,
     albums: Vec<HashMap<&str, SqliteValue>>,
 ) -> Result<Vec<Album>, DbError> {
@@ -428,7 +434,7 @@ pub fn add_album_maps_and_get_values(
                 }
                 values
             };
-            let row = upsert_and_get_values(
+            let row = upsert_and_get_row(
                 &db.library,
                 "albums",
                 filters,
@@ -463,7 +469,7 @@ pub struct InsertTrack {
     pub file: String,
 }
 
-pub fn add_tracks(db: &Db, tracks: Vec<InsertTrack>) -> Result<Vec<i64>, DbError> {
+pub fn add_tracks(db: &Db, tracks: Vec<InsertTrack>) -> Result<Vec<Row>, DbError> {
     Ok(tracks
         .iter()
         .map(|insert| {

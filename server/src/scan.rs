@@ -3,7 +3,7 @@ use moosicbox_core::{
     app::AppState,
     slim::player::Track,
     sqlite::db::{
-        add_album_and_get_value, add_album_map_and_get_value, add_tracks, DbError, InsertTrack,
+        add_album_and_get_album, add_album_map_and_get_album, add_tracks, DbError, InsertTrack,
         SqliteValue,
     },
 };
@@ -75,7 +75,7 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
     let title = tag.title().unwrap().to_string();
     let album = tag.album_title().unwrap_or("(none)").to_string();
     let artist = tag.artist().or(tag.album_artist()).unwrap().to_string();
-    let date_released = tag.date_released().map(|date| date.to_string());
+    let date_released = tag.date().map(|date| date.to_string());
 
     let path_artist = path.clone().parent().unwrap().parent().unwrap().to_owned();
     let artist_dir_name = path_artist
@@ -101,7 +101,7 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
     println!("date_released: {:?}", date_released);
     println!("contains cover: {:?}", tag.album_cover().is_some());
 
-    let mut album = add_album_map_and_get_value(
+    let mut album = add_album_map_and_get_album(
         &data.db,
         HashMap::from([
             ("title", SqliteValue::String(album)),
@@ -124,7 +124,7 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
                 path_album.to_str().unwrap(),
                 album.artwork.clone().unwrap()
             );
-            album = add_album_and_get_value(&data.db, album)?;
+            album = add_album_and_get_album(&data.db, album)?;
         }
     }
 
