@@ -9,7 +9,7 @@ use serde::Deserialize;
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTrackQuery {
-    id: i32,
+    track_id: i32,
 }
 
 #[get("/track")]
@@ -18,7 +18,7 @@ pub async fn track_endpoint(
     query: web::Query<GetTrackQuery>,
     data: web::Data<AppState>,
 ) -> Result<HttpResponse> {
-    let track = get_track(&data.db, query.id)
+    let track = get_track(&data.db, query.track_id)
         .await
         .map_err(|_e| ErrorInternalServerError("Failed to fetch track"))?;
 
