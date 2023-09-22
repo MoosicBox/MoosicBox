@@ -1,5 +1,5 @@
 use crate::scan::scan;
-use actix_web::error::{ErrorInternalServerError, ErrorNotFound};
+use actix_web::error::ErrorInternalServerError;
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
 use actix_web::{
@@ -14,7 +14,6 @@ use moosicbox_core::slim::player::{
     player_next_track, player_pause, player_play, player_previous_track, player_start_track,
     set_player_status, PingResponse, PlaylistStatus, Status,
 };
-use moosicbox_core::sqlite::menu::{get_album, FullAlbum, GetAlbumError};
 use serde::Deserialize;
 use serde_json::Value;
 use std::thread;
@@ -103,30 +102,6 @@ pub async fn ping_endpoint(
     };
 
     Ok(Json(serde_json::json!({"alive": successful})))
-}
-
-#[derive(Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct GetAlbumQuery {
-    player_id: String,
-    album_id: i32,
-}
-
-#[get("/album")]
-pub async fn get_album_endpoint(
-    query: web::Query<GetAlbumQuery>,
-    data: web::Data<AppState>,
-) -> Result<Json<FullAlbum>> {
-    let player_id = &query.player_id;
-    let album_id = query.album_id;
-
-    match get_album(player_id, album_id, &data).await {
-        Ok(resp) => Ok(Json(resp)),
-        Err(error) => match error {
-            GetAlbumError::AlbumNotFound { .. } => Err(ErrorNotFound(error.to_string())),
-            _ => panic!("Failed to get album: {:?}", error),
-        },
-    }
 }
 
 #[derive(Deserialize, Clone)]
