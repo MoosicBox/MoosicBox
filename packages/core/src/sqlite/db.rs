@@ -142,7 +142,11 @@ pub async fn get_album_tracks(db: &Db, album_id: i32) -> Result<Vec<Track>, DbEr
         .library
         .prepare(
             "
-            SELECT tracks.*, albums.title as album, artists.title as artist, artists.id as artist_id
+            SELECT tracks.*,
+                albums.title as album,
+                artists.title as artist,
+                artists.id as artist_id,
+                albums.artwork
             FROM tracks
             JOIN albums ON albums.id=tracks.album_id
             JOIN artists ON artists.id=albums.artist_id
@@ -159,6 +163,9 @@ pub async fn get_album_tracks(db: &Db, album_id: i32) -> Result<Vec<Track>, DbEr
             artist: row.read::<&str, _>("artist").to_string(),
             artist_id: row.read::<i64, _>("artist_id") as i32,
             file: row.read::<Option<&str>, _>("file").map(|f| f.to_string()),
+            artwork: row
+                .read::<Option<&str>, _>("artwork")
+                .map(|date| date.to_string()),
         })
         .collect())
 }
@@ -168,7 +175,11 @@ pub async fn get_track(db: &Db, id: i32) -> Result<Option<Track>, DbError> {
         .library
         .prepare(
             "
-            SELECT tracks.*, albums.title as album, artists.title as artist, artists.id as artist_id
+            SELECT tracks.*,
+                albums.title as album,
+                artists.title as artist,
+                artists.id as artist_id,
+                albums.artwork
             FROM tracks
             JOIN albums ON albums.id=tracks.album_id
             JOIN artists ON artists.id=albums.artist_id
@@ -185,6 +196,9 @@ pub async fn get_track(db: &Db, id: i32) -> Result<Option<Track>, DbError> {
             artist: row.read::<&str, _>("artist").to_string(),
             artist_id: row.read::<i64, _>("artist_id") as i32,
             file: row.read::<Option<&str>, _>("file").map(|f| f.to_string()),
+            artwork: row
+                .read::<Option<&str>, _>("artwork")
+                .map(|date| date.to_string()),
         })
         .next())
 }
