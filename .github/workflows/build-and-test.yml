@@ -1,60 +1,38 @@
 name: Build and Test
 
 on:
-  push:
-    branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
+    push:
+        branches: ['master']
+    pull_request:
+        branches: ['master']
 
 env:
-  CARGO_TERM_COLOR: always
+    CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+    build:
+        runs-on: ubuntu-latest
 
-    runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                package: [packages/core, packages/files, packages/menu, server]
 
-    steps:
+        steps:
+            - name: Checkout audiotags
+              uses: actions/checkout@master
+              with:
+                  repository: BSteffaniak/audiotags
+                  ref: feat/add-full-date-capabilities
+                  path: audiotags
 
-    - name: Checkout audiotags
-      uses: actions/checkout@master
-      with:
-        repository: BSteffaniak/audiotags
-        ref: feat/add-full-date-capabilities
-        path: audiotags
+            - uses: actions/checkout@v3
+              with:
+                  path: MoosicBoxServer
 
-    - uses: actions/checkout@v3
-      with:
-        path: MoosicBoxServer
+            - name: Build ${{ matrix.package }}
+              working-directory: MoosicBoxServer
+              run: cargo build --manifest-path=${{ matrix.package }}/Cargo.toml --verbose
 
-    - name: Build core
-      working-directory: MoosicBoxServer
-      run: cargo build --manifest-path=packages/core/Cargo.toml --verbose
-
-    - name: Build files
-      working-directory: MoosicBoxServer
-      run: cargo build --manifest-path=packages/files/Cargo.toml --verbose
-
-    - name: Build menu
-      working-directory: MoosicBoxServer
-      run: cargo build --manifest-path=packages/menu/Cargo.toml --verbose
-
-    - name: Build server
-      working-directory: MoosicBoxServer
-      run: cargo build --manifest-path=server/Cargo.toml --verbose
-
-    - name: Run core tests
-      working-directory: MoosicBoxServer
-      run: cargo test --manifest-path=packages/core/Cargo.toml --verbose
-
-    - name: Run files tests
-      working-directory: MoosicBoxServer
-      run: cargo test --manifest-path=packages/files/Cargo.toml --verbose
-
-    - name: Run menu tests
-      working-directory: MoosicBoxServer
-      run: cargo test --manifest-path=packages/menu/Cargo.toml --verbose
-
-    - name: Run server tests
-      working-directory: MoosicBoxServer
-      run: cargo test --manifest-path=server/Cargo.toml --verbose
+            - name: Run ${{ matrix.package }} tests
+              working-directory: MoosicBoxServer
+              run: cargo test --manifest-path=${{ matrix.package }}/Cargo.toml --verbose
