@@ -31,29 +31,29 @@ jobs:
       working-directory: MoosicBoxServer
       run: cargo build --manifest-path=packages/core/Cargo.toml --verbose
 
-    - name: Run core tests
-      working-directory: MoosicBoxServer
-      run: cargo test --manifest-path=packages/core/Cargo.toml --verbose
-
     - name: Build files
       working-directory: MoosicBoxServer
       run: cargo build --manifest-path=packages/files/Cargo.toml --verbose
-
-    - name: Run files tests
-      working-directory: MoosicBoxServer
-      run: cargo test --manifest-path=packages/files/Cargo.toml --verbose
 
     - name: Build menu
       working-directory: MoosicBoxServer
       run: cargo build --manifest-path=packages/menu/Cargo.toml --verbose
 
-    - name: Run menu tests
-      working-directory: MoosicBoxServer
-      run: cargo test --manifest-path=packages/menu/Cargo.toml --verbose
-
     - name: Build server
       working-directory: MoosicBoxServer
       run: cargo build --manifest-path=server/Cargo.toml --verbose
+
+    - name: Run core tests
+      working-directory: MoosicBoxServer
+      run: cargo test --manifest-path=packages/core/Cargo.toml --verbose
+
+    - name: Run files tests
+      working-directory: MoosicBoxServer
+      run: cargo test --manifest-path=packages/files/Cargo.toml --verbose
+
+    - name: Run menu tests
+      working-directory: MoosicBoxServer
+      run: cargo test --manifest-path=packages/menu/Cargo.toml --verbose
 
     - name: Run server tests
       working-directory: MoosicBoxServer
