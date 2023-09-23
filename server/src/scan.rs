@@ -3,8 +3,8 @@ use moosicbox_core::{
     app::AppState,
     slim::player::Track,
     sqlite::db::{
-        add_album_and_get_album, add_album_map_and_get_album, add_tracks, DbError, InsertTrack,
-        SqliteValue,
+        add_album_and_get_album, add_album_map_and_get_album, add_artist_map_and_get_artist,
+        add_tracks, DbError, InsertTrack, SqliteValue,
     },
 };
 use regex::Regex;
@@ -74,8 +74,14 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
 
     let title = tag.title().unwrap().to_string();
     let album = tag.album_title().unwrap_or("(none)").to_string();
-    let artist = tag.artist().or(tag.album_artist()).unwrap().to_string();
+    let artist_name = tag.artist().or(tag.album_artist()).unwrap().to_string();
+    let album_artist = tag
+        .album_artist()
+        .unwrap_or(artist_name.as_str())
+        .to_string();
     let date_released = tag.date().map(|date| date.to_string());
+
+    let multi_artist_pattern = Regex::new(r"\S,\S").unwrap();
 
     let path_artist = path.clone().parent().unwrap().parent().unwrap().to_owned();
     let artist_dir_name = path_artist
@@ -97,15 +103,26 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
     println!("album title: {}", album);
     println!("artist directory name: {}", artist_dir_name);
     println!("album directory name: {}", album_dir_name);
-    println!("artist: {}", artist.clone());
+    println!("artist: {}", artist_name.clone());
+    println!("album_artist: {}", album_artist.clone());
     println!("date_released: {:?}", date_released);
     println!("contains cover: {:?}", tag.album_cover().is_some());
+
+    let album_artist = match multi_artist_pattern.find(album_artist.as_str()) {
+        Some(comma) => album_artist[..comma.start() + 1].to_string(),
+        None => album_artist,
+    };
+
+    let artist = add_artist_map_and_get_artist(
+        &data.db,
+        HashMap::from([("title", SqliteValue::String(album_artist))]),
+    )?;
 
     let mut album = add_album_map_and_get_album(
         &data.db,
         HashMap::from([
             ("title", SqliteValue::String(album)),
-            ("artist", SqliteValue::String(artist)),
+            ("artist_id", SqliteValue::Number(artist.id as i64)),
             ("date_released", SqliteValue::StringOpt(date_released)),
             (
                 "directory",
@@ -131,7 +148,7 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
     let _track_id = add_tracks(
         &data.db,
         vec![InsertTrack {
-            album_id: album.id.parse::<i32>()?,
+            album_id: album.id,
             file: path.to_str().unwrap().to_string(),
             track: Track {
                 title,

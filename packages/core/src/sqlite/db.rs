@@ -1,7 +1,7 @@
 use crate::{
     app::Db,
     slim::{
-        menu::{Album, AlbumSource},
+        menu::{Album, AlbumSource, Artist},
         player::Track,
     },
 };
@@ -27,10 +27,16 @@ pub enum DbError {
 }
 
 pub async fn init_db(db: &Db) -> Result<(), DbError> {
+    if !does_table_exist(&db.library, "artists").await? {
+        db.library
+            .prepare("CREATE TABLE artists (id INTEGER PRIMARY KEY, title TEXT)")?
+            .into_iter()
+            .next();
+    }
     if !does_table_exist(&db.library, "albums").await? {
         db
             .library
-            .prepare("CREATE TABLE albums (id INTEGER PRIMARY KEY, artist TEXT, title TEXT, date_released TEXT, artwork TEXT, directory TEXT)")?
+            .prepare("CREATE TABLE albums (id INTEGER PRIMARY KEY, artist_id INTEGER, title TEXT, date_released TEXT, artwork TEXT, directory TEXT, date_added TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now')))")?
             .into_iter()
             .next();
     }
@@ -43,15 +49,41 @@ pub async fn init_db(db: &Db) -> Result<(), DbError> {
     Ok(())
 }
 
+pub async fn get_artists_for_albums(db: &Db, album_ids: &[i32]) -> Result<Vec<Artist>, DbError> {
+    Ok(db
+        .library
+        .prepare(format!(
+            "SELECT * FROM artists WHERE id IN ({})",
+            album_ids
+                .iter()
+                .map(|id| id.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))?
+        .into_iter()
+        .filter_map(|row| row.ok())
+        .map(|row| Artist {
+            id: row.read::<i64, _>("id") as i32,
+            title: row.read::<&str, _>("title").to_string(),
+        })
+        .collect())
+}
+
 pub async fn get_albums(db: &Db) -> Result<Vec<Album>, DbError> {
     Ok(db
         .library
-        .prepare("SELECT * FROM albums")?
+        .prepare(
+            "
+            SELECT albums.*, artists.title as artist
+            FROM albums
+            JOIN artists ON artists.id=albums.artist_id",
+        )?
         .into_iter()
         .filter_map(|row| row.ok())
         .map(|row| Album {
-            id: row.read::<i64, _>("id").to_string(),
+            id: row.read::<i64, _>("id") as i32,
             artist: row.read::<&str, _>("artist").to_string(),
+            artist_id: row.read::<i64, _>("artist_id") as i32,
             title: row.read::<&str, _>("title").to_string(),
             date_released: row
                 .read::<Option<&str>, _>("date_released")
@@ -63,7 +95,6 @@ pub async fn get_albums(db: &Db) -> Result<Vec<Album>, DbError> {
                 .read::<Option<&str>, _>("directory")
                 .map(|date| date.to_string()),
             source: AlbumSource::Local,
-            ..Default::default()
         })
         .collect())
 }
@@ -71,13 +102,20 @@ pub async fn get_albums(db: &Db) -> Result<Vec<Album>, DbError> {
 pub async fn get_album(db: &Db, id: i32) -> Result<Option<Album>, DbError> {
     Ok(db
         .library
-        .prepare("SELECT * FROM albums WHERE id=?")?
+        .prepare(
+            "
+            SELECT albums.*, artists.title as artist
+            FROM albums
+            JOIN artists ON artists.id=albums.artist_id
+            WHERE albums.id=?",
+        )?
         .into_iter()
         .bind((1, id as i64))?
         .filter_map(|row| row.ok())
         .map(|row| Album {
-            id: row.read::<i64, _>("id").to_string(),
+            id: row.read::<i64, _>("id") as i32,
             artist: row.read::<&str, _>("artist").to_string(),
+            artist_id: row.read::<i64, _>("artist_id") as i32,
             title: row.read::<&str, _>("title").to_string(),
             date_released: row
                 .read::<Option<&str>, _>("date_released")
@@ -88,22 +126,59 @@ pub async fn get_album(db: &Db, id: i32) -> Result<Option<Album>, DbError> {
             directory: row
                 .read::<Option<&str>, _>("directory")
                 .map(|date| date.to_string()),
-            ..Default::default()
+            source: AlbumSource::Local,
         })
         .next())
+}
+
+pub async fn get_album_tracks(db: &Db, album_id: i32) -> Result<Vec<Track>, DbError> {
+    Ok(db
+        .library
+        .prepare(
+            "
+            SELECT tracks.*, albums.title as album, artists.title as artist, artists.id as artist_id
+            FROM tracks
+            JOIN albums ON albums.id=tracks.album_id
+            JOIN artists ON artists.id=albums.artist_id
+            WHERE tracks.album_id=?",
+        )?
+        .into_iter()
+        .bind((1, album_id as i64))?
+        .filter_map(|row| row.ok())
+        .map(|row| Track {
+            id: row.read::<i64, _>("id") as i32,
+            title: row.read::<&str, _>("title").to_string(),
+            album: row.read::<&str, _>("album").to_string(),
+            album_id: row.read::<i64, _>("album_id") as i32,
+            artist: row.read::<&str, _>("artist").to_string(),
+            artist_id: row.read::<i64, _>("artist_id") as i32,
+            file: row.read::<Option<&str>, _>("file").map(|f| f.to_string()),
+        })
+        .collect())
 }
 
 pub async fn get_track(db: &Db, id: i32) -> Result<Option<Track>, DbError> {
     Ok(db
         .library
-        .prepare("SELECT * FROM tracks WHERE id=?")?
+        .prepare(
+            "
+            SELECT tracks.*, albums.title as album, artists.title as artist, artists.id as artist_id
+            FROM tracks
+            JOIN albums ON albums.id=tracks.album_id
+            JOIN artists ON artists.id=albums.artist_id
+            WHERE tracks.id=?",
+        )?
         .into_iter()
         .bind((1, id as i64))?
         .filter_map(|row| row.ok())
         .map(|row| Track {
+            id: row.read::<i64, _>("id") as i32,
             title: row.read::<&str, _>("title").to_string(),
+            album: row.read::<&str, _>("album").to_string(),
+            album_id: row.read::<i64, _>("album_id") as i32,
+            artist: row.read::<&str, _>("artist").to_string(),
+            artist_id: row.read::<i64, _>("artist_id") as i32,
             file: row.read::<Option<&str>, _>("file").map(|f| f.to_string()),
-            ..Default::default()
         })
         .next())
 }
@@ -358,6 +433,39 @@ fn upsert_and_get_row<'a>(
     }
 }
 
+pub fn add_artist_map_and_get_artist(
+    db: &Db,
+    artist: HashMap<&str, SqliteValue>,
+) -> Result<Artist, DbError> {
+    Ok(add_artist_maps_and_get_artists(db, vec![artist])?[0].clone())
+}
+
+pub fn add_artist_maps_and_get_artists(
+    db: &Db,
+    artists: Vec<HashMap<&str, SqliteValue>>,
+) -> Result<Vec<Artist>, DbError> {
+    Ok(artists
+        .into_iter()
+        .map(|artist| {
+            if !artist.contains_key("title") {
+                return Err(DbError::InvalidRequest);
+            }
+            let row = upsert_and_get_row(
+                &db.library,
+                "artists",
+                vec![("title", artist.get("title").unwrap().clone())],
+                artist.into_iter().collect::<Vec<_>>(),
+            )?;
+
+            Ok::<_, DbError>(Artist {
+                id: row.read::<i64, _>("id") as i32,
+                title: row.read::<&str, _>("title").to_string(),
+            })
+        })
+        .filter_map(|artist| artist.ok())
+        .collect())
+}
+
 pub fn add_albums(db: &Db, albums: Vec<Album>) -> Result<Vec<Row>, DbError> {
     let mut ids = Vec::new();
 
@@ -366,12 +474,12 @@ pub fn add_albums(db: &Db, albums: Vec<Album>) -> Result<Vec<Row>, DbError> {
             &db.library,
             "albums",
             vec![
-                ("artist", SqliteValue::String(album.artist.clone())),
+                ("artist_id", SqliteValue::Number(album.artist_id as i64)),
                 ("title", SqliteValue::String(album.title.clone())),
                 ("directory", SqliteValue::StringOpt(album.directory.clone())),
             ],
             vec![
-                ("artist", SqliteValue::String(album.artist)),
+                ("artist_id", SqliteValue::Number(album.artist_id as i64)),
                 ("title", SqliteValue::String(album.title)),
                 ("date_released", SqliteValue::StringOpt(album.date_released)),
                 ("artwork", SqliteValue::StringOpt(album.artwork)),
@@ -401,7 +509,7 @@ pub fn add_albums_and_get_albums(db: &Db, albums: Vec<Album>) -> Result<Vec<Albu
             .into_iter()
             .map(|album| {
                 HashMap::from([
-                    ("artist", SqliteValue::String(album.artist)),
+                    ("artist_id", SqliteValue::Number(album.artist_id as i64)),
                     ("title", SqliteValue::String(album.title)),
                     ("date_released", SqliteValue::StringOpt(album.date_released)),
                     ("artwork", SqliteValue::StringOpt(album.artwork)),
@@ -419,14 +527,14 @@ pub fn add_album_maps_and_get_albums(
     Ok(albums
         .into_iter()
         .map(|album| {
-            if !album.contains_key("artist") || !album.contains_key("title") {
+            if !album.contains_key("artist_id") || !album.contains_key("title") {
                 return Err(DbError::InvalidRequest);
             }
             let filters = if album.contains_key("directory") && album.get("directory").is_some() {
                 vec![("directory", album.get("directory").unwrap().clone())]
             } else {
                 let mut values = vec![
-                    ("artist", album.get("artist").unwrap().clone()),
+                    ("artist_id", album.get("artist_id").unwrap().clone()),
                     ("title", album.get("title").unwrap().clone()),
                 ];
                 if album.contains_key("directory") {
@@ -442,8 +550,8 @@ pub fn add_album_maps_and_get_albums(
             )?;
 
             Ok::<_, DbError>(Album {
-                id: row.read::<i64, _>("id").to_string(),
-                artist: row.read::<&str, _>("artist").to_string(),
+                id: row.read::<i64, _>("id") as i32,
+                artist_id: row.read::<i64, _>("artist_id") as i32,
                 title: row.read::<&str, _>("title").to_string(),
                 date_released: row
                     .read::<Option<&str>, _>("date_released")

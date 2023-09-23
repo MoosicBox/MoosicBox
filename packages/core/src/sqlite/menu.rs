@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::{sync::PoisonError, time::Duration};
 use thiserror::Error;
 
-use super::db;
+use super::db::{self, DbError};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FullAlbum {
@@ -99,8 +99,8 @@ pub async fn get_albums(data: &AppState) -> Result<Vec<Album>, GetAlbumsError> {
                 .into_iter()
                 .filter_map(|row| row.ok())
                 .map(|row| {
-                    let id = String::from(row.read::<&str, _>("id"));
-                    let artist = String::from(row.read::<&str, _>("artist"));
+                    let id = row.read::<i64, _>("id") as i32;
+                    let artist_id = row.read::<i64, _>("artist") as i32;
                     let title = String::from(row.read::<&str, _>("title"));
                     let date_released = row
                         .read::<Option<&str>, _>("date_released")
@@ -114,7 +114,7 @@ pub async fn get_albums(data: &AppState) -> Result<Vec<Album>, GetAlbumsError> {
                     Album {
                         id,
                         title,
-                        artist,
+                        artist_id,
                         date_released,
                         artwork,
                         directory,
@@ -131,18 +131,20 @@ pub async fn get_albums(data: &AppState) -> Result<Vec<Album>, GetAlbumsError> {
 
 impl<T> From<PoisonError<T>> for GetAlbumTracksError {
     fn from(_err: PoisonError<T>) -> Self {
-        Self::PoisonError
+        Self::Poison
     }
 }
 
 #[derive(Debug, Error)]
 pub enum GetAlbumTracksError {
     #[error("Poison error")]
-    PoisonError,
+    Poison,
     #[error(transparent)]
-    JsonError(#[from] awc::error::JsonPayloadError),
+    Json(#[from] awc::error::JsonPayloadError),
     #[error(transparent)]
-    SqliteError(#[from] sqlite::Error),
+    Sqlite(#[from] sqlite::Error),
+    #[error(transparent)]
+    Db(#[from] DbError),
 }
 
 pub async fn get_album_tracks(
@@ -156,19 +158,7 @@ pub async fn get_album_tracks(
 
     Ok(get_or_set_to_cache(request, || async {
         Ok::<CacheItemType, GetAlbumTracksError>(CacheItemType::AlbumTracks(
-            data.db
-                .library
-                .prepare("SELECT * from tracks WHERE album_id=?")?
-                .into_iter()
-                .bind((1, album_id as i64))?
-                .filter_map(|row| row.ok())
-                .map(|row| Track {
-                    id: Some(row.read::<i64, _>("id") as i32),
-                    title: String::from(row.read::<&str, _>("title")),
-                    file: row.read::<Option<&str>, _>("file").map(|f| f.to_string()),
-                    ..Default::default()
-                })
-                .collect(),
+            db::get_album_tracks(&data.db, album_id).await?,
         ))
     })
     .await?

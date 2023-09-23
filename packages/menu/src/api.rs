@@ -1,10 +1,15 @@
 use actix_web::{
-    error::ErrorBadRequest,
+    error::{ErrorBadRequest, ErrorInternalServerError},
     web::{self, Json},
     Result,
 };
 use lambda_web::actix_web::{self, get};
-use moosicbox_core::{app::AppState, slim::player::Track, sqlite::menu::get_album};
+use moosicbox_core::{
+    app::AppState,
+    slim::{menu::ApiAlbum, player::ApiTrack},
+    sqlite::menu::get_album,
+    ToApi,
+};
 use moosicbox_core::{
     slim::menu::{get_all_albums, Album, AlbumFilters, AlbumSort, AlbumSource, AlbumsRequest},
     sqlite::menu::get_album_tracks,
@@ -39,7 +44,6 @@ pub struct GetAlbumsQuery {
     sort: Option<String>,
     name: Option<String>,
     artist: Option<String>,
-    year: Option<String>,
     search: Option<String>,
 }
 
@@ -47,7 +51,7 @@ pub struct GetAlbumsQuery {
 pub async fn get_albums_endpoint(
     query: web::Query<GetAlbumsQuery>,
     data: web::Data<AppState>,
-) -> Result<Json<Vec<Album>>> {
+) -> Result<Json<Vec<ApiAlbum>>> {
     let player_id = &query.player_id;
     let request = AlbumsRequest {
         sources: query
@@ -75,22 +79,18 @@ pub async fn get_albums_endpoint(
         filters: AlbumFilters {
             name: query.name.clone().map(|s| s.to_lowercase()),
             artist: query.artist.clone().map(|s| s.to_lowercase()),
-            year: query
-                .year
-                .clone()
-                .map(|y| {
-                    y.parse::<i16>()
-                        .map_err(|_e| ErrorBadRequest(format!("Invalid year filter value: {y}")))
-                })
-                .transpose()?,
             search: query.search.clone().map(|s| s.to_lowercase()),
         },
     };
 
-    match get_all_albums(player_id, &data, &request).await {
-        Ok(resp) => Ok(Json(resp)),
-        Err(error) => panic!("Failed to get albums: {:?}", error),
-    }
+    Ok(Json(
+        get_all_albums(player_id, &data, &request)
+            .await
+            .map_err(|_e| ErrorInternalServerError("Failed to fetch albums"))?
+            .into_iter()
+            .map(|t| t.to_api())
+            .collect(),
+    ))
 }
 
 #[derive(Deserialize, Clone)]
@@ -103,11 +103,15 @@ pub struct GetAlbumTracksQuery {
 pub async fn get_album_tracks_endpoint(
     query: web::Query<GetAlbumTracksQuery>,
     data: web::Data<AppState>,
-) -> Result<Json<Vec<Track>>> {
-    match get_album_tracks(query.album_id, &data).await {
-        Ok(resp) => Ok(Json(resp)),
-        Err(error) => panic!("Failed to get album tracks: {:?}", error),
-    }
+) -> Result<Json<Vec<ApiTrack>>> {
+    Ok(Json(
+        get_album_tracks(query.album_id, &data)
+            .await
+            .map_err(|_e| ErrorInternalServerError("Failed to fetch tracks"))?
+            .into_iter()
+            .map(|t| t.to_api())
+            .collect(),
+    ))
 }
 
 #[derive(Deserialize, Clone)]
@@ -120,9 +124,11 @@ pub struct GetAlbumQuery {
 pub async fn get_album_endpoint(
     query: web::Query<GetAlbumQuery>,
     data: web::Data<AppState>,
-) -> Result<Json<Album>> {
-    match get_album(query.album_id, &data).await {
-        Ok(resp) => Ok(Json(resp)),
-        Err(error) => panic!("Failed to get album tracks: {:?}", error),
-    }
+) -> Result<Json<ApiAlbum>> {
+    Ok(Json(
+        get_album(query.album_id, &data)
+            .await
+            .map_err(|_e| ErrorInternalServerError("Failed to fetch album"))?
+            .to_api(),
+    ))
 }

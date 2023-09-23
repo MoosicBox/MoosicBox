@@ -2,6 +2,7 @@ use crate::{
     app::AppState,
     cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
     sqlite::db::{get_albums, DbError},
+    ToApi,
 };
 use futures::{future, FutureExt};
 use serde::{Deserialize, Serialize};
@@ -19,14 +20,62 @@ pub struct FullAlbum {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+pub struct Artist {
+    pub id: i32,
+    pub title: String,
+}
+
+impl ToApi<ApiArtist> for Artist {
+    fn to_api(&self) -> ApiArtist {
+        ApiArtist {
+            id: self.id,
+            title: self.title.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiArtist {
+    pub id: i32,
+    pub title: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 pub struct Album {
-    pub id: String,
+    pub id: i32,
     pub title: String,
     pub artist: String,
-    pub year: Option<i16>,
+    pub artist_id: i32,
     pub date_released: Option<String>,
     pub artwork: Option<String>,
     pub directory: Option<String>,
+    pub source: AlbumSource,
+}
+
+impl ToApi<ApiAlbum> for Album {
+    fn to_api(&self) -> ApiAlbum {
+        ApiAlbum {
+            id: self.id,
+            title: self.title.clone(),
+            artist: self.artist.clone(),
+            artist_id: self.artist_id,
+            contains_artwork: self.artwork.is_some(),
+            date_released: self.date_released.clone(),
+            source: self.source.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiAlbum {
+    pub id: i32,
+    pub title: String,
+    pub artist: String,
+    pub artist_id: i32,
+    pub contains_artwork: bool,
+    pub date_released: Option<String>,
     pub source: AlbumSource,
 }
 
@@ -188,7 +237,6 @@ pub struct AlbumsRequest {
 pub struct AlbumFilters {
     pub name: Option<String>,
     pub artist: Option<String>,
-    pub year: Option<i16>,
     pub search: Option<String>,
 }
 
@@ -213,14 +261,7 @@ pub fn filter_albums(albums: Vec<Album>, request: &AlbumsRequest) -> Vec<Album> 
                 .filters
                 .artist
                 .as_ref()
-                .is_some_and(|s| !album.artist.to_lowercase().contains(s))
-        })
-        .filter(|album| {
-            !request
-                .filters
-                .year
-                .as_ref()
-                .is_some_and(|y| !album.year.is_some_and(|album_year| &album_year == y))
+                .is_some_and(|s| !&album.artist.to_lowercase().contains(s))
         })
         .filter(|album| {
             !request.filters.search.as_ref().is_some_and(|s| {
@@ -251,18 +292,12 @@ pub fn sort_albums(mut albums: Vec<Album>, request: &AlbumsRequest) -> Vec<Album
         Some(AlbumSort::NameDesc) => {
             albums.sort_by(|a, b| b.title.to_lowercase().cmp(&a.title.to_lowercase()))
         }
-        Some(AlbumSort::ReleaseDateAsc) => albums.sort_by(|a, b| {
-            a.clone()
-                .date_released
-                .or(a.year.map(|y| y.to_string()))
-                .cmp(&b.clone().date_released.or(b.year.map(|y| y.to_string())))
-        }),
-        Some(AlbumSort::ReleaseDateDesc) => albums.sort_by(|b, a| {
-            a.clone()
-                .date_released
-                .or(a.year.map(|y| y.to_string()))
-                .cmp(&b.clone().date_released.or(b.year.map(|y| y.to_string())))
-        }),
+        Some(AlbumSort::ReleaseDateAsc) => {
+            albums.sort_by(|a, b| a.clone().date_released.cmp(&b.clone().date_released))
+        }
+        Some(AlbumSort::ReleaseDateDesc) => {
+            albums.sort_by(|b, a| a.clone().date_released.cmp(&b.clone().date_released))
+        }
         None => (),
     }
 
@@ -394,10 +429,9 @@ pub async fn get_local_albums(
                         .as_ref()
                         .map(|track_id| format!("/albums/{track_id}/300x300"));
                     Album {
-                        id: format!("album_id:{:?}", item.id),
+                        id: item.id,
                         title: item.album.clone(),
-                        artist: item.artist.clone(),
-                        year: Some(item.year),
+                        artist_id: -1,
                         artwork: icon,
                         source: AlbumSource::Local,
                         ..Default::default()
@@ -462,17 +496,16 @@ pub async fn get_tidal_albums(
                 .map(|item| {
                     let text_parts = item.text.split('\n').collect::<Vec<&str>>();
                     let id = if let Some(params) = &item.params {
-                        format!("item_id:{}", params.item_id)
+                        params.item_id.parse::<i32>().unwrap()
                     } else if let Some(actions) = &item.actions {
-                        format!("item_id:{}", actions.go.params.item_id)
+                        actions.go.params.item_id.parse::<i32>().unwrap()
                     } else {
                         unreachable!()
                     };
                     Album {
                         id,
                         title: String::from(text_parts[0]),
-                        artist: String::from(text_parts[1]),
-                        year: None,
+                        artist_id: -1,
                         artwork: item.icon.clone(),
                         source: AlbumSource::Tidal,
                         ..Default::default()
@@ -536,9 +569,6 @@ pub async fn get_qobuz_albums(
                 .filter(|item| item.params.is_some() || item.actions.is_some())
                 .map(|item| {
                     let text_parts = item.text.split('\n').collect::<Vec<&str>>();
-                    let artist_and_year = String::from(text_parts[1]);
-                    let artist = &artist_and_year[..artist_and_year.len() - 7];
-                    let year = &artist_and_year[artist.len() + 2..artist_and_year.len() - 1];
                     let proxy_icon_url = item.icon.clone();
                     let title_and_maybe_star = String::from(text_parts[0]);
                     let title = match title_and_maybe_star.strip_prefix("* ") {
@@ -547,17 +577,16 @@ pub async fn get_qobuz_albums(
                     };
                     let icon = proxy_icon_url.map(|url| format!("{proxy_url}{url}"));
                     let id = if let Some(params) = &item.params {
-                        format!("item_id:{}", params.item_id)
+                        params.item_id.parse::<i32>().unwrap()
                     } else if let Some(actions) = &item.actions {
-                        format!("item_id:{}", actions.go.params.item_id)
+                        actions.go.params.item_id.parse::<i32>().unwrap()
                     } else {
                         unreachable!()
                     };
                     Album {
                         id,
                         title,
-                        artist: String::from(artist),
-                        year: String::from(year).parse::<i16>().ok(),
+                        artist_id: -1,
                         artwork: icon,
                         source: AlbumSource::Qobuz,
                         ..Default::default()
@@ -586,7 +615,6 @@ mod test {
                 filters: AlbumFilters {
                     name: None,
                     artist: None,
-                    year: None,
                     search: None,
                 },
             },

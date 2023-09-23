@@ -1,4 +1,4 @@
-use crate::app::AppState;
+use crate::{app::AppState, ToApi};
 use actix_web::web;
 use core::panic;
 use serde::{de::Error, Deserialize, Serialize};
@@ -45,12 +45,37 @@ pub struct PlaylistStatus {
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Track {
-    pub id: Option<i32>,
+    pub id: i32,
     pub title: String,
-    pub icon: Option<String>,
     pub album: String,
+    pub album_id: i32,
     pub artist: String,
+    pub artist_id: i32,
     pub file: Option<String>,
+}
+
+impl ToApi<ApiTrack> for Track {
+    fn to_api(&self) -> ApiTrack {
+        ApiTrack {
+            id: self.id,
+            title: self.title.clone(),
+            artist: self.artist.clone(),
+            artist_id: self.artist_id,
+            album: self.album.clone(),
+            album_id: self.album_id,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiTrack {
+    pub id: i32,
+    pub title: String,
+    pub artist: String,
+    pub artist_id: i32,
+    pub album: String,
+    pub album_id: i32,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -578,9 +603,7 @@ pub async fn get_playlist_status(
             .playlist_loop
             .iter()
             .map(|p| Track {
-                icon: Some(p.artwork_url.clone()),
-                album: p.album.clone(),
-                artist: p.artist.clone(),
+                album_id: 0,
                 title: p.title.clone(),
                 ..Default::default()
             })
