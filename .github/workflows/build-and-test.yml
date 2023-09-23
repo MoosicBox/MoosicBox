@@ -15,8 +15,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
+    - name: Checkout audiotags
+      uses: actions/checkout@master
+      with:
+        repository: BSteffaniak/audiotags
+        ref: feat/add-full-date-capabilities
+        path: audiotags
+
     - uses: actions/checkout@v3
+      with:
+        path: MoosicBoxServer
+
     - name: Build
+      working-directory: MoosicBoxServer
       run: cargo build --manifest-path=server/Cargo.toml --verbose
+
     - name: Run tests
+      working-directory: MoosicBoxServer
       run: cargo test --manifest-path=server/Cargo.toml --verbose
