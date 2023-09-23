@@ -48,6 +48,7 @@ pub struct Album {
     pub artist: String,
     pub artist_id: i32,
     pub date_released: Option<String>,
+    pub date_added: Option<String>,
     pub artwork: Option<String>,
     pub directory: Option<String>,
     pub source: AlbumSource,
@@ -62,6 +63,7 @@ impl ToApi<ApiAlbum> for Album {
             artist_id: self.artist_id,
             contains_artwork: self.artwork.is_some(),
             date_released: self.date_released.clone(),
+            date_added: self.date_added.clone(),
             source: self.source.clone(),
         }
     }
@@ -76,6 +78,7 @@ pub struct ApiAlbum {
     pub artist_id: i32,
     pub contains_artwork: bool,
     pub date_released: Option<String>,
+    pub date_added: Option<String>,
     pub source: AlbumSource,
 }
 
@@ -108,6 +111,8 @@ pub enum AlbumSort {
     NameDesc,
     ReleaseDateAsc,
     ReleaseDateDesc,
+    DateAddedAsc,
+    DateAddedDesc,
 }
 
 impl FromStr for AlbumSort {
@@ -121,6 +126,8 @@ impl FromStr for AlbumSort {
             "name-desc" => Ok(AlbumSort::NameDesc),
             "release-date-asc" | "release-date" => Ok(AlbumSort::ReleaseDateAsc),
             "release-date-desc" => Ok(AlbumSort::ReleaseDateDesc),
+            "date-added-asc" | "date-added" => Ok(AlbumSort::DateAddedAsc),
+            "date-added-desc" => Ok(AlbumSort::DateAddedDesc),
             _ => Err(()),
         }
     }
@@ -297,6 +304,12 @@ pub fn sort_albums(mut albums: Vec<Album>, request: &AlbumsRequest) -> Vec<Album
         }
         Some(AlbumSort::ReleaseDateDesc) => {
             albums.sort_by(|b, a| a.clone().date_released.cmp(&b.clone().date_released))
+        }
+        Some(AlbumSort::DateAddedAsc) => {
+            albums.sort_by(|a, b| a.clone().date_added.cmp(&b.clone().date_added))
+        }
+        Some(AlbumSort::DateAddedDesc) => {
+            albums.sort_by(|b, a| a.clone().date_added.cmp(&b.clone().date_added))
         }
         None => (),
     }

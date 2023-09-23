@@ -88,6 +88,9 @@ pub async fn get_albums(db: &Db) -> Result<Vec<Album>, DbError> {
             date_released: row
                 .read::<Option<&str>, _>("date_released")
                 .map(|d| d.to_string()),
+            date_added: row
+                .read::<Option<&str>, _>("date_added")
+                .map(|d| d.to_string()),
             artwork: row
                 .read::<Option<&str>, _>("artwork")
                 .map(|d| d.to_string()),
@@ -119,6 +122,9 @@ pub async fn get_album(db: &Db, id: i32) -> Result<Option<Album>, DbError> {
             title: row.read::<&str, _>("title").to_string(),
             date_released: row
                 .read::<Option<&str>, _>("date_released")
+                .map(|date| date.to_string()),
+            date_added: row
+                .read::<Option<&str>, _>("date_added")
                 .map(|date| date.to_string()),
             artwork: row
                 .read::<Option<&str>, _>("artwork")
