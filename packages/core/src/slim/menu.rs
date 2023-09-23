@@ -28,7 +28,7 @@ pub struct Artist {
 impl ToApi<ApiArtist> for Artist {
     fn to_api(&self) -> ApiArtist {
         ApiArtist {
-            id: self.id,
+            artist_id: self.id,
             title: self.title.clone(),
         }
     }
@@ -37,7 +37,7 @@ impl ToApi<ApiArtist> for Artist {
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiArtist {
-    pub id: i32,
+    pub artist_id: i32,
     pub title: String,
 }
 
@@ -57,7 +57,7 @@ pub struct Album {
 impl ToApi<ApiAlbum> for Album {
     fn to_api(&self) -> ApiAlbum {
         ApiAlbum {
-            id: self.id,
+            album_id: self.id,
             title: self.title.clone(),
             artist: self.artist.clone(),
             artist_id: self.artist_id,
@@ -72,7 +72,7 @@ impl ToApi<ApiAlbum> for Album {
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiAlbum {
-    pub id: i32,
+    pub album_id: i32,
     pub title: String,
     pub artist: String,
     pub artist_id: i32,

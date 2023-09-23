@@ -57,7 +57,7 @@ pub struct Track {
 impl ToApi<ApiTrack> for Track {
     fn to_api(&self) -> ApiTrack {
         ApiTrack {
-            id: self.id,
+            track_id: self.id,
             title: self.title.clone(),
             artist: self.artist.clone(),
             artist_id: self.artist_id,
@@ -70,7 +70,7 @@ impl ToApi<ApiTrack> for Track {
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiTrack {
-    pub id: i32,
+    pub track_id: i32,
     pub title: String,
     pub artist: String,
     pub artist_id: i32,
