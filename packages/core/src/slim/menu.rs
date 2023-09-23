@@ -638,28 +638,25 @@ mod test {
     #[test]
     fn filter_albums_filters_albums_of_sources_that_dont_match() {
         let local = Album {
-            id: "".to_string(),
+            id: 0,
             title: "".to_string(),
             artist: "".to_string(),
-            year: None,
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
         };
         let tidal = Album {
-            id: "".to_string(),
+            id: 0,
             title: "".to_string(),
             artist: "".to_string(),
-            year: None,
             artwork: None,
             source: AlbumSource::Tidal,
             ..Default::default()
         };
         let qobuz = Album {
-            id: "".to_string(),
+            id: 0,
             title: "".to_string(),
             artist: "".to_string(),
-            year: None,
             artwork: None,
             source: AlbumSource::Qobuz,
             ..Default::default()
@@ -673,7 +670,6 @@ mod test {
                 filters: AlbumFilters {
                     name: None,
                     artist: None,
-                    year: None,
                     search: None,
                 },
             },
@@ -682,76 +678,27 @@ mod test {
     }
 
     #[test]
-    fn filter_albums_filters_albums_of_year_that_dont_match() {
-        let album_2020 = Album {
-            id: "".to_string(),
-            title: "".to_string(),
-            artist: "".to_string(),
-            year: Some(2020),
-            artwork: None,
-            source: AlbumSource::Local,
-            ..Default::default()
-        };
-        let album_2021 = Album {
-            id: "".to_string(),
-            title: "".to_string(),
-            artist: "".to_string(),
-            year: Some(2021),
-            artwork: None,
-            source: AlbumSource::Local,
-            ..Default::default()
-        };
-        let album_2022 = Album {
-            id: "".to_string(),
-            title: "".to_string(),
-            artist: "".to_string(),
-            year: Some(2022),
-            artwork: None,
-            source: AlbumSource::Local,
-            ..Default::default()
-        };
-        let albums = vec![album_2020, album_2021.clone(), album_2022];
-        let result = filter_albums(
-            albums,
-            &AlbumsRequest {
-                sources: None,
-                sort: None,
-                filters: AlbumFilters {
-                    name: None,
-                    artist: None,
-                    year: Some(2021),
-                    search: None,
-                },
-            },
-        );
-        assert_eq!(result, vec![album_2021]);
-    }
-
-    #[test]
     fn filter_albums_filters_albums_of_name_that_dont_match() {
         let bob = Album {
-            id: "".to_string(),
+            id: 0,
             title: "bob".to_string(),
             artist: "".to_string(),
-            year: Some(2020),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
         };
         let sally = Album {
-            id: "".to_string(),
+            id: 0,
             title: "sally".to_string(),
             artist: "".to_string(),
-            year: Some(2021),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
         };
         let test = Album {
-            id: "".to_string(),
+            id: 0,
             title: "test".to_string(),
             artist: "".to_string(),
-            year: Some(2022),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -765,7 +712,6 @@ mod test {
                 filters: AlbumFilters {
                     name: Some("test".to_string()),
                     artist: None,
-                    year: None,
                     search: None,
                 },
             },
@@ -776,28 +722,25 @@ mod test {
     #[test]
     fn filter_albums_filters_albums_of_name_that_dont_match_and_searches_multiple_words() {
         let bob = Album {
-            id: "".to_string(),
+            id: 0,
             title: "bob".to_string(),
             artist: "".to_string(),
-            year: Some(2020),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
         };
         let sally = Album {
-            id: "".to_string(),
+            id: 0,
             title: "sally".to_string(),
             artist: "".to_string(),
-            year: Some(2021),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
         };
         let test = Album {
-            id: "".to_string(),
+            id: 0,
             title: "one test two".to_string(),
             artist: "".to_string(),
-            year: Some(2022),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -811,7 +754,6 @@ mod test {
                 filters: AlbumFilters {
                     name: Some("test".to_string()),
                     artist: None,
-                    year: None,
                     search: None,
                 },
             },
@@ -822,28 +764,25 @@ mod test {
     #[test]
     fn filter_albums_filters_albums_of_artist_that_dont_match() {
         let bob = Album {
-            id: "".to_string(),
+            id: 0,
             title: "".to_string(),
             artist: "bob".to_string(),
-            year: Some(2020),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
         };
         let sally = Album {
-            id: "".to_string(),
+            id: 0,
             title: "".to_string(),
             artist: "sally".to_string(),
-            year: Some(2021),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
         };
         let test = Album {
-            id: "".to_string(),
+            id: 0,
             title: "".to_string(),
             artist: "test".to_string(),
-            year: Some(2022),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -857,7 +796,6 @@ mod test {
                 filters: AlbumFilters {
                     name: None,
                     artist: Some("test".to_string()),
-                    year: None,
                     search: None,
                 },
             },
@@ -868,28 +806,25 @@ mod test {
     #[test]
     fn filter_albums_filters_albums_of_artist_that_dont_match_and_searches_multiple_words() {
         let bob = Album {
-            id: "".to_string(),
+            id: 0,
             title: "".to_string(),
             artist: "bob".to_string(),
-            year: Some(2020),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
         };
         let sally = Album {
-            id: "".to_string(),
+            id: 0,
             title: "".to_string(),
             artist: "sally".to_string(),
-            year: Some(2021),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
         };
         let test = Album {
-            id: "".to_string(),
+            id: 0,
             title: "".to_string(),
             artist: "one test two".to_string(),
-            year: Some(2022),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -903,7 +838,6 @@ mod test {
                 filters: AlbumFilters {
                     name: None,
                     artist: Some("test".to_string()),
-                    year: None,
                     search: None,
                 },
             },
@@ -914,28 +848,25 @@ mod test {
     #[test]
     fn filter_albums_filters_albums_of_search_that_dont_match_artist() {
         let bob = Album {
-            id: "".to_string(),
+            id: 0,
             title: "".to_string(),
             artist: "bob".to_string(),
-            year: Some(2020),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
         };
         let sally = Album {
-            id: "".to_string(),
+            id: 0,
             title: "".to_string(),
             artist: "sally".to_string(),
-            year: Some(2021),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
         };
         let test = Album {
-            id: "".to_string(),
+            id: 0,
             title: "".to_string(),
             artist: "test".to_string(),
-            year: Some(2022),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -949,7 +880,6 @@ mod test {
                 filters: AlbumFilters {
                     name: None,
                     artist: None,
-                    year: None,
                     search: Some("test".to_string()),
                 },
             },
@@ -960,28 +890,25 @@ mod test {
     #[test]
     fn filter_albums_filters_albums_of_search_that_dont_match_artist_and_searches_multiple_words() {
         let bob = Album {
-            id: "".to_string(),
+            id: 0,
             title: "".to_string(),
             artist: "bob".to_string(),
-            year: Some(2020),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
         };
         let sally = Album {
-            id: "".to_string(),
+            id: 0,
             title: "".to_string(),
             artist: "sally".to_string(),
-            year: Some(2021),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
         };
         let test = Album {
-            id: "".to_string(),
+            id: 0,
             title: "".to_string(),
             artist: "one test two".to_string(),
-            year: Some(2022),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -995,7 +922,6 @@ mod test {
                 filters: AlbumFilters {
                     name: None,
                     artist: None,
-                    year: None,
                     search: Some("test".to_string()),
                 },
             },
@@ -1006,28 +932,25 @@ mod test {
     #[test]
     fn filter_albums_filters_albums_of_search_that_dont_match_name() {
         let bob = Album {
-            id: "".to_string(),
+            id: 0,
             title: "bob".to_string(),
             artist: "".to_string(),
-            year: Some(2020),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
         };
         let sally = Album {
-            id: "".to_string(),
+            id: 0,
             title: "sally".to_string(),
             artist: "".to_string(),
-            year: Some(2021),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
         };
         let test = Album {
-            id: "".to_string(),
+            id: 0,
             title: "test".to_string(),
             artist: "".to_string(),
-            year: Some(2022),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -1041,7 +964,6 @@ mod test {
                 filters: AlbumFilters {
                     name: None,
                     artist: None,
-                    year: None,
                     search: Some("test".to_string()),
                 },
             },
@@ -1052,28 +974,25 @@ mod test {
     #[test]
     fn filter_albums_filters_albums_of_search_that_dont_match_name_and_searches_multiple_words() {
         let bob = Album {
-            id: "".to_string(),
+            id: 0,
             title: "bob".to_string(),
             artist: "".to_string(),
-            year: Some(2020),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
         };
         let sally = Album {
-            id: "".to_string(),
+            id: 0,
             title: "sally".to_string(),
             artist: "".to_string(),
-            year: Some(2021),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
         };
         let test = Album {
-            id: "".to_string(),
+            id: 0,
             title: "one test two".to_string(),
             artist: "".to_string(),
-            year: Some(2022),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -1087,7 +1006,6 @@ mod test {
                 filters: AlbumFilters {
                     name: None,
                     artist: None,
-                    year: None,
                     search: Some("test".to_string()),
                 },
             },
@@ -1098,28 +1016,25 @@ mod test {
     #[test]
     fn filter_albums_filters_albums_of_search_that_dont_match_and_searches_across_properties() {
         let bob = Album {
-            id: "".to_string(),
+            id: 0,
             title: "bob".to_string(),
             artist: "test".to_string(),
-            year: Some(2020),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
         };
         let sally = Album {
-            id: "".to_string(),
+            id: 0,
             title: "sally".to_string(),
             artist: "".to_string(),
-            year: Some(2021),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
         };
         let test = Album {
-            id: "".to_string(),
+            id: 0,
             title: "one test two".to_string(),
             artist: "".to_string(),
-            year: Some(2022),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -1133,7 +1048,6 @@ mod test {
                 filters: AlbumFilters {
                     name: None,
                     artist: None,
-                    year: None,
                     search: Some("test".to_string()),
                 },
             },
