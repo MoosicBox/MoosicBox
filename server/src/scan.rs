@@ -114,12 +114,12 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
     };
 
     let artist = add_artist_map_and_get_artist(
-        &data.db,
+        data.db.as_ref().unwrap(),
         HashMap::from([("title", SqliteValue::String(album_artist))]),
     )?;
 
     let mut album = add_album_map_and_get_album(
-        &data.db,
+        data.db.as_ref().unwrap(),
         HashMap::from([
             ("title", SqliteValue::String(album)),
             ("artist_id", SqliteValue::Number(artist.id as i64)),
@@ -141,12 +141,12 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
                 path_album.to_str().unwrap(),
                 album.artwork.clone().unwrap()
             );
-            album = add_album_and_get_album(&data.db, album)?;
+            album = add_album_and_get_album(data.db.as_ref().unwrap(), album)?;
         }
     }
 
     let _track_id = add_tracks(
-        &data.db,
+        data.db.as_ref().unwrap(),
         vec![InsertTrack {
             album_id: album.id,
             file: path.to_str().unwrap().to_string(),

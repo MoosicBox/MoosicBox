@@ -51,7 +51,7 @@ pub async fn get_album(album_id: i32, data: &AppState) -> Result<Album, GetAlbum
     };
 
     Ok(get_or_set_to_cache(request, || async {
-        match db::get_album(&data.db, album_id).await {
+        match db::get_album(data.db.as_ref().unwrap(), album_id).await {
             Ok(album) => {
                 if album.is_none() {
                     return Err(GetAlbumError::AlbumNotFound { album_id });
@@ -94,6 +94,8 @@ pub async fn get_albums(data: &AppState) -> Result<Vec<Album>, GetAlbumsError> {
     Ok(get_or_set_to_cache(request, || async {
         Ok::<CacheItemType, GetAlbumsError>(CacheItemType::Albums(
             data.db
+                .as_ref()
+                .unwrap()
                 .library
                 .prepare("SELECT * from albums")?
                 .into_iter()
@@ -158,7 +160,7 @@ pub async fn get_album_tracks(
 
     Ok(get_or_set_to_cache(request, || async {
         Ok::<CacheItemType, GetAlbumTracksError>(CacheItemType::AlbumTracks(
-            db::get_album_tracks(&data.db, album_id).await?,
+            db::get_album_tracks(data.db.as_ref().unwrap(), album_id).await?,
         ))
     })
     .await?

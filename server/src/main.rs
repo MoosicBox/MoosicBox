@@ -46,7 +46,7 @@ async fn main() -> std::io::Result<()> {
             proxy_url,
             proxy_client,
             image_client,
-            db,
+            db: Some(db),
         };
 
         let cors = Cors::default()

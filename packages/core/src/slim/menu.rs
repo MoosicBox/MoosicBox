@@ -336,7 +336,7 @@ pub async fn get_all_albums(
 ) -> Result<Vec<Album>, GetAlbumsError> {
     #[allow(clippy::eq_op)]
     let albums = if 1 == 1 {
-        get_albums(&data.db).await?
+        get_albums(data.db.as_ref().unwrap()).await?
     } else if request.sources.as_ref().is_some_and(|s| s.len() == 1) {
         let source = request.sources.as_ref().unwrap();
         get_albums_from_source(player_id, data, &source[0])

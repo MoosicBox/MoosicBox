@@ -18,7 +18,7 @@ pub async fn track_endpoint(
     query: web::Query<GetTrackQuery>,
     data: web::Data<AppState>,
 ) -> Result<HttpResponse> {
-    let track = get_track(&data.db, query.track_id)
+    let track = get_track(data.db.as_ref().unwrap(), query.track_id)
         .await
         .map_err(|_e| ErrorInternalServerError("Failed to fetch track"))?;
 
@@ -52,7 +52,7 @@ pub async fn album_artwork_endpoint(
         .parse::<i32>()
         .map_err(|_e| ErrorInternalServerError("Invalid album_id"))?;
 
-    let album = get_album(&data.db, album_id)
+    let album = get_album(data.db.as_ref().unwrap(), album_id)
         .await
         .map_err(|_e| ErrorInternalServerError("Failed to fetch album"))?;
 
