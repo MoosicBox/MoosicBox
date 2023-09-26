@@ -29,20 +29,41 @@ pub enum DbError {
 pub async fn init_db(db: &Db) -> Result<(), DbError> {
     if !does_table_exist(&db.library, "artists").await? {
         db.library
-            .prepare("CREATE TABLE artists (id INTEGER PRIMARY KEY, title TEXT)")?
+            .prepare(
+                "CREATE TABLE artists (
+                    id INTEGER PRIMARY KEY,
+                    title TEXT
+                )",
+            )?
             .into_iter()
             .next();
     }
     if !does_table_exist(&db.library, "albums").await? {
-        db
-            .library
-            .prepare("CREATE TABLE albums (id INTEGER PRIMARY KEY, artist_id INTEGER, title TEXT, date_released TEXT, artwork TEXT, directory TEXT, date_added TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now')))")?
+        db.library
+            .prepare(
+                "CREATE TABLE albums (
+                    id INTEGER PRIMARY KEY,
+                    artist_id INTEGER, title TEXT,
+                    date_released TEXT, artwork TEXT,
+                    directory TEXT,
+                    date_added TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now'))
+                )",
+            )?
             .into_iter()
             .next();
     }
     if !does_table_exist(&db.library, "tracks").await? {
         db.library
-            .prepare("CREATE TABLE tracks (id INTEGER PRIMARY KEY, album_id INTEGER, title TEXT, file TEXT)")?
+            .prepare(
+                "CREATE TABLE tracks (
+                    id INTEGER PRIMARY KEY,
+                    number INTEGER,
+                    title TEXT,
+                    duration REAL,
+                    album_id INTEGER,
+                    file TEXT
+                )",
+            )?
             .into_iter()
             .next();
     }
@@ -150,14 +171,17 @@ pub async fn get_album_tracks(db: &Db, album_id: i32) -> Result<Vec<Track>, DbEr
             FROM tracks
             JOIN albums ON albums.id=tracks.album_id
             JOIN artists ON artists.id=albums.artist_id
-            WHERE tracks.album_id=?",
+            WHERE tracks.album_id=?
+            ORDER BY number ASC",
         )?
         .into_iter()
         .bind((1, album_id as i64))?
         .filter_map(|row| row.ok())
         .map(|row| Track {
             id: row.read::<i64, _>("id") as i32,
+            number: row.read::<i64, _>("number") as i32,
             title: row.read::<&str, _>("title").to_string(),
+            duration: row.read::<f64, _>("duration"),
             album: row.read::<&str, _>("album").to_string(),
             album_id: row.read::<i64, _>("album_id") as i32,
             artist: row.read::<&str, _>("artist").to_string(),
@@ -190,7 +214,9 @@ pub async fn get_track(db: &Db, id: i32) -> Result<Option<Track>, DbError> {
         .filter_map(|row| row.ok())
         .map(|row| Track {
             id: row.read::<i64, _>("id") as i32,
+            number: row.read::<i64, _>("number") as i32,
             title: row.read::<&str, _>("title").to_string(),
+            duration: row.read::<f64, _>("duration"),
             album: row.read::<&str, _>("album").to_string(),
             album_id: row.read::<i64, _>("album_id") as i32,
             artist: row.read::<&str, _>("artist").to_string(),
@@ -203,11 +229,12 @@ pub async fn get_track(db: &Db, id: i32) -> Result<Option<Track>, DbError> {
         .next())
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq)]
 pub enum SqliteValue {
     String(String),
     StringOpt(Option<String>),
     Number(i64),
+    Real(f64),
 }
 
 impl Display for SqliteValue {
@@ -217,6 +244,7 @@ impl Display for SqliteValue {
                 SqliteValue::String(str) => str.to_string(),
                 SqliteValue::StringOpt(str_opt) => str_opt.clone().unwrap_or("NULL".to_string()),
                 SqliteValue::Number(num) => num.to_string(),
+                SqliteValue::Real(num) => num.to_string(),
             }
             .as_str(),
         )
@@ -327,6 +355,10 @@ fn bind_values<'a>(
                 cursor = cursor.bind((i, *value))?;
                 i += 1;
             }
+            SqliteValue::Real(value) => {
+                cursor = cursor.bind((i, *value))?;
+                i += 1;
+            }
         }
     }
 
@@ -340,6 +372,7 @@ fn get_value(row: &Row, key: &str, value: &SqliteValue) -> SqliteValue {
             SqliteValue::StringOpt(row.read::<Option<&str>, _>(key).map(|s| s.to_string()))
         }
         SqliteValue::Number(_value) => SqliteValue::Number(row.read::<i64, _>(key)),
+        SqliteValue::Real(_value) => SqliteValue::Real(row.read::<f64, _>(key)),
     }
 }
 
@@ -609,13 +642,15 @@ pub fn add_tracks(db: &Db, tracks: Vec<InsertTrack>) -> Result<Vec<Row>, DbError
                     ("title", SqliteValue::String(insert.track.title.clone())),
                 ],
                 vec![
+                    ("number", SqliteValue::Number(insert.track.number as i64)),
+                    ("duration", SqliteValue::Real(insert.track.duration)),
                     ("album_id", SqliteValue::Number(insert.album_id as i64)),
                     ("title", SqliteValue::String(insert.track.title.clone())),
                     ("file", SqliteValue::String(insert.file.clone())),
                 ],
             )
         })
-        .filter_map(|album| album.ok())
+        .filter_map(|track| track.ok())
         .collect())
 }
 

@@ -72,7 +72,16 @@ fn search_for_artwork(path: PathBuf, tag: Box<dyn AudioTag>) -> Option<PathBuf> 
 fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
     let tag = Tag::new().read_from_path(path.to_str().unwrap())?;
 
+    let duration = if path.to_str().unwrap().ends_with(".mp3") {
+        mp3_duration::from_path(path.as_path())
+            .unwrap()
+            .as_secs_f64()
+    } else {
+        tag.duration().unwrap()
+    };
+
     let title = tag.title().unwrap().to_string();
+    let number = tag.track_number().unwrap_or(1) as i32;
     let album = tag.album_title().unwrap_or("(none)").to_string();
     let artist_name = tag.artist().or(tag.album_artist()).unwrap().to_string();
     let album_artist = tag
@@ -100,6 +109,8 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
 
     println!("====== {} ======", path.clone().to_str().unwrap());
     println!("title: {}", title);
+    println!("number: {}", number);
+    println!("duration: {}", duration);
     println!("album title: {}", album);
     println!("artist directory name: {}", artist_dir_name);
     println!("album directory name: {}", album_dir_name);
@@ -151,7 +162,9 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
             album_id: album.id,
             file: path.to_str().unwrap().to_string(),
             track: Track {
+                number,
                 title,
+                duration,
                 ..Default::default()
             },
         }],

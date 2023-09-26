@@ -46,7 +46,9 @@ pub struct PlaylistStatus {
 #[serde(rename_all = "camelCase")]
 pub struct Track {
     pub id: i32,
+    pub number: i32,
     pub title: String,
+    pub duration: f64,
     pub album: String,
     pub album_id: i32,
     pub artist: String,
@@ -59,7 +61,9 @@ impl ToApi<ApiTrack> for Track {
     fn to_api(&self) -> ApiTrack {
         ApiTrack {
             track_id: self.id,
+            number: self.number,
             title: self.title.clone(),
+            duration: self.duration,
             artist: self.artist.clone(),
             artist_id: self.artist_id,
             album: self.album.clone(),
@@ -73,7 +77,9 @@ impl ToApi<ApiTrack> for Track {
 #[serde(rename_all = "camelCase")]
 pub struct ApiTrack {
     pub track_id: i32,
+    pub number: i32,
     pub title: String,
+    pub duration: f64,
     pub artist: String,
     pub artist_id: i32,
     pub album: String,
