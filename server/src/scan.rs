@@ -25,6 +25,8 @@ pub enum ScanError {
     ParseInt(#[from] ParseIntError),
     #[error(transparent)]
     Tag(#[from] audiotags::error::Error),
+    #[error(transparent)]
+    IO(#[from] std::io::Error),
 }
 
 pub fn scan(directory: &str, data: &AppState) -> Result<(), ScanError> {
@@ -179,7 +181,12 @@ where
 {
     let music_file_pattern = Regex::new(r".+\.(flac|m4a|mp3)").unwrap();
 
-    for p in fs::read_dir(path).unwrap().filter_map(|p| p.ok()) {
+    let dir = match fs::read_dir(path) {
+        Ok(dir) => dir,
+        Err(_err) => return Ok(()),
+    };
+
+    for p in dir.filter_map(|p| p.ok()) {
         let metadata = p.metadata().unwrap();
 
         if metadata.is_dir() {
