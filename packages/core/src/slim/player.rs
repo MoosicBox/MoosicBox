@@ -55,6 +55,7 @@ pub struct Track {
     pub artist_id: i32,
     pub file: Option<String>,
     pub artwork: Option<String>,
+    pub blur: bool,
 }
 
 impl ToApi<ApiTrack> for Track {
@@ -69,6 +70,7 @@ impl ToApi<ApiTrack> for Track {
             album: self.album.clone(),
             album_id: self.album_id,
             contains_artwork: self.artwork.is_some(),
+            blur: self.blur,
         }
     }
 }
@@ -85,6 +87,7 @@ pub struct ApiTrack {
     pub album: String,
     pub album_id: i32,
     pub contains_artwork: bool,
+    pub blur: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

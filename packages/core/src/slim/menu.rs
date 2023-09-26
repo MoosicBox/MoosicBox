@@ -52,6 +52,7 @@ pub struct Album {
     pub artwork: Option<String>,
     pub directory: Option<String>,
     pub source: AlbumSource,
+    pub blur: bool,
 }
 
 impl ToApi<ApiAlbum> for Album {
@@ -65,6 +66,7 @@ impl ToApi<ApiAlbum> for Album {
             date_released: self.date_released.clone(),
             date_added: self.date_added.clone(),
             source: self.source.clone(),
+            blur: self.blur,
         }
     }
 }
@@ -80,6 +82,7 @@ pub struct ApiAlbum {
     pub date_released: Option<String>,
     pub date_added: Option<String>,
     pub source: AlbumSource,
+    pub blur: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Default)]

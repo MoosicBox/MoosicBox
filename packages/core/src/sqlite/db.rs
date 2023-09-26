@@ -46,6 +46,7 @@ pub async fn init_db(db: &Db) -> Result<(), DbError> {
                     artist_id INTEGER, title TEXT,
                     date_released TEXT, artwork TEXT,
                     directory TEXT,
+                    blur INTEGER DEFAULT 0,
                     date_added TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now'))
                 )",
             )?
@@ -119,6 +120,7 @@ pub async fn get_albums(db: &Db) -> Result<Vec<Album>, DbError> {
                 .read::<Option<&str>, _>("directory")
                 .map(|date| date.to_string()),
             source: AlbumSource::Local,
+            blur: row.read::<i64, _>("blur") == 1,
         })
         .collect())
 }
@@ -154,6 +156,7 @@ pub async fn get_album(db: &Db, id: i32) -> Result<Option<Album>, DbError> {
                 .read::<Option<&str>, _>("directory")
                 .map(|date| date.to_string()),
             source: AlbumSource::Local,
+            blur: row.read::<i64, _>("blur") == 1,
         })
         .next())
 }
@@ -165,6 +168,7 @@ pub async fn get_album_tracks(db: &Db, album_id: i32) -> Result<Vec<Track>, DbEr
             "
             SELECT tracks.*,
                 albums.title as album,
+                albums.blur as blur,
                 artists.title as artist,
                 artists.id as artist_id,
                 albums.artwork
@@ -190,6 +194,7 @@ pub async fn get_album_tracks(db: &Db, album_id: i32) -> Result<Vec<Track>, DbEr
             artwork: row
                 .read::<Option<&str>, _>("artwork")
                 .map(|date| date.to_string()),
+            blur: row.read::<i64, _>("blur") == 1,
         })
         .collect())
 }
@@ -201,6 +206,7 @@ pub async fn get_track(db: &Db, id: i32) -> Result<Option<Track>, DbError> {
             "
             SELECT tracks.*,
                 albums.title as album,
+                albums.blur as blur,
                 artists.title as artist,
                 artists.id as artist_id,
                 albums.artwork
@@ -225,6 +231,7 @@ pub async fn get_track(db: &Db, id: i32) -> Result<Option<Track>, DbError> {
             artwork: row
                 .read::<Option<&str>, _>("artwork")
                 .map(|date| date.to_string()),
+            blur: row.read::<i64, _>("blur") == 1,
         })
         .next())
 }
