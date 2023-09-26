@@ -11,7 +11,13 @@ use std::{env, time::Duration};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let service_port = 8000;
+    let args: Vec<String> = env::args().collect();
+
+    let service_port = if args.len() > 2 {
+        args[2].parse::<u16>().unwrap()
+    } else {
+        8000
+    };
 
     let library_db = ::sqlite::open("library.db").unwrap();
     let db = Db {
@@ -20,8 +26,6 @@ async fn main() -> std::io::Result<()> {
     let _ = init_db(&db).await;
 
     let app = move || {
-        let args: Vec<String> = env::args().collect();
-
         let proxy_url = if args.len() > 1 {
             args[1].clone()
         } else {
