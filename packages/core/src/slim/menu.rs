@@ -1,7 +1,7 @@
 use crate::{
     app::AppState,
     cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
-    sqlite::db::{get_albums, DbError},
+    sqlite::db::{get_albums, get_artists, DbError},
     ToApi,
 };
 use futures::{future, FutureExt};
@@ -101,6 +101,24 @@ impl FromStr for AlbumSource {
             "local" => Ok(AlbumSource::Local),
             "tidal" => Ok(AlbumSource::Tidal),
             "qobuz" => Ok(AlbumSource::Qobuz),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub enum ArtistSort {
+    NameAsc,
+    NameDesc,
+}
+
+impl FromStr for ArtistSort {
+    type Err = ();
+
+    fn from_str(input: &str) -> Result<ArtistSort, Self::Err> {
+        match input.to_lowercase().as_str() {
+            "name-asc" | "name" => Ok(ArtistSort::NameAsc),
+            "name-desc" => Ok(ArtistSort::NameDesc),
             _ => Err(()),
         }
     }
@@ -236,6 +254,21 @@ pub struct GetLocalAlbumsResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct ArtistsRequest {
+    pub sources: Option<Vec<AlbumSource>>,
+    pub sort: Option<ArtistSort>,
+    pub filters: ArtistFilters,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistFilters {
+    pub name: Option<String>,
+    pub search: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct AlbumsRequest {
     pub sources: Option<Vec<AlbumSource>>,
     pub sort: Option<AlbumSort>,
@@ -248,6 +281,60 @@ pub struct AlbumFilters {
     pub name: Option<String>,
     pub artist: Option<String>,
     pub search: Option<String>,
+}
+
+pub fn filter_artists(artists: Vec<Artist>, request: &ArtistsRequest) -> Vec<Artist> {
+    artists
+        .into_iter()
+        .filter(|artist| {
+            !request
+                .filters
+                .name
+                .as_ref()
+                .is_some_and(|s| !artist.title.to_lowercase().contains(s))
+        })
+        .filter(|artist| {
+            !request.filters.search.as_ref().is_some_and(|s| {
+                !(artist.title.to_lowercase().contains(s)
+                    || artist.title.to_lowercase().contains(s))
+            })
+        })
+        .collect()
+}
+
+pub fn sort_artists(mut artists: Vec<Artist>, request: &ArtistsRequest) -> Vec<Artist> {
+    match request.sort {
+        Some(ArtistSort::NameAsc) => artists.sort_by(|a, b| a.title.cmp(&b.title)),
+        Some(ArtistSort::NameDesc) => artists.sort_by(|a, b| b.title.cmp(&a.title)),
+        _ => (),
+    }
+    match request.sort {
+        Some(ArtistSort::NameAsc) => {
+            artists.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
+        }
+        Some(ArtistSort::NameDesc) => {
+            artists.sort_by(|a, b| b.title.to_lowercase().cmp(&a.title.to_lowercase()))
+        }
+        None => (),
+    }
+
+    artists
+}
+
+#[derive(Debug, Error)]
+pub enum GetArtistsError {
+    #[error(transparent)]
+    DbError(#[from] DbError),
+}
+
+pub async fn get_all_artists(
+    data: &AppState,
+    request: &ArtistsRequest,
+) -> Result<Vec<Artist>, GetArtistsError> {
+    #[allow(clippy::eq_op)]
+    let artists = get_artists(data.db.as_ref().unwrap()).await?;
+
+    Ok(sort_artists(filter_artists(artists, request), request))
 }
 
 pub fn filter_albums(albums: Vec<Album>, request: &AlbumsRequest) -> Vec<Album> {

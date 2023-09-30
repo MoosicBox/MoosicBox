@@ -45,6 +45,7 @@ async fn main() -> Result<(), Error> {
                 image_client,
                 db: None,
             }))
+            .service(api::get_artists_endpoint)
             .service(api::get_albums_endpoint)
             .service(api::get_album_tracks_endpoint)
     };

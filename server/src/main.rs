@@ -75,6 +75,7 @@ async fn main() -> std::io::Result<()> {
             .service(api::player_start_track_endpoint)
             .service(api::player_next_track_endpoint)
             .service(api::player_previous_track_endpoint)
+            .service(moosicbox_menu::api::get_artists_endpoint)
             .service(moosicbox_menu::api::get_album_endpoint)
             .service(moosicbox_menu::api::get_albums_endpoint)
             .service(moosicbox_menu::api::get_album_tracks_endpoint)

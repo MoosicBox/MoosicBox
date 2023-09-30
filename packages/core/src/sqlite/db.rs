@@ -91,6 +91,23 @@ pub async fn get_artists_for_albums(db: &Db, album_ids: &[i32]) -> Result<Vec<Ar
         .collect())
 }
 
+pub async fn get_artists(db: &Db) -> Result<Vec<Artist>, DbError> {
+    Ok(db
+        .library
+        .prepare(
+            "
+            SELECT artists.*
+            FROM artists",
+        )?
+        .into_iter()
+        .filter_map(|row| row.ok())
+        .map(|row| Artist {
+            id: row.read::<i64, _>("id") as i32,
+            title: row.read::<&str, _>("title").to_string(),
+        })
+        .collect())
+}
+
 pub async fn get_albums(db: &Db) -> Result<Vec<Album>, DbError> {
     Ok(db
         .library
