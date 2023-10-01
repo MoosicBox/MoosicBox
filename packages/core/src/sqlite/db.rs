@@ -186,6 +186,7 @@ pub async fn get_album_tracks(db: &Db, album_id: i32) -> Result<Vec<Track>, DbEr
             SELECT tracks.*,
                 albums.title as album,
                 albums.blur as blur,
+                albums.date_released as date_released,
                 artists.title as artist,
                 artists.id as artist_id,
                 albums.artwork
@@ -205,6 +206,9 @@ pub async fn get_album_tracks(db: &Db, album_id: i32) -> Result<Vec<Track>, DbEr
             duration: row.read::<f64, _>("duration"),
             album: row.read::<&str, _>("album").to_string(),
             album_id: row.read::<i64, _>("album_id") as i32,
+            date_released: row
+                .read::<Option<&str>, _>("date_released")
+                .map(|date| date.to_string()),
             artist: row.read::<&str, _>("artist").to_string(),
             artist_id: row.read::<i64, _>("artist_id") as i32,
             file: row.read::<Option<&str>, _>("file").map(|f| f.to_string()),
@@ -224,6 +228,7 @@ pub async fn get_track(db: &Db, id: i32) -> Result<Option<Track>, DbError> {
             SELECT tracks.*,
                 albums.title as album,
                 albums.blur as blur,
+                albums.date_released as date_released,
                 artists.title as artist,
                 artists.id as artist_id,
                 albums.artwork
@@ -242,6 +247,9 @@ pub async fn get_track(db: &Db, id: i32) -> Result<Option<Track>, DbError> {
             duration: row.read::<f64, _>("duration"),
             album: row.read::<&str, _>("album").to_string(),
             album_id: row.read::<i64, _>("album_id") as i32,
+            date_released: row
+                .read::<Option<&str>, _>("date_released")
+                .map(|date| date.to_string()),
             artist: row.read::<&str, _>("artist").to_string(),
             artist_id: row.read::<i64, _>("artist_id") as i32,
             file: row.read::<Option<&str>, _>("file").map(|f| f.to_string()),
