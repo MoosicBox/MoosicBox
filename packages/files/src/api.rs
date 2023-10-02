@@ -1,9 +1,12 @@
+use std::env;
+
 use actix_web::{error::ErrorInternalServerError, web, HttpRequest, HttpResponse, Result};
 use lambda_web::actix_web::{self, get};
 use moosicbox_core::{
     app::AppState,
     sqlite::db::{get_album, get_track},
 };
+use regex::{Captures, Regex};
 use serde::Deserialize;
 
 #[derive(Deserialize, Clone)]
@@ -28,11 +31,20 @@ pub async fn track_endpoint(
 
     let track = track.unwrap();
 
-    if track.file.is_none() {
-        return Err(ErrorInternalServerError("Track is not a local file"));
-    }
+    let file = match track.file {
+        Some(file) => match env::consts::OS {
+            "windows" => Regex::new(r"/mnt/(\w+)")
+                .unwrap()
+                .replace(&file, |caps: &Captures| {
+                    format!("{}:", caps[1].to_uppercase())
+                })
+                .replace('/', "\\"),
+            _ => file,
+        },
+        None => return Err(ErrorInternalServerError("Track is not a local file")),
+    };
 
-    let path_buf = std::path::PathBuf::from(track.file.unwrap());
+    let path_buf = std::path::PathBuf::from(file);
     let file_path = path_buf.as_path();
 
     let file = actix_files::NamedFile::open_async(file_path).await.unwrap();
@@ -69,7 +81,20 @@ pub async fn album_artwork_endpoint(
         return Err(ErrorInternalServerError("Album is not locally hosted"));
     }
 
-    let path_buf = std::path::PathBuf::from(album.directory.unwrap()).join(album.artwork.unwrap());
+    let directory = match album.directory {
+        Some(file) => match env::consts::OS {
+            "windows" => Regex::new(r"/mnt/(\w+)")
+                .unwrap()
+                .replace(&file, |caps: &Captures| {
+                    format!("{}:", caps[1].to_uppercase())
+                })
+                .replace('/', "\\"),
+            _ => file,
+        },
+        None => return Err(ErrorInternalServerError("Track is not a local file")),
+    };
+
+    let path_buf = std::path::PathBuf::from(directory).join(album.artwork.unwrap());
     let file_path = path_buf.as_path();
 
     let file = actix_files::NamedFile::open_async(file_path).await.unwrap();
