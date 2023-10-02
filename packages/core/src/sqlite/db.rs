@@ -72,26 +72,6 @@ pub async fn init_db(db: &Db) -> Result<(), DbError> {
     Ok(())
 }
 
-pub async fn get_artists_for_albums(db: &Db, album_ids: &[i32]) -> Result<Vec<Artist>, DbError> {
-    Ok(db
-        .library
-        .prepare(format!(
-            "SELECT * FROM artists WHERE id IN ({})",
-            album_ids
-                .iter()
-                .map(|id| id.to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        ))?
-        .into_iter()
-        .filter_map(|row| row.ok())
-        .map(|row| Artist {
-            id: row.read::<i64, _>("id") as i32,
-            title: row.read::<&str, _>("title").to_string(),
-        })
-        .collect())
-}
-
 pub async fn get_artists(db: &Db) -> Result<Vec<Artist>, DbError> {
     Ok(db
         .library
