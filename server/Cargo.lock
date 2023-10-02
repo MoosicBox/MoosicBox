@@ -1112,6 +1112,7 @@ dependencies = [
  "lambda-web",
  "lambda_runtime 0.8.2",
  "moosicbox_core",
+ "regex",
  "serde",
  "serde_json",
  "sqlite",
