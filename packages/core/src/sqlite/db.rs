@@ -32,7 +32,8 @@ pub async fn init_db(db: &Db) -> Result<(), DbError> {
             .prepare(
                 "CREATE TABLE artists (
                     id INTEGER PRIMARY KEY,
-                    title TEXT
+                    title TEXT,
+                    cover TEXT
                 )",
             )?
             .into_iter()
@@ -104,6 +105,7 @@ pub async fn get_artists(db: &Db) -> Result<Vec<Artist>, DbError> {
         .map(|row| Artist {
             id: row.read::<i64, _>("id") as i32,
             title: row.read::<&str, _>("title").to_string(),
+            cover: row.read::<Option<&str>, _>("cover").map(|c| c.to_string()),
         })
         .collect())
 }
@@ -545,6 +547,7 @@ pub fn add_artist_maps_and_get_artists(
             Ok::<_, DbError>(Artist {
                 id: row.read::<i64, _>("id") as i32,
                 title: row.read::<&str, _>("title").to_string(),
+                cover: row.read::<Option<&str>, _>("cover").map(|c| c.to_string()),
             })
         })
         .filter_map(|artist| artist.ok())

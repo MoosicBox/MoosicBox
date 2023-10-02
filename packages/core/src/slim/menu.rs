@@ -23,6 +23,7 @@ pub struct FullAlbum {
 pub struct Artist {
     pub id: i32,
     pub title: String,
+    pub cover: Option<String>,
 }
 
 impl ToApi<ApiArtist> for Artist {
@@ -30,6 +31,7 @@ impl ToApi<ApiArtist> for Artist {
         ApiArtist {
             artist_id: self.id,
             title: self.title.clone(),
+            contains_cover: self.cover.is_some(),
         }
     }
 }
@@ -39,6 +41,7 @@ impl ToApi<ApiArtist> for Artist {
 pub struct ApiArtist {
     pub artist_id: i32,
     pub title: String,
+    pub contains_cover: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
