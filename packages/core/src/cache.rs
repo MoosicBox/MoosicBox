@@ -1,4 +1,4 @@
-use crate::slim::menu::Album;
+use crate::slim::menu::{Album, Artist};
 use crate::slim::player::Track;
 use crate::sqlite::menu::FullAlbum;
 use enum_as_inner::EnumAsInner;
@@ -20,6 +20,8 @@ struct CacheItem {
 pub enum CacheItemType {
     Albums(Vec<Album>),
     AlbumTracks(Vec<Track>),
+    ArtistAlbums(Vec<Album>),
+    Artist(Artist),
     Album(Album),
     FullAlbum(FullAlbum),
 }

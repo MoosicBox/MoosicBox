@@ -2,7 +2,7 @@ use crate::{
     app::AppState,
     cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
     slim::{
-        menu::{Album, AlbumSource},
+        menu::{Album, AlbumSource, Artist},
         player::Track,
     },
 };
@@ -26,6 +26,45 @@ impl<T> From<PoisonError<T>> for GetAlbumError {
     fn from(_err: PoisonError<T>) -> Self {
         Self::PoisonError
     }
+}
+
+#[derive(Debug, Error)]
+pub enum GetArtistError {
+    #[error("Album not found with ID {artist_id:?}")]
+    ArtistNotFound { artist_id: i32 },
+    #[error("Unknown source: {artist_source:?}")]
+    UnknownSource { artist_source: String },
+    #[error("Poison error")]
+    PoisonError,
+    #[error(transparent)]
+    SqliteError(#[from] sqlite::Error),
+    #[error(transparent)]
+    DbError(#[from] db::DbError),
+}
+
+pub async fn get_artist(artist_id: i32, data: &AppState) -> Result<Artist, GetArtistError> {
+    let request = CacheRequest {
+        key: format!("artist|{artist_id}"),
+        expiration: Duration::from_secs(5 * 60),
+    };
+
+    Ok(get_or_set_to_cache(request, || async {
+        match db::get_artist(data.db.as_ref().unwrap(), artist_id).await {
+            Ok(artist) => {
+                if artist.is_none() {
+                    return Err(GetArtistError::ArtistNotFound { artist_id });
+                }
+
+                let artist = artist.unwrap();
+
+                Ok(CacheItemType::Artist(artist))
+            }
+            Err(err) => Err(GetArtistError::DbError(err)),
+        }
+    })
+    .await?
+    .into_artist()
+    .unwrap())
 }
 
 #[derive(Debug, Error)]
@@ -165,5 +204,36 @@ pub async fn get_album_tracks(
     })
     .await?
     .into_album_tracks()
+    .unwrap())
+}
+
+#[derive(Debug, Error)]
+pub enum GetArtistAlbumsError {
+    #[error("Poison error")]
+    Poison,
+    #[error(transparent)]
+    Json(#[from] awc::error::JsonPayloadError),
+    #[error(transparent)]
+    Sqlite(#[from] sqlite::Error),
+    #[error(transparent)]
+    Db(#[from] DbError),
+}
+
+pub async fn get_artist_albums(
+    artist_id: i32,
+    data: &AppState,
+) -> Result<Vec<Album>, GetArtistAlbumsError> {
+    let request = CacheRequest {
+        key: format!("sqlite|local_artist_albums|{artist_id}"),
+        expiration: Duration::from_secs(5 * 60),
+    };
+
+    Ok(get_or_set_to_cache(request, || async {
+        Ok::<CacheItemType, GetArtistAlbumsError>(CacheItemType::ArtistAlbums(
+            db::get_artist_albums(data.db.as_ref().unwrap(), artist_id).await?,
+        ))
+    })
+    .await?
+    .into_artist_albums()
     .unwrap())
 }

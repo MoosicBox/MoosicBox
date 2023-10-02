@@ -4,7 +4,7 @@ use actix_web::{error::ErrorInternalServerError, web, HttpRequest, HttpResponse,
 use lambda_web::actix_web::{self, get};
 use moosicbox_core::{
     app::AppState,
-    sqlite::db::{get_album, get_track},
+    sqlite::db::{get_album, get_artist, get_track},
 };
 use regex::{Captures, Regex};
 use serde::Deserialize;
@@ -45,6 +45,53 @@ pub async fn track_endpoint(
     };
 
     let path_buf = std::path::PathBuf::from(file);
+    let file_path = path_buf.as_path();
+
+    let file = actix_files::NamedFile::open_async(file_path).await.unwrap();
+
+    Ok(file.into_response(&req))
+}
+
+#[get("/artists/{artist_id}/{size}")]
+pub async fn artist_cover_endpoint(
+    req: HttpRequest,
+    path: web::Path<(String, String)>,
+    data: web::Data<AppState>,
+) -> Result<HttpResponse> {
+    let paths = path.into_inner();
+    let artist_id = paths
+        .0
+        .parse::<i32>()
+        .map_err(|_e| ErrorInternalServerError("Invalid artist_id"))?;
+
+    let artist = get_artist(data.db.as_ref().unwrap(), artist_id)
+        .await
+        .map_err(|_e| ErrorInternalServerError("Failed to fetch artist"))?;
+
+    if artist.is_none() {
+        return Err(ErrorInternalServerError("Failed to find artist"));
+    }
+
+    let artist = artist.unwrap();
+
+    if artist.cover.is_none() {
+        return Err(ErrorInternalServerError("Album is does not have cover"));
+    }
+
+    let cover = match artist.cover {
+        Some(cover) => match env::consts::OS {
+            "windows" => Regex::new(r"/mnt/(\w+)")
+                .unwrap()
+                .replace(&cover, |caps: &Captures| {
+                    format!("{}:", caps[1].to_uppercase())
+                })
+                .replace('/', "\\"),
+            _ => cover.to_string(),
+        },
+        None => unreachable!(),
+    };
+
+    let path_buf = std::path::PathBuf::from(cover);
     let file_path = path_buf.as_path();
 
     let file = actix_files::NamedFile::open_async(file_path).await.unwrap();

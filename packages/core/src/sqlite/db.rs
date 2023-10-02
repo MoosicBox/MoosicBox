@@ -124,6 +124,26 @@ pub async fn get_albums(db: &Db) -> Result<Vec<Album>, DbError> {
         .collect())
 }
 
+pub async fn get_artist(db: &Db, id: i32) -> Result<Option<Artist>, DbError> {
+    Ok(db
+        .library
+        .prepare(
+            "
+            SELECT *
+            FROM artists
+            WHERE artists.id=?",
+        )?
+        .into_iter()
+        .bind((1, id as i64))?
+        .filter_map(|row| row.ok())
+        .map(|row| Artist {
+            id: row.read::<i64, _>("id") as i32,
+            title: row.read::<&str, _>("title").to_string(),
+            cover: row.read::<Option<&str>, _>("cover").map(|c| c.to_string()),
+        })
+        .next())
+}
+
 pub async fn get_album(db: &Db, id: i32) -> Result<Option<Album>, DbError> {
     Ok(db
         .library
@@ -197,6 +217,42 @@ pub async fn get_album_tracks(db: &Db, album_id: i32) -> Result<Vec<Track>, DbEr
             artwork: row
                 .read::<Option<&str>, _>("artwork")
                 .map(|date| date.to_string()),
+            blur: row.read::<i64, _>("blur") == 1,
+        })
+        .collect())
+}
+
+pub async fn get_artist_albums(db: &Db, artist_id: i32) -> Result<Vec<Album>, DbError> {
+    Ok(db
+        .library
+        .prepare(
+            "
+            SELECT albums.*, artists.title as artist
+            FROM albums
+            JOIN artists ON artists.id=albums.artist_id
+            WHERE albums.artist_id=?",
+        )?
+        .into_iter()
+        .bind((1, artist_id as i64))?
+        .filter_map(|row| row.ok())
+        .map(|row| Album {
+            id: row.read::<i64, _>("id") as i32,
+            artist: row.read::<&str, _>("artist").to_string(),
+            artist_id: row.read::<i64, _>("artist_id") as i32,
+            title: row.read::<&str, _>("title").to_string(),
+            date_released: row
+                .read::<Option<&str>, _>("date_released")
+                .map(|date| date.to_string()),
+            date_added: row
+                .read::<Option<&str>, _>("date_added")
+                .map(|date| date.to_string()),
+            artwork: row
+                .read::<Option<&str>, _>("artwork")
+                .map(|date| date.to_string()),
+            directory: row
+                .read::<Option<&str>, _>("directory")
+                .map(|date| date.to_string()),
+            source: AlbumSource::Local,
             blur: row.read::<i64, _>("blur") == 1,
         })
         .collect())
@@ -500,11 +556,30 @@ fn upsert_and_get_row<'a>(
     }
 }
 
+pub fn add_artist_and_get_artist(db: &Db, artist: Artist) -> Result<Artist, DbError> {
+    Ok(add_artists_and_get_artists(db, vec![artist])?[0].clone())
+}
+
 pub fn add_artist_map_and_get_artist(
     db: &Db,
     artist: HashMap<&str, SqliteValue>,
 ) -> Result<Artist, DbError> {
     Ok(add_artist_maps_and_get_artists(db, vec![artist])?[0].clone())
+}
+
+pub fn add_artists_and_get_artists(db: &Db, artists: Vec<Artist>) -> Result<Vec<Artist>, DbError> {
+    add_artist_maps_and_get_artists(
+        db,
+        artists
+            .into_iter()
+            .map(|artist| {
+                HashMap::from([
+                    ("title", SqliteValue::String(artist.title)),
+                    ("cover", SqliteValue::StringOpt(artist.cover)),
+                ])
+            })
+            .collect(),
+    )
 }
 
 pub fn add_artist_maps_and_get_artists(

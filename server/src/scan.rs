@@ -3,8 +3,8 @@ use moosicbox_core::{
     app::AppState,
     slim::player::Track,
     sqlite::db::{
-        add_album_and_get_album, add_album_map_and_get_album, add_artist_map_and_get_artist,
-        add_tracks, DbError, InsertTrack, SqliteValue,
+        add_album_and_get_album, add_album_map_and_get_album, add_artist_and_get_artist,
+        add_artist_map_and_get_artist, add_tracks, DbError, InsertTrack, SqliteValue,
     },
 };
 use regex::Regex;
@@ -45,27 +45,35 @@ fn save_bytes_to_file(bytes: &[u8], path: &PathBuf) {
     let _ = file.write_all(bytes);
 }
 
-fn search_for_artwork(path: PathBuf, tag: Box<dyn AudioTag>) -> Option<PathBuf> {
+fn search_for_artwork(
+    path: PathBuf,
+    file_name: &str,
+    tag: Option<Box<dyn AudioTag>>,
+) -> Option<PathBuf> {
     if let Some(cover_file) = fs::read_dir(path.clone())
         .unwrap()
         .filter_map(|p| p.ok())
         .find(|p| {
             let name = p.file_name().to_str().unwrap().to_lowercase();
-            name.starts_with("cover.")
+            name.starts_with(format!("{file_name}.").as_str())
         })
         .map(|dir| dir.path())
     {
         Some(cover_file)
-    } else if let Some(tag_cover) = tag.album_cover() {
-        let cover_file_path = match tag_cover.mime_type {
-            audiotags::MimeType::Png => path.join("cover.png"),
-            audiotags::MimeType::Jpeg => path.join("cover.jpg"),
-            audiotags::MimeType::Tiff => path.join("cover.tiff"),
-            audiotags::MimeType::Bmp => path.join("cover.bmp"),
-            audiotags::MimeType::Gif => path.join("cover.gif"),
-        };
-        save_bytes_to_file(tag_cover.data, &cover_file_path);
-        Some(cover_file_path)
+    } else if let Some(tag) = tag {
+        if let Some(tag_cover) = tag.album_cover() {
+            let cover_file_path = match tag_cover.mime_type {
+                audiotags::MimeType::Png => path.join(format!("{file_name}.png")),
+                audiotags::MimeType::Jpeg => path.join(format!("{file_name}.jpg")),
+                audiotags::MimeType::Tiff => path.join(format!("{file_name}.tiff")),
+                audiotags::MimeType::Bmp => path.join(format!("{file_name}.bmp")),
+                audiotags::MimeType::Gif => path.join(format!("{file_name}.gif")),
+            };
+            save_bytes_to_file(tag_cover.data, &cover_file_path);
+            Some(cover_file_path)
+        } else {
+            None
+        }
     } else {
         None
     }
@@ -126,7 +134,7 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
         None => album_artist,
     };
 
-    let artist = add_artist_map_and_get_artist(
+    let mut artist = add_artist_map_and_get_artist(
         data.db.as_ref().unwrap(),
         HashMap::from([("title", SqliteValue::String(album_artist))]),
     )?;
@@ -147,7 +155,7 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
     println!("artwork: {:?}", album.artwork);
 
     if album.artwork.is_none() {
-        if let Some(artwork) = search_for_artwork(path_album.clone(), tag) {
+        if let Some(artwork) = search_for_artwork(path_album.clone(), "cover", Some(tag)) {
             album.artwork = Some(artwork.file_name().unwrap().to_str().unwrap().to_string());
             println!(
                 "Found artwork for {}: {}",
@@ -155,6 +163,17 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
                 album.artwork.clone().unwrap()
             );
             album = add_album_and_get_album(data.db.as_ref().unwrap(), album)?;
+        }
+    }
+    if artist.cover.is_none() {
+        if let Some(cover) = search_for_artwork(path_album.clone(), "artist", None) {
+            artist.cover = Some(cover.to_str().unwrap().to_string());
+            println!(
+                "Found cover for {}: {}",
+                path_album.to_str().unwrap(),
+                artist.cover.clone().unwrap()
+            );
+            let _ = add_artist_and_get_artist(data.db.as_ref().unwrap(), artist)?;
         }
     }
 

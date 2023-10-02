@@ -10,12 +10,13 @@ use moosicbox_core::{
         menu::{get_all_artists, ApiAlbum, ApiArtist, ArtistFilters, ArtistSort, ArtistsRequest},
         player::ApiTrack,
     },
-    sqlite::menu::get_album,
+    sqlite::menu::{get_album, get_artist},
     ToApi,
 };
 use moosicbox_core::{
     slim::menu::{get_all_albums, Album, AlbumFilters, AlbumSort, AlbumSource, AlbumsRequest},
     sqlite::menu::get_album_tracks,
+    sqlite::menu::get_artist_albums,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -167,6 +168,46 @@ pub async fn get_album_tracks_endpoint(
             .into_iter()
             .map(|t| t.to_api())
             .collect(),
+    ))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GetArtistAlbumsQuery {
+    artist_id: i32,
+}
+
+#[get("/artist/albums")]
+pub async fn get_artist_albums_endpoint(
+    query: web::Query<GetArtistAlbumsQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<Vec<ApiAlbum>>> {
+    Ok(Json(
+        get_artist_albums(query.artist_id, &data)
+            .await
+            .map_err(|_e| ErrorInternalServerError("Failed to fetch albums"))?
+            .into_iter()
+            .map(|t| t.to_api())
+            .collect(),
+    ))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GetArtistQuery {
+    artist_id: i32,
+}
+
+#[get("/artist")]
+pub async fn get_artist_endpoint(
+    query: web::Query<GetArtistQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<ApiArtist>> {
+    Ok(Json(
+        get_artist(query.artist_id, &data)
+            .await
+            .map_err(|_e| ErrorInternalServerError("Failed to fetch artist"))?
+            .to_api(),
     ))
 }
 
