@@ -1,5 +1,6 @@
 mod api;
 mod scan;
+mod ws;
 
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App, HttpServer};
@@ -65,6 +66,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(cors)
             .wrap(middleware::Compress::default())
             .app_data(web::Data::new(app_data))
+            .service(api::websocket)
             .service(api::connect_endpoint)
             .service(api::status_endpoint)
             .service(api::playlist_status_endpoint)

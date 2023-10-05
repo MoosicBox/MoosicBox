@@ -1,4 +1,5 @@
 use crate::scan::scan;
+use crate::ws::Websocket;
 use actix_web::error::ErrorInternalServerError;
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
@@ -18,6 +19,14 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::thread;
 use std::time::Duration;
+
+#[get("/ws")]
+pub async fn websocket(
+    req: actix_web::HttpRequest,
+    stream: web::Payload,
+) -> Result<HttpResponse, actix_web::Error> {
+    actix_web_actors::ws::start(Websocket::new(), &req, stream)
+}
 
 #[post("/connect")]
 pub async fn connect_endpoint(data: web::Data<AppState>) -> Result<Json<Value>> {
