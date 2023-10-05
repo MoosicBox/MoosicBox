@@ -3,8 +3,10 @@ use std::time::{Duration, Instant};
 use actix::prelude::*;
 use actix_web_actors::ws;
 use moosicbox_ws::api::{
-    EventType, InputMessageType, WebsocketContext, WebsocketSendError, WebsocketSender,
+    EventType, InputMessageType, WebsocketContext, WebsocketMessageError, WebsocketSendError,
+    WebsocketSender,
 };
+use thiserror::Error;
 use uuid::Uuid;
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -63,17 +65,29 @@ impl Actor for Websocket {
     }
 }
 
+#[derive(Debug, Error)]
+pub enum WebsocketHandlerError {
+    #[error(transparent)]
+    Protocol(ws::ProtocolError),
+    #[error(transparent)]
+    WebsocketMessageError(WebsocketMessageError),
+    #[error("Unknown")]
+    Unknown,
+}
+
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Websocket {
     fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
-        match msg {
+        let result = match msg {
             // Ping/Pong will be used to make sure the connection is still alive
             Ok(ws::Message::Ping(msg)) => {
                 self.hb = Instant::now();
                 println!("Ping {msg:?}");
                 ctx.pong(&msg);
+                Ok(())
             }
             Ok(ws::Message::Pong(_)) => {
                 self.hb = Instant::now();
+                Ok(())
             }
             Ok(ws::Message::Text(text)) => {
                 let value = serde_json::from_str::<serde_json::Value>(text.as_ref()).unwrap();
@@ -92,14 +106,24 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Websocket {
                 )
                 .unwrap();
                 let mut sender = ActixSender { context: ctx };
-                moosicbox_ws::api::message(&mut sender, payload, message_type, &context).unwrap();
-                println!("Received value {value:?}");
+                moosicbox_ws::api::message(&mut sender, payload, message_type, &context)
+                    .map(|_| ())
+                    .map_err(WebsocketHandlerError::WebsocketMessageError)
             }
             Ok(ws::Message::Close(reason)) => {
                 ctx.close(reason);
                 ctx.stop();
+                Ok(())
             }
-            _ => ctx.stop(),
+            Err(error) => {
+                ctx.stop();
+                Err(WebsocketHandlerError::Protocol(error))
+            }
+            _ => Err(WebsocketHandlerError::Unknown),
+        };
+
+        if let Err(error) = result {
+            eprintln!("WebSocket Stream Handler failed! {error:?}")
         }
     }
 }

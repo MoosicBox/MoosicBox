@@ -12,9 +12,10 @@ use aws_sdk_apigatewaymanagement::{
 use lambda_runtime::{service_fn, LambdaEvent};
 use moosicbox_ws::api::{
     EventType, InputMessageType, Response, WebsocketConnectError, WebsocketContext,
-    WebsocketSendError, WebsocketSender,
+    WebsocketDisconnectError, WebsocketMessageError, WebsocketSendError, WebsocketSender,
 };
 use serde_json::Value;
+use thiserror::Error;
 
 #[actix_rt::main]
 async fn main() -> Result<(), actix_web::Error> {
@@ -43,7 +44,19 @@ impl WebsocketSender for ApiGatewayWebsocketSender<'_> {
     }
 }
 
-pub async fn ws_handler(event: LambdaEvent<Value>) -> Result<Response, WebsocketConnectError> {
+#[derive(Debug, Error)]
+pub enum WebsocketHandlerError {
+    #[error(transparent)]
+    WebsocketConnectError(WebsocketConnectError),
+    #[error(transparent)]
+    WebsocketDisconnectError(WebsocketDisconnectError),
+    #[error(transparent)]
+    WebsocketMessageError(WebsocketMessageError),
+    #[error("Unknown")]
+    Unknown,
+}
+
+pub async fn ws_handler(event: LambdaEvent<Value>) -> Result<Response, WebsocketHandlerError> {
     let api_context = serde_json::from_value::<ApiGatewayWebsocketProxyRequestContext>(
         event.payload.get("requestContext").unwrap().clone(),
     )
@@ -75,8 +88,10 @@ pub async fn ws_handler(event: LambdaEvent<Value>) -> Result<Response, Websocket
             messages: &mut messages,
         };
         let response = match context.event_type {
-            EventType::Connect => moosicbox_ws::api::connect(&context)?,
-            EventType::Disconnect => moosicbox_ws::api::disconnect(&context)?,
+            EventType::Connect => moosicbox_ws::api::connect(&context)
+                .map_err(WebsocketHandlerError::WebsocketConnectError)?,
+            EventType::Disconnect => moosicbox_ws::api::disconnect(&context)
+                .map_err(WebsocketHandlerError::WebsocketDisconnectError)?,
             EventType::Message => {
                 let body = serde_json::from_str::<Value>(
                     event.payload.get("body").unwrap().as_str().unwrap(),
@@ -87,7 +102,8 @@ pub async fn ws_handler(event: LambdaEvent<Value>) -> Result<Response, Websocket
                 )
                 .unwrap();
                 let payload = body.get("payload");
-                moosicbox_ws::api::message(&mut sender, payload, message_type, &context)?
+                moosicbox_ws::api::message(&mut sender, payload, message_type, &context)
+                    .map_err(WebsocketHandlerError::WebsocketMessageError)?
             }
         };
 
@@ -111,12 +127,12 @@ pub async fn ws_handler(event: LambdaEvent<Value>) -> Result<Response, Websocket
                     .data(Blob::new(message.payload))
                     .send()
                     .await
-                    .map_err(|_e| WebsocketConnectError::Unknown)?;
+                    .map_err(|_e| WebsocketHandlerError::Unknown)?;
             }
         }
 
         Ok(response)
     } else {
-        Err(WebsocketConnectError::Unknown)
+        Err(WebsocketHandlerError::Unknown)
     }
 }

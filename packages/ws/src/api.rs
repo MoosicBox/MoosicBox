@@ -2,12 +2,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
-#[derive(Debug, Error)]
-pub enum WebsocketConnectError {
-    #[error("Unknown")]
-    Unknown,
-}
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Response {
@@ -52,6 +46,12 @@ pub trait WebsocketSender {
     fn send(&mut self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError>;
 }
 
+#[derive(Debug, Error)]
+pub enum WebsocketConnectError {
+    #[error("Unknown")]
+    Unknown,
+}
+
 pub fn connect(context: &WebsocketContext) -> Result<Response, WebsocketConnectError> {
     println!("Connected {}", context.connection_id);
     Ok(Response {
@@ -60,7 +60,13 @@ pub fn connect(context: &WebsocketContext) -> Result<Response, WebsocketConnectE
     })
 }
 
-pub fn disconnect(context: &WebsocketContext) -> Result<Response, WebsocketConnectError> {
+#[derive(Debug, Error)]
+pub enum WebsocketDisconnectError {
+    #[error("Unknown")]
+    Unknown,
+}
+
+pub fn disconnect(context: &WebsocketContext) -> Result<Response, WebsocketDisconnectError> {
     println!("Disconnected {}", context.connection_id);
     Ok(Response {
         status_code: 200,
@@ -68,24 +74,35 @@ pub fn disconnect(context: &WebsocketContext) -> Result<Response, WebsocketConne
     })
 }
 
+#[derive(Debug, Error)]
+pub enum WebsocketMessageError {
+    #[error("Missing payload")]
+    MissingPayload,
+    #[error("Unknown")]
+    Unknown,
+}
+
 pub fn message(
     sender: &mut impl WebsocketSender,
     payload: Option<&Value>,
     message_type: InputMessageType,
     context: &WebsocketContext,
-) -> Result<Response, WebsocketConnectError> {
+) -> Result<Response, WebsocketMessageError> {
     println!(
         "Received message from {}: {:?}",
         context.connection_id, payload
     );
     match message_type {
         InputMessageType::GetConnectionId => {
-            get_connection_id(sender, context).map_err(|_e| WebsocketConnectError::Unknown)?
+            get_connection_id(sender, context).map_err(|_e| WebsocketMessageError::Unknown)?;
+            Ok(())
         }
         InputMessageType::Ping => {
             println!("Ping {payload:?}");
+            Ok(())
         }
-    }
+    }?;
+
     Ok(Response {
         status_code: 200,
         body: "Received".into(),
