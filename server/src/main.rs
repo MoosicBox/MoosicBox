@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+
 mod api;
 mod scan;
 mod ws;

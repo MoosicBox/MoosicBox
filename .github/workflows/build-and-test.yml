@@ -54,8 +54,15 @@ jobs:
 
             - name: Build ${{ matrix.package.name }}
               working-directory: MoosicBoxServer
-              run: cargo build --manifest-path=${{ matrix.package.path }}/Cargo.toml --verbose
+              run: |
+                  cargo build \
+                        --manifest-path=${{ matrix.package.path }}/Cargo.toml \
+                        --verbose \
+                        --features=fail-on-warnings
 
             - name: Run ${{ matrix.package.name }} tests
               working-directory: MoosicBoxServer
-              run: cargo test --manifest-path=${{ matrix.package.path }}/Cargo.toml --verbose
+              run: |
+                  cargo test \
+                        --manifest-path=${{ matrix.package.path }}/Cargo.toml \
+                        --verbose
