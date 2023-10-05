@@ -16,13 +16,20 @@ jobs:
         strategy:
             matrix:
                 package:
-                    [
-                        packages/core,
-                        packages/files,
-                        packages/menu,
-                        packages/ws,
-                        server,
-                    ]
+                    - name: core
+                      path: packages/core
+
+                    - name: files
+                      path: packages/files
+
+                    - name: menu
+                      path: packages/menu
+
+                    - name: ws
+                      path: packages/ws
+
+                    - name: server
+                      path: server
 
         steps:
             - name: Checkout audiotags
@@ -36,10 +43,19 @@ jobs:
               with:
                   path: MoosicBoxServer
 
-            - name: Build ${{ matrix.package }}
-              working-directory: MoosicBoxServer
-              run: cargo build --manifest-path=${{ matrix.package }}/Cargo.toml --verbose
+            - name: ⚡ Cache cargo
+              uses: actions/cache@v3
+              with:
+                  path: |
+                      ~/.cargo/registry
+                      ~/.cargo/git
+                      target
+                  key: ${{ runner.os }}-${{ matrix.package.name }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-            - name: Run ${{ matrix.package }} tests
+            - name: Build ${{ matrix.package.name }}
               working-directory: MoosicBoxServer
-              run: cargo test --manifest-path=${{ matrix.package }}/Cargo.toml --verbose
+              run: cargo build --manifest-path=${{ matrix.package.path }}/Cargo.toml --verbose
+
+            - name: Run ${{ matrix.package.name }} tests
+              working-directory: MoosicBoxServer
+              run: cargo test --manifest-path=${{ matrix.package.path }}/Cargo.toml --verbose
