@@ -15,7 +15,14 @@ jobs:
 
         strategy:
             matrix:
-                package: [packages/core, packages/files, packages/menu, server]
+                package:
+                    [
+                        packages/core,
+                        packages/files,
+                        packages/menu,
+                        packages/ws,
+                        server,
+                    ]
 
         steps:
             - name: Checkout audiotags
