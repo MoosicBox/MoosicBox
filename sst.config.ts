@@ -1,5 +1,5 @@
 import { SSTConfig } from 'sst';
-import { API } from './stacks/MusicBoxStack';
+import { API } from './stacks/MoosicBoxStack';
 
 export default {
     config(_input) {
