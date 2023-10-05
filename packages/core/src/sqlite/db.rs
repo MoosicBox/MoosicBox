@@ -728,6 +728,7 @@ pub fn add_tracks(db: &Db, tracks: Vec<InsertTrack>) -> Result<Vec<Row>, DbError
                 &db.library,
                 "tracks",
                 vec![
+                    ("number", SqliteValue::Number(insert.track.number as i64)),
                     ("album_id", SqliteValue::Number(insert.album_id as i64)),
                     ("title", SqliteValue::String(insert.track.title.clone())),
                 ],
