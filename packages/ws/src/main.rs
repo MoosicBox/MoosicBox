@@ -1,6 +1,7 @@
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 
 use actix_web::{error::ErrorInternalServerError, Result};
+use async_once_cell::OnceCell;
 use aws_config::SdkConfig;
 use aws_lambda_events::apigw::ApiGatewayWebsocketProxyRequestContext;
 use aws_sdk_apigatewaymanagement::{
@@ -8,7 +9,6 @@ use aws_sdk_apigatewaymanagement::{
     primitives::Blob,
     Client,
 };
-use futures::executor;
 use lambda_runtime::{service_fn, LambdaEvent};
 use moosicbox_ws::api::{
     EventType, InputMessageType, Response, WebsocketConnectError, WebsocketContext,
@@ -49,14 +49,17 @@ pub async fn ws_handler(event: LambdaEvent<Value>) -> Result<Response, Websocket
     )
     .unwrap();
 
-    static SHARED_CONFIG: OnceLock<Arc<Mutex<SdkConfig>>> = OnceLock::new();
-    let shared_config = SHARED_CONFIG.get_or_init(|| {
-        Arc::new(Mutex::new(executor::block_on(
-            aws_config::from_env()
-                .region(Region::new("us-east-1"))
-                .load(),
-        )))
-    });
+    static SHARED_CONFIG: OnceCell<Arc<Mutex<SdkConfig>>> = OnceCell::new();
+    let shared_config = SHARED_CONFIG
+        .get_or_init(async {
+            Arc::new(Mutex::new(
+                aws_config::from_env()
+                    .region(Region::new("us-east-1"))
+                    .load()
+                    .await,
+            ))
+        })
+        .await;
 
     let mut messages = Vec::new();
 
