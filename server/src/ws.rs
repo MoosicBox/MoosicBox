@@ -27,6 +27,11 @@ impl<A: Actor<Context = actix_web_actors::ws::WebsocketContext<A>>> WebsocketSen
         self.context.text(data);
         Ok(())
     }
+
+    fn send_all(&mut self, data: &str) -> Result<(), WebsocketSendError> {
+        self.context.text(data);
+        Ok(())
+    }
 }
 
 impl Websocket {

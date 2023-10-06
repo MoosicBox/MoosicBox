@@ -42,6 +42,10 @@ impl WebsocketSender for ApiGatewayWebsocketSender<'_> {
         });
         Ok(())
     }
+
+    fn send_all(&mut self, _data: &str) -> Result<(), WebsocketSendError> {
+        Ok(())
+    }
 }
 
 #[derive(Debug, Error)]

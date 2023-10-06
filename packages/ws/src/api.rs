@@ -1,4 +1,9 @@
 use core::fmt;
+use std::{
+    collections::HashMap,
+    sync::{Mutex, OnceLock},
+};
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
@@ -23,6 +28,7 @@ pub enum EventType {
 pub enum InboundMessageType {
     Ping,
     GetConnectionId,
+    SyncConnectionData,
 }
 
 impl fmt::Display for InboundMessageType {
@@ -49,9 +55,18 @@ pub enum WebsocketSendError {
     Unknown,
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebsocketConnectionData {
+    pub playing: bool,
+}
+
 pub trait WebsocketSender {
     fn send(&mut self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError>;
+    fn send_all(&mut self, data: &str) -> Result<(), WebsocketSendError>;
 }
+
+static CONNECTION_DATA: OnceLock<Mutex<HashMap<String, WebsocketConnectionData>>> = OnceLock::new();
 
 #[derive(Debug, Error)]
 pub enum WebsocketConnectError {
@@ -73,7 +88,23 @@ pub enum WebsocketDisconnectError {
     Unknown,
 }
 
-pub fn disconnect(context: &WebsocketContext) -> Result<Response, WebsocketDisconnectError> {
+pub fn disconnect(
+    sender: &mut impl WebsocketSender,
+    context: &WebsocketContext,
+) -> Result<Response, WebsocketDisconnectError> {
+    let mut connection_data = CONNECTION_DATA
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap();
+
+    connection_data.remove(&context.connection_id);
+
+    sender
+        .send(
+            &context.connection_id,
+            &serde_json::to_string(&connection_data.values().collect::<Vec<_>>()).unwrap(),
+        )
+        .map_err(|_e| WebsocketDisconnectError::Unknown)?;
     println!("Disconnected {}", context.connection_id);
     Ok(Response {
         status_code: 200,
@@ -108,6 +139,14 @@ pub fn message(
             println!("Ping {payload:?}");
             Ok(())
         }
+        InboundMessageType::SyncConnectionData => match payload {
+            Some(payload) => {
+                sync_connection_data(sender, context, payload)
+                    .map_err(|_e| WebsocketMessageError::Unknown)?;
+                Ok(())
+            }
+            None => Err(WebsocketMessageError::MissingPayload),
+        },
     }?;
 
     Ok(Response {
@@ -128,4 +167,27 @@ fn get_connection_id(
         })
         .to_string(),
     )
+}
+
+fn sync_connection_data(
+    sender: &mut impl WebsocketSender,
+    context: &WebsocketContext,
+    payload: &Value,
+) -> Result<(), WebsocketSendError> {
+    let mut connection_data = CONNECTION_DATA
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap();
+
+    connection_data.insert(
+        context.connection_id.clone(),
+        serde_json::from_value(payload.clone()).unwrap(),
+    );
+
+    sender.send(
+        &context.connection_id,
+        &serde_json::to_string(&connection_data.values().collect::<Vec<_>>()).unwrap(),
+    )?;
+
+    Ok(())
 }
