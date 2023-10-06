@@ -11,7 +11,7 @@ use aws_sdk_apigatewaymanagement::{
 };
 use lambda_runtime::{service_fn, LambdaEvent};
 use moosicbox_ws::api::{
-    EventType, InputMessageType, Response, WebsocketConnectError, WebsocketContext,
+    EventType, InboundMessageType, Response, WebsocketConnectError, WebsocketContext,
     WebsocketDisconnectError, WebsocketMessageError, WebsocketSendError, WebsocketSender,
 };
 use serde_json::Value;
@@ -90,14 +90,14 @@ pub async fn ws_handler(event: LambdaEvent<Value>) -> Result<Response, Websocket
         let response = match context.event_type {
             EventType::Connect => moosicbox_ws::api::connect(&context)
                 .map_err(WebsocketHandlerError::WebsocketConnectError)?,
-            EventType::Disconnect => moosicbox_ws::api::disconnect(&context)
+            EventType::Disconnect => moosicbox_ws::api::disconnect(&mut sender, &context)
                 .map_err(WebsocketHandlerError::WebsocketDisconnectError)?,
             EventType::Message => {
                 let body = serde_json::from_str::<Value>(
                     event.payload.get("body").unwrap().as_str().unwrap(),
                 )
                 .unwrap();
-                let message_type = serde_json::from_str::<InputMessageType>(
+                let message_type = serde_json::from_str::<InboundMessageType>(
                     format!("\"{}\"", body.get("type").unwrap().as_str().unwrap()).as_str(),
                 )
                 .unwrap();

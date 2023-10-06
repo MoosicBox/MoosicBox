@@ -19,14 +19,14 @@ pub enum EventType {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum InputMessageType {
+pub enum InboundMessageType {
     Ping,
     GetConnectionId,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum OutputMessageType {
+pub enum OutboundMessageType {
     Connect,
     ConnectionId,
 }
@@ -85,7 +85,7 @@ pub enum WebsocketMessageError {
 pub fn message(
     sender: &mut impl WebsocketSender,
     payload: Option<&Value>,
-    message_type: InputMessageType,
+    message_type: InboundMessageType,
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketMessageError> {
     println!(
@@ -93,11 +93,11 @@ pub fn message(
         context.connection_id, payload
     );
     match message_type {
-        InputMessageType::GetConnectionId => {
+        InboundMessageType::GetConnectionId => {
             get_connection_id(sender, context).map_err(|_e| WebsocketMessageError::Unknown)?;
             Ok(())
         }
-        InputMessageType::Ping => {
+        InboundMessageType::Ping => {
             println!("Ping {payload:?}");
             Ok(())
         }
@@ -117,7 +117,7 @@ fn get_connection_id(
         &context.connection_id,
         &serde_json::json!({
             "connectionId": context.connection_id,
-            "type": OutputMessageType::ConnectionId
+            "type": OutboundMessageType::ConnectionId
         })
         .to_string(),
     )

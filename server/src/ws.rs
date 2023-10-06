@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use actix::prelude::*;
 use actix_web_actors::ws;
 use moosicbox_ws::api::{
-    EventType, InputMessageType, WebsocketContext, WebsocketMessageError, WebsocketSendError,
+    EventType, InboundMessageType, WebsocketContext, WebsocketMessageError, WebsocketSendError,
     WebsocketSender,
 };
 use thiserror::Error;
@@ -101,7 +101,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Websocket {
                     event_type: EventType::Message,
                 };
                 let payload = value.get("payload");
-                let message_type = serde_json::from_str::<InputMessageType>(
+                let message_type = serde_json::from_str::<InboundMessageType>(
                     format!("\"{}\"", value.get("type").unwrap().as_str().unwrap()).as_str(),
                 )
                 .unwrap();
