@@ -1,3 +1,4 @@
+use core::fmt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
@@ -22,6 +23,12 @@ pub enum EventType {
 pub enum InboundMessageType {
     Ping,
     GetConnectionId,
+}
+
+impl fmt::Display for InboundMessageType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -89,8 +96,8 @@ pub fn message(
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketMessageError> {
     println!(
-        "Received message from {}: {:?}",
-        context.connection_id, payload
+        "Received message type {} from {}: {:?}",
+        message_type, context.connection_id, payload
     );
     match message_type {
         InboundMessageType::GetConnectionId => {
