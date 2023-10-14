@@ -6,10 +6,7 @@ mod ws;
 
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App, HttpServer};
-use moosicbox_core::{
-    app::{AppState, Db},
-    sqlite::db::init_db,
-};
+use moosicbox_core::app::{AppState, Db};
 use std::{env, time::Duration};
 
 #[actix_web::main]
@@ -21,12 +18,6 @@ async fn main() -> std::io::Result<()> {
     } else {
         8000
     };
-
-    let library_db = ::sqlite::open("library.db").unwrap();
-    let db = Db {
-        library: library_db,
-    };
-    let _ = init_db(&db).await;
 
     let app = move || {
         let proxy_url = if args.len() > 1 {

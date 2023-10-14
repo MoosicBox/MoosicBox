@@ -26,52 +26,6 @@ pub enum DbError {
     SqliteError(#[from] sqlite::Error),
 }
 
-pub async fn init_db(db: &Db) -> Result<(), DbError> {
-    if !does_table_exist(&db.library, "artists").await? {
-        db.library
-            .prepare(
-                "CREATE TABLE artists (
-                    id INTEGER PRIMARY KEY,
-                    title TEXT,
-                    cover TEXT
-                )",
-            )?
-            .into_iter()
-            .next();
-    }
-    if !does_table_exist(&db.library, "albums").await? {
-        db.library
-            .prepare(
-                "CREATE TABLE albums (
-                    id INTEGER PRIMARY KEY,
-                    artist_id INTEGER, title TEXT,
-                    date_released TEXT, artwork TEXT,
-                    directory TEXT,
-                    blur INTEGER DEFAULT 0,
-                    date_added TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now'))
-                )",
-            )?
-            .into_iter()
-            .next();
-    }
-    if !does_table_exist(&db.library, "tracks").await? {
-        db.library
-            .prepare(
-                "CREATE TABLE tracks (
-                    id INTEGER PRIMARY KEY,
-                    number INTEGER,
-                    title TEXT,
-                    duration REAL,
-                    album_id INTEGER,
-                    file TEXT
-                )",
-            )?
-            .into_iter()
-            .next();
-    }
-    Ok(())
-}
-
 pub async fn get_artists(db: &Db) -> Result<Vec<Artist>, DbError> {
     Ok(db
         .library
@@ -486,7 +440,7 @@ fn update_and_get_row<'a>(
         connection
             .prepare(format!(
                 "UPDATE {table_name} {} WHERE id=?",
-                build_set_clause(&values),
+                build_set_clause(values),
             ))?
             .into_iter(),
         &[values.clone(), vec![("id", SqliteValue::Number(id))]].concat(),
@@ -743,15 +697,4 @@ pub fn add_tracks(db: &Db, tracks: Vec<InsertTrack>) -> Result<Vec<Row>, DbError
         })
         .filter_map(|track| track.ok())
         .collect())
-}
-
-async fn does_table_exist(connection: &Connection, name: &str) -> Result<bool, sqlite::Error> {
-    Ok(connection
-        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?")?
-        .into_iter()
-        .bind((1, name))
-        .unwrap()
-        .filter_map(|row| row.ok())
-        .count()
-        > 0)
 }
