@@ -1,5 +1,6 @@
+use crate::handler;
 use crate::scan::scan;
-use crate::ws::Websocket;
+use crate::server::ChatServerHandle;
 use actix_web::error::ErrorInternalServerError;
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
@@ -19,13 +20,24 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::thread;
 use std::time::Duration;
+use tokio::task::spawn_local;
 
 #[get("/ws")]
 pub async fn websocket(
     req: actix_web::HttpRequest,
     stream: web::Payload,
+    chat_server: web::Data<ChatServerHandle>,
 ) -> Result<HttpResponse, actix_web::Error> {
-    actix_web_actors::ws::start(Websocket::new(), &req, stream)
+    let (res, session, msg_stream) = actix_ws::handle(&req, stream)?;
+
+    // spawn websocket handler (and don't await it) so that the response is returned immediately
+    spawn_local(handler::chat_ws(
+        (**chat_server).clone(),
+        session,
+        msg_stream,
+    ));
+
+    Ok(res)
 }
 
 #[post("/connect")]

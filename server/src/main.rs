@@ -1,13 +1,25 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 mod api;
+mod handler;
 mod scan;
-mod ws;
+mod server;
 
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App, HttpServer};
 use moosicbox_core::app::{AppState, Db};
+use server::ChatServer;
 use std::{env, time::Duration};
+use tokio::{task::spawn, try_join};
+
+/// Connection ID.
+pub type ConnId = usize;
+
+/// Room ID.
+pub type RoomId = String;
+
+/// Message sent to a room/client.
+pub type Msg = String;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -18,6 +30,10 @@ async fn main() -> std::io::Result<()> {
     } else {
         8000
     };
+
+    let (chat_server, server_tx) = ChatServer::new();
+
+    let chat_server = spawn(chat_server.run());
 
     let app = move || {
         let proxy_url = if args.len() > 1 {
@@ -59,6 +75,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(cors)
             .wrap(middleware::Compress::default())
             .app_data(web::Data::new(app_data))
+            .app_data(web::Data::new(server_tx.clone()))
             .service(api::websocket)
             .service(api::connect_endpoint)
             .service(api::status_endpoint)
@@ -89,8 +106,9 @@ async fn main() -> std::io::Result<()> {
             .service(api::scan_endpoint)
     };
 
-    HttpServer::new(app)
-        .bind(("0.0.0.0", service_port))?
-        .run()
-        .await
+    let http_server = HttpServer::new(app).bind(("0.0.0.0", service_port))?.run();
+
+    try_join!(http_server, async move { chat_server.await.unwrap() })?;
+
+    Ok(())
 }
