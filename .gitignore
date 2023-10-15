@@ -17,4 +17,5 @@ node_modules
 # local env files
 .env*.local
 
-library.db*
+*.db
+*.bak
