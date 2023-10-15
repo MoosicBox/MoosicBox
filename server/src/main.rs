@@ -1,16 +1,15 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 mod api;
-mod handler;
 mod scan;
-mod server;
+mod ws;
 
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App, HttpServer};
 use moosicbox_core::app::{AppState, Db};
-use server::ChatServer;
 use std::{env, time::Duration};
 use tokio::{task::spawn, try_join};
+use ws::server::ChatServer;
 
 /// Connection ID.
 pub type ConnId = usize;

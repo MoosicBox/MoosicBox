@@ -1,6 +1,6 @@
-use crate::handler;
 use crate::scan::scan;
-use crate::server::ChatServerHandle;
+use crate::ws::handler;
+use crate::ws::server::ChatServerHandle;
 use actix_web::error::ErrorInternalServerError;
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
