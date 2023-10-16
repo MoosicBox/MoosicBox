@@ -42,7 +42,7 @@ pub struct PlaylistStatus {
     pub tracks: Vec<Track>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Track {
     pub id: i32,
