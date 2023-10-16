@@ -5,11 +5,12 @@ use std::{
     io,
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Arc,
+        Arc, Mutex,
     },
 };
 
 use async_trait::async_trait;
+use moosicbox_core::app::Db;
 use moosicbox_ws::api::{
     EventType, InboundMessageType, WebsocketContext, WebsocketDisconnectError,
     WebsocketMessageError, WebsocketSendError, WebsocketSender,
@@ -91,6 +92,8 @@ pub struct ChatServer {
     /// Map of room name to participant IDs in that room.
     rooms: HashMap<RoomId, HashSet<ConnId>>,
 
+    db: Arc<Mutex<Db>>,
+
     /// Tracks total number of historical connections established.
     visitor_count: Arc<AtomicUsize>,
 
@@ -99,7 +102,7 @@ pub struct ChatServer {
 }
 
 impl ChatServer {
-    pub fn new() -> (Self, ChatServerHandle) {
+    pub fn new(db: Arc<Mutex<Db>>) -> (Self, ChatServerHandle) {
         // create empty server
         let mut rooms = HashMap::with_capacity(4);
 
@@ -112,6 +115,7 @@ impl ChatServer {
             Self {
                 sessions: HashMap::new(),
                 rooms,
+                db,
                 visitor_count: Arc::new(AtomicUsize::new(0)),
                 cmd_rx,
             },
@@ -175,7 +179,7 @@ impl ChatServer {
         .map_err(|_| WebsocketMessageError::InvalidMessageType)?;
 
         let payload = body.get("payload");
-        moosicbox_ws::api::message(self, payload, message_type, &context).await?;
+        moosicbox_ws::api::message(self.db.clone(), self, payload, message_type, &context).await?;
         Ok(())
     }
 

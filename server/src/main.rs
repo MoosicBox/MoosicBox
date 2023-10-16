@@ -7,7 +7,11 @@ mod ws;
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App, HttpServer};
 use moosicbox_core::app::{AppState, Db};
-use std::{env, time::Duration};
+use std::{
+    env,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use tokio::{task::spawn, try_join};
 use ws::server::ChatServer;
 
@@ -21,7 +25,12 @@ async fn main() -> std::io::Result<()> {
         8000
     };
 
-    let (chat_server, server_tx) = ChatServer::new();
+    let library_db = ::sqlite::open("library.db").unwrap();
+    let db = Db {
+        library: library_db,
+    };
+
+    let (chat_server, server_tx) = ChatServer::new(Arc::new(Mutex::new(db)));
 
     let chat_server = spawn(chat_server.run());
 

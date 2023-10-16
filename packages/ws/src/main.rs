@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use actix_web::{error::ErrorInternalServerError, Result};
 use async_once_cell::OnceCell;
@@ -11,6 +11,7 @@ use aws_sdk_apigatewaymanagement::{
     Client,
 };
 use lambda_runtime::{service_fn, LambdaEvent};
+use moosicbox_core::app::Db;
 use moosicbox_ws::api::{
     EventType, InboundMessageType, Response, WebsocketConnectError, WebsocketContext,
     WebsocketDisconnectError, WebsocketMessageError, WebsocketSendError, WebsocketSender,
@@ -88,6 +89,15 @@ pub async fn ws_handler(event: LambdaEvent<Value>) -> Result<Response, Websocket
         })
         .await;
 
+    static DB: OnceLock<Arc<Mutex<Db>>> = OnceLock::new();
+    let db = DB.get_or_init(|| {
+        let library_db = ::sqlite::open(":memory:").unwrap();
+        let db = Db {
+            library: library_db,
+        };
+        Arc::new(Mutex::new(db))
+    });
+
     let mut messages = Vec::new();
 
     if let Ok(event_type) = serde_json::from_str::<EventType>(
@@ -118,7 +128,7 @@ pub async fn ws_handler(event: LambdaEvent<Value>) -> Result<Response, Websocket
                 )
                 .unwrap();
                 let payload = body.get("payload");
-                moosicbox_ws::api::message(&mut sender, payload, message_type, &context)
+                moosicbox_ws::api::message(db.clone(), &mut sender, payload, message_type, &context)
                     .await
                     .map_err(WebsocketHandlerError::WebsocketMessageError)?
             }

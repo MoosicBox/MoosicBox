@@ -10,6 +10,8 @@ use sqlite::{Connection, CursorWithOwnership, Row};
 use std::{collections::HashMap, fmt::Display, sync::PoisonError};
 use thiserror::Error;
 
+use super::models::{CreateSession, Session, SessionPlaylist};
+
 impl<T> From<PoisonError<T>> for DbError {
     fn from(_err: PoisonError<T>) -> Self {
         Self::PoisonError
@@ -24,6 +26,184 @@ pub enum DbError {
     PoisonError,
     #[error(transparent)]
     SqliteError(#[from] sqlite::Error),
+    #[error("Unknown DbError")]
+    Unknown,
+}
+
+pub fn get_session_playlist_tracks(
+    db: &Db,
+    session_playlist_id: i32,
+) -> Result<Vec<Track>, DbError> {
+    Ok(db
+        .library
+        .prepare(
+            "
+            SELECT tracks.*,
+                albums.title as album,
+                albums.blur as blur,
+                albums.date_released as date_released,
+                artists.title as artist,
+                artists.id as artist_id,
+                albums.artwork
+            FROM session_playlist_tracks
+            JOIN tracks ON tracks.id=session_playlist_tracks.track_id
+            JOIN albums ON albums.id=tracks.album_id
+            JOIN artists ON artists.id=albums.artist_id
+            WHERE session_playlist_tracks.session_playlist_id=?
+            ORDER BY number ASC
+            ",
+        )?
+        .into_iter()
+        .bind((1, session_playlist_id as i64))?
+        .filter_map(|row| row.ok())
+        .map(|row| Track {
+            id: row.read::<i64, _>("id") as i32,
+            number: row.read::<i64, _>("number") as i32,
+            title: row.read::<&str, _>("title").to_string(),
+            duration: row.read::<f64, _>("duration"),
+            album: row.read::<&str, _>("album").to_string(),
+            album_id: row.read::<i64, _>("album_id") as i32,
+            date_released: row
+                .read::<Option<&str>, _>("date_released")
+                .map(|date| date.to_string()),
+            artist: row.read::<&str, _>("artist").to_string(),
+            artist_id: row.read::<i64, _>("artist_id") as i32,
+            file: row.read::<Option<&str>, _>("file").map(|f| f.to_string()),
+            artwork: row
+                .read::<Option<&str>, _>("artwork")
+                .map(|date| date.to_string()),
+            blur: row.read::<i64, _>("blur") == 1,
+        })
+        .collect())
+}
+
+pub fn get_session_playlist(db: &Db, session_id: i32) -> Result<SessionPlaylist, DbError> {
+    db.library
+        .prepare(
+            "
+            SELECT session_playlists.*
+            FROM session_playlists
+            WHERE id=?
+            ",
+        )?
+        .into_iter()
+        .bind((1, session_id as i64))?
+        .filter_map(|row| row.ok())
+        .map(|row| {
+            let id = row.read::<i64, _>("id") as i32;
+            Ok::<SessionPlaylist, DbError>(SessionPlaylist {
+                id,
+                tracks: get_session_playlist_tracks(db, id)?,
+            })
+        })
+        .next()
+        .unwrap_or(Err(DbError::InvalidRequest))
+}
+
+pub fn get_sessions(db: &Db) -> Result<Vec<Session>, DbError> {
+    db.library
+        .prepare(
+            "
+            SELECT sessions.*
+            FROM sessions
+            ",
+        )?
+        .into_iter()
+        .filter_map(|row| row.ok())
+        .map(|row| {
+            let id = row.read::<i64, _>("id") as i32;
+            Ok::<Session, DbError>(Session {
+                id,
+                name: row.read::<&str, _>("name").to_string(),
+                playlist: get_session_playlist(db, id)?,
+            })
+        })
+        .collect()
+}
+
+pub fn create_session(db: &Db, session: CreateSession) -> Result<Session, DbError> {
+    let tracks = get_tracks(db, &session.playlist.tracks)?;
+    let playlist = insert_and_get_row(
+        &db.library,
+        "session_playlists",
+        vec![("id", SqliteValue::StringOpt(None))],
+    )?;
+    let playlist_id = playlist.read::<i64, _>("id");
+    tracks
+        .iter()
+        .map(|track| {
+            insert_and_get_row(
+                &db.library,
+                "session_playlist_tracks",
+                vec![
+                    ("session_playlist_id", SqliteValue::Number(playlist_id)),
+                    ("track_id", SqliteValue::Number(track.id as i64)),
+                ],
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let session = insert_and_get_row(
+        &db.library,
+        "sessions",
+        vec![
+            ("session_playlist_id", SqliteValue::Number(playlist_id)),
+            ("name", SqliteValue::String(session.name)),
+        ],
+    )?;
+
+    Ok(Session {
+        id: session.read::<i64, _>("id") as i32,
+        name: session.read::<&str, _>("name").to_string(),
+        playlist: SessionPlaylist {
+            id: playlist_id as i32,
+            tracks,
+        },
+    })
+}
+
+pub fn delete_session(db: &Db, session_id: i32) -> Result<(), DbError> {
+    db.library
+        .prepare(
+            "
+            DELETE FROM session_playlist_tracks
+            WHERE session_playlist_tracks.id IN (
+                SELECT session_playlist_tracks.id FROM session_playlist_tracks
+                JOIN session_playlists ON session_playlists.id=sessions.session_playlist_id
+                JOIN sessions ON sessions.session_playlist_id=session_playlists.id
+                WHERE sessions.id=? AND session_playlist_tracks.session_playlist_id=session_playlists.id
+            )
+            ",
+        )?
+        .into_iter()
+        .bind((1, session_id as i64))?
+        .next();
+
+    let session_row = db
+        .library
+        .prepare(
+            "
+            DELETE FROM sessions
+            WHERE id=?
+            RETURNING *
+            ",
+        )?
+        .into_iter()
+        .bind((1, session_id as i64))?
+        .next()
+        .ok_or(DbError::InvalidRequest)??;
+
+    db.library
+        .prepare(
+            "
+            DELETE FROM session_playlists
+            WHERE id=?
+            ",
+        )?
+        .into_iter()
+        .bind((1, session_row.read::<i64, _>("id")))?
+        .next();
+
+    Ok(())
 }
 
 pub async fn get_artists(db: &Db) -> Result<Vec<Artist>, DbError> {
@@ -427,22 +607,19 @@ fn insert_and_get_row<'a>(
         .collect::<Vec<_>>()
         .join(", ");
 
-    bind_values(
+    let value = bind_values(
         connection
             .prepare(format!(
-                "INSERT INTO {table_name} ({}) {}",
-                column_names,
+                "INSERT INTO {table_name} ({column_names}) {} RETURNING *",
                 build_values_clause(&values),
             ))?
             .into_iter(),
         &values,
     )?
-    .next();
+    .next()
+    .ok_or(DbError::Unknown)??;
 
-    Ok(select(connection, table_name, &values, &["*"])?
-        .into_iter()
-        .last()
-        .unwrap())
+    Ok(value)
 }
 
 fn update_and_get_row<'a>(
