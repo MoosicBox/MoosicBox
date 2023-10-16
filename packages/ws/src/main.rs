@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use actix_web::{error::ErrorInternalServerError, Result};
 use async_once_cell::OnceCell;
+use async_trait::async_trait;
 use aws_config::SdkConfig;
 use aws_lambda_events::apigw::ApiGatewayWebsocketProxyRequestContext;
 use aws_sdk_apigatewaymanagement::{
@@ -34,8 +35,9 @@ struct ApiGatewayWebsocketSender<'a> {
     messages: &'a mut Vec<Message>,
 }
 
+#[async_trait]
 impl WebsocketSender for ApiGatewayWebsocketSender<'_> {
-    fn send(&mut self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
+    async fn send(&mut self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
         self.messages.push(Message {
             connection_id: connection_id.into(),
             payload: data.into(),
@@ -43,7 +45,15 @@ impl WebsocketSender for ApiGatewayWebsocketSender<'_> {
         Ok(())
     }
 
-    fn send_all(&mut self, _data: &str) -> Result<(), WebsocketSendError> {
+    async fn send_all(&mut self, _data: &str) -> Result<(), WebsocketSendError> {
+        Ok(())
+    }
+
+    async fn send_all_except(
+        &mut self,
+        _connection_id: &str,
+        _data: &str,
+    ) -> Result<(), WebsocketSendError> {
         Ok(())
     }
 }
@@ -95,6 +105,7 @@ pub async fn ws_handler(event: LambdaEvent<Value>) -> Result<Response, Websocket
             EventType::Connect => moosicbox_ws::api::connect(&context)
                 .map_err(WebsocketHandlerError::WebsocketConnectError)?,
             EventType::Disconnect => moosicbox_ws::api::disconnect(&mut sender, &context)
+                .await
                 .map_err(WebsocketHandlerError::WebsocketDisconnectError)?,
             EventType::Message => {
                 let body = serde_json::from_str::<Value>(
@@ -107,6 +118,7 @@ pub async fn ws_handler(event: LambdaEvent<Value>) -> Result<Response, Websocket
                 .unwrap();
                 let payload = body.get("payload");
                 moosicbox_ws::api::message(&mut sender, payload, message_type, &context)
+                    .await
                     .map_err(WebsocketHandlerError::WebsocketMessageError)?
             }
         };

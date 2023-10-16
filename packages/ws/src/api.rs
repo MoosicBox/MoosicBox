@@ -4,6 +4,7 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
@@ -41,6 +42,7 @@ impl fmt::Display for InboundMessageType {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum OutboundMessageType {
     Connect,
+    NewConnection,
     ConnectionId,
 }
 
@@ -61,9 +63,15 @@ pub struct WebsocketConnectionData {
     pub playing: bool,
 }
 
+#[async_trait]
 pub trait WebsocketSender {
-    fn send(&mut self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError>;
-    fn send_all(&mut self, data: &str) -> Result<(), WebsocketSendError>;
+    async fn send(&mut self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError>;
+    async fn send_all(&mut self, data: &str) -> Result<(), WebsocketSendError>;
+    async fn send_all_except(
+        &mut self,
+        connection_id: &str,
+        data: &str,
+    ) -> Result<(), WebsocketSendError>;
 }
 
 static CONNECTION_DATA: OnceLock<Mutex<HashMap<String, WebsocketConnectionData>>> = OnceLock::new();
@@ -88,24 +96,28 @@ pub enum WebsocketDisconnectError {
     Unknown,
 }
 
-pub fn disconnect(
+pub async fn disconnect(
     sender: &mut impl WebsocketSender,
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketDisconnectError> {
-    let mut connection_data = CONNECTION_DATA
-        .get_or_init(|| Mutex::new(HashMap::new()))
-        .lock()
-        .unwrap();
+    let connections = {
+        let mut connection_data = CONNECTION_DATA
+            .get_or_init(|| Mutex::new(HashMap::new()))
+            .lock()
+            .unwrap();
 
-    connection_data.remove(&context.connection_id);
+        connection_data.remove(&context.connection_id);
+
+        &serde_json::to_string(&connection_data.values().collect::<Vec<_>>()).unwrap()
+    };
 
     sender
-        .send(
-            &context.connection_id,
-            &serde_json::to_string(&connection_data.values().collect::<Vec<_>>()).unwrap(),
-        )
+        .send(&context.connection_id, connections)
+        .await
         .map_err(|_e| WebsocketDisconnectError::Unknown)?;
+
     println!("Disconnected {}", context.connection_id);
+
     Ok(Response {
         status_code: 200,
         body: "Disconnected".into(),
@@ -120,7 +132,7 @@ pub enum WebsocketMessageError {
     Unknown,
 }
 
-pub fn message(
+pub async fn message(
     sender: &mut impl WebsocketSender,
     payload: Option<&Value>,
     message_type: InboundMessageType,
@@ -132,7 +144,9 @@ pub fn message(
     );
     match message_type {
         InboundMessageType::GetConnectionId => {
-            get_connection_id(sender, context).map_err(|_e| WebsocketMessageError::Unknown)?;
+            get_connection_id(sender, context)
+                .await
+                .map_err(|_e| WebsocketMessageError::Unknown)?;
             Ok(())
         }
         InboundMessageType::Ping => {
@@ -142,6 +156,7 @@ pub fn message(
         InboundMessageType::SyncConnectionData => match payload {
             Some(payload) => {
                 sync_connection_data(sender, context, payload)
+                    .await
                     .map_err(|_e| WebsocketMessageError::Unknown)?;
                 Ok(())
             }
@@ -155,21 +170,23 @@ pub fn message(
     })
 }
 
-fn get_connection_id(
+async fn get_connection_id(
     sender: &mut impl WebsocketSender,
     context: &WebsocketContext,
 ) -> Result<(), WebsocketSendError> {
-    sender.send(
-        &context.connection_id,
-        &serde_json::json!({
-            "connectionId": context.connection_id,
-            "type": OutboundMessageType::ConnectionId
-        })
-        .to_string(),
-    )
+    sender
+        .send(
+            &context.connection_id,
+            &serde_json::json!({
+                "connectionId": context.connection_id,
+                "type": OutboundMessageType::ConnectionId
+            })
+            .to_string(),
+        )
+        .await
 }
 
-fn sync_connection_data(
+async fn sync_connection_data(
     sender: &mut impl WebsocketSender,
     context: &WebsocketContext,
     payload: &Value,
@@ -184,10 +201,12 @@ fn sync_connection_data(
         serde_json::from_value(payload.clone()).unwrap(),
     );
 
-    sender.send(
-        &context.connection_id,
-        &serde_json::to_string(&connection_data.values().collect::<Vec<_>>()).unwrap(),
-    )?;
+    sender
+        .send(
+            &context.connection_id,
+            &serde_json::to_string(&connection_data.values().collect::<Vec<_>>()).unwrap(),
+        )
+        .await?;
 
     Ok(())
 }

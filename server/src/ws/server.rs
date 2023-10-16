@@ -9,11 +9,48 @@ use std::{
     },
 };
 
-use moosicbox_ws::api::OutboundMessageType;
+use async_trait::async_trait;
+use moosicbox_ws::api::{OutboundMessageType, WebsocketSendError, WebsocketSender};
 use rand::{thread_rng, Rng as _};
 use tokio::sync::{mpsc, oneshot};
 
-use crate::{ConnId, Msg, RoomId};
+use crate::ws::{ConnId, Msg, RoomId};
+
+struct ActixWebsocketSender<'a> {
+    server: &'a ChatServer,
+}
+
+#[async_trait]
+impl WebsocketSender for ActixWebsocketSender<'_> {
+    async fn send(&mut self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
+        self.server
+            .send_message(connection_id.parse::<usize>().unwrap(), data.to_string())
+            .await;
+        Ok(())
+    }
+
+    async fn send_all(&mut self, data: &str) -> Result<(), WebsocketSendError> {
+        self.server
+            .send_system_message("main", 0, data.to_string())
+            .await;
+        Ok(())
+    }
+
+    async fn send_all_except(
+        &mut self,
+        connection_id: &str,
+        data: &str,
+    ) -> Result<(), WebsocketSendError> {
+        self.server
+            .send_system_message(
+                "main",
+                connection_id.parse::<usize>().unwrap(),
+                data.to_string(),
+            )
+            .await;
+        Ok(())
+    }
+}
 
 /// A command received by the [`ChatServer`].
 #[derive(Debug)]
@@ -121,28 +158,36 @@ impl ChatServer {
     async fn connect(&mut self, tx: mpsc::UnboundedSender<Msg>) -> ConnId {
         log::info!("Someone joined");
 
-        // notify all users in same room
-        self.send_system_message("main", 0, "Someone joined").await;
-
         // register session with random connection ID
         let id = thread_rng().gen::<usize>();
-        self.sessions.insert(id, tx);
+        self.sessions.insert(id, tx.clone());
 
         // auto join session to main room
         self.rooms.entry("main".to_owned()).or_default().insert(id);
 
         let count = self.visitor_count.fetch_add(1, Ordering::SeqCst);
+
+        // notify all users in same room
         self.send_system_message(
             "main",
-            0,
+            id,
             serde_json::json!({
-                "type": OutboundMessageType::Connect,
+                "type": OutboundMessageType::NewConnection,
                 "connectionId": id.to_string(),
                 "payload": format!("Total visitors {count}")
             })
             .to_string(),
         )
         .await;
+
+        let _ = tx.send(
+            serde_json::json!({
+                "type": OutboundMessageType::Connect,
+                "connectionId": id.to_string(),
+                "payload": format!("Total visitors {count}")
+            })
+            .to_string(),
+        );
 
         // send id back
         id

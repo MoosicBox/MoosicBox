@@ -11,15 +11,6 @@ use std::{env, time::Duration};
 use tokio::{task::spawn, try_join};
 use ws::server::ChatServer;
 
-/// Connection ID.
-pub type ConnId = usize;
-
-/// Room ID.
-pub type RoomId = String;
-
-/// Message sent to a room/client.
-pub type Msg = String;
-
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
