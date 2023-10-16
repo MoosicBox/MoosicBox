@@ -23,8 +23,9 @@ use crate::ws::{ConnId, Msg, RoomId};
 #[async_trait]
 impl WebsocketSender for ChatServer {
     async fn send(&mut self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
-        self.send_message(connection_id.parse::<usize>().unwrap(), data.to_string())
-            .await?;
+        let id = connection_id.parse::<usize>().unwrap();
+        println!("Sending to {id}");
+        self.send_message_to(id, data.to_string()).await?;
         Ok(())
     }
 
@@ -136,22 +137,16 @@ impl ChatServer {
         }
     }
 
-    /// Send message to all other users in current room.
-    ///
-    /// `conn` is used to find current room and prevent messages sent by a connection also being
-    /// received by it.
-    async fn send_message(
+    /// Send message directly to the user.
+    async fn send_message_to(
         &self,
-        conn: ConnId,
+        id: ConnId,
         msg: impl Into<String>,
     ) -> Result<(), WebsocketSendError> {
-        if let Some(room) = self
-            .rooms
-            .iter()
-            .find_map(|(room, participants)| participants.contains(&conn).then_some(room))
-        {
-            self.send_system_message(room, conn, msg).await;
-        };
+        if let Some(session) = self.sessions.get(&id) {
+            // errors if client disconnected abruptly and hasn't been timed-out yet
+            let _ = session.send(msg.into());
+        }
 
         Ok(())
     }
