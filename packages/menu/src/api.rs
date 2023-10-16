@@ -96,7 +96,6 @@ pub async fn get_artists_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetAlbumsQuery {
-    player_id: String,
     sources: Option<String>,
     sort: Option<String>,
     name: Option<String>,
@@ -109,7 +108,6 @@ pub async fn get_albums_endpoint(
     query: web::Query<GetAlbumsQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<Vec<ApiAlbum>>> {
-    let player_id = &query.player_id;
     let request = AlbumsRequest {
         sources: query
             .sources
@@ -141,7 +139,7 @@ pub async fn get_albums_endpoint(
     };
 
     Ok(Json(
-        get_all_albums(player_id, &data, &request)
+        get_all_albums(&data, &request)
             .await
             .map_err(|e| ErrorInternalServerError(format!("Failed to fetch albums: {e:?}")))?
             .into_iter()
