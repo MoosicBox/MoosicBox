@@ -163,9 +163,17 @@ impl ChatServer {
         };
         let body = serde_json::from_str::<Value>(&msg.into()).unwrap();
         let message_type = serde_json::from_str::<InboundMessageType>(
-            format!("\"{}\"", body.get("type").unwrap().as_str().unwrap()).as_str(),
+            format!(
+                "\"{}\"",
+                body.get("type")
+                    .ok_or(WebsocketMessageError::Unknown)?
+                    .as_str()
+                    .ok_or(WebsocketMessageError::Unknown)?
+            )
+            .as_str(),
         )
-        .unwrap();
+        .map_err(|_| WebsocketMessageError::Unknown)?;
+
         let payload = body.get("payload");
         moosicbox_ws::api::message(self, payload, message_type, &context).await?;
         Ok(())
@@ -262,17 +270,19 @@ impl ChatServer {
         while let Some(cmd) = self.cmd_rx.recv().await {
             match cmd {
                 Command::Connect { conn_tx, res_tx } => {
-                    let conn_id = self
+                    if let Err(error) = self
                         .connect(conn_tx)
                         .await
-                        .map_err(|_| io::Error::new(io::ErrorKind::Other, "Connection error"))?;
-                    let _ = res_tx.send(conn_id);
+                        .map(|conn_id| res_tx.send(conn_id))
+                    {
+                        eprintln!("Failed to connect: {:?}", error);
+                    }
                 }
 
                 Command::Disconnect { conn } => {
-                    self.disconnect(conn)
-                        .await
-                        .map_err(|_| io::Error::new(io::ErrorKind::Other, "Disconnection error"))?;
+                    if let Err(error) = self.disconnect(conn).await {
+                        eprintln!("Failed to disconnect connection {conn}: {:?}", error);
+                    }
                 }
 
                 Command::List { res_tx } => {
@@ -285,9 +295,9 @@ impl ChatServer {
                 }
 
                 Command::Message { conn, msg, res_tx } => {
-                    self.on_message(conn, msg)
-                        .await
-                        .map_err(|_| io::Error::new(io::ErrorKind::Other, "Message error"))?;
+                    if let Err(error) = self.on_message(conn, msg).await {
+                        eprintln!("Failed to process message: {:?}", error);
+                    }
                     let _ = res_tx.send(());
                 }
             }
