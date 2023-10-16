@@ -102,7 +102,8 @@ pub async fn ws_handler(event: LambdaEvent<Value>) -> Result<Response, Websocket
             messages: &mut messages,
         };
         let response = match context.event_type {
-            EventType::Connect => moosicbox_ws::api::connect(&context)
+            EventType::Connect => moosicbox_ws::api::connect(&mut sender, &context)
+                .await
                 .map_err(WebsocketHandlerError::WebsocketConnectError)?,
             EventType::Disconnect => moosicbox_ws::api::disconnect(&mut sender, &context)
                 .await

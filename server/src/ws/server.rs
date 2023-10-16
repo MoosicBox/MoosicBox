@@ -10,29 +10,26 @@ use std::{
 };
 
 use async_trait::async_trait;
-use moosicbox_ws::api::{OutboundMessageType, WebsocketSendError, WebsocketSender};
+use moosicbox_ws::api::{
+    EventType, InboundMessageType, WebsocketContext, WebsocketDisconnectError,
+    WebsocketMessageError, WebsocketSendError, WebsocketSender,
+};
 use rand::{thread_rng, Rng as _};
+use serde_json::Value;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::ws::{ConnId, Msg, RoomId};
 
-struct ActixWebsocketSender<'a> {
-    server: &'a ChatServer,
-}
-
 #[async_trait]
-impl WebsocketSender for ActixWebsocketSender<'_> {
+impl WebsocketSender for ChatServer {
     async fn send(&mut self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
-        self.server
-            .send_message(connection_id.parse::<usize>().unwrap(), data.to_string())
-            .await;
+        self.send_message(connection_id.parse::<usize>().unwrap(), data.to_string())
+            .await?;
         Ok(())
     }
 
     async fn send_all(&mut self, data: &str) -> Result<(), WebsocketSendError> {
-        self.server
-            .send_system_message("main", 0, data.to_string())
-            .await;
+        self.send_system_message("main", 0, data.to_string()).await;
         Ok(())
     }
 
@@ -41,13 +38,12 @@ impl WebsocketSender for ActixWebsocketSender<'_> {
         connection_id: &str,
         data: &str,
     ) -> Result<(), WebsocketSendError> {
-        self.server
-            .send_system_message(
-                "main",
-                connection_id.parse::<usize>().unwrap(),
-                data.to_string(),
-            )
-            .await;
+        self.send_system_message(
+            "main",
+            connection_id.parse::<usize>().unwrap(),
+            data.to_string(),
+        )
+        .await;
         Ok(())
     }
 }
@@ -144,7 +140,11 @@ impl ChatServer {
     ///
     /// `conn` is used to find current room and prevent messages sent by a connection also being
     /// received by it.
-    async fn send_message(&self, conn: ConnId, msg: impl Into<String>) {
+    async fn send_message(
+        &self,
+        conn: ConnId,
+        msg: impl Into<String>,
+    ) -> Result<(), WebsocketSendError> {
         if let Some(room) = self
             .rooms
             .iter()
@@ -152,10 +152,35 @@ impl ChatServer {
         {
             self.send_system_message(room, conn, msg).await;
         };
+
+        Ok(())
+    }
+
+    async fn on_message(
+        &mut self,
+        id: ConnId,
+        msg: impl Into<String>,
+    ) -> Result<(), WebsocketMessageError> {
+        let connection_id = id.to_string();
+        let context = WebsocketContext {
+            connection_id,
+            event_type: EventType::Connect,
+        };
+        let body = serde_json::from_str::<Value>(&msg.into()).unwrap();
+        let message_type = serde_json::from_str::<InboundMessageType>(
+            format!("\"{}\"", body.get("type").unwrap().as_str().unwrap()).as_str(),
+        )
+        .unwrap();
+        let payload = body.get("payload");
+        moosicbox_ws::api::message(self, payload, message_type, &context).await?;
+        Ok(())
     }
 
     /// Register new session and assign unique ID to this session
-    async fn connect(&mut self, tx: mpsc::UnboundedSender<Msg>) -> ConnId {
+    async fn connect(
+        &mut self,
+        tx: mpsc::UnboundedSender<Msg>,
+    ) -> Result<ConnId, WebsocketSendError> {
         log::info!("Someone joined");
 
         // register session with random connection ID
@@ -166,36 +191,27 @@ impl ChatServer {
         self.rooms.entry("main".to_owned()).or_default().insert(id);
 
         let count = self.visitor_count.fetch_add(1, Ordering::SeqCst);
+        println!("Visitor count: {}", count + 1);
 
-        // notify all users in same room
-        self.send_system_message(
-            "main",
-            id,
-            serde_json::json!({
-                "type": OutboundMessageType::NewConnection,
-                "connectionId": id.to_string(),
-                "payload": format!("Total visitors {count}")
-            })
-            .to_string(),
-        )
-        .await;
+        let connection_id = id.to_string();
+        let context = WebsocketContext {
+            connection_id,
+            event_type: EventType::Connect,
+        };
 
-        let _ = tx.send(
-            serde_json::json!({
-                "type": OutboundMessageType::Connect,
-                "connectionId": id.to_string(),
-                "payload": format!("Total visitors {count}")
-            })
-            .to_string(),
-        );
+        moosicbox_ws::api::connect(self, &context)
+            .await
+            .map_err(|_| WebsocketSendError::Unknown)?;
 
         // send id back
-        id
+        Ok(id)
     }
 
-    /// Unregister connection from room map and broadcast disconnection message.
-    async fn disconnect(&mut self, conn_id: ConnId) {
-        println!("Someone disconnected");
+    /// Unregister connection from room map and invoke ws api disconnect.
+    async fn disconnect(&mut self, conn_id: ConnId) -> Result<(), WebsocketDisconnectError> {
+        println!("Someone disconnected {conn_id}");
+        let count = self.visitor_count.fetch_sub(1, Ordering::SeqCst);
+        println!("Visitor count: {}", count - 1);
 
         let mut rooms: Vec<String> = Vec::new();
 
@@ -209,11 +225,15 @@ impl ChatServer {
             }
         }
 
-        // send message to other users
-        for room in rooms {
-            self.send_system_message(&room, 0, "Someone disconnected")
-                .await;
-        }
+        let connection_id = conn_id.to_string();
+        let context = WebsocketContext {
+            connection_id,
+            event_type: EventType::Disconnect,
+        };
+
+        moosicbox_ws::api::disconnect(self, &context).await?;
+
+        Ok(())
     }
 
     /// Returns list of created room names.
@@ -247,12 +267,17 @@ impl ChatServer {
         while let Some(cmd) = self.cmd_rx.recv().await {
             match cmd {
                 Command::Connect { conn_tx, res_tx } => {
-                    let conn_id = self.connect(conn_tx).await;
+                    let conn_id = self
+                        .connect(conn_tx)
+                        .await
+                        .map_err(|_| io::Error::new(io::ErrorKind::Other, "Connection error"))?;
                     let _ = res_tx.send(conn_id);
                 }
 
                 Command::Disconnect { conn } => {
-                    self.disconnect(conn).await;
+                    self.disconnect(conn)
+                        .await
+                        .map_err(|_| io::Error::new(io::ErrorKind::Other, "Disconnection error"))?;
                 }
 
                 Command::List { res_tx } => {
@@ -265,7 +290,9 @@ impl ChatServer {
                 }
 
                 Command::Message { conn, msg, res_tx } => {
-                    self.send_message(conn, msg).await;
+                    self.on_message(conn, msg)
+                        .await
+                        .map_err(|_| io::Error::new(io::ErrorKind::Other, "Message error"))?;
                     let _ = res_tx.send(());
                 }
             }

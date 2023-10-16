@@ -82,8 +82,22 @@ pub enum WebsocketConnectError {
     Unknown,
 }
 
-pub fn connect(context: &WebsocketContext) -> Result<Response, WebsocketConnectError> {
+pub async fn connect(
+    sender: &mut impl WebsocketSender,
+    context: &WebsocketContext,
+) -> Result<Response, WebsocketConnectError> {
     println!("Connected {}", context.connection_id);
+    sender
+        .send(
+            &context.connection_id,
+            &serde_json::json!({
+                "connectionId": context.connection_id,
+                "type": OutboundMessageType::ConnectionId
+            })
+            .to_string(),
+        )
+        .await
+        .map_err(|_| WebsocketConnectError::Unknown)?;
     Ok(Response {
         status_code: 200,
         body: "Connected".into(),
