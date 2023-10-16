@@ -24,7 +24,6 @@ sqlite = "0.31.1"
 thiserror = "1.0.48"
 regex = "1.9.5"
 mp3-duration = "0.1.10"
-uuid = { version = "1.4.1", features = ["v4"] }
 
 async-trait.workspace = true
 env_logger.workspace = true
