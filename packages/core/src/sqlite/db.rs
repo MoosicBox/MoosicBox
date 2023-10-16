@@ -212,10 +212,18 @@ pub async fn get_artist_albums(db: &Db, artist_id: i32) -> Result<Vec<Album>, Db
         .collect())
 }
 
-pub async fn get_track(db: &Db, id: i32) -> Result<Option<Track>, DbError> {
-    Ok(db
+pub fn get_track(db: &Db, id: i32) -> Result<Option<Track>, DbError> {
+    Ok(get_tracks(db, &vec![id])?.into_iter().next())
+}
+pub fn get_tracks(db: &Db, ids: &Vec<i32>) -> Result<Vec<Track>, DbError> {
+    if ids.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let ids_param = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let mut query = db
         .library
-        .prepare(
+        .prepare(format!(
             "
             SELECT tracks.*,
                 albums.title as album,
@@ -227,10 +235,17 @@ pub async fn get_track(db: &Db, id: i32) -> Result<Option<Track>, DbError> {
             FROM tracks
             JOIN albums ON albums.id=tracks.album_id
             JOIN artists ON artists.id=albums.artist_id
-            WHERE tracks.id=?",
-        )?
-        .into_iter()
-        .bind((1, id as i64))?
+            WHERE tracks.id IN ({ids_param})"
+        ))?
+        .into_iter();
+
+    let mut index = 1;
+    for id in ids {
+        query = query.bind((index, (*id) as i64))?;
+        index += 1;
+    }
+
+    Ok(query
         .filter_map(|row| row.ok())
         .map(|row| Track {
             id: row.read::<i64, _>("id") as i32,
@@ -250,7 +265,7 @@ pub async fn get_track(db: &Db, id: i32) -> Result<Option<Track>, DbError> {
                 .map(|date| date.to_string()),
             blur: row.read::<i64, _>("blur") == 1,
         })
-        .next())
+        .collect())
 }
 
 #[derive(Clone, PartialEq)]

@@ -22,7 +22,6 @@ pub async fn track_endpoint(
     data: web::Data<AppState>,
 ) -> Result<HttpResponse> {
     let track = get_track(data.db.as_ref().unwrap(), query.track_id)
-        .await
         .map_err(|_e| ErrorInternalServerError("Failed to fetch track"))?;
 
     if track.is_none() {
