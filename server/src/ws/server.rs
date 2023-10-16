@@ -166,13 +166,13 @@ impl ChatServer {
             format!(
                 "\"{}\"",
                 body.get("type")
-                    .ok_or(WebsocketMessageError::Unknown)?
+                    .ok_or(WebsocketMessageError::MissingMessageType)?
                     .as_str()
-                    .ok_or(WebsocketMessageError::Unknown)?
+                    .ok_or(WebsocketMessageError::InvalidMessageType)?
             )
             .as_str(),
         )
-        .map_err(|_| WebsocketMessageError::Unknown)?;
+        .map_err(|_| WebsocketMessageError::InvalidMessageType)?;
 
         let payload = body.get("payload");
         moosicbox_ws::api::message(self, payload, message_type, &context).await?;

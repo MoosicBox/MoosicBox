@@ -140,6 +140,10 @@ pub async fn disconnect(
 
 #[derive(Debug, Error)]
 pub enum WebsocketMessageError {
+    #[error("Missing message type")]
+    MissingMessageType,
+    #[error("Invalid message type")]
+    InvalidMessageType,
     #[error("Missing payload")]
     MissingPayload,
     #[error("Unknown")]
