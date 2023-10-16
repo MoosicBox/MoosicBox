@@ -30,6 +30,7 @@ pub enum InboundMessageType {
     Ping,
     GetConnectionId,
     SyncConnectionData,
+    PlaybackAction,
 }
 
 impl fmt::Display for InboundMessageType {
@@ -171,15 +172,18 @@ pub async fn message(
             println!("Ping {payload:?}");
             Ok(())
         }
-        InboundMessageType::SyncConnectionData => match payload {
-            Some(payload) => {
-                sync_connection_data(sender, context, payload)
-                    .await
-                    .map_err(|_e| WebsocketMessageError::Unknown)?;
-                Ok(())
-            }
-            None => Err(WebsocketMessageError::MissingPayload),
-        },
+        InboundMessageType::PlaybackAction => {
+            let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
+            println!("Playback Action {payload:?}");
+            Ok(())
+        }
+        InboundMessageType::SyncConnectionData => {
+            let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
+            sync_connection_data(sender, context, payload)
+                .await
+                .map_err(|_e| WebsocketMessageError::Unknown)?;
+            Ok(())
+        }
     }?;
 
     Ok(Response {
