@@ -191,22 +191,20 @@ async fn sync_connection_data(
     context: &WebsocketContext,
     payload: &Value,
 ) -> Result<(), WebsocketSendError> {
-    let mut connection_data = CONNECTION_DATA
-        .get_or_init(|| Mutex::new(HashMap::new()))
-        .lock()
-        .unwrap();
+    let connections = {
+        let mut connection_data = CONNECTION_DATA
+            .get_or_init(|| Mutex::new(HashMap::new()))
+            .lock()
+            .unwrap();
 
-    connection_data.insert(
-        context.connection_id.clone(),
-        serde_json::from_value(payload.clone()).unwrap(),
-    );
+        connection_data.insert(
+            context.connection_id.clone(),
+            serde_json::from_value(payload.clone()).unwrap(),
+        );
+        &serde_json::to_string(&connection_data.values().collect::<Vec<_>>()).unwrap()
+    };
 
-    sender
-        .send(
-            &context.connection_id,
-            &serde_json::to_string(&connection_data.values().collect::<Vec<_>>()).unwrap(),
-        )
-        .await?;
+    sender.send(&context.connection_id, connections).await?;
 
     Ok(())
 }
