@@ -95,6 +95,33 @@ pub fn get_session_playlist(db: &Connection, session_id: i32) -> Result<SessionP
     .unwrap_or(Err(DbError::InvalidRequest))
 }
 
+pub fn get_session(db: &Connection, id: i32) -> Result<Option<Session>, DbError> {
+    db.prepare(
+        "
+            SELECT sessions.*
+            FROM sessions
+            WHERE id=?
+            ",
+    )?
+    .into_iter()
+    .bind((1, id as i64))?
+    .filter_map(|row| row.ok())
+    .map(|row| {
+        let id = row.read::<i64, _>("id") as i32;
+        Ok::<Session, DbError>(Session {
+            id,
+            active: row.read::<i64, _>("active") == 1,
+            playing: row.read::<i64, _>("playing") == 1,
+            position: row.read::<Option<i64>, _>("position").map(|x| x as i32),
+            seek: row.read::<Option<i64>, _>("seek").map(|x| x as i32),
+            name: row.read::<&str, _>("name").to_string(),
+            playlist: get_session_playlist(db, id)?,
+        })
+    })
+    .next()
+    .transpose()
+}
+
 pub fn get_sessions(db: &Connection) -> Result<Vec<Session>, DbError> {
     db.prepare(
         "
@@ -210,6 +237,7 @@ pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<Sessio
         .transpose()?;
 
     let mut values = Vec::new();
+
     if session.name.is_some() {
         values.push(("name", SqliteValue::String(session.name.clone().unwrap())))
     }

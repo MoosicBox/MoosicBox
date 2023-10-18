@@ -77,7 +77,7 @@ impl ToApi<ApiTrack> for Track {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiTrack {
     pub track_id: i32,

@@ -7,7 +7,9 @@ use std::{
 use async_trait::async_trait;
 use moosicbox_core::{
     app::Db,
-    sqlite::models::{CreateSession, DeleteSession, UpdateSession},
+    sqlite::models::{
+        ApiUpdateSession, ApiUpdateSessionPlaylist, CreateSession, DeleteSession, UpdateSession,
+    },
     ToApi,
 };
 use serde::{Deserialize, Serialize};
@@ -297,16 +299,34 @@ async fn update_session(
     _context: &WebsocketContext,
     payload: &UpdateSession,
 ) -> Result<(), WebsocketSendError> {
-    {
+    let session = {
         let db = db.lock();
         let library = db.as_ref().unwrap().library.lock().unwrap();
         moosicbox_core::sqlite::db::update_session(&library, payload)
             .map_err(|_| WebsocketSendError::Unknown)?;
-    }
+        moosicbox_core::sqlite::db::get_session(&library, payload.id)
+            .map_err(|_| WebsocketSendError::Unknown)?
+            .expect("No session with id")
+    };
+
+    let response = ApiUpdateSession {
+        id: session.id,
+        name: payload.name.clone().map(|_| session.name),
+        active: payload.active.map(|_| session.active),
+        playing: payload.playing.map(|_| session.playing),
+        position: payload
+            .position
+            .map(|_| session.position.expect("Position not set")),
+        seek: payload.seek.map(|_| session.seek.expect("Seek not set")),
+        playlist: payload.playlist.clone().map(|p| ApiUpdateSessionPlaylist {
+            id: p.id,
+            tracks: session.playlist.tracks.iter().map(|t| t.to_api()).collect(),
+        }),
+    };
 
     let session_updated = serde_json::json!({
         "type": OutboundMessageType::SessionUpdated,
-        "payload": payload,
+        "payload": response,
     })
     .to_string();
 
