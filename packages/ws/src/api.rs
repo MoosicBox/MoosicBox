@@ -55,6 +55,7 @@ pub enum OutboundMessageType {
     NewConnection,
     ConnectionId,
     Sessions,
+    SessionUpdated,
 }
 
 pub struct WebsocketContext {
@@ -293,7 +294,7 @@ async fn create_session(
 async fn update_session(
     db: Arc<Mutex<Db>>,
     sender: &mut impl WebsocketSender,
-    context: &WebsocketContext,
+    _context: &WebsocketContext,
     payload: &UpdateSession,
 ) -> Result<(), WebsocketSendError> {
     {
@@ -303,7 +304,14 @@ async fn update_session(
             .map_err(|_| WebsocketSendError::Unknown)?;
     }
 
-    get_sessions(db, sender, context, true).await?;
+    let session_updated = serde_json::json!({
+        "type": OutboundMessageType::SessionUpdated,
+        "payload": payload,
+    })
+    .to_string();
+
+    sender.send_all(&session_updated).await?;
+
     Ok(())
 }
 

@@ -22,11 +22,17 @@ pub struct CreateSessionPlaylist {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSession {
     pub id: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub active: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub playing: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub position: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub seek: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub playlist: Option<UpdateSessionPlaylist>,
 }
 
