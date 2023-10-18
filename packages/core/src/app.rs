@@ -1,4 +1,7 @@
-use std::fmt;
+use std::{
+    fmt,
+    sync::{Arc, Mutex},
+};
 
 use sqlite::Connection;
 
@@ -10,8 +13,9 @@ pub struct AppState {
     pub db: Option<Db>,
 }
 
+#[derive(Clone)]
 pub struct Db {
-    pub library: Connection,
+    pub library: Arc<Mutex<Connection>>,
 }
 
 impl fmt::Debug for Db {

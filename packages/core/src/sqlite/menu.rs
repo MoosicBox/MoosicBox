@@ -49,7 +49,8 @@ pub async fn get_artist(artist_id: i32, data: &AppState) -> Result<Artist, GetAr
     };
 
     Ok(get_or_set_to_cache(request, || async {
-        match db::get_artist(data.db.as_ref().unwrap(), artist_id).await {
+        let library = data.db.as_ref().unwrap().library.lock().unwrap();
+        match db::get_artist(&library, artist_id) {
             Ok(artist) => {
                 if artist.is_none() {
                     return Err(GetArtistError::ArtistNotFound { artist_id });
@@ -90,7 +91,8 @@ pub async fn get_album(album_id: i32, data: &AppState) -> Result<Album, GetAlbum
     };
 
     Ok(get_or_set_to_cache(request, || async {
-        match db::get_album(data.db.as_ref().unwrap(), album_id).await {
+        let library = data.db.as_ref().unwrap().library.lock().unwrap();
+        match db::get_album(&library, album_id) {
             Ok(album) => {
                 if album.is_none() {
                     return Err(GetAlbumError::AlbumNotFound { album_id });
@@ -136,6 +138,7 @@ pub async fn get_albums(data: &AppState) -> Result<Vec<Album>, GetAlbumsError> {
                 .as_ref()
                 .unwrap()
                 .library
+                .lock()?
                 .prepare("SELECT * from albums")?
                 .into_iter()
                 .filter_map(|row| row.ok())
@@ -198,9 +201,10 @@ pub async fn get_album_tracks(
     };
 
     Ok(get_or_set_to_cache(request, || async {
-        Ok::<CacheItemType, GetAlbumTracksError>(CacheItemType::AlbumTracks(
-            db::get_album_tracks(data.db.as_ref().unwrap(), album_id).await?,
-        ))
+        let library = data.db.as_ref().unwrap().library.lock().unwrap();
+        Ok::<CacheItemType, GetAlbumTracksError>(CacheItemType::AlbumTracks(db::get_album_tracks(
+            &library, album_id,
+        )?))
     })
     .await?
     .into_album_tracks()
@@ -229,8 +233,9 @@ pub async fn get_artist_albums(
     };
 
     Ok(get_or_set_to_cache(request, || async {
+        let library = data.db.as_ref().unwrap().library.lock().unwrap();
         Ok::<CacheItemType, GetArtistAlbumsError>(CacheItemType::ArtistAlbums(
-            db::get_artist_albums(data.db.as_ref().unwrap(), artist_id).await?,
+            db::get_artist_albums(&library, artist_id)?,
         ))
     })
     .await?

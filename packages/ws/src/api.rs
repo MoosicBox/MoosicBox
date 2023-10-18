@@ -5,7 +5,11 @@ use std::{
 };
 
 use async_trait::async_trait;
-use moosicbox_core::{app::Db, sqlite::models::CreateSession};
+use moosicbox_core::{
+    app::Db,
+    sqlite::models::{CreateSession, DeleteSession, UpdateSession},
+    ToApi,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
@@ -32,6 +36,7 @@ pub enum InboundMessageType {
     GetConnectionId,
     GetSessions,
     CreateSession,
+    UpdateSession,
     DeleteSession,
     SyncConnectionData,
     PlaybackAction,
@@ -182,14 +187,30 @@ pub async fn message(
         }
         InboundMessageType::CreateSession => {
             let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
-            create_session(db, sender, context, payload)
+            let payload = serde_json::from_value::<CreateSession>(payload.clone())
+                .map_err(|_| WebsocketMessageError::Unknown)?;
+
+            create_session(db, sender, context, &payload)
+                .await
+                .map_err(|_e| WebsocketMessageError::Unknown)?;
+            Ok(())
+        }
+        InboundMessageType::UpdateSession => {
+            let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
+            let payload = serde_json::from_value::<UpdateSession>(payload.clone())
+                .map_err(|_| WebsocketMessageError::Unknown)?;
+
+            update_session(db, sender, context, &payload)
                 .await
                 .map_err(|_e| WebsocketMessageError::Unknown)?;
             Ok(())
         }
         InboundMessageType::DeleteSession => {
             let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
-            delete_session(db, sender, context, payload)
+            let payload = serde_json::from_value::<DeleteSession>(payload.clone())
+                .map_err(|_| WebsocketMessageError::Unknown)?;
+
+            delete_session(db, sender, context, &payload)
                 .await
                 .map_err(|_e| WebsocketMessageError::Unknown)?;
             Ok(())
@@ -214,6 +235,10 @@ pub async fn message(
         }
     }?;
 
+    println!(
+        "Successfully processed message type {} from {}",
+        message_type, context.connection_id
+    );
     Ok(Response {
         status_code: 200,
         body: "Received".into(),
@@ -226,8 +251,15 @@ async fn get_sessions(
     context: &WebsocketContext,
     send_all: bool,
 ) -> Result<(), WebsocketSendError> {
-    let sessions = moosicbox_core::sqlite::db::get_sessions(&db.lock().unwrap())
-        .map_err(|_| WebsocketSendError::Unknown)?;
+    let sessions = {
+        let db = db.lock();
+        let library = db.as_ref().unwrap().library.lock().unwrap();
+        moosicbox_core::sqlite::db::get_sessions(&library)
+            .map_err(|_| WebsocketSendError::Unknown)?
+            .iter()
+            .map(|session| session.to_api())
+            .collect::<Vec<_>>()
+    };
 
     let sessions_json = serde_json::json!({
         "type": OutboundMessageType::Sessions,
@@ -236,9 +268,9 @@ async fn get_sessions(
     .to_string();
 
     if send_all {
-        sender.send(&context.connection_id, &sessions_json).await
-    } else {
         sender.send_all(&sessions_json).await
+    } else {
+        sender.send(&context.connection_id, &sessions_json).await
     }
 }
 
@@ -246,14 +278,32 @@ async fn create_session(
     db: Arc<Mutex<Db>>,
     sender: &mut impl WebsocketSender,
     context: &WebsocketContext,
-    payload: &Value,
+    payload: &CreateSession,
 ) -> Result<(), WebsocketSendError> {
-    moosicbox_core::sqlite::db::create_session(
-        &db.lock().unwrap(),
-        serde_json::from_value::<CreateSession>(payload.clone())
-            .map_err(|_| WebsocketSendError::Unknown)?,
-    )
-    .map_err(|_| WebsocketSendError::Unknown)?;
+    println!("create session.... 0");
+    {
+        let db = db.lock();
+        let library = db.as_ref().unwrap().library.lock().unwrap();
+        moosicbox_core::sqlite::db::create_session(&library, payload)
+            .map_err(|_| WebsocketSendError::Unknown)?;
+    }
+    get_sessions(db, sender, context, true).await?;
+    Ok(())
+}
+
+async fn update_session(
+    db: Arc<Mutex<Db>>,
+    sender: &mut impl WebsocketSender,
+    context: &WebsocketContext,
+    payload: &UpdateSession,
+) -> Result<(), WebsocketSendError> {
+    {
+        let db = db.lock();
+        let library = db.as_ref().unwrap().library.lock().unwrap();
+        moosicbox_core::sqlite::db::update_session(&library, payload)
+            .map_err(|_| WebsocketSendError::Unknown)?;
+    }
+
     get_sessions(db, sender, context, true).await?;
     Ok(())
 }
@@ -262,17 +312,14 @@ async fn delete_session(
     db: Arc<Mutex<Db>>,
     sender: &mut impl WebsocketSender,
     context: &WebsocketContext,
-    payload: &Value,
+    payload: &DeleteSession,
 ) -> Result<(), WebsocketSendError> {
-    moosicbox_core::sqlite::db::delete_session(
-        &db.lock().unwrap(),
-        payload
-            .get("session_id")
-            .ok_or(WebsocketSendError::Unknown)?
-            .as_i64()
-            .ok_or(WebsocketSendError::Unknown)? as i32,
-    )
-    .map_err(|_| WebsocketSendError::Unknown)?;
+    {
+        let db = db.lock();
+        let library = db.as_ref().unwrap().library.lock().unwrap();
+        moosicbox_core::sqlite::db::delete_session(&library, payload.session_id)
+            .map_err(|_| WebsocketSendError::Unknown)?;
+    }
 
     get_sessions(db, sender, context, true).await?;
 

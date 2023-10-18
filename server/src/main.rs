@@ -9,7 +9,7 @@ use actix_web::{http, middleware, web, App, HttpServer};
 use moosicbox_core::app::{AppState, Db};
 use std::{
     env,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, OnceLock},
     time::Duration,
 };
 use tokio::{task::spawn, try_join};
@@ -25,12 +25,18 @@ async fn main() -> std::io::Result<()> {
         8000
     };
 
-    let library_db = ::sqlite::open("library.db").unwrap();
-    let db = Db {
-        library: library_db,
-    };
+    static DB: OnceLock<Db> = OnceLock::new();
+    let db = DB.get_or_init(|| {
+        let mut library = ::sqlite::open("library.db").unwrap();
+        library
+            .set_busy_timeout(10)
+            .expect("Failed to set busy timeout");
+        Db {
+            library: Arc::new(Mutex::new(library)),
+        }
+    });
 
-    let (chat_server, server_tx) = ChatServer::new(Arc::new(Mutex::new(db)));
+    let (chat_server, server_tx) = ChatServer::new(Arc::new(Mutex::new(db.clone())));
 
     let chat_server = spawn(chat_server.run());
 
@@ -49,17 +55,12 @@ async fn main() -> std::io::Result<()> {
             .timeout(Duration::from_secs(120))
             .finish();
 
-        let library_db = ::sqlite::open("library.db").unwrap();
-        let db = Db {
-            library: library_db,
-        };
-
         let app_data = AppState {
             service_port,
             proxy_url,
             proxy_client,
             image_client,
-            db: Some(db),
+            db: Some(db.clone()),
         };
 
         let cors = Cors::default()

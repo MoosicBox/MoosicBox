@@ -134,13 +134,15 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
         None => album_artist,
     };
 
+    let library = data.db.as_ref().unwrap().library.lock().unwrap();
+
     let mut artist = add_artist_map_and_get_artist(
-        data.db.as_ref().unwrap(),
+        &library,
         HashMap::from([("title", SqliteValue::String(album_artist))]),
     )?;
 
     let mut album = add_album_map_and_get_album(
-        data.db.as_ref().unwrap(),
+        &library,
         HashMap::from([
             ("title", SqliteValue::String(album)),
             ("artist_id", SqliteValue::Number(artist.id as i64)),
@@ -162,7 +164,7 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
                 path_album.to_str().unwrap(),
                 album.artwork.clone().unwrap()
             );
-            album = add_album_and_get_album(data.db.as_ref().unwrap(), album)?;
+            album = add_album_and_get_album(&library, album)?;
         }
     }
     if artist.cover.is_none() {
@@ -173,12 +175,12 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
                 path_album.to_str().unwrap(),
                 artist.cover.clone().unwrap()
             );
-            let _ = add_artist_and_get_artist(data.db.as_ref().unwrap(), artist)?;
+            let _ = add_artist_and_get_artist(&library, artist)?;
         }
     }
 
     let _track_id = add_tracks(
-        data.db.as_ref().unwrap(),
+        &library,
         vec![InsertTrack {
             album_id: album.id,
             file: path.to_str().unwrap().to_string(),

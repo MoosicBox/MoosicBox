@@ -9,7 +9,7 @@ use moosicbox_core::{
 use regex::{Captures, Regex};
 use serde::Deserialize;
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTrackQuery {
     track_id: i32,
@@ -21,8 +21,17 @@ pub async fn track_endpoint(
     query: web::Query<GetTrackQuery>,
     data: web::Data<AppState>,
 ) -> Result<HttpResponse> {
-    let track = get_track(data.db.as_ref().unwrap(), query.track_id)
-        .map_err(|_e| ErrorInternalServerError("Failed to fetch track"))?;
+    println!("Getting track audio file {query:?}");
+
+    let track = {
+        let library = data.db.as_ref().unwrap().library.lock().unwrap();
+        get_track(&library, query.track_id).map_err(|e| {
+            eprintln!("Failed to fetch track: {e:?}");
+            ErrorInternalServerError(format!("Failed to fetch track: {e:?}"))
+        })?
+    };
+
+    println!("Got track {track:?}");
 
     if track.is_none() {
         return Err(ErrorInternalServerError("Failed to find track"));
@@ -63,9 +72,11 @@ pub async fn artist_cover_endpoint(
         .parse::<i32>()
         .map_err(|_e| ErrorInternalServerError("Invalid artist_id"))?;
 
-    let artist = get_artist(data.db.as_ref().unwrap(), artist_id)
-        .await
-        .map_err(|_e| ErrorInternalServerError("Failed to fetch artist"))?;
+    let artist = {
+        let library = data.db.as_ref().unwrap().library.lock().unwrap();
+        get_artist(&library, artist_id)
+            .map_err(|_e| ErrorInternalServerError("Failed to fetch artist"))?
+    };
 
     if artist.is_none() {
         return Err(ErrorInternalServerError("Failed to find artist"));
@@ -110,9 +121,11 @@ pub async fn album_artwork_endpoint(
         .parse::<i32>()
         .map_err(|_e| ErrorInternalServerError("Invalid album_id"))?;
 
-    let album = get_album(data.db.as_ref().unwrap(), album_id)
-        .await
-        .map_err(|_e| ErrorInternalServerError("Failed to fetch album"))?;
+    let album = {
+        let library = data.db.as_ref().unwrap().library.lock().unwrap();
+        get_album(&library, album_id)
+            .map_err(|_e| ErrorInternalServerError("Failed to fetch album"))?
+    };
 
     if album.is_none() {
         return Err(ErrorInternalServerError("Failed to find album"));

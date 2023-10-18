@@ -333,7 +333,7 @@ pub async fn get_all_artists(
     request: &ArtistsRequest,
 ) -> Result<Vec<Artist>, GetArtistsError> {
     #[allow(clippy::eq_op)]
-    let artists = get_artists(data.db.as_ref().unwrap()).await?;
+    let artists = get_artists(&data.db.as_ref().unwrap().library.lock().unwrap())?;
 
     Ok(sort_artists(filter_artists(artists, request), request))
 }
@@ -418,7 +418,7 @@ pub async fn get_all_albums(
     data: &AppState,
     request: &AlbumsRequest,
 ) -> Result<Vec<Album>, GetAlbumsError> {
-    let albums = get_albums(data.db.as_ref().unwrap()).await?;
+    let albums = get_albums(&data.db.as_ref().unwrap().library.lock().unwrap())?;
 
     Ok(sort_albums(filter_albums(albums, request), request))
 }

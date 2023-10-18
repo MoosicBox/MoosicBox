@@ -93,7 +93,7 @@ pub async fn ws_handler(event: LambdaEvent<Value>) -> Result<Response, Websocket
     let db = DB.get_or_init(|| {
         let library_db = ::sqlite::open(":memory:").unwrap();
         let db = Db {
-            library: library_db,
+            library: Arc::new(Mutex::new(library_db)),
         };
         Arc::new(Mutex::new(db))
     });
