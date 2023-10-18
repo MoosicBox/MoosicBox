@@ -280,7 +280,6 @@ async fn create_session(
     context: &WebsocketContext,
     payload: &CreateSession,
 ) -> Result<(), WebsocketSendError> {
-    println!("create session.... 0");
     {
         let db = db.lock();
         let library = db.as_ref().unwrap().library.lock().unwrap();
