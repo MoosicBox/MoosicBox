@@ -34,6 +34,29 @@ pub struct Track {
     pub blur: bool,
 }
 
+impl AsModel<Track> for Row {
+    fn as_model(&self) -> Track {
+        Track {
+            id: self.read::<i64, _>("id") as i32,
+            number: self.read::<i64, _>("number") as i32,
+            title: self.read::<&str, _>("title").to_string(),
+            duration: self.read::<f64, _>("duration"),
+            album: self.read::<&str, _>("album").to_string(),
+            album_id: self.read::<i64, _>("album_id") as i32,
+            date_released: self
+                .read::<Option<&str>, _>("date_released")
+                .map(|date| date.to_string()),
+            artist: self.read::<&str, _>("artist").to_string(),
+            artist_id: self.read::<i64, _>("artist_id") as i32,
+            file: self.read::<Option<&str>, _>("file").map(|f| f.to_string()),
+            artwork: self
+                .read::<Option<&str>, _>("artwork")
+                .map(|date| date.to_string()),
+            blur: self.read::<i64, _>("blur") == 1,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiTrack {
@@ -68,29 +91,6 @@ impl ToApi<ApiTrack> for Track {
     }
 }
 
-impl AsModel<Track> for Row {
-    fn as_model(&self) -> Track {
-        Track {
-            id: self.read::<i64, _>("id") as i32,
-            number: self.read::<i64, _>("number") as i32,
-            title: self.read::<&str, _>("title").to_string(),
-            duration: self.read::<f64, _>("duration"),
-            album: self.read::<&str, _>("album").to_string(),
-            album_id: self.read::<i64, _>("album_id") as i32,
-            date_released: self
-                .read::<Option<&str>, _>("date_released")
-                .map(|date| date.to_string()),
-            artist: self.read::<&str, _>("artist").to_string(),
-            artist_id: self.read::<i64, _>("artist_id") as i32,
-            file: self.read::<Option<&str>, _>("file").map(|f| f.to_string()),
-            artwork: self
-                .read::<Option<&str>, _>("artwork")
-                .map(|date| date.to_string()),
-            blur: self.read::<i64, _>("blur") == 1,
-        }
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 pub struct Artist {
     pub id: i32,
@@ -104,16 +104,6 @@ impl AsModel<Artist> for Row {
             id: self.read::<i64, _>("id") as i32,
             title: self.read::<&str, _>("title").to_string(),
             cover: self.read::<Option<&str>, _>("cover").map(|c| c.to_string()),
-        }
-    }
-}
-
-impl ToApi<ApiArtist> for Artist {
-    fn to_api(&self) -> ApiArtist {
-        ApiArtist {
-            artist_id: self.id,
-            title: self.title.clone(),
-            contains_cover: self.cover.is_some(),
         }
     }
 }
@@ -144,6 +134,16 @@ pub struct ApiArtist {
     pub contains_cover: bool,
 }
 
+impl ToApi<ApiArtist> for Artist {
+    fn to_api(&self) -> ApiArtist {
+        ApiArtist {
+            artist_id: self.id,
+            title: self.title.clone(),
+            contains_cover: self.cover.is_some(),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 pub struct Album {
     pub id: i32,
@@ -156,6 +156,31 @@ pub struct Album {
     pub directory: Option<String>,
     pub source: AlbumSource,
     pub blur: bool,
+}
+
+impl AsModel<Album> for Row {
+    fn as_model(&self) -> Album {
+        Album {
+            id: self.read::<i64, _>("id") as i32,
+            artist: self.read::<&str, _>("artist").to_string(),
+            artist_id: self.read::<i64, _>("artist_id") as i32,
+            title: self.read::<&str, _>("title").to_string(),
+            date_released: self
+                .read::<Option<&str>, _>("date_released")
+                .map(|date| date.to_string()),
+            date_added: self
+                .read::<Option<&str>, _>("date_added")
+                .map(|date| date.to_string()),
+            artwork: self
+                .read::<Option<&str>, _>("artwork")
+                .map(|date| date.to_string()),
+            directory: self
+                .read::<Option<&str>, _>("directory")
+                .map(|date| date.to_string()),
+            source: AlbumSource::Local,
+            blur: self.read::<i64, _>("blur") == 1,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -219,31 +244,6 @@ pub enum AlbumSort {
     ReleaseDateDesc,
     DateAddedAsc,
     DateAddedDesc,
-}
-
-impl AsModel<Album> for Row {
-    fn as_model(&self) -> Album {
-        Album {
-            id: self.read::<i64, _>("id") as i32,
-            artist: self.read::<&str, _>("artist").to_string(),
-            artist_id: self.read::<i64, _>("artist_id") as i32,
-            title: self.read::<&str, _>("title").to_string(),
-            date_released: self
-                .read::<Option<&str>, _>("date_released")
-                .map(|date| date.to_string()),
-            date_added: self
-                .read::<Option<&str>, _>("date_added")
-                .map(|date| date.to_string()),
-            artwork: self
-                .read::<Option<&str>, _>("artwork")
-                .map(|date| date.to_string()),
-            directory: self
-                .read::<Option<&str>, _>("directory")
-                .map(|date| date.to_string()),
-            source: AlbumSource::Local,
-            blur: self.read::<i64, _>("blur") == 1,
-        }
-    }
 }
 
 impl FromStr for AlbumSort {
@@ -345,16 +345,20 @@ pub struct Session {
     pub playlist: SessionPlaylist,
 }
 
-impl ToApi<ApiSession> for Session {
-    fn to_api(&self) -> ApiSession {
-        ApiSession {
-            id: self.id,
-            name: self.name.clone(),
-            active: self.active,
-            playing: self.playing,
-            position: self.position,
-            seek: self.seek,
-            playlist: self.playlist.to_api(),
+impl AsModelQuery<Session> for Row {
+    fn as_model_query(&self, db: &Connection) -> Result<Session, DbError> {
+        let id = self.read::<i64, _>("id") as i32;
+        match get_session_playlist(db, id)? {
+            Some(playlist) => Ok(Session {
+                id,
+                active: self.read::<i64, _>("active") == 1,
+                playing: self.read::<i64, _>("playing") == 1,
+                position: self.read::<Option<i64>, _>("position").map(|x| x as i32),
+                seek: self.read::<Option<i64>, _>("seek").map(|x| x as i32),
+                name: self.read::<&str, _>("name").to_string(),
+                playlist,
+            }),
+            None => Err(DbError::InvalidRequest),
         }
     }
 }
@@ -371,20 +375,16 @@ pub struct ApiSession {
     pub playlist: ApiSessionPlaylist,
 }
 
-impl AsModelQuery<Session> for Row {
-    fn as_model_query(&self, db: &Connection) -> Result<Session, DbError> {
-        let id = self.read::<i64, _>("id") as i32;
-        match get_session_playlist(db, id)? {
-            Some(playlist) => Ok(Session {
-                id,
-                active: self.read::<i64, _>("active") == 1,
-                playing: self.read::<i64, _>("playing") == 1,
-                position: self.read::<Option<i64>, _>("position").map(|x| x as i32),
-                seek: self.read::<Option<i64>, _>("seek").map(|x| x as i32),
-                name: self.read::<&str, _>("name").to_string(),
-                playlist,
-            }),
-            None => Err(DbError::InvalidRequest),
+impl ToApi<ApiSession> for Session {
+    fn to_api(&self) -> ApiSession {
+        ApiSession {
+            id: self.id,
+            name: self.name.clone(),
+            active: self.active,
+            playing: self.playing,
+            position: self.position,
+            seek: self.seek,
+            playlist: self.playlist.to_api(),
         }
     }
 }
@@ -406,6 +406,13 @@ impl AsModelQuery<SessionPlaylist> for Row {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiSessionPlaylist {
+    pub id: i32,
+    pub tracks: Vec<ApiTrack>,
+}
+
 impl ToApi<ApiSessionPlaylist> for SessionPlaylist {
     fn to_api(&self) -> ApiSessionPlaylist {
         ApiSessionPlaylist {
@@ -413,11 +420,4 @@ impl ToApi<ApiSessionPlaylist> for SessionPlaylist {
             tracks: self.tracks.iter().map(|t| t.to_api()).collect(),
         }
     }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct ApiSessionPlaylist {
-    pub id: i32,
-    pub tracks: Vec<ApiTrack>,
 }
