@@ -1,6 +1,4 @@
-use crate::slim::menu::{Album, Artist};
-use crate::slim::player::Track;
-use crate::sqlite::menu::FullAlbum;
+use crate::sqlite::models::{Album, Artist, FullAlbum, Track};
 use enum_as_inner::EnumAsInner;
 use futures::Future;
 use serde::{Deserialize, Serialize};

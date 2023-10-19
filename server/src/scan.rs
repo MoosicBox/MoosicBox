@@ -1,10 +1,12 @@
 use audiotags::{AudioTag, Tag};
 use moosicbox_core::{
     app::AppState,
-    slim::player::Track,
-    sqlite::db::{
-        add_album_and_get_album, add_album_map_and_get_album, add_artist_and_get_artist,
-        add_artist_map_and_get_artist, add_tracks, DbError, InsertTrack, SqliteValue,
+    sqlite::{
+        db::{
+            add_album_and_get_album, add_album_map_and_get_album, add_artist_and_get_artist,
+            add_artist_map_and_get_artist, add_tracks, DbError, InsertTrack, SqliteValue,
+        },
+        models::Track,
     },
 };
 use regex::Regex;

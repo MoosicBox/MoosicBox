@@ -1,4 +1,4 @@
-use crate::{app::AppState, ToApi};
+use crate::{app::AppState, sqlite::models::Track};
 use actix_web::web;
 use core::panic;
 use serde::{de::Error, Deserialize, Serialize};
@@ -40,57 +40,6 @@ pub struct StatusResponse {
 #[serde(rename_all = "camelCase")]
 pub struct PlaylistStatus {
     pub tracks: Vec<Track>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct Track {
-    pub id: i32,
-    pub number: i32,
-    pub title: String,
-    pub duration: f64,
-    pub album: String,
-    pub album_id: i32,
-    pub date_released: Option<String>,
-    pub artist: String,
-    pub artist_id: i32,
-    pub file: Option<String>,
-    pub artwork: Option<String>,
-    pub blur: bool,
-}
-
-impl ToApi<ApiTrack> for Track {
-    fn to_api(&self) -> ApiTrack {
-        ApiTrack {
-            track_id: self.id,
-            number: self.number,
-            title: self.title.clone(),
-            duration: self.duration,
-            artist: self.artist.clone(),
-            artist_id: self.artist_id,
-            date_released: self.date_released.clone(),
-            album: self.album.clone(),
-            album_id: self.album_id,
-            contains_artwork: self.artwork.is_some(),
-            blur: self.blur,
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct ApiTrack {
-    pub track_id: i32,
-    pub number: i32,
-    pub title: String,
-    pub duration: f64,
-    pub artist: String,
-    pub artist_id: i32,
-    pub date_released: Option<String>,
-    pub album: String,
-    pub album_id: i32,
-    pub contains_artwork: bool,
-    pub blur: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

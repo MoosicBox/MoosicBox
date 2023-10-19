@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use actix_web::{
     error::{ErrorBadRequest, ErrorInternalServerError},
     web::{self, Json},
@@ -6,21 +8,19 @@ use actix_web::{
 use lambda_web::actix_web::{self, get};
 use moosicbox_core::{
     app::AppState,
-    slim::{
-        menu::{get_all_artists, ApiAlbum, ApiArtist, ArtistFilters, ArtistSort, ArtistsRequest},
-        player::ApiTrack,
+    slim::menu::{get_all_artists, ArtistFilters, ArtistsRequest},
+    sqlite::{
+        menu::{get_album, get_artist},
+        models::{Album, AlbumSort, AlbumSource, ApiAlbum, ApiArtist, ApiTrack, ArtistSort, ToApi},
     },
-    sqlite::menu::{get_album, get_artist},
-    ToApi,
 };
 use moosicbox_core::{
-    slim::menu::{get_all_albums, Album, AlbumFilters, AlbumSort, AlbumSource, AlbumsRequest},
+    slim::menu::{get_all_albums, AlbumFilters, AlbumsRequest},
     sqlite::menu::get_album_tracks,
     sqlite::menu::get_artist_albums,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::str::FromStr;
 use thiserror::Error;
 
 #[derive(Debug, Error)]

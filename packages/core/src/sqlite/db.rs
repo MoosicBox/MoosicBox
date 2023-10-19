@@ -1,13 +1,12 @@
-use crate::slim::{
-    menu::{Album, AlbumSource, Artist},
-    player::Track,
-};
 use serde::{Deserialize, Serialize};
 use sqlite::{Connection, CursorWithOwnership, Row};
 use std::{collections::HashMap, fmt::Display, sync::PoisonError};
 use thiserror::Error;
 
-use super::models::{CreateSession, Session, SessionPlaylist, UpdateSession};
+use super::models::{
+    Album, Artist, AsModel, AsModelQuery, CreateSession, Session, SessionPlaylist, Track,
+    UpdateSession,
+};
 
 impl<T> From<PoisonError<T>> for DbError {
     fn from(_err: PoisonError<T>) -> Self {
@@ -52,28 +51,14 @@ pub fn get_session_playlist_tracks(
         .into_iter()
         .bind((1, session_playlist_id as i64))?
         .filter_map(|row| row.ok())
-        .map(|row| Track {
-            id: row.read::<i64, _>("id") as i32,
-            number: row.read::<i64, _>("number") as i32,
-            title: row.read::<&str, _>("title").to_string(),
-            duration: row.read::<f64, _>("duration"),
-            album: row.read::<&str, _>("album").to_string(),
-            album_id: row.read::<i64, _>("album_id") as i32,
-            date_released: row
-                .read::<Option<&str>, _>("date_released")
-                .map(|date| date.to_string()),
-            artist: row.read::<&str, _>("artist").to_string(),
-            artist_id: row.read::<i64, _>("artist_id") as i32,
-            file: row.read::<Option<&str>, _>("file").map(|f| f.to_string()),
-            artwork: row
-                .read::<Option<&str>, _>("artwork")
-                .map(|date| date.to_string()),
-            blur: row.read::<i64, _>("blur") == 1,
-        })
+        .map(|row| row.as_model())
         .collect())
 }
 
-pub fn get_session_playlist(db: &Connection, session_id: i32) -> Result<SessionPlaylist, DbError> {
+pub fn get_session_playlist(
+    db: &Connection,
+    session_id: i32,
+) -> Result<Option<SessionPlaylist>, DbError> {
     db.prepare(
         "
             SELECT session_playlists.*
@@ -84,15 +69,9 @@ pub fn get_session_playlist(db: &Connection, session_id: i32) -> Result<SessionP
     .into_iter()
     .bind((1, session_id as i64))?
     .filter_map(|row| row.ok())
-    .map(|row| {
-        let id = row.read::<i64, _>("id") as i32;
-        Ok::<SessionPlaylist, DbError>(SessionPlaylist {
-            id,
-            tracks: get_session_playlist_tracks(db, id)?,
-        })
-    })
+    .map(|row| row.as_model_query(db))
     .next()
-    .unwrap_or(Err(DbError::InvalidRequest))
+    .transpose()
 }
 
 pub fn get_session(db: &Connection, id: i32) -> Result<Option<Session>, DbError> {
@@ -106,18 +85,7 @@ pub fn get_session(db: &Connection, id: i32) -> Result<Option<Session>, DbError>
     .into_iter()
     .bind((1, id as i64))?
     .filter_map(|row| row.ok())
-    .map(|row| {
-        let id = row.read::<i64, _>("id") as i32;
-        Ok::<Session, DbError>(Session {
-            id,
-            active: row.read::<i64, _>("active") == 1,
-            playing: row.read::<i64, _>("playing") == 1,
-            position: row.read::<Option<i64>, _>("position").map(|x| x as i32),
-            seek: row.read::<Option<i64>, _>("seek").map(|x| x as i32),
-            name: row.read::<&str, _>("name").to_string(),
-            playlist: get_session_playlist(db, id)?,
-        })
-    })
+    .map(|row| row.as_model_query(db))
     .next()
     .transpose()
 }
@@ -131,18 +99,7 @@ pub fn get_sessions(db: &Connection) -> Result<Vec<Session>, DbError> {
     )?
     .into_iter()
     .filter_map(|row| row.ok())
-    .map(|row| {
-        let id = row.read::<i64, _>("id") as i32;
-        Ok::<Session, DbError>(Session {
-            id,
-            active: row.read::<i64, _>("active") == 1,
-            playing: row.read::<i64, _>("playing") == 1,
-            position: row.read::<Option<i64>, _>("position").map(|x| x as i32),
-            seek: row.read::<Option<i64>, _>("seek").map(|x| x as i32),
-            name: row.read::<&str, _>("name").to_string(),
-            playlist: get_session_playlist(db, id)?,
-        })
-    })
+    .map(|row| row.as_model_query(db))
     .collect()
 }
 
@@ -176,18 +133,7 @@ pub fn create_session(db: &Connection, session: &CreateSession) -> Result<Sessio
         ],
     )?;
 
-    Ok(Session {
-        id: session.read::<i64, _>("id") as i32,
-        active: session.read::<i64, _>("active") == 1,
-        playing: session.read::<i64, _>("playing") == 1,
-        position: session.read::<Option<i64>, _>("position").map(|x| x as i32),
-        seek: session.read::<Option<i64>, _>("seek").map(|x| x as i32),
-        name: session.read::<&str, _>("name").to_string(),
-        playlist: SessionPlaylist {
-            id: playlist_id as i32,
-            tracks,
-        },
-    })
+    session.as_model_query(db)
 }
 
 pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<Session, DbError> {
@@ -265,8 +211,10 @@ pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<Sessio
             id: playlist_id.unwrap() as i32,
             tracks: tracks.unwrap(),
         }
+    } else if let Some(playlist) = get_session_playlist(db, session.id)? {
+        playlist
     } else {
-        get_session_playlist(db, session.id)?
+        return Err(DbError::InvalidRequest);
     };
 
     Ok(Session {
@@ -332,11 +280,7 @@ pub fn get_artists(db: &Connection) -> Result<Vec<Artist>, DbError> {
         )?
         .into_iter()
         .filter_map(|row| row.ok())
-        .map(|row| Artist {
-            id: row.read::<i64, _>("id") as i32,
-            title: row.read::<&str, _>("title").to_string(),
-            cover: row.read::<Option<&str>, _>("cover").map(|c| c.to_string()),
-        })
+        .map(|row| row.as_model())
         .collect())
 }
 
@@ -350,26 +294,7 @@ pub fn get_albums(db: &Connection) -> Result<Vec<Album>, DbError> {
         )?
         .into_iter()
         .filter_map(|row| row.ok())
-        .map(|row| Album {
-            id: row.read::<i64, _>("id") as i32,
-            artist: row.read::<&str, _>("artist").to_string(),
-            artist_id: row.read::<i64, _>("artist_id") as i32,
-            title: row.read::<&str, _>("title").to_string(),
-            date_released: row
-                .read::<Option<&str>, _>("date_released")
-                .map(|d| d.to_string()),
-            date_added: row
-                .read::<Option<&str>, _>("date_added")
-                .map(|d| d.to_string()),
-            artwork: row
-                .read::<Option<&str>, _>("artwork")
-                .map(|d| d.to_string()),
-            directory: row
-                .read::<Option<&str>, _>("directory")
-                .map(|date| date.to_string()),
-            source: AlbumSource::Local,
-            blur: row.read::<i64, _>("blur") == 1,
-        })
+        .map(|row| row.as_model())
         .collect())
 }
 
@@ -384,11 +309,7 @@ pub fn get_artist(db: &Connection, id: i32) -> Result<Option<Artist>, DbError> {
         .into_iter()
         .bind((1, id as i64))?
         .filter_map(|row| row.ok())
-        .map(|row| Artist {
-            id: row.read::<i64, _>("id") as i32,
-            title: row.read::<&str, _>("title").to_string(),
-            cover: row.read::<Option<&str>, _>("cover").map(|c| c.to_string()),
-        })
+        .map(|row| row.as_model())
         .next())
 }
 
@@ -404,26 +325,7 @@ pub fn get_album(db: &Connection, id: i32) -> Result<Option<Album>, DbError> {
         .into_iter()
         .bind((1, id as i64))?
         .filter_map(|row| row.ok())
-        .map(|row| Album {
-            id: row.read::<i64, _>("id") as i32,
-            artist: row.read::<&str, _>("artist").to_string(),
-            artist_id: row.read::<i64, _>("artist_id") as i32,
-            title: row.read::<&str, _>("title").to_string(),
-            date_released: row
-                .read::<Option<&str>, _>("date_released")
-                .map(|date| date.to_string()),
-            date_added: row
-                .read::<Option<&str>, _>("date_added")
-                .map(|date| date.to_string()),
-            artwork: row
-                .read::<Option<&str>, _>("artwork")
-                .map(|date| date.to_string()),
-            directory: row
-                .read::<Option<&str>, _>("directory")
-                .map(|date| date.to_string()),
-            source: AlbumSource::Local,
-            blur: row.read::<i64, _>("blur") == 1,
-        })
+        .map(|row| row.as_model())
         .next())
 }
 
@@ -447,24 +349,7 @@ pub fn get_album_tracks(db: &Connection, album_id: i32) -> Result<Vec<Track>, Db
         .into_iter()
         .bind((1, album_id as i64))?
         .filter_map(|row| row.ok())
-        .map(|row| Track {
-            id: row.read::<i64, _>("id") as i32,
-            number: row.read::<i64, _>("number") as i32,
-            title: row.read::<&str, _>("title").to_string(),
-            duration: row.read::<f64, _>("duration"),
-            album: row.read::<&str, _>("album").to_string(),
-            album_id: row.read::<i64, _>("album_id") as i32,
-            date_released: row
-                .read::<Option<&str>, _>("date_released")
-                .map(|date| date.to_string()),
-            artist: row.read::<&str, _>("artist").to_string(),
-            artist_id: row.read::<i64, _>("artist_id") as i32,
-            file: row.read::<Option<&str>, _>("file").map(|f| f.to_string()),
-            artwork: row
-                .read::<Option<&str>, _>("artwork")
-                .map(|date| date.to_string()),
-            blur: row.read::<i64, _>("blur") == 1,
-        })
+        .map(|row| row.as_model())
         .collect())
 }
 
@@ -480,26 +365,7 @@ pub fn get_artist_albums(db: &Connection, artist_id: i32) -> Result<Vec<Album>, 
         .into_iter()
         .bind((1, artist_id as i64))?
         .filter_map(|row| row.ok())
-        .map(|row| Album {
-            id: row.read::<i64, _>("id") as i32,
-            artist: row.read::<&str, _>("artist").to_string(),
-            artist_id: row.read::<i64, _>("artist_id") as i32,
-            title: row.read::<&str, _>("title").to_string(),
-            date_released: row
-                .read::<Option<&str>, _>("date_released")
-                .map(|date| date.to_string()),
-            date_added: row
-                .read::<Option<&str>, _>("date_added")
-                .map(|date| date.to_string()),
-            artwork: row
-                .read::<Option<&str>, _>("artwork")
-                .map(|date| date.to_string()),
-            directory: row
-                .read::<Option<&str>, _>("directory")
-                .map(|date| date.to_string()),
-            source: AlbumSource::Local,
-            blur: row.read::<i64, _>("blur") == 1,
-        })
+        .map(|row| row.as_model())
         .collect())
 }
 
@@ -536,24 +402,7 @@ pub fn get_tracks(db: &Connection, ids: &Vec<i32>) -> Result<Vec<Track>, DbError
 
     Ok(query
         .filter_map(|row| row.ok())
-        .map(|row| Track {
-            id: row.read::<i64, _>("id") as i32,
-            number: row.read::<i64, _>("number") as i32,
-            title: row.read::<&str, _>("title").to_string(),
-            duration: row.read::<f64, _>("duration"),
-            album: row.read::<&str, _>("album").to_string(),
-            album_id: row.read::<i64, _>("album_id") as i32,
-            date_released: row
-                .read::<Option<&str>, _>("date_released")
-                .map(|date| date.to_string()),
-            artist: row.read::<&str, _>("artist").to_string(),
-            artist_id: row.read::<i64, _>("artist_id") as i32,
-            file: row.read::<Option<&str>, _>("file").map(|f| f.to_string()),
-            artwork: row
-                .read::<Option<&str>, _>("artwork")
-                .map(|date| date.to_string()),
-            blur: row.read::<i64, _>("blur") == 1,
-        })
+        .map(|row| row.as_model())
         .collect())
 }
 
@@ -869,11 +718,7 @@ pub fn add_artist_maps_and_get_artists(
                 artist.into_iter().collect::<Vec<_>>(),
             )?;
 
-            Ok::<_, DbError>(Artist {
-                id: row.read::<i64, _>("id") as i32,
-                title: row.read::<&str, _>("title").to_string(),
-                cover: row.read::<Option<&str>, _>("cover").map(|c| c.to_string()),
-            })
+            Ok::<_, DbError>(row.as_model())
         })
         .filter_map(|artist| artist.ok())
         .collect())
@@ -961,21 +806,7 @@ pub fn add_album_maps_and_get_albums(
             let row =
                 upsert_and_get_row(db, "albums", filters, album.into_iter().collect::<Vec<_>>())?;
 
-            Ok::<_, DbError>(Album {
-                id: row.read::<i64, _>("id") as i32,
-                artist_id: row.read::<i64, _>("artist_id") as i32,
-                title: row.read::<&str, _>("title").to_string(),
-                date_released: row
-                    .read::<Option<&str>, _>("date_released")
-                    .map(|date| date.to_string()),
-                artwork: row
-                    .read::<Option<&str>, _>("artwork")
-                    .map(|date| date.to_string()),
-                directory: row
-                    .read::<Option<&str>, _>("directory")
-                    .map(|date| date.to_string()),
-                ..Default::default()
-            })
+            Ok::<_, DbError>(row.as_model())
         })
         .filter_map(|album| album.ok())
         .collect())

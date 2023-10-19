@@ -1,16 +1,15 @@
 use crate::{
     app::AppState,
     cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
-    slim::{
-        menu::{Album, AlbumSource, Artist},
-        player::Track,
-    },
 };
 use serde::{Deserialize, Serialize};
 use std::{sync::PoisonError, time::Duration};
 use thiserror::Error;
 
-use super::db::{self, DbError};
+use super::{
+    db::{self, DbError},
+    models::{Album, AlbumSource, Artist, Track},
+};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FullAlbum {
