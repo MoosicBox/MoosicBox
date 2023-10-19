@@ -296,7 +296,7 @@ async fn create_session(
 async fn update_session(
     db: Arc<Mutex<Db>>,
     sender: &mut impl WebsocketSender,
-    _context: &WebsocketContext,
+    context: &WebsocketContext,
     payload: &UpdateSession,
 ) -> Result<(), WebsocketSendError> {
     let session = {
@@ -330,7 +330,9 @@ async fn update_session(
     })
     .to_string();
 
-    sender.send_all(&session_updated).await?;
+    sender
+        .send_all_except(&context.connection_id, &session_updated)
+        .await?;
 
     Ok(())
 }
