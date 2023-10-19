@@ -8,20 +8,20 @@ use actix_web::{
 use lambda_web::actix_web::{self, get};
 use moosicbox_core::{
     app::AppState,
-    slim::menu::{get_all_artists, ArtistFilters, ArtistsRequest},
     sqlite::{
         menu::{get_album, get_artist},
         models::{Album, AlbumSort, AlbumSource, ApiAlbum, ApiArtist, ApiTrack, ArtistSort, ToApi},
     },
 };
-use moosicbox_core::{
-    slim::menu::{get_all_albums, AlbumFilters, AlbumsRequest},
-    sqlite::menu::get_album_tracks,
-    sqlite::menu::get_artist_albums,
-};
+use moosicbox_core::{sqlite::menu::get_album_tracks, sqlite::menu::get_artist_albums};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
+
+use crate::library::{
+    albums::{get_all_albums, AlbumFilters, AlbumsRequest},
+    artists::{get_all_artists, ArtistFilters, ArtistsRequest},
+};
 
 #[derive(Debug, Error)]
 pub enum MenuError {
