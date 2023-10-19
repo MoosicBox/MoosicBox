@@ -144,16 +144,6 @@ pub struct ApiArtist {
     pub contains_cover: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct FullAlbum {
-    pub id: String,
-    pub title: String,
-    pub artist: String,
-    pub year: Option<i16>,
-    pub artwork: Option<String>,
-    pub source: AlbumSource,
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 pub struct Album {
     pub id: i32,

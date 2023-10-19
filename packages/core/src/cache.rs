@@ -1,4 +1,4 @@
-use crate::sqlite::models::{Album, Artist, FullAlbum, Track};
+use crate::sqlite::models::{Album, Artist, Track};
 use enum_as_inner::EnumAsInner;
 use futures::Future;
 use serde::{Deserialize, Serialize};
@@ -21,7 +21,6 @@ pub enum CacheItemType {
     ArtistAlbums(Vec<Album>),
     Artist(Artist),
     Album(Album),
-    FullAlbum(FullAlbum),
 }
 
 pub fn current_time_nanos() -> u128 {

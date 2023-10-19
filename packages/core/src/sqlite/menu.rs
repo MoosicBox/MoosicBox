@@ -2,24 +2,13 @@ use crate::{
     app::AppState,
     cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
 };
-use serde::{Deserialize, Serialize};
 use std::{sync::PoisonError, time::Duration};
 use thiserror::Error;
 
 use super::{
     db::{self, DbError},
-    models::{Album, AlbumSource, Artist, Track},
+    models::{Album, Artist, Track},
 };
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct FullAlbum {
-    pub id: i32,
-    pub title: String,
-    pub artist: String,
-    pub year: Option<i32>,
-    pub icon: Option<String>,
-    pub source: AlbumSource,
-}
 
 impl<T> From<PoisonError<T>> for GetAlbumError {
     fn from(_err: PoisonError<T>) -> Self {
