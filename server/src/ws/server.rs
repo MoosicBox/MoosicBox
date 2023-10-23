@@ -206,7 +206,7 @@ impl ChatServer {
             event_type: EventType::Connect,
         };
 
-        moosicbox_ws::api::connect(self, &context)
+        moosicbox_ws::api::connect(self.db.clone(), self, &context)
             .await
             .map_err(|_| WebsocketSendError::Unknown)?;
 
@@ -238,7 +238,7 @@ impl ChatServer {
             event_type: EventType::Disconnect,
         };
 
-        moosicbox_ws::api::disconnect(self, &context).await?;
+        moosicbox_ws::api::disconnect(self.db.clone(), self, &context).await?;
 
         Ok(())
     }

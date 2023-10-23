@@ -8,8 +8,8 @@ use async_trait::async_trait;
 use moosicbox_core::{
     app::Db,
     sqlite::models::{
-        ApiUpdateSession, ApiUpdateSessionPlaylist, CreateSession, DeleteSession, ToApi,
-        UpdateSession,
+        ApiUpdateSession, ApiUpdateSessionPlaylist, CreateSession, DeleteSession,
+        RegisterConnection, RegisterPlayer, SetSessionActivePlayers, ToApi, UpdateSession,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -40,7 +40,9 @@ pub enum InboundMessageType {
     CreateSession,
     UpdateSession,
     DeleteSession,
-    SyncConnectionData,
+    RegisterConnection,
+    RegisterPlayers,
+    SetActivePlayers,
     PlaybackAction,
 }
 
@@ -58,6 +60,7 @@ pub enum OutboundMessageType {
     ConnectionId,
     Sessions,
     SessionUpdated,
+    Connections,
 }
 
 pub struct WebsocketContext {
@@ -97,6 +100,7 @@ pub enum WebsocketConnectError {
 }
 
 pub async fn connect(
+    db: Arc<Mutex<Db>>,
     sender: &mut impl WebsocketSender,
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketConnectError> {
@@ -112,6 +116,17 @@ pub async fn connect(
         )
         .await
         .map_err(|_| WebsocketConnectError::Unknown)?;
+
+    sender
+        .send(
+            &context.connection_id,
+            &get_connections(db)
+                .await
+                .map_err(|_e| WebsocketConnectError::Unknown)?,
+        )
+        .await
+        .map_err(|_e| WebsocketConnectError::Unknown)?;
+
     Ok(Response {
         status_code: 200,
         body: "Connected".into(),
@@ -125,6 +140,7 @@ pub enum WebsocketDisconnectError {
 }
 
 pub async fn disconnect(
+    _db: Arc<Mutex<Db>>,
     sender: &mut impl WebsocketSender,
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketDisconnectError> {
@@ -188,6 +204,69 @@ pub async fn message(
                 .map_err(|_e| WebsocketMessageError::Unknown)?;
             Ok(())
         }
+        InboundMessageType::RegisterConnection => {
+            let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
+            let payload = serde_json::from_value::<RegisterConnection>(payload.clone())
+                .map_err(|_| WebsocketMessageError::Unknown)?;
+
+            register_connection(db.clone(), sender, context, &payload)
+                .await
+                .map_err(|_e| WebsocketMessageError::Unknown)?;
+
+            sender
+                .send_all_except(
+                    &context.connection_id,
+                    &get_connections(db)
+                        .await
+                        .map_err(|_e| WebsocketMessageError::Unknown)?,
+                )
+                .await
+                .map_err(|_e| WebsocketMessageError::Unknown)?;
+
+            Ok(())
+        }
+        InboundMessageType::RegisterPlayers => {
+            let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
+            let payload = serde_json::from_value::<Vec<RegisterPlayer>>(payload.clone())
+                .map_err(|_| WebsocketMessageError::Unknown)?;
+
+            register_players(db.clone(), sender, context, &payload)
+                .await
+                .map_err(|_e| WebsocketMessageError::Unknown)?;
+
+            sender
+                .send_all_except(
+                    &context.connection_id,
+                    &get_connections(db)
+                        .await
+                        .map_err(|_e| WebsocketMessageError::Unknown)?,
+                )
+                .await
+                .map_err(|_e| WebsocketMessageError::Unknown)?;
+
+            Ok(())
+        }
+        InboundMessageType::SetActivePlayers => {
+            let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
+            let payload = serde_json::from_value::<SetSessionActivePlayers>(payload.clone())
+                .map_err(|_| WebsocketMessageError::Unknown)?;
+
+            set_session_active_players(db.clone(), sender, context, &payload)
+                .await
+                .map_err(|_e| WebsocketMessageError::Unknown)?;
+
+            sender
+                .send_all_except(
+                    &context.connection_id,
+                    &get_connections(db)
+                        .await
+                        .map_err(|_e| WebsocketMessageError::Unknown)?,
+                )
+                .await
+                .map_err(|_e| WebsocketMessageError::Unknown)?;
+
+            Ok(())
+        }
         InboundMessageType::CreateSession => {
             let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
             let payload = serde_json::from_value::<CreateSession>(payload.clone())
@@ -225,13 +304,6 @@ pub async fn message(
         InboundMessageType::PlaybackAction => {
             let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
             playback_action(sender, context, payload)
-                .await
-                .map_err(|_e| WebsocketMessageError::Unknown)?;
-            Ok(())
-        }
-        InboundMessageType::SyncConnectionData => {
-            let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
-            sync_connection_data(sender, context, payload)
                 .await
                 .map_err(|_e| WebsocketMessageError::Unknown)?;
             Ok(())
@@ -287,6 +359,79 @@ async fn create_session(
         let db = db.lock();
         let library = db.as_ref().unwrap().library.lock().unwrap();
         moosicbox_core::sqlite::db::create_session(&library, payload)
+            .map_err(|_| WebsocketSendError::Unknown)?;
+    }
+    get_sessions(db, sender, context, true).await?;
+    Ok(())
+}
+
+async fn get_connections(db: Arc<Mutex<Db>>) -> Result<String, WebsocketSendError> {
+    let connections = {
+        let db = db.lock();
+        let library = db.as_ref().unwrap().library.lock().unwrap();
+        moosicbox_core::sqlite::db::get_connections(&library)
+            .map_err(|_| WebsocketSendError::Unknown)?
+            .iter()
+            .map(|connection| connection.to_api())
+            .collect::<Vec<_>>()
+    };
+
+    let connections_json = serde_json::json!({
+        "type": OutboundMessageType::Connections,
+        "payload": connections,
+    })
+    .to_string();
+
+    Ok(connections_json)
+}
+
+async fn register_connection(
+    db: Arc<Mutex<Db>>,
+    _sender: &mut impl WebsocketSender,
+    _context: &WebsocketContext,
+    payload: &RegisterConnection,
+) -> Result<(), WebsocketSendError> {
+    {
+        let db = db.lock();
+        let library = db.as_ref().unwrap().library.lock().unwrap();
+
+        moosicbox_core::sqlite::db::register_connection(&library, payload)
+            .map_err(|_| WebsocketSendError::Unknown)?;
+    }
+    get_connections(db).await?;
+    Ok(())
+}
+
+async fn register_players(
+    db: Arc<Mutex<Db>>,
+    sender: &mut impl WebsocketSender,
+    context: &WebsocketContext,
+    payload: &Vec<RegisterPlayer>,
+) -> Result<(), WebsocketSendError> {
+    {
+        let db = db.lock();
+        let library = db.as_ref().unwrap().library.lock().unwrap();
+
+        for player in payload {
+            moosicbox_core::sqlite::db::create_player(&library, &context.connection_id, player)
+                .map_err(|_| WebsocketSendError::Unknown)?;
+        }
+    }
+    get_sessions(db, sender, context, true).await?;
+    Ok(())
+}
+
+async fn set_session_active_players(
+    db: Arc<Mutex<Db>>,
+    sender: &mut impl WebsocketSender,
+    context: &WebsocketContext,
+    payload: &SetSessionActivePlayers,
+) -> Result<(), WebsocketSendError> {
+    {
+        let db = db.lock();
+        let library = db.as_ref().unwrap().library.lock().unwrap();
+
+        moosicbox_core::sqlite::db::set_session_active_players(&library, &payload)
             .map_err(|_| WebsocketSendError::Unknown)?;
     }
     get_sessions(db, sender, context, true).await?;
@@ -376,28 +521,5 @@ async fn playback_action(
     _context: &WebsocketContext,
     _payload: &Value,
 ) -> Result<(), WebsocketSendError> {
-    Ok(())
-}
-
-async fn sync_connection_data(
-    sender: &mut impl WebsocketSender,
-    context: &WebsocketContext,
-    payload: &Value,
-) -> Result<(), WebsocketSendError> {
-    let connections = {
-        let mut connection_data = CONNECTION_DATA
-            .get_or_init(|| Mutex::new(HashMap::new()))
-            .lock()
-            .unwrap();
-
-        connection_data.insert(
-            context.connection_id.clone(),
-            serde_json::from_value(payload.clone()).unwrap(),
-        );
-        &serde_json::to_string(&connection_data.values().collect::<Vec<_>>()).unwrap()
-    };
-
-    sender.send(&context.connection_id, connections).await?;
-
     Ok(())
 }

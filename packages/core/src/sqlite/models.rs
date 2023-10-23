@@ -1,16 +1,19 @@
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
-use sqlite::{Connection, Row};
+use sqlite::Row;
 
-use super::db::{get_session_playlist, get_session_playlist_tracks, DbError};
+use super::db::{
+    get_players, get_session_active_players, get_session_playlist, get_session_playlist_tracks,
+    DbError,
+};
 
 pub trait AsModel<T> {
     fn as_model(&self) -> T;
 }
 
 pub trait AsModelQuery<T> {
-    fn as_model_query(&self, db: &Connection) -> Result<T, DbError>;
+    fn as_model_query(&self, db: &sqlite::Connection) -> Result<T, DbError>;
 }
 
 pub trait ToApi<T> {
@@ -266,8 +269,16 @@ impl FromStr for AlbumSort {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
+pub struct SetSessionActivePlayers {
+    pub session_id: i32,
+    pub players: Vec<i32>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateSession {
     pub name: String,
+    pub active_players: Vec<i32>,
     pub playlist: CreateSessionPlaylist,
 }
 
@@ -342,20 +353,22 @@ pub struct Session {
     pub playing: bool,
     pub position: Option<i32>,
     pub seek: Option<i32>,
+    pub active_players: Vec<Player>,
     pub playlist: SessionPlaylist,
 }
 
 impl AsModelQuery<Session> for Row {
-    fn as_model_query(&self, db: &Connection) -> Result<Session, DbError> {
+    fn as_model_query(&self, db: &sqlite::Connection) -> Result<Session, DbError> {
         let id = self.read::<i64, _>("id") as i32;
         match get_session_playlist(db, id)? {
             Some(playlist) => Ok(Session {
                 id,
+                name: self.read::<&str, _>("name").to_string(),
                 active: self.read::<i64, _>("active") == 1,
                 playing: self.read::<i64, _>("playing") == 1,
                 position: self.read::<Option<i64>, _>("position").map(|x| x as i32),
                 seek: self.read::<Option<i64>, _>("seek").map(|x| x as i32),
-                name: self.read::<&str, _>("name").to_string(),
+                active_players: get_session_active_players(db, id)?,
                 playlist,
             }),
             None => Err(DbError::InvalidRequest),
@@ -366,24 +379,26 @@ impl AsModelQuery<Session> for Row {
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiSession {
-    pub id: i32,
+    pub session_id: i32,
     pub name: String,
     pub active: bool,
     pub playing: bool,
     pub position: Option<i32>,
     pub seek: Option<i32>,
+    pub active_players: Vec<ApiPlayer>,
     pub playlist: ApiSessionPlaylist,
 }
 
 impl ToApi<ApiSession> for Session {
     fn to_api(&self) -> ApiSession {
         ApiSession {
-            id: self.id,
+            session_id: self.id,
             name: self.name.clone(),
             active: self.active,
             playing: self.playing,
             position: self.position,
             seek: self.seek,
+            active_players: self.active_players.iter().map(|p| p.to_api()).collect(),
             playlist: self.playlist.to_api(),
         }
     }
@@ -397,7 +412,7 @@ pub struct SessionPlaylist {
 }
 
 impl AsModelQuery<SessionPlaylist> for Row {
-    fn as_model_query(&self, db: &Connection) -> Result<SessionPlaylist, DbError> {
+    fn as_model_query(&self, db: &sqlite::Connection) -> Result<SessionPlaylist, DbError> {
         let id = self.read::<i64, _>("id") as i32;
         Ok(SessionPlaylist {
             id,
@@ -409,15 +424,116 @@ impl AsModelQuery<SessionPlaylist> for Row {
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiSessionPlaylist {
-    pub id: i32,
+    pub session_playlist_id: i32,
     pub tracks: Vec<ApiTrack>,
 }
 
 impl ToApi<ApiSessionPlaylist> for SessionPlaylist {
     fn to_api(&self) -> ApiSessionPlaylist {
         ApiSessionPlaylist {
-            id: self.id,
+            session_playlist_id: self.id,
             tracks: self.tracks.iter().map(|t| t.to_api()).collect(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterConnection {
+    pub connection_id: String,
+    pub name: String,
+    pub players: Vec<RegisterPlayer>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Connection {
+    pub id: String,
+    pub name: String,
+    pub created: String,
+    pub updated: String,
+    pub players: Vec<Player>,
+}
+
+impl AsModelQuery<Connection> for Row {
+    fn as_model_query(&self, db: &sqlite::Connection) -> Result<Connection, DbError> {
+        let id = self.read::<&str, _>("id").to_string();
+        let players = get_players(db, &id)?;
+        Ok(Connection {
+            id,
+            name: self.read::<&str, _>("name").to_string(),
+            created: self.read::<&str, _>("created").to_string(),
+            updated: self.read::<&str, _>("updated").to_string(),
+            players,
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiConnection {
+    pub connection_id: String,
+    pub name: String,
+    pub players: Vec<ApiPlayer>,
+}
+
+impl ToApi<ApiConnection> for Connection {
+    fn to_api(&self) -> ApiConnection {
+        ApiConnection {
+            connection_id: self.id.clone(),
+            name: self.name.clone(),
+            players: self.players.iter().map(|p| p.to_api()).collect(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterPlayer {
+    pub name: String,
+    pub r#type: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Player {
+    pub id: i32,
+    pub name: String,
+    pub r#type: String,
+    pub playing: bool,
+    pub created: String,
+    pub updated: String,
+}
+
+impl AsModel<Player> for Row {
+    fn as_model(&self) -> Player {
+        Player {
+            id: self.read::<i64, _>("id") as i32,
+            name: self.read::<&str, _>("name").to_string(),
+            r#type: self.read::<&str, _>("type").to_string(),
+            playing: self.read::<i64, _>("playing") == 1,
+            created: self.read::<&str, _>("created").to_string(),
+            updated: self.read::<&str, _>("updated").to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiPlayer {
+    pub player_id: i32,
+    pub name: String,
+    pub r#type: String,
+    pub playing: bool,
+}
+
+impl ToApi<ApiPlayer> for Player {
+    fn to_api(&self) -> ApiPlayer {
+        ApiPlayer {
+            player_id: self.id,
+            name: self.name.clone(),
+            r#type: self.r#type.clone(),
+            playing: self.playing,
         }
     }
 }
