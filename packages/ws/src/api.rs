@@ -258,14 +258,11 @@ pub async fn message(
                 })?;
 
             sender
-                .send_all_except(
-                    &context.connection_id,
-                    &get_connections(db)
-                        .await
-                        .map_err(|e| WebsocketMessageError::Unknown {
-                            message: e.to_string(),
-                        })?,
-                )
+                .send_all(&get_connections(db).await.map_err(|e| {
+                    WebsocketMessageError::Unknown {
+                        message: e.to_string(),
+                    }
+                })?)
                 .await
                 .map_err(|e| WebsocketMessageError::Unknown {
                     message: e.to_string(),
