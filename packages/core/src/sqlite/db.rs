@@ -424,6 +424,16 @@ pub fn set_session_active_players(
     db: &Connection,
     set_session_active_players: &super::models::SetSessionActivePlayers,
 ) -> Result<(), DbError> {
+    db.prepare(
+        "
+            DELETE FROM active_players
+            WHERE session_id=?
+            ",
+    )?
+    .into_iter()
+    .bind((1, set_session_active_players.session_id as i64))?
+    .next();
+
     for player_id in &set_session_active_players.players {
         insert_and_get_row(
             db,
