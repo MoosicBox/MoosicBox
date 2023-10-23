@@ -184,11 +184,14 @@ pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<Sessio
             ",
         )?
         .into_iter()
-        .bind((1, session.id as i64))?
+        .bind((1, session.session_id as i64))?
         .next();
     }
 
-    let playlist_id = session.playlist.as_ref().map(|p| p.id as i64);
+    let playlist_id = session
+        .playlist
+        .as_ref()
+        .map(|p| p.session_playlist_id as i64);
 
     let tracks: Option<Vec<Track>> = session
         .playlist
@@ -239,7 +242,7 @@ pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<Sessio
     let row = update_and_get_row(
         db,
         "sessions",
-        SqliteValue::Number(session.id as i64),
+        SqliteValue::Number(session.session_id as i64),
         &values,
     )?
     .expect("Session failed to update");
@@ -249,7 +252,7 @@ pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<Sessio
             id: playlist_id.unwrap() as i32,
             tracks: tracks.unwrap(),
         }
-    } else if let Some(playlist) = get_session_playlist(db, session.id)? {
+    } else if let Some(playlist) = get_session_playlist(db, session.session_id)? {
         playlist
     } else {
         return Err(DbError::InvalidRequest);
@@ -262,7 +265,7 @@ pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<Sessio
         position: row.read::<Option<i64>, _>("position").map(|x| x as i32),
         seek: row.read::<Option<i64>, _>("seek").map(|x| x as i32),
         name: row.read::<&str, _>("name").to_string(),
-        active_players: get_session_active_players(db, session.id)?,
+        active_players: get_session_active_players(db, session.session_id)?,
         playlist,
     })
 }
@@ -788,7 +791,6 @@ fn update_and_get_row<'a>(
         "UPDATE {table_name} {} WHERE id=? RETURNING *",
         build_set_clause(values),
     );
-    println!("statement: '{statement}'");
 
     Ok(bind_values(
         connection.prepare(statement)?.into_iter(),

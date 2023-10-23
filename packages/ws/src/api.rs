@@ -7,9 +7,12 @@ use std::{
 use async_trait::async_trait;
 use moosicbox_core::{
     app::Db,
-    sqlite::models::{
-        ApiUpdateSession, ApiUpdateSessionPlaylist, CreateSession, DeleteSession,
-        RegisterConnection, RegisterPlayer, SetSessionActivePlayers, ToApi, UpdateSession,
+    sqlite::{
+        db::DbError,
+        models::{
+            ApiUpdateSession, ApiUpdateSessionPlaylist, CreateSession, DeleteSession,
+            RegisterConnection, RegisterPlayer, SetSessionActivePlayers, ToApi, UpdateSession,
+        },
     },
 };
 use serde::{Deserialize, Serialize};
@@ -176,8 +179,8 @@ pub enum WebsocketMessageError {
     InvalidMessageType,
     #[error("Missing payload")]
     MissingPayload,
-    #[error("Unknown")]
-    Unknown,
+    #[error("Unknown {message:?}")]
+    Unknown { message: String },
 }
 
 pub async fn message(
@@ -193,108 +196,158 @@ pub async fn message(
     );
     match message_type {
         InboundMessageType::GetConnectionId => {
-            get_connection_id(sender, context)
-                .await
-                .map_err(|_e| WebsocketMessageError::Unknown)?;
+            get_connection_id(sender, context).await.map_err(|e| {
+                WebsocketMessageError::Unknown {
+                    message: e.to_string(),
+                }
+            })?;
             Ok(())
         }
         InboundMessageType::GetSessions => {
             get_sessions(db, sender, context, false)
                 .await
-                .map_err(|_e| WebsocketMessageError::Unknown)?;
+                .map_err(|e| WebsocketMessageError::Unknown {
+                    message: e.to_string(),
+                })?;
             Ok(())
         }
         InboundMessageType::RegisterConnection => {
             let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
-            let payload = serde_json::from_value::<RegisterConnection>(payload.clone())
-                .map_err(|_| WebsocketMessageError::Unknown)?;
+            let payload =
+                serde_json::from_value::<RegisterConnection>(payload.clone()).map_err(|e| {
+                    WebsocketMessageError::Unknown {
+                        message: e.to_string(),
+                    }
+                })?;
 
             register_connection(db.clone(), sender, context, &payload)
                 .await
-                .map_err(|_e| WebsocketMessageError::Unknown)?;
+                .map_err(|e| WebsocketMessageError::Unknown {
+                    message: e.to_string(),
+                })?;
 
             sender
                 .send_all_except(
                     &context.connection_id,
                     &get_connections(db)
                         .await
-                        .map_err(|_e| WebsocketMessageError::Unknown)?,
+                        .map_err(|e| WebsocketMessageError::Unknown {
+                            message: e.to_string(),
+                        })?,
                 )
                 .await
-                .map_err(|_e| WebsocketMessageError::Unknown)?;
+                .map_err(|e| WebsocketMessageError::Unknown {
+                    message: e.to_string(),
+                })?;
 
             Ok(())
         }
         InboundMessageType::RegisterPlayers => {
             let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
-            let payload = serde_json::from_value::<Vec<RegisterPlayer>>(payload.clone())
-                .map_err(|_| WebsocketMessageError::Unknown)?;
+            let payload =
+                serde_json::from_value::<Vec<RegisterPlayer>>(payload.clone()).map_err(|e| {
+                    WebsocketMessageError::Unknown {
+                        message: e.to_string(),
+                    }
+                })?;
 
             register_players(db.clone(), sender, context, &payload)
                 .await
-                .map_err(|_e| WebsocketMessageError::Unknown)?;
+                .map_err(|e| WebsocketMessageError::Unknown {
+                    message: e.to_string(),
+                })?;
 
             sender
                 .send_all_except(
                     &context.connection_id,
                     &get_connections(db)
                         .await
-                        .map_err(|_e| WebsocketMessageError::Unknown)?,
+                        .map_err(|e| WebsocketMessageError::Unknown {
+                            message: e.to_string(),
+                        })?,
                 )
                 .await
-                .map_err(|_e| WebsocketMessageError::Unknown)?;
+                .map_err(|e| WebsocketMessageError::Unknown {
+                    message: e.to_string(),
+                })?;
 
             Ok(())
         }
         InboundMessageType::SetActivePlayers => {
             let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
             let payload = serde_json::from_value::<SetSessionActivePlayers>(payload.clone())
-                .map_err(|_| WebsocketMessageError::Unknown)?;
+                .map_err(|e| WebsocketMessageError::Unknown {
+                    message: e.to_string(),
+                })?;
 
             set_session_active_players(db.clone(), sender, context, &payload)
                 .await
-                .map_err(|_e| WebsocketMessageError::Unknown)?;
+                .map_err(|e| WebsocketMessageError::Unknown {
+                    message: e.to_string(),
+                })?;
 
             sender
                 .send_all_except(
                     &context.connection_id,
                     &get_connections(db)
                         .await
-                        .map_err(|_e| WebsocketMessageError::Unknown)?,
+                        .map_err(|e| WebsocketMessageError::Unknown {
+                            message: e.to_string(),
+                        })?,
                 )
                 .await
-                .map_err(|_e| WebsocketMessageError::Unknown)?;
+                .map_err(|e| WebsocketMessageError::Unknown {
+                    message: e.to_string(),
+                })?;
 
             Ok(())
         }
         InboundMessageType::CreateSession => {
             let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
-            let payload = serde_json::from_value::<CreateSession>(payload.clone())
-                .map_err(|_| WebsocketMessageError::Unknown)?;
+            let payload =
+                serde_json::from_value::<CreateSession>(payload.clone()).map_err(|e| {
+                    WebsocketMessageError::Unknown {
+                        message: e.to_string(),
+                    }
+                })?;
 
             create_session(db, sender, context, &payload)
                 .await
-                .map_err(|_e| WebsocketMessageError::Unknown)?;
+                .map_err(|e| WebsocketMessageError::Unknown {
+                    message: e.to_string(),
+                })?;
             Ok(())
         }
         InboundMessageType::UpdateSession => {
             let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
-            let payload = serde_json::from_value::<UpdateSession>(payload.clone())
-                .map_err(|_| WebsocketMessageError::Unknown)?;
+            let payload =
+                serde_json::from_value::<UpdateSession>(payload.clone()).map_err(|e| {
+                    WebsocketMessageError::Unknown {
+                        message: e.to_string(),
+                    }
+                })?;
 
             update_session(db, sender, context, &payload)
                 .await
-                .map_err(|_e| WebsocketMessageError::Unknown)?;
+                .map_err(|e| WebsocketMessageError::Unknown {
+                    message: e.to_string(),
+                })?;
             Ok(())
         }
         InboundMessageType::DeleteSession => {
             let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
-            let payload = serde_json::from_value::<DeleteSession>(payload.clone())
-                .map_err(|_| WebsocketMessageError::Unknown)?;
+            let payload =
+                serde_json::from_value::<DeleteSession>(payload.clone()).map_err(|e| {
+                    WebsocketMessageError::Unknown {
+                        message: e.to_string(),
+                    }
+                })?;
 
             delete_session(db, sender, context, &payload)
                 .await
-                .map_err(|_e| WebsocketMessageError::Unknown)?;
+                .map_err(|e| WebsocketMessageError::Unknown {
+                    message: e.to_string(),
+                })?;
             Ok(())
         }
         InboundMessageType::Ping => {
@@ -305,7 +358,9 @@ pub async fn message(
             let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
             playback_action(sender, context, payload)
                 .await
-                .map_err(|_e| WebsocketMessageError::Unknown)?;
+                .map_err(|e| WebsocketMessageError::Unknown {
+                    message: e.to_string(),
+                })?;
             Ok(())
         }
     }?;
@@ -431,11 +486,21 @@ async fn set_session_active_players(
         let db = db.lock();
         let library = db.as_ref().unwrap().library.lock().unwrap();
 
-        moosicbox_core::sqlite::db::set_session_active_players(&library, &payload)
+        moosicbox_core::sqlite::db::set_session_active_players(&library, payload)
             .map_err(|_| WebsocketSendError::Unknown)?;
     }
     get_sessions(db, sender, context, true).await?;
     Ok(())
+}
+
+#[derive(Debug, Error)]
+pub enum UpdateSessionError {
+    #[error("No session found")]
+    NoSessionFound,
+    #[error(transparent)]
+    WebsocketSend(WebsocketSendError),
+    #[error(transparent)]
+    Db(DbError),
 }
 
 async fn update_session(
@@ -443,19 +508,22 @@ async fn update_session(
     sender: &mut impl WebsocketSender,
     context: &WebsocketContext,
     payload: &UpdateSession,
-) -> Result<(), WebsocketSendError> {
+) -> Result<(), UpdateSessionError> {
     let session = {
         let db = db.lock();
         let library = db.as_ref().unwrap().library.lock().unwrap();
+
         moosicbox_core::sqlite::db::update_session(&library, payload)
-            .map_err(|_| WebsocketSendError::Unknown)?;
-        moosicbox_core::sqlite::db::get_session(&library, payload.id)
-            .map_err(|_| WebsocketSendError::Unknown)?
-            .expect("No session with id")
+            .map_err(UpdateSessionError::Db)?;
+
+        moosicbox_core::sqlite::db::get_session(&library, payload.session_id)
+            .map_err(UpdateSessionError::Db)?
+            .map(Ok)
+            .unwrap_or(Err(UpdateSessionError::NoSessionFound))?
     };
 
     let response = ApiUpdateSession {
-        id: session.id,
+        session_id: session.id,
         name: payload.name.clone().map(|_| session.name),
         active: payload.active.map(|_| session.active),
         playing: payload.playing.map(|_| session.playing),
@@ -464,7 +532,7 @@ async fn update_session(
             .map(|_| session.position.expect("Position not set")),
         seek: payload.seek.map(|_| session.seek.expect("Seek not set")),
         playlist: payload.playlist.clone().map(|p| ApiUpdateSessionPlaylist {
-            id: p.id,
+            id: p.session_playlist_id,
             tracks: session.playlist.tracks.iter().map(|t| t.to_api()).collect(),
         }),
     };
@@ -477,7 +545,8 @@ async fn update_session(
 
     sender
         .send_all_except(&context.connection_id, &session_updated)
-        .await?;
+        .await
+        .map_err(UpdateSessionError::WebsocketSend)?;
 
     Ok(())
 }

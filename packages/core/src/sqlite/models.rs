@@ -291,7 +291,7 @@ pub struct CreateSessionPlaylist {
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSession {
-    pub id: i32,
+    pub session_id: i32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -309,14 +309,14 @@ pub struct UpdateSession {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSessionPlaylist {
-    pub id: i32,
+    pub session_playlist_id: i32,
     pub tracks: Vec<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiUpdateSession {
-    pub id: i32,
+    pub session_id: i32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
