@@ -11,7 +11,8 @@ use moosicbox_core::{
         db::DbError,
         models::{
             ApiUpdateSession, ApiUpdateSessionPlaylist, CreateSession, DeleteSession,
-            RegisterConnection, RegisterPlayer, SetSessionActivePlayers, ToApi, UpdateSession,
+            RegisterConnection, RegisterPlayer, SetSeek, SetSessionActivePlayers, ToApi,
+            UpdateSession,
         },
     },
 };
@@ -47,6 +48,7 @@ pub enum InboundMessageType {
     RegisterPlayers,
     SetActivePlayers,
     PlaybackAction,
+    SetSeek,
 }
 
 impl fmt::Display for InboundMessageType {
@@ -64,6 +66,7 @@ pub enum OutboundMessageType {
     Sessions,
     SessionUpdated,
     Connections,
+    SetSeek,
 }
 
 pub struct WebsocketContext {
@@ -358,6 +361,30 @@ pub async fn message(
                 .map_err(|e| WebsocketMessageError::Unknown {
                     message: e.to_string(),
                 })?;
+            Ok(())
+        }
+        InboundMessageType::SetSeek => {
+            let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
+            let payload = serde_json::from_value::<SetSeek>(payload.clone()).map_err(|e| {
+                WebsocketMessageError::Unknown {
+                    message: e.to_string(),
+                }
+            })?;
+
+            sender
+                .send_all_except(
+                    &context.connection_id,
+                    &serde_json::json!({
+                        "type": OutboundMessageType::SetSeek,
+                        "payload": payload,
+                    })
+                    .to_string(),
+                )
+                .await
+                .map_err(|e| WebsocketMessageError::Unknown {
+                    message: e.to_string(),
+                })?;
+
             Ok(())
         }
     }?;

@@ -537,3 +537,10 @@ impl ToApi<ApiPlayer> for Player {
         }
     }
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SetSeek {
+    pub session_id: i32,
+    pub seek: i32,
+}
