@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use sqlite::Connection;
+use rusqlite::Connection;
 
 pub struct AppState {
     pub service_port: u16,

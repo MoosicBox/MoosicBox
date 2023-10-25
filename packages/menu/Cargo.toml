@@ -14,7 +14,6 @@ lambda_runtime = "0.8.2"
 moosicbox_core = { path = "../core" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.107"
-sqlite = "0.31.1"
 thiserror = "1.0.48"
 
 [features]

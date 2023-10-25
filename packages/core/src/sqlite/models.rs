@@ -1,23 +1,67 @@
 use std::str::FromStr;
 
+use rusqlite::Row;
 use serde::{Deserialize, Serialize};
-use sqlite::Row;
 
 use super::db::{
     get_players, get_session_active_players, get_session_playlist, get_session_playlist_tracks,
-    DbError,
+    DbError, SqliteValue,
 };
 
 pub trait AsModel<T> {
     fn as_model(&self) -> T;
 }
 
+pub trait AsId {
+    fn as_id(&self) -> SqliteValue;
+}
+
 pub trait AsModelQuery<T> {
-    fn as_model_query(&self, db: &sqlite::Connection) -> Result<T, DbError>;
+    fn as_model_query(&self, db: &rusqlite::Connection) -> Result<T, DbError>;
 }
 
 pub trait ToApi<T> {
     fn to_api(&self) -> T;
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct NumberId {
+    pub id: i32,
+}
+
+impl AsModel<NumberId> for Row<'_> {
+    fn as_model(&self) -> NumberId {
+        NumberId {
+            id: self.get("id").unwrap(),
+        }
+    }
+}
+
+impl AsId for NumberId {
+    fn as_id(&self) -> SqliteValue {
+        SqliteValue::Number(self.id as i64)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct StringId {
+    pub id: String,
+}
+
+impl AsModel<StringId> for Row<'_> {
+    fn as_model(&self) -> StringId {
+        StringId {
+            id: self.get("id").unwrap(),
+        }
+    }
+}
+
+impl AsId for StringId {
+    fn as_id(&self) -> SqliteValue {
+        SqliteValue::String(self.id.clone())
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
@@ -37,26 +81,28 @@ pub struct Track {
     pub blur: bool,
 }
 
-impl AsModel<Track> for Row {
+impl AsModel<Track> for Row<'_> {
     fn as_model(&self) -> Track {
         Track {
-            id: self.read::<i64, _>("id") as i32,
-            number: self.read::<i64, _>("number") as i32,
-            title: self.read::<&str, _>("title").to_string(),
-            duration: self.read::<f64, _>("duration"),
-            album: self.read::<&str, _>("album").to_string(),
-            album_id: self.read::<i64, _>("album_id") as i32,
-            date_released: self
-                .read::<Option<&str>, _>("date_released")
-                .map(|date| date.to_string()),
-            artist: self.read::<&str, _>("artist").to_string(),
-            artist_id: self.read::<i64, _>("artist_id") as i32,
-            file: self.read::<Option<&str>, _>("file").map(|f| f.to_string()),
-            artwork: self
-                .read::<Option<&str>, _>("artwork")
-                .map(|date| date.to_string()),
-            blur: self.read::<i64, _>("blur") == 1,
+            id: self.get("id").unwrap(),
+            number: self.get("number").unwrap(),
+            title: self.get("title").unwrap(),
+            duration: self.get("duration").unwrap(),
+            album: self.get("album").unwrap_or_default(),
+            album_id: self.get("album_id").unwrap(),
+            date_released: self.get("date_released").unwrap_or_default(),
+            artist: self.get("artist").unwrap_or_default(),
+            artist_id: self.get("artist_id").unwrap_or_default(),
+            file: self.get("file").unwrap(),
+            artwork: self.get("artwork").unwrap_or_default(),
+            blur: self.get::<_, u16>("blur").unwrap_or_default() == 1,
         }
+    }
+}
+
+impl AsId for Track {
+    fn as_id(&self) -> SqliteValue {
+        SqliteValue::Number(self.id as i64)
     }
 }
 
@@ -101,13 +147,19 @@ pub struct Artist {
     pub cover: Option<String>,
 }
 
-impl AsModel<Artist> for Row {
+impl AsModel<Artist> for Row<'_> {
     fn as_model(&self) -> Artist {
         Artist {
-            id: self.read::<i64, _>("id") as i32,
-            title: self.read::<&str, _>("title").to_string(),
-            cover: self.read::<Option<&str>, _>("cover").map(|c| c.to_string()),
+            id: self.get("id").unwrap(),
+            title: self.get("title").unwrap(),
+            cover: self.get("cover").unwrap(),
         }
+    }
+}
+
+impl AsId for Artist {
+    fn as_id(&self) -> SqliteValue {
+        SqliteValue::Number(self.id as i64)
     }
 }
 
@@ -161,28 +213,26 @@ pub struct Album {
     pub blur: bool,
 }
 
-impl AsModel<Album> for Row {
+impl AsModel<Album> for Row<'_> {
     fn as_model(&self) -> Album {
         Album {
-            id: self.read::<i64, _>("id") as i32,
-            artist: self.read::<&str, _>("artist").to_string(),
-            artist_id: self.read::<i64, _>("artist_id") as i32,
-            title: self.read::<&str, _>("title").to_string(),
-            date_released: self
-                .read::<Option<&str>, _>("date_released")
-                .map(|date| date.to_string()),
-            date_added: self
-                .read::<Option<&str>, _>("date_added")
-                .map(|date| date.to_string()),
-            artwork: self
-                .read::<Option<&str>, _>("artwork")
-                .map(|date| date.to_string()),
-            directory: self
-                .read::<Option<&str>, _>("directory")
-                .map(|date| date.to_string()),
+            id: self.get("id").unwrap(),
+            artist: self.get("artist").unwrap_or_default(),
+            artist_id: self.get("artist_id").unwrap(),
+            title: self.get("title").unwrap(),
+            date_released: self.get("date_released").unwrap(),
+            date_added: self.get("date_added").unwrap(),
+            artwork: self.get("artwork").unwrap(),
+            directory: self.get("directory").unwrap(),
             source: AlbumSource::Local,
-            blur: self.read::<i64, _>("blur") == 1,
+            blur: self.get::<_, u16>("blur").unwrap() == 1,
         }
+    }
+}
+
+impl AsId for Album {
+    fn as_id(&self) -> SqliteValue {
+        SqliteValue::Number(self.id as i64)
     }
 }
 
@@ -357,22 +407,42 @@ pub struct Session {
     pub playlist: SessionPlaylist,
 }
 
-impl AsModelQuery<Session> for Row {
-    fn as_model_query(&self, db: &sqlite::Connection) -> Result<Session, DbError> {
-        let id = self.read::<i64, _>("id") as i32;
+impl AsModel<Session> for Row<'_> {
+    fn as_model(&self) -> Session {
+        Session {
+            id: self.get("id").unwrap(),
+            name: self.get("name").unwrap(),
+            active: self.get::<_, u16>("active").unwrap() == 1,
+            playing: self.get::<_, u16>("playing").unwrap() == 1,
+            position: self.get("position").unwrap(),
+            seek: self.get("seek").unwrap(),
+            ..Default::default()
+        }
+    }
+}
+
+impl AsModelQuery<Session> for Row<'_> {
+    fn as_model_query(&self, db: &rusqlite::Connection) -> Result<Session, DbError> {
+        let id = self.get("id").unwrap();
         match get_session_playlist(db, id)? {
             Some(playlist) => Ok(Session {
                 id,
-                name: self.read::<&str, _>("name").to_string(),
-                active: self.read::<i64, _>("active") == 1,
-                playing: self.read::<i64, _>("playing") == 1,
-                position: self.read::<Option<i64>, _>("position").map(|x| x as i32),
-                seek: self.read::<Option<i64>, _>("seek").map(|x| x as i32),
+                name: self.get("name").unwrap(),
+                active: self.get::<_, u16>("active").unwrap() == 1,
+                playing: self.get::<_, u16>("playing").unwrap() == 1,
+                position: self.get("position").unwrap(),
+                seek: self.get("seek").unwrap(),
                 active_players: get_session_active_players(db, id)?,
                 playlist,
             }),
             None => Err(DbError::InvalidRequest),
         }
+    }
+}
+
+impl AsId for Session {
+    fn as_id(&self) -> SqliteValue {
+        SqliteValue::Number(self.id as i64)
     }
 }
 
@@ -411,13 +481,28 @@ pub struct SessionPlaylist {
     pub tracks: Vec<Track>,
 }
 
-impl AsModelQuery<SessionPlaylist> for Row {
-    fn as_model_query(&self, db: &sqlite::Connection) -> Result<SessionPlaylist, DbError> {
-        let id = self.read::<i64, _>("id") as i32;
+impl AsModel<SessionPlaylist> for Row<'_> {
+    fn as_model(&self) -> SessionPlaylist {
+        SessionPlaylist {
+            id: self.get("id").unwrap(),
+            ..Default::default()
+        }
+    }
+}
+
+impl AsModelQuery<SessionPlaylist> for Row<'_> {
+    fn as_model_query(&self, db: &rusqlite::Connection) -> Result<SessionPlaylist, DbError> {
+        let id = self.get("id").unwrap();
         Ok(SessionPlaylist {
             id,
             tracks: get_session_playlist_tracks(db, id)?,
         })
+    }
+}
+
+impl AsId for SessionPlaylist {
+    fn as_id(&self) -> SqliteValue {
+        SqliteValue::Number(self.id as i64)
     }
 }
 
@@ -455,17 +540,35 @@ pub struct Connection {
     pub players: Vec<Player>,
 }
 
-impl AsModelQuery<Connection> for Row {
-    fn as_model_query(&self, db: &sqlite::Connection) -> Result<Connection, DbError> {
-        let id = self.read::<&str, _>("id").to_string();
+impl AsModel<Connection> for Row<'_> {
+    fn as_model(&self) -> Connection {
+        Connection {
+            id: self.get::<_, String>("id").unwrap(),
+            name: self.get("name").unwrap(),
+            created: self.get("created").unwrap(),
+            updated: self.get("updated").unwrap(),
+            ..Default::default()
+        }
+    }
+}
+
+impl AsModelQuery<Connection> for Row<'_> {
+    fn as_model_query(&self, db: &rusqlite::Connection) -> Result<Connection, DbError> {
+        let id = self.get::<_, String>("id").unwrap();
         let players = get_players(db, &id)?;
         Ok(Connection {
             id,
-            name: self.read::<&str, _>("name").to_string(),
-            created: self.read::<&str, _>("created").to_string(),
-            updated: self.read::<&str, _>("updated").to_string(),
+            name: self.get("name").unwrap(),
+            created: self.get("created").unwrap(),
+            updated: self.get("updated").unwrap(),
             players,
         })
+    }
+}
+
+impl AsId for Connection {
+    fn as_id(&self) -> SqliteValue {
+        SqliteValue::String(self.id.clone())
     }
 }
 
@@ -505,16 +608,50 @@ pub struct Player {
     pub updated: String,
 }
 
-impl AsModel<Player> for Row {
+impl AsModel<Player> for Row<'_> {
     fn as_model(&self) -> Player {
         Player {
-            id: self.read::<i64, _>("id") as i32,
-            name: self.read::<&str, _>("name").to_string(),
-            r#type: self.read::<&str, _>("type").to_string(),
-            playing: self.read::<i64, _>("playing") == 1,
-            created: self.read::<&str, _>("created").to_string(),
-            updated: self.read::<&str, _>("updated").to_string(),
+            id: self.get("id").unwrap(),
+            name: self.get("name").unwrap(),
+            r#type: self.get("type").unwrap(),
+            playing: self.get::<_, u16>("playing").unwrap() == 1,
+            created: self.get("created").unwrap(),
+            updated: self.get("updated").unwrap(),
         }
+    }
+}
+
+impl AsId for Player {
+    fn as_id(&self) -> SqliteValue {
+        SqliteValue::Number(self.id as i64)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivePlayer {
+    pub id: i32,
+    pub session_id: i32,
+    pub player_id: i32,
+    pub created: String,
+    pub updated: String,
+}
+
+impl AsModel<ActivePlayer> for Row<'_> {
+    fn as_model(&self) -> ActivePlayer {
+        ActivePlayer {
+            id: self.get("id").unwrap(),
+            session_id: self.get("session_id").unwrap(),
+            player_id: self.get("player_id").unwrap(),
+            created: self.get("created").unwrap(),
+            updated: self.get("updated").unwrap(),
+        }
+    }
+}
+
+impl AsId for ActivePlayer {
+    fn as_id(&self) -> SqliteValue {
+        SqliteValue::Number(self.id as i64)
     }
 }
 

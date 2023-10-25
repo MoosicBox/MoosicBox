@@ -25,7 +25,7 @@ pub enum GetArtistError {
     #[error("Poison error")]
     PoisonError,
     #[error(transparent)]
-    SqliteError(#[from] sqlite::Error),
+    SqliteError(#[from] rusqlite::Error),
     #[error(transparent)]
     DbError(#[from] db::DbError),
 }
@@ -67,7 +67,7 @@ pub enum GetAlbumError {
     #[error("Poison error")]
     PoisonError,
     #[error(transparent)]
-    SqliteError(#[from] sqlite::Error),
+    SqliteError(#[from] rusqlite::Error),
     #[error(transparent)]
     DbError(#[from] db::DbError),
 }
@@ -100,18 +100,18 @@ pub async fn get_album(album_id: i32, data: &AppState) -> Result<Album, GetAlbum
 
 impl<T> From<PoisonError<T>> for GetAlbumsError {
     fn from(_err: PoisonError<T>) -> Self {
-        Self::PoisonError
+        Self::Poison
     }
 }
 
 #[derive(Debug, Error)]
 pub enum GetAlbumsError {
     #[error("Poison error")]
-    PoisonError,
+    Poison,
     #[error(transparent)]
-    JsonError(#[from] awc::error::JsonPayloadError),
+    Json(#[from] awc::error::JsonPayloadError),
     #[error(transparent)]
-    SqliteError(#[from] sqlite::Error),
+    Db(#[from] DbError),
 }
 
 pub async fn get_albums(data: &AppState) -> Result<Vec<Album>, GetAlbumsError> {
@@ -121,40 +121,9 @@ pub async fn get_albums(data: &AppState) -> Result<Vec<Album>, GetAlbumsError> {
     };
 
     Ok(get_or_set_to_cache(request, || async {
-        Ok::<CacheItemType, GetAlbumsError>(CacheItemType::Albums(
-            data.db
-                .as_ref()
-                .unwrap()
-                .library
-                .lock()?
-                .prepare("SELECT * from albums")?
-                .into_iter()
-                .filter_map(|row| row.ok())
-                .map(|row| {
-                    let id = row.read::<i64, _>("id") as i32;
-                    let artist_id = row.read::<i64, _>("artist") as i32;
-                    let title = String::from(row.read::<&str, _>("title"));
-                    let date_released = row
-                        .read::<Option<&str>, _>("date_released")
-                        .map(|date| date.to_string());
-                    let artwork = row
-                        .read::<Option<&str>, _>("artwork")
-                        .map(|_a| format!("/albums/{id}/300x300"));
-                    let directory = row
-                        .read::<Option<&str>, _>("directory")
-                        .map(|dir| dir.to_string());
-                    Album {
-                        id,
-                        title,
-                        artist_id,
-                        date_released,
-                        artwork,
-                        directory,
-                        ..Default::default()
-                    }
-                })
-                .collect(),
-        ))
+        Ok::<CacheItemType, GetAlbumsError>(CacheItemType::Albums(super::db::get_albums(
+            &data.db.as_ref().unwrap().library.lock().unwrap(),
+        )?))
     })
     .await?
     .into_albums()
@@ -174,7 +143,7 @@ pub enum GetAlbumTracksError {
     #[error(transparent)]
     Json(#[from] awc::error::JsonPayloadError),
     #[error(transparent)]
-    Sqlite(#[from] sqlite::Error),
+    Sqlite(#[from] rusqlite::Error),
     #[error(transparent)]
     Db(#[from] DbError),
 }
@@ -206,7 +175,7 @@ pub enum GetArtistAlbumsError {
     #[error(transparent)]
     Json(#[from] awc::error::JsonPayloadError),
     #[error(transparent)]
-    Sqlite(#[from] sqlite::Error),
+    Sqlite(#[from] rusqlite::Error),
     #[error(transparent)]
     Db(#[from] DbError),
 }

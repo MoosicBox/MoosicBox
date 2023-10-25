@@ -10,6 +10,7 @@ use moosicbox_core::app::{AppState, Db};
 use std::{
     env,
     sync::{Arc, Mutex, OnceLock},
+    time::Duration,
 };
 use tokio::{task::spawn, try_join};
 use ws::server::ChatServer;
@@ -26,9 +27,9 @@ async fn main() -> std::io::Result<()> {
 
     static DB: OnceLock<Db> = OnceLock::new();
     let db = DB.get_or_init(|| {
-        let mut library = ::sqlite::open("library.db").unwrap();
+        let library = ::rusqlite::Connection::open("library.db").unwrap();
         library
-            .set_busy_timeout(10)
+            .busy_timeout(Duration::from_millis(10))
             .expect("Failed to set busy timeout");
         Db {
             library: Arc::new(Mutex::new(library)),

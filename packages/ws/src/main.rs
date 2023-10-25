@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex, OnceLock};
+use std::{
+    sync::{Arc, Mutex, OnceLock},
+    time::Duration,
+};
 
 use actix_web::{error::ErrorInternalServerError, Result};
 use async_once_cell::OnceCell;
@@ -91,9 +94,12 @@ pub async fn ws_handler(event: LambdaEvent<Value>) -> Result<Response, Websocket
 
     static DB: OnceLock<Arc<Mutex<Db>>> = OnceLock::new();
     let db = DB.get_or_init(|| {
-        let library_db = ::sqlite::open(":memory:").unwrap();
+        let library = ::rusqlite::Connection::open_in_memory().unwrap();
+        library
+            .busy_timeout(Duration::from_millis(10))
+            .expect("Failed to set busy timeout");
         let db = Db {
-            library: Arc::new(Mutex::new(library_db)),
+            library: Arc::new(Mutex::new(library)),
         };
         Arc::new(Mutex::new(db))
     });

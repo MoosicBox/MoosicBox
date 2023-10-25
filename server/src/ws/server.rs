@@ -12,8 +12,8 @@ use std::{
 use async_trait::async_trait;
 use moosicbox_core::app::Db;
 use moosicbox_ws::api::{
-    EventType, InboundMessageType, WebsocketContext, WebsocketDisconnectError,
-    WebsocketMessageError, WebsocketSendError, WebsocketSender,
+    EventType, InboundMessageType, WebsocketConnectError, WebsocketContext,
+    WebsocketDisconnectError, WebsocketMessageError, WebsocketSendError, WebsocketSender,
 };
 use rand::{thread_rng, Rng as _};
 use serde_json::Value;
@@ -187,7 +187,7 @@ impl ChatServer {
     async fn connect(
         &mut self,
         tx: mpsc::UnboundedSender<Msg>,
-    ) -> Result<ConnId, WebsocketSendError> {
+    ) -> Result<ConnId, WebsocketConnectError> {
         log::info!("Someone joined");
 
         // register session with random connection ID
@@ -206,9 +206,7 @@ impl ChatServer {
             event_type: EventType::Connect,
         };
 
-        moosicbox_ws::api::connect(self.db.clone(), self, &context)
-            .await
-            .map_err(|_| WebsocketSendError::Unknown)?;
+        moosicbox_ws::api::connect(self.db.clone(), self, &context).await?;
 
         // send id back
         Ok(id)
@@ -299,8 +297,11 @@ impl ChatServer {
                 }
 
                 Command::Message { conn, msg, res_tx } => {
-                    if let Err(error) = self.on_message(conn, msg).await {
-                        eprintln!("Failed to process message: {:?}", error);
+                    if let Err(error) = self.on_message(conn, msg.clone()).await {
+                        eprintln!(
+                            "Failed to process message from {}: {msg:?}: {error:?}",
+                            conn
+                        );
                     }
                     let _ = res_tx.send(());
                 }
