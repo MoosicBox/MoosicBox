@@ -807,7 +807,7 @@ where
         build_set_clause(values),
         variable_count + 1
     );
-    println!("running statement {statement}");
+
     let mut statement = connection.prepare_cached(&statement)?;
     bind_values(&mut statement, &[values.clone(), vec![("id", id)]].concat())?;
     let mut query = statement.raw_query();
@@ -844,10 +844,8 @@ where
 {
     match find_row(connection, table_name, &filters)? {
         Some(row) => {
-            println!("ONE {table_name}");
             let updated =
                 update_and_get_row(connection, table_name, row.as_id(), &values)?.unwrap();
-            println!("aft ONE {table_name}");
 
             let str1 = format!("{row:?}");
             let str2 = format!("{updated:?}");
