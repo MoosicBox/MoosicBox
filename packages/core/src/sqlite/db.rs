@@ -793,10 +793,19 @@ fn update_and_get_row<'a, T>(
 where
     for<'b> Row<'b>: AsModel<T>,
 {
+    let variable_count: i32 = values
+        .iter()
+        .map(|v| match v.1 {
+            SqliteValue::StringOpt(None) => 0,
+            SqliteValue::NumberOpt(None) => 0,
+            _ => 1,
+        })
+        .sum();
+
     let statement = format!(
         "UPDATE {table_name} {} WHERE id=?{} RETURNING *",
         build_set_clause(values),
-        values.len() + 1
+        variable_count + 1
     );
     println!("running statement {statement}");
     let mut statement = connection.prepare_cached(&statement)?;
