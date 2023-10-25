@@ -6,5 +6,5 @@ CREATE TABLE IF NOT EXISTS players (
     playing INTEGER NOT NULL DEFAULT 0,
     created TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now')),
     updated TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now')),
-    FOREIGN KEY (connection_id) REFERENCES connection(id)
+    FOREIGN KEY (connection_id) REFERENCES connections(id)
 );
