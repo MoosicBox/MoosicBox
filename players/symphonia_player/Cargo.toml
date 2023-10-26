@@ -11,16 +11,19 @@ log = { workspace = true }
 pretty_env_logger = { workspace = true }
 symphonia = { workspace = true }
 thiserror = "1.0.48"
+arrayvec = { version = "0.7.1", optional = true }
+cpal = { version = "0.15.2", optional = true }
+rb = { version = "0.4.1", optional = true }
+rubato = { version = "0.12.0", optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-libpulse-binding = "2.5.0"
-libpulse-simple-binding = "2.5.0"
-
-[target.'cfg(not(target_os = "linux"))'.dependencies]
-arrayvec = "0.7.1"
-cpal = "0.15.2"
-rb = "0.4.1"
-rubato = "0.12.0"
+libpulse-binding = { version = "2.5.0", optional = true }
+libpulse-simple-binding = { version = "2.5.0", optional = true }
 
 [features]
+default = ["cpal"]
 fail-on-warnings = []
+cpal = ["dep:arrayvec", "dep:cpal", "dep:rb", "dep:rubato"]
+jack = ["cpal/jack"]
+asio = ["cpal/asio"]
+pulseaudio = ["libpulse-binding", "libpulse-simple-binding"]

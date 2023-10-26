@@ -19,6 +19,7 @@ moosicbox_menu = { path = "../packages/menu" }
 moosicbox_files = { path = "../packages/files" }
 moosicbox_player = { path = "../packages/player" }
 moosicbox_ws = { path = "../packages/ws" }
+moosicbox_symphonia_player = { path = "../players/symphonia_player" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.105"
 thiserror = "1.0.48"
@@ -35,3 +36,7 @@ tokio = { workspace = true, features = ["rt", "time", "macros"] }
 
 [features]
 fail-on-warnings = []
+cpal = ["moosicbox_symphonia_player/cpal"]
+jack = ["moosicbox_symphonia_player/jack"]
+asio = ["moosicbox_symphonia_player/asio"]
+pulseaudio = ["moosicbox_symphonia_player/pulseaudio"]

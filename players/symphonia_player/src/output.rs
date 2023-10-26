@@ -25,7 +25,7 @@ pub enum AudioOutputError {
 
 pub type Result<T> = result::Result<T, AudioOutputError>;
 
-#[cfg(target_os = "linux")]
+#[cfg(all(feature = "pulseaudio", target_os = "linux"))]
 mod pulseaudio {
     use std::time::SystemTime;
 
@@ -180,7 +180,7 @@ mod pulseaudio {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(all(feature = "pulseaudio", target_os = "linux")))]
 mod cpal {
     use crate::resampler::Resampler;
 
@@ -422,12 +422,12 @@ mod cpal {
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(feature = "pulseaudio", target_os = "linux"))]
 pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
     pulseaudio::PulseAudioOutput::try_open(spec, duration)
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(all(feature = "pulseaudio", target_os = "linux")))]
 pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
     cpal::CpalAudioOutput::try_open(spec, duration)
 }

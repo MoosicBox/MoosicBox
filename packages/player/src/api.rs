@@ -14,7 +14,7 @@ use actix_web::{
 };
 use lambda_web::actix_web::{self, get, post};
 use lazy_static::lazy_static;
-use log::{debug, info, trace};
+use log::{debug, error, info, trace};
 use moosicbox_core::{
     app::AppState,
     sqlite::{
@@ -180,13 +180,15 @@ fn stop(playback_id: Option<usize>) -> Result<Playback> {
     playback.abort.clone().store(true, Ordering::SeqCst);
 
     trace!("Waiting for playback completion response");
-    ACTIVE_PLAYBACK_RECEIVERS
+    if let Err(_err) = ACTIVE_PLAYBACK_RECEIVERS
         .lock()
         .unwrap()
         .get(&playback.id)
         .unwrap()
         .recv()
-        .unwrap();
+    {
+        error!("Sender correlated with receiver has dropped");
+    }
     trace!("Playback successfully stopped");
 
     Ok(playback)

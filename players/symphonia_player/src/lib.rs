@@ -22,7 +22,7 @@ use thiserror::Error;
 
 mod output;
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(all(feature = "pulseaudio", target_os = "linux")))]
 mod resampler;
 
 #[derive(Clone)]
