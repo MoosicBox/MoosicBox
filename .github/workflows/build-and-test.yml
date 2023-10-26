@@ -59,6 +59,7 @@ jobs:
                   key: ${{ runner.os }}-${{ matrix.package.name }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
             - name: Install also audio libs
+              if: ${{ matrix.package.name == 'server' || matrix.package.name == 'symphonia_player' || matrix.package.name == 'player' }}
               run: sudo apt-get install libasound2-dev
 
             - name: Build ${{ matrix.package.name }}
