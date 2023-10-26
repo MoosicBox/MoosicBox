@@ -248,12 +248,10 @@ pub async fn message(
                 })?;
 
             register_connection(db.clone(), sender, context, &payload).await?;
-            println!("after register");
 
             sender
                 .send_all_except(&context.connection_id, &get_connections(db).await?)
                 .await?;
-            println!("after send");
 
             Ok(())
         }
