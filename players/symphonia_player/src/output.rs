@@ -14,13 +14,13 @@ pub trait AudioOutput {
 #[derive(Debug, Error)]
 pub enum AudioOutputError {
     #[error("OpenStreamError")]
-    OpenStreamError,
+    OpenStream,
     #[error("PlayStreamError")]
-    PlayStreamError,
+    PlayStream,
     #[error("StreamClosedError")]
-    StreamClosedError,
-    #[error("RbError")]
-    RbError,
+    StreamClosed,
+    #[error("InterruptError")]
+    Interrupt,
 }
 
 pub type Result<T> = result::Result<T, AudioOutputError>;
@@ -89,7 +89,7 @@ mod pulseaudio {
                 Err(err) => {
                     error!("audio output stream open error: {}", err);
 
-                    Err(AudioOutputError::OpenStreamError)
+                    Err(AudioOutputError::OpenStream)
                 }
             }
         }
@@ -119,14 +119,17 @@ mod pulseaudio {
                 Err(err) => {
                     error!("audio output stream write error: {}", err);
 
-                    Err(AudioOutputError::StreamClosedError)
+                    Err(AudioOutputError::StreamClosed)
                 }
                 _ => {
                     let end = SystemTime::now();
-                    trace!(
-                        "Successfully wrote to pulse audio. Took {}ms",
-                        end.duration_since(start).unwrap().as_millis()
-                    );
+                    let took_ms = end.duration_since(start).unwrap().as_millis();
+                    if took_ms >= 500 {
+                        error!("Detected audio interrupt");
+                        return Err(AudioOutputError::Interrupt);
+                    } else {
+                        trace!("Successfully wrote to pulse audio. Took {}ms", took_ms);
+                    }
                     Ok(())
                 }
             }
@@ -228,7 +231,7 @@ mod cpal {
                 Some(device) => device,
                 _ => {
                     error!("failed to get default audio output device");
-                    return Err(AudioOutputError::OpenStreamError);
+                    return Err(AudioOutputError::OpenStream);
                 }
             };
 
@@ -236,7 +239,7 @@ mod cpal {
                 Ok(config) => config,
                 Err(err) => {
                     error!("failed to get default audio output device config: {}", err);
-                    return Err(AudioOutputError::OpenStreamError);
+                    return Err(AudioOutputError::OpenStream);
                 }
             };
 
@@ -333,7 +336,7 @@ mod cpal {
             if let Err(err) = stream_result {
                 error!("audio output stream open error: {}", err);
 
-                return Err(AudioOutputError::OpenStreamError);
+                return Err(AudioOutputError::OpenStream);
             }
 
             let stream = stream_result.unwrap();
@@ -342,7 +345,7 @@ mod cpal {
             if let Err(err) = stream.play() {
                 error!("audio output stream play error: {}", err);
 
-                return Err(AudioOutputError::PlayStreamError);
+                return Err(AudioOutputError::PlayStream);
             }
 
             let sample_buf = SampleBuffer::<T>::new(duration, spec);
@@ -398,7 +401,7 @@ mod cpal {
                         samples = &samples[written..];
                     }
                     Ok(None) => break,
-                    Err(_err) => return Err(AudioOutputError::RbError),
+                    Err(_err) => return Err(AudioOutputError::Interrupt),
                 }
             }
 

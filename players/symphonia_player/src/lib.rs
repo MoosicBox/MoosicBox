@@ -7,6 +7,8 @@ use std::io;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
+use std::thread::sleep;
+use std::time::Duration;
 
 use output::AudioOutputError;
 use symphonia::core::codecs::{DecoderOptions, FinalizeResult, CODEC_TYPE_NULL};
@@ -65,62 +67,86 @@ pub fn run(
     progress: Arc<RwLock<Progress>>,
     abort: Arc<AtomicBool>,
 ) -> Result<i32, PlaybackError> {
-    // Create a hint to help the format registry guess what format reader is appropriate.
-    let mut hint = Hint::new();
+    const MAX_RETRY_COUNT: i32 = 10;
+    let mut retry_counter = 0;
 
-    // If the path string is '-' then read from standard input.
-    let source = if path_str == "-" {
-        Box::new(ReadOnlySource::new(std::io::stdin())) as Box<dyn MediaSource>
-    } else {
-        // Otherwise, get a Path from the path string.
-        let path = Path::new(path_str);
+    loop {
+        // Create a hint to help the format registry guess what format reader is appropriate.
+        let mut hint = Hint::new();
 
-        // Provide the file extension as a hint.
-        if let Some(extension) = path.extension() {
-            if let Some(extension_str) = extension.to_str() {
-                hint.with_extension(extension_str);
+        // If the path string is '-' then read from standard input.
+        let source = if path_str == "-" {
+            Box::new(ReadOnlySource::new(std::io::stdin())) as Box<dyn MediaSource>
+        } else {
+            // Otherwise, get a Path from the path string.
+            let path = Path::new(path_str);
+
+            // Provide the file extension as a hint.
+            if let Some(extension) = path.extension() {
+                if let Some(extension_str) = extension.to_str() {
+                    hint.with_extension(extension_str);
+                }
+            }
+
+            Box::new(File::open(path)?)
+        };
+
+        // Create the media source stream using the boxed media source from above.
+        let mss = MediaSourceStream::new(source, Default::default());
+
+        // Use the default options for format readers other than for gapless playback.
+        let format_opts = FormatOptions {
+            enable_gapless,
+            ..Default::default()
+        };
+
+        // Use the default options for metadata readers.
+        let metadata_opts: MetadataOptions = Default::default();
+
+        // Probe the media source stream for metadata and get the format reader.
+        let result = match symphonia::default::get_probe().format(
+            &hint,
+            mss,
+            &format_opts,
+            &metadata_opts,
+        ) {
+            Ok(probed) => {
+                // If present, parse the seek argument.
+                let seek_time = seek.or(Some(progress.clone().read().unwrap().position));
+
+                // Set the decoder options.
+                let decode_opts = DecoderOptions { verify };
+
+                // Play it!
+                play(
+                    probed.format,
+                    track_num,
+                    seek_time,
+                    &decode_opts,
+                    progress.clone(),
+                    abort.clone(),
+                )
+            }
+            Err(err) => {
+                // The input was not supported by any format reader.
+                info!("the input is not supported");
+                Err(PlaybackError::Symphonia(err))
+            }
+        };
+
+        if let Err(PlaybackError::AudioOutput(AudioOutputError::Interrupt)) = result {
+            if retry_counter < MAX_RETRY_COUNT {
+                retry_counter += 1;
+                info!(
+                    "Audio interrupt detected. Trying playback again where left off attempt {}/{}",
+                    retry_counter, MAX_RETRY_COUNT
+                );
+                sleep(Duration::from_millis(1000));
+                continue;
             }
         }
 
-        Box::new(File::open(path)?)
-    };
-
-    // Create the media source stream using the boxed media source from above.
-    let mss = MediaSourceStream::new(source, Default::default());
-
-    // Use the default options for format readers other than for gapless playback.
-    let format_opts = FormatOptions {
-        enable_gapless,
-        ..Default::default()
-    };
-
-    // Use the default options for metadata readers.
-    let metadata_opts: MetadataOptions = Default::default();
-
-    // Probe the media source stream for metadata and get the format reader.
-    match symphonia::default::get_probe().format(&hint, mss, &format_opts, &metadata_opts) {
-        Ok(probed) => {
-            // If present, parse the seek argument.
-            let seek_time = seek.or(Some(0.0));
-
-            // Set the decoder options.
-            let decode_opts = DecoderOptions { verify };
-
-            // Play it!
-            play(
-                probed.format,
-                track_num,
-                seek_time,
-                &decode_opts,
-                progress,
-                abort,
-            )
-        }
-        Err(err) => {
-            // The input was not supported by any format reader.
-            info!("the input is not supported");
-            Err(PlaybackError::Symphonia(err))
-        }
+        break result;
     }
 }
 
@@ -207,7 +233,9 @@ fn play(
         }
     };
 
-    if !result.as_ref().is_ok_and(|x| *x == 2) {
+    if let Err(PlaybackError::AudioOutput(AudioOutputError::Interrupt)) = result {
+        info!("Audio interrupt detected. Not flushing");
+    } else if !result.as_ref().is_ok_and(|x| *x == 2) {
         // Flush the audio output to finish playing back any leftover samples.
         if let Some(audio_output) = audio_output.as_mut() {
             audio_output.flush()
