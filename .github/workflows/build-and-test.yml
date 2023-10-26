@@ -25,11 +25,17 @@ jobs:
                     - name: menu
                       path: packages/menu
 
+                    - name: player
+                      path: packages/player
+
                     - name: ws
                       path: packages/ws
 
                     - name: server
                       path: server
+
+                    - name: symphonia_player
+                      path: players/symphonia_player
 
         steps:
             - name: Checkout audiotags
