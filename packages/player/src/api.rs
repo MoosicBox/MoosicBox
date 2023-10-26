@@ -14,6 +14,7 @@ use actix_web::{
 };
 use lambda_web::actix_web::{self, get, post};
 use lazy_static::lazy_static;
+use log::{debug, info, trace};
 use moosicbox_core::{
     app::AppState,
     sqlite::{
@@ -101,6 +102,7 @@ pub async fn play_track_endpoint(
 
 fn start_playback(track: Track, seek: Option<f64>) -> Result<Playback> {
     if let Ok(playback) = get_playback(None) {
+        debug!("Stopping existing playback {}", playback.id);
         stop(Some(playback.id))?;
     }
     let playback_id = thread_rng().gen::<usize>();
@@ -117,6 +119,7 @@ fn start_playback(track: Track, seek: Option<f64>) -> Result<Playback> {
     let (tx, rx) = channel();
 
     RT.spawn(async move {
+        info!("Playing track with Symphonia: {}", track.id);
         let response = moosicbox_symphonia_player::run(
             &track.file.unwrap(),
             true,
@@ -130,7 +133,7 @@ fn start_playback(track: Track, seek: Option<f64>) -> Result<Playback> {
             error: format!("{e:?}"),
         });
 
-        println!("Finished playback for track {}", track.id);
+        info!("Finished playback for track {}", track.id);
 
         ACTIVE_PLAYBACKS.lock().unwrap().remove(&playback_id);
 
@@ -176,6 +179,7 @@ fn stop(playback_id: Option<usize>) -> Result<Playback> {
 
     playback.abort.clone().store(true, Ordering::SeqCst);
 
+    trace!("Waiting for playback completion response");
     ACTIVE_PLAYBACK_RECEIVERS
         .lock()
         .unwrap()
@@ -183,6 +187,7 @@ fn stop(playback_id: Option<usize>) -> Result<Playback> {
         .unwrap()
         .recv()
         .unwrap();
+    trace!("Playback successfully stopped");
 
     Ok(playback)
 }
@@ -259,6 +264,7 @@ pub async fn player_status_endpoint(
 }
 
 fn get_playback(playback_id: Option<usize>) -> Result<Playback> {
+    trace!("Getting by id {playback_id:?}");
     let active_playbacks = ACTIVE_PLAYBACKS.lock().unwrap();
 
     match playback_id {

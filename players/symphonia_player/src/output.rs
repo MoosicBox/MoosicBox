@@ -2,6 +2,7 @@ use std::result;
 
 use symphonia::core::audio::{AudioBufferRef, SignalSpec};
 use symphonia::core::units::Duration;
+use thiserror::Error;
 
 pub trait AudioOutput {
     fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<()>;
@@ -10,17 +11,24 @@ pub trait AudioOutput {
 
 #[allow(dead_code)]
 #[allow(clippy::enum_variant_names)]
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum AudioOutputError {
+    #[error("OpenStreamError")]
     OpenStreamError,
+    #[error("PlayStreamError")]
     PlayStreamError,
+    #[error("StreamClosedError")]
     StreamClosedError,
+    #[error("RbError")]
+    RbError,
 }
 
 pub type Result<T> = result::Result<T, AudioOutputError>;
 
 #[cfg(target_os = "linux")]
 mod pulseaudio {
+    use std::time::SystemTime;
+
     use super::{AudioOutput, AudioOutputError, Result};
 
     use symphonia::core::audio::*;
@@ -29,7 +37,7 @@ mod pulseaudio {
     use libpulse_binding as pulse;
     use libpulse_simple_binding as psimple;
 
-    use log::{error, warn};
+    use log::{error, trace, warn};
 
     pub struct PulseAudioOutput {
         pa: psimple::Simple,
@@ -89,14 +97,23 @@ mod pulseaudio {
 
     impl AudioOutput for PulseAudioOutput {
         fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<()> {
+            let frame_count = decoded.frames();
             // Do nothing if there are no audio frames.
-            if decoded.frames() == 0 {
+            if frame_count == 0 {
+                trace!("No decoded frames. Returning");
                 return Ok(());
             }
 
+            trace!("Interleaving samples");
             // Interleave samples from the audio buffer into the sample buffer.
             self.sample_buf.copy_interleaved_ref(decoded);
 
+            trace!(
+                "Writing to pulse audio {} frames, {} bytes",
+                frame_count,
+                self.sample_buf.len()
+            );
+            let start = SystemTime::now();
             // Write interleaved samples to PulseAudio.
             match self.pa.write(self.sample_buf.as_bytes()) {
                 Err(err) => {
@@ -104,7 +121,14 @@ mod pulseaudio {
 
                     Err(AudioOutputError::StreamClosedError)
                 }
-                _ => Ok(()),
+                _ => {
+                    let end = SystemTime::now();
+                    trace!(
+                        "Successfully wrote to pulse audio. Took {}ms",
+                        end.duration_since(start).unwrap().as_millis()
+                    );
+                    Ok(())
+                }
             }
         }
 
@@ -162,6 +186,7 @@ mod cpal {
 
     use super::{AudioOutput, AudioOutputError, Result};
 
+    use cpal::SizedSample;
     use symphonia::core::audio::{AudioBufferRef, RawSample, SampleBuffer, SignalSpec};
     use symphonia::core::conv::{ConvertibleSample, IntoSample};
     use symphonia::core::units::Duration;
@@ -174,13 +199,24 @@ mod cpal {
     pub struct CpalAudioOutput;
 
     trait AudioOutputSample:
-        cpal::Sample + ConvertibleSample + IntoSample<f32> + RawSample + std::marker::Send + 'static
+        cpal::Sample
+        + ConvertibleSample
+        + SizedSample
+        + IntoSample<f32>
+        + RawSample
+        + std::marker::Send
+        + 'static
     {
     }
 
     impl AudioOutputSample for f32 {}
     impl AudioOutputSample for i16 {}
     impl AudioOutputSample for u16 {}
+    impl AudioOutputSample for i8 {}
+    impl AudioOutputSample for i32 {}
+    impl AudioOutputSample for u8 {}
+    impl AudioOutputSample for u32 {}
+    impl AudioOutputSample for f64 {}
 
     impl CpalAudioOutput {
         pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
@@ -215,6 +251,28 @@ mod cpal {
                 cpal::SampleFormat::U16 => {
                     CpalAudioOutputImpl::<u16>::try_open(spec, duration, &device)
                 }
+                cpal::SampleFormat::I8 => {
+                    CpalAudioOutputImpl::<i8>::try_open(spec, duration, &device)
+                }
+                cpal::SampleFormat::I32 => {
+                    CpalAudioOutputImpl::<i32>::try_open(spec, duration, &device)
+                }
+                cpal::SampleFormat::I64 => {
+                    CpalAudioOutputImpl::<i32>::try_open(spec, duration, &device)
+                }
+                cpal::SampleFormat::U8 => {
+                    CpalAudioOutputImpl::<u8>::try_open(spec, duration, &device)
+                }
+                cpal::SampleFormat::U32 => {
+                    CpalAudioOutputImpl::<u32>::try_open(spec, duration, &device)
+                }
+                cpal::SampleFormat::U64 => {
+                    CpalAudioOutputImpl::<u32>::try_open(spec, duration, &device)
+                }
+                cpal::SampleFormat::F64 => {
+                    CpalAudioOutputImpl::<f64>::try_open(spec, duration, &device)
+                }
+                _ => unreachable!(),
             }
         }
     }
@@ -269,6 +327,7 @@ mod cpal {
                     data[written..].iter_mut().for_each(|s| *s = T::MID);
                 },
                 move |err| error!("audio output error: {}", err),
+                None,
             );
 
             if let Err(err) = stream_result {
@@ -330,8 +389,17 @@ mod cpal {
             };
 
             // Write all samples to the ring buffer.
-            while let Some(written) = self.ring_buf_producer.write_blocking(samples) {
-                samples = &samples[written..];
+            loop {
+                match self
+                    .ring_buf_producer
+                    .write_blocking_timeout(samples, std::time::Duration::from_millis(5000))
+                {
+                    Ok(Some(written)) => {
+                        samples = &samples[written..];
+                    }
+                    Ok(None) => break,
+                    Err(_err) => return Err(AudioOutputError::RbError),
+                }
             }
 
             Ok(())

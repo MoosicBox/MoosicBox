@@ -3,19 +3,22 @@
 #![forbid(unsafe_code)]
 
 use std::fs::File;
+use std::io;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
+use output::AudioOutputError;
 use symphonia::core::codecs::{DecoderOptions, FinalizeResult, CODEC_TYPE_NULL};
-use symphonia::core::errors::{Error, Result};
+use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, Track};
 use symphonia::core::io::{MediaSource, MediaSourceStream, ReadOnlySource};
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::core::units::Time;
 
-use log::{info, warn};
+use log::{error, info, trace, warn};
+use thiserror::Error;
 
 mod output;
 
@@ -27,6 +30,32 @@ pub struct Progress {
     pub position: f64,
 }
 
+impl From<AudioOutputError> for PlaybackError {
+    fn from(err: AudioOutputError) -> Self {
+        PlaybackError::AudioOutput(err)
+    }
+}
+
+impl From<io::Error> for PlaybackError {
+    fn from(err: io::Error) -> Self {
+        PlaybackError::Symphonia(Error::IoError(err))
+    }
+}
+
+impl From<Error> for PlaybackError {
+    fn from(err: Error) -> Self {
+        PlaybackError::Symphonia(err)
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum PlaybackError {
+    #[error(transparent)]
+    AudioOutput(AudioOutputError),
+    #[error(transparent)]
+    Symphonia(Error),
+}
+
 pub fn run(
     path_str: &str,
     enable_gapless: bool,
@@ -35,7 +64,7 @@ pub fn run(
     seek: Option<f64>,
     progress: Arc<RwLock<Progress>>,
     abort: Arc<AtomicBool>,
-) -> Result<i32> {
+) -> Result<i32, PlaybackError> {
     // Create a hint to help the format registry guess what format reader is appropriate.
     let mut hint = Hint::new();
 
@@ -90,7 +119,7 @@ pub fn run(
         Err(err) => {
             // The input was not supported by any format reader.
             info!("the input is not supported");
-            Err(err)
+            Err(PlaybackError::Symphonia(err))
         }
     }
 }
@@ -108,7 +137,7 @@ fn play(
     decode_opts: &DecoderOptions,
     progress: Arc<RwLock<Progress>>,
     abort: Arc<AtomicBool>,
-) -> Result<i32> {
+) -> Result<i32, PlaybackError> {
     // If the user provided a track number, select that track if it exists, otherwise, select the
     // first track with a known codec.
     let track = track_num
@@ -165,7 +194,7 @@ fn play(
             progress.clone(),
             abort.clone(),
         ) {
-            Err(Error::ResetRequired) => {
+            Err(PlaybackError::Symphonia(Error::ResetRequired)) => {
                 // Select the first supported track since the user's selected track number might no
                 // longer be valid or make sense.
                 let track_id = first_supported_track(reader.tracks()).unwrap().id;
@@ -195,7 +224,7 @@ fn play_track(
     decode_opts: &DecoderOptions,
     progress: Arc<RwLock<Progress>>,
     abort: Arc<AtomicBool>,
-) -> Result<i32> {
+) -> Result<i32, PlaybackError> {
     // Get the selected track using the track ID.
     let track = match reader
         .tracks()
@@ -220,7 +249,7 @@ fn play_track(
         // Get the next packet from the format reader.
         let packet = match reader.next_packet() {
             Ok(packet) => packet,
-            Err(err) => break Err(err),
+            Err(err) => break Err(PlaybackError::Symphonia(err)),
         };
 
         // If the packet does not belong to the selected track, skip it.
@@ -228,11 +257,14 @@ fn play_track(
             continue;
         }
 
+        trace!("Decoding packet");
         // Decode the packet into audio samples.
         match decoder.decode(&packet) {
             Ok(decoded) => {
+                trace!("Decoded packet");
                 // If the audio output is not open, try to open it.
                 if audio_output.is_none() {
+                    trace!("Getting audio spec");
                     // Get the audio buffer specification. This is a description of the decoded
                     // audio buffer's sample format and sample rate.
                     let spec = *decoded.spec();
@@ -242,6 +274,7 @@ fn play_track(
                     // decoder, but the length is not.
                     let duration = decoded.capacity() as u64;
 
+                    trace!("Opening audio output");
                     // Try to open the audio output.
                     audio_output.replace(output::try_open(spec, duration).unwrap());
                 } else {
@@ -262,8 +295,12 @@ fn play_track(
                     }
 
                     if let Some(audio_output) = audio_output {
-                        audio_output.write(decoded).unwrap()
+                        trace!("Writing decoded to audio output");
+                        audio_output.write(decoded)?;
+                        trace!("Wrote decoded to audio output");
                     }
+                } else {
+                    trace!("Not to seeked position yet. Continuing decode");
                 }
             }
             Err(Error::DecodeError(err)) => {
@@ -271,8 +308,9 @@ fn play_track(
                 // packet as usual.
                 warn!("decode error: {}", err);
             }
-            Err(err) => break Err(err),
+            Err(err) => break Err(PlaybackError::Symphonia(err)),
         }
+        trace!("Finished processing packet");
     };
 
     // Return if a fatal error occured.
@@ -288,9 +326,9 @@ fn first_supported_track(tracks: &[Track]) -> Option<&Track> {
         .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
 }
 
-fn ignore_end_of_stream_error(result: Result<()>) -> Result<()> {
+fn ignore_end_of_stream_error(result: Result<(), PlaybackError>) -> Result<(), PlaybackError> {
     match result {
-        Err(Error::IoError(err))
+        Err(PlaybackError::Symphonia(Error::IoError(err)))
             if err.kind() == std::io::ErrorKind::UnexpectedEof
                 && err.to_string() == "end of stream" =>
         {
@@ -302,7 +340,7 @@ fn ignore_end_of_stream_error(result: Result<()>) -> Result<()> {
     }
 }
 
-fn do_verification(finalization: FinalizeResult) -> Result<i32> {
+fn do_verification(finalization: FinalizeResult) -> Result<i32, PlaybackError> {
     match finalization.verify_ok {
         Some(is_ok) => {
             // Got a verification result.
