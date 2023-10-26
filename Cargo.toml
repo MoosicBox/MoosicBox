@@ -4,6 +4,7 @@ members = [
     "packages/core",
     "packages/files",
     "packages/menu",
+    "packages/player",
     "packages/ws",
     "players/symphonia_player",
 ]
