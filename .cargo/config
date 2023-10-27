@@ -1,3 +1,7 @@
 [alias]
-"server:dev" = "run --manifest-path=server/Cargo.toml -- "
-server = "run --release --manifest-path=server/Cargo.toml -- "
+"server:dev" = "run --manifest-path=server/Cargo.toml --features=cpal -- "
+server = "run --release --manifest-path=server/Cargo.toml --features=cpal -- "
+"server:dev-pulseaudio-standard" = "run --manifest-path=server/Cargo.toml --features=pulseaudio-standard -- "
+"server:pulseaudio-standard" = "run --release --manifest-path=server/Cargo.toml --features=pulseaudio-standard -- "
+"server:dev-pulseaudio-simple" = "run --manifest-path=server/Cargo.toml --features=pulseaudio-simple -- "
+"server:pulseaudio-simple" = "run --release --manifest-path=server/Cargo.toml --features=pulseaudio-simple -- "
