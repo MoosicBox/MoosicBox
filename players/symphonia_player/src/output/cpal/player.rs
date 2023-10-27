@@ -1,14 +1,14 @@
 use crate::resampler::Resampler;
 
-use crate::output::{AudioOutput, AudioOutputError, Result};
+use crate::output::{AudioOutput, AudioOutputError};
 
 use cpal::SizedSample;
+use rb::{RbConsumer, RbProducer, SpscRb, RB};
 use symphonia::core::audio::{AudioBufferRef, RawSample, SampleBuffer, SignalSpec};
 use symphonia::core::conv::{ConvertibleSample, IntoSample};
 use symphonia::core::units::Duration;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use rb::*;
 
 use log::{error, info};
 
@@ -35,7 +35,10 @@ impl AudioOutputSample for u32 {}
 impl AudioOutputSample for f64 {}
 
 impl CpalAudioOutput {
-    pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
+    pub fn try_open(
+        spec: SignalSpec,
+        duration: Duration,
+    ) -> Result<Box<dyn AudioOutput>, AudioOutputError> {
         // Get default host.
         let host = cpal::default_host();
 
@@ -104,7 +107,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         spec: SignalSpec,
         duration: Duration,
         device: &cpal::Device,
-    ) -> Result<Box<dyn AudioOutput>> {
+    ) -> Result<Box<dyn AudioOutput>, AudioOutputError> {
         let num_channels = spec.channels.count();
 
         // Output audio stream config.
@@ -180,7 +183,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
 }
 
 impl<T: AudioOutputSample> AudioOutput for CpalAudioOutputImpl<T> {
-    fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<usize> {
+    fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<usize, AudioOutputError> {
         // Do nothing if there are no audio frames.
         if decoded.frames() == 0 {
             return Ok(0);
@@ -219,7 +222,7 @@ impl<T: AudioOutputSample> AudioOutput for CpalAudioOutputImpl<T> {
         Ok(bytes)
     }
 
-    fn flush(&mut self) -> Result<()> {
+    fn flush(&mut self) -> Result<(), AudioOutputError> {
         // If there is a resampler, then it may need to be flushed
         // depending on the number of samples it has.
         if let Some(resampler) = &mut self.resampler {
@@ -237,6 +240,9 @@ impl<T: AudioOutputSample> AudioOutput for CpalAudioOutputImpl<T> {
     }
 }
 
-pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
+pub fn try_open(
+    spec: SignalSpec,
+    duration: Duration,
+) -> Result<Box<dyn AudioOutput>, AudioOutputError> {
     CpalAudioOutput::try_open(spec, duration)
 }

@@ -2,7 +2,7 @@ use std::time::SystemTime;
 use symphonia::core::audio::{AudioBufferRef, SignalSpec};
 
 use crate::output::{
-    pulseaudio::common::map_channels_to_pa_channelmap, AudioOutput, AudioOutputError, Result,
+    pulseaudio::common::map_channels_to_pa_channelmap, AudioOutput, AudioOutputError,
 };
 
 use symphonia::core::audio::*;
@@ -19,7 +19,10 @@ pub struct PulseAudioOutput {
 }
 
 impl PulseAudioOutput {
-    pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
+    pub fn try_open(
+        spec: SignalSpec,
+        duration: Duration,
+    ) -> Result<Box<dyn AudioOutput>, AudioOutputError> {
         // An interleaved buffer is required to send data to PulseAudio. Use a SampleBuffer to
         // move data between Symphonia AudioBuffers and the byte buffers required by PulseAudio.
         let sample_buf = RawSampleBuffer::<f32>::new(duration, spec);
@@ -59,7 +62,7 @@ impl PulseAudioOutput {
 }
 
 impl AudioOutput for PulseAudioOutput {
-    fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<usize> {
+    fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<usize, AudioOutputError> {
         let frame_count = decoded.frames();
         // Do nothing if there are no audio frames.
         if frame_count == 0 {
@@ -99,13 +102,16 @@ impl AudioOutput for PulseAudioOutput {
         }
     }
 
-    fn flush(&mut self) -> Result<()> {
+    fn flush(&mut self) -> Result<(), AudioOutputError> {
         // Flush is best-effort, ignore the returned result.
         let _ = self.pa.drain();
         Ok(())
     }
 }
 
-pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
+pub fn try_open(
+    spec: SignalSpec,
+    duration: Duration,
+) -> Result<Box<dyn AudioOutput>, AudioOutputError> {
     PulseAudioOutput::try_open(spec, duration)
 }
