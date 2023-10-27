@@ -25,7 +25,7 @@ pub enum AudioOutputError {
 
 pub type Result<T> = result::Result<T, AudioOutputError>;
 
-#[cfg(all(feature = "pulseaudio", target_os = "linux"))]
+#[cfg(feature = "pulseaudio")]
 mod pulseaudio;
 
 #[cfg(feature = "cpal")]
