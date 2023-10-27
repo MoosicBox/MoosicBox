@@ -94,36 +94,18 @@ impl PulseAudioOutput {
                 strm.connect_playback(None, None, StreamFlagSet::START_CORKED, None, None)
                     .expect("Failed to connect playback");
 
-                strm.set_moved_callback(Some(Box::new(|| {
-                    debug!("MOVED");
-                })));
-                strm.set_started_callback(Some(Box::new(|| {
-                    debug!("STARTED");
-                })));
-                strm.set_overflow_callback(Some(Box::new(|| {
-                    debug!("OVERFLOW");
-                })));
-                strm.set_underflow_callback(Some(Box::new(|| {
-                    debug!("UNDERFLOW");
-                })));
+                strm.set_moved_callback(Some(Box::new(|| debug!("MOVED"))));
+                strm.set_started_callback(Some(Box::new(|| debug!("STARTED"))));
+                strm.set_overflow_callback(Some(Box::new(|| debug!("OVERFLOW"))));
+                strm.set_underflow_callback(Some(Box::new(|| debug!("UNDERFLOW"))));
+                strm.set_event_callback(Some(Box::new(|evt, _props| debug!("EVENT: {evt}"))));
+                strm.set_suspended_callback(Some(Box::new(|| debug!("SUSPENDED"))));
+                strm.set_latency_update_callback(Some(Box::new(|| debug!("LATENCY_UPDATE"))));
+                strm.set_buffer_attr_callback(Some(Box::new(|| debug!("BUFFER_ATTR"))));
+                strm.set_read_callback(Some(Box::new(|buf_size| debug!("READ: {buf_size}"))));
                 strm.set_write_callback(Some(Box::new(move |buf_size| {
                     debug!("WRITE: {buf_size:?}");
                     tx.send(buf_size).unwrap();
-                })));
-                strm.set_event_callback(Some(Box::new(|evt, _props| {
-                    debug!("EVENT: {evt}");
-                })));
-                strm.set_suspended_callback(Some(Box::new(|| {
-                    debug!("SUSPENDED");
-                })));
-                strm.set_latency_update_callback(Some(Box::new(|| {
-                    debug!("LATENCY_UPDATE");
-                })));
-                strm.set_buffer_attr_callback(Some(Box::new(|| {
-                    debug!("BUFFER_ATTR");
-                })));
-                strm.set_read_callback(Some(Box::new(|buf_size| {
-                    debug!("READ: {buf_size}");
                 })));
             }
 
@@ -322,14 +304,14 @@ impl AudioOutput for PulseAudioOutput {
         debug!("{bytes_available} bytes available");
         let next_bytes = if bytes_available < byte_count {
             if bytes_available == 0 {
-                debug!("Waiting for write lock...");
+                trace!("Waiting for write lock...");
                 let start = SystemTime::now();
                 let _ = self
                     .write_lock
                     .recv_timeout(std::time::Duration::from_millis(140));
                 let end = SystemTime::now();
                 let took_ms = end.duration_since(start).unwrap().as_millis();
-                debug!("Waiting for write lock took {took_ms}ms");
+                trace!("Waiting for write lock took {took_ms}ms");
                 None
             } else {
                 let next_bytes = &bytes[bytes_available..];
@@ -346,7 +328,7 @@ impl AudioOutput for PulseAudioOutput {
         let mut result = write_bytes(&mut self.stream.borrow_mut(), bytes)?;
 
         if let Some(next_bytes) = next_bytes {
-            debug!("Writing second buffer");
+            trace!("Writing second buffer");
             result += write_bytes(&mut self.stream.borrow_mut(), next_bytes)?;
         }
 
