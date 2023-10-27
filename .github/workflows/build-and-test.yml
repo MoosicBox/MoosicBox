@@ -11,7 +11,7 @@ env:
 
 jobs:
     build:
-        runs-on: ubuntu-latest
+        runs-on: ${{ matrix.package.os }}
 
         strategy:
             fail-fast: false
@@ -20,39 +20,70 @@ jobs:
                 package:
                     - name: core
                       path: packages/core
+                      os: ubuntu-latest
 
                     - name: files
                       path: packages/files
+                      os: ubuntu-latest
 
                     - name: menu
                       path: packages/menu
+                      os: ubuntu-latest
 
                     - name: player
                       path: packages/player
-                      dependencies: libasound2-dev
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get install libasound2-dev
                       features: cpal
 
                     - name: ws
                       path: packages/ws
+                      os: ubuntu-latest
 
                     - name: server
                       path: server
-                      dependencies: libasound2-dev
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get install libasound2-dev
                       features: cpal
 
-                    - name: symphonia_player cpal
+                    - name: symphonia_player-cpal-windows
                       path: players/symphonia_player
-                      dependencies: libasound2-dev
+                      os: windows-latest
                       features: cpal
 
-                    - name: symphonia_player pulseaudio-standard
+                    - name: symphonia_player-cpal-ubuntu
                       path: players/symphonia_player
-                      dependencies: pulseaudio
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get install libasound2-dev
+                      features: cpal
+
+                    - name: symphonia_player-pulseaudio-standard-ubuntu
+                      path: players/symphonia_player
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get install pulseaudio
                       features: pulseaudio-standard
 
-                    - name: symphonia_player pulseaudio-simple
+                    - name: symphonia_player-pulseaudio-simple-ubuntu
                       path: players/symphonia_player
-                      dependencies: pulseaudio
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get install pulseaudio
+                      features: pulseaudio-simple
+
+                    - name: symphonia_player-cpal-macos
+                      path: players/symphonia_player
+                      os: macos-latest
+                      features: cpal
+
+                    - name: symphonia_player-pulseaudio-standard-macos
+                      path: players/symphonia_player
+                      os: macos-latest
+                      dependencies: brew install pulseaudio
+                      features: pulseaudio-standard
+
+                    - name: symphonia_player-pulseaudio-simple-macos
+                      path: players/symphonia_player
+                      os: macos-latest
+                      dependencies: brew install pulseaudio
                       features: pulseaudio-simple
 
         steps:
@@ -78,9 +109,10 @@ jobs:
 
             - name: Install dependencies
               if: ${{ matrix.package.dependencies }}
-              run: sudo apt-get install ${{ matrix.package.dependencies }}
+              run: ${{ matrix.package.dependencies }}
 
             - name: Build ${{ matrix.package.name }}
+              shell: bash
               working-directory: MoosicBoxServer
               run: |
                   cargo build \
@@ -89,6 +121,7 @@ jobs:
                         --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }}
 
             - name: Run ${{ matrix.package.name }} tests
+              shell: bash
               working-directory: MoosicBoxServer
               run: |
                   cargo test \
