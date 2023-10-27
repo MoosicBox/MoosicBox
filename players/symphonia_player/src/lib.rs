@@ -24,7 +24,7 @@ use thiserror::Error;
 
 mod output;
 
-#[cfg(not(all(feature = "pulseaudio", target_os = "linux")))]
+#[cfg(feature = "cpal")]
 mod resampler;
 
 #[derive(Clone)]
@@ -238,7 +238,7 @@ fn play(
     } else if !result.as_ref().is_ok_and(|x| *x == 2) {
         // Flush the audio output to finish playing back any leftover samples.
         if let Some(audio_output) = audio_output.as_mut() {
-            audio_output.flush()
+            audio_output.flush()?
         }
     }
 

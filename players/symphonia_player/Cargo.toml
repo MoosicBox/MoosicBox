@@ -15,15 +15,14 @@ arrayvec = { version = "0.7.1", optional = true }
 cpal = { version = "0.15.2", optional = true }
 rb = { version = "0.4.1", optional = true }
 rubato = { version = "0.12.0", optional = true }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-libpulse-binding = { version = "2.5.0", optional = true }
-libpulse-simple-binding = { version = "2.5.0", optional = true }
+libpulse-binding = { version = "2.28.1", optional = true }
+libpulse-simple-binding = { version = "2.28.1", optional = true }
 
 [features]
-default = ["cpal"]
+default = []
 fail-on-warnings = []
-cpal = ["dep:arrayvec", "dep:cpal", "dep:rb", "dep:rubato"]
 jack = ["cpal/jack"]
 asio = ["cpal/asio"]
-pulseaudio = ["libpulse-binding", "libpulse-simple-binding"]
+pulseaudio = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
+cpal = ["dep:arrayvec", "dep:cpal", "dep:rb", "dep:rubato"]
+pulseaudio-simple = ["pulseaudio"]
