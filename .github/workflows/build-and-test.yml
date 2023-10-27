@@ -29,6 +29,7 @@ jobs:
 
                     - name: player
                       path: packages/player
+                      dependencies: libasound2-dev
                       features: cpal
 
                     - name: ws
@@ -36,10 +37,12 @@ jobs:
 
                     - name: server
                       path: server
+                      dependencies: libasound2-dev
                       features: cpal
 
                     - name: symphonia_player
                       path: players/symphonia_player
+                      dependencies: libasound2-dev
                       features: cpal
 
         steps:
@@ -63,9 +66,9 @@ jobs:
                       target
                   key: ${{ runner.os }}-${{ matrix.package.name }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-            - name: Install also audio libs
-              if: ${{ matrix.package.name == 'server' || matrix.package.name == 'symphonia_player' || matrix.package.name == 'player' }}
-              run: sudo apt-get install libasound2-dev
+            - name: Install dependencies
+              if: ${{ matrix.package.dependencies }}
+              run: sudo apt-get install ${{ matrix.package.dependencies }}
 
             - name: Build ${{ matrix.package.name }}
               working-directory: MoosicBoxServer
