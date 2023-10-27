@@ -27,15 +27,18 @@ jobs:
 
                     - name: player
                       path: packages/player
+                      features: cpal
 
                     - name: ws
                       path: packages/ws
 
                     - name: server
                       path: server
+                      features: cpal
 
                     - name: symphonia_player
                       path: players/symphonia_player
+                      features: cpal
 
         steps:
             - name: Checkout audiotags
@@ -68,7 +71,7 @@ jobs:
                   cargo build \
                         --manifest-path=${{ matrix.package.path }}/Cargo.toml \
                         --verbose \
-                        --features=fail-on-warnings
+                        --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }}
 
             - name: Run ${{ matrix.package.name }} tests
               working-directory: MoosicBoxServer
