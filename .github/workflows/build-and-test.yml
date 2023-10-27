@@ -40,10 +40,20 @@ jobs:
                       dependencies: libasound2-dev
                       features: cpal
 
-                    - name: symphonia_player
+                    - name: symphonia_player cpal
                       path: players/symphonia_player
                       dependencies: libasound2-dev
                       features: cpal
+
+                    - name: symphonia_player pulseaudio-standard
+                      path: players/symphonia_player
+                      dependencies: pulseaudio
+                      features: pulseaudio-standard
+
+                    - name: symphonia_player pulseaudio-simple
+                      path: players/symphonia_player
+                      dependencies: pulseaudio
+                      features: pulseaudio-simple
 
         steps:
             - name: Checkout audiotags
