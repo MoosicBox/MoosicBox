@@ -41,4 +41,5 @@ asio = ["moosicbox_symphonia_player/asio"]
 
 # Player audio outputs
 cpal = ["moosicbox_symphonia_player/cpal"]
+pulseaudio-standard = ["moosicbox_symphonia_player/pulseaudio-standard"]
 pulseaudio-simple = ["moosicbox_symphonia_player/pulseaudio-simple"]

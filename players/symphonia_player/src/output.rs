@@ -31,6 +31,11 @@ mod pulseaudio;
 #[cfg(feature = "cpal")]
 mod cpal;
 
+#[cfg(feature = "pulseaudio-standard")]
+pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
+    pulseaudio::standard::try_open(spec, duration)
+}
+
 #[cfg(feature = "pulseaudio-simple")]
 pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
     pulseaudio::simple::try_open(spec, duration)
@@ -41,12 +46,16 @@ pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOut
     cpal::player::try_open(spec, duration)
 }
 
-#[cfg(not(any(feature = "cpal", feature = "pulseaudio-simple")))]
+#[cfg(not(any(
+    feature = "cpal",
+    feature = "pulseaudio-standard",
+    feature = "pulseaudio-simple"
+)))]
 pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
     #[cfg(feature = "pulseaudio")]
-    compile_error!("Must use 'pulseaudio-simple' feature");
+    compile_error!("Must use 'pulseaudio-standard' or 'pulseaudio-simple' feature");
     #[cfg(not(feature = "pulseaudio"))]
-    compile_error!("Must specify a valid audio output feature. e.g. cpal or pulseaudio-simple");
+    compile_error!("Must specify a valid audio output feature. e.g. cpal, pulseaudio-standard, or pulseaudio-simple");
 
     unreachable!()
 }
