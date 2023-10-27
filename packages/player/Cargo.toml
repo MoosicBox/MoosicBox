@@ -23,3 +23,8 @@ tokio = { workspace = true, features = ["rt", "time", "macros"] }
 
 [features]
 fail-on-warnings = []
+
+# Player audio outputs
+cpal = ["moosicbox_symphonia_player/cpal"]
+pulseaudio-standard = ["moosicbox_symphonia_player/pulseaudio-standard"]
+pulseaudio-simple = ["moosicbox_symphonia_player/pulseaudio-simple"]
