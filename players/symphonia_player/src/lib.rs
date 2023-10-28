@@ -304,7 +304,7 @@ fn play_track(
 
                     trace!("Opening audio output");
                     // Try to open the audio output.
-                    audio_output.replace(output::try_open(spec, duration).unwrap());
+                    audio_output.replace(output::try_open(spec, duration)?);
                 } else {
                     // TODO: Check the audio spec. and duration hasn't changed.
                 }
