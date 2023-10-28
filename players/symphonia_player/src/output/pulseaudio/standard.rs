@@ -1,3 +1,5 @@
+use pulse::def::BufferAttr;
+use pulse::time::MicroSeconds;
 use symphonia::core::audio::{AudioBufferRef, SignalSpec};
 use symphonia::core::units::Duration;
 
@@ -12,7 +14,7 @@ use crate::output::{AudioOutput, AudioOutputError};
 use pulse::context::{Context, FlagSet as ContextFlagSet};
 use pulse::mainloop::standard::{IterateResult, Mainloop};
 use pulse::proplist::Proplist;
-use pulse::stream::{FlagSet as StreamFlagSet, Stream};
+use pulse::stream::{FlagSet as StreamFlagSet, Latency, Stream};
 use symphonia::core::audio::*;
 
 use libpulse_binding as pulse;
@@ -91,8 +93,24 @@ impl PulseAudioOutput {
 
             {
                 let mut strm = stream.borrow_mut();
-                strm.connect_playback(None, None, StreamFlagSet::START_CORKED, None, None)
-                    .expect("Failed to connect playback");
+                let buf_size = u32::pow(2, 15);
+                let buf_attr = BufferAttr {
+                    maxlength: buf_size * 20,
+                    tlength: buf_size,
+                    prebuf: buf_size,
+                    minreq: buf_size,
+                    fragsize: buf_size,
+                };
+                strm.connect_playback(
+                    None,
+                    Some(&buf_attr),
+                    StreamFlagSet::INTERPOLATE_TIMING
+                        | StreamFlagSet::AUTO_TIMING_UPDATE
+                        | StreamFlagSet::START_CORKED,
+                    None,
+                    None,
+                )
+                .expect("Failed to connect playback");
 
                 strm.set_moved_callback(Some(Box::new(|| debug!("MOVED"))));
                 strm.set_started_callback(Some(Box::new(|| debug!("STARTED"))));
@@ -275,6 +293,8 @@ fn drain(mainloop: &mut Mainloop, stream: &mut Stream) -> Result<(), AudioOutput
 
 impl AudioOutput for PulseAudioOutput {
     fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<usize, AudioOutputError> {
+        static BUFFER_TIMEOUT: u128 = 140;
+
         let frame_count = decoded.frames();
         // Do nothing if there are no audio frames.
         if frame_count == 0 {
@@ -300,15 +320,26 @@ impl AudioOutput for PulseAudioOutput {
         let mut bytes = self.sample_buf.as_bytes();
         let byte_count = bytes.len();
         let bytes_available = self.stream.borrow().writable_size().unwrap();
+        let latency = match self.stream.borrow().get_latency() {
+            Ok(Latency::Positive(MicroSeconds(micros))) => {
+                Some(std::time::Duration::from_micros(micros))
+            }
+            _ => None,
+        };
 
         debug!("{bytes_available} bytes available");
+        debug!("Latency {:?}", latency);
         let next_bytes = if bytes_available < byte_count {
             if bytes_available == 0 {
                 trace!("Waiting for write lock...");
                 let start = SystemTime::now();
                 let _ = self
                     .write_lock
-                    .recv_timeout(std::time::Duration::from_millis(140));
+                    .recv_timeout(std::time::Duration::from_millis(
+                        latency
+                            .map(|l| u128::max(BUFFER_TIMEOUT, l.as_millis() / 2))
+                            .unwrap_or(BUFFER_TIMEOUT) as u64,
+                    ));
                 let end = SystemTime::now();
                 let took_ms = end.duration_since(start).unwrap().as_millis();
                 trace!("Waiting for write lock took {took_ms}ms");
