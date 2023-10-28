@@ -293,7 +293,7 @@ fn drain(mainloop: &mut Mainloop, stream: &mut Stream) -> Result<(), AudioOutput
 
 impl AudioOutput for PulseAudioOutput {
     fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<usize, AudioOutputError> {
-        static BUFFER_TIMEOUT: u128 = 140;
+        static BUFFER_TIMEOUT: u64 = 140;
 
         let frame_count = decoded.frames();
         // Do nothing if there are no audio frames.
@@ -335,11 +335,7 @@ impl AudioOutput for PulseAudioOutput {
                 let start = SystemTime::now();
                 let _ = self
                     .write_lock
-                    .recv_timeout(std::time::Duration::from_millis(
-                        latency
-                            .map(|l| u128::max(BUFFER_TIMEOUT, l.as_millis() / 2))
-                            .unwrap_or(BUFFER_TIMEOUT) as u64,
-                    ));
+                    .recv_timeout(std::time::Duration::from_millis(BUFFER_TIMEOUT));
                 let end = SystemTime::now();
                 let took_ms = end.duration_since(start).unwrap().as_millis();
                 trace!("Waiting for write lock took {took_ms}ms");
