@@ -376,7 +376,7 @@ impl AudioOutput for PulseAudioOutput {
 
         trace!("Successfully wrote to pulseaudio (total {total_bytes} bytes). Took {took_ms}ms");
 
-        if took_ms >= 1000 {
+        if took_ms >= 500 {
             error!("Detected audio interrupt");
             return Err(AudioOutputError::Interrupt);
         }
