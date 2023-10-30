@@ -109,6 +109,7 @@ fn play_playback(
     RT.spawn(async move {
         let (tx, rx) = channel();
 
+        let mut seek = seek.clone();
         let mut tracks = playback.tracks.clone();
         let track_ids: Vec<_> = tracks
             .iter()
@@ -155,8 +156,8 @@ fn play_playback(
                 id: playback.id,
                 tracks: tracks.clone(),
                 position: i as u16,
-                progress: playback.progress.clone(),
-                abort: playback.abort.clone(),
+                progress: Arc::new(RwLock::new(Progress { position: 0.0 })),
+                abort: Arc::new(AtomicBool::new(false)),
             };
 
             ACTIVE_PLAYBACKS
@@ -164,8 +165,8 @@ fn play_playback(
                 .unwrap()
                 .insert(playback.id, playback.clone());
 
-            debug!("track {}", track.id);
-            start_playback(&playback, seek)?;
+            debug!("track {} {seek:?}", track.id);
+            start_playback(&playback, seek.take())?;
 
             if playback.abort.load(Ordering::SeqCst) {
                 break;
