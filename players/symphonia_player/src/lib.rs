@@ -27,7 +27,7 @@ mod output;
 #[cfg(feature = "cpal")]
 mod resampler;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Progress {
     pub position: f64,
 }

@@ -78,23 +78,38 @@ pub fn play_tracks(
     position: Option<u16>,
     seek: Option<f64>,
 ) -> Result<PlaybackStatus, PlayerError> {
+    if let Ok(playback) = get_playback(None) {
+        debug!("Stopping existing playback {}", playback.id);
+        stop(Some(playback.id))?;
+    }
+
     let playback_id = thread_rng().gen::<usize>();
 
     RT.spawn(async move {
+        let (tx, rx) = channel();
+        let progress = Arc::new(RwLock::new(Progress { position: 0.0 }));
+        let abort = Arc::new(AtomicBool::new(false));
+
+        ACTIVE_PLAYBACK_RECEIVERS
+            .lock()
+            .unwrap()
+            .insert(playback_id, rx);
+
         for (i, track_id) in track_ids.iter().enumerate() {
             if position.is_some_and(|position| (i as u16) < position) {
                 continue;
             }
 
+            debug!("Fetching track {track_id}");
             let track = {
                 let library = db.library.lock().unwrap();
                 get_track(&library, *track_id).map_err(|e| {
-                    eprintln!("Failed to fetch track: {e:?}");
+                    error!("Failed to fetch track: {e:?}");
                     PlayerError::TrackFetchFailed(*track_id)
                 })?
             };
 
-            println!("Got track {track:?}");
+            debug!("Got track {track:?}");
 
             if track.is_none() {
                 return Err(PlayerError::TrackNotFound(*track_id));
@@ -106,9 +121,30 @@ pub fn play_tracks(
                 return Err(PlayerError::TrackNotLocal(*track_id));
             }
 
-            println!("track {}", track.id);
-            start_playback(playback_id, track, seek)?;
+            let playback = Playback {
+                id: playback_id,
+                track: track.clone(),
+                progress: progress.clone(),
+                abort: abort.clone(),
+            };
+
+            ACTIVE_PLAYBACKS
+                .lock()
+                .unwrap()
+                .insert(playback_id, playback.clone());
+
+            debug!("track {}", track.id);
+            start_playback(&playback, seek)?;
         }
+
+        ACTIVE_PLAYBACKS.lock().unwrap().remove(&playback_id);
+
+        tx.send(())?;
+
+        ACTIVE_PLAYBACK_RECEIVERS
+            .lock()
+            .unwrap()
+            .remove(&playback_id);
 
         Ok(0)
     });
@@ -119,55 +155,22 @@ pub fn play_tracks(
     })
 }
 
-fn start_playback(
-    playback_id: usize,
-    track: Track,
-    seek: Option<f64>,
-) -> Result<Playback, PlayerError> {
-    if let Ok(playback) = get_playback(None) {
-        debug!("Stopping existing playback {}", playback.id);
-        stop(Some(playback.id))?;
-    }
-    let progress = Arc::new(RwLock::new(Progress { position: 0.0 }));
-    let abort = Arc::new(AtomicBool::new(false));
+fn start_playback(playback: &Playback, seek: Option<f64>) -> Result<(), PlayerError> {
+    info!("Playing track with Symphonia: {}", playback.track.id);
 
-    let playback = Playback {
-        id: playback_id,
-        track: track.clone(),
-        progress: progress.clone(),
-        abort: abort.clone(),
-    };
-
-    let (tx, rx) = channel();
-
-    info!("Playing track with Symphonia: {}", track.id);
     moosicbox_symphonia_player::run(
-        &track.file.unwrap(),
+        &playback.track.file.clone().unwrap(),
         true,
         true,
         None,
         seek,
-        progress,
-        abort,
+        playback.progress.clone(),
+        playback.abort.clone(),
     )?;
 
-    info!("Finished playback for track {}", track.id);
+    info!("Finished playback for track {}", playback.track.id);
 
-    ACTIVE_PLAYBACKS.lock().unwrap().remove(&playback_id);
-
-    tx.send(())?;
-
-    ACTIVE_PLAYBACK_RECEIVERS
-        .lock()
-        .unwrap()
-        .insert(playback_id, rx);
-
-    ACTIVE_PLAYBACKS
-        .lock()
-        .unwrap()
-        .insert(playback_id, playback.clone());
-
-    Ok(playback)
+    Ok(())
 }
 
 pub fn stop_track(playback_id: Option<usize>) -> Result<PlaybackStatus, PlayerError> {
@@ -180,7 +183,9 @@ pub fn stop_track(playback_id: Option<usize>) -> Result<PlaybackStatus, PlayerEr
 }
 
 fn stop(playback_id: Option<usize>) -> Result<Playback, PlayerError> {
+    info!("Stopping playback for playback_id {playback_id:?}");
     let playback = get_playback(playback_id)?;
+    debug!("Stopping playback {playback:?}");
 
     playback.abort.clone().store(true, Ordering::SeqCst);
 
@@ -201,11 +206,7 @@ fn stop(playback_id: Option<usize>) -> Result<Playback, PlayerError> {
 
 pub fn seek_track(playback_id: Option<usize>, seek: f64) -> Result<PlaybackStatus, PlayerError> {
     let playback = stop(playback_id)?;
-    let playback = start_playback(
-        playback_id.unwrap_or(thread_rng().gen::<usize>()),
-        playback.track.clone(),
-        Some(seek),
-    )?;
+    start_playback(&playback, Some(seek))?;
 
     Ok(PlaybackStatus {
         success: true,
@@ -213,7 +214,7 @@ pub fn seek_track(playback_id: Option<usize>, seek: f64) -> Result<PlaybackStatu
     })
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Playback {
     pub id: usize,
     pub track: Track,
