@@ -135,6 +135,10 @@ pub fn play_tracks(
 
             debug!("track {}", track.id);
             start_playback(&playback, seek)?;
+
+            if abort.load(Ordering::SeqCst) {
+                break;
+            }
         }
 
         ACTIVE_PLAYBACKS.lock().unwrap().remove(&playback_id);
