@@ -8,8 +8,8 @@ use moosicbox_core::app::AppState;
 use serde::Deserialize;
 
 use crate::player::{
-    play_track, player_status, seek_track, stop_track, ApiPlaybackStatus, PlaybackStatus,
-    PlayerError,
+    play_track, play_tracks, player_status, seek_track, stop_track, ApiPlaybackStatus,
+    PlaybackStatus, PlayerError,
 };
 
 impl From<PlayerError> for actix_web::Error {
@@ -38,14 +38,42 @@ pub struct PlayTrackQuery {
     pub seek: Option<f64>,
 }
 
-#[post("/player/play")]
+#[post("/player/play/track")]
 pub async fn play_track_endpoint(
     query: web::Query<PlayTrackQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(play_track(
-        data.db.as_ref().expect("No DB bound on AppState"),
+        data.db.clone().expect("No DB bound on AppState"),
         query.track_id,
+        query.seek,
+    )?))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayTracksQuery {
+    pub track_ids: String,
+    pub position: Option<u16>,
+    pub seek: Option<f64>,
+}
+
+#[post("/player/play/tracks")]
+pub async fn play_tracks_endpoint(
+    query: web::Query<PlayTracksQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<PlaybackStatus>> {
+    Ok(Json(play_tracks(
+        data.db.clone().expect("No DB bound on AppState"),
+        query
+            .track_ids
+            .split(",")
+            .map(|t| {
+                t.parse::<i32>()
+                    .map_err(|_| ErrorBadRequest(format!("Could not parse trackId '{t}'")))
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        query.position,
         query.seek,
     )?))
 }
