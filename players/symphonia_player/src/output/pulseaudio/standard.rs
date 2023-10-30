@@ -266,7 +266,6 @@ fn write_bytes(stream: &mut Stream, bytes: &[u8]) -> Result<usize, AudioOutputEr
     let size_left = stream.writable_size().unwrap();
     // stream.begin_write(Some(byte_count)).unwrap();
     trace!("Writing to pulse audio {byte_count} bytes ({size_left} left)");
-    let start = SystemTime::now();
     // Write interleaved samples to PulseAudio.
     match stream.write(buffer, None, 0, pulse::stream::SeekMode::Relative) {
         Err(err) => {
@@ -275,13 +274,6 @@ fn write_bytes(stream: &mut Stream, bytes: &[u8]) -> Result<usize, AudioOutputEr
             Err(AudioOutputError::StreamClosed)
         }
         _ => {
-            let end = SystemTime::now();
-            let took_ms = end.duration_since(start).unwrap().as_millis();
-            if took_ms >= 500 {
-                error!("Detected audio interrupt");
-                return Err(AudioOutputError::Interrupt);
-            }
-
             if stream.is_corked().unwrap() {
                 stream.uncork(None);
             }
