@@ -14,7 +14,7 @@ use output::AudioOutputError;
 use symphonia::core::codecs::{DecoderOptions, FinalizeResult, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, Track};
-use symphonia::core::io::{MediaSource, MediaSourceStream, ReadOnlySource};
+use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::core::units::Time;
@@ -74,22 +74,16 @@ pub fn run(
         // Create a hint to help the format registry guess what format reader is appropriate.
         let mut hint = Hint::new();
 
-        // If the path string is '-' then read from standard input.
-        let source = if path_str == "-" {
-            Box::new(ReadOnlySource::new(std::io::stdin())) as Box<dyn MediaSource>
-        } else {
-            // Otherwise, get a Path from the path string.
-            let path = Path::new(path_str);
+        let path = Path::new(path_str);
 
-            // Provide the file extension as a hint.
-            if let Some(extension) = path.extension() {
-                if let Some(extension_str) = extension.to_str() {
-                    hint.with_extension(extension_str);
-                }
+        // Provide the file extension as a hint.
+        if let Some(extension) = path.extension() {
+            if let Some(extension_str) = extension.to_str() {
+                hint.with_extension(extension_str);
             }
+        }
 
-            Box::new(File::open(path)?)
-        };
+        let source = Box::new(File::open(path)?);
 
         // Create the media source stream using the boxed media source from above.
         let mss = MediaSourceStream::new(source, Default::default());
