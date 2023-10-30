@@ -68,16 +68,26 @@ impl PulseAudioOutput {
                     .expect("Failed to create new context"),
             ));
 
-            context
-                .borrow_mut()
-                .connect(None, ContextFlagSet::NOFLAGS, None)
-                .expect("Failed to connect context");
+            {
+                let mut ctx = context.borrow_mut();
 
-            wait_for_context(
-                &mut mainloop.borrow_mut(),
-                &mut context.borrow_mut(),
-                pulse::context::State::Ready,
-            )?;
+                ctx.set_state_callback(Some(Box::new(|| debug!("Context STATE"))));
+                ctx.set_event_callback(Some(Box::new(|evt, _props| {
+                    debug!("Context EVENT: {evt}")
+                })));
+                ctx.set_subscribe_callback(Some(Box::new(|_facility, _operation, _index| {
+                    debug!("Context SUBSCRIBED")
+                })));
+
+                ctx.connect(None, ContextFlagSet::NOFLAGS, None)
+                    .expect("Failed to connect context");
+
+                wait_for_context(
+                    &mut mainloop.borrow_mut(),
+                    &mut ctx,
+                    pulse::context::State::Ready,
+                )?;
+            }
 
             let stream = Rc::new(RefCell::new(
                 Stream::new(
