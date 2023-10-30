@@ -32,6 +32,8 @@ async fn main() -> Result<(), Error> {
             }))
             .service(api::play_track_endpoint)
             .service(api::play_tracks_endpoint)
+            .service(api::pause_playback_endpoint)
+            .service(api::resume_playback_endpoint)
             .service(api::update_playback_endpoint)
             .service(api::next_track_endpoint)
             .service(api::previous_track_endpoint)

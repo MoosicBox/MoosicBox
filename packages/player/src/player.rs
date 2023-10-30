@@ -62,6 +62,10 @@ pub enum PlayerError {
     NoPlayersPlaying,
     #[error("Position out of bounds: {0}")]
     PositionOutOfBounds(i32),
+    #[error("Playback not playing: {0}")]
+    PlaybackNotPlaying(usize),
+    #[error("Playback already playing: {0}")]
+    PlaybackAlreadyPlaying(usize),
 }
 
 #[derive(Serialize)]
@@ -88,6 +92,7 @@ pub fn play_tracks(
     let playback = Playback {
         id: thread_rng().gen::<usize>(),
         tracks: track_ids.iter().map(|id| TrackOrId::Id(*id)).collect(),
+        playing: true,
         position: position.unwrap_or_default(),
         progress: Arc::new(RwLock::new(Progress { position: 0.0 })),
         abort: Arc::new(AtomicBool::new(false)),
@@ -155,6 +160,7 @@ fn play_playback(
             let playback = Playback {
                 id: playback.id,
                 tracks: tracks.clone(),
+                playing: true,
                 position: i as u16,
                 progress: Arc::new(RwLock::new(Progress { position: 0.0 })),
                 abort: Arc::new(AtomicBool::new(false)),
@@ -173,7 +179,14 @@ fn play_playback(
             }
         }
 
-        ACTIVE_PLAYBACKS.lock().unwrap().remove(&playback.id);
+        let mut active_playbacks = ACTIVE_PLAYBACKS.lock().unwrap();
+
+        if active_playbacks
+            .get(&playback.id)
+            .is_some_and(|p| p.playing)
+        {
+            active_playbacks.remove(&playback.id);
+        }
 
         tx.send(())?;
 
@@ -230,14 +243,10 @@ fn stop(playback_id: Option<usize>) -> Result<Playback, PlayerError> {
     playback.abort.clone().store(true, Ordering::SeqCst);
 
     trace!("Waiting for playback completion response");
-    if let Err(_err) = ACTIVE_PLAYBACK_RECEIVERS
-        .lock()
-        .unwrap()
-        .get(&playback.id)
-        .unwrap()
-        .recv()
-    {
-        error!("Sender correlated with receiver has dropped");
+    if let Some(rx) = ACTIVE_PLAYBACK_RECEIVERS.lock().unwrap().get(&playback.id) {
+        if let Err(_err) = rx.recv() {
+            error!("Sender correlated with receiver has dropped");
+        }
     }
     trace!("Playback successfully stopped");
 
@@ -297,7 +306,75 @@ pub fn update_playback(
     let playback = Playback {
         id: playback.id,
         tracks: playback.tracks.clone(),
+        playing: true,
         position: position.unwrap_or(playback.position),
+        progress: Arc::new(RwLock::new(Progress { position: 0.0 })),
+        abort: Arc::new(AtomicBool::new(false)),
+    };
+
+    play_playback(db, playback, seek)
+}
+
+pub fn pause_playback(playback_id: Option<usize>) -> Result<PlaybackStatus, PlayerError> {
+    info!("Pausing playback id {playback_id:?}");
+    let playback = get_playback(playback_id)?;
+
+    let id = playback.id;
+
+    if !playback.playing {
+        return Err(PlayerError::PlaybackNotPlaying(id));
+    }
+
+    playback.abort.clone().store(true, Ordering::SeqCst);
+
+    trace!("Waiting for playback completion response");
+    if let Err(_err) = ACTIVE_PLAYBACK_RECEIVERS
+        .lock()
+        .unwrap()
+        .get(&playback.id)
+        .unwrap()
+        .recv()
+    {
+        error!("Sender correlated with receiver has dropped");
+    }
+    trace!("Playback successfully stopped");
+
+    let playback = Playback {
+        id,
+        tracks: playback.tracks.clone(),
+        playing: false,
+        position: playback.position,
+        progress: playback.progress,
+        abort: Arc::new(AtomicBool::new(false)),
+    };
+
+    let mut active_playbacks = ACTIVE_PLAYBACKS.lock().unwrap();
+
+    active_playbacks.insert(playback.id, playback);
+
+    Ok(PlaybackStatus {
+        success: true,
+        playback_id: id,
+    })
+}
+
+pub fn resume_playback(db: Db, playback_id: Option<usize>) -> Result<PlaybackStatus, PlayerError> {
+    info!("Resuming playback id {playback_id:?}");
+    let playback = get_playback(playback_id)?;
+
+    let id = playback.id;
+
+    if playback.playing {
+        return Err(PlayerError::PlaybackAlreadyPlaying(id));
+    }
+
+    let seek = Some(playback.progress.read().unwrap().position);
+
+    let playback = Playback {
+        id,
+        tracks: playback.tracks.clone(),
+        playing: true,
+        position: playback.position,
         progress: Arc::new(RwLock::new(Progress { position: 0.0 })),
         abort: Arc::new(AtomicBool::new(false)),
     };
@@ -315,6 +392,7 @@ pub enum TrackOrId {
 pub struct Playback {
     pub id: usize,
     pub tracks: Vec<TrackOrId>,
+    pub playing: bool,
     pub position: u16,
     pub progress: Arc<RwLock<Progress>>,
     pub abort: Arc<AtomicBool>,
@@ -324,6 +402,7 @@ pub struct Playback {
 #[serde(rename_all = "camelCase")]
 pub struct ApiPlayback {
     pub track_ids: Vec<i32>,
+    pub playing: bool,
     pub position: u16,
     pub seek: f64,
 }
@@ -339,6 +418,7 @@ impl ToApi<ApiPlayback> for Playback {
                     TrackOrId::Id(id) => *id,
                 })
                 .collect(),
+            playing: self.playing,
             position: self.position,
             seek: self.progress.clone().read().unwrap().position,
         }

@@ -8,8 +8,9 @@ use moosicbox_core::app::AppState;
 use serde::Deserialize;
 
 use crate::player::{
-    next_track, play_track, play_tracks, player_status, previous_track, seek_track, stop_track,
-    update_playback, ApiPlaybackStatus, PlaybackStatus, PlayerError,
+    next_track, pause_playback, play_track, play_tracks, player_status, previous_track,
+    resume_playback, seek_track, stop_track, update_playback, ApiPlaybackStatus, PlaybackStatus,
+    PlayerError,
 };
 
 impl From<PlayerError> for actix_web::Error {
@@ -27,6 +28,12 @@ impl From<PlayerError> for actix_web::Error {
             PlayerError::NoPlayersPlaying => ErrorBadRequest(err),
             PlayerError::PositionOutOfBounds(position) => {
                 ErrorBadRequest(format!("Position out of bounds: {position}"))
+            }
+            PlayerError::PlaybackNotPlaying(id) => {
+                ErrorBadRequest(format!("Playback not playing: {id}"))
+            }
+            PlayerError::PlaybackAlreadyPlaying(id) => {
+                ErrorBadRequest(format!("Playback already playing: {id}"))
             }
             PlayerError::PlaybackError(err) => ErrorInternalServerError(err),
             PlayerError::Send(err) => ErrorInternalServerError(err),
@@ -147,6 +154,37 @@ pub async fn next_track_endpoint(
         data.db.clone().expect("No DB bound on AppState"),
         query.playback_id,
         query.seek,
+    )?))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PauseQuery {
+    pub playback_id: Option<usize>,
+}
+
+#[post("/player/pause")]
+pub async fn pause_playback_endpoint(
+    query: web::Query<PauseQuery>,
+    _data: web::Data<AppState>,
+) -> Result<Json<PlaybackStatus>> {
+    Ok(Json(pause_playback(query.playback_id)?))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ResumeQuery {
+    pub playback_id: Option<usize>,
+}
+
+#[post("/player/resume")]
+pub async fn resume_playback_endpoint(
+    query: web::Query<ResumeQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<PlaybackStatus>> {
+    Ok(Json(resume_playback(
+        data.db.clone().expect("No DB bound on AppState"),
+        query.playback_id,
     )?))
 }
 
