@@ -19,7 +19,7 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::core::units::Time;
 
-use log::{error, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use thiserror::Error;
 
 mod output;
@@ -227,14 +227,20 @@ fn play(
         }
     };
 
-    if let Err(PlaybackError::AudioOutput(AudioOutputError::Interrupt)) = result {
-        info!("Audio interrupt detected. Not flushing");
-    } else if !result.as_ref().is_ok_and(|x| *x == 2) {
-        // Flush the audio output to finish playing back any leftover samples.
-        if let Some(audio_output) = audio_output.as_mut() {
-            audio_output.flush()?
+    match result {
+        Ok(code) => match code {
+            2 => debug!("Aborted"),
+            _ => {
+                if let Some(audio_output) = audio_output.as_mut() {
+                    audio_output.flush()?;
+                }
+            }
+        },
+        Err(PlaybackError::AudioOutput(AudioOutputError::Interrupt)) => {
+            info!("Audio interrupt detected. Not flushing");
         }
-    }
+        _ => {}
+    };
 
     result
 }
@@ -335,7 +341,7 @@ fn play_track(
         trace!("Finished processing packet");
     };
 
-    // Return if a fatal error occured.
+    // Return if a fatal error occurred.
     ignore_end_of_stream_error(result)?;
 
     // Finalize the decoder and return the verification result if it's been enabled.
