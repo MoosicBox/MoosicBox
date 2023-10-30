@@ -8,8 +8,8 @@ use moosicbox_core::app::AppState;
 use serde::Deserialize;
 
 use crate::player::{
-    play_track, play_tracks, player_status, seek_track, stop_track, ApiPlaybackStatus,
-    PlaybackStatus, PlayerError,
+    next_track, play_track, play_tracks, player_status, previous_track, seek_track, stop_track,
+    update_playback, ApiPlaybackStatus, PlaybackStatus, PlayerError,
 };
 
 impl From<PlayerError> for actix_web::Error {
@@ -25,6 +25,9 @@ impl From<PlayerError> for actix_web::Error {
                 ErrorInternalServerError(format!("Failed to fetch track: {track_id}"))
             }
             PlayerError::NoPlayersPlaying => ErrorBadRequest(err),
+            PlayerError::PositionOutOfBounds(position) => {
+                ErrorBadRequest(format!("Position out of bounds: {position}"))
+            }
             PlayerError::PlaybackError(err) => ErrorInternalServerError(err),
             PlayerError::Send(err) => ErrorInternalServerError(err),
         }
@@ -105,6 +108,65 @@ pub async fn seek_track_endpoint(
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(seek_track(query.playback_id, query.seek)?))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdatePlaybackQuery {
+    pub playback_id: Option<usize>,
+    pub position: Option<u16>,
+    pub seek: Option<f64>,
+}
+
+#[post("/player/update-playback")]
+pub async fn update_playback_endpoint(
+    query: web::Query<UpdatePlaybackQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<PlaybackStatus>> {
+    Ok(Json(update_playback(
+        data.db.clone().expect("No DB bound on AppState"),
+        query.playback_id,
+        query.position,
+        query.seek,
+    )?))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct NextTrackQuery {
+    pub playback_id: Option<usize>,
+    pub seek: Option<f64>,
+}
+
+#[post("/player/next-track")]
+pub async fn next_track_endpoint(
+    query: web::Query<NextTrackQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<PlaybackStatus>> {
+    Ok(Json(next_track(
+        data.db.clone().expect("No DB bound on AppState"),
+        query.playback_id,
+        query.seek,
+    )?))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviousTrackQuery {
+    pub playback_id: Option<usize>,
+    pub seek: Option<f64>,
+}
+
+#[post("/player/previous-track")]
+pub async fn previous_track_endpoint(
+    query: web::Query<PreviousTrackQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<PlaybackStatus>> {
+    Ok(Json(previous_track(
+        data.db.clone().expect("No DB bound on AppState"),
+        query.playback_id,
+        query.seek,
+    )?))
 }
 
 #[derive(Deserialize, Clone)]
