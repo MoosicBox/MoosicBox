@@ -1,11 +1,12 @@
 use pulse::def::BufferAttr;
+use pulse::error::PAErr;
 use pulse::time::MicroSeconds;
 use symphonia::core::audio::{AudioBufferRef, SignalSpec};
 use symphonia::core::units::Duration;
+use thiserror::Error;
 
 use std::ops::Deref;
 use std::sync::atomic::AtomicUsize;
-use std::sync::mpsc::{channel, Receiver};
 use std::{cell::RefCell, rc::Rc, time::SystemTime};
 
 use crate::output::pulseaudio::common::map_channels_to_pa_channelmap;
@@ -25,7 +26,6 @@ pub struct PulseAudioOutput {
     mainloop: Rc<RefCell<Mainloop>>,
     stream: Rc<RefCell<pulse::stream::Stream>>,
     context: Rc<RefCell<pulse::context::Context>>,
-    write_lock: Receiver<usize>,
     sample_buf: RawSampleBuffer<f32>,
     bytes: AtomicUsize,
 }
@@ -99,8 +99,6 @@ impl PulseAudioOutput {
                 .expect("Failed to create new stream"),
             ));
 
-            let (tx, rx) = channel();
-
             {
                 let mut strm = stream.borrow_mut();
                 let buf_size = u32::pow(2, 15);
@@ -133,7 +131,6 @@ impl PulseAudioOutput {
                 strm.set_read_callback(Some(Box::new(|buf_size| debug!("READ: {buf_size}"))));
                 strm.set_write_callback(Some(Box::new(move |buf_size| {
                     debug!("WRITE: {buf_size:?}");
-                    tx.send(buf_size).unwrap();
                 })));
             }
 
@@ -141,7 +138,6 @@ impl PulseAudioOutput {
                 mainloop: mainloop.clone(),
                 stream: stream.clone(),
                 context: context.clone(),
-                write_lock: rx, //write_lock.clone(),
                 sample_buf,
                 bytes: AtomicUsize::new(0),
             }
@@ -151,9 +147,34 @@ impl PulseAudioOutput {
     }
 }
 
+#[derive(Debug, Error, Clone)]
+enum MainloopError {
+    #[error("Mainloop quit")]
+    Quit,
+    #[error("Mainloop error: {0:?}")]
+    Error(PAErr),
+}
+
+impl<T> From<MainloopError> for StateError<T> {
+    fn from(err: MainloopError) -> Self {
+        StateError::Mainloop(err)
+    }
+}
+
+#[derive(Debug, Error, Clone)]
 enum StateError<T> {
-    Mainloop,
+    #[error(transparent)]
+    Mainloop(MainloopError),
+    #[error("Failure state: {0:?}")]
     State(T),
+}
+
+fn iterate_mainloop(mainloop: &mut Mainloop) -> Result<(), MainloopError> {
+    match mainloop.iterate(false) {
+        IterateResult::Quit(_) => Err(MainloopError::Quit),
+        IterateResult::Err(error) => Err(MainloopError::Error(error)),
+        IterateResult::Success(_) => Ok(()),
+    }
 }
 
 fn wait_for_state<'a, T>(
@@ -167,13 +188,7 @@ where
 {
     let mut last_state = None;
     loop {
-        match mainloop.iterate(false) {
-            IterateResult::Quit(_) | IterateResult::Err(_) => {
-                error!("Iterate state was not success, quitting...");
-                return Err(StateError::Mainloop);
-            }
-            IterateResult::Success(_) => {}
-        }
+        iterate_mainloop(mainloop)?;
         let state = get_state();
         if state == expected_state {
             break Ok(());
@@ -212,7 +227,7 @@ fn wait_for_context(
                 _ => unreachable!(),
             }
         }
-        StateError::Mainloop => AudioOutputError::StreamClosed,
+        StateError::Mainloop(_) => AudioOutputError::StreamClosed,
     })
 }
 
@@ -239,7 +254,7 @@ fn wait_for_stream(
                 _ => unreachable!(),
             }
         }
-        StateError::Mainloop => AudioOutputError::StreamClosed,
+        StateError::Mainloop(_) => AudioOutputError::StreamClosed,
     })
 }
 
@@ -303,8 +318,6 @@ fn drain(mainloop: &mut Mainloop, stream: &mut Stream) -> Result<(), AudioOutput
 
 impl AudioOutput for PulseAudioOutput {
     fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<usize, AudioOutputError> {
-        static BUFFER_TIMEOUT: u64 = 140;
-
         let frame_count = decoded.frames();
         // Do nothing if there are no audio frames.
         if frame_count == 0 {
@@ -328,8 +341,7 @@ impl AudioOutput for PulseAudioOutput {
         )?;
 
         let mut bytes = self.sample_buf.as_bytes();
-        let byte_count = bytes.len();
-        let bytes_available = self.stream.borrow().writable_size().unwrap();
+        let mut bytes_available = self.stream.borrow().writable_size().unwrap();
         let latency = match self.stream.borrow().get_latency() {
             Ok(Latency::Positive(MicroSeconds(micros))) => {
                 Some(std::time::Duration::from_micros(micros))
@@ -337,48 +349,42 @@ impl AudioOutput for PulseAudioOutput {
             _ => None,
         };
 
+        let mut bytes_written = 0;
+
         debug!("{bytes_available} bytes available");
         debug!("Latency {:?}", latency);
-        let next_bytes = if bytes_available < byte_count {
-            if bytes_available == 0 {
-                trace!("Waiting for write lock...");
-                let start = SystemTime::now();
-                let _ = self
-                    .write_lock
-                    .recv_timeout(std::time::Duration::from_millis(BUFFER_TIMEOUT));
-                let end = SystemTime::now();
-                let took_ms = end.duration_since(start).unwrap().as_millis();
-                trace!("Waiting for write lock took {took_ms}ms");
-                None
-            } else {
-                let next_bytes = &bytes[bytes_available..];
-                bytes = &bytes[..bytes_available];
-
-                Some(next_bytes)
-            }
-        } else {
-            None
-        };
 
         let start = SystemTime::now();
         trace!("Writing bytes");
-        let mut result = write_bytes(&mut self.stream.borrow_mut(), bytes)?;
 
-        if let Some(next_bytes) = next_bytes {
-            trace!("Writing second buffer");
-            result += write_bytes(&mut self.stream.borrow_mut(), next_bytes)?;
+        while bytes_available < bytes.len() {
+            if bytes_available > 0 {
+                let write_now_bytes = &bytes[..bytes_available];
+                bytes = &bytes[bytes_available..];
+
+                trace!("Writing bytes (partial {bytes_available} bytes)");
+                bytes_written += write_bytes(&mut self.stream.borrow_mut(), write_now_bytes)?;
+            }
+
+            iterate_mainloop(&mut self.mainloop.borrow_mut())
+                .map_err(|_e| AudioOutputError::StreamClosed)?;
+
+            bytes_available = self.stream.borrow().writable_size().unwrap();
         }
 
-        let total_bytes = self
-            .bytes
-            .fetch_add(result, std::sync::atomic::Ordering::SeqCst)
-            + result;
+        bytes_written += write_bytes(&mut self.stream.borrow_mut(), bytes)?;
 
         let end = SystemTime::now();
         let took_ms = end.duration_since(start).unwrap().as_millis();
-        trace!("Successfully wrote to pulse audio (total {total_bytes} bytes). Took {took_ms}ms");
 
-        Ok(result)
+        let total_bytes = self
+            .bytes
+            .fetch_add(bytes_written, std::sync::atomic::Ordering::SeqCst)
+            + bytes_written;
+
+        trace!("Successfully wrote to pulseaudio (total {total_bytes} bytes). Took {took_ms}ms");
+
+        Ok(bytes_written)
     }
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
