@@ -34,57 +34,101 @@ jobs:
                       path: packages/player
                       os: ubuntu-latest
                       dependencies: sudo apt-get install libasound2-dev
+                      cargo: --no-default-features
                       features: cpal
 
                     - name: ws
                       path: packages/ws
                       os: ubuntu-latest
 
-                    - name: server
+                    - name: server-cpal
                       path: server
                       os: ubuntu-latest
                       dependencies: sudo apt-get install libasound2-dev
+                      cargo: --no-default-features
+                      features: cpal
+
+                    - name: server-pulseaudio-standard
+                      path: server
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get install pulseaudio
+                      cargo: --no-default-features
+                      features: pulseaudio-standard
+
+                    - name: server-pulseaudio-simple
+                      path: server
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get install pulseaudio
+                      cargo: --no-default-features
+                      features: pulseaudio-simple
+
+                    - name: server-all
+                      path: server
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get install libasound2-dev
+                      cargo: --no-default-features
                       features: cpal
 
                     - name: symphonia_player-cpal-windows
                       path: players/symphonia_player
                       os: windows-latest
+                      cargo: --no-default-features
                       features: cpal
+
+                    - name: symphonia_player-all-windows
+                      path: players/symphonia_player
+                      os: windows-latest
 
                     - name: symphonia_player-cpal-ubuntu
                       path: players/symphonia_player
                       os: ubuntu-latest
                       dependencies: sudo apt-get install libasound2-dev
+                      cargo: --no-default-features
                       features: cpal
 
                     - name: symphonia_player-pulseaudio-standard-ubuntu
                       path: players/symphonia_player
                       os: ubuntu-latest
                       dependencies: sudo apt-get install pulseaudio
+                      cargo: --no-default-features
                       features: pulseaudio-standard
 
                     - name: symphonia_player-pulseaudio-simple-ubuntu
                       path: players/symphonia_player
                       os: ubuntu-latest
                       dependencies: sudo apt-get install pulseaudio
+                      cargo: --no-default-features
                       features: pulseaudio-simple
+
+                    - name: symphonia_player-all-ubuntu
+                      path: players/symphonia_player
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get install pulseaudio libasound2-dev
 
                     - name: symphonia_player-cpal-macos
                       path: players/symphonia_player
                       os: macos-latest
+                      cargo: --no-default-features
                       features: cpal
 
                     - name: symphonia_player-pulseaudio-standard-macos
                       path: players/symphonia_player
                       os: macos-latest
                       dependencies: brew install pulseaudio
+                      cargo: --no-default-features
                       features: pulseaudio-standard
 
                     - name: symphonia_player-pulseaudio-simple-macos
                       path: players/symphonia_player
                       os: macos-latest
                       dependencies: brew install pulseaudio
+                      cargo: --no-default-features
                       features: pulseaudio-simple
+
+                    - name: symphonia_player-all-macos
+                      path: players/symphonia_player
+                      os: macos-latest
+                      dependencies: brew install pulseaudio
 
         steps:
             - name: Checkout audiotags
@@ -118,7 +162,7 @@ jobs:
                   cargo build \
                         --manifest-path=${{ matrix.package.path }}/Cargo.toml \
                         --verbose \
-                        --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }}
+                        --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }} ${{ matrix.package.cargo }}
 
             - name: Run ${{ matrix.package.name }} tests
               shell: bash
@@ -127,4 +171,4 @@ jobs:
                   cargo test \
                         --manifest-path=${{ matrix.package.path }}/Cargo.toml \
                         --verbose \
-                        --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }}
+                        --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }} ${{ matrix.package.cargo }}

@@ -14,7 +14,7 @@ lambda_runtime = "0.8.2"
 lazy_static = { workspace = true }
 log = { workspace = true }
 moosicbox_core = { path = "../core" }
-moosicbox_symphonia_player = { path = "../../players/symphonia_player" }
+moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false }
 rand.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.107"
@@ -22,9 +22,14 @@ thiserror = "1.0.48"
 tokio = { workspace = true, features = ["rt", "time", "macros"] }
 
 [features]
+default = ["cpal", "pulseaudio"]
+
 fail-on-warnings = []
 
 # Player audio outputs
 cpal = ["moosicbox_symphonia_player/cpal"]
+jack = ["moosicbox_symphonia_player/jack"]
+asio = ["moosicbox_symphonia_player/asio"]
+pulseaudio = ["pulseaudio-standard", "pulseaudio-simple"]
 pulseaudio-standard = ["moosicbox_symphonia_player/pulseaudio-standard"]
 pulseaudio-simple = ["moosicbox_symphonia_player/pulseaudio-simple"]

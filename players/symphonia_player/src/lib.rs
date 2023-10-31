@@ -58,8 +58,19 @@ pub enum PlaybackError {
     Symphonia(Error),
 }
 
+pub enum AudioOutputType {
+    #[cfg(feature = "cpal")]
+    Cpal,
+    #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
+    PulseAudioStandard,
+    #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
+    PulseAudioSimple,
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn run(
     path_str: &str,
+    audio_output_type: &AudioOutputType,
     enable_gapless: bool,
     verify: bool,
     track_num: Option<usize>,
@@ -114,6 +125,7 @@ pub fn run(
                 // Play it!
                 play(
                     probed.format,
+                    audio_output_type,
                     track_num,
                     seek_time,
                     &decode_opts,
@@ -152,6 +164,7 @@ struct PlayTrackOptions {
 
 fn play(
     mut reader: Box<dyn FormatReader>,
+    audio_output_type: &AudioOutputType,
     track_num: Option<usize>,
     seek_time: Option<f64>,
     decode_opts: &DecoderOptions,
@@ -209,6 +222,7 @@ fn play(
         match play_track(
             &mut reader,
             &mut audio_output,
+            audio_output_type,
             track_info,
             decode_opts,
             progress.clone(),
@@ -248,6 +262,7 @@ fn play(
 fn play_track(
     reader: &mut Box<dyn FormatReader>,
     audio_output: &mut Option<Box<dyn output::AudioOutput>>,
+    audio_output_type: &AudioOutputType,
     play_opts: PlayTrackOptions,
     decode_opts: &DecoderOptions,
     progress: Arc<RwLock<Progress>>,
@@ -304,7 +319,7 @@ fn play_track(
 
                     trace!("Opening audio output");
                     // Try to open the audio output.
-                    audio_output.replace(output::try_open(spec, duration)?);
+                    audio_output.replace(output::try_open(audio_output_type, spec, duration)?);
                 } else {
                     // TODO: Check the audio spec. and duration hasn't changed.
                 }

@@ -19,11 +19,14 @@ libpulse-binding = { version = "2.28.1", optional = true }
 libpulse-simple-binding = { version = "2.28.1", optional = true }
 
 [features]
-default = []
+default = ["cpal", "pulseaudio"]
+
 fail-on-warnings = []
+
+# Player audio outputs
+cpal = ["dep:arrayvec", "dep:cpal", "dep:rb", "dep:rubato"]
 jack = ["cpal/jack"]
 asio = ["cpal/asio"]
-pulseaudio = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
-cpal = ["dep:arrayvec", "dep:cpal", "dep:rb", "dep:rubato"]
-pulseaudio-standard = ["pulseaudio"]
-pulseaudio-simple = ["pulseaudio"]
+pulseaudio = ["pulseaudio-standard", "pulseaudio-simple"]
+pulseaudio-standard = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
+pulseaudio-simple = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]

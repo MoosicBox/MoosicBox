@@ -17,7 +17,7 @@ use moosicbox_core::{
         models::{ToApi, Track},
     },
 };
-use moosicbox_symphonia_player::{PlaybackError, Progress};
+use moosicbox_symphonia_player::{AudioOutputType, PlaybackError, Progress};
 use rand::{thread_rng, Rng as _};
 use serde::Serialize;
 use thiserror::Error;
@@ -114,7 +114,7 @@ fn play_playback(
     RT.spawn(async move {
         let (tx, rx) = channel();
 
-        let mut seek = seek.clone();
+        let mut seek = seek;
         let mut tracks = playback.tracks.clone();
         let track_ids: Vec<_> = tracks
             .iter()
@@ -208,8 +208,19 @@ fn start_playback(playback: &Playback, seek: Option<f64>) -> Result<(), PlayerEr
     if let TrackOrId::Track(track) = &playback.tracks[playback.position as usize] {
         info!("Playing track with Symphonia: {}", track.id);
 
+        #[allow(unused)]
+        #[cfg(feature = "cpal")]
+        let audio_output_type = AudioOutputType::Cpal;
+        #[allow(unused)]
+        #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
+        let audio_output_type = AudioOutputType::PulseAudioSimple;
+        #[allow(unused)]
+        #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
+        let audio_output_type = AudioOutputType::PulseAudioStandard;
+
         moosicbox_symphonia_player::run(
             &track.file.clone().unwrap(),
+            &audio_output_type,
             true,
             true,
             None,
