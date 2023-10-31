@@ -103,8 +103,8 @@ impl PulseAudioOutput {
                 let mut strm = stream.borrow_mut();
                 let buf_size = u32::pow(2, 15);
                 let buf_attr = BufferAttr {
-                    maxlength: buf_size * 20,
-                    tlength: buf_size,
+                    maxlength: buf_size * 4,
+                    tlength: buf_size * 4,
                     prebuf: buf_size,
                     minreq: buf_size,
                     fragsize: buf_size,
