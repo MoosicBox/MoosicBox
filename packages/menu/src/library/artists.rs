@@ -71,7 +71,6 @@ pub async fn get_all_artists(
     data: &AppState,
     request: &ArtistsRequest,
 ) -> Result<Vec<Artist>, GetArtistsError> {
-    #[allow(clippy::eq_op)]
     let artists = get_artists(&data.db.as_ref().unwrap().library.lock().unwrap())?;
 
     Ok(sort_artists(filter_artists(artists, request), request))
