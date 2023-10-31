@@ -13,7 +13,7 @@ use log::{debug, error, info, trace};
 use moosicbox_core::{
     app::Db,
     sqlite::{
-        db::get_track,
+        db::{get_album_tracks, get_track},
         models::{ToApi, Track},
     },
 };
@@ -54,6 +54,8 @@ pub enum PlayerError {
     PlaybackError(moosicbox_symphonia_player::PlaybackError),
     #[error("Track fetch failed: {0}")]
     TrackFetchFailed(i32),
+    #[error("Album fetch failed: {0}")]
+    AlbumFetchFailed(i32),
     #[error("Track not found: {0}")]
     TrackNotFound(i32),
     #[error("Track not locally stored: {0}")]
@@ -74,13 +76,39 @@ pub struct PlaybackStatus {
     pub success: bool,
 }
 
-pub fn play_track(db: Db, track_id: i32, seek: Option<f64>) -> Result<PlaybackStatus, PlayerError> {
-    play_tracks(db, vec![track_id], None, seek)
+pub fn play_album(
+    db: Db,
+    album_id: i32,
+    position: Option<u16>,
+    seek: Option<f64>,
+) -> Result<PlaybackStatus, PlayerError> {
+    let tracks = {
+        let library = db.library.lock().unwrap();
+        get_album_tracks(&library, album_id).map_err(|e| {
+            error!("Failed to fetch album tracks: {e:?}");
+            PlayerError::AlbumFetchFailed(album_id)
+        })?
+    };
+
+    play_tracks(
+        db,
+        tracks.into_iter().map(TrackOrId::Track).collect(),
+        position,
+        seek,
+    )
+}
+
+pub fn play_track(
+    db: Db,
+    track: TrackOrId,
+    seek: Option<f64>,
+) -> Result<PlaybackStatus, PlayerError> {
+    play_tracks(db, vec![track], None, seek)
 }
 
 pub fn play_tracks(
     db: Db,
-    track_ids: Vec<i32>,
+    tracks: Vec<TrackOrId>,
     position: Option<u16>,
     seek: Option<f64>,
 ) -> Result<PlaybackStatus, PlayerError> {
@@ -91,7 +119,7 @@ pub fn play_tracks(
 
     let playback = Playback {
         id: thread_rng().gen::<usize>(),
-        tracks: track_ids.iter().map(|id| TrackOrId::Id(*id)).collect(),
+        tracks,
         playing: true,
         position: position.unwrap_or_default(),
         progress: Arc::new(RwLock::new(Progress { position: 0.0 })),

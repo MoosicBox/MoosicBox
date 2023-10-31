@@ -9,9 +9,9 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use crate::player::{
-    next_track, pause_playback, play_track, play_tracks, player_status, previous_track,
+    next_track, pause_playback, play_album, play_track, play_tracks, player_status, previous_track,
     resume_playback, seek_track, stop_track, update_playback, ApiPlaybackStatus, PlaybackStatus,
-    PlayerError,
+    PlayerError, TrackOrId,
 };
 
 impl From<PlayerError> for actix_web::Error {
@@ -25,6 +25,9 @@ impl From<PlayerError> for actix_web::Error {
             }
             PlayerError::TrackFetchFailed(track_id) => {
                 ErrorInternalServerError(format!("Failed to fetch track: {track_id}"))
+            }
+            PlayerError::AlbumFetchFailed(album_id) => {
+                ErrorInternalServerError(format!("Failed to fetch album: {album_id}"))
             }
             PlayerError::NoPlayersPlaying => ErrorBadRequest(err),
             PlayerError::PositionOutOfBounds(position) => {
@@ -44,6 +47,27 @@ impl From<PlayerError> for actix_web::Error {
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct PlayAlbumQuery {
+    pub album_id: i32,
+    pub position: Option<u16>,
+    pub seek: Option<f64>,
+}
+
+#[post("/player/play/album")]
+pub async fn play_album_endpoint(
+    query: web::Query<PlayAlbumQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<PlaybackStatus>> {
+    Ok(Json(play_album(
+        data.db.clone().expect("No DB bound on AppState"),
+        query.album_id,
+        query.position,
+        query.seek,
+    )?))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct PlayTrackQuery {
     pub track_id: i32,
     pub seek: Option<f64>,
@@ -56,7 +80,7 @@ pub async fn play_track_endpoint(
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(play_track(
         data.db.clone().expect("No DB bound on AppState"),
-        query.track_id,
+        TrackOrId::Id(query.track_id),
         query.seek,
     )?))
 }
@@ -139,17 +163,21 @@ pub async fn play_tracks_endpoint(
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(play_tracks(
         data.db.clone().expect("No DB bound on AppState"),
-        parse_track_id_ranges(&query.track_ids).map_err(|e| match e {
-            ParseTrackIdsError::ParseId(id) => {
-                ErrorBadRequest(format!("Could not parse trackId '{id}'"))
-            }
-            ParseTrackIdsError::UnmatchedRange(range) => {
-                ErrorBadRequest(format!("Unmatched range '{range}'"))
-            }
-            ParseTrackIdsError::RangeTooLarge(range) => {
-                ErrorBadRequest(format!("Range too large '{range}'"))
-            }
-        })?,
+        parse_track_id_ranges(&query.track_ids)
+            .map_err(|e| match e {
+                ParseTrackIdsError::ParseId(id) => {
+                    ErrorBadRequest(format!("Could not parse trackId '{id}'"))
+                }
+                ParseTrackIdsError::UnmatchedRange(range) => {
+                    ErrorBadRequest(format!("Unmatched range '{range}'"))
+                }
+                ParseTrackIdsError::RangeTooLarge(range) => {
+                    ErrorBadRequest(format!("Range too large '{range}'"))
+                }
+            })?
+            .iter()
+            .map(|id| TrackOrId::Id(*id))
+            .collect(),
         query.position,
         query.seek,
     )?))
