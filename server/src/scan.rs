@@ -1,4 +1,5 @@
 use audiotags::{AudioTag, Tag};
+use log::info;
 use moosicbox_core::{
     app::AppState,
     sqlite::{
@@ -119,17 +120,17 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
         .unwrap()
         .to_string();
 
-    println!("====== {} ======", path.clone().to_str().unwrap());
-    println!("title: {}", title);
-    println!("number: {}", number);
-    println!("duration: {}", duration);
-    println!("album title: {}", album);
-    println!("artist directory name: {}", artist_dir_name);
-    println!("album directory name: {}", album_dir_name);
-    println!("artist: {}", artist_name.clone());
-    println!("album_artist: {}", album_artist.clone());
-    println!("date_released: {:?}", date_released);
-    println!("contains cover: {:?}", tag.album_cover().is_some());
+    info!("====== {} ======", path.clone().to_str().unwrap());
+    info!("title: {}", title);
+    info!("number: {}", number);
+    info!("duration: {}", duration);
+    info!("album title: {}", album);
+    info!("artist directory name: {}", artist_dir_name);
+    info!("album directory name: {}", album_dir_name);
+    info!("artist: {}", artist_name.clone());
+    info!("album_artist: {}", album_artist.clone());
+    info!("date_released: {:?}", date_released);
+    info!("contains cover: {:?}", tag.album_cover().is_some());
 
     let album_artist = match multi_artist_pattern.find(album_artist.as_str()) {
         Some(comma) => album_artist[..comma.start() + 1].to_string(),
@@ -156,12 +157,12 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
         ]),
     )?;
 
-    println!("artwork: {:?}", album.artwork);
+    info!("artwork: {:?}", album.artwork);
 
     if album.artwork.is_none() {
         if let Some(artwork) = search_for_artwork(path_album.clone(), "cover", Some(tag)) {
             album.artwork = Some(artwork.file_name().unwrap().to_str().unwrap().to_string());
-            println!(
+            info!(
                 "Found artwork for {}: {}",
                 path_album.to_str().unwrap(),
                 album.artwork.clone().unwrap()
@@ -172,7 +173,7 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
     if artist.cover.is_none() {
         if let Some(cover) = search_for_artwork(path_album.clone(), "artist", None) {
             artist.cover = Some(cover.to_str().unwrap().to_string());
-            println!(
+            info!(
                 "Found cover for {}: {}",
                 path_album.to_str().unwrap(),
                 artist.cover.clone().unwrap()

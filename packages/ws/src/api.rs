@@ -5,6 +5,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use log::{debug, info, trace};
 use moosicbox_core::{
     app::Db,
     sqlite::{
@@ -118,7 +119,7 @@ pub async fn connect(
     sender: &mut impl WebsocketSender,
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketConnectError> {
-    println!("Connected {}", context.connection_id);
+    info!("Connected {}", context.connection_id);
     sender
         .send(
             &context.connection_id,
@@ -174,7 +175,7 @@ pub async fn disconnect(
         .await
         .map_err(|_e| WebsocketDisconnectError::Unknown)?;
 
-    println!("Disconnected {}", context.connection_id);
+    info!("Disconnected {}", context.connection_id);
 
     Ok(Response {
         status_code: 200,
@@ -225,7 +226,7 @@ pub async fn message(
     message_type: InboundMessageType,
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketMessageError> {
-    println!(
+    debug!(
         "Received message type {} from {}: {:?}",
         message_type, context.connection_id, payload
     );
@@ -335,7 +336,7 @@ pub async fn message(
             Ok(())
         }
         InboundMessageType::Ping => {
-            println!("Ping {payload:?}");
+            trace!("Ping {payload:?}");
             Ok(())
         }
         InboundMessageType::PlaybackAction => {
@@ -366,7 +367,7 @@ pub async fn message(
         }
     }?;
 
-    println!(
+    debug!(
         "Successfully processed message type {} from {}",
         message_type, context.connection_id
     );

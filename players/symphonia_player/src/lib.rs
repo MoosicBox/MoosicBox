@@ -387,7 +387,7 @@ fn do_verification(finalization: FinalizeResult) -> Result<i32, PlaybackError> {
     match finalization.verify_ok {
         Some(is_ok) => {
             // Got a verification result.
-            println!("verification: {}", if is_ok { "passed" } else { "failed" });
+            debug!("verification: {}", if is_ok { "passed" } else { "failed" });
 
             Ok(i32::from(!is_ok))
         }

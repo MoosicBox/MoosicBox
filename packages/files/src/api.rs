@@ -2,12 +2,14 @@ use std::env;
 
 use actix_web::{error::ErrorInternalServerError, web, HttpRequest, HttpResponse, Result};
 use lambda_web::actix_web::{self, get};
+use log::{debug, error, trace};
 use moosicbox_core::{
     app::AppState,
     sqlite::db::{get_album, get_artist, get_track},
 };
 use regex::{Captures, Regex};
 use serde::Deserialize;
+use thiserror::Error;
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -21,17 +23,17 @@ pub async fn track_endpoint(
     query: web::Query<GetTrackQuery>,
     data: web::Data<AppState>,
 ) -> Result<HttpResponse> {
-    println!("Getting track audio file {query:?}");
+    debug!("Getting track audio file {query:?}");
 
     let track = {
         let library = data.db.as_ref().unwrap().library.lock().unwrap();
         get_track(&library, query.track_id).map_err(|e| {
-            eprintln!("Failed to fetch track: {e:?}");
+            error!("Failed to fetch track: {e:?}");
             ErrorInternalServerError(format!("Failed to fetch track: {e:?}"))
         })?
     };
 
-    println!("Got track {track:?}");
+    trace!("Got track {track:?}");
 
     if track.is_none() {
         return Err(ErrorInternalServerError("Failed to find track"));
@@ -109,6 +111,12 @@ pub async fn artist_cover_endpoint(
     Ok(file.into_response(&req))
 }
 
+#[derive(Debug, Error)]
+pub enum AlbumArtworkError {
+    #[error("Failed to read file with path: {0} ({1})")]
+    File(String, String),
+}
+
 #[get("/albums/{album_id}/{size}")]
 pub async fn album_artwork_endpoint(
     req: HttpRequest,
@@ -156,7 +164,10 @@ pub async fn album_artwork_endpoint(
     let path_buf = std::path::PathBuf::from(directory).join(album.artwork.unwrap());
     let file_path = path_buf.as_path();
 
-    let file = actix_files::NamedFile::open_async(file_path).await.unwrap();
+    let file = actix_files::NamedFile::open_async(file_path)
+        .await
+        .map_err(|e| AlbumArtworkError::File(file_path.to_str().unwrap().into(), format!("{e:?}")))
+        .unwrap();
 
     Ok(file.into_response(&req))
 }

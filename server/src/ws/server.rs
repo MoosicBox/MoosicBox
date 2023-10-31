@@ -10,6 +10,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use log::{debug, error, info};
 use moosicbox_core::app::Db;
 use moosicbox_ws::api::{
     EventType, InboundMessageType, WebsocketConnectError, WebsocketContext,
@@ -25,7 +26,7 @@ use crate::ws::{ConnId, Msg, RoomId};
 impl WebsocketSender for ChatServer {
     async fn send(&mut self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
         let id = connection_id.parse::<usize>().unwrap();
-        println!("Sending to {id}");
+        debug!("Sending to {id}");
         self.send_message_to(id, data.to_string()).await?;
         Ok(())
     }
@@ -188,7 +189,7 @@ impl ChatServer {
         &mut self,
         tx: mpsc::UnboundedSender<Msg>,
     ) -> Result<ConnId, WebsocketConnectError> {
-        log::info!("Someone joined");
+        info!("Someone joined");
 
         // register session with random connection ID
         let id = thread_rng().gen::<usize>();
@@ -198,7 +199,7 @@ impl ChatServer {
         self.rooms.entry("main".to_owned()).or_default().insert(id);
 
         let count = self.visitor_count.fetch_add(1, Ordering::SeqCst);
-        println!("Visitor count: {}", count + 1);
+        info!("Visitor count: {}", count + 1);
 
         let connection_id = id.to_string();
         let context = WebsocketContext {
@@ -214,9 +215,9 @@ impl ChatServer {
 
     /// Unregister connection from room map and invoke ws api disconnect.
     async fn disconnect(&mut self, conn_id: ConnId) -> Result<(), WebsocketDisconnectError> {
-        println!("Someone disconnected {conn_id}");
+        info!("Someone disconnected {conn_id}");
         let count = self.visitor_count.fetch_sub(1, Ordering::SeqCst);
-        println!("Visitor count: {}", count - 1);
+        info!("Visitor count: {}", count - 1);
 
         let mut rooms: Vec<String> = Vec::new();
 
@@ -277,13 +278,13 @@ impl ChatServer {
                         .await
                         .map(|conn_id| res_tx.send(conn_id))
                     {
-                        eprintln!("Failed to connect: {:?}", error);
+                        error!("Failed to connect: {:?}", error);
                     }
                 }
 
                 Command::Disconnect { conn } => {
                     if let Err(error) = self.disconnect(conn).await {
-                        eprintln!("Failed to disconnect connection {conn}: {:?}", error);
+                        error!("Failed to disconnect connection {conn}: {:?}", error);
                     }
                 }
 
@@ -298,7 +299,7 @@ impl ChatServer {
 
                 Command::Message { conn, msg, res_tx } => {
                     if let Err(error) = self.on_message(conn, msg.clone()).await {
-                        eprintln!(
+                        error!(
                             "Failed to process message from {}: {msg:?}: {error:?}",
                             conn
                         );

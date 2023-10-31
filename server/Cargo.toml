@@ -14,6 +14,7 @@ audiotags = { path = "../../audiotags" }
 awc = "3.0.0-beta.9"
 enum-as-inner = "0.6.0"
 futures = "0.3"
+log = { workspace = true }
 moosicbox_core = { path = "../packages/core" }
 moosicbox_menu = { path = "../packages/menu" }
 moosicbox_files = { path = "../packages/files" }
@@ -28,7 +29,6 @@ mp3-duration = "0.1.10"
 async-trait.workspace = true
 env_logger.workspace = true
 futures-util.workspace = true
-log.workspace = true
 rand.workspace = true
 rusqlite = { workspace = true }
 tokio = { workspace = true, features = ["rt", "time", "macros"] }

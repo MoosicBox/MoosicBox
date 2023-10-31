@@ -14,6 +14,7 @@ use aws_sdk_apigatewaymanagement::{
     Client,
 };
 use lambda_runtime::{service_fn, LambdaEvent};
+use log::debug;
 use moosicbox_core::app::Db;
 use moosicbox_ws::api::{
     EventType, InboundMessageType, Response, WebsocketConnectError, WebsocketContext,
@@ -152,7 +153,7 @@ pub async fn ws_handler(event: LambdaEvent<Value>) -> Result<Response, Websocket
                 .build();
             let client = Client::from_conf(api_management_config);
             for message in messages {
-                println!(
+                debug!(
                     "Sending message to {}: {}",
                     message.connection_id, message.payload
                 );

@@ -1,3 +1,4 @@
+use log::debug;
 use rusqlite::{params, Connection, Row, Statement};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -851,9 +852,9 @@ where
             let str2 = format!("{updated:?}");
 
             if str1 == str2 {
-                println!("No updates to {table_name}");
+                debug!("No updates to {table_name}");
             } else {
-                println!("Changed {table_name} from {str1} to {str2}");
+                debug!("Changed {table_name} from {str1} to {str2}");
             }
 
             Ok(updated)
