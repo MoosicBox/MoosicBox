@@ -114,6 +114,7 @@ impl PulseAudioOutput {
                     Some(&buf_attr),
                     StreamFlagSet::INTERPOLATE_TIMING
                         | StreamFlagSet::AUTO_TIMING_UPDATE
+                        | StreamFlagSet::ADJUST_LATENCY
                         | StreamFlagSet::START_CORKED,
                     None,
                     None,
