@@ -8,3 +8,6 @@ server = "server:release"
 "server:pulseaudio-standard" = "run --manifest-path=server/Cargo.toml --release --features=pulseaudio-standard -- "
 "server:debug:pulseaudio-simple" = "run --manifest-path=server/Cargo.toml --features=pulseaudio-simple -- "
 "server:pulseaudio-simple" = "run --manifest-path=server/Cargo.toml --release --features=pulseaudio-simple -- "
+
+[env]
+RUST_LOG = "info"
