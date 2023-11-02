@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use rusqlite::Row;
+use rusqlite::{types::FromSql, Row};
 use serde::{Deserialize, Serialize};
 
 use super::db::{
@@ -598,11 +598,29 @@ pub struct RegisterPlayer {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PlayerType {
+    Symphonia,
+    Howler,
+    #[default]
+    Unknown,
+}
+
+impl FromSql for PlayerType {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        Ok(
+            serde_json::from_str::<PlayerType>(&format!("\"{}\"", value.as_str()?))
+                .unwrap_or(PlayerType::Unknown),
+        )
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Player {
     pub id: i32,
     pub name: String,
-    pub r#type: String,
+    pub r#type: PlayerType,
     pub playing: bool,
     pub created: String,
     pub updated: String,
@@ -660,7 +678,7 @@ impl AsId for ActivePlayer {
 pub struct ApiPlayer {
     pub player_id: i32,
     pub name: String,
-    pub r#type: String,
+    pub r#type: PlayerType,
     pub playing: bool,
 }
 
