@@ -91,7 +91,7 @@ pub fn play_album(
     };
 
     play_tracks(
-        db,
+        Some(db),
         tracks.into_iter().map(TrackOrId::Track).collect(),
         position,
         seek,
@@ -99,7 +99,7 @@ pub fn play_album(
 }
 
 pub fn play_track(
-    db: Db,
+    db: Option<Db>,
     track: TrackOrId,
     seek: Option<f64>,
 ) -> Result<PlaybackStatus, PlayerError> {
@@ -107,7 +107,7 @@ pub fn play_track(
 }
 
 pub fn play_tracks(
-    db: Db,
+    db: Option<Db>,
     tracks: Vec<TrackOrId>,
     position: Option<u16>,
     seek: Option<f64>,
@@ -122,8 +122,8 @@ pub fn play_tracks(
     play_playback(db, playback, seek)
 }
 
-fn play_playback(
-    db: Db,
+pub fn play_playback(
+    db: Option<Db>,
     playback: Playback,
     seek: Option<f64>,
 ) -> Result<PlaybackStatus, PlayerError> {
@@ -157,13 +157,13 @@ fn play_playback(
 
             debug!("Fetching track {track_id}");
             let track = {
+                let db = db.clone().expect("No DB set");
                 let library = db.library.lock().unwrap();
                 get_track(&library, *track_id).map_err(|e| {
                     error!("Failed to fetch track: {e:?}");
                     PlayerError::TrackFetchFailed(*track_id)
                 })?
             };
-
             debug!("Got track {track:?}");
 
             if track.is_none() {
@@ -296,7 +296,7 @@ pub fn seek_track(playback_id: Option<usize>, seek: f64) -> Result<PlaybackStatu
 }
 
 pub fn next_track(
-    db: Db,
+    db: Option<Db>,
     playback_id: Option<usize>,
     seek: Option<f64>,
 ) -> Result<PlaybackStatus, PlayerError> {
@@ -313,7 +313,7 @@ pub fn next_track(
 }
 
 pub fn previous_track(
-    db: Db,
+    db: Option<Db>,
     playback_id: Option<usize>,
     seek: Option<f64>,
 ) -> Result<PlaybackStatus, PlayerError> {
@@ -328,7 +328,7 @@ pub fn previous_track(
 }
 
 pub fn update_playback(
-    db: Db,
+    db: Option<Db>,
     playback_id: Option<usize>,
     position: Option<u16>,
     seek: Option<f64>,
@@ -390,7 +390,10 @@ pub fn pause_playback(playback_id: Option<usize>) -> Result<PlaybackStatus, Play
     })
 }
 
-pub fn resume_playback(db: Db, playback_id: Option<usize>) -> Result<PlaybackStatus, PlayerError> {
+pub fn resume_playback(
+    db: Option<Db>,
+    playback_id: Option<usize>,
+) -> Result<PlaybackStatus, PlayerError> {
     info!("Resuming playback id {playback_id:?}");
     let playback = get_playback(playback_id)?;
 

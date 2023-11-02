@@ -79,7 +79,7 @@ pub async fn play_track_endpoint(
     data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(play_track(
-        data.db.clone().expect("No DB bound on AppState"),
+        Some(data.db.clone().expect("No DB bound on AppState")),
         TrackOrId::Id(query.track_id),
         query.seek,
     )?))
@@ -162,7 +162,7 @@ pub async fn play_tracks_endpoint(
     data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(play_tracks(
-        data.db.clone().expect("No DB bound on AppState"),
+        Some(data.db.clone().expect("No DB bound on AppState")),
         parse_track_id_ranges(&query.track_ids)
             .map_err(|e| match e {
                 ParseTrackIdsError::ParseId(id) => {
@@ -226,7 +226,7 @@ pub async fn update_playback_endpoint(
     data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(update_playback(
-        data.db.clone().expect("No DB bound on AppState"),
+        Some(data.db.clone().expect("No DB bound on AppState")),
         query.playback_id,
         query.position,
         query.seek,
@@ -246,7 +246,7 @@ pub async fn next_track_endpoint(
     data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(next_track(
-        data.db.clone().expect("No DB bound on AppState"),
+        Some(data.db.clone().expect("No DB bound on AppState")),
         query.playback_id,
         query.seek,
     )?))
@@ -278,7 +278,7 @@ pub async fn resume_playback_endpoint(
     data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(resume_playback(
-        data.db.clone().expect("No DB bound on AppState"),
+        Some(data.db.clone().expect("No DB bound on AppState")),
         query.playback_id,
     )?))
 }
@@ -296,7 +296,7 @@ pub async fn previous_track_endpoint(
     data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(previous_track(
-        data.db.clone().expect("No DB bound on AppState"),
+        Some(data.db.clone().expect("No DB bound on AppState")),
         query.playback_id,
         query.seek,
     )?))
