@@ -117,14 +117,7 @@ pub fn play_tracks(
         stop(Some(playback.id))?;
     }
 
-    let playback = Playback {
-        id: thread_rng().gen::<usize>(),
-        tracks,
-        playing: true,
-        position: position.unwrap_or_default(),
-        progress: Arc::new(RwLock::new(Progress { position: 0.0 })),
-        abort: Arc::new(AtomicBool::new(false)),
-    };
+    let playback = Playback::new(tracks, position);
 
     play_playback(db, playback, seek)
 }
@@ -435,6 +428,19 @@ pub struct Playback {
     pub position: u16,
     pub progress: Arc<RwLock<Progress>>,
     pub abort: Arc<AtomicBool>,
+}
+
+impl Playback {
+    pub fn new(tracks: Vec<TrackOrId>, position: Option<u16>) -> Playback {
+        Playback {
+            id: thread_rng().gen::<usize>(),
+            tracks,
+            playing: true,
+            position: position.unwrap_or_default(),
+            progress: Arc::new(RwLock::new(Progress { position: 0.0 })),
+            abort: Arc::new(AtomicBool::new(false)),
+        }
+    }
 }
 
 #[derive(Serialize)]
