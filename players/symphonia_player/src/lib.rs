@@ -22,6 +22,7 @@ use symphonia::core::units::Time;
 use log::{debug, error, info, trace, warn};
 use thiserror::Error;
 
+pub mod media_sources;
 mod output;
 
 #[cfg(feature = "cpal")]
