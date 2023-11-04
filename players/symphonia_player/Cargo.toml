@@ -5,6 +5,7 @@ authors = ["Braden Steffaniak"]
 edition = "2021"
 
 [dependencies]
+bytes = { workspace = true }
 clap = { workspace = true }
 crossbeam-channel = { workspace = true }
 lazy_static = { workspace = true }
