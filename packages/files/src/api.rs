@@ -1,6 +1,6 @@
 use std::env;
 
-use actix_web::{error::ErrorInternalServerError, web, HttpRequest, HttpResponse, Result};
+use actix_web::{error::ErrorInternalServerError, route, web, HttpRequest, HttpResponse, Result};
 use lambda_web::actix_web::{self, get};
 use log::{debug, error, trace};
 use moosicbox_core::{
@@ -17,7 +17,7 @@ pub struct GetTrackQuery {
     track_id: i32,
 }
 
-#[get("/track")]
+#[route("/track", method = "GET", method = "HEAD")]
 pub async fn track_endpoint(
     req: HttpRequest,
     query: web::Query<GetTrackQuery>,
