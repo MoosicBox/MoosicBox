@@ -69,7 +69,7 @@ pub enum AudioOutputType {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn run(
+pub fn play_file_path_str(
     path_str: &str,
     audio_output_type: &AudioOutputType,
     enable_gapless: bool,
@@ -100,47 +100,17 @@ pub fn run(
         // Create the media source stream using the boxed media source from above.
         let mss = MediaSourceStream::new(source, Default::default());
 
-        // Use the default options for format readers other than for gapless playback.
-        let format_opts = FormatOptions {
-            enable_gapless,
-            ..Default::default()
-        };
-
-        // Use the default options for metadata readers.
-        let metadata_opts: MetadataOptions = Default::default();
-
-        // Probe the media source stream for metadata and get the format reader.
-        let result = match symphonia::default::get_probe().format(
-            &hint,
+        let result = play_media_source(
             mss,
-            &format_opts,
-            &metadata_opts,
-        ) {
-            Ok(probed) => {
-                // If present, parse the seek argument.
-                let seek_time = seek.or(Some(progress.clone().read().unwrap().position));
-
-                // Set the decoder options.
-                let decode_opts = DecoderOptions { verify };
-
-                // Play it!
-                play(
-                    probed.format,
-                    audio_output_type,
-                    track_num,
-                    seek_time,
-                    &decode_opts,
-                    progress.clone(),
-                    abort.clone(),
-                )
-            }
-            Err(err) => {
-                // The input was not supported by any format reader.
-                info!("the input is not supported");
-                Err(PlaybackError::Symphonia(err))
-            }
-        };
-
+            &hint,
+            audio_output_type,
+            enable_gapless,
+            verify,
+            track_num,
+            seek,
+            progress.clone(),
+            abort.clone(),
+        );
         if let Err(PlaybackError::AudioOutput(AudioOutputError::Interrupt)) = result {
             if retry_counter < MAX_RETRY_COUNT {
                 retry_counter += 1;
@@ -154,6 +124,67 @@ pub fn run(
         }
 
         break result;
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn play_media_source(
+    media_source_stream: MediaSourceStream,
+    hint: &Hint,
+    audio_output_type: &AudioOutputType,
+    enable_gapless: bool,
+    verify: bool,
+    track_num: Option<usize>,
+    seek: Option<f64>,
+    progress: Arc<RwLock<Progress>>,
+    abort: Arc<AtomicBool>,
+) -> Result<i32, PlaybackError> {
+    // Use the default options for format readers other than for gapless playback.
+    let format_opts = FormatOptions {
+        enable_gapless,
+        ..Default::default()
+    };
+
+    // Use the default options for metadata readers.
+    let metadata_opts: MetadataOptions = Default::default();
+
+    // Probe the media source stream for metadata and get the format reader.
+    match symphonia::default::get_probe().format(
+        hint,
+        media_source_stream,
+        &format_opts,
+        &metadata_opts,
+    ) {
+        Ok(probed) => {
+            // If present, parse the seek argument.
+            let seek_time = seek.or_else(|| {
+                let position = progress.clone().read().unwrap().position;
+                if position == 0.0 {
+                    None
+                } else {
+                    Some(position)
+                }
+            });
+
+            // Set the decoder options.
+            let decode_opts = DecoderOptions { verify };
+
+            // Play it!
+            play(
+                probed.format,
+                audio_output_type,
+                track_num,
+                seek_time,
+                &decode_opts,
+                progress,
+                abort,
+            )
+        }
+        Err(err) => {
+            // The input was not supported by any format reader.
+            info!("the input is not supported");
+            Err(PlaybackError::Symphonia(err))
+        }
     }
 }
 

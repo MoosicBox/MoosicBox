@@ -16,8 +16,10 @@ log = { workspace = true }
 moosicbox_core = { path = "../core" }
 moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false }
 rand.workspace = true
+reqwest = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.107"
+symphonia = { workspace = true }
 thiserror = "1.0.48"
 tokio = { workspace = true, features = ["rt", "time", "macros"] }
 

@@ -223,10 +223,9 @@ pub struct UpdatePlaybackQuery {
 #[post("/player/update-playback")]
 pub async fn update_playback_endpoint(
     query: web::Query<UpdatePlaybackQuery>,
-    data: web::Data<AppState>,
+    _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(update_playback(
-        Some(data.db.clone().expect("No DB bound on AppState")),
         query.playback_id,
         query.position,
         query.seek,
@@ -243,13 +242,9 @@ pub struct NextTrackQuery {
 #[post("/player/next-track")]
 pub async fn next_track_endpoint(
     query: web::Query<NextTrackQuery>,
-    data: web::Data<AppState>,
+    _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(next_track(
-        Some(data.db.clone().expect("No DB bound on AppState")),
-        query.playback_id,
-        query.seek,
-    )?))
+    Ok(Json(next_track(query.playback_id, query.seek)?))
 }
 
 #[derive(Deserialize, Clone)]
@@ -275,12 +270,9 @@ pub struct ResumeQuery {
 #[post("/player/resume")]
 pub async fn resume_playback_endpoint(
     query: web::Query<ResumeQuery>,
-    data: web::Data<AppState>,
+    _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(resume_playback(
-        Some(data.db.clone().expect("No DB bound on AppState")),
-        query.playback_id,
-    )?))
+    Ok(Json(resume_playback(query.playback_id)?))
 }
 
 #[derive(Deserialize, Clone)]
@@ -293,13 +285,9 @@ pub struct PreviousTrackQuery {
 #[post("/player/previous-track")]
 pub async fn previous_track_endpoint(
     query: web::Query<PreviousTrackQuery>,
-    data: web::Data<AppState>,
+    _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(previous_track(
-        Some(data.db.clone().expect("No DB bound on AppState")),
-        query.playback_id,
-        query.seek,
-    )?))
+    Ok(Json(previous_track(query.playback_id, query.seek)?))
 }
 
 #[derive(Deserialize, Clone)]

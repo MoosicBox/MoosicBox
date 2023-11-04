@@ -11,8 +11,8 @@ use moosicbox_core::{
     sqlite::{
         db::DbError,
         models::{
-            ApiUpdateSession, ApiUpdateSessionPlaylist, CreateSession, DeleteSession,
-            RegisterConnection, RegisterPlayer, SetSeek, SetSessionActivePlayers, ToApi,
+            ApiUpdateSession, ApiUpdateSessionPlaylist, CreateSession, DeleteSession, PlayerType,
+            RegisterConnection, RegisterPlayer, Session, SetSeek, SetSessionActivePlayers, ToApi,
             UpdateSession,
         },
     },
@@ -504,18 +504,34 @@ async fn update_session(
     context: &WebsocketContext,
     payload: &UpdateSession,
 ) -> Result<(), UpdateSessionError> {
-    let session = {
+    let (before_session, session) = {
         let db = db.lock();
         let library = db.as_ref().unwrap().library.lock().unwrap();
+
+        let before_session = moosicbox_core::sqlite::db::get_session(&library, payload.session_id)
+            .map_err(UpdateSessionError::Db)?
+            .map(Ok)
+            .unwrap_or(Err(UpdateSessionError::NoSessionFound))?;
 
         moosicbox_core::sqlite::db::update_session(&library, payload)
             .map_err(UpdateSessionError::Db)?;
 
-        moosicbox_core::sqlite::db::get_session(&library, payload.session_id)
+        let session = moosicbox_core::sqlite::db::get_session(&library, payload.session_id)
             .map_err(UpdateSessionError::Db)?
             .map(Ok)
-            .unwrap_or(Err(UpdateSessionError::NoSessionFound))?
+            .unwrap_or(Err(UpdateSessionError::NoSessionFound))?;
+
+        (before_session, session)
     };
+
+    if let Some(playing) = payload.playing {
+        if playing != before_session.playing {
+            match playing {
+                true => play_session(&session),
+                false => pause_session(&session),
+            }
+        }
+    }
 
     let response = ApiUpdateSession {
         session_id: session.id,
@@ -544,6 +560,22 @@ async fn update_session(
         .map_err(UpdateSessionError::WebsocketSend)?;
 
     Ok(())
+}
+
+fn play_session(session: &Session) {
+    for player in &session.active_players {
+        if player.r#type == PlayerType::Symphonia {
+            debug!("Playing Symphonia player");
+        }
+    }
+}
+
+fn pause_session(session: &Session) {
+    for player in &session.active_players {
+        if player.r#type == PlayerType::Symphonia {
+            debug!("Pausing Symphonia player");
+        }
+    }
 }
 
 async fn delete_session(

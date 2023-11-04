@@ -1,5 +1,7 @@
 use std::{
     collections::HashMap,
+    fs::File,
+    path::Path,
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::{channel, Receiver, SendError},
@@ -20,6 +22,10 @@ use moosicbox_core::{
 use moosicbox_symphonia_player::{AudioOutputType, PlaybackError, Progress};
 use rand::{thread_rng, Rng as _};
 use serde::Serialize;
+use symphonia::core::{
+    io::{MediaSource, MediaSourceStream},
+    probe::Hint,
+};
 use thiserror::Error;
 use tokio::runtime::{self, Runtime};
 
@@ -116,15 +122,37 @@ pub fn play_tracks(
         debug!("Stopping existing playback {}", playback.id);
         stop(Some(playback.id))?;
     }
+    let to_playable = ToPlayable::Callback(PlayableTrack::from_track_or_id);
 
+    let tracks = {
+        let db = db.clone().expect("No DB set");
+        let library = db.library.lock().unwrap();
+        tracks
+            .iter()
+            .map(|track| match track {
+                TrackOrId::Id(track_id) => {
+                    debug!("Fetching track {track_id}",);
+                    let track = get_track(&library, *track_id)
+                        .map_err(|e| {
+                            error!("Failed to fetch track: {e:?}");
+                            PlayerError::TrackFetchFailed(*track_id)
+                        })
+                        .expect("Failed to fetch track");
+                    debug!("Got track {track:?}");
+                    TrackOrId::Track(track.expect("Track doesnt exist"))
+                }
+                TrackOrId::Track(track) => TrackOrId::Track(track.clone()),
+            })
+            .collect()
+    };
     let playback = Playback::new(tracks, position);
 
-    play_playback(db, playback, seek)
+    play_playback(playback, to_playable, seek)
 }
 
 pub fn play_playback(
-    db: Option<Db>,
     playback: Playback,
+    to_playable: ToPlayable,
     seek: Option<f64>,
 ) -> Result<PlaybackStatus, PlayerError> {
     if let Ok(playback) = get_playback(Some(playback.id)) {
@@ -136,51 +164,25 @@ pub fn play_playback(
         let (tx, rx) = channel();
 
         let mut seek = seek;
-        let mut tracks = playback.tracks.clone();
-        let track_ids: Vec<_> = tracks
-            .iter()
-            .map(|t| match t {
-                TrackOrId::Id(id) => *id,
-                TrackOrId::Track(t) => t.id,
-            })
-            .collect();
 
         ACTIVE_PLAYBACK_RECEIVERS
             .lock()
             .unwrap()
             .insert(playback.id, rx);
 
-        for (i, track_id) in track_ids.iter().enumerate() {
+        for (i, track_or_id) in playback.tracks.iter().enumerate() {
             if (i as u16) < playback.position {
                 continue;
             }
-
-            debug!("Fetching track {track_id}");
-            let track = {
-                let db = db.clone().expect("No DB set");
-                let library = db.library.lock().unwrap();
-                get_track(&library, *track_id).map_err(|e| {
-                    error!("Failed to fetch track: {e:?}");
-                    PlayerError::TrackFetchFailed(*track_id)
-                })?
+            let track_id = match track_or_id {
+                TrackOrId::Id(id) => *id,
+                TrackOrId::Track(track) => track.id,
             };
-            debug!("Got track {track:?}");
 
-            if track.is_none() {
-                return Err(PlayerError::TrackNotFound(*track_id));
-            }
-
-            let track = track.unwrap();
-
-            if track.file.is_none() {
-                return Err(PlayerError::TrackNotLocal(*track_id));
-            }
-
-            tracks[i] = TrackOrId::Track(track.clone());
-
+            // playback.playing = true;
             let playback = Playback {
                 id: playback.id,
-                tracks: tracks.clone(),
+                tracks: playback.tracks.clone(),
                 playing: true,
                 position: i as u16,
                 progress: Arc::new(RwLock::new(Progress { position: 0.0 })),
@@ -192,8 +194,11 @@ pub fn play_playback(
                 .unwrap()
                 .insert(playback.id, playback.clone());
 
-            debug!("track {} {seek:?}", track.id);
-            start_playback(&playback, seek.take())?;
+            debug!("track {} {seek:?}", track_id);
+
+            let seek = if seek.is_some() { seek.take() } else { None };
+
+            start_playback(&playback, to_playable, seek)?;
 
             if playback.abort.load(Ordering::SeqCst) {
                 break;
@@ -216,7 +221,7 @@ pub fn play_playback(
             .unwrap()
             .remove(&playback.id);
 
-        Ok(0)
+        Ok::<_, PlayerError>(0)
     });
 
     Ok(PlaybackStatus {
@@ -225,35 +230,50 @@ pub fn play_playback(
     })
 }
 
-fn start_playback(playback: &Playback, seek: Option<f64>) -> Result<(), PlayerError> {
-    if let TrackOrId::Track(track) = &playback.tracks[playback.position as usize] {
-        info!("Playing track with Symphonia: {}", track.id);
+#[derive(Copy, Clone)]
+pub enum ToPlayable {
+    Callback(fn(&TrackOrId) -> PlayableTrack),
+}
 
-        #[allow(unused)]
-        #[cfg(feature = "cpal")]
-        let audio_output_type = AudioOutputType::Cpal;
-        #[allow(unused)]
-        #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
-        let audio_output_type = AudioOutputType::PulseAudioSimple;
-        #[allow(unused)]
-        #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
-        let audio_output_type = AudioOutputType::PulseAudioStandard;
+fn start_playback(
+    playback: &Playback,
+    to_playable: ToPlayable,
+    seek: Option<f64>,
+) -> Result<(), PlayerError> {
+    let track = &playback.tracks[playback.position as usize];
+    let track_id = match track {
+        TrackOrId::Id(id) => *id,
+        TrackOrId::Track(track) => track.id,
+    };
+    info!("Playing track with Symphonia: {}", track_id);
 
-        moosicbox_symphonia_player::run(
-            &track.file.clone().unwrap(),
-            &audio_output_type,
-            true,
-            true,
-            None,
-            seek,
-            playback.progress.clone(),
-            playback.abort.clone(),
-        )?;
+    #[allow(unused)]
+    #[cfg(feature = "cpal")]
+    let audio_output_type = AudioOutputType::Cpal;
+    #[allow(unused)]
+    #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
+    let audio_output_type = AudioOutputType::PulseAudioSimple;
+    #[allow(unused)]
+    #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
+    let audio_output_type = AudioOutputType::PulseAudioStandard;
 
-        info!("Finished playback for track {}", track.id);
-    } else {
-        unreachable!();
-    }
+    let playable_track = match to_playable {
+        ToPlayable::Callback(f) => f(track),
+    };
+    let mss = MediaSourceStream::new(playable_track.source, Default::default());
+    moosicbox_symphonia_player::play_media_source(
+        mss,
+        &playable_track.hint,
+        &audio_output_type,
+        true,
+        true,
+        None,
+        seek,
+        playback.progress.clone(),
+        playback.abort.clone(),
+    )?;
+
+    info!("Finished playback for track {}", track_id);
 
     Ok(())
 }
@@ -287,7 +307,11 @@ fn stop(playback_id: Option<usize>) -> Result<Playback, PlayerError> {
 
 pub fn seek_track(playback_id: Option<usize>, seek: f64) -> Result<PlaybackStatus, PlayerError> {
     let playback = stop(playback_id)?;
-    start_playback(&playback, Some(seek))?;
+    start_playback(
+        &playback,
+        ToPlayable::Callback(PlayableTrack::from_track_or_id),
+        Some(seek),
+    )?;
 
     Ok(PlaybackStatus {
         success: true,
@@ -296,7 +320,6 @@ pub fn seek_track(playback_id: Option<usize>, seek: f64) -> Result<PlaybackStatu
 }
 
 pub fn next_track(
-    db: Option<Db>,
     playback_id: Option<usize>,
     seek: Option<f64>,
 ) -> Result<PlaybackStatus, PlayerError> {
@@ -309,11 +332,10 @@ pub fn next_track(
         ));
     }
 
-    update_playback(db, playback_id, Some(playback.position + 1), seek)
+    update_playback(playback_id, Some(playback.position + 1), seek)
 }
 
 pub fn previous_track(
-    db: Option<Db>,
     playback_id: Option<usize>,
     seek: Option<f64>,
 ) -> Result<PlaybackStatus, PlayerError> {
@@ -324,17 +346,19 @@ pub fn previous_track(
         return Err(PlayerError::PositionOutOfBounds(-1));
     }
 
-    update_playback(db, playback_id, Some(playback.position - 1), seek)
+    update_playback(playback_id, Some(playback.position - 1), seek)
 }
 
 pub fn update_playback(
-    db: Option<Db>,
     playback_id: Option<usize>,
     position: Option<u16>,
     seek: Option<f64>,
 ) -> Result<PlaybackStatus, PlayerError> {
     info!("Updating playback id {playback_id:?} position {position:?} seek {seek:?}");
     let playback = stop(playback_id)?;
+
+    let to_playable = ToPlayable::Callback(PlayableTrack::from_track_or_id);
+
     let playback = Playback {
         id: playback.id,
         tracks: playback.tracks.clone(),
@@ -344,7 +368,7 @@ pub fn update_playback(
         abort: Arc::new(AtomicBool::new(false)),
     };
 
-    play_playback(db, playback, seek)
+    play_playback(playback, to_playable, seek)
 }
 
 pub fn pause_playback(playback_id: Option<usize>) -> Result<PlaybackStatus, PlayerError> {
@@ -390,10 +414,7 @@ pub fn pause_playback(playback_id: Option<usize>) -> Result<PlaybackStatus, Play
     })
 }
 
-pub fn resume_playback(
-    db: Option<Db>,
-    playback_id: Option<usize>,
-) -> Result<PlaybackStatus, PlayerError> {
+pub fn resume_playback(playback_id: Option<usize>) -> Result<PlaybackStatus, PlayerError> {
     info!("Resuming playback id {playback_id:?}");
     let playback = get_playback(playback_id)?;
 
@@ -405,6 +426,8 @@ pub fn resume_playback(
 
     let seek = Some(playback.progress.read().unwrap().position);
 
+    let to_playable = ToPlayable::Callback(PlayableTrack::from_track_or_id);
+
     let playback = Playback {
         id,
         tracks: playback.tracks.clone(),
@@ -414,13 +437,63 @@ pub fn resume_playback(
         abort: Arc::new(AtomicBool::new(false)),
     };
 
-    play_playback(db, playback, seek)
+    play_playback(playback, to_playable, seek)
 }
 
 #[derive(Debug, Clone)]
 pub enum TrackOrId {
     Track(Track),
     Id(i32),
+}
+
+pub struct PlayableTrack {
+    pub track_id: i32,
+    pub source: Box<dyn MediaSource>,
+    pub hint: Hint,
+}
+
+impl PlayableTrack {
+    fn from_track_or_id(track_or_id: &TrackOrId) -> PlayableTrack {
+        match track_or_id {
+            TrackOrId::Id(_id) => unreachable!(),
+            TrackOrId::Track(track) => PlayableTrack::from_track(track),
+        }
+    }
+
+    fn from_track(track: &Track) -> PlayableTrack {
+        let mut hint = Hint::new();
+
+        let file = track.file.clone().unwrap();
+        let path = Path::new(&file);
+
+        // Provide the file extension as a hint.
+        if let Some(extension) = path.extension() {
+            if let Some(extension_str) = extension.to_str() {
+                hint.with_extension(extension_str);
+            }
+        }
+
+        let source = Box::new(File::open(path).unwrap());
+
+        PlayableTrack {
+            track_id: track.id,
+            source,
+            hint,
+        }
+    }
+}
+
+impl std::fmt::Debug for PlayableTrack {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PlayableTrack")
+            .field("track_id", &self.track_id)
+            .field("source", &"{{source}}")
+            .finish()
+    }
+}
+
+trait PlayablePlayback {
+    fn track_to_playable(track: TrackOrId) -> PlayableTrack;
 }
 
 #[derive(Debug, Clone)]
@@ -431,6 +504,18 @@ pub struct Playback {
     pub position: u16,
     pub progress: Arc<RwLock<Progress>>,
     pub abort: Arc<AtomicBool>,
+}
+
+pub struct FilePlayback {}
+
+impl PlayablePlayback for Playback {
+    fn track_to_playable(track: TrackOrId) -> PlayableTrack {
+        if let TrackOrId::Track(track) = track {
+            PlayableTrack::from_track(&track)
+        } else {
+            unreachable!()
+        }
+    }
 }
 
 impl Playback {
