@@ -15,6 +15,7 @@ lazy_static = { workspace = true }
 log = { workspace = true }
 moosicbox_core = { path = "../core" }
 moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false }
+once_cell = { workspace = true }
 rand.workspace = true
 reqwest = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }

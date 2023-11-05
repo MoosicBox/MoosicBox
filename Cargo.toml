@@ -26,6 +26,7 @@ futures = "0.3"
 futures-util = { version = "0.3.17", default-features = false, features = ["std"] }
 lazy_static = "1.4.0"
 log = { version = "0.4", features = ["release_max_level_info"] }
+once_cell = { version = "1.18.0" }
 openssl = { version = "0.10.55", features = ["v110"] }
 pretty_env_logger = "0.4"
 rand = "0.8"

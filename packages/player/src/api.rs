@@ -5,14 +5,11 @@ use actix_web::{
 };
 use lambda_web::actix_web::{self, get, post};
 use moosicbox_core::app::AppState;
+use once_cell::sync::Lazy;
 use serde::Deserialize;
 use thiserror::Error;
 
-use crate::player::{
-    next_track, pause_playback, play_album, play_track, play_tracks, player_status, previous_track,
-    resume_playback, seek_track, stop_track, update_playback, ApiPlaybackStatus, PlaybackStatus,
-    PlayerError, TrackOrId,
-};
+use crate::player::{ApiPlaybackStatus, PlaybackStatus, Player, PlayerError, TrackOrId};
 
 impl From<PlayerError> for actix_web::Error {
     fn from(err: PlayerError) -> Self {
@@ -39,11 +36,14 @@ impl From<PlayerError> for actix_web::Error {
             PlayerError::PlaybackAlreadyPlaying(id) => {
                 ErrorBadRequest(format!("Playback already playing: {id}"))
             }
+            PlayerError::InvalidPlaybackType => ErrorBadRequest(format!("Invalid Playback Type")),
             PlayerError::PlaybackError(err) => ErrorInternalServerError(err),
             PlayerError::Send(err) => ErrorInternalServerError(err),
         }
     }
 }
+
+static PLAYER: Lazy<Player> = Lazy::new(|| Player::new(None));
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -58,7 +58,7 @@ pub async fn play_album_endpoint(
     query: web::Query<PlayAlbumQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(play_album(
+    Ok(Json(PLAYER.play_album(
         data.db.clone().expect("No DB bound on AppState"),
         query.album_id,
         query.position,
@@ -78,7 +78,7 @@ pub async fn play_track_endpoint(
     query: web::Query<PlayTrackQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(play_track(
+    Ok(Json(PLAYER.play_track(
         Some(data.db.clone().expect("No DB bound on AppState")),
         TrackOrId::Id(query.track_id),
         query.seek,
@@ -161,26 +161,28 @@ pub async fn play_tracks_endpoint(
     query: web::Query<PlayTracksQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(play_tracks(
-        Some(data.db.clone().expect("No DB bound on AppState")),
-        parse_track_id_ranges(&query.track_ids)
-            .map_err(|e| match e {
-                ParseTrackIdsError::ParseId(id) => {
-                    ErrorBadRequest(format!("Could not parse trackId '{id}'"))
-                }
-                ParseTrackIdsError::UnmatchedRange(range) => {
-                    ErrorBadRequest(format!("Unmatched range '{range}'"))
-                }
-                ParseTrackIdsError::RangeTooLarge(range) => {
-                    ErrorBadRequest(format!("Range too large '{range}'"))
-                }
-            })?
-            .iter()
-            .map(|id| TrackOrId::Id(*id))
-            .collect(),
-        query.position,
-        query.seek,
-    )?))
+    Ok(Json(
+        PLAYER.play_tracks(
+            Some(data.db.clone().expect("No DB bound on AppState")),
+            parse_track_id_ranges(&query.track_ids)
+                .map_err(|e| match e {
+                    ParseTrackIdsError::ParseId(id) => {
+                        ErrorBadRequest(format!("Could not parse trackId '{id}'"))
+                    }
+                    ParseTrackIdsError::UnmatchedRange(range) => {
+                        ErrorBadRequest(format!("Unmatched range '{range}'"))
+                    }
+                    ParseTrackIdsError::RangeTooLarge(range) => {
+                        ErrorBadRequest(format!("Range too large '{range}'"))
+                    }
+                })?
+                .iter()
+                .map(|id| TrackOrId::Id(*id))
+                .collect(),
+            query.position,
+            query.seek,
+        )?,
+    ))
 }
 
 #[derive(Deserialize, Clone)]
@@ -194,7 +196,7 @@ pub async fn stop_track_endpoint(
     query: web::Query<StopTrackQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(stop_track(query.playback_id)?))
+    Ok(Json(PLAYER.stop_track(query.playback_id)?))
 }
 
 #[derive(Deserialize, Clone)]
@@ -209,7 +211,7 @@ pub async fn seek_track_endpoint(
     query: web::Query<SeekTrackQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(seek_track(query.playback_id, query.seek)?))
+    Ok(Json(PLAYER.seek_track(query.playback_id, query.seek)?))
 }
 
 #[derive(Deserialize, Clone)]
@@ -225,7 +227,7 @@ pub async fn update_playback_endpoint(
     query: web::Query<UpdatePlaybackQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(update_playback(
+    Ok(Json(PLAYER.update_playback(
         query.playback_id,
         query.position,
         query.seek,
@@ -244,7 +246,7 @@ pub async fn next_track_endpoint(
     query: web::Query<NextTrackQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(next_track(query.playback_id, query.seek)?))
+    Ok(Json(PLAYER.next_track(query.playback_id, query.seek)?))
 }
 
 #[derive(Deserialize, Clone)]
@@ -258,7 +260,7 @@ pub async fn pause_playback_endpoint(
     query: web::Query<PauseQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(pause_playback(query.playback_id)?))
+    Ok(Json(PLAYER.pause_playback(query.playback_id)?))
 }
 
 #[derive(Deserialize, Clone)]
@@ -272,7 +274,7 @@ pub async fn resume_playback_endpoint(
     query: web::Query<ResumeQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(resume_playback(query.playback_id)?))
+    Ok(Json(PLAYER.resume_playback(query.playback_id)?))
 }
 
 #[derive(Deserialize, Clone)]
@@ -287,7 +289,7 @@ pub async fn previous_track_endpoint(
     query: web::Query<PreviousTrackQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(previous_track(query.playback_id, query.seek)?))
+    Ok(Json(PLAYER.previous_track(query.playback_id, query.seek)?))
 }
 
 #[derive(Deserialize, Clone)]
@@ -298,5 +300,5 @@ pub struct PlayerStatusQuery {}
 pub async fn player_status_endpoint(
     _query: web::Query<PlayerStatusQuery>,
 ) -> Result<Json<ApiPlaybackStatus>> {
-    Ok(Json(player_status()?))
+    Ok(Json(PLAYER.player_status()?))
 }
