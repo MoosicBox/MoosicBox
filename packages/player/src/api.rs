@@ -9,7 +9,9 @@ use once_cell::sync::Lazy;
 use serde::Deserialize;
 use thiserror::Error;
 
-use crate::player::{ApiPlaybackStatus, PlaybackStatus, Player, PlayerError, TrackOrId};
+use crate::player::{
+    ApiPlaybackStatus, PlaybackRetryOptions, PlaybackStatus, Player, PlayerError, TrackOrId,
+};
 
 impl From<PlayerError> for actix_web::Error {
     fn from(err: PlayerError) -> Self {
@@ -46,6 +48,10 @@ impl From<PlayerError> for actix_web::Error {
 }
 
 static PLAYER: Lazy<Player> = Lazy::new(|| Player::new(None));
+const DEFAULT_PLAYBACK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
+    max_retry_count: 10,
+    retry_delay: std::time::Duration::from_millis(1000),
+};
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -65,6 +71,7 @@ pub async fn play_album_endpoint(
         query.album_id,
         query.position,
         query.seek,
+        Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
     )?))
 }
 
@@ -84,6 +91,7 @@ pub async fn play_track_endpoint(
         Some(data.db.clone().expect("No DB bound on AppState")),
         TrackOrId::Id(query.track_id),
         query.seek,
+        Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
     )?))
 }
 
@@ -183,6 +191,7 @@ pub async fn play_tracks_endpoint(
                 .collect(),
             query.position,
             query.seek,
+            Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
         )?,
     ))
 }
@@ -213,7 +222,11 @@ pub async fn seek_track_endpoint(
     query: web::Query<SeekTrackQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(PLAYER.seek_track(query.playback_id, query.seek)?))
+    Ok(Json(PLAYER.seek_track(
+        query.playback_id,
+        query.seek,
+        Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
+    )?))
 }
 
 #[derive(Deserialize, Clone)]
@@ -233,6 +246,7 @@ pub async fn update_playback_endpoint(
         query.playback_id,
         query.position,
         query.seek,
+        Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
     )?))
 }
 
@@ -248,7 +262,11 @@ pub async fn next_track_endpoint(
     query: web::Query<NextTrackQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(PLAYER.next_track(query.playback_id, query.seek)?))
+    Ok(Json(PLAYER.next_track(
+        query.playback_id,
+        query.seek,
+        Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
+    )?))
 }
 
 #[derive(Deserialize, Clone)]
@@ -276,7 +294,10 @@ pub async fn resume_playback_endpoint(
     query: web::Query<ResumeQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(PLAYER.resume_playback(query.playback_id)?))
+    Ok(Json(PLAYER.resume_playback(
+        query.playback_id,
+        Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
+    )?))
 }
 
 #[derive(Deserialize, Clone)]
@@ -291,7 +312,11 @@ pub async fn previous_track_endpoint(
     query: web::Query<PreviousTrackQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(PLAYER.previous_track(query.playback_id, query.seek)?))
+    Ok(Json(PLAYER.previous_track(
+        query.playback_id,
+        query.seek,
+        Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
+    )?))
 }
 
 #[derive(Deserialize, Clone)]

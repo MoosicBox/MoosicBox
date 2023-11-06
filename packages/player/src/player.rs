@@ -10,7 +10,7 @@ use std::{
 
 use crossbeam_channel::{bounded, Receiver, SendError, Sender};
 use lazy_static::lazy_static;
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 use moosicbox_core::{
     app::Db,
     sqlite::{
@@ -19,7 +19,8 @@ use moosicbox_core::{
     },
 };
 use moosicbox_symphonia_player::{
-    media_sources::remote_bytestream::RemoteByteStream, AudioOutputType, PlaybackError, Progress,
+    media_sources::remote_bytestream::RemoteByteStream, output::AudioOutputError, AudioOutputType,
+    PlaybackError, Progress,
 };
 use rand::{thread_rng, Rng as _};
 use serde::Serialize;
@@ -176,6 +177,12 @@ pub struct Player {
     receiver: Receiver<()>,
 }
 
+#[derive(Copy, Clone)]
+pub struct PlaybackRetryOptions {
+    pub max_retry_count: u32,
+    pub retry_delay: std::time::Duration,
+}
+
 impl Player {
     pub fn new(host: Option<String>) -> Player {
         let (tx, rx) = bounded(1);
@@ -195,6 +202,7 @@ impl Player {
         album_id: i32,
         position: Option<u16>,
         seek: Option<f64>,
+        retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
         let tracks = {
             let library = db.library.lock().unwrap();
@@ -209,6 +217,7 @@ impl Player {
             tracks.into_iter().map(TrackOrId::Track).collect(),
             position,
             seek,
+            retry_options,
         )
     }
 
@@ -217,8 +226,9 @@ impl Player {
         db: Option<Db>,
         track: TrackOrId,
         seek: Option<f64>,
+        retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
-        self.play_tracks(db, vec![track], None, seek)
+        self.play_tracks(db, vec![track], None, seek, retry_options)
     }
 
     pub fn play_tracks(
@@ -227,6 +237,7 @@ impl Player {
         tracks: Vec<TrackOrId>,
         position: Option<u16>,
         seek: Option<f64>,
+        retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
         if let Ok(playback) = self.get_playback() {
             debug!("Stopping existing playback {}", playback.id);
@@ -256,7 +267,7 @@ impl Player {
         };
         let playback = Playback::new(tracks, position);
 
-        self.play_playback(playback, PlaybackType::Default, seek)
+        self.play_playback(playback, PlaybackType::Default, seek, retry_options)
     }
 
     fn assert_playback_playing(&self, playback_id: usize) -> Result<(), PlayerError> {
@@ -278,6 +289,7 @@ impl Player {
         playback: Playback,
         to_playable: PlaybackType,
         seek: Option<f64>,
+        retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
         self.assert_playback_playing(playback.id)?;
         if let Ok(playback) = self.get_playback() {
@@ -319,7 +331,7 @@ impl Player {
 
                 let seek = if seek.is_some() { seek.take() } else { None };
 
-                player.start_playback(&playback, to_playable, seek)?;
+                player.start_playback(&playback, to_playable, seek, retry_options)?;
 
                 if playback.abort.load(Ordering::SeqCst) {
                     break;
@@ -343,6 +355,7 @@ impl Player {
         playback: &Playback,
         playback_type: PlaybackType,
         seek: Option<f64>,
+        retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
         let track_or_id = &playback.tracks[playback.position as usize];
         let track_id = match track_or_id {
@@ -361,19 +374,45 @@ impl Player {
         #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
         let audio_output_type = AudioOutputType::PulseAudioStandard;
 
-        let playable_track = self.track_or_id_to_playable(playback_type, track_or_id)?;
-        let mss = MediaSourceStream::new(playable_track.source, Default::default());
-        moosicbox_symphonia_player::play_media_source(
-            mss,
-            &playable_track.hint,
-            &audio_output_type,
-            true,
-            true,
-            None,
-            seek,
-            playback.progress.clone(),
-            playback.abort.clone(),
-        )?;
+        let mut current_seek = seek;
+        let mut retry_count = 0;
+
+        loop {
+            let playable_track = self.track_or_id_to_playable(playback_type, track_or_id)?;
+            let mss = MediaSourceStream::new(playable_track.source, Default::default());
+
+            if let Err(err) = moosicbox_symphonia_player::play_media_source(
+                mss,
+                &playable_track.hint,
+                &audio_output_type,
+                true,
+                true,
+                None,
+                current_seek,
+                playback.progress.clone(),
+                playback.abort.clone(),
+            ) {
+                if let Some(retry_options) = retry_options {
+                    match err {
+                        PlaybackError::AudioOutput(AudioOutputError::Interrupt) => {
+                            retry_count += 1;
+                            if retry_count > retry_options.max_retry_count {
+                                error!(
+                                "Playback retry failed after {retry_count} attempts. Not retrying"
+                            );
+                                break;
+                            }
+                            current_seek = Some(playback.progress.read().unwrap().position);
+                            warn!("Playback interrupted. Trying again at position {current_seek:?} (attempt {retry_count}/{})", retry_options.max_retry_count);
+                            std::thread::sleep(retry_options.retry_delay);
+                            continue;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            break;
+        }
 
         info!("Finished playback for track {}", track_id);
 
@@ -422,9 +461,10 @@ impl Player {
         &self,
         playback_id: Option<usize>,
         seek: f64,
+        retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
         let playback = self.stop(playback_id)?;
-        self.start_playback(&playback, PlaybackType::Default, Some(seek))?;
+        self.start_playback(&playback, PlaybackType::Default, Some(seek), retry_options)?;
 
         Ok(PlaybackStatus {
             success: true,
@@ -436,6 +476,7 @@ impl Player {
         &self,
         playback_id: Option<usize>,
         seek: Option<f64>,
+        retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
         if let Some(playback_id) = playback_id {
             self.assert_playback_playing(playback_id)?;
@@ -449,13 +490,19 @@ impl Player {
             ));
         }
 
-        self.update_playback(playback_id, Some(playback.position + 1), seek)
+        self.update_playback(
+            playback_id,
+            Some(playback.position + 1),
+            seek,
+            retry_options,
+        )
     }
 
     pub fn previous_track(
         &self,
         playback_id: Option<usize>,
         seek: Option<f64>,
+        retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
         if let Some(playback_id) = playback_id {
             self.assert_playback_playing(playback_id)?;
@@ -467,7 +514,12 @@ impl Player {
             return Err(PlayerError::PositionOutOfBounds(-1));
         }
 
-        self.update_playback(playback_id, Some(playback.position - 1), seek)
+        self.update_playback(
+            playback_id,
+            Some(playback.position - 1),
+            seek,
+            retry_options,
+        )
     }
 
     pub fn update_playback(
@@ -475,6 +527,7 @@ impl Player {
         playback_id: Option<usize>,
         position: Option<u16>,
         seek: Option<f64>,
+        retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
         info!("Updating playback id {playback_id:?} position {position:?} seek {seek:?}");
         let playback = self.stop(playback_id)?;
@@ -488,7 +541,7 @@ impl Player {
             abort: Arc::new(AtomicBool::new(false)),
         };
 
-        self.play_playback(playback, PlaybackType::Default, seek)
+        self.play_playback(playback, PlaybackType::Default, seek, retry_options)
     }
 
     pub fn pause_playback(
@@ -537,6 +590,7 @@ impl Player {
     pub fn resume_playback(
         &self,
         playback_id: Option<usize>,
+        retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
         if let Some(playback_id) = playback_id {
             self.assert_playback_playing(playback_id)?;
@@ -561,7 +615,7 @@ impl Player {
             abort: Arc::new(AtomicBool::new(false)),
         };
 
-        self.play_playback(playback, PlaybackType::Default, seek)
+        self.play_playback(playback, PlaybackType::Default, seek, retry_options)
     }
 
     pub fn track_to_playable_file(&self, track: &Track) -> PlayableTrack {
