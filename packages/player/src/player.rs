@@ -395,6 +395,12 @@ impl Player {
         }
         info!("Stopping playback for playback_id {playback_id:?}");
         let playback = self.get_playback()?;
+
+        if !playback.playing {
+            debug!("Playback {playback:?} not playing");
+            return Ok(playback);
+        }
+
         debug!("Stopping playback {playback:?}");
 
         playback.abort.clone().store(true, Ordering::SeqCst);
