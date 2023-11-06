@@ -7,8 +7,6 @@ use std::io;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
-use std::thread::sleep;
-use std::time::Duration;
 
 use output::AudioOutputError;
 use symphonia::core::codecs::{DecoderOptions, FinalizeResult, CODEC_TYPE_NULL};
@@ -79,52 +77,34 @@ pub fn play_file_path_str(
     progress: Arc<RwLock<Progress>>,
     abort: Arc<AtomicBool>,
 ) -> Result<i32, PlaybackError> {
-    const MAX_RETRY_COUNT: i32 = 10;
-    let mut retry_counter = 0;
+    // Create a hint to help the format registry guess what format reader is appropriate.
+    let mut hint = Hint::new();
 
-    loop {
-        // Create a hint to help the format registry guess what format reader is appropriate.
-        let mut hint = Hint::new();
+    let path = Path::new(path_str);
 
-        let path = Path::new(path_str);
-
-        // Provide the file extension as a hint.
-        if let Some(extension) = path.extension() {
-            if let Some(extension_str) = extension.to_str() {
-                hint.with_extension(extension_str);
-            }
+    // Provide the file extension as a hint.
+    if let Some(extension) = path.extension() {
+        if let Some(extension_str) = extension.to_str() {
+            hint.with_extension(extension_str);
         }
-
-        let source = Box::new(File::open(path)?);
-
-        // Create the media source stream using the boxed media source from above.
-        let mss = MediaSourceStream::new(source, Default::default());
-
-        let result = play_media_source(
-            mss,
-            &hint,
-            audio_output_type,
-            enable_gapless,
-            verify,
-            track_num,
-            seek,
-            progress.clone(),
-            abort.clone(),
-        );
-        if let Err(PlaybackError::AudioOutput(AudioOutputError::Interrupt)) = result {
-            if retry_counter < MAX_RETRY_COUNT {
-                retry_counter += 1;
-                info!(
-                    "Audio interrupt detected. Trying playback again where left off attempt {}/{}",
-                    retry_counter, MAX_RETRY_COUNT
-                );
-                sleep(Duration::from_millis(1000));
-                continue;
-            }
-        }
-
-        break result;
     }
+
+    let source = Box::new(File::open(path)?);
+
+    // Create the media source stream using the boxed media source from above.
+    let mss = MediaSourceStream::new(source, Default::default());
+
+    play_media_source(
+        mss,
+        &hint,
+        audio_output_type,
+        enable_gapless,
+        verify,
+        track_num,
+        seek,
+        progress.clone(),
+        abort.clone(),
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
