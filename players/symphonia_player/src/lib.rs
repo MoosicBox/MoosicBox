@@ -23,7 +23,7 @@ use log::{debug, error, info, trace, warn};
 use thiserror::Error;
 
 pub mod media_sources;
-mod output;
+pub mod output;
 
 #[cfg(feature = "cpal")]
 mod resampler;
