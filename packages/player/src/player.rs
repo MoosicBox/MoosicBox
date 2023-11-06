@@ -1,15 +1,14 @@
 use std::{
-    collections::HashMap,
     fs::File,
     path::Path,
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc::{channel, Receiver, SendError},
-        Arc, Mutex, RwLock,
+        Arc, RwLock,
     },
     u16, usize,
 };
 
+use crossbeam_channel::{bounded, Receiver, SendError, Sender};
 use lazy_static::lazy_static;
 use log::{debug, error, info, trace};
 use moosicbox_core::{
@@ -37,9 +36,6 @@ lazy_static! {
         .max_blocking_threads(4)
         .build()
         .unwrap();
-    static ref ACTIVE_PLAYBACKS: Mutex<HashMap<usize, Playback>> = Mutex::new(HashMap::new());
-    static ref ACTIVE_PLAYBACK_RECEIVERS: Mutex<HashMap<usize, Receiver<()>>> =
-        Mutex::new(HashMap::new());
 }
 
 impl From<SendError<()>> for PlayerError {
@@ -142,7 +138,7 @@ impl ToApi<ApiPlayback> for Playback {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiPlaybackStatus {
-    active_playbacks: Vec<ApiPlayback>,
+    active_playbacks: Option<ApiPlayback>,
 }
 
 #[derive(Serialize)]
@@ -172,12 +168,24 @@ pub enum PlaybackType {
 
 #[derive(Clone)]
 pub struct Player {
+    pub id: usize,
     host: Option<String>,
+    pub active_playback: Arc<RwLock<Option<Playback>>>,
+    sender: Sender<()>,
+    receiver: Receiver<()>,
 }
 
 impl Player {
     pub fn new(host: Option<String>) -> Player {
-        Player { host }
+        let (tx, rx) = bounded(1);
+
+        Player {
+            id: thread_rng().gen::<usize>(),
+            host,
+            active_playback: Arc::new(RwLock::new(None)),
+            sender: tx,
+            receiver: rx,
+        }
     }
 
     pub fn play_album(
@@ -219,7 +227,7 @@ impl Player {
         position: Option<u16>,
         seek: Option<f64>,
     ) -> Result<PlaybackStatus, PlayerError> {
-        if let Ok(playback) = self.get_playback(None) {
+        if let Ok(playback) = self.get_playback() {
             debug!("Stopping existing playback {}", playback.id);
             self.stop(Some(playback.id))?;
         }
@@ -247,41 +255,50 @@ impl Player {
         };
         let playback = Playback::new(tracks, position);
 
-        self.clone()
-            .play_playback(playback, PlaybackType::Default, seek)
+        self.play_playback(playback, PlaybackType::Default, seek)
+    }
+
+    fn assert_playback_playing(&self, playback_id: usize) -> Result<(), PlayerError> {
+        if self
+            .active_playback
+            .read()
+            .unwrap()
+            .clone()
+            .is_some_and(|p| p.id != playback_id)
+        {
+            return Err(PlayerError::PlaybackNotPlaying(playback_id));
+        }
+
+        Ok(())
     }
 
     pub fn play_playback(
-        self,
+        &self,
         playback: Playback,
         to_playable: PlaybackType,
         seek: Option<f64>,
     ) -> Result<PlaybackStatus, PlayerError> {
-        if let Ok(playback) = self.get_playback(Some(playback.id)) {
+        self.assert_playback_playing(playback.id)?;
+        if let Ok(playback) = self.get_playback() {
             debug!("Stopping existing playback {}", playback.id);
             self.stop(Some(playback.id))?;
         }
 
+        self.active_playback
+            .write()
+            .unwrap()
+            .replace(playback.clone());
+
+        let player = self.clone();
+
         RT.spawn(async move {
-            let (tx, rx) = channel();
-
             let mut seek = seek;
-
-            ACTIVE_PLAYBACK_RECEIVERS
-                .lock()
-                .unwrap()
-                .insert(playback.id, rx);
 
             for (i, track_or_id) in playback.tracks.iter().enumerate() {
                 if (i as u16) < playback.position {
                     continue;
                 }
-                let track_id = match track_or_id {
-                    TrackOrId::Id(id) => *id,
-                    TrackOrId::Track(track) => track.id,
-                };
 
-                // playback.playing = true;
                 let playback = Playback {
                     id: playback.id,
                     tracks: playback.tracks.clone(),
@@ -291,37 +308,25 @@ impl Player {
                     abort: Arc::new(AtomicBool::new(false)),
                 };
 
-                ACTIVE_PLAYBACKS
-                    .lock()
+                player
+                    .active_playback
+                    .write()
                     .unwrap()
-                    .insert(playback.id, playback.clone());
+                    .replace(playback.clone());
 
-                debug!("track {} {seek:?}", track_id);
+                debug!("track {track_or_id:?} {seek:?}");
 
                 let seek = if seek.is_some() { seek.take() } else { None };
 
-                self.start_playback(&playback, to_playable, seek)?;
+                player.start_playback(&playback, to_playable, seek)?;
 
                 if playback.abort.load(Ordering::SeqCst) {
                     break;
                 }
             }
 
-            let mut active_playbacks = ACTIVE_PLAYBACKS.lock().unwrap();
-
-            if active_playbacks
-                .get(&playback.id)
-                .is_some_and(|p| p.playing)
-            {
-                active_playbacks.remove(&playback.id);
-            }
-
-            tx.send(())?;
-
-            ACTIVE_PLAYBACK_RECEIVERS
-                .lock()
-                .unwrap()
-                .remove(&playback.id);
+            player.active_playback.write().unwrap().take();
+            player.sender.send(())?;
 
             Ok::<_, PlayerError>(0)
         });
@@ -355,7 +360,7 @@ impl Player {
         #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
         let audio_output_type = AudioOutputType::PulseAudioStandard;
 
-        let playable_track = self.track_or_id_to_playable(playback_type, &track_or_id)?;
+        let playable_track = self.track_or_id_to_playable(playback_type, track_or_id)?;
         let mss = MediaSourceStream::new(playable_track.source, Default::default());
         moosicbox_symphonia_player::play_media_source(
             mss,
@@ -384,17 +389,18 @@ impl Player {
     }
 
     pub fn stop(&self, playback_id: Option<usize>) -> Result<Playback, PlayerError> {
+        if let Some(playback_id) = playback_id {
+            self.assert_playback_playing(playback_id)?;
+        }
         info!("Stopping playback for playback_id {playback_id:?}");
-        let playback = self.get_playback(playback_id)?;
+        let playback = self.get_playback()?;
         debug!("Stopping playback {playback:?}");
 
         playback.abort.clone().store(true, Ordering::SeqCst);
 
         trace!("Waiting for playback completion response");
-        if let Some(rx) = ACTIVE_PLAYBACK_RECEIVERS.lock().unwrap().get(&playback.id) {
-            if let Err(_err) = rx.recv() {
-                error!("Sender correlated with receiver has dropped");
-            }
+        if let Err(_err) = self.receiver.recv() {
+            error!("Sender correlated with receiver has dropped");
         }
         trace!("Playback successfully stopped");
 
@@ -420,8 +426,11 @@ impl Player {
         playback_id: Option<usize>,
         seek: Option<f64>,
     ) -> Result<PlaybackStatus, PlayerError> {
+        if let Some(playback_id) = playback_id {
+            self.assert_playback_playing(playback_id)?;
+        }
         info!("Playing next track {playback_id:?} seek {seek:?}");
-        let playback = self.get_playback(playback_id)?;
+        let playback = self.get_playback()?;
 
         if playback.position + 1 >= playback.tracks.len() as u16 {
             return Err(PlayerError::PositionOutOfBounds(
@@ -437,8 +446,11 @@ impl Player {
         playback_id: Option<usize>,
         seek: Option<f64>,
     ) -> Result<PlaybackStatus, PlayerError> {
+        if let Some(playback_id) = playback_id {
+            self.assert_playback_playing(playback_id)?;
+        }
         info!("Playing next track {playback_id:?} seek {seek:?}");
-        let playback = self.get_playback(playback_id)?;
+        let playback = self.get_playback()?;
 
         if playback.position == 0 {
             return Err(PlayerError::PositionOutOfBounds(-1));
@@ -465,16 +477,18 @@ impl Player {
             abort: Arc::new(AtomicBool::new(false)),
         };
 
-        self.clone()
-            .play_playback(playback, PlaybackType::Default, seek)
+        self.play_playback(playback, PlaybackType::Default, seek)
     }
 
     pub fn pause_playback(
         &self,
         playback_id: Option<usize>,
     ) -> Result<PlaybackStatus, PlayerError> {
+        if let Some(playback_id) = playback_id {
+            self.assert_playback_playing(playback_id)?;
+        }
         info!("Pausing playback id {playback_id:?}");
-        let playback = self.get_playback(playback_id)?;
+        let playback = self.get_playback()?;
 
         let id = playback.id;
 
@@ -485,29 +499,23 @@ impl Player {
         playback.abort.clone().store(true, Ordering::SeqCst);
 
         trace!("Waiting for playback completion response");
-        if let Err(_err) = ACTIVE_PLAYBACK_RECEIVERS
-            .lock()
-            .unwrap()
-            .get(&playback.id)
-            .unwrap()
-            .recv()
-        {
+        if let Err(_err) = self.receiver.recv() {
             error!("Sender correlated with receiver has dropped");
         }
         trace!("Playback successfully stopped");
 
-        let playback = Playback {
-            id,
-            tracks: playback.tracks.clone(),
-            playing: false,
-            position: playback.position,
-            progress: playback.progress,
-            abort: Arc::new(AtomicBool::new(false)),
-        };
-
-        let mut active_playbacks = ACTIVE_PLAYBACKS.lock().unwrap();
-
-        active_playbacks.insert(playback.id, playback);
+        self.active_playback
+            .clone()
+            .write()
+            .unwrap()
+            .replace(Playback {
+                id,
+                tracks: playback.tracks.clone(),
+                playing: false,
+                position: playback.position,
+                progress: playback.progress,
+                abort: Arc::new(AtomicBool::new(false)),
+            });
 
         Ok(PlaybackStatus {
             success: true,
@@ -519,8 +527,11 @@ impl Player {
         &self,
         playback_id: Option<usize>,
     ) -> Result<PlaybackStatus, PlayerError> {
-        info!("Resuming playback id {playback_id:?}");
-        let playback = self.get_playback(playback_id)?;
+        if let Some(playback_id) = playback_id {
+            self.assert_playback_playing(playback_id)?;
+        }
+        info!("Resuming playback");
+        let playback = self.get_playback()?;
 
         let id = playback.id;
 
@@ -539,8 +550,7 @@ impl Player {
             abort: Arc::new(AtomicBool::new(false)),
         };
 
-        self.clone()
-            .play_playback(playback, PlaybackType::Default, seek)
+        self.play_playback(playback, PlaybackType::Default, seek)
     }
 
     pub fn track_to_playable_file(&self, track: &Track) -> PlayableTrack {
@@ -621,32 +631,22 @@ impl Player {
 
     pub fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
         Ok(ApiPlaybackStatus {
-            active_playbacks: ACTIVE_PLAYBACKS
-                .lock()
+            active_playbacks: self
+                .active_playback
+                .clone()
+                .read()
                 .unwrap()
-                .iter()
-                .map(|x| x.1)
-                .map(|x| x.to_api())
-                .collect(),
+                .clone()
+                .map(|x| x.to_api()),
         })
     }
 
-    pub fn get_playback(&self, playback_id: Option<usize>) -> Result<Playback, PlayerError> {
-        trace!("Getting by id {playback_id:?}");
-        let active_playbacks = ACTIVE_PLAYBACKS.lock().unwrap();
-
-        match playback_id {
-            Some(playback_id) => match active_playbacks.get(&playback_id) {
-                Some(playback) => Ok(playback.clone()),
-                None => Err(PlayerError::NoPlayersPlaying),
-            },
-            None => {
-                if active_playbacks.len() == 1 {
-                    Ok(active_playbacks.values().next().unwrap().clone())
-                } else {
-                    Err(PlayerError::NoPlayersPlaying)
-                }
-            }
+    pub fn get_playback(&self) -> Result<Playback, PlayerError> {
+        trace!("Getting Playback");
+        if let Some(playback) = self.active_playback.read().unwrap().clone() {
+            Ok(playback.clone())
+        } else {
+            Err(PlayerError::NoPlayersPlaying)
         }
     }
 }

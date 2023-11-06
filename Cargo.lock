@@ -2353,6 +2353,7 @@ dependencies = [
  "actix-files",
  "actix-web",
  "awc",
+ "crossbeam-channel",
  "lambda-web",
  "lambda_runtime 0.8.2",
  "lazy_static",
