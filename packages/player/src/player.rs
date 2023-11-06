@@ -142,6 +142,7 @@ pub struct ApiPlaybackStatus {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PlaybackStatus {
     pub playback_id: usize,
     pub success: bool,
