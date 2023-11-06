@@ -36,7 +36,9 @@ impl From<PlayerError> for actix_web::Error {
             PlayerError::PlaybackAlreadyPlaying(id) => {
                 ErrorBadRequest(format!("Playback already playing: {id}"))
             }
-            PlayerError::InvalidPlaybackType => ErrorBadRequest(format!("Invalid Playback Type")),
+            PlayerError::InvalidPlaybackType => {
+                ErrorBadRequest("Invalid Playback Type".to_string())
+            }
             PlayerError::PlaybackError(err) => ErrorInternalServerError(err),
             PlayerError::Send(err) => ErrorInternalServerError(err),
         }
