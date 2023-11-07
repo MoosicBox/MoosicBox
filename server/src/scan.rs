@@ -13,7 +13,7 @@ use moosicbox_core::{
 use regex::Regex;
 use std::{
     collections::HashMap,
-    fs::{self},
+    fs::{self, File},
     io::Write,
     num::ParseIntError,
     path::{Path, PathBuf},
@@ -93,6 +93,13 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
         tag.duration().unwrap()
     };
 
+    let bytes = {
+        File::open(path.to_str().unwrap())
+            .unwrap()
+            .metadata()
+            .unwrap()
+            .len()
+    };
     let title = tag.title().unwrap().to_string();
     let number = tag.track_number().unwrap_or(1) as i32;
     let album = tag.album_title().unwrap_or("(none)").to_string();
@@ -124,6 +131,7 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
     info!("title: {}", title);
     info!("number: {}", number);
     info!("duration: {}", duration);
+    info!("bytes: {}", bytes);
     info!("album title: {}", album);
     info!("artist directory name: {}", artist_dir_name);
     info!("album directory name: {}", album_dir_name);
@@ -191,6 +199,7 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
                 number,
                 title,
                 duration,
+                bytes,
                 ..Default::default()
             },
         }],
