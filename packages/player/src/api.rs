@@ -47,7 +47,7 @@ impl From<PlayerError> for actix_web::Error {
     }
 }
 
-static PLAYER: Lazy<Player> = Lazy::new(|| Player::new(None));
+static PLAYER: Lazy<Player> = Lazy::new(|| Player::new(None, None));
 const DEFAULT_PLAYBACK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
     max_retry_count: 10,
     retry_delay: std::time::Duration::from_millis(1000),

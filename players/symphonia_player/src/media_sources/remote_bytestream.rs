@@ -1,14 +1,17 @@
 use std::cmp::min;
 use std::io::{Read, Seek};
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 use bytes::Bytes;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use futures::StreamExt;
 use lazy_static::lazy_static;
-use log::debug;
+use log::{debug, info};
 use reqwest::Client;
 use symphonia::core::io::MediaSource;
 use tokio::runtime::{self, Runtime};
+use tokio::task::JoinHandle;
 
 lazy_static! {
     static ref RT: Runtime = runtime::Builder::new_multi_thread()
@@ -19,38 +22,130 @@ lazy_static! {
 }
 
 pub struct RemoteByteStream {
+    url: String,
     finished: bool,
     size: Option<u64>,
-    buffer: Vec<u8>,
     read_position: usize,
-    ready: Sender<()>,
-    receiver: Receiver<Bytes>,
+    fetcher: RemoteByteStreamFetcher,
 }
 
-impl RemoteByteStream {
-    pub fn new(url: String, size: Option<u64>) -> Self {
+struct RemoteByteStreamFetcher {
+    url: String,
+    start: u64,
+    end: Option<u64>,
+    buffer: Vec<u8>,
+    ready_receiver: Receiver<()>,
+    ready: Sender<()>,
+    receiver: Receiver<Bytes>,
+    sender: Sender<Bytes>,
+    abort_handle: Option<JoinHandle<()>>,
+    aborting: Arc<AtomicBool>,
+}
+
+impl RemoteByteStreamFetcher {
+    pub fn new(url: String, start: u64, end: Option<u64>, autostart: bool) -> Self {
         let (tx, rx) = bounded(1);
         let (tx_ready, rx_ready) = bounded(1);
 
-        RT.spawn(async move {
-            let mut stream = Client::new().get(url).send().await.unwrap().bytes_stream();
-            while let Some(item) = stream.next().await {
-                debug!("Received more bytes from stream");
-                let bytes = item.unwrap();
-                tx.send(bytes).unwrap();
-            }
-            debug!("Finished reading from stream");
-            tx.send(Bytes::new()).unwrap();
-            rx_ready.recv().unwrap();
-        });
-
-        RemoteByteStream {
-            finished: false,
-            size,
+        let mut fetcher = RemoteByteStreamFetcher {
+            url,
+            start,
+            end,
             buffer: vec![],
-            read_position: 0,
+            ready_receiver: rx_ready,
             ready: tx_ready,
             receiver: rx,
+            sender: tx,
+            abort_handle: None,
+            aborting: Arc::new(AtomicBool::new(false)),
+        };
+
+        if autostart {
+            fetcher.start_fetch();
+        }
+
+        fetcher
+    }
+
+    fn start_fetch(&mut self) {
+        let url = self.url.clone();
+        let sender = self.sender.clone();
+        let ready_receiver = self.ready_receiver.clone();
+        let aborting = self.aborting.clone();
+        let start = self.start;
+        let end = self.end;
+        let bytes_range = format!(
+            "bytes={}-{}",
+            start,
+            end.map(|n| n.to_string()).unwrap_or("".into())
+        );
+        debug!("Starting fetch for byte stream with range {bytes_range}");
+
+        self.abort_handle = Some(RT.spawn(async move {
+            debug!("Fetching byte stream with range {bytes_range}");
+
+            let mut stream = Client::new()
+                .get(url.clone())
+                .header("Range", bytes_range)
+                .send()
+                .await
+                .unwrap()
+                .bytes_stream();
+
+            while let Some(item) = stream.next().await {
+                if aborting.load(std::sync::atomic::Ordering::SeqCst) {
+                    debug!("ABORTING");
+                    break;
+                }
+                debug!("Received more bytes from stream");
+                let bytes = item.unwrap();
+                if sender.send(bytes).is_err() {
+                    info!("Aborted byte stream read");
+                    return;
+                }
+            }
+
+            if aborting.load(std::sync::atomic::Ordering::SeqCst) {
+                debug!("ABORTED");
+            } else {
+                debug!("Finished reading from stream");
+                if sender.send(Bytes::new()).is_ok() && ready_receiver.recv().is_err() {
+                    info!("Byte stream read has been aborted");
+                }
+            }
+        }));
+    }
+
+    fn abort(&mut self) {
+        self.aborting
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+        if let Some(handle) = &self.abort_handle {
+            debug!("Aborting request");
+            handle.abort();
+            self.abort_handle = None;
+        } else {
+            debug!("No join handle for request");
+        }
+        self.aborting
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+impl Drop for RemoteByteStreamFetcher {
+    fn drop(&mut self) {
+        self.abort();
+    }
+}
+
+impl RemoteByteStream {
+    pub fn new(url: String, size: Option<u64>, autostart_fetch: bool) -> Self {
+        RemoteByteStream {
+            url: url.clone(),
+            finished: false,
+            size,
+            read_position: 0,
+            fetcher: RemoteByteStreamFetcher::new(url, 0, size, autostart_fetch),
         }
     }
 }
@@ -62,45 +157,54 @@ impl Read for RemoteByteStream {
         }
 
         let mut written = 0;
+        let mut read_position = self.read_position;
         let write_max = buf.len();
 
-        debug!(
-            "Read: read_pos[{}] buf[{}] buffer[{}]",
-            self.read_position,
-            write_max,
-            self.buffer.len()
-        );
         while written < write_max {
-            if !self.buffer.is_empty() {
-                let bytes_to_write = min(self.buffer.len(), write_max);
-                buf[written..written + bytes_to_write]
-                    .copy_from_slice(&self.buffer.drain(..bytes_to_write).collect::<Vec<_>>());
-                written += bytes_to_write;
+            let receiver = self.fetcher.receiver.clone();
+            let fetcher = &mut self.fetcher;
+            let buffer_len = fetcher.buffer.len();
+            let fetcher_start = fetcher.start as usize;
+
+            debug!(
+                "Read: read_pos[{}] write_max[{}] fetcher_start[{}] buffer_len[{}] written[{}]",
+                read_position, write_max, fetcher_start, buffer_len, written
+            );
+
+            let bytes_written = if fetcher_start + buffer_len > read_position {
+                let fetcher_buf_start = read_position - fetcher_start;
+                let bytes_to_read_from_buf = buffer_len - fetcher_buf_start;
+                debug!("Reading bytes from buffer: {bytes_to_read_from_buf} (max {write_max})");
+                let bytes_to_write = min(bytes_to_read_from_buf, write_max);
+                buf[written..written + bytes_to_write].copy_from_slice(
+                    &fetcher.buffer[fetcher_buf_start..fetcher_buf_start + bytes_to_write],
+                );
+                bytes_to_write
             } else {
                 debug!("Waiting for bytes...");
-                let new_bytes = self.receiver.recv().unwrap();
+                let new_bytes = receiver.recv().unwrap();
+                fetcher.buffer.extend_from_slice(&new_bytes);
                 let len = new_bytes.len();
                 debug!("Received bytes {len}");
 
                 if len == 0 {
                     self.finished = true;
-                    self.ready.send(()).unwrap();
+                    self.fetcher.ready.send(()).unwrap();
                     break;
                 }
 
                 let bytes_to_write = min(len, write_max - written);
                 buf[written..written + bytes_to_write]
                     .copy_from_slice(&new_bytes[..bytes_to_write]);
-                written += bytes_to_write;
+                bytes_to_write
+            };
 
-                if len + written > write_max {
-                    self.buffer.extend_from_slice(&new_bytes[bytes_to_write..]);
-                    break;
-                }
-            }
+            written += bytes_written;
+            read_position += bytes_written;
         }
 
-        self.read_position += written;
+        self.read_position = read_position;
+
         Ok(written)
     }
 }
@@ -118,12 +222,22 @@ impl Seek for RemoteByteStream {
                     )
                 })?
             }
-            std::io::SeekFrom::End(_pos) => todo!("Unsupported"),
+            std::io::SeekFrom::End(pos) => {
+                let pos = self.size.unwrap() as i64 - pos;
+                pos.try_into().map_err(|_| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!("Invalid seek: {pos}"),
+                    )
+                })?
+            }
         };
 
-        debug!("Seeking: pos[{seek_position}] type[{pos:?}]");
+        info!("Seeking: pos[{seek_position}] type[{pos:?}]");
 
         self.read_position = seek_position;
+        self.fetcher =
+            RemoteByteStreamFetcher::new(self.url.clone(), seek_position as u64, self.size, true);
 
         Ok(seek_position as u64)
     }

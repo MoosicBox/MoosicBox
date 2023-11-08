@@ -23,7 +23,7 @@ use moosicbox_symphonia_player::{
     PlaybackError, Progress,
 };
 use rand::{thread_rng, Rng as _};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use symphonia::core::{
     io::{MediaSource, MediaSourceStream},
     probe::Hint,
@@ -161,20 +161,13 @@ pub struct PlayableTrack {
     pub hint: Hint,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum PlaybackType {
     File,
     Stream,
+    #[default]
     Default,
-}
-
-#[derive(Clone)]
-pub struct Player {
-    pub id: usize,
-    host: Option<String>,
-    pub active_playback: Arc<RwLock<Option<Playback>>>,
-    sender: Sender<()>,
-    receiver: Receiver<()>,
 }
 
 #[derive(Copy, Clone)]
@@ -183,12 +176,23 @@ pub struct PlaybackRetryOptions {
     pub retry_delay: std::time::Duration,
 }
 
+#[derive(Clone)]
+pub struct Player {
+    pub id: usize,
+    playback_type: PlaybackType,
+    host: Option<String>,
+    pub active_playback: Arc<RwLock<Option<Playback>>>,
+    sender: Sender<()>,
+    receiver: Receiver<()>,
+}
+
 impl Player {
-    pub fn new(host: Option<String>) -> Player {
+    pub fn new(host: Option<String>, playback_type: Option<PlaybackType>) -> Player {
         let (tx, rx) = bounded(1);
 
         Player {
             id: thread_rng().gen::<usize>(),
+            playback_type: playback_type.unwrap_or_default(),
             host,
             active_playback: Arc::new(RwLock::new(None)),
             sender: tx,
@@ -267,7 +271,7 @@ impl Player {
         };
         let playback = Playback::new(tracks, position);
 
-        self.play_playback(playback, PlaybackType::Default, seek, retry_options)
+        self.play_playback(playback, seek, retry_options)
     }
 
     fn assert_playback_playing(&self, playback_id: usize) -> Result<(), PlayerError> {
@@ -287,7 +291,6 @@ impl Player {
     pub fn play_playback(
         &self,
         playback: Playback,
-        to_playable: PlaybackType,
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
@@ -331,7 +334,9 @@ impl Player {
 
                 let seek = if seek.is_some() { seek.take() } else { None };
 
-                player.start_playback(&playback, to_playable, seek, retry_options)?;
+                player
+                    .start_playback(&playback, seek, retry_options)
+                    .await?;
 
                 if playback.abort.load(Ordering::SeqCst) {
                     break;
@@ -350,10 +355,9 @@ impl Player {
         })
     }
 
-    fn start_playback(
+    async fn start_playback(
         &self,
         playback: &Playback,
-        playback_type: PlaybackType,
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
@@ -378,7 +382,9 @@ impl Player {
         let mut retry_count = 0;
 
         loop {
-            let playable_track = self.track_or_id_to_playable(playback_type, track_or_id)?;
+            let playable_track = self
+                .track_or_id_to_playable(self.playback_type, track_or_id)
+                .await?;
             let mss = MediaSourceStream::new(playable_track.source, Default::default());
 
             if let Err(err) = moosicbox_symphonia_player::play_media_source(
@@ -393,21 +399,18 @@ impl Player {
                 playback.abort.clone(),
             ) {
                 if let Some(retry_options) = retry_options {
-                    match err {
-                        PlaybackError::AudioOutput(AudioOutputError::Interrupt) => {
-                            retry_count += 1;
-                            if retry_count > retry_options.max_retry_count {
-                                error!(
+                    if let PlaybackError::AudioOutput(AudioOutputError::Interrupt) = err {
+                        retry_count += 1;
+                        if retry_count > retry_options.max_retry_count {
+                            error!(
                                 "Playback retry failed after {retry_count} attempts. Not retrying"
                             );
-                                break;
-                            }
-                            current_seek = Some(playback.progress.read().unwrap().position);
-                            warn!("Playback interrupted. Trying again at position {current_seek:?} (attempt {retry_count}/{})", retry_options.max_retry_count);
-                            std::thread::sleep(retry_options.retry_delay);
-                            continue;
+                            break;
                         }
-                        _ => {}
+                        current_seek = Some(playback.progress.read().unwrap().position);
+                        warn!("Playback interrupted. Trying again at position {current_seek:?} (attempt {retry_count}/{})", retry_options.max_retry_count);
+                        std::thread::sleep(retry_options.retry_delay);
+                        continue;
                     }
                 }
             }
@@ -464,11 +467,12 @@ impl Player {
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
         let playback = self.stop(playback_id)?;
-        self.start_playback(&playback, PlaybackType::Default, Some(seek), retry_options)?;
+        let playback_id = playback.id;
+        self.play_playback(playback, Some(seek), retry_options)?;
 
         Ok(PlaybackStatus {
             success: true,
-            playback_id: playback.id,
+            playback_id,
         })
     }
 
@@ -541,7 +545,7 @@ impl Player {
             abort: Arc::new(AtomicBool::new(false)),
         };
 
-        self.play_playback(playback, PlaybackType::Default, seek, retry_options)
+        self.play_playback(playback, seek, retry_options)
     }
 
     pub fn pause_playback(
@@ -615,7 +619,7 @@ impl Player {
             abort: Arc::new(AtomicBool::new(false)),
         };
 
-        self.play_playback(playback, PlaybackType::Default, seek, retry_options)
+        self.play_playback(playback, seek, retry_options)
     }
 
     pub fn track_to_playable_file(&self, track: &Track) -> PlayableTrack {
@@ -640,28 +644,29 @@ impl Player {
         }
     }
 
-    pub fn track_or_id_to_playable_stream(
+    pub async fn track_or_id_to_playable_stream(
         &self,
         track_or_id: &TrackOrId,
         host: &str,
     ) -> PlayableTrack {
         match track_or_id {
-            TrackOrId::Id(id) => self.track_id_to_playable_stream(*id, host),
-            TrackOrId::Track(track) => self.track_to_playable_stream(track, host),
+            TrackOrId::Id(id) => self.track_id_to_playable_stream(*id, host).await,
+            TrackOrId::Track(track) => self.track_to_playable_stream(track, host).await,
         }
     }
 
-    pub fn track_to_playable_stream(&self, track: &Track, host: &str) -> PlayableTrack {
-        self.track_id_to_playable_stream(track.id, host)
+    pub async fn track_to_playable_stream(&self, track: &Track, host: &str) -> PlayableTrack {
+        self.track_id_to_playable_stream(track.id, host).await
     }
 
-    pub fn track_id_to_playable_stream(&self, track_id: i32, host: &str) -> PlayableTrack {
+    pub async fn track_id_to_playable_stream(&self, track_id: i32, host: &str) -> PlayableTrack {
         let hint = Hint::new();
 
-        let source = Box::new(RemoteByteStream::new(
-            format!("{host}/track?trackId={}", track_id),
-            None,
-        ));
+        let url = format!("{host}/track?trackId={}", track_id);
+        let res = reqwest::Client::new().head(&url).send().await.unwrap();
+        let header = res.headers().get("Content-Length").unwrap();
+        let size: u64 = header.to_str().unwrap().parse().unwrap();
+        let source = Box::new(RemoteByteStream::new(url, Some(size), true));
 
         PlayableTrack {
             track_id,
@@ -670,7 +675,7 @@ impl Player {
         }
     }
 
-    pub fn track_or_id_to_playable(
+    async fn track_or_id_to_playable(
         &self,
         playback_type: PlaybackType,
         track_or_id: &TrackOrId,
@@ -680,15 +685,21 @@ impl Player {
                 TrackOrId::Id(_id) => return Err(PlayerError::InvalidPlaybackType),
                 TrackOrId::Track(track) => self.track_to_playable_file(track),
             },
-            PlaybackType::Stream => self.track_or_id_to_playable_stream(
-                track_or_id,
-                self.host.as_ref().expect("Player url value missing"),
-            ),
-            PlaybackType::Default => match track_or_id {
-                TrackOrId::Id(id) => self.track_id_to_playable_stream(
-                    *id,
+            PlaybackType::Stream => {
+                self.track_or_id_to_playable_stream(
+                    track_or_id,
                     self.host.as_ref().expect("Player url value missing"),
-                ),
+                )
+                .await
+            }
+            PlaybackType::Default => match track_or_id {
+                TrackOrId::Id(id) => {
+                    self.track_id_to_playable_stream(
+                        *id,
+                        self.host.as_ref().expect("Player url value missing"),
+                    )
+                    .await
+                }
                 TrackOrId::Track(track) => self.track_to_playable_file(track),
             },
         })
