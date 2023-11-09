@@ -1,20 +1,26 @@
-use std::env;
-
 use actix_web::{error::ErrorInternalServerError, route, web, HttpRequest, HttpResponse, Result};
 use lambda_web::actix_web::{self, get};
-use log::{debug, error, trace};
-use moosicbox_core::{
-    app::AppState,
-    sqlite::db::{get_album, get_artist, get_track},
-};
-use regex::{Captures, Regex};
+use log::error;
+use moosicbox_core::app::AppState;
 use serde::Deserialize;
 use thiserror::Error;
+
+use crate::files::{
+    album::{get_album_cover, AlbumCoverError, AlbumCoverSource},
+    artist::{get_artist_cover, ArtistCoverError, ArtistCoverSource},
+    track::{get_track_source, TrackSource, TrackSourceError},
+};
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTrackQuery {
     track_id: i32,
+}
+
+impl From<TrackSourceError> for actix_web::Error {
+    fn from(err: TrackSourceError) -> Self {
+        ErrorInternalServerError(err.to_string())
+    }
 }
 
 #[route("/track", method = "GET", method = "HEAD")]
@@ -23,43 +29,21 @@ pub async fn track_endpoint(
     query: web::Query<GetTrackQuery>,
     data: web::Data<AppState>,
 ) -> Result<HttpResponse> {
-    debug!("Getting track audio file {query:?}");
+    match get_track_source(query.track_id, data.db.clone().expect("No DB set")).await? {
+        TrackSource::LocalFilePath(path) => {
+            let path_buf = std::path::PathBuf::from(path);
 
-    let track = {
-        let library = data.db.as_ref().unwrap().library.lock().unwrap();
-        get_track(&library, query.track_id).map_err(|e| {
-            error!("Failed to fetch track: {e:?}");
-            ErrorInternalServerError(format!("Failed to fetch track: {e:?}"))
-        })?
-    };
-
-    trace!("Got track {track:?}");
-
-    if track.is_none() {
-        return Err(ErrorInternalServerError("Failed to find track"));
+            Ok(actix_files::NamedFile::open_async(path_buf.as_path())
+                .await?
+                .into_response(&req))
+        }
     }
+}
 
-    let track = track.unwrap();
-
-    let file = match track.file {
-        Some(file) => match env::consts::OS {
-            "windows" => Regex::new(r"/mnt/(\w+)")
-                .unwrap()
-                .replace(&file, |caps: &Captures| {
-                    format!("{}:", caps[1].to_uppercase())
-                })
-                .replace('/', "\\"),
-            _ => file,
-        },
-        None => return Err(ErrorInternalServerError("Track is not a local file")),
-    };
-
-    let path_buf = std::path::PathBuf::from(file);
-    let file_path = path_buf.as_path();
-
-    let file = actix_files::NamedFile::open_async(file_path).await.unwrap();
-
-    Ok(file.into_response(&req))
+impl From<ArtistCoverError> for actix_web::Error {
+    fn from(err: ArtistCoverError) -> Self {
+        ErrorInternalServerError(err.to_string())
+    }
 }
 
 #[get("/artists/{artist_id}/{size}")]
@@ -74,47 +58,27 @@ pub async fn artist_cover_endpoint(
         .parse::<i32>()
         .map_err(|_e| ErrorInternalServerError("Invalid artist_id"))?;
 
-    let artist = {
-        let library = data.db.as_ref().unwrap().library.lock().unwrap();
-        get_artist(&library, artist_id)
-            .map_err(|_e| ErrorInternalServerError("Failed to fetch artist"))?
-    };
+    match get_artist_cover(artist_id, data.db.clone().expect("No DB set")).await? {
+        ArtistCoverSource::LocalFilePath(path) => {
+            let path_buf = std::path::PathBuf::from(path);
 
-    if artist.is_none() {
-        return Err(ErrorInternalServerError("Failed to find artist"));
+            Ok(actix_files::NamedFile::open_async(path_buf.as_path())
+                .await?
+                .into_response(&req))
+        }
     }
-
-    let artist = artist.unwrap();
-
-    if artist.cover.is_none() {
-        return Err(ErrorInternalServerError("Album is does not have cover"));
-    }
-
-    let cover = match artist.cover {
-        Some(cover) => match env::consts::OS {
-            "windows" => Regex::new(r"/mnt/(\w+)")
-                .unwrap()
-                .replace(&cover, |caps: &Captures| {
-                    format!("{}:", caps[1].to_uppercase())
-                })
-                .replace('/', "\\"),
-            _ => cover.to_string(),
-        },
-        None => unreachable!(),
-    };
-
-    let path_buf = std::path::PathBuf::from(cover);
-    let file_path = path_buf.as_path();
-
-    let file = actix_files::NamedFile::open_async(file_path).await.unwrap();
-
-    Ok(file.into_response(&req))
 }
 
 #[derive(Debug, Error)]
 pub enum AlbumArtworkError {
     #[error("Failed to read file with path: {0} ({1})")]
     File(String, String),
+}
+
+impl From<AlbumCoverError> for actix_web::Error {
+    fn from(err: AlbumCoverError) -> Self {
+        ErrorInternalServerError(err.to_string())
+    }
 }
 
 #[get("/albums/{album_id}/{size}")]
@@ -129,45 +93,19 @@ pub async fn album_artwork_endpoint(
         .parse::<i32>()
         .map_err(|_e| ErrorInternalServerError("Invalid album_id"))?;
 
-    let album = {
-        let library = data.db.as_ref().unwrap().library.lock().unwrap();
-        get_album(&library, album_id)
-            .map_err(|_e| ErrorInternalServerError("Failed to fetch album"))?
-    };
+    match get_album_cover(album_id, data.db.clone().expect("No DB set")).await? {
+        AlbumCoverSource::LocalFilePath(path) => {
+            let path_buf = std::path::PathBuf::from(path);
+            let file_path = path_buf.as_path();
 
-    if album.is_none() {
-        return Err(ErrorInternalServerError("Failed to find album"));
-    }
-
-    let album = album.unwrap();
-
-    if album.artwork.is_none() {
-        return Err(ErrorInternalServerError("Album is does not have artwork"));
-    }
-    if album.directory.is_none() {
-        return Err(ErrorInternalServerError("Album is not locally hosted"));
-    }
-
-    let directory = match album.directory {
-        Some(file) => match env::consts::OS {
-            "windows" => Regex::new(r"/mnt/(\w+)")
-                .unwrap()
-                .replace(&file, |caps: &Captures| {
-                    format!("{}:", caps[1].to_uppercase())
+            let file = actix_files::NamedFile::open_async(file_path)
+                .await
+                .map_err(|e| {
+                    AlbumArtworkError::File(file_path.to_str().unwrap().into(), format!("{e:?}"))
                 })
-                .replace('/', "\\"),
-            _ => file,
-        },
-        None => return Err(ErrorInternalServerError("Track is not a local file")),
-    };
+                .unwrap();
 
-    let path_buf = std::path::PathBuf::from(directory).join(album.artwork.unwrap());
-    let file_path = path_buf.as_path();
-
-    let file = actix_files::NamedFile::open_async(file_path)
-        .await
-        .map_err(|e| AlbumArtworkError::File(file_path.to_str().unwrap().into(), format!("{e:?}")))
-        .unwrap();
-
-    Ok(file.into_response(&req))
+            Ok(file.into_response(&req))
+        }
+    }
 }
