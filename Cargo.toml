@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "server",
+    "proxy_server",
     "packages/core",
     "packages/files",
     "packages/menu",
@@ -15,6 +16,16 @@ resolver = "2"
 edition = "2021"
 
 [workspace.dependencies]
+actix = "0.13.1"
+actix-cors = "0.6.4"
+actix-files = "0.6.2"
+actix-rt = "2.9.0"
+actix-web = "4.4.0"
+actix-ws = "0.2.5"
+async-once-cell = "0.5.3"
+aws-config = "0.56.1"
+aws-sdk-apigatewaymanagement = "0.32.0"
+aws_lambda_events = "0.11.1"
 bytes = "1.5.0"
 chrono = { version = "0.4.20", default-features = false, features = ["clock", "serde"] }
 clap = "3.1.0"
@@ -24,8 +35,11 @@ dotenv = "0.15"
 env_logger = "0.10"
 futures = "0.3"
 futures-util = { version = "0.3.17", default-features = false, features = ["std"] }
+lambda-web = { version = "0.2.1", features=["actix4"] }
+lambda_runtime = "0.8.2"
 lazy_static = "1.4.0"
 log = { version = "0.4", features = ["release_max_level_info"] }
+mysql = "24.0.0"
 once_cell = { version = "1.18.0" }
 openssl = { version = "0.10.55", features = ["v110"] }
 pretty_env_logger = "0.4"

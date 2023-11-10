@@ -41,6 +41,20 @@ jobs:
                       path: packages/ws
                       os: ubuntu-latest
 
+                    - name: proxy_server
+                      path: proxy_server
+                      os: ubuntu-latest
+
+                    - name: proxy_server server
+                      path: proxy_server
+                      os: ubuntu-latest
+                      cargo: --no-default-features --features=server
+
+                    - name: proxy_server serverless
+                      path: proxy_server
+                      os: ubuntu-latest
+                      cargo: --no-default-features --features=serverless
+
                     - name: server-cpal
                       path: server
                       os: ubuntu-latest

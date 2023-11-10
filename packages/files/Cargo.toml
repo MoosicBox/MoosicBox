@@ -9,8 +9,8 @@ actix-cors = "0.6.4"
 actix-files = "0.6.2"
 actix-web = "4.4.0"
 awc = "3.0.0-beta.9"
-lambda-web = { version = "0.2.1", features=["actix4"] }
-lambda_runtime = "0.8.2"
+lambda-web = { workspace = true }
+lambda_runtime = { workspace = true }
 log = { workspace = true }
 moosicbox_core = { path = "../core" }
 regex = "1.9.5"
