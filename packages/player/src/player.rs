@@ -39,24 +39,12 @@ lazy_static! {
         .unwrap();
 }
 
-impl From<SendError<()>> for PlayerError {
-    fn from(err: SendError<()>) -> Self {
-        PlayerError::Send(err)
-    }
-}
-
-impl From<PlaybackError> for PlayerError {
-    fn from(err: PlaybackError) -> Self {
-        PlayerError::PlaybackError(err)
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum PlayerError {
     #[error(transparent)]
-    Send(SendError<()>),
+    Send(#[from] SendError<()>),
     #[error(transparent)]
-    PlaybackError(moosicbox_symphonia_player::PlaybackError),
+    PlaybackError(#[from] moosicbox_symphonia_player::PlaybackError),
     #[error("Track fetch failed: {0}")]
     TrackFetchFailed(i32),
     #[error("Album fetch failed: {0}")]

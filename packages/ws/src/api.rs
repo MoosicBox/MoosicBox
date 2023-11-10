@@ -75,16 +75,10 @@ pub struct WebsocketContext {
     pub event_type: EventType,
 }
 
-impl From<DbError> for WebsocketSendError {
-    fn from(err: DbError) -> Self {
-        WebsocketSendError::Db(err)
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum WebsocketSendError {
     #[error(transparent)]
-    Db(DbError),
+    Db(#[from] DbError),
     #[error("Unknown {message:?}")]
     Unknown { message: String },
 }
@@ -162,24 +156,6 @@ pub async fn disconnect(
     })
 }
 
-impl From<WebsocketSendError> for WebsocketMessageError {
-    fn from(err: WebsocketSendError) -> Self {
-        WebsocketMessageError::WebsocketSend(err)
-    }
-}
-
-impl From<UpdateSessionError> for WebsocketMessageError {
-    fn from(err: UpdateSessionError) -> Self {
-        WebsocketMessageError::UpdateSession(err)
-    }
-}
-
-impl From<DbError> for WebsocketMessageError {
-    fn from(err: DbError) -> Self {
-        WebsocketMessageError::Db(err)
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum WebsocketMessageError {
     #[error("Missing message type")]
@@ -189,11 +165,11 @@ pub enum WebsocketMessageError {
     #[error("Missing payload")]
     MissingPayload,
     #[error(transparent)]
-    WebsocketSend(WebsocketSendError),
+    WebsocketSend(#[from] WebsocketSendError),
     #[error(transparent)]
-    UpdateSession(UpdateSessionError),
+    UpdateSession(#[from] UpdateSessionError),
     #[error(transparent)]
-    Db(DbError),
+    Db(#[from] DbError),
     #[error("Unknown {message:?}")]
     Unknown { message: String },
 }

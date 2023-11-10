@@ -19,13 +19,7 @@ pub enum TrackSourceError {
     #[error("Invalid source")]
     InvalidSource,
     #[error(transparent)]
-    Db(DbError),
-}
-
-impl From<DbError> for TrackSourceError {
-    fn from(value: DbError) -> Self {
-        TrackSourceError::Db(value)
-    }
+    Db(#[from] DbError),
 }
 
 pub async fn get_track_source(track_id: i32, db: Db) -> Result<TrackSource, TrackSourceError> {

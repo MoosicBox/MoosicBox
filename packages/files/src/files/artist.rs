@@ -18,13 +18,7 @@ pub enum ArtistCoverError {
     #[error("Invalid source")]
     InvalidSource,
     #[error(transparent)]
-    Db(DbError),
-}
-
-impl From<DbError> for ArtistCoverError {
-    fn from(value: DbError) -> Self {
-        ArtistCoverError::Db(value)
-    }
+    Db(#[from] DbError),
 }
 
 pub async fn get_artist_cover(

@@ -31,30 +31,18 @@ pub struct Progress {
     pub position: f64,
 }
 
-impl From<AudioOutputError> for PlaybackError {
-    fn from(err: AudioOutputError) -> Self {
-        PlaybackError::AudioOutput(err)
-    }
-}
-
 impl From<io::Error> for PlaybackError {
     fn from(err: io::Error) -> Self {
         PlaybackError::Symphonia(Error::IoError(err))
     }
 }
 
-impl From<Error> for PlaybackError {
-    fn from(err: Error) -> Self {
-        PlaybackError::Symphonia(err)
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum PlaybackError {
     #[error(transparent)]
-    AudioOutput(AudioOutputError),
+    AudioOutput(#[from] AudioOutputError),
     #[error(transparent)]
-    Symphonia(Error),
+    Symphonia(#[from] Error),
 }
 
 pub enum AudioOutputType {

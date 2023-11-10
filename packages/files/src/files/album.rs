@@ -18,13 +18,7 @@ pub enum AlbumCoverError {
     #[error("Invalid source")]
     InvalidSource,
     #[error(transparent)]
-    Db(DbError),
-}
-
-impl From<DbError> for AlbumCoverError {
-    fn from(value: DbError) -> Self {
-        AlbumCoverError::Db(value)
-    }
+    Db(#[from] DbError),
 }
 
 pub async fn get_album_cover(album_id: i32, db: Db) -> Result<AlbumCoverSource, AlbumCoverError> {
