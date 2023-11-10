@@ -52,7 +52,7 @@ impl From<ArtistCoverError> for actix_web::Error {
     }
 }
 
-#[get("/artists/{artist_id}/{size}")]
+#[route("/artists/{artist_id}/{size}", method = "GET", method = "HEAD")]
 pub async fn artist_cover_endpoint(
     req: HttpRequest,
     path: web::Path<(String, String)>,
@@ -94,7 +94,7 @@ impl From<AlbumCoverError> for actix_web::Error {
     }
 }
 
-#[get("/albums/{album_id}/{size}")]
+#[route("/albums/{album_id}/{size}", method = "GET", method = "HEAD")]
 pub async fn album_artwork_endpoint(
     req: HttpRequest,
     path: web::Path<(String, String)>,
