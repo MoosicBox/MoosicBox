@@ -25,6 +25,8 @@ use thiserror::Error;
 
 #[actix_rt::main]
 async fn main() -> Result<(), actix_web::Error> {
+    env_logger::init();
+
     lambda_runtime::run(service_fn(ws_handler))
         .await
         .map_err(|e| ErrorInternalServerError(format!("Error: {e:?}")))?;

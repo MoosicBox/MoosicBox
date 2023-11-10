@@ -2440,6 +2440,7 @@ dependencies = [
  "aws-config",
  "aws-sdk-apigatewaymanagement",
  "aws_lambda_events",
+ "env_logger 0.10.0",
  "lambda_runtime 0.8.2",
  "log",
  "moosicbox_core",
