@@ -1,12 +1,28 @@
 # Server
 
-## Run
+## Local
+
+### Run
 
 `cargo server 8001`
 
-## Debug
+### Debug
 
 `cargo server:debug 8001`
+
+## SST - Serverless AWS
+
+### Installation
+
+`pnpm install`
+
+### Deploy
+
+`pnpm sst deploy --stage stage-name`
+
+### Development
+
+`pnpm sst dev`
 
 # Database
 
