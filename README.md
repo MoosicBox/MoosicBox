@@ -1,59 +1,63 @@
-# Server
+# MoosicBox Server
 
-## Local
+A music server for cows
 
-### Run
+## Server
+
+### Local
+
+#### Run
 
 `cargo server 8001`
 
-### Debug
+#### Debug
 
 `cargo server:debug 8001`
 
-## SST - Serverless AWS
+### SST - Serverless AWS
 
-### Installation
+#### Installation
 
 `pnpm install`
 
-### Deploy
+#### Deploy
 
 `pnpm sst deploy --stage stage-name`
 
-### Development
+#### Development
 
 `pnpm sst dev`
 
-# Database
+## Database
 
-## SQLite
+### SQLite
 
-### Migrations
+#### Migrations
 
-#### Run
+##### Run
 
 `diesel migration run --migration-dir migrations/sqlite --database-url library.db`
 
-#### Revert
+##### Revert
 
 `diesel migration revert --migration-dir migrations/sqlite --database-url library.db`
 
-#### New Migration
+##### New Migration
 
 `diesel migration generate --migration-dir migrations/sqlite migration_name`
 
-## MySQL
+### MySQL
 
-### Migrations
+#### Migrations
 
-#### Run
+##### Run
 
 `diesel migration run --migration-dir migrations/mysql --database-url mysql://username:password@host/dbname`
 
-#### Revert
+##### Revert
 
 `diesel migration revert --migration-dir migrations/mysql --database-url mysql://username:password@host/dbname`
 
-#### New Migration
+##### New Migration
 
 `diesel migration generate --migration-dir migrations/mysql migration_name`
