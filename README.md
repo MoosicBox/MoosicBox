@@ -32,6 +32,15 @@ A music server for cows
 
 ### SQLite
 
+The SQLite database stores the music library data:
+
+-   Artist metadata
+-   Album metadata
+-   Track metadata
+-   Local WebSocket connection metadata
+-   Audio Player configurations
+-   Playback Sessions
+
 #### Migrations
 
 ##### Run
