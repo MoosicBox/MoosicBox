@@ -28,7 +28,14 @@ pub async fn track_endpoint(
     query: web::Query<GetTrackQuery>,
     data: web::Data<AppState>,
 ) -> Result<HttpResponse> {
-    match get_track_source(query.track_id, data.db.clone().expect("No DB set")).await? {
+    match get_track_source(
+        query.track_id,
+        data.db
+            .clone()
+            .ok_or(ErrorInternalServerError("No DB set"))?,
+    )
+    .await?
+    {
         TrackSource::LocalFilePath(path) => {
             let path_buf = std::path::PathBuf::from(path);
 
@@ -57,7 +64,14 @@ pub async fn artist_cover_endpoint(
         .parse::<i32>()
         .map_err(|_e| ErrorInternalServerError("Invalid artist_id"))?;
 
-    match get_artist_cover(artist_id, data.db.clone().expect("No DB set")).await? {
+    match get_artist_cover(
+        artist_id,
+        data.db
+            .clone()
+            .ok_or(ErrorInternalServerError("No DB set"))?,
+    )
+    .await?
+    {
         ArtistCoverSource::LocalFilePath(path) => {
             let path_buf = std::path::PathBuf::from(path);
 
@@ -92,7 +106,14 @@ pub async fn album_artwork_endpoint(
         .parse::<i32>()
         .map_err(|_e| ErrorInternalServerError("Invalid album_id"))?;
 
-    match get_album_cover(album_id, data.db.clone().expect("No DB set")).await? {
+    match get_album_cover(
+        album_id,
+        data.db
+            .clone()
+            .ok_or(ErrorInternalServerError("No DB set"))?,
+    )
+    .await?
+    {
         AlbumCoverSource::LocalFilePath(path) => {
             let path_buf = std::path::PathBuf::from(path);
             let file_path = path_buf.as_path();
