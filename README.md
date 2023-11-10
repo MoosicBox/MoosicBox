@@ -2,29 +2,27 @@
 
 A music server for cows
 
-## Server
+## Local Server
 
-### Local
-
-#### Run
+### Run
 
 `cargo server 8001`
 
-#### Debug
+### Debug
 
 `cargo server:debug 8001`
 
-### SST - Serverless AWS
+## Proxy Server
 
-#### Installation
+### Installation
 
 `pnpm install`
 
-#### Deploy
+### Deploy
 
 `pnpm sst deploy --stage stage-name`
 
-#### Development
+### Development
 
 `pnpm sst dev`
 
@@ -56,6 +54,11 @@ The SQLite database stores the music library data:
 `diesel migration generate --migration-dir migrations/sqlite migration_name`
 
 ### MySQL
+
+The MySQL database stores the proxy server configurations:
+
+-   WebSocket connection mappings
+    -   Enables the proxy server to know which WebSocket connection to forward proxy data from
 
 #### Migrations
 
