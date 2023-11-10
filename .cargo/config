@@ -1,13 +1,13 @@
 [alias]
-"server:debug" = "run --manifest-path=server/Cargo.toml -- "
-"server:release" = "run --manifest-path=server/Cargo.toml --release -- "
+"server:debug" = "run --manifest-path=server/Cargo.toml"
+"server:release" = "run --manifest-path=server/Cargo.toml --release"
 server = "server:release"
-"server:debug:cpal" = "run --manifest-path=server/Cargo.toml --features=cpal -- "
-"server:cpal" = "run --manifest-path=server/Cargo.toml --release --features=cpal -- "
-"server:debug:pulseaudio-standard" = "run --manifest-path=server/Cargo.toml --features=pulseaudio-standard -- "
-"server:pulseaudio-standard" = "run --manifest-path=server/Cargo.toml --release --features=pulseaudio-standard -- "
-"server:debug:pulseaudio-simple" = "run --manifest-path=server/Cargo.toml --features=pulseaudio-simple -- "
-"server:pulseaudio-simple" = "run --manifest-path=server/Cargo.toml --release --features=pulseaudio-simple -- "
+"server:debug:cpal" = "run --manifest-path=server/Cargo.toml --features=cpal"
+"server:cpal" = "run --manifest-path=server/Cargo.toml --release --features=cpal"
+"server:debug:pulseaudio-standard" = "run --manifest-path=server/Cargo.toml --features=pulseaudio-standard"
+"server:pulseaudio-standard" = "run --manifest-path=server/Cargo.toml --release --features=pulseaudio-standard"
+"server:debug:pulseaudio-simple" = "run --manifest-path=server/Cargo.toml --features=pulseaudio-simple"
+"server:pulseaudio-simple" = "run --manifest-path=server/Cargo.toml --release --features=pulseaudio-simple"
 
 [env]
 RUST_LOG = "info"
