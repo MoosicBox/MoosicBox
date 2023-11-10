@@ -10,6 +10,7 @@ use aws_config::SdkConfig;
 use aws_lambda_events::apigw::ApiGatewayWebsocketProxyRequestContext;
 use aws_sdk_apigatewaymanagement::{
     config::{self, Region},
+    operation::post_to_connection::PostToConnectionError,
     primitives::Blob,
     Client,
 };
@@ -73,11 +74,25 @@ pub enum WebsocketHandlerError {
     WebsocketDisconnectError(WebsocketDisconnectError),
     #[error(transparent)]
     WebsocketMessageError(WebsocketMessageError),
-    #[error("Unknown")]
-    Unknown,
+    #[error("Unknown: {0:?}")]
+    Unknown(String),
 }
 
 pub async fn ws_handler(event: LambdaEvent<Value>) -> Result<Response, WebsocketHandlerError> {
+    let response = match handler(event).await {
+        Ok(resp) => resp,
+        Err(err) => Response {
+            status_code: 500,
+            body: err.to_string(),
+        },
+    };
+
+    debug!("Response: {response:?}");
+
+    Ok(response)
+}
+
+async fn handler(event: LambdaEvent<Value>) -> Result<Response, WebsocketHandlerError> {
     let api_context = serde_json::from_value::<ApiGatewayWebsocketProxyRequestContext>(
         event.payload.get("requestContext").unwrap().clone(),
     )
@@ -165,12 +180,32 @@ pub async fn ws_handler(event: LambdaEvent<Value>) -> Result<Response, Websocket
                     .data(Blob::new(message.payload))
                     .send()
                     .await
-                    .map_err(|_e| WebsocketHandlerError::Unknown)?;
+                    .map_err(|e| {
+                        let service_error = e.into_service_error();
+                        match service_error {
+                            PostToConnectionError::GoneException(err) => {
+                                WebsocketHandlerError::Unknown(err.to_string())
+                            }
+                            PostToConnectionError::ForbiddenException(err) => {
+                                WebsocketHandlerError::Unknown(err.to_string())
+                            }
+                            PostToConnectionError::LimitExceededException(err) => {
+                                WebsocketHandlerError::Unknown(err.to_string())
+                            }
+                            PostToConnectionError::PayloadTooLargeException(err) => {
+                                WebsocketHandlerError::Unknown(err.to_string())
+                            }
+                            PostToConnectionError::Unhandled(err) => {
+                                WebsocketHandlerError::Unknown(err.to_string())
+                            }
+                            _ => WebsocketHandlerError::Unknown(service_error.to_string()),
+                        }
+                    })?;
             }
         }
 
         Ok(response)
     } else {
-        Err(WebsocketHandlerError::Unknown)
+        Err(WebsocketHandlerError::Unknown("Invalid Event Type".into()))
     }
 }
