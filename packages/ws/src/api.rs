@@ -385,7 +385,7 @@ async fn get_sessions(
 ) -> Result<(), WebsocketSendError> {
     let sessions = {
         let db = db.lock();
-        let library = db.as_ref().unwrap().library.lock().unwrap();
+        let library = db.as_ref().expect("No DB set").library.lock().unwrap();
         moosicbox_core::sqlite::db::get_sessions(&library)?
             .iter()
             .map(|session| session.to_api())
@@ -413,7 +413,7 @@ async fn create_session(
 ) -> Result<(), WebsocketSendError> {
     {
         let db = db.lock();
-        let library = db.as_ref().unwrap().library.lock().unwrap();
+        let library = db.as_ref().expect("No DB set").library.lock().unwrap();
         moosicbox_core::sqlite::db::create_session(&library, payload)?;
     }
     get_sessions(db, sender, context, true).await?;
@@ -423,7 +423,7 @@ async fn create_session(
 async fn get_connections(db: Arc<Mutex<Db>>) -> Result<String, WebsocketSendError> {
     let connections = {
         let db = db.lock();
-        let library = db.as_ref().unwrap().library.lock().unwrap();
+        let library = db.as_ref().expect("No DB set").library.lock().unwrap();
         moosicbox_core::sqlite::db::get_connections(&library)?
             .iter()
             .map(|connection| connection.to_api())
@@ -447,7 +447,7 @@ async fn register_connection(
 ) -> Result<(), WebsocketSendError> {
     {
         let db = db.lock();
-        let library = db.as_ref().unwrap().library.lock().unwrap();
+        let library = db.as_ref().expect("No DB set").library.lock().unwrap();
 
         moosicbox_core::sqlite::db::register_connection(&library, payload)?;
     }
@@ -462,7 +462,7 @@ async fn register_players(
 ) -> Result<(), WebsocketSendError> {
     {
         let db = db.lock();
-        let library = db.as_ref().unwrap().library.lock().unwrap();
+        let library = db.as_ref().expect("No DB set").library.lock().unwrap();
 
         for player in payload {
             moosicbox_core::sqlite::db::create_player(&library, &context.connection_id, player)?;
@@ -480,7 +480,7 @@ async fn set_session_active_players(
 ) -> Result<(), WebsocketMessageError> {
     {
         let db = db.lock();
-        let library = db.as_ref().unwrap().library.lock().unwrap();
+        let library = db.as_ref().expect("No DB set").library.lock().unwrap();
 
         moosicbox_core::sqlite::db::set_session_active_players(&library, payload)?;
     }
@@ -506,7 +506,7 @@ async fn update_session(
 ) -> Result<(), UpdateSessionError> {
     let (before_session, session) = {
         let db = db.lock();
-        let library = db.as_ref().unwrap().library.lock().unwrap();
+        let library = db.as_ref().expect("No DB set").library.lock().unwrap();
 
         let before_session = moosicbox_core::sqlite::db::get_session(&library, payload.session_id)
             .map_err(UpdateSessionError::Db)?
@@ -586,7 +586,7 @@ async fn delete_session(
 ) -> Result<(), WebsocketSendError> {
     {
         let db = db.lock();
-        let library = db.as_ref().unwrap().library.lock().unwrap();
+        let library = db.as_ref().expect("No DB set").library.lock().unwrap();
         moosicbox_core::sqlite::db::delete_session(&library, payload.session_id)?;
     }
 
