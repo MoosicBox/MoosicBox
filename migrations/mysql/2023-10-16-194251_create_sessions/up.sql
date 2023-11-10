@@ -1,0 +1,19 @@
+CREATE TABLE IF NOT EXISTS session_playlists (
+    id INTEGER PRIMARY KEY NOT NULL AUTO_INCREMENT
+);
+
+CREATE TABLE IF NOT EXISTS session_playlist_tracks (
+    id INTEGER PRIMARY KEY NOT NULL AUTO_INCREMENT,
+    session_playlist_id INTEGER NOT NULL,
+    track_id INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY NOT NULL AUTO_INCREMENT,
+    session_playlist_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 0,
+    playing INTEGER NOT NULL DEFAULT 0,
+    position INTEGER,
+    seek INTEGER
+);
