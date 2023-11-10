@@ -10,12 +10,6 @@ use super::{
     models::{Album, Artist, Track},
 };
 
-impl<T> From<PoisonError<T>> for GetAlbumError {
-    fn from(_err: PoisonError<T>) -> Self {
-        Self::PoisonError
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum GetArtistError {
     #[error("Album not found with ID {artist_id:?}")]
@@ -28,6 +22,14 @@ pub enum GetArtistError {
     SqliteError(#[from] rusqlite::Error),
     #[error(transparent)]
     DbError(#[from] db::DbError),
+    #[error("No DB set")]
+    NoDb,
+}
+
+impl<T> From<PoisonError<T>> for GetArtistError {
+    fn from(_err: PoisonError<T>) -> Self {
+        Self::PoisonError
+    }
 }
 
 pub async fn get_artist(artist_id: i32, data: &AppState) -> Result<Artist, GetArtistError> {
@@ -37,7 +39,13 @@ pub async fn get_artist(artist_id: i32, data: &AppState) -> Result<Artist, GetAr
     };
 
     Ok(get_or_set_to_cache(request, || async {
-        let library = data.db.as_ref().unwrap().library.lock().unwrap();
+        let library = data
+            .db
+            .as_ref()
+            .ok_or(GetArtistError::NoDb)?
+            .library
+            .lock()?;
+
         match db::get_artist(&library, artist_id) {
             Ok(artist) => {
                 if artist.is_none() {
@@ -70,6 +78,14 @@ pub enum GetAlbumError {
     SqliteError(#[from] rusqlite::Error),
     #[error(transparent)]
     DbError(#[from] db::DbError),
+    #[error("No DB set")]
+    NoDb,
+}
+
+impl<T> From<PoisonError<T>> for GetAlbumError {
+    fn from(_err: PoisonError<T>) -> Self {
+        Self::PoisonError
+    }
 }
 
 pub async fn get_album(album_id: i32, data: &AppState) -> Result<Album, GetAlbumError> {
@@ -79,7 +95,13 @@ pub async fn get_album(album_id: i32, data: &AppState) -> Result<Album, GetAlbum
     };
 
     Ok(get_or_set_to_cache(request, || async {
-        let library = data.db.as_ref().unwrap().library.lock().unwrap();
+        let library = data
+            .db
+            .as_ref()
+            .ok_or(GetAlbumError::NoDb)?
+            .library
+            .lock()?;
+
         match db::get_album(&library, album_id) {
             Ok(album) => {
                 if album.is_none() {
@@ -98,12 +120,6 @@ pub async fn get_album(album_id: i32, data: &AppState) -> Result<Album, GetAlbum
     .unwrap())
 }
 
-impl<T> From<PoisonError<T>> for GetAlbumsError {
-    fn from(_err: PoisonError<T>) -> Self {
-        Self::Poison
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum GetAlbumsError {
     #[error("Poison error")]
@@ -112,6 +128,14 @@ pub enum GetAlbumsError {
     Json(#[from] awc::error::JsonPayloadError),
     #[error(transparent)]
     Db(#[from] DbError),
+    #[error("No DB set")]
+    NoDb,
+}
+
+impl<T> From<PoisonError<T>> for GetAlbumsError {
+    fn from(_err: PoisonError<T>) -> Self {
+        Self::Poison
+    }
 }
 
 pub async fn get_albums(data: &AppState) -> Result<Vec<Album>, GetAlbumsError> {
@@ -121,19 +145,18 @@ pub async fn get_albums(data: &AppState) -> Result<Vec<Album>, GetAlbumsError> {
     };
 
     Ok(get_or_set_to_cache(request, || async {
-        Ok::<CacheItemType, GetAlbumsError>(CacheItemType::Albums(super::db::get_albums(
-            &data.db.as_ref().unwrap().library.lock().unwrap(),
-        )?))
+        let library = data
+            .db
+            .as_ref()
+            .ok_or(GetAlbumsError::NoDb)?
+            .library
+            .lock()?;
+
+        Ok::<CacheItemType, GetAlbumsError>(CacheItemType::Albums(super::db::get_albums(&library)?))
     })
     .await?
     .into_albums()
     .unwrap())
-}
-
-impl<T> From<PoisonError<T>> for GetAlbumTracksError {
-    fn from(_err: PoisonError<T>) -> Self {
-        Self::Poison
-    }
 }
 
 #[derive(Debug, Error)]
@@ -146,6 +169,14 @@ pub enum GetAlbumTracksError {
     Sqlite(#[from] rusqlite::Error),
     #[error(transparent)]
     Db(#[from] DbError),
+    #[error("No DB set")]
+    NoDb,
+}
+
+impl<T> From<PoisonError<T>> for GetAlbumTracksError {
+    fn from(_err: PoisonError<T>) -> Self {
+        Self::Poison
+    }
 }
 
 pub async fn get_album_tracks(
@@ -158,7 +189,13 @@ pub async fn get_album_tracks(
     };
 
     Ok(get_or_set_to_cache(request, || async {
-        let library = data.db.as_ref().unwrap().library.lock().unwrap();
+        let library = data
+            .db
+            .as_ref()
+            .ok_or(GetAlbumTracksError::NoDb)?
+            .library
+            .lock()?;
+
         Ok::<CacheItemType, GetAlbumTracksError>(CacheItemType::AlbumTracks(db::get_album_tracks(
             &library, album_id,
         )?))
@@ -178,6 +215,14 @@ pub enum GetArtistAlbumsError {
     Sqlite(#[from] rusqlite::Error),
     #[error(transparent)]
     Db(#[from] DbError),
+    #[error("No DB set")]
+    NoDb,
+}
+
+impl<T> From<PoisonError<T>> for GetArtistAlbumsError {
+    fn from(_err: PoisonError<T>) -> Self {
+        Self::Poison
+    }
 }
 
 pub async fn get_artist_albums(
@@ -190,7 +235,13 @@ pub async fn get_artist_albums(
     };
 
     Ok(get_or_set_to_cache(request, || async {
-        let library = data.db.as_ref().unwrap().library.lock().unwrap();
+        let library = data
+            .db
+            .as_ref()
+            .ok_or(GetArtistAlbumsError::NoDb)?
+            .library
+            .lock()?;
+
         Ok::<CacheItemType, GetArtistAlbumsError>(CacheItemType::ArtistAlbums(
             db::get_artist_albums(&library, artist_id)?,
         ))

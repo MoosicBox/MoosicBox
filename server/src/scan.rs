@@ -24,6 +24,8 @@ use thiserror::Error;
 pub enum ScanError {
     #[error(transparent)]
     Db(#[from] DbError),
+    #[error("No DB set")]
+    NoDb,
     #[error(transparent)]
     ParseInt(#[from] ParseIntError),
     #[error(transparent)]
@@ -145,7 +147,13 @@ fn create_track(path: PathBuf, data: &AppState) -> Result<(), ScanError> {
         None => album_artist,
     };
 
-    let library = data.db.as_ref().unwrap().library.lock().unwrap();
+    let library = data
+        .db
+        .as_ref()
+        .ok_or(ScanError::NoDb)?
+        .library
+        .lock()
+        .unwrap();
 
     let mut artist = add_artist_map_and_get_artist(
         &library,

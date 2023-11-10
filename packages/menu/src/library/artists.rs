@@ -65,13 +65,23 @@ pub fn sort_artists(mut artists: Vec<Artist>, request: &ArtistsRequest) -> Vec<A
 pub enum GetArtistsError {
     #[error(transparent)]
     DbError(#[from] DbError),
+    #[error("No DB set")]
+    NoDb,
 }
 
 pub async fn get_all_artists(
     data: &AppState,
     request: &ArtistsRequest,
 ) -> Result<Vec<Artist>, GetArtistsError> {
-    let artists = get_artists(&data.db.as_ref().unwrap().library.lock().unwrap())?;
+    let artists = get_artists(
+        &data
+            .db
+            .as_ref()
+            .ok_or(GetArtistsError::NoDb)?
+            .library
+            .lock()
+            .unwrap(),
+    )?;
 
     Ok(sort_artists(filter_artists(artists, request), request))
 }

@@ -98,13 +98,23 @@ pub fn sort_albums(mut albums: Vec<Album>, request: &AlbumsRequest) -> Vec<Album
 pub enum GetAlbumsError {
     #[error(transparent)]
     DbError(#[from] DbError),
+    #[error("No DB set")]
+    NoDb,
 }
 
 pub async fn get_all_albums(
     data: &AppState,
     request: &AlbumsRequest,
 ) -> Result<Vec<Album>, GetAlbumsError> {
-    let albums = get_albums(&data.db.as_ref().unwrap().library.lock().unwrap())?;
+    let albums = get_albums(
+        &data
+            .db
+            .as_ref()
+            .ok_or(GetAlbumsError::NoDb)?
+            .library
+            .lock()
+            .unwrap(),
+    )?;
 
     Ok(sort_albums(filter_albums(albums, request), request))
 }

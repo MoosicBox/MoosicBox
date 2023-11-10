@@ -141,7 +141,7 @@ pub async fn get_albums_endpoint(
     Ok(Json(
         get_all_albums(&data, &request)
             .await
-            .map_err(|e| ErrorInternalServerError(format!("Failed to fetch albums: {e:?}")))?
+            .map_err(|e| ErrorInternalServerError(format!("Failed to fetch albums: {e}")))?
             .into_iter()
             .map(|t| t.to_api())
             .collect(),
