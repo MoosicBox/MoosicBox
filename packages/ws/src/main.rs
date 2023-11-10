@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+
 use std::{
     sync::{Arc, Mutex, OnceLock},
     time::Duration,
