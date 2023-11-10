@@ -135,5 +135,6 @@ export async function API({ app, stack }: StackContext) {
         ApiEndpoint: api.url,
         WebsocketApiEndpoint: websocketApi.url,
         host: `https://${customDomain.domainName}`,
+        wsHost: `wss://${customDomain.domainName}/ws`,
     });
 }
