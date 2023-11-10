@@ -1,5 +1,4 @@
 use actix_web::{error::ErrorInternalServerError, route, web, HttpRequest, HttpResponse, Result};
-use lambda_web::actix_web::{self, get};
 use log::error;
 use moosicbox_core::app::AppState;
 use serde::Deserialize;
