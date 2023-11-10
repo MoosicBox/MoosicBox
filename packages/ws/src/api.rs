@@ -115,32 +115,11 @@ pub enum WebsocketConnectError {
 }
 
 pub async fn connect(
-    db: Arc<Mutex<Db>>,
-    sender: &mut impl WebsocketSender,
+    _db: Arc<Mutex<Db>>,
+    _sender: &mut impl WebsocketSender,
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketConnectError> {
     info!("Connected {}", context.connection_id);
-    sender
-        .send(
-            &context.connection_id,
-            &serde_json::json!({
-                "connectionId": context.connection_id,
-                "type": OutboundMessageType::ConnectionId
-            })
-            .to_string(),
-        )
-        .await
-        .map_err(|_| WebsocketConnectError::Unknown)?;
-
-    sender
-        .send(
-            &context.connection_id,
-            &get_connections(db)
-                .await
-                .map_err(|_e| WebsocketConnectError::Unknown)?,
-        )
-        .await
-        .map_err(|_e| WebsocketConnectError::Unknown)?;
 
     Ok(Response {
         status_code: 200,
