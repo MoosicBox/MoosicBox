@@ -12,7 +12,7 @@ A music server for cows
 
 `cargo server:debug 8001`
 
-## Proxy Server
+## Tunnel Server
 
 ### Installation
 
@@ -55,10 +55,10 @@ The SQLite database stores the music library data:
 
 ### MySQL
 
-The MySQL database stores the proxy server configurations:
+The MySQL database stores the tunnel server configurations:
 
 -   WebSocket connection mappings
-    -   Enables the proxy server to know which WebSocket connection to forward proxy data from
+    -   Enables the tunnel server to know which WebSocket connection to tunnel data from
 
 #### Migrations
 

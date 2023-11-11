@@ -1,5 +1,5 @@
 {
-    "name": "moosicbox-proxy-server",
+    "name": "moosicbox-tunnel-server",
     "version": "0.0.0",
     "private": true,
     "type": "module",

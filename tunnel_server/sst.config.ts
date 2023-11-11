@@ -1,10 +1,10 @@
 import { SSTConfig } from 'sst';
-import { API } from './stacks/ProxyServerStack';
+import { API } from './stacks/TunnelServerStack';
 
 export default {
     config(_input) {
         return {
-            name: 'moosicbox-proxy-server',
+            name: 'moosicbox-tunnel-server',
             region: 'us-east-1',
         };
     },

@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "server",
-    "proxy_server",
+    "tunnel_server",
     "packages/core",
     "packages/files",
     "packages/menu",

@@ -1,16 +1,16 @@
 [package]
-name = "moosicbox_proxy_server"
+name = "moosicbox_tunnel_server"
 version = "0.1.0"
 authors = ["Braden Steffaniak"]
 edition = "2021"
-default-run = "moosicbox_proxy_server"
+default-run = "moosicbox_tunnel_server"
 
 [[bin]]
-name = "moosicbox_proxy_server"
+name = "moosicbox_tunnel_server"
 path = "src/main.rs"
 
 [[bin]]
-name = "moosicbox_proxy_server_ws"
+name = "moosicbox_tunnel_server_ws"
 path = "src/ws/main.rs"
 
 [dependencies]

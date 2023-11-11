@@ -14,7 +14,7 @@ import {
     ViewerProtocolPolicy,
 } from 'aws-cdk-lib/aws-cloudfront';
 
-const domainSlug = 'proxy';
+const domainSlug = 'tunnel';
 const domain = 'moosicbox.com';
 const defaultStageName = 'prod';
 
@@ -38,7 +38,7 @@ export async function API({ stack }: StackContext) {
             },
         },
         routes: {
-            'GET /track': 'src/moosicbox_proxy_server.handler',
+            'GET /track': 'src/moosicbox_tunnel_server.handler',
         },
     });
 
@@ -51,10 +51,10 @@ export async function API({ stack }: StackContext) {
             },
         },
         routes: {
-            $connect: 'src/moosicbox_proxy_server_ws.handler',
-            $default: 'src/moosicbox_proxy_server_ws.handler',
-            $disconnect: 'src/moosicbox_proxy_server_ws.handler',
-            sendMessage: 'src/moosicbox_proxy_server_ws.handler',
+            $connect: 'src/moosicbox_tunnel_server_ws.handler',
+            $default: 'src/moosicbox_tunnel_server_ws.handler',
+            $disconnect: 'src/moosicbox_tunnel_server_ws.handler',
+            sendMessage: 'src/moosicbox_tunnel_server_ws.handler',
         },
         cdk: {
             webSocketStage: {

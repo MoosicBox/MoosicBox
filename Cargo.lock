@@ -2729,44 +2729,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "moosicbox_proxy_server"
-version = "0.1.0"
-dependencies = [
- "actix",
- "actix-cors",
- "actix-files",
- "actix-rt",
- "actix-web",
- "actix-ws",
- "async-once-cell",
- "async-trait",
- "awc",
- "aws-config",
- "aws-sdk-apigatewaymanagement",
- "aws_lambda_events",
- "enum-as-inner",
- "env_logger 0.10.0",
- "futures",
- "futures-util",
- "lambda-web",
- "lambda_runtime 0.8.2",
- "log",
- "moosicbox_core",
- "moosicbox_files",
- "moosicbox_menu",
- "moosicbox_ws",
- "mp3-duration",
- "mysql",
- "rand",
- "regex",
- "rusqlite",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
-]
-
-[[package]]
 name = "moosicbox_server"
 version = "0.1.0"
 dependencies = [
@@ -2818,6 +2780,44 @@ dependencies = [
  "reqwest",
  "rubato",
  "symphonia",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "moosicbox_tunnel_server"
+version = "0.1.0"
+dependencies = [
+ "actix",
+ "actix-cors",
+ "actix-files",
+ "actix-rt",
+ "actix-web",
+ "actix-ws",
+ "async-once-cell",
+ "async-trait",
+ "awc",
+ "aws-config",
+ "aws-sdk-apigatewaymanagement",
+ "aws_lambda_events",
+ "enum-as-inner",
+ "env_logger 0.10.0",
+ "futures",
+ "futures-util",
+ "lambda-web",
+ "lambda_runtime 0.8.2",
+ "log",
+ "moosicbox_core",
+ "moosicbox_files",
+ "moosicbox_menu",
+ "moosicbox_ws",
+ "mp3-duration",
+ "mysql",
+ "rand",
+ "regex",
+ "rusqlite",
+ "serde",
+ "serde_json",
  "thiserror",
  "tokio",
 ]
