@@ -166,7 +166,9 @@ impl ChatServer {
             connection_id,
             event_type: EventType::Connect,
         };
-        let body = serde_json::from_str::<Value>(&msg.into()).unwrap();
+        let payload = msg.into();
+        let body = serde_json::from_str::<Value>(&payload)
+            .map_err(|e| WebsocketMessageError::InvalidPayload(payload, e.to_string()))?;
         let message_type = serde_json::from_str::<InboundMessageType>(
             format!(
                 "\"{}\"",

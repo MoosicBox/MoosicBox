@@ -3,6 +3,7 @@ use std::sync::atomic::AtomicBool;
 use std::thread;
 
 use crossbeam_channel::{bounded, Receiver, Sender};
+use log::debug;
 use rangemap::RangeSet;
 use reqwest::blocking::Client;
 use symphonia::core::io::MediaSource;
@@ -26,12 +27,8 @@ impl StreamableFile {
     pub fn new(url: String) -> Self {
         // Get the size of the file we are streaming.
         let res = Client::new().head(&url).send().unwrap();
-
         let header = res.headers().get("Content-Length").unwrap();
-
         let size: usize = header.to_str().unwrap().parse().unwrap();
-
-        println!("{size}");
 
         StreamableFile {
             url,
@@ -144,7 +141,7 @@ impl Read for StreamableFile {
         // to the last downloaded chunk, then fetch more.
         let (should_get_chunk, chunk_write_pos) = self.should_get_chunk(buf.len());
 
-        println!("Read: read_pos[{}] read_max[{read_max}] buf[{}] write_pos[{chunk_write_pos}] download[{should_get_chunk}]", self.read_position, buf.len());
+        debug!("Read: read_pos[{}] read_max[{read_max}] buf[{}] write_pos[{chunk_write_pos}] download[{should_get_chunk}]", self.read_position, buf.len());
         if should_get_chunk {
             self.requested
                 .insert(chunk_write_pos..chunk_write_pos + CHUNK_SIZE + 1);
@@ -203,11 +200,11 @@ impl Seek for StreamableFile {
         };
 
         if seek_position > self.buffer.len() {
-            println!("Seek position {seek_position} > file size");
+            debug!("Seek position {seek_position} > file size");
             return Ok(self.read_position as u64);
         }
 
-        println!("Seeking: pos[{seek_position}] type[{pos:?}]");
+        debug!("Seeking: pos[{seek_position}] type[{pos:?}]");
 
         self.read_position = seek_position;
 

@@ -25,26 +25,30 @@ awc = "3.0.0-beta.9"
 aws-config = { workspace = true }
 aws-sdk-apigatewaymanagement = { workspace = true }
 aws_lambda_events = { workspace = true }
+bytes = { workspace = true }
+crossbeam-channel = { workspace = true }
 enum-as-inner = "0.6.0"
 futures = { workspace = true }
 lambda-web = { workspace = true }
 lambda_runtime = { workspace = true }
+lazy_static = { workspace = true }
 log = { workspace = true }
 moosicbox_core = { path = "../packages/core" }
 moosicbox_menu = { path = "../packages/menu" }
 moosicbox_files = { path = "../packages/files" }
-moosicbox_ws = { path = "../packages/ws" }
+moosicbox_tunnel = { path = "../packages/tunnel" }
+mp3-duration = "0.1.10"
 mysql = { workspace = true }
+once_cell = { workspace = true }
+rand = { workspace = true }
+regex = "1.9.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.105"
 thiserror = "1.0.48"
-regex = "1.9.5"
-mp3-duration = "0.1.10"
 
 async-trait.workspace = true
 env_logger.workspace = true
 futures-util.workspace = true
-rand.workspace = true
 rusqlite = { workspace = true }
 tokio = { workspace = true, features = ["rt", "time", "macros"] }
 

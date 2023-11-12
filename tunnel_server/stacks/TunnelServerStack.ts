@@ -29,12 +29,16 @@ function getCustomDomain(stack: Stack): DistributionDomainProps {
 }
 
 export async function API({ stack }: StackContext) {
+    const customDomain = getCustomDomain(stack);
+
     const api = new Api(stack, 'api', {
         defaults: {
             function: {
                 runtime: 'rust',
                 timeout: '5 minutes',
-                environment: {},
+                environment: {
+                    WS_HOST: `wss://${customDomain.domainName}/ws`
+                },
             },
         },
         routes: {
@@ -65,7 +69,6 @@ export async function API({ stack }: StackContext) {
 
     const apiDomainName = `${api.cdk.httpApi.httpApiId}.execute-api.${stack.region}.amazonaws.com`;
     const websocketApiDomainName = `${websocketApi.cdk.webSocketApi.apiId}.execute-api.${stack.region}.amazonaws.com`;
-    const customDomain = getCustomDomain(stack);
 
     // eslint-disable-next-line no-new
     new Distribution(stack, 'API-Proxy-Distribution', {

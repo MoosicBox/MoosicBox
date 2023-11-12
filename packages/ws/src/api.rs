@@ -162,6 +162,8 @@ pub enum WebsocketMessageError {
     MissingMessageType,
     #[error("Invalid message type")]
     InvalidMessageType,
+    #[error("Invalid payload: '{0}' ({1})")]
+    InvalidPayload(String, String),
     #[error("Missing payload")]
     MissingPayload,
     #[error(transparent)]

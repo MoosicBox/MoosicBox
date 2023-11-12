@@ -5,9 +5,13 @@ use futures_util::{
     future::{select, Either},
     StreamExt as _,
 };
+use log::error;
 use tokio::{pin, sync::mpsc, time::interval};
 
-use crate::ws::{server::ChatServerHandle, ConnId};
+use crate::{
+    api::TUNNEL_SENDERS,
+    ws::{server::ChatServerHandle, ConnId},
+};
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -33,6 +37,8 @@ pub async fn chat_ws(
     // unwrap: chat server is not dropped before the HTTP server
     let conn_id = chat_server.connect(conn_tx).await;
 
+    log::info!("Connection id: {conn_id}");
+
     let close_reason = loop {
         // most of the futures we process need to be stack-pinned to work with select()
 
@@ -49,8 +55,6 @@ pub async fn chat_ws(
         match select(messages, tick).await {
             // commands & messages received from client
             Either::Left((Either::Left((Some(Ok(msg)), _)), _)) => {
-                log::debug!("msg: {msg:?}");
-
                 match msg {
                     Message::Ping(bytes) => {
                         last_heartbeat = Instant::now();
@@ -63,12 +67,20 @@ pub async fn chat_ws(
                     }
 
                     Message::Text(text) => {
+                        log::debug!("msg: {text:?}");
                         process_text_msg(&chat_server, &mut session, &text, conn_id, &mut name)
                             .await;
                     }
 
-                    Message::Binary(_bin) => {
-                        log::warn!("unexpected binary message");
+                    Message::Binary(bin) => {
+                        let data = bin.slice(8..);
+                        let id = &bin[..8];
+                        let id = usize::from_be_bytes(id.try_into().unwrap());
+                        if let Some(sender) = TUNNEL_SENDERS.lock().unwrap().get(&id) {
+                            sender.send(data).unwrap();
+                        } else {
+                            error!("unexpected binary message {id} (size {})", data.len());
+                        }
                     }
 
                     Message::Close(reason) => break reason,
@@ -122,7 +134,7 @@ pub async fn chat_ws(
 
 async fn process_text_msg(
     chat_server: &ChatServerHandle,
-    session: &mut actix_ws::Session,
+    _session: &mut actix_ws::Session,
     text: &str,
     conn: ConnId,
     name: &mut Option<String>,
@@ -130,60 +142,11 @@ async fn process_text_msg(
     // strip leading and trailing whitespace (spaces, newlines, etc.)
     let msg = text.trim();
 
-    // we check for /<cmd> type of messages
-    if msg.starts_with('/') {
-        let mut cmd_args = msg.splitn(2, ' ');
+    // prefix message with our name, if assigned
+    let msg = match name {
+        Some(ref name) => format!("{name}: {msg}"),
+        None => msg.to_owned(),
+    };
 
-        // unwrap: we have guaranteed non-zero string length already
-        match cmd_args.next().unwrap() {
-            "/list" => {
-                log::info!("conn {conn}: listing rooms");
-
-                let rooms = chat_server.list_rooms().await;
-
-                for room in rooms {
-                    session.text(room).await.unwrap();
-                }
-            }
-
-            "/join" => match cmd_args.next() {
-                Some(room) => {
-                    log::info!("conn {conn}: joining room {room}");
-
-                    chat_server.join_room(conn, room).await;
-
-                    session.text(format!("joined {room}")).await.unwrap();
-                }
-
-                None => {
-                    session.text("!!! room name is required").await.unwrap();
-                }
-            },
-
-            "/name" => match cmd_args.next() {
-                Some(new_name) => {
-                    log::info!("conn {conn}: setting name to: {new_name}");
-                    name.replace(new_name.to_owned());
-                }
-                None => {
-                    session.text("!!! name is required").await.unwrap();
-                }
-            },
-
-            _ => {
-                session
-                    .text(format!("!!! unknown command: {msg}"))
-                    .await
-                    .unwrap();
-            }
-        }
-    } else {
-        // prefix message with our name, if assigned
-        let msg = match name {
-            Some(ref name) => format!("{name}: {msg}"),
-            None => msg.to_owned(),
-        };
-
-        chat_server.send_message(conn, msg).await
-    }
+    chat_server.send_message(conn, msg).await
 }

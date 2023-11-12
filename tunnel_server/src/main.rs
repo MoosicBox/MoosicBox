@@ -1,55 +1,98 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 mod api;
+#[cfg(feature = "server")]
+mod server;
 mod ws;
 
 use actix_cors::Cors;
-use actix_web::{http, middleware, web, App};
+use actix_web::{http, middleware, App};
 use lambda_runtime::Error;
-use moosicbox_core::app::{AppState, Db};
-use std::{
-    env,
-    sync::{Arc, Mutex, OnceLock},
-    time::Duration,
-};
+use lazy_static::lazy_static;
+use std::env;
+use tokio::runtime::{self, Runtime};
 #[cfg(feature = "server")]
 use tokio::{task::spawn, try_join};
+
+lazy_static! {
+    static ref RT: Runtime = runtime::Builder::new_multi_thread()
+        .enable_all()
+        .max_blocking_threads(4)
+        .build()
+        .unwrap();
+}
+
+#[cfg(feature = "server")]
+static CHAT_SERVER_HANDLE: once_cell::sync::Lazy<
+    std::sync::Mutex<Option<ws::server::ChatServerHandle>>,
+> = once_cell::sync::Lazy::new(|| std::sync::Mutex::new(None));
+
+#[cfg(feature = "server")]
+static CONN_ID: once_cell::sync::Lazy<std::sync::Mutex<Option<usize>>> =
+    once_cell::sync::Lazy::new(|| std::sync::Mutex::new(None));
 
 #[actix_web::main]
 async fn main() -> Result<(), Error> {
     env_logger::init();
 
-    let args: Vec<String> = env::args().collect();
+    #[cfg(feature = "serverless")]
+    {
+        if let Ok(host) = env::var("WS_HOST") {
+            use crate::api::TUNNEL_SENDERS;
+            use moosicbox_tunnel::ws::{
+                init_host,
+                sender::{start, TunnelMessage},
+            };
 
-    let service_port = if args.len() > 1 {
-        args[1].parse::<u16>().unwrap()
-    } else {
-        8000
-    };
+            init_host(host).expect("Failed to initialize websocket host");
 
-    static DB: OnceLock<Db> = OnceLock::new();
-    let db = DB.get_or_init(|| {
-        let library = ::rusqlite::Connection::open("library.db").unwrap();
-        library
-            .busy_timeout(Duration::from_millis(10))
-            .expect("Failed to set busy timeout");
-        Db {
-            library: Arc::new(Mutex::new(library)),
+            let (ready, rx) = start();
+            ready.recv().unwrap();
+
+            RT.spawn(async move {
+                while let Ok(m) = rx.recv() {
+                    match m {
+                        TunnelMessage::Text(m) => {
+                            log::debug!("Received text TunnelMessage: {m}");
+                        }
+                        TunnelMessage::Binary(bytes) => {
+                            let data = bytes.slice(8..);
+                            let id = &bytes[..8];
+                            let id = usize::from_be_bytes(id.try_into().unwrap());
+                            if let Some(sender) = TUNNEL_SENDERS.lock().unwrap().get(&id) {
+                                sender.send(data).unwrap();
+                            } else {
+                                log::error!("unexpected binary message {id} (size {})", data.len());
+                            }
+                        }
+                        TunnelMessage::Ping(_) => {}
+                        TunnelMessage::Pong(_) => todo!(),
+                        TunnelMessage::Close => todo!(),
+                        TunnelMessage::Frame(_) => todo!(),
+                    }
+                }
+            });
         }
-    });
+    }
 
     #[cfg(feature = "server")]
-    let (chat_server, server_tx) = ws::server::ChatServer::new(Arc::new(Mutex::new(db.clone())));
+    let service_port = {
+        let args: Vec<String> = env::args().collect();
+
+        if args.len() > 1 {
+            args[1].parse::<u16>().unwrap()
+        } else {
+            8000
+        }
+    };
+
+    #[cfg(feature = "server")]
+    let (chat_server, server_tx) = ws::server::ChatServer::new();
 
     #[cfg(feature = "server")]
     let chat_server = spawn(chat_server.run());
 
     let app = move || {
-        let app_data = AppState {
-            service_port,
-            db: Some(db.clone()),
-        };
-
         let cors = Cors::default()
             .allow_any_origin()
             .allowed_methods(vec!["GET", "POST"])
@@ -62,14 +105,16 @@ async fn main() -> Result<(), Error> {
         let mut app = App::new()
             .wrap(cors)
             .wrap(middleware::Compress::default())
-            .app_data(web::Data::new(app_data))
-            .service(api::track_endpoint);
+            .service(api::track_server_endpoint);
 
         #[cfg(feature = "server")]
         {
-            app = app
-                .app_data(web::Data::new(server_tx.clone()))
-                .service(ws::api::websocket);
+            CHAT_SERVER_HANDLE
+                .lock()
+                .unwrap()
+                .replace(server_tx.clone());
+
+            app = app.service(ws::api::websocket);
         }
 
         app

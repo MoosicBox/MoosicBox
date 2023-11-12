@@ -6,14 +6,30 @@ mod ws;
 
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App, HttpServer};
+use lazy_static::lazy_static;
+use log::debug;
 use moosicbox_core::app::{AppState, Db};
+use moosicbox_tunnel::{tunnel::tunnel_request, ws::sender::TunnelMessage};
+use serde_json::Value;
 use std::{
     env,
     sync::{Arc, Mutex, OnceLock},
     time::Duration,
 };
-use tokio::{task::spawn, try_join};
+use tokio::{
+    runtime::{self, Runtime},
+    task::spawn,
+    try_join,
+};
 use ws::server::ChatServer;
+
+lazy_static! {
+    static ref RT: Runtime = runtime::Builder::new_multi_thread()
+        .enable_all()
+        .max_blocking_threads(4)
+        .build()
+        .unwrap();
+}
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -37,6 +53,47 @@ async fn main() -> std::io::Result<()> {
             library: Arc::new(Mutex::new(library)),
         }
     });
+
+    if let Ok(host) = env::var("WS_HOST") {
+        use moosicbox_tunnel::ws::{init_host, sender::start};
+        init_host(host).expect("Failed to initialize websocket host");
+        let (ready, rx) = start();
+        ready.recv().unwrap();
+
+        RT.spawn(async move {
+            while let Ok(m) = rx.recv() {
+                match m {
+                    TunnelMessage::Text(m) => {
+                        debug!("Received text TunnelMessage");
+                        let value: Value = serde_json::from_str(&m).unwrap();
+
+                        match value.get("type").map(|t| t.as_str()) {
+                            Some(Some("CONNECTION_ID")) => {
+                                debug!("Received connection id: {value:?}");
+                            }
+                            Some(Some("TUNNEL_REQUEST")) => {
+                                tunnel_request(
+                                    db,
+                                    serde_json::from_value(value.get("id").unwrap().clone())
+                                        .unwrap(),
+                                    "track".into(),
+                                    value.get("payload").unwrap().clone(),
+                                )
+                                .await
+                                .unwrap();
+                            }
+                            _ => {}
+                        }
+                    }
+                    TunnelMessage::Binary(_) => todo!(),
+                    TunnelMessage::Ping(_) => {}
+                    TunnelMessage::Pong(_) => todo!(),
+                    TunnelMessage::Close => todo!(),
+                    TunnelMessage::Frame(_) => todo!(),
+                }
+            }
+        });
+    }
 
     let (chat_server, server_tx) = ChatServer::new(Arc::new(Mutex::new(db.clone())));
 
