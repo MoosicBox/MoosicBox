@@ -13,7 +13,7 @@ use crate::files::{
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTrackQuery {
-    track_id: i32,
+    pub track_id: i32,
 }
 
 impl From<TrackSourceError> for actix_web::Error {
