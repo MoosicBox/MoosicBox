@@ -2,94 +2,89 @@
 
 ## Connection
 
-```plantuml
+```mermaid
+sequenceDiagram
+
 title Serverless Tunnel Connection Sequence Diagram
 
-skinparam maxMessageSize 260
-skinparam ParticipantPadding 20
-skinparam BoxPadding 10
-
 box Local Network
-    participant "Local MoosicBox Server\n(moosicbox_server)" as MoosicBox
-end box
-
-box Cloud #ffd28f
-    box Lambda #ffd28f
-        participant "Tunnel WS\n(moosicbox_tunnel_server_ws)" as WS
-end box
-
-box PlanetScale #8fc3ff
-    database MySQL
-end box
-
-MoosicBox -> WS: Connect request
-WS -> MoosicBox: Connect success
-
-MoosicBox -> WS: [InitConnection]\n{clientId: "12345"}
-MoosicBox -> MySQL: Upsert client_id and tunnel_ws_id in `connections` table
-
-loop each 5 minutes (to keep lamda ws alive)
-    MoosicBox -> WS: [Ping]
-    WS -> MoosicBox: [Pong]
+    participant MoosicBox as Local MoosicBox Server<br>(moosicbox_server)
 end
+
+box rgb(255, 210, 143) Cloud
+    participant WS as Tunnel WS<br>(moosicbox_tunnel_server_ws)
+end
+
+box rgb(143, 195, 255) PlanetScale
+    participant MySQL
+end
+
+MoosicBox ->> WS: Connect request
+WS ->> MoosicBox: Connect success
+
+MoosicBox ->> WS: [InitConnection]<br>{clientId: "12345"}
+WS ->> MySQL: Upsert client_id and tunnel_ws_id in `connections` table
+
+loop every 5 minutes (to keep lambda ws alive)
+    MoosicBox ->> WS: [PING]
+    WS ->> MoosicBox: [PONG]
+end
+
 ```
 
 ## Data Stream Request
 
-```plantuml
+```mermaid
+sequenceDiagram
+
 title Serverless Tunnel Data Stream Request Sequence Diagram
 
-skinparam maxMessageSize 260
-skinparam ParticipantPadding 20
-skinparam BoxPadding 10
-
 box Internet
-    actor Client #green
-end box
+    actor Client
+end
 
-box Cloud #ffd28f
-    box Lambda #ffd28f
-        participant "Tunnel API\n(moosicbox_tunnel_server)" as API
-    end box
-    box Lambda #ffd28f
-        participant "Tunnel WS\n(moosicbox_tunnel_server_ws)" as WS
-    end box
-end box
+box rgb(255, 210, 143) Lambda
+    participant API as Tunnel API<br>(moosicbox_tunnel_server)
+end
+
+box rgb(255, 210, 143) Lambda
+    participant WS as Tunnel WS<br>(moosicbox_tunnel_server_ws)
+end
 
 box Local Network
-    participant "Local MoosicBox Server\n(moosicbox_server)" as MoosicBox
-end box
+    participant MoosicBox as Local MoosicBox Server<br>(moosicbox_server)
+end
 
-box PlanetScale #8fc3ff
-    database MySQL
-end box
+box rgb(143, 195, 255) PlanetScale
+    participant MySQL
+end
 
-Client -> API: Request data\n{clientId: "12345"}
-API -> WS: Request data\n{clientId: "12345"}
-WS -> MySQL: Request tunnel_ws_id for clientId "12345"
+Client ->> API: Request data\n{clientId: "12345"}
+API ->> WS: Request data\n{clientId: "12345"}
+WS ->> MySQL: Request tunnel_ws_id for clientId "12345"
 activate MySQL#gray
-MySQL -> WS: Return tunnel_ws_id "127347374123"
+MySQL ->> WS: Return tunnel_ws_id "127347374123"
 deactivate MySQL#gray
-WS -> MoosicBox: Request data from ws connection "127347374123"
+WS ->> MoosicBox: Request data from ws connection "127347374123"
 
 loop until all data sent
-    MoosicBox -> MoosicBox: Read data (bytes)
+    MoosicBox ->> MoosicBox: Read data (bytes)
     activate MoosicBox#gray
-    MoosicBox -> MoosicBox: Encode data (base64)
+    MoosicBox ->> MoosicBox: Encode data (base64)
     deactivate MoosicBox#gray
 
-    MoosicBox -> WS: Send packet of data (base64)
+    MoosicBox ->> WS: Send packet of data (base64)
     activate WS#gray
     deactivate WS#gray
 
-    WS -> API: Send packet of data (base64)
+    WS ->> API: Send packet of data (base64)
     activate API#gray
     deactivate API#gray
-    API -> API: Decode data (bytes)
+    API ->> API: Decode data (bytes)
     activate API#gray
     deactivate API#gray
 
-    API -> Client: Send packet of data (bytes)
+    API ->> Client: Send packet of data (bytes)
     activate Client#gray
     deactivate Client#gray
 end
@@ -97,67 +92,64 @@ end
 
 ## Data Blocking Request
 
-```plantuml
+```mermaid
+sequenceDiagram
+
 title Serverless Tunnel Data Blocking Request Sequence Diagram
 
-skinparam maxMessageSize 260
-skinparam ParticipantPadding 20
-skinparam BoxPadding 10
-
 box Internet
-    actor Client #green
-end box
+    actor Client
+end
 
-box Cloud #ffd28f
-    box Lambda #ffd28f
-        participant "Tunnel API\n(moosicbox_tunnel_server)" as API
-    end box
-    box Lambda #ffd28f
-        participant "Tunnel WS\n(moosicbox_tunnel_server_ws)" as WS
-    end box
-end box
+box rgb(255, 210, 143) Lambda
+    participant API as Tunnel API<br>(moosicbox_tunnel_server)
+end
+
+box rgb(255, 210, 143) Lambda
+    participant WS as Tunnel WS<br>(moosicbox_tunnel_server_ws)
+end
 
 box Local Network
-    participant "Local MoosicBox Server\n(moosicbox_server)" as MoosicBox
-end box
+    participant MoosicBox as Local MoosicBox Server<br>(moosicbox_server)
+end
 
-box PlanetScale #8fc3ff
-    database MySQL
-end box
+box rgb(143, 195, 255) PlanetScale
+    participant MySQL
+end
 
-Client -> API: Request data\n{clientId: "12345"}
-API -> API: Create response buffer
+Client ->> API: Request data<br>{clientId: "12345"}
+API ->> API: Create response buffer
 activate API#gray
 deactivate API#gray
-API -> WS: Request data\n{clientId: "12345"}
-WS -> MySQL: Request tunnel_ws_id for clientId "12345"
+API ->> WS: Request data<br>{clientId: "12345"}
+WS ->> MySQL: Request tunnel_ws_id for clientId "12345"
 activate MySQL#gray
-MySQL -> WS: Return tunnel_ws_id "127347374123"
+MySQL ->> WS: Return tunnel_ws_id "127347374123"
 deactivate MySQL#gray
-WS -> MoosicBox: Request data from ws connection "127347374123"
+WS ->> MoosicBox: Request data from ws connection "127347374123"
 
-loop until all data saved to buffer
-    MoosicBox -> MoosicBox: Read data (bytes)
+loop until all data sent
+    MoosicBox ->> MoosicBox: Read data (bytes)
     activate MoosicBox#gray
-    MoosicBox -> MoosicBox: Encode data (base64)
+    MoosicBox ->> MoosicBox: Encode data (base64)
     deactivate MoosicBox#gray
 
-    MoosicBox -> WS: Send packet of data (base64)
+    MoosicBox ->> WS: Send packet of data (base64)
     activate WS#gray
     deactivate WS#gray
 
-    WS -> API: Send packet of data (base64)
+    WS ->> API: Send packet of data (base64)
     activate API#gray
     deactivate API#gray
-    API -> API: Decode data (bytes)
+    API ->> API: Decode data (bytes)
     activate API#gray
     deactivate API#gray
-    API -> API: Push bytes to response buffer
+    API ->> API: Push bytes to response buffer
     activate API#gray
     deactivate API#gray
 end
 
-API -> Client: Send response buffer (bytes)
+API ->> Client: Send response buffer (bytes)
 activate Client#gray
 deactivate Client#gray
 ```
@@ -166,88 +158,81 @@ deactivate Client#gray
 
 ## Connection
 
-```plantuml
+```mermaid
+sequenceDiagram
+
 title Server Tunnel Connection Sequence Diagram
 
-skinparam maxMessageSize 260
-skinparam ParticipantPadding 20
-skinparam BoxPadding 10
-
 box Local Network
-    participant "Local MoosicBox Server\n(moosicbox_server)" as MoosicBox
-end box
+    participant MoosicBox as Local MoosicBox Server<br>(moosicbox_server)
+end
 
-box Cloud #ffd28f
-    box "Server\n(moosicbox_tunnel_server)"
-        participant "Tunnel WS\n(moosicbox_tunnel_server_ws)" as WS
-    end box
-end box
+box Server
+    participant WS as Tunnel WS<br>(moosicbox_tunnel_server)
+end
 
-box PlanetScale #8fc3ff
-    database MySQL
-end box
+box rgb(143, 195, 255) PlanetScale
+    participant MySQL
+end
 
-MoosicBox -> WS: Connect request
-WS -> MoosicBox: Connect success
+MoosicBox ->> WS: Connect request
+WS ->> MoosicBox: Connect success
 
-MoosicBox -> WS: [InitConnection]\n{clientId: "12345"}
-MoosicBox -> MySQL: Upsert client_id and tunnel_ws_id in `connections` table
+MoosicBox ->> WS: [InitConnection]<br>{clientId: "12345"}
+WS ->> MySQL: Upsert client_id and tunnel_ws_id in `connections` table
 
-loop each 5 minutes
-    MoosicBox -> WS: [Ping]
-    WS -> MoosicBox: [Pong]
+loop every 5 minutes
+    MoosicBox ->> WS: [PING]
+    WS ->> MoosicBox: [PONG]
 end
 ```
 
 ## Data Stream Request
 
-```plantuml
+```mermaid
+sequenceDiagram
+
 title Server Tunnel Data Stream Request Sequence Diagram
 
-skinparam maxMessageSize 260
-skinparam ParticipantPadding 20
-skinparam BoxPadding 10
-
 box Internet
-    actor Client #green
-end box
+    actor Client
+end
 
-box Cloud #ffd28f
-    box "Server\n(moosicbox_tunnel_server)"
-        participant "Tunnel API" as API
-        participant "Tunnel WS" as WS
-    end box
+box Server<br>(moosicbox_tunnel_server)
+    participant API as Tunnel API
+    participant WS as Tunnel WS
+end
 
-    box Local Network
-        participant "Local MoosicBox Server\n(moosicbox_server)" as MoosicBox
-end box
+box Local Network
+    participant MoosicBox as Local MoosicBox Server<br>(moosicbox_server)
+end
 
-box PlanetScale #8fc3ff
-    database MySQL
-end box
+box rgb(143, 195, 255) PlanetScale
+    participant MySQL
+end
 
-Client -> API: Request data\n{clientId: "12345"}
-API -> WS: Request data\n{clientId: "12345"}
-WS -> MySQL: Request tunnel_ws_id for clientId "12345"
+Client ->> API: Request data<br>{clientId: "12345"}
+API ->> WS: Request data<br>{clientId: "12345"}
+WS ->> MySQL: Request tunnel_ws_id for clientId "12345"
 activate MySQL#gray
-MySQL -> WS: Return tunnel_ws_id "127347374123"
+MySQL ->> WS: Return tunnel_ws_id "127347374123"
 deactivate MySQL#gray
-WS -> MoosicBox: Request data from ws connection "127347374123"
+WS ->> MoosicBox: Request data from ws connection "127347374123"
 
 loop until all data sent
-    MoosicBox -> MoosicBox: Read data (bytes)
+    MoosicBox ->> MoosicBox: Read data (bytes)
     activate MoosicBox#gray
     deactivate MoosicBox#gray
 
-    MoosicBox -> WS: Send packet of data (bytes)
+    MoosicBox ->> WS: Send packet of data (bytes)
     activate WS#gray
     deactivate WS#gray
 
-    WS -> API: Send packet of data (bytes)
+    WS ->> API: Send packet of data (bytes)
     activate API#gray
     deactivate API#gray
 
-    API -> Client: Send packet of data (bytes)
+    API ->> Client: Send packet of data (bytes)
     activate Client#gray
     deactivate Client#gray
 end
@@ -255,60 +240,57 @@ end
 
 ## Data Blocking Request
 
-```plantuml
+```mermaid
+sequenceDiagram
+
 title Server Tunnel Data Blocking Request Sequence Diagram
 
-skinparam maxMessageSize 260
-skinparam ParticipantPadding 20
-skinparam BoxPadding 10
-
 box Internet
-    actor Client #green
-end box
+    actor Client
+end
 
-box Cloud #ffd28f
-    box "Server\n(moosicbox_tunnel_server)"
-        participant "Tunnel API" as API
-        participant "Tunnel WS" as WS
-    end box
+box Server<br>(moosicbox_tunnel_server)
+    participant API as Tunnel API
+    participant WS as Tunnel WS
+end
 
-    box Local Network
-        participant "Local MoosicBox Server\n(moosicbox_server)" as MoosicBox
-end box
+box Local Network
+    participant MoosicBox as Local MoosicBox Server<br>(moosicbox_server)
+end
 
-box PlanetScale #8fc3ff
-    database MySQL
-end box
+box rgb(143, 195, 255) PlanetScale
+    participant MySQL
+end
 
-Client -> API: Request data\n{clientId: "12345"}
-API -> API: Create response buffer
+Client ->> API: Request data<br>{clientId: "12345"}
+API ->> API: Create response buffer
 activate API#gray
 deactivate API#gray
-API -> WS: Request data\n{clientId: "12345"}
-WS -> MySQL: Request tunnel_ws_id for clientId "12345"
+API ->> WS: Request data<br>{clientId: "12345"}
+WS ->> MySQL: Request tunnel_ws_id for clientId "12345"
 activate MySQL#gray
-MySQL -> WS: Return tunnel_ws_id "127347374123"
+MySQL ->> WS: Return tunnel_ws_id "127347374123"
 deactivate MySQL#gray
-WS -> MoosicBox: Request data from ws connection "127347374123"
+WS ->> MoosicBox: Request data from ws connection "127347374123"
 
 loop until all data saved to buffer
-    MoosicBox -> MoosicBox: Read data (bytes)
+    MoosicBox ->> MoosicBox: Read data (bytes)
     activate MoosicBox#gray
     deactivate MoosicBox#gray
 
-    MoosicBox -> WS: Send packet of data (bytes)
+    MoosicBox ->> WS: Send packet of data (bytes)
     activate WS#gray
     deactivate WS#gray
 
-    WS -> API: Send packet of data (bytes)
+    WS ->> API: Send packet of data (bytes)
     activate API#gray
     deactivate API#gray
-    API -> API: Push bytes to response buffer
+    API ->> API: Push bytes to response buffer
     activate API#gray
     deactivate API#gray
 end
 
-API -> Client: Send response buffer (bytes)
+API ->> Client: Send response buffer (bytes)
 activate Client#gray
 deactivate Client#gray
 ```
