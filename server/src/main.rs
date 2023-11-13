@@ -127,6 +127,7 @@ async fn main() -> std::io::Result<()> {
             .service(moosicbox_menu::api::get_album_tracks_endpoint)
             .service(moosicbox_menu::api::get_artist_albums_endpoint)
             .service(moosicbox_files::api::track_endpoint)
+            .service(moosicbox_files::api::track_info_endpoint)
             .service(moosicbox_files::api::artist_cover_endpoint)
             .service(moosicbox_files::api::album_artwork_endpoint)
             .service(moosicbox_player::api::play_track_endpoint)

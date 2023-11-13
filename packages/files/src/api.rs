@@ -1,4 +1,9 @@
-use actix_web::{error::ErrorInternalServerError, route, web, HttpRequest, HttpResponse, Result};
+use actix_web::{
+    error::ErrorInternalServerError,
+    route,
+    web::{self, Json},
+    HttpRequest, HttpResponse, Result,
+};
 use log::error;
 use moosicbox_core::app::AppState;
 use serde::Deserialize;
@@ -7,7 +12,9 @@ use thiserror::Error;
 use crate::files::{
     album::{get_album_cover, AlbumCoverError, AlbumCoverSource},
     artist::{get_artist_cover, ArtistCoverError, ArtistCoverSource},
-    track::{get_track_source, TrackSource, TrackSourceError},
+    track::{
+        get_track_info, get_track_source, TrackInfo, TrackInfoError, TrackSource, TrackSourceError,
+    },
 };
 
 #[derive(Deserialize, Clone, Debug)]
@@ -44,6 +51,34 @@ pub async fn track_endpoint(
                 .into_response(&req))
         }
     }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTrackInfoQuery {
+    pub track_id: i32,
+}
+
+impl From<TrackInfoError> for actix_web::Error {
+    fn from(err: TrackInfoError) -> Self {
+        ErrorInternalServerError(err.to_string())
+    }
+}
+
+#[route("/track/info", method = "GET")]
+pub async fn track_info_endpoint(
+    query: web::Query<GetTrackInfoQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<TrackInfo>> {
+    Ok(Json(
+        get_track_info(
+            query.track_id,
+            data.db
+                .clone()
+                .ok_or(ErrorInternalServerError("No DB set"))?,
+        )
+        .await?,
+    ))
 }
 
 impl From<ArtistCoverError> for actix_web::Error {
