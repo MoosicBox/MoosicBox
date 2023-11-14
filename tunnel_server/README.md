@@ -19,11 +19,9 @@ box rgb(143, 195, 255) PlanetScale
     participant MySQL
 end
 
-MoosicBox ->> WS: Connect request
-WS ->> MoosicBox: Connect success
-
-MoosicBox ->> WS: [InitConnection]<br>{clientId: "12345"}
+MoosicBox ->> WS: Connect request (/ws?clientId=12345)
 WS ->> MySQL: Upsert client_id and tunnel_ws_id in `connections` table
+WS ->> MoosicBox: Connect success
 
 loop every 5 minutes (to keep lambda ws alive)
     MoosicBox ->> WS: [PING]
@@ -175,11 +173,9 @@ box rgb(143, 195, 255) PlanetScale
     participant MySQL
 end
 
-MoosicBox ->> WS: Connect request
-WS ->> MoosicBox: Connect success
-
-MoosicBox ->> WS: [InitConnection]<br>{clientId: "12345"}
+MoosicBox ->> WS: Connect request (/ws?clientId=12345)
 WS ->> MySQL: Upsert client_id and tunnel_ws_id in `connections` table
+WS ->> MoosicBox: Connect success
 
 loop every 5 minutes
     MoosicBox ->> WS: [PING]
