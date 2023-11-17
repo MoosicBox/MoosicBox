@@ -207,9 +207,7 @@ pub async fn message(
 
             register_connection(db.clone(), sender, context, &payload).await?;
 
-            sender
-                .send_all_except(&context.connection_id, &get_connections(db).await?)
-                .await?;
+            sender.send_all(&get_connections(db).await?).await?;
 
             Ok(())
         }
