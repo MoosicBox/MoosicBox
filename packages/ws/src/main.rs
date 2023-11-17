@@ -172,10 +172,7 @@ async fn handler(event: LambdaEvent<Value>) -> Result<Response, WebsocketHandler
                 .build();
             let client = Client::from_conf(api_management_config);
             for message in messages {
-                debug!(
-                    "Sending message to {}: {}",
-                    message.connection_id, message.payload
-                );
+                debug!("Sending message to {}", message.connection_id);
                 client
                     .post_to_connection()
                     .connection_id(message.connection_id)
