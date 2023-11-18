@@ -317,9 +317,10 @@ impl Player {
 
                 let seek = if seek.is_some() { seek.take() } else { None };
 
-                player
-                    .start_playback(&playback, seek, retry_options)
-                    .await?;
+                if let Err(err) = player.start_playback(&playback, seek, retry_options).await {
+                    player.active_playback.write().unwrap().take();
+                    return Err(err);
+                }
 
                 if playback.abort.load(Ordering::SeqCst) {
                     break;
