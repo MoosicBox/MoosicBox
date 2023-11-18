@@ -45,6 +45,7 @@ export async function API({ stack }: StackContext) {
         },
         routes: {
             'GET /track': 'src/moosicbox_tunnel_server.handler',
+            'GET /track/info': 'src/moosicbox_tunnel_server.handler',
         },
     });
 
