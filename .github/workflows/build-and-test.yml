@@ -45,16 +45,6 @@ jobs:
                       path: tunnel_server
                       os: ubuntu-latest
 
-                    - name: tunnel_server server
-                      path: tunnel_server
-                      os: ubuntu-latest
-                      cargo: --no-default-features --features=server
-
-                    - name: tunnel_server serverless
-                      path: tunnel_server
-                      os: ubuntu-latest
-                      cargo: --no-default-features --features=serverless
-
                     - name: server-cpal
                       path: server
                       os: ubuntu-latest
