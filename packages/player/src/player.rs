@@ -432,12 +432,11 @@ impl Player {
         playback.abort.clone().store(true, Ordering::SeqCst);
 
         trace!("Waiting for playback completion response");
-        if self
+        if let Err(err) = self
             .receiver
             .recv_timeout(std::time::Duration::from_secs(2))
-            .is_err()
         {
-            error!("Sender correlated with receiver has dropped");
+            error!("Sender correlated with receiver has dropped: {err:?}");
         }
         trace!("Playback successfully stopped");
 
@@ -551,8 +550,8 @@ impl Player {
         playback.abort.clone().store(true, Ordering::SeqCst);
 
         trace!("Waiting for playback completion response");
-        if let Err(_err) = self.receiver.recv() {
-            error!("Sender correlated with receiver has dropped");
+        if let Err(err) = self.receiver.recv() {
+            error!("Sender correlated with receiver has dropped: {err:?}");
         }
         trace!("Playback successfully stopped");
 
