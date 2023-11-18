@@ -59,11 +59,11 @@ async fn main() -> std::io::Result<()> {
     });
 
     if let Ok(host) = env::var("WS_HOST") {
-        use moosicbox_tunnel::ws::{init_host, sender::start_server};
+        use moosicbox_tunnel::ws::{init_host, sender::start};
         init_host(host).expect("Failed to initialize websocket host");
 
         RT.spawn(async {
-            let rx = start_server("123123".into());
+            let rx = start("123123".into());
 
             while let Ok(m) = rx.recv() {
                 match m {
