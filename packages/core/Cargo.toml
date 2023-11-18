@@ -14,6 +14,8 @@ log = { workspace = true }
 rusqlite = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.105"
+strum = { workspace = true }
+strum_macros = { workspace = true }
 thiserror = "1.0.48"
 
 [features]

@@ -3,6 +3,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt, io,
+    str::FromStr,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -13,6 +14,7 @@ use log::{debug, error, info};
 use rand::{thread_rng, Rng as _};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use strum_macros::EnumString;
 use thiserror::Error;
 use tokio::sync::{
     mpsc::{self, error::SendError},
@@ -62,8 +64,9 @@ pub struct ChatServer {
     cmd_rx: mpsc::UnboundedReceiver<Command>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, EnumString)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum InboundMessageType {
     Ping,
     GetConnectionId,
@@ -131,15 +134,11 @@ impl ChatServer {
         let payload = msg.into();
         let body = serde_json::from_str::<Value>(&payload)
             .map_err(|e| WebsocketMessageError::InvalidPayload(payload, e.to_string()))?;
-        let message_type = serde_json::from_str::<InboundMessageType>(
-            format!(
-                "\"{}\"",
-                body.get("type")
-                    .ok_or(WebsocketMessageError::MissingMessageType)?
-                    .as_str()
-                    .ok_or(WebsocketMessageError::InvalidMessageType)?
-            )
-            .as_str(),
+        let message_type = InboundMessageType::from_str(
+            body.get("type")
+                .ok_or(WebsocketMessageError::MissingMessageType)?
+                .as_str()
+                .ok_or(WebsocketMessageError::InvalidMessageType)?,
         )
         .map_err(|_| WebsocketMessageError::InvalidMessageType)?;
 

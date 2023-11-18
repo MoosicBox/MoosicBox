@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use rusqlite::{types::FromSql, Row};
 use serde::{Deserialize, Serialize};
+use strum_macros::EnumString;
 
 use super::db::{
     get_players, get_session_active_players, get_session_playlist, get_session_playlist_tracks,
@@ -599,8 +600,9 @@ pub struct RegisterPlayer {
     pub r#type: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default, EnumString)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum PlayerType {
     Symphonia,
     Howler,
@@ -610,10 +612,7 @@ pub enum PlayerType {
 
 impl FromSql for PlayerType {
     fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
-        Ok(
-            serde_json::from_str::<PlayerType>(&format!("\"{}\"", value.as_str()?))
-                .unwrap_or(PlayerType::Unknown),
-        )
+        Ok(PlayerType::from_str(value.as_str()?).unwrap_or(PlayerType::Unknown))
     }
 }
 

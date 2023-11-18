@@ -1,6 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 use std::{
+    str::FromStr,
     sync::{Arc, Mutex, OnceLock},
     time::Duration,
 };
@@ -126,9 +127,7 @@ async fn handler(event: LambdaEvent<Value>) -> Result<Response, WebsocketHandler
 
     let mut messages = Vec::new();
 
-    if let Ok(event_type) = serde_json::from_str::<EventType>(
-        format!("\"{}\"", api_context.clone().event_type.unwrap().as_str()).as_str(),
-    ) {
+    if let Ok(event_type) = EventType::from_str(api_context.clone().event_type.unwrap().as_str()) {
         let context = WebsocketContext {
             connection_id: api_context.clone().connection_id.unwrap(),
             event_type,
@@ -151,10 +150,9 @@ async fn handler(event: LambdaEvent<Value>) -> Result<Response, WebsocketHandler
                     event.payload.get("body").unwrap().as_str().unwrap(),
                 )
                 .unwrap();
-                let message_type = serde_json::from_str::<InboundMessageType>(
-                    format!("\"{}\"", body.get("type").unwrap().as_str().unwrap()).as_str(),
-                )
-                .unwrap();
+                let message_type =
+                    InboundMessageType::from_str(body.get("type").unwrap().as_str().unwrap())
+                        .unwrap();
                 let payload = body.get("payload");
                 moosicbox_ws::api::message(db.clone(), &mut sender, payload, message_type, &context)
                     .await

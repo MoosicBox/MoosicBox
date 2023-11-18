@@ -19,6 +19,7 @@ use moosicbox_core::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use strum_macros::EnumString;
 use thiserror::Error;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -28,16 +29,18 @@ pub struct Response {
     pub body: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, EnumString)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum EventType {
     Connect,
     Disconnect,
     Message,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, EnumString)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum InboundMessageType {
     Ping,
     GetConnectionId,

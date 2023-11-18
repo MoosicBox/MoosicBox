@@ -3,6 +3,7 @@
 use std::{
     collections::{HashMap, HashSet},
     io,
+    str::FromStr,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc, Mutex,
@@ -169,15 +170,11 @@ impl ChatServer {
         let payload = msg.into();
         let body = serde_json::from_str::<Value>(&payload)
             .map_err(|e| WebsocketMessageError::InvalidPayload(payload, e.to_string()))?;
-        let message_type = serde_json::from_str::<InboundMessageType>(
-            format!(
-                "\"{}\"",
-                body.get("type")
-                    .ok_or(WebsocketMessageError::MissingMessageType)?
-                    .as_str()
-                    .ok_or(WebsocketMessageError::InvalidMessageType)?
-            )
-            .as_str(),
+        let message_type = InboundMessageType::from_str(
+            body.get("type")
+                .ok_or(WebsocketMessageError::MissingMessageType)?
+                .as_str()
+                .ok_or(WebsocketMessageError::InvalidMessageType)?,
         )
         .map_err(|_| WebsocketMessageError::InvalidMessageType)?;
 
