@@ -6,6 +6,7 @@ members = [
     "packages/files",
     "packages/menu",
     "packages/player",
+    "packages/tunnel",
     "packages/ws",
     "players/symphonia_player",
 ]
