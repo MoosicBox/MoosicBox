@@ -36,6 +36,7 @@ export async function API({ stack }: StackContext) {
             function: {
                 runtime: 'rust',
                 timeout: '5 minutes',
+                retryAttempts: 0,
                 environment: {
                     WS_HOST: `wss://${customDomain.domainName}/ws`
                 },
@@ -52,6 +53,7 @@ export async function API({ stack }: StackContext) {
                 runtime: 'rust',
                 timeout: '5 minutes',
                 environment: {},
+                retryAttempts: 0,
             },
         },
         routes: {
