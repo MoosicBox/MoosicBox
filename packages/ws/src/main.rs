@@ -9,7 +9,7 @@ use std::{
 use actix_web::{error::ErrorInternalServerError, Result};
 use async_once_cell::OnceCell;
 use async_trait::async_trait;
-use aws_config::SdkConfig;
+use aws_config::{BehaviorVersion, SdkConfig};
 use aws_lambda_events::apigw::ApiGatewayWebsocketProxyRequestContext;
 use aws_sdk_apigatewaymanagement::{
     config::{self, Region},
@@ -105,7 +105,7 @@ async fn handler(event: LambdaEvent<Value>) -> Result<Response, WebsocketHandler
     let shared_config = SHARED_CONFIG
         .get_or_init(async {
             Arc::new(Mutex::new(
-                aws_config::from_env()
+                aws_config::defaults(BehaviorVersion::v2023_11_09())
                     .region(Region::new("us-east-1"))
                     .load()
                     .await,
@@ -190,9 +190,6 @@ async fn handler(event: LambdaEvent<Value>) -> Result<Response, WebsocketHandler
                                 WebsocketHandlerError::Unknown(err.to_string())
                             }
                             PostToConnectionError::PayloadTooLargeException(err) => {
-                                WebsocketHandlerError::Unknown(err.to_string())
-                            }
-                            PostToConnectionError::Unhandled(err) => {
                                 WebsocketHandlerError::Unknown(err.to_string())
                             }
                             _ => WebsocketHandlerError::Unknown(service_error.to_string()),
