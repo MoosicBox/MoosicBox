@@ -40,7 +40,7 @@ pub async fn track_endpoint(
     let query: HashMap<String, String> = query.into_iter().collect();
     let query = serde_json::to_value(query).unwrap();
 
-    info!("Received {method} call to {path} with {query}");
+    info!("Received {method} call to {path} with {query} (id {id})");
 
     let body = body
         .filter(|bytes| !bytes.is_empty())
