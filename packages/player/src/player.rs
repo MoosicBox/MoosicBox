@@ -24,6 +24,7 @@ use moosicbox_symphonia_player::{
 };
 use rand::{thread_rng, Rng as _};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use symphonia::core::{
     io::{MediaSource, MediaSourceStream},
     probe::Hint,
@@ -645,10 +646,11 @@ impl Player {
     pub async fn track_id_to_playable_stream(&self, track_id: i32, host: &str) -> PlayableTrack {
         let hint = Hint::new();
 
+        let url = format!("{host}/track/info?trackId={}", track_id);
+        let res: Value = reqwest::get(&url).await.unwrap().json().await.unwrap();
+        debug!("Got track info {res:?}");
+        let size = res.get("bytes").unwrap().as_u64().unwrap();
         let url = format!("{host}/track?trackId={}", track_id);
-        let res = reqwest::Client::new().head(&url).send().await.unwrap();
-        let header = res.headers().get("Content-Length").unwrap();
-        let size: u64 = header.to_str().unwrap().parse().unwrap();
         let source = Box::new(RemoteByteStream::new(url, Some(size), true));
 
         PlayableTrack {
