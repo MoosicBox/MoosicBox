@@ -49,8 +49,6 @@ pub async fn chat_ws(
         match select(messages, tick).await {
             // commands & messages received from client
             Either::Left((Either::Left((Some(Ok(msg)), _)), _)) => {
-                log::debug!("msg: {msg:?}");
-
                 match msg {
                     Message::Ping(bytes) => {
                         last_heartbeat = Instant::now();
