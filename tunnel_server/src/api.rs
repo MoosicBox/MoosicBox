@@ -1,128 +1,106 @@
-use actix_web::{route, HttpResponse};
-use actix_web::{
-    web::{self},
-    HttpRequest, Result,
-};
+use actix_web::error::ErrorInternalServerError;
+use actix_web::http::Method;
+use actix_web::{route, web, HttpResponse};
+use actix_web::{HttpRequest, Result};
 use bytes::Bytes;
 use crossbeam_channel::{bounded, Receiver, Sender};
-use log::debug;
+use log::{debug, info, warn};
+use moosicbox_tunnel::tunnel::{TunnelEncoding, TunnelStream};
+use moosicbox_tunnel::ws::sender::TunnelResponse;
 use once_cell::sync::Lazy;
+use qstring::QString;
 use rand::{thread_rng, Rng as _};
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::sync::Mutex;
 
-pub static TUNNEL_SENDERS: Lazy<Mutex<HashMap<usize, Sender<Bytes>>>> =
+use crate::ws::db::select_connection;
+use crate::CHAT_SERVER_HANDLE;
+
+pub static TUNNEL_SENDERS: Lazy<Mutex<HashMap<usize, Sender<TunnelResponse>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct GetTrackQuery {
-    track_id: i32,
-}
-
-#[route("/track", method = "GET", method = "HEAD")]
-pub async fn track_server_endpoint(
-    _req: HttpRequest,
-    query: web::Query<GetTrackQuery>,
-) -> Result<HttpResponse> {
-    let id = thread_rng().gen::<usize>();
-
-    debug!("Starting ws request for {id}");
-    let start = std::time::SystemTime::now();
-    let rx = request(
-        id,
-        "track",
-        serde_json::to_value(query.deref().clone()).unwrap(),
-    )
-    .await?;
-
-    let mut time_to_first_byte = None;
-    let mut packet_count = 0;
-    let mut byte_count = 0;
-    loop {
-        let bytes = rx.recv().unwrap();
-        if time_to_first_byte.is_none() {
-            time_to_first_byte = Some(std::time::SystemTime::now());
-        }
-        packet_count += 1;
-        debug!("Received packet for {id} {packet_count}");
-
-        if bytes.is_empty() {
-            break;
-        }
-
-        byte_count += bytes.len();
-    }
-    let end = std::time::SystemTime::now();
-
-    debug!(
-        "Byte count: {byte_count} (received {} packets, took {}ms total, {}ms to first byte)",
-        packet_count,
-        end.duration_since(start).unwrap().as_millis(),
-        time_to_first_byte
-            .map(|t| t.duration_since(start).unwrap().as_millis())
-            .map(|t| t.to_string())
-            .unwrap_or("N/A".into())
-    );
-
+#[route("/health", method = "GET")]
+pub async fn health_endpoint() -> Result<HttpResponse> {
+    info!("Healthy");
     Ok(HttpResponse::Ok().body(""))
 }
 
-async fn request(id: usize, path: &str, payload: Value) -> Result<Receiver<Bytes>> {
-    let (tx, rx) = bounded(1);
+#[route("/{path:.*}", method = "GET", method = "POST", method = "HEAD")]
+pub async fn track_endpoint(
+    body: Option<Bytes>,
+    path: web::Path<(String,)>,
+    req: HttpRequest,
+) -> Result<HttpResponse> {
+    let id = thread_rng().gen::<usize>();
 
-    TUNNEL_SENDERS.lock().unwrap().insert(id, tx);
+    let method = req.method();
+    let path = path.into_inner().0;
+    let query: Vec<_> = QString::from(req.query_string()).into();
+    let query: HashMap<String, String> = query.into_iter().collect();
+    let query = serde_json::to_value(query).unwrap();
 
-    #[cfg(feature = "server")]
-    request_server(id, path, payload).await?;
-    #[cfg(all(not(feature = "server"), feature = "serverless"))]
-    request_serverless(id, path, payload).await?;
+    info!("Received {method} call to {path} with {query}");
 
-    Ok(rx)
+    let body = body
+        .filter(|bytes| !bytes.is_empty())
+        .map(|bytes| serde_json::from_slice(&bytes))
+        .transpose()?;
+
+    debug!("Starting ws request for {id} {method} {path} {query:?}");
+
+    let rx = request(id, method, &path, query, body).await?;
+
+    Ok(HttpResponse::Ok().streaming(TunnelStream::new(id, rx)))
 }
 
-#[cfg(feature = "server")]
-async fn request_server(id: usize, path: &str, payload: Value) -> Result<()> {
-    use crate::{CHAT_SERVER_HANDLE, CONN_ID};
+async fn request(
+    id: usize,
+    method: &Method,
+    path: &str,
+    query: Value,
+    payload: Option<Value>,
+) -> Result<Receiver<TunnelResponse>> {
+    let (tx, rx) = bounded(1);
 
+    debug!("Setting sender for request {id}");
+    match TUNNEL_SENDERS.lock() {
+        Ok(mut lock) => {
+            lock.insert(id, tx);
+        }
+        Err(poison) => {
+            warn!("Accessing from poison");
+            poison.into_inner().insert(id, tx);
+        }
+    }
+
+    debug!("Sending server request {id}");
     let chat_server = CHAT_SERVER_HANDLE.lock().unwrap().as_ref().unwrap().clone();
-    let conn_id = CONN_ID.lock().unwrap().unwrap();
+    let conn_id = select_connection("123123")
+        .ok_or(ErrorInternalServerError(
+            "Could not get moosicbox server connection",
+        ))?
+        .tunnel_ws_id
+        .parse::<usize>()
+        .map_err(|_| ErrorInternalServerError("Failed to parse connection id"))?;
 
+    debug!("Sending server request {id} to {conn_id}");
     chat_server
         .send_message(
             conn_id,
             serde_json::json!({
                 "type": "TUNNEL_REQUEST",
                 "id": id,
+                "method": method.to_string(),
                 "path": path,
-                "payload": payload
+                "query": query,
+                "payload": payload,
+                "encoding": TunnelEncoding::Binary
             })
             .to_string(),
         )
         .await;
+    debug!("Sent server request {id} to {conn_id}");
 
-    Ok(())
-}
-
-#[cfg(feature = "serverless")]
-#[allow(dead_code)]
-async fn request_serverless(id: usize, path: &str, payload: Value) -> Result<()> {
-    use actix_web::error::ErrorInternalServerError;
-    use moosicbox_tunnel::ws::sender::send_message;
-
-    send_message(
-        serde_json::json!({
-            "type": "TUNNEL_REQUEST",
-            "id": id,
-            "path": path,
-            "payload": payload
-        })
-        .to_string(),
-    )
-    .map_err(|e| ErrorInternalServerError(e.to_string()))?;
-
-    Ok(())
+    Ok(rx)
 }

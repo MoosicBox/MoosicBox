@@ -22,7 +22,10 @@ use tokio::sync::{
 };
 
 use crate::{
-    ws::{ConnId, Msg, RoomId},
+    ws::{
+        db::{delete_connection, upsert_connection},
+        ConnId, Msg, RoomId,
+    },
     CONN_ID,
 };
 
@@ -32,6 +35,7 @@ enum Command {
     Connect {
         conn_tx: mpsc::UnboundedSender<Msg>,
         res_tx: oneshot::Sender<ConnId>,
+        client_id: String,
     },
 
     Disconnect {
@@ -142,8 +146,7 @@ impl ChatServer {
         )
         .map_err(|_| WebsocketMessageError::InvalidMessageType)?;
 
-        let payload = body.get("payload");
-        debug!("Received Message from {id} [{message_type}] {payload:?}");
+        debug!("Received Message from {id} [{message_type}]");
 
         match message_type {
             InboundMessageType::Ping => {}
@@ -164,8 +167,11 @@ impl ChatServer {
                     json!({
                         "type": "TUNNEL_REQUEST",
                         "id": body.get("id"),
+                        "method": body.get("method"),
                         "path": body.get("path"),
-                        "payload": payload
+                        "query": body.get("query"),
+                        "payload": body.get("payload"),
+                        "encoding": body.get("encoding")
                     })
                     .to_string(),
                 )
@@ -177,7 +183,7 @@ impl ChatServer {
     }
 
     /// Register new session and assign unique ID to this session
-    async fn connect(&mut self, tx: mpsc::UnboundedSender<Msg>) -> ConnId {
+    async fn connect(&mut self, client_id: String, tx: mpsc::UnboundedSender<Msg>) -> ConnId {
         // register session with random connection ID
         let id = thread_rng().gen::<usize>();
 
@@ -185,6 +191,8 @@ impl ChatServer {
         CONN_ID.lock().unwrap().replace(id);
 
         self.sessions.insert(id, tx.clone());
+
+        upsert_connection(&client_id, &id.to_string());
 
         // auto join session to main room
         self.rooms.entry("main".to_owned()).or_default().insert(id);
@@ -202,6 +210,8 @@ impl ChatServer {
         let count = self.visitor_count.fetch_sub(1, Ordering::SeqCst);
         info!("Visitor count: {}", count - 1);
 
+        delete_connection(&conn_id.to_string());
+
         let mut rooms: Vec<String> = Vec::new();
 
         // remove sender
@@ -218,8 +228,12 @@ impl ChatServer {
     pub async fn run(mut self) -> io::Result<()> {
         while let Some(cmd) = self.cmd_rx.recv().await {
             match cmd {
-                Command::Connect { conn_tx, res_tx } => {
-                    if let Err(error) = res_tx.send(self.connect(conn_tx).await) {
+                Command::Connect {
+                    client_id,
+                    conn_tx,
+                    res_tx,
+                } => {
+                    if let Err(error) = res_tx.send(self.connect(client_id, conn_tx).await) {
                         error!("Failed to connect {error:?}");
                     }
                 }
@@ -252,12 +266,20 @@ pub struct ChatServerHandle {
 
 impl ChatServerHandle {
     /// Register client message sender and obtain connection ID.
-    pub async fn connect(&self, conn_tx: mpsc::UnboundedSender<String>) -> ConnId {
+    pub async fn connect(
+        &self,
+        client_id: String,
+        conn_tx: mpsc::UnboundedSender<String>,
+    ) -> ConnId {
         let (res_tx, res_rx) = oneshot::channel();
 
         // unwrap: chat server should not have been dropped
         self.cmd_tx
-            .send(Command::Connect { conn_tx, res_tx })
+            .send(Command::Connect {
+                conn_tx,
+                res_tx,
+                client_id,
+            })
             .unwrap();
 
         // unwrap: chat server does not drop out response channel

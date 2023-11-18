@@ -5,6 +5,7 @@ authors = ["Braden Steffaniak"]
 edition = "2021"
 
 [dependencies]
+base64 = { workspace = true }
 bytes = { workspace = true }
 crossbeam-channel = { workspace = true }
 futures-channel = "0.3.29"
@@ -15,7 +16,10 @@ moosicbox_core = { path = "../core" }
 moosicbox_files = { path = "../files" }
 once_cell = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
+serde-aux = "4.2.0"
 serde_json = "1.0.107"
+strum = { workspace = true }
+strum_macros = { workspace = true }
 thiserror = "1.0.48"
 tokio = { workspace = true }
 tokio-tungstenite = { workspace = true }

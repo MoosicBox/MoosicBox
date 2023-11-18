@@ -5,13 +5,11 @@ use futures_util::{
     future::{select, Either},
     StreamExt as _,
 };
-use log::error;
+use log::{error, warn};
+use moosicbox_tunnel::ws::sender::TunnelResponse;
 use tokio::{pin, sync::mpsc, time::interval};
 
-use crate::{
-    api::TUNNEL_SENDERS,
-    ws::{server::ChatServerHandle, ConnId},
-};
+use crate::{api::TUNNEL_SENDERS, ws::server::ChatServerHandle};
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -25,17 +23,17 @@ pub async fn chat_ws(
     chat_server: ChatServerHandle,
     mut session: actix_ws::Session,
     mut msg_stream: actix_ws::MessageStream,
+    client_id: String,
 ) {
-    log::info!("connected");
+    log::info!("Connected");
 
-    let mut name = None;
     let mut last_heartbeat = Instant::now();
     let mut interval = interval(HEARTBEAT_INTERVAL);
 
     let (conn_tx, mut conn_rx) = mpsc::unbounded_channel();
 
     // unwrap: chat server is not dropped before the HTTP server
-    let conn_id = chat_server.connect(conn_tx).await;
+    let conn_id = chat_server.connect(client_id, conn_tx).await;
 
     log::info!("Connection id: {conn_id}");
 
@@ -67,19 +65,31 @@ pub async fn chat_ws(
                     }
 
                     Message::Text(text) => {
-                        log::debug!("msg: {text:?}");
-                        process_text_msg(&chat_server, &mut session, &text, conn_id, &mut name)
-                            .await;
+                        log::error!("Received unexpected text msg: {text:?}");
                     }
 
-                    Message::Binary(bin) => {
-                        let data = bin.slice(8..);
-                        let id = &bin[..8];
-                        let id = usize::from_be_bytes(id.try_into().unwrap());
-                        if let Some(sender) = TUNNEL_SENDERS.lock().unwrap().get(&id) {
-                            sender.send(data).unwrap();
+                    Message::Binary(bytes) => {
+                        last_heartbeat = Instant::now();
+                        let data = bytes.slice(12..);
+                        let request_id = usize::from_be_bytes(bytes[..8].try_into().unwrap());
+                        let packet_id = u32::from_be_bytes(bytes[8..12].try_into().unwrap());
+
+                        let mut senders = TUNNEL_SENDERS.lock().unwrap();
+
+                        if let Some(sender) = senders.get(&request_id) {
+                            if let Err(_err) = sender.send(TunnelResponse {
+                                request_id,
+                                packet_id,
+                                bytes: data,
+                            }) {
+                                warn!("Sender dropped for request {request_id}");
+                                senders.remove(&request_id);
+                            }
                         } else {
-                            error!("unexpected binary message {id} (size {})", data.len());
+                            error!(
+                                "unexpected binary message {request_id} (size {})",
+                                data.len()
+                            );
                         }
                     }
 
@@ -130,23 +140,4 @@ pub async fn chat_ws(
 
     // attempt to close connection gracefully
     let _ = session.close(close_reason).await;
-}
-
-async fn process_text_msg(
-    chat_server: &ChatServerHandle,
-    _session: &mut actix_ws::Session,
-    text: &str,
-    conn: ConnId,
-    name: &mut Option<String>,
-) {
-    // strip leading and trailing whitespace (spaces, newlines, etc.)
-    let msg = text.trim();
-
-    // prefix message with our name, if assigned
-    let msg = match name {
-        Some(ref name) => format!("{name}: {msg}"),
-        None => msg.to_owned(),
-    };
-
-    chat_server.send_message(conn, msg).await
 }

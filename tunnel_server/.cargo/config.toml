@@ -2,8 +2,8 @@
 target-dir = "target"
 
 [alias]
-"server:debug" = "run --no-default-features --features=server"
-"server:release" = "run --no-default-features --features=server --release"
+"server:debug" = "run"
+"server:release" = "run --release"
 server = "server:release"
 
 [env]

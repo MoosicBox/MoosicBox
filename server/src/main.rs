@@ -7,12 +7,16 @@ mod ws;
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App, HttpServer};
 use lazy_static::lazy_static;
-use log::debug;
+use log::{debug, info, warn};
 use moosicbox_core::app::{AppState, Db};
-use moosicbox_tunnel::{tunnel::tunnel_request, ws::sender::TunnelMessage};
+use moosicbox_tunnel::{
+    tunnel::{tunnel_request, Method, TunnelEncoding},
+    ws::sender::TunnelMessage,
+};
 use serde_json::Value;
 use std::{
     env,
+    str::FromStr,
     sync::{Arc, Mutex, OnceLock},
     time::Duration,
 };
@@ -55,16 +59,16 @@ async fn main() -> std::io::Result<()> {
     });
 
     if let Ok(host) = env::var("WS_HOST") {
-        use moosicbox_tunnel::ws::{init_host, sender::start};
+        use moosicbox_tunnel::ws::{init_host, sender::start_server};
         init_host(host).expect("Failed to initialize websocket host");
-        let (ready, rx) = start();
-        ready.recv().unwrap();
 
-        RT.spawn(async move {
+        RT.spawn(async {
+            let rx = start_server("123123".into());
+
             while let Ok(m) = rx.recv() {
                 match m {
                     TunnelMessage::Text(m) => {
-                        debug!("Received text TunnelMessage");
+                        debug!("Received text TunnelMessage {}", &m);
                         let value: Value = serde_json::from_str(&m).unwrap();
 
                         match value.get("type").map(|t| t.as_str()) {
@@ -76,8 +80,17 @@ async fn main() -> std::io::Result<()> {
                                     db,
                                     serde_json::from_value(value.get("id").unwrap().clone())
                                         .unwrap(),
-                                    "track".into(),
+                                    Method::from_str(
+                                        value.get("method").unwrap().as_str().unwrap(),
+                                    )
+                                    .unwrap(),
+                                    value.get("path").unwrap().as_str().unwrap().to_string(),
+                                    value.get("query").unwrap().clone(),
                                     value.get("payload").unwrap().clone(),
+                                    TunnelEncoding::from_str(
+                                        value.get("encoding").unwrap().as_str().unwrap(),
+                                    )
+                                    .unwrap(),
                                 )
                                 .await
                                 .unwrap();
@@ -88,10 +101,14 @@ async fn main() -> std::io::Result<()> {
                     TunnelMessage::Binary(_) => todo!(),
                     TunnelMessage::Ping(_) => {}
                     TunnelMessage::Pong(_) => todo!(),
-                    TunnelMessage::Close => todo!(),
+                    TunnelMessage::Close => {
+                        info!("Closing tunnel connection");
+                        break;
+                    }
                     TunnelMessage::Frame(_) => todo!(),
                 }
             }
+            warn!("Exiting tunnel message loop");
         });
     }
 
