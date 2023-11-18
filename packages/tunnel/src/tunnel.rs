@@ -11,7 +11,7 @@ use base64::{engine::general_purpose, Engine as _};
 use bytes::Bytes;
 use crossbeam_channel::{Receiver, RecvTimeoutError};
 use futures_util::Stream;
-use log::debug;
+use log::{debug, error};
 use moosicbox_core::app::Db;
 use moosicbox_files::files::track::{get_track_info, get_track_source, TrackSource};
 use serde::{Deserialize, Serialize};
@@ -242,7 +242,17 @@ impl Stream for TunnelStream {
     ) -> std::task::Poll<Option<Self::Item>> {
         let stream = self.get_mut();
         debug!("Waiting for next packet");
-        let response = stream.rx.recv_timeout(Duration::from_secs(10))?;
+        let response = match stream.rx.recv_timeout(Duration::from_secs(10)) {
+            Ok(response) => response,
+            Err(err) => {
+                error!(
+                    "Timed out waiting for next packet for request {}, packet {}",
+                    stream.request_id,
+                    stream.packet_count + 1
+                );
+                return Poll::Ready(Some(Err(err)));
+            }
+        };
 
         if stream.time_to_first_byte.is_none() {
             stream.time_to_first_byte = Some(SystemTime::now());
