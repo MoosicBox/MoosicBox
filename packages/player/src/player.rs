@@ -288,11 +288,6 @@ impl Player {
             self.stop(Some(playback.id))?;
         }
 
-        self.active_playback
-            .write()
-            .unwrap()
-            .replace(playback.clone());
-
         let player = self.clone();
 
         RT.spawn(async move {
