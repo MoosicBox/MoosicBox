@@ -10,8 +10,8 @@ use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use moosicbox_core::app::{AppState, Db};
 use moosicbox_tunnel::{
-    tunnel::{tunnel_request, Method, TunnelEncoding},
-    ws::sender::TunnelMessage,
+    sender::{tunnel_request, Method, TunnelMessage},
+    tunnel::TunnelEncoding,
 };
 use serde_json::Value;
 use std::{
@@ -59,7 +59,7 @@ async fn main() -> std::io::Result<()> {
     });
 
     if let Ok(host) = env::var("WS_HOST") {
-        use moosicbox_tunnel::ws::{init_host, sender::start};
+        use moosicbox_tunnel::sender::{init_host, start};
         init_host(host).expect("Failed to initialize websocket host");
 
         RT.spawn(async {

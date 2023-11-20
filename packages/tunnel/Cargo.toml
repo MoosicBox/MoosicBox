@@ -5,29 +5,29 @@ authors = ["Braden Steffaniak"]
 edition = "2021"
 
 [dependencies]
-base64 = { workspace = true }
+base64 = { workspace = true, optional = true }
 bytes = { workspace = true }
 crossbeam-channel = { workspace = true }
-futures-channel = "0.3.29"
+futures-channel = { workspace = true, optional = true }
 futures-util = { workspace = true }
-lazy_static = { workspace = true }
+lazy_static = { workspace = true, optional = true }
 log = { workspace = true }
-moosicbox_core = { path = "../core" }
-moosicbox_files = { path = "../files" }
+moosicbox_core = { path = "../core", optional = true }
+moosicbox_files = { path = "../files", optional = true }
 once_cell = { workspace = true }
-serde = { version = "1.0", features = ["derive"] }
-serde-aux = "4.2.0"
-serde_json = "1.0.107"
+serde = { workspace = true, features = ["derive"] }
+serde-aux = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
-thiserror = "1.0.48"
-tokio = { workspace = true }
-tokio-tungstenite = { workspace = true }
+thiserror = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+tokio-tungstenite = { workspace = true, optional = true }
 
 [features]
-default = ["sender", "receiver"]
+default = ["sender", "base64"]
 
 fail-on-warnings = []
 
-sender = []
-receiver = []
+sender = ["dep:futures-channel", "dep:lazy_static", "dep:moosicbox_core", "dep:moosicbox_files", "dep:serde-aux", "dep:serde_json", "dep:thiserror", "dep:tokio", "dep:tokio-tungstenite"]
+base64 = ["dep:base64"]

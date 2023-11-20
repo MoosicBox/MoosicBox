@@ -6,7 +6,7 @@ use futures_util::{
     StreamExt as _,
 };
 use log::{error, warn};
-use moosicbox_tunnel::ws::sender::TunnelResponse;
+use moosicbox_tunnel::tunnel::TunnelResponse;
 use tokio::{pin, sync::mpsc, time::interval};
 
 use crate::{api::TUNNEL_SENDERS, ws::server::ChatServerHandle};
@@ -70,25 +70,20 @@ pub async fn chat_ws(
 
                     Message::Binary(bytes) => {
                         last_heartbeat = Instant::now();
-                        let data = bytes.slice(12..);
-                        let request_id = usize::from_be_bytes(bytes[..8].try_into().unwrap());
-                        let packet_id = u32::from_be_bytes(bytes[8..12].try_into().unwrap());
-
                         let mut senders = TUNNEL_SENDERS.lock().unwrap();
+                        let response: TunnelResponse = bytes.into();
+                        let request_id = response.request_id;
 
                         if let Some(sender) = senders.get(&request_id) {
-                            if let Err(_err) = sender.send(TunnelResponse {
-                                request_id,
-                                packet_id,
-                                bytes: data,
-                            }) {
-                                warn!("Sender dropped for request {request_id}");
+                            if let Err(_err) = sender.send(response) {
+                                warn!("Sender dropped for request {}", request_id);
                                 senders.remove(&request_id);
                             }
                         } else {
                             error!(
-                                "unexpected binary message {request_id} (size {})",
-                                data.len()
+                                "unexpected binary message {} (size {})",
+                                request_id,
+                                response.bytes.len()
                             );
                         }
                     }
