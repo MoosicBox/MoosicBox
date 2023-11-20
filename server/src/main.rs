@@ -78,8 +78,10 @@ async fn main() -> std::io::Result<()> {
                             Some(Some("TUNNEL_REQUEST")) => {
                                 tunnel_request(
                                     db,
-                                    serde_json::from_value(value.get("id").unwrap().clone())
-                                        .unwrap(),
+                                    serde_json::from_value(
+                                        value.get("request_id").unwrap().clone(),
+                                    )
+                                    .unwrap(),
                                     Method::from_str(
                                         value.get("method").unwrap().as_str().unwrap(),
                                     )

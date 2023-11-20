@@ -1,28 +1,24 @@
 use actix_web::error::ErrorInternalServerError;
 use actix_web::http::Method;
+use actix_web::web::Json;
 use actix_web::{route, web, HttpResponse};
 use actix_web::{HttpRequest, Result};
 use bytes::Bytes;
-use crossbeam_channel::{bounded, Receiver, Sender};
-use log::{debug, info, warn};
+use log::{debug, info};
 use moosicbox_tunnel::tunnel::{TunnelEncoding, TunnelResponse, TunnelStream};
-use once_cell::sync::Lazy;
 use qstring::QString;
 use rand::{thread_rng, Rng as _};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::sync::Mutex;
+use tokio::sync::mpsc::{channel, Receiver};
 
 use crate::ws::db::select_connection;
 use crate::CHAT_SERVER_HANDLE;
 
-pub static TUNNEL_SENDERS: Lazy<Mutex<HashMap<usize, Sender<TunnelResponse>>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-
 #[route("/health", method = "GET")]
-pub async fn health_endpoint() -> Result<HttpResponse> {
+pub async fn health_endpoint() -> Result<Json<Value>> {
     info!("Healthy");
-    Ok(HttpResponse::Ok().body(""))
+    Ok(Json(json!({"healthy": true})))
 }
 
 #[route("/{path:.*}", method = "GET", method = "POST", method = "HEAD")]
@@ -31,50 +27,47 @@ pub async fn track_endpoint(
     path: web::Path<(String,)>,
     req: HttpRequest,
 ) -> Result<HttpResponse> {
-    let id = thread_rng().gen::<usize>();
+    let request_id = thread_rng().gen::<usize>();
 
     let method = req.method();
     let path = path.into_inner().0;
     let query: Vec<_> = QString::from(req.query_string()).into();
-    let query: HashMap<String, String> = query.into_iter().collect();
+    let query: HashMap<_, _> = query.into_iter().collect();
     let query = serde_json::to_value(query).unwrap();
 
-    info!("Received {method} call to {path} with {query} (id {id})");
+    info!("Received {method} call to {path} with {query} (id {request_id})");
 
     let body = body
         .filter(|bytes| !bytes.is_empty())
         .map(|bytes| serde_json::from_slice(&bytes))
         .transpose()?;
 
-    debug!("Starting ws request for {id} {method} {path} {query:?}");
+    debug!("Starting ws request for {request_id} {method} {path} {query:?}");
 
-    let rx = request(id, method, &path, query, body).await?;
+    let rx = request(request_id, method, &path, query, body).await?;
 
-    Ok(HttpResponse::Ok().streaming(TunnelStream::new(id, rx)))
+    Ok(
+        HttpResponse::Ok().streaming(TunnelStream::new(request_id, rx, &|request_id| {
+            info!("Request {request_id} ended");
+            let chat_server = CHAT_SERVER_HANDLE.lock().unwrap().as_ref().unwrap().clone();
+            chat_server.request_end(request_id);
+        })),
+    )
 }
 
 async fn request(
-    id: usize,
+    request_id: usize,
     method: &Method,
     path: &str,
     query: Value,
     payload: Option<Value>,
 ) -> Result<Receiver<TunnelResponse>> {
-    let (tx, rx) = bounded(1);
+    let (tx, rx) = channel(1024);
 
-    debug!("Setting sender for request {id}");
-    match TUNNEL_SENDERS.lock() {
-        Ok(mut lock) => {
-            lock.insert(id, tx);
-        }
-        Err(poison) => {
-            warn!("Accessing from poison");
-            poison.into_inner().insert(id, tx);
-        }
-    }
-
-    debug!("Sending server request {id}");
+    debug!("Sending server request {request_id}");
     let chat_server = CHAT_SERVER_HANDLE.lock().unwrap().as_ref().unwrap().clone();
+    chat_server.request_start(request_id, tx);
+
     let conn_id = select_connection("123123")
         .ok_or(ErrorInternalServerError(
             "Could not get moosicbox server connection",
@@ -83,13 +76,13 @@ async fn request(
         .parse::<usize>()
         .map_err(|_| ErrorInternalServerError("Failed to parse connection id"))?;
 
-    debug!("Sending server request {id} to {conn_id}");
+    debug!("Sending server request {request_id} to {conn_id}");
     chat_server
         .send_message(
             conn_id,
             serde_json::json!({
                 "type": "TUNNEL_REQUEST",
-                "id": id,
+                "request_id": request_id,
                 "method": method.to_string(),
                 "path": path,
                 "query": query,
@@ -99,7 +92,7 @@ async fn request(
             .to_string(),
         )
         .await;
-    debug!("Sent server request {id} to {conn_id}");
+    debug!("Sent server request {request_id} to {conn_id}");
 
     Ok(rx)
 }

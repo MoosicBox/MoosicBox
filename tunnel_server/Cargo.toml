@@ -1,53 +1,37 @@
 [package]
-name = "moosicbox_tunnel_server"
-version = "0.1.0"
-authors = ["Braden Steffaniak"]
-edition = "2021"
+authors     = ["Braden Steffaniak"]
 default-run = "moosicbox_tunnel_server"
+edition     = "2021"
+name        = "moosicbox_tunnel_server"
+version     = "0.1.0"
 
 [[bin]]
 name = "moosicbox_tunnel_server"
 path = "src/main.rs"
 
 [dependencies]
-actix = { workspace = true }
-actix-cors = { workspace = true }
-actix-files = { workspace = true }
-actix-rt = { workspace = true }
-actix-web = { workspace = true }
-actix-ws = { workspace = true }
-async-once-cell = { workspace = true }
-awc = "3.0.0-beta.9"
-aws-config = { workspace = true }
-aws-sdk-ssm = { workspace = true }
-base64 = { workspace = true }
-bytes = { workspace = true }
+actix-cors        = { workspace = true }
+actix-web         = { workspace = true }
+actix-ws          = { workspace = true }
+aws-config        = { workspace = true }
+aws-sdk-ssm       = { workspace = true }
+bytes             = { workspace = true }
 crossbeam-channel = { workspace = true }
-enum-as-inner = "0.6.0"
-futures = { workspace = true }
-lazy_static = { workspace = true }
-log = { workspace = true }
-moosicbox_core = { path = "../packages/core" }
-moosicbox_menu = { path = "../packages/menu" }
-moosicbox_files = { path = "../packages/files" }
-moosicbox_tunnel = { path = "../packages/tunnel", default-features = false }
-mp3-duration = "0.1.10"
-mysql = { workspace = true }
-once_cell = { workspace = true }
-qstring = { workspace = true }
-rand = { workspace = true }
-regex = "1.9.5"
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
-strum = { workspace = true }
-strum_macros = { workspace = true }
-thiserror = { workspace = true }
-
-async-trait.workspace = true
-env_logger.workspace = true
-futures-util.workspace = true
-rusqlite = { workspace = true }
-tokio = { workspace = true, features = ["rt", "time", "macros"] }
+env_logger        = { workspace = true }
+futures-util      = { workspace = true }
+lazy_static       = { workspace = true }
+log               = { workspace = true }
+moosicbox_tunnel  = { path = "../packages/tunnel", default-features = false }
+mysql             = { workspace = true }
+once_cell         = { workspace = true }
+qstring           = { workspace = true }
+rand              = { workspace = true }
+serde             = { workspace = true, features = ["derive"] }
+serde_json        = { workspace = true }
+strum             = { workspace = true }
+strum_macros      = { workspace = true }
+thiserror         = { workspace = true }
+tokio             = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
 [features]
 fail-on-warnings = []

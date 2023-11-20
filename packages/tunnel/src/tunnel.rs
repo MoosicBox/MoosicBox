@@ -1,17 +1,11 @@
-use std::{
-    collections::HashMap,
-    sync::Mutex,
-    task::Poll,
-    time::{Duration, SystemTime},
-};
+use std::{error::Error, task::Poll, time::SystemTime};
 
 use bytes::Bytes;
-use crossbeam_channel::{Receiver, RecvTimeoutError};
 use futures_util::Stream;
-use log::{debug, error};
-use once_cell::sync::Lazy;
+use log::debug;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumString;
+use tokio::sync::mpsc::Receiver;
 
 #[derive(Debug, Serialize, Deserialize, EnumString, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -42,17 +36,23 @@ impl From<Bytes> for TunnelResponse {
     }
 }
 
-pub struct TunnelStream {
+pub struct TunnelStream<'a> {
     start: SystemTime,
     request_id: usize,
     time_to_first_byte: Option<SystemTime>,
     packet_count: u32,
     byte_count: usize,
     rx: Receiver<TunnelResponse>,
+    on_end: &'a dyn Fn(usize),
+    packet_queue: Vec<TunnelResponse>,
 }
 
-impl TunnelStream {
-    pub fn new(request_id: usize, rx: Receiver<TunnelResponse>) -> TunnelStream {
+impl<'a> TunnelStream<'a> {
+    pub fn new(
+        request_id: usize,
+        rx: Receiver<TunnelResponse>,
+        on_end: &'a impl Fn(usize),
+    ) -> TunnelStream<'a> {
         TunnelStream {
             start: SystemTime::now(),
             request_id,
@@ -60,17 +60,16 @@ impl TunnelStream {
             packet_count: 0,
             byte_count: 0,
             rx,
+            on_end,
+            packet_queue: vec![],
         }
     }
 }
 
-static PACKET_QUEUE: Lazy<Mutex<HashMap<usize, Vec<TunnelResponse>>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-
 fn return_polled_bytes(
     stream: &mut TunnelStream,
     response: TunnelResponse,
-) -> std::task::Poll<Option<Result<Bytes, RecvTimeoutError>>> {
+) -> std::task::Poll<Option<Result<Bytes, Box<dyn Error>>>> {
     if stream.time_to_first_byte.is_none() {
         stream.time_to_first_byte = Some(SystemTime::now());
     }
@@ -98,7 +97,7 @@ fn return_polled_bytes(
                 .unwrap_or("N/A".into())
         );
 
-        PACKET_QUEUE.lock().unwrap().remove(&response.request_id);
+        (stream.on_end)(stream.request_id);
 
         return Poll::Ready(None);
     }
@@ -108,48 +107,46 @@ fn return_polled_bytes(
     Poll::Ready(Some(Ok(response.bytes)))
 }
 
-impl Stream for TunnelStream {
-    type Item = Result<Bytes, RecvTimeoutError>;
+impl Stream for TunnelStream<'_> {
+    type Item = Result<Bytes, Box<dyn Error>>;
 
     fn poll_next(
         self: std::pin::Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
+        cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
         let stream = self.get_mut();
         debug!("Waiting for next packet");
-        let response = match stream.rx.recv_timeout(Duration::from_secs(10)) {
-            Ok(response) => response,
-            Err(err) => {
-                error!(
-                    "Timed out waiting for next packet for request {}, packet {}",
-                    stream.request_id,
-                    stream.packet_count + 1
-                );
-                return Poll::Ready(Some(Err(err)));
-            }
+        let response = match stream.rx.poll_recv(cx) {
+            Poll::Ready(Some(response)) => response,
+            Poll::Pending => return Poll::Pending,
+            Poll::Ready(None) => return Poll::Ready(None),
         };
 
-        if let Some(queue) = PACKET_QUEUE.lock().unwrap().get_mut(&response.request_id) {
-            if queue
-                .iter()
-                .next()
-                .map(|n| n.packet_id == stream.packet_count + 1)
-                .is_some_and(|n| n)
-            {
-                return return_polled_bytes(stream, queue.remove(0));
-            }
+        if stream
+            .packet_queue
+            .first()
+            .map(|n| n.packet_id == stream.packet_count + 1)
+            .is_some_and(|n| n)
+        {
+            let response = stream.packet_queue.remove(0);
+            debug!("Sending queued packet {}", response.packet_id);
+            return return_polled_bytes(stream, response);
         }
 
         if response.packet_id > stream.packet_count + 1 {
-            let mut queues = PACKET_QUEUE.lock().unwrap();
-            if let Some(queue) = queues.get_mut(&response.request_id) {
-                if let Some(pos) = queue.iter().position(|r| r.packet_id > response.packet_id) {
-                    queue.insert(pos, response);
-                } else {
-                    queue.push(response);
-                }
+            debug!(
+                "Received future packet {}. Waiting for packet {} before continuing",
+                response.packet_id,
+                stream.packet_count + 1
+            );
+            if let Some(pos) = stream
+                .packet_queue
+                .iter()
+                .position(|r| r.packet_id > response.packet_id)
+            {
+                stream.packet_queue.insert(pos, response);
             } else {
-                queues.insert(response.request_id, vec![response]);
+                stream.packet_queue.push(response);
             }
             return Poll::Pending;
         }

@@ -5,11 +5,9 @@ use futures_util::{
     future::{select, Either},
     StreamExt as _,
 };
-use log::{error, warn};
-use moosicbox_tunnel::tunnel::TunnelResponse;
 use tokio::{pin, sync::mpsc, time::interval};
 
-use crate::{api::TUNNEL_SENDERS, ws::server::ChatServerHandle};
+use crate::ws::server::ChatServerHandle;
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -70,22 +68,8 @@ pub async fn chat_ws(
 
                     Message::Binary(bytes) => {
                         last_heartbeat = Instant::now();
-                        let mut senders = TUNNEL_SENDERS.lock().unwrap();
-                        let response: TunnelResponse = bytes.into();
-                        let request_id = response.request_id;
 
-                        if let Some(sender) = senders.get(&request_id) {
-                            if let Err(_err) = sender.send(response) {
-                                warn!("Sender dropped for request {}", request_id);
-                                senders.remove(&request_id);
-                            }
-                        } else {
-                            error!(
-                                "unexpected binary message {} (size {})",
-                                request_id,
-                                response.bytes.len()
-                            );
-                        }
+                        chat_server.response(bytes);
                     }
 
                     Message::Close(reason) => break reason,

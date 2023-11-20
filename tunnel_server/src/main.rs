@@ -24,9 +24,6 @@ static CHAT_SERVER_HANDLE: once_cell::sync::Lazy<
     std::sync::Mutex<Option<ws::server::ChatServerHandle>>,
 > = once_cell::sync::Lazy::new(|| std::sync::Mutex::new(None));
 
-static CONN_ID: once_cell::sync::Lazy<std::sync::Mutex<Option<usize>>> =
-    once_cell::sync::Lazy::new(|| std::sync::Mutex::new(None));
-
 #[actix_web::main]
 async fn main() -> Result<(), std::io::Error> {
     env_logger::init();
@@ -55,26 +52,26 @@ async fn main() -> Result<(), std::io::Error> {
             .supports_credentials()
             .max_age(3600);
 
-        let mut app = App::new()
-            .wrap(cors)
-            .wrap(middleware::Compress::default())
-            .service(health_endpoint);
-
         CHAT_SERVER_HANDLE
             .lock()
             .unwrap()
             .replace(server_tx.clone());
 
-        app = app.service(ws::api::websocket);
-
-        app = app.service(api::track_endpoint);
-
-        app
+        App::new()
+            .wrap(cors)
+            .wrap(middleware::Compress::default())
+            .service(health_endpoint)
+            .service(ws::api::websocket)
+            .service(api::track_endpoint)
     };
 
-    let http_server = actix_web::HttpServer::new(app)
-        .bind(("0.0.0.0", service_port))?
-        .run();
+    let mut http_server = actix_web::HttpServer::new(app);
+
+    if let Ok(Ok(workers)) = env::var("ACTIX_WORKERS").map(|w| w.parse::<usize>()) {
+        http_server = http_server.workers(workers);
+    }
+
+    let http_server = http_server.bind(("0.0.0.0", service_port))?.run();
 
     try_join!(
         async move {

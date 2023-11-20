@@ -85,7 +85,7 @@ pub fn start_tunnel<T>(
 where
     T: Send + 'static,
 {
-    let (tx, rx) = bounded(1);
+    let (tx, rx) = bounded(1024);
 
     RT.spawn(async move {
         let mut just_retried = false;
@@ -108,9 +108,9 @@ where
 
                     let (write, read) = ws_stream.split();
 
-                    let stdin_to_ws = rxf.map(Ok).forward(write);
+                    let ws_writer = rxf.map(Ok).forward(write);
 
-                    let ws_to_stdout = read.for_each(|m| async {
+                    let ws_reader = read.for_each(|m| async {
                         let m = match m {
                             Ok(m) => m,
                             Err(e) => {
@@ -121,11 +121,12 @@ where
 
                         if let Err(e) = handler(tx.clone(), m) {
                             error!("Handler Send Loop error {ws_connection_id}: {e:?}");
+                            txf.unbounded_send(Message::Close(None)).unwrap();
                         }
                     });
 
-                    pin_mut!(stdin_to_ws, ws_to_stdout);
-                    future::select(stdin_to_ws, ws_to_stdout).await;
+                    pin_mut!(ws_writer, ws_reader);
+                    future::select(ws_writer, ws_reader).await;
                     info!("Websocket connection closed");
                 }
                 Err(err) => match err {
@@ -186,8 +187,8 @@ pub fn send_message(message: impl Into<String>) -> Result<(), SendMessageError> 
 
 #[derive(Debug, Error)]
 pub enum TunnelRequestError {
-    #[error("Invalid Query: '{0}' ({1})")]
-    InvalidQuery(String, String),
+    #[error("Invalid Query: {0}")]
+    InvalidQuery(String),
 }
 
 #[derive(Debug, Serialize, Deserialize, EnumString)]
@@ -316,7 +317,7 @@ fn send_base64(request_id: usize, mut reader: impl std::io::Read) {
 
 pub async fn tunnel_request(
     db: &Db,
-    id: usize,
+    request_id: usize,
     method: Method,
     path: String,
     query: Value,
@@ -326,31 +327,28 @@ pub async fn tunnel_request(
     match path.as_str() {
         "track" => match method {
             Method::Get => {
-                let query =
-                    serde_json::from_value::<GetTrackQuery>(query.clone()).map_err(|e| {
-                        TunnelRequestError::InvalidQuery(query.to_string(), e.to_string())
-                    })?;
+                let query = serde_json::from_value::<GetTrackQuery>(query)
+                    .map_err(|e| TunnelRequestError::InvalidQuery(e.to_string()))?;
 
                 if let Ok(TrackSource::LocalFilePath(path)) =
                     get_track_source(query.track_id, db.clone()).await
                 {
-                    send(id, File::open(path).unwrap(), encoding);
+                    send(request_id, File::open(path).unwrap(), encoding);
                 }
+
                 Ok(())
             }
             _ => todo!(),
         },
         "track/info" => match method {
             Method::Get => {
-                let query =
-                    serde_json::from_value::<GetTrackInfoQuery>(query.clone()).map_err(|e| {
-                        TunnelRequestError::InvalidQuery(query.to_string(), e.to_string())
-                    })?;
+                let query = serde_json::from_value::<GetTrackInfoQuery>(query)
+                    .map_err(|e| TunnelRequestError::InvalidQuery(e.to_string()))?;
 
                 if let Ok(track_info) = get_track_info(query.track_id, db.clone()).await {
                     let mut bytes: Vec<u8> = Vec::new();
                     serde_json::to_writer(&mut bytes, &track_info).unwrap();
-                    send(id, Cursor::new(bytes), encoding);
+                    send(request_id, Cursor::new(bytes), encoding);
                 }
 
                 Ok(())

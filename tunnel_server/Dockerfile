@@ -41,20 +41,8 @@ ADD server/.cargo server/.cargo
 RUN mkdir -p server/src && echo "fn main() {}" > server/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_server\"\nversion = \"0.1.0\"" > server/Cargo.toml
 
-COPY packages/core packages/core
-RUN cargo build --manifest-path=packages/core/Cargo.toml --release
-RUN rm packages/core/src/main.rs
-
-COPY packages/files packages/files
-RUN cargo build --manifest-path=packages/files/Cargo.toml --release
-RUN rm packages/files/src/main.rs
-
-COPY packages/menu packages/menu
-RUN cargo build --manifest-path=packages/menu/Cargo.toml --release
-RUN rm packages/menu/src/main.rs
-
 COPY packages/tunnel packages/tunnel
-RUN cargo build --manifest-path=packages/tunnel/Cargo.toml --release
+RUN cargo build --manifest-path=packages/tunnel/Cargo.toml --release --no-default-features
 RUN rm packages/tunnel/src/main.rs
 
 COPY tunnel_server tunnel_server
@@ -63,9 +51,10 @@ RUN cargo build --manifest-path=tunnel_server/Cargo.toml --release
 # Final
 FROM debian:bookworm-slim
 
-RUN apt-get update && apt-get install -y ca-certificates
+RUN apt-get update && apt-get install -y ca-certificates curl
 
 COPY --from=builder /app/target/release/moosicbox_tunnel_server /
 EXPOSE 8004
 ENV RUST_LOG=info,moosicbox=debug
+ENV ACTIX_WORKERS=128
 CMD ["./moosicbox_tunnel_server", "8004"]

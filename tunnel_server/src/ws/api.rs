@@ -26,7 +26,7 @@ pub async fn websocket(
 
     // spawn websocket handler (and don't await it) so that the response is returned immediately
     spawn_local(handler::chat_ws(
-        chat_server.clone(),
+        chat_server,
         session,
         msg_stream,
         query.client_id.clone(),
