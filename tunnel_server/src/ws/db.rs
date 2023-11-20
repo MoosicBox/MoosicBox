@@ -107,7 +107,7 @@ pub fn upsert_connection(client_id: &str, tunnel_ws_id: &str) {
         .exec_drop(
             "
             INSERT INTO `connections` (client_id, tunnel_ws_id) VALUES(?, ?)
-            ON DUPLICATE KEY UPDATE `tunnel_ws_id` = ?",
+            ON DUPLICATE KEY UPDATE `tunnel_ws_id` = ?, `updated` = (DATE_FORMAT(NOW(), '%Y-%m-%dT%H:%i:%f'))",
             (client_id, tunnel_ws_id, tunnel_ws_id),
         )
         .unwrap();
