@@ -22,8 +22,8 @@ moosicbox_files = { path = "../packages/files" }
 moosicbox_player = { path = "../packages/player", default-features = false }
 moosicbox_tunnel = { path = "../packages/tunnel" }
 moosicbox_ws = { path = "../packages/ws" }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.105"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 thiserror = "1.0.48"
 regex = "1.9.5"
 mp3-duration = "0.1.10"

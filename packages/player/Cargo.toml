@@ -19,8 +19,8 @@ moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-
 once_cell = { workspace = true }
 rand.workspace = true
 reqwest = { workspace = true, features = [ "json" ] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.107"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 symphonia = { workspace = true }
 thiserror = "1.0.48"
 tokio = { workspace = true, features = ["rt", "time", "macros"] }

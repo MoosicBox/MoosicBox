@@ -14,8 +14,8 @@ lambda_runtime = { workspace = true }
 log = { workspace = true }
 moosicbox_core = { path = "../core" }
 regex = "1.9.5"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.107"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 thiserror = "1.0.48"
 
 [features]
