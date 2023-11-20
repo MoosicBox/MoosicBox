@@ -15,7 +15,7 @@ log = { workspace = true }
 moosicbox_core = { path = "../core" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-thiserror = "1.0.48"
+thiserror = { workspace = true }
 
 [features]
 fail-on-warnings = []

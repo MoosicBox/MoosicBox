@@ -24,7 +24,7 @@ moosicbox_tunnel = { path = "../packages/tunnel", default-features = false, feat
 moosicbox_ws = { path = "../packages/ws" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-thiserror = "1.0.48"
+thiserror = { workspace = true }
 regex = "1.9.5"
 mp3-duration = "0.1.10"
 
