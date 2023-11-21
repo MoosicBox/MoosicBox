@@ -30,7 +30,10 @@ use symphonia::core::{
     probe::Hint,
 };
 use thiserror::Error;
-use tokio::runtime::{self, Runtime};
+use tokio::{
+    runtime::{self, Runtime},
+    time::sleep,
+};
 
 lazy_static! {
     static ref RT: Runtime = runtime::Builder::new_multi_thread()
@@ -394,7 +397,7 @@ impl Player {
                         }
                         current_seek = Some(playback.progress.read().unwrap().position);
                         warn!("Playback interrupted. Trying again at position {current_seek:?} (attempt {retry_count}/{})", retry_options.max_retry_count);
-                        std::thread::sleep(retry_options.retry_delay);
+                        sleep(retry_options.retry_delay).await;
                         continue;
                     }
                 }
