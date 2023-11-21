@@ -1,7 +1,6 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 mod api;
-mod server;
 mod ws;
 
 use actix_cors::Cors;
