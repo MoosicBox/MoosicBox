@@ -1,10 +1,10 @@
 use actix_web::error::ErrorInternalServerError;
-use actix_web::http::header::{CacheControl, CacheDirective};
 use actix_web::http::Method;
 use actix_web::web::Json;
 use actix_web::{route, web, HttpResponse};
 use actix_web::{HttpRequest, Result};
 use bytes::Bytes;
+use futures_util::StreamExt;
 use log::{debug, info};
 use moosicbox_tunnel::tunnel::{TunnelEncoding, TunnelResponse, TunnelStream};
 use qstring::QString;
@@ -20,6 +20,12 @@ use crate::CHAT_SERVER_HANDLE;
 pub async fn health_endpoint() -> Result<Json<Value>> {
     info!("Healthy");
     Ok(Json(json!({"healthy": true})))
+}
+
+#[allow(dead_code)]
+enum ResponseType {
+    Stream,
+    Body,
 }
 
 #[route("/{path:.*}", method = "GET", method = "POST", method = "HEAD")]
@@ -45,23 +51,41 @@ pub async fn track_endpoint(
 
     debug!("Starting ws request for {request_id} {method} {path} {query:?}");
 
-    let rx = request(request_id, method, &path, query, body).await?;
+    let (mut headers_rx, rx) = request(request_id, method, &path, query, body).await?;
 
     let mut builder = HttpResponse::Ok();
 
-    builder.insert_header(CacheControl(vec![CacheDirective::MaxAge(86400u32)]));
+    let headers = headers_rx.recv().await.unwrap();
+    let response_type = ResponseType::Stream;
 
-    Ok(
-        HttpResponse::Ok().streaming(TunnelStream::new(request_id, rx, &|request_id| {
-            info!("Request {request_id} ended");
-            CHAT_SERVER_HANDLE
-                .lock()
-                .unwrap()
-                .as_ref()
-                .unwrap()
-                .request_end(request_id);
-        })),
-    )
+    for (key, value) in &headers {
+        builder.insert_header((key.clone(), value.clone()));
+    }
+
+    let tunnel_stream = TunnelStream::new(request_id, rx, &|request_id| {
+        info!("Request {request_id} ended");
+        CHAT_SERVER_HANDLE
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .request_end(request_id);
+    });
+
+    match response_type {
+        ResponseType::Stream => Ok(builder.streaming(tunnel_stream)),
+        ResponseType::Body => {
+            let body: Vec<_> = tunnel_stream
+                .collect::<Vec<_>>()
+                .await
+                .into_iter()
+                .filter_map(|bytes| bytes.ok())
+                .flatten()
+                .collect();
+
+            Ok(builder.body(body))
+        }
+    }
 }
 
 async fn request(
@@ -70,12 +94,13 @@ async fn request(
     path: &str,
     query: Value,
     payload: Option<Value>,
-) -> Result<Receiver<TunnelResponse>> {
+) -> Result<(Receiver<HashMap<String, String>>, Receiver<TunnelResponse>)> {
+    let (headers_tx, headers_rx) = channel(64);
     let (tx, rx) = channel(1024);
 
     debug!("Sending server request {request_id}");
     let chat_server = CHAT_SERVER_HANDLE.lock().unwrap().as_ref().unwrap().clone();
-    chat_server.request_start(request_id, tx);
+    chat_server.request_start(request_id, tx, headers_tx);
 
     let conn_id = select_connection("123123")
         .ok_or(ErrorInternalServerError(
@@ -103,5 +128,5 @@ async fn request(
         .await;
     debug!("Sent server request {request_id} to {conn_id}");
 
-    Ok(rx)
+    Ok((headers_rx, rx))
 }

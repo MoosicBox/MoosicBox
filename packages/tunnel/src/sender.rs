@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Cursor;
 use std::sync::{Arc, Mutex};
@@ -354,15 +355,26 @@ impl TunnelSender {
         Ok(())
     }
 
-    fn send(&self, request_id: usize, reader: impl std::io::Read, encoding: TunnelEncoding) {
+    fn send(
+        &self,
+        request_id: usize,
+        headers: HashMap<String, String>,
+        reader: impl std::io::Read,
+        encoding: TunnelEncoding,
+    ) {
         match encoding {
-            TunnelEncoding::Binary => self.send_binary(request_id, reader),
+            TunnelEncoding::Binary => self.send_binary(request_id, headers, reader),
             #[cfg(feature = "base64")]
-            TunnelEncoding::Base64 => self.send_base64(request_id, reader),
+            TunnelEncoding::Base64 => self.send_base64(request_id, headers, reader),
         }
     }
 
-    fn send_binary(&self, request_id: usize, mut reader: impl std::io::Read) {
+    fn send_binary(
+        &self,
+        request_id: usize,
+        headers: HashMap<String, String>,
+        mut reader: impl std::io::Read,
+    ) {
         let buf_size = 1024 * 32;
 
         let mut bytes_read = 0_usize;
@@ -382,6 +394,19 @@ impl TunnelSender {
             buf[offset..(offset + len)].copy_from_slice(&packet_id_bytes);
             offset += len;
 
+            if packet_id == 1 {
+                let headers = serde_json::to_string(&headers).unwrap();
+                let headers_bytes = headers.as_bytes();
+                let headers_len = headers_bytes.len() as u32;
+                let headers_len_bytes = headers_len.to_be_bytes();
+                let len = headers_len_bytes.len();
+                buf[offset..(offset + len)].copy_from_slice(&headers_len_bytes);
+                offset += len;
+                let len = headers_len as usize;
+                buf[offset..(offset + len)].copy_from_slice(headers_bytes);
+                offset += len;
+            }
+
             match reader.read(&mut buf[offset..]) {
                 Ok(size) => {
                     packet_id += 1;
@@ -399,7 +424,12 @@ impl TunnelSender {
     }
 
     #[cfg(feature = "base64")]
-    fn send_base64(&self, request_id: usize, mut reader: impl std::io::Read) {
+    fn send_base64(
+        &self,
+        request_id: usize,
+        headers: HashMap<String, String>,
+        mut reader: impl std::io::Read,
+    ) {
         use std::cmp::min;
 
         let buf_size = 1024 * 32;
@@ -420,6 +450,16 @@ impl TunnelSender {
                     let mut base64 = general_purpose::STANDARD.encode(bytes);
                     base64.insert(0, '{');
                     base64.push('}');
+
+                    if packet_id == 1 {
+                        let mut headers_base64 = general_purpose::STANDARD
+                            .encode(serde_json::to_string(&headers).unwrap().clone());
+                        headers_base64.insert(0, '{');
+                        headers_base64.push('}');
+                        headers_base64.push_str(&base64);
+                        base64 = headers_base64;
+                    }
+
                     if !overflow_buf.is_empty() {
                         overflow_buf.push_str(&base64);
                         base64 = overflow_buf;
@@ -506,9 +546,15 @@ impl TunnelSender {
         }
 
         let response = builder.send().await.unwrap();
+        let headers = response
+            .headers()
+            .iter()
+            .map(|(key, value)| (key.to_string(), value.to_str().unwrap().to_string()))
+            .collect();
 
         self.send(
             request_id,
+            headers,
             Cursor::new(response.bytes().await.unwrap()),
             encoding,
         );
@@ -532,10 +578,14 @@ impl TunnelSender {
                     let query = serde_json::from_value::<GetTrackQuery>(query)
                         .map_err(|e| TunnelRequestError::InvalidQuery(e.to_string()))?;
 
+                    let mut headers = HashMap::new();
+                    headers.insert("content-type".to_string(), "audio/flac".to_string());
+                    headers.insert("accept-ranges".to_string(), "bytes".to_string());
+
                     if let Ok(TrackSource::LocalFilePath(path)) =
                         get_track_source(query.track_id, db.clone()).await
                     {
-                        self.send(request_id, File::open(path).unwrap(), encoding);
+                        self.send(request_id, headers, File::open(path).unwrap(), encoding);
                     }
 
                     Ok(())
@@ -547,10 +597,13 @@ impl TunnelSender {
                     let query = serde_json::from_value::<GetTrackInfoQuery>(query)
                         .map_err(|e| TunnelRequestError::InvalidQuery(e.to_string()))?;
 
+                    let mut headers = HashMap::new();
+                    headers.insert("content-type".to_string(), "application/json".to_string());
+
                     if let Ok(track_info) = get_track_info(query.track_id, db.clone()).await {
                         let mut bytes: Vec<u8> = Vec::new();
                         serde_json::to_writer(&mut bytes, &track_info).unwrap();
-                        self.send(request_id, Cursor::new(bytes), encoding);
+                        self.send(request_id, headers, Cursor::new(bytes), encoding);
                     }
 
                     Ok(())

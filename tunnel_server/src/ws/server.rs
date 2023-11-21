@@ -46,6 +46,7 @@ enum Command {
     RequestStart {
         request_id: usize,
         sender: Sender<TunnelResponse>,
+        headers_sender: Sender<HashMap<String, String>>,
     },
 
     RequestEnd {
@@ -84,6 +85,7 @@ pub struct ChatServer {
     /// Map of connection IDs to their message receivers.
     sessions: HashMap<ConnId, mpsc::UnboundedSender<Msg>>,
     senders: HashMap<usize, Sender<TunnelResponse>>,
+    headers_senders: HashMap<usize, Sender<HashMap<String, String>>>,
 
     /// Tracks total number of historical connections established.
     visitor_count: Arc<AtomicUsize>,
@@ -123,6 +125,7 @@ impl ChatServer {
             Self {
                 sessions: HashMap::new(),
                 senders: HashMap::new(),
+                headers_senders: HashMap::new(),
                 visitor_count: Arc::new(AtomicUsize::new(0)),
                 cmd_rx,
                 ws_requests: HashMap::new(),
@@ -201,17 +204,38 @@ impl ChatServer {
 
                 Command::Disconnect { conn } => self.disconnect(conn).await,
 
-                Command::RequestStart { request_id, sender } => {
+                Command::RequestStart {
+                    request_id,
+                    sender,
+                    headers_sender,
+                } => {
                     self.senders.insert(request_id, sender);
+                    self.headers_senders.insert(request_id, headers_sender);
                 }
 
                 Command::RequestEnd { request_id } => {
                     self.senders.remove(&request_id);
+                    self.headers_senders.remove(&request_id);
                 }
 
                 Command::Response { bytes } => {
                     let response: TunnelResponse = bytes.into();
                     let request_id = response.request_id;
+
+                    if let Some(headers) = &response.headers {
+                        if let Some(sender) = self.headers_senders.get(&request_id) {
+                            if sender.send(headers.clone()).await.is_err() {
+                                warn!("Header sender dropped for request {}", request_id);
+                                self.headers_senders.remove(&request_id);
+                            }
+                        } else {
+                            error!(
+                                "unexpected binary message {} (size {})",
+                                request_id,
+                                response.bytes.len()
+                            );
+                        }
+                    }
 
                     if let Some(sender) = self.senders.get(&request_id) {
                         if sender.send(response).await.is_err() {
@@ -375,11 +399,17 @@ impl ChatServerHandle {
         self.cmd_tx.send(Command::Disconnect { conn }).unwrap();
     }
 
-    pub fn request_start(&self, request_id: usize, tx: Sender<TunnelResponse>) {
+    pub fn request_start(
+        &self,
+        request_id: usize,
+        sender: Sender<TunnelResponse>,
+        headers_sender: Sender<HashMap<String, String>>,
+    ) {
         self.cmd_tx
             .send(Command::RequestStart {
                 request_id,
-                sender: tx,
+                sender,
+                headers_sender,
             })
             .unwrap();
     }

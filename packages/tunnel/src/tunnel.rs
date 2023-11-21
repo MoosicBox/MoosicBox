@@ -1,4 +1,4 @@
-use std::{error::Error, task::Poll, time::SystemTime};
+use std::{collections::HashMap, error::Error, task::Poll, time::SystemTime};
 
 use bytes::Bytes;
 use futures_util::Stream;
@@ -28,18 +28,28 @@ pub struct TunnelResponse {
     pub request_id: usize,
     pub packet_id: u32,
     pub bytes: Bytes,
+    pub headers: Option<HashMap<String, String>>,
 }
 
 impl From<Bytes> for TunnelResponse {
     fn from(bytes: Bytes) -> Self {
-        let data = bytes.slice(12..);
+        let mut data = bytes.slice(12..);
         let request_id = usize::from_be_bytes(bytes[..8].try_into().unwrap());
         let packet_id = u32::from_be_bytes(bytes[8..12].try_into().unwrap());
+        let headers = if packet_id == 1 {
+            let len = u32::from_be_bytes(data[..4].try_into().unwrap()) as usize;
+            let headers_bytes = &data.slice(4..(4 + len));
+            data = data.slice((4 + len)..);
+            Some(serde_json::from_slice(headers_bytes).unwrap())
+        } else {
+            None
+        };
 
         TunnelResponse {
             request_id,
             packet_id,
             bytes: data,
+            headers,
         }
     }
 }
