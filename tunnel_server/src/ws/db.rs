@@ -96,12 +96,14 @@ pub async fn init() {
         .pass(params.get("moosicbox_db_password").cloned())
         .user(params.get("moosicbox_db_user").cloned());
 
-    DB.lock().unwrap().replace(mysql::Conn::new(opts).unwrap());
+    DB.lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .replace(mysql::Conn::new(opts).unwrap());
 }
 
 pub fn upsert_connection(client_id: &str, tunnel_ws_id: &str) {
     DB.lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .as_mut()
         .expect("DB not initialized")
         .exec_drop(
@@ -115,7 +117,7 @@ pub fn upsert_connection(client_id: &str, tunnel_ws_id: &str) {
 
 pub fn select_connection(client_id: &str) -> Option<Connection> {
     DB.lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .as_mut()
         .expect("DB not initialized")
         .exec_first(
@@ -127,7 +129,7 @@ pub fn select_connection(client_id: &str) -> Option<Connection> {
 
 pub fn delete_connection(tunnel_ws_id: &str) {
     DB.lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .as_mut()
         .expect("DB not initialized")
         .exec_drop(

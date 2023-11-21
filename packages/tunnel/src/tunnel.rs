@@ -4,6 +4,7 @@ use bytes::Bytes;
 use futures_util::Stream;
 use log::debug;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use strum_macros::EnumString;
 use tokio::sync::mpsc::Receiver;
 
@@ -16,6 +17,13 @@ pub enum TunnelEncoding {
     Base64,
 }
 
+#[derive(Debug)]
+pub struct TunnelWsResponse {
+    pub request_id: usize,
+    pub body: Value,
+}
+
+#[derive(Debug)]
 pub struct TunnelResponse {
     pub request_id: usize,
     pub packet_id: u32,
@@ -118,8 +126,14 @@ impl Stream for TunnelStream<'_> {
         debug!("Waiting for next packet");
         let response = match stream.rx.poll_recv(cx) {
             Poll::Ready(Some(response)) => response,
-            Poll::Pending => return Poll::Pending,
-            Poll::Ready(None) => return Poll::Ready(None),
+            Poll::Pending => {
+                debug!("Pending...");
+                return Poll::Pending;
+            }
+            Poll::Ready(None) => {
+                debug!("Finished");
+                return Poll::Ready(None);
+            }
         };
 
         if stream

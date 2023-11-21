@@ -1,4 +1,5 @@
 use actix_web::error::ErrorInternalServerError;
+use actix_web::http::header::{CacheControl, CacheDirective};
 use actix_web::http::Method;
 use actix_web::web::Json;
 use actix_web::{route, web, HttpResponse};
@@ -46,11 +47,19 @@ pub async fn track_endpoint(
 
     let rx = request(request_id, method, &path, query, body).await?;
 
+    let mut builder = HttpResponse::Ok();
+
+    builder.insert_header(CacheControl(vec![CacheDirective::MaxAge(86400u32)]));
+
     Ok(
         HttpResponse::Ok().streaming(TunnelStream::new(request_id, rx, &|request_id| {
             info!("Request {request_id} ended");
-            let chat_server = CHAT_SERVER_HANDLE.lock().unwrap().as_ref().unwrap().clone();
-            chat_server.request_end(request_id);
+            CHAT_SERVER_HANDLE
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .request_end(request_id);
         })),
     )
 }

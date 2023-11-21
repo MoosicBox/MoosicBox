@@ -7,12 +7,13 @@ mod ws;
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App, HttpServer};
 use lazy_static::lazy_static;
-use log::{debug, info, warn};
+use log::{debug, error, info};
 use moosicbox_core::app::{AppState, Db};
 use moosicbox_tunnel::{
-    sender::{tunnel_request, Method, TunnelMessage},
+    sender::{Method, TunnelMessage, TunnelSender},
     tunnel::TunnelEncoding,
 };
+use once_cell::sync::Lazy;
 use serde_json::Value;
 use std::{
     env,
@@ -34,6 +35,9 @@ lazy_static! {
         .build()
         .unwrap();
 }
+
+static CHAT_SERVER_HANDLE: Lazy<std::sync::Mutex<Option<ws::server::ChatServerHandle>>> =
+    Lazy::new(|| std::sync::Mutex::new(None));
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -58,65 +62,80 @@ async fn main() -> std::io::Result<()> {
         }
     });
 
-    if let Ok(host) = env::var("WS_HOST") {
-        use moosicbox_tunnel::sender::{init_host, start};
-        init_host(host).expect("Failed to initialize websocket host");
-
-        RT.spawn(async {
-            let rx = start("123123".into());
-
-            while let Ok(m) = rx.recv() {
-                match m {
-                    TunnelMessage::Text(m) => {
-                        debug!("Received text TunnelMessage {}", &m);
-                        let value: Value = serde_json::from_str(&m).unwrap();
-
-                        match value.get("type").map(|t| t.as_str()) {
-                            Some(Some("CONNECTION_ID")) => {
-                                debug!("Received connection id: {value:?}");
-                            }
-                            Some(Some("TUNNEL_REQUEST")) => {
-                                tunnel_request(
-                                    db,
-                                    serde_json::from_value(
-                                        value.get("request_id").unwrap().clone(),
-                                    )
-                                    .unwrap(),
-                                    Method::from_str(
-                                        value.get("method").unwrap().as_str().unwrap(),
-                                    )
-                                    .unwrap(),
-                                    value.get("path").unwrap().as_str().unwrap().to_string(),
-                                    value.get("query").unwrap().clone(),
-                                    value.get("payload").unwrap().clone(),
-                                    TunnelEncoding::from_str(
-                                        value.get("encoding").unwrap().as_str().unwrap(),
-                                    )
-                                    .unwrap(),
-                                )
-                                .await
-                                .unwrap();
-                            }
-                            _ => {}
-                        }
-                    }
-                    TunnelMessage::Binary(_) => todo!(),
-                    TunnelMessage::Ping(_) => {}
-                    TunnelMessage::Pong(_) => todo!(),
-                    TunnelMessage::Close => {
-                        info!("Closing tunnel connection");
-                        break;
-                    }
-                    TunnelMessage::Frame(_) => todo!(),
-                }
-            }
-            warn!("Exiting tunnel message loop");
-        });
-    }
-
-    let (chat_server, server_tx) = ChatServer::new(Arc::new(Mutex::new(db.clone())));
-
+    let (chat_server, server_tx) = ChatServer::new(Arc::new(db.clone()));
     let chat_server = spawn(chat_server.run());
+
+    let (tunnel_join_handle, tunnel_handle) = if let Ok(host) = env::var("WS_HOST") {
+        let (mut tunnel, handle) = TunnelSender::new(host);
+
+        (
+            Some(RT.spawn(async move {
+                let rx = tunnel.start("123123".into());
+
+                while let Ok(m) = rx.recv() {
+                    match m {
+                        TunnelMessage::Text(m) => {
+                            debug!("Received text TunnelMessage {}", &m);
+                            let value: Value = serde_json::from_str(&m).unwrap();
+                            let message_type = value.get("type").map(|t| t.as_str());
+
+                            if let Some(Some("TUNNEL_REQUEST")) = message_type {
+                                tunnel
+                                    .tunnel_request(
+                                        db,
+                                        service_port,
+                                        serde_json::from_value(
+                                            value.get("request_id").unwrap().clone(),
+                                        )
+                                        .unwrap(),
+                                        Method::from_str(
+                                            value.get("method").unwrap().as_str().unwrap(),
+                                        )
+                                        .unwrap(),
+                                        value.get("path").unwrap().as_str().unwrap().to_string(),
+                                        value.get("query").unwrap().clone(),
+                                        value.get("payload").cloned(),
+                                        TunnelEncoding::from_str(
+                                            value.get("encoding").unwrap().as_str().unwrap(),
+                                        )
+                                        .unwrap(),
+                                    )
+                                    .await
+                                    .unwrap();
+                            } else {
+                                let request_id: usize = serde_json::from_value(
+                                    value.get("request_id").unwrap().clone(),
+                                )
+                                .unwrap();
+                                let body = value.get("body").unwrap();
+                                let sender =
+                                    CHAT_SERVER_HANDLE.lock().unwrap().as_ref().unwrap().clone();
+                                if let Err(err) = tunnel
+                                    .ws_request(db, request_id, body.clone(), sender)
+                                    .await
+                                {
+                                    debug!("value: {value:?}");
+                                    error!("Failed to propagate ws request {request_id}: {err:?}");
+                                }
+                            }
+                        }
+                        TunnelMessage::Binary(_) => todo!(),
+                        TunnelMessage::Ping(_) => {}
+                        TunnelMessage::Pong(_) => todo!(),
+                        TunnelMessage::Close => {
+                            info!("Closing tunnel connection");
+                            break;
+                        }
+                        TunnelMessage::Frame(_) => todo!(),
+                    }
+                }
+                debug!("Exiting tunnel message loop");
+            })),
+            Some(handle),
+        )
+    } else {
+        (None, None)
+    };
 
     let app = move || {
         let app_data = AppState {
@@ -131,6 +150,11 @@ async fn main() -> std::io::Result<()> {
             .allowed_header(http::header::CONTENT_TYPE)
             .supports_credentials()
             .max_age(3600);
+
+        CHAT_SERVER_HANDLE
+            .lock()
+            .unwrap()
+            .replace(server_tx.clone());
 
         App::new()
             .wrap(cors)
@@ -164,7 +188,23 @@ async fn main() -> std::io::Result<()> {
 
     let http_server = HttpServer::new(app).bind(("0.0.0.0", service_port))?.run();
 
-    try_join!(http_server, async move { chat_server.await.unwrap() })?;
+    try_join!(
+        async move {
+            let resp = http_server.await;
+            CHAT_SERVER_HANDLE.lock().unwrap().take();
+            if let Some(handle) = tunnel_handle {
+                handle.close().await.unwrap();
+            }
+            resp
+        },
+        async move { chat_server.await.unwrap() },
+        async move {
+            if let Some(handle) = tunnel_join_handle {
+                handle.await.unwrap()
+            }
+            Ok(())
+        }
+    )?;
 
     Ok(())
 }

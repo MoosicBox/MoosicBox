@@ -11,9 +11,10 @@ use std::{
 
 use bytes::Bytes;
 use log::{debug, error, info, warn};
-use moosicbox_tunnel::tunnel::TunnelResponse;
+use moosicbox_tunnel::tunnel::{TunnelResponse, TunnelWsResponse};
 use rand::{thread_rng, Rng as _};
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use strum_macros::EnumString;
 use thiserror::Error;
 use tokio::sync::{
@@ -26,6 +27,8 @@ use crate::ws::{
     ConnId, Msg,
 };
 
+use super::db::select_connection;
+
 /// A command received by the [`ChatServer`].
 #[derive(Debug)]
 enum Command {
@@ -33,6 +36,7 @@ enum Command {
         conn_tx: mpsc::UnboundedSender<Msg>,
         res_tx: oneshot::Sender<ConnId>,
         client_id: String,
+        sender: bool,
     },
 
     Disconnect {
@@ -50,6 +54,17 @@ enum Command {
 
     Response {
         bytes: Bytes,
+    },
+
+    WsRequest {
+        request_id: usize,
+        conn_id: ConnId,
+        client_id: String,
+        body: String,
+    },
+
+    WsResponse {
+        response: TunnelWsResponse,
     },
 
     Message {
@@ -75,6 +90,8 @@ pub struct ChatServer {
 
     /// Command receiver.
     cmd_rx: mpsc::UnboundedReceiver<Command>,
+
+    ws_requests: HashMap<usize, ConnId>,
 }
 
 #[derive(Debug, Serialize, Deserialize, EnumString)]
@@ -108,6 +125,7 @@ impl ChatServer {
                 senders: HashMap::new(),
                 visitor_count: Arc::new(AtomicUsize::new(0)),
                 cmd_rx,
+                ws_requests: HashMap::new(),
             },
             ChatServerHandle { cmd_tx },
         )
@@ -130,18 +148,25 @@ impl ChatServer {
     }
 
     /// Register new session and assign unique ID to this session
-    async fn connect(&mut self, client_id: String, tx: mpsc::UnboundedSender<Msg>) -> ConnId {
+    async fn connect(
+        &mut self,
+        client_id: String,
+        sender: bool,
+        tx: mpsc::UnboundedSender<Msg>,
+    ) -> ConnId {
         // register session with random connection ID
         let id = thread_rng().gen::<usize>();
 
-        info!("Someone joined {id}");
+        info!("Someone joined {id} sender={sender}");
 
         self.sessions.insert(id, tx.clone());
 
-        upsert_connection(&client_id, &id.to_string());
+        if sender {
+            upsert_connection(&client_id, &id.to_string());
+        }
 
-        let count = self.visitor_count.fetch_add(1, Ordering::SeqCst);
-        info!("Visitor count: {}", count + 1);
+        let count = self.visitor_count.fetch_add(1, Ordering::SeqCst) + 1;
+        info!("Visitor count: {count}");
 
         // send id back
         id
@@ -150,8 +175,8 @@ impl ChatServer {
     /// Unregister connection from room map and invoke ws api disconnect.
     async fn disconnect(&mut self, conn_id: ConnId) {
         info!("Someone disconnected {conn_id}");
-        let count = self.visitor_count.fetch_sub(1, Ordering::SeqCst);
-        info!("Visitor count: {}", count - 1);
+        let count = self.visitor_count.fetch_sub(1, Ordering::SeqCst) - 1;
+        info!("Visitor count: {count}");
 
         delete_connection(&conn_id.to_string());
 
@@ -166,8 +191,10 @@ impl ChatServer {
                     client_id,
                     conn_tx,
                     res_tx,
+                    sender,
                 } => {
-                    if let Err(error) = res_tx.send(self.connect(client_id, conn_tx).await) {
+                    if let Err(error) = res_tx.send(self.connect(client_id, sender, conn_tx).await)
+                    {
                         error!("Failed to connect {error:?}");
                     }
                 }
@@ -200,6 +227,53 @@ impl ChatServer {
                     }
                 }
 
+                Command::WsRequest {
+                    conn_id,
+                    client_id,
+                    request_id,
+                    body,
+                } => {
+                    let client_conn_id = match select_connection(&client_id)
+                        .ok_or_else(|| WsRequestError::MissingClientId(client_id.clone()))
+                        .map(|conn| {
+                            conn.tunnel_ws_id
+                                .parse::<usize>()
+                                .map_err(|_| WsRequestError::InvalidClientId(client_id))
+                        }) {
+                        Ok(Ok(id)) => id,
+                        Ok(Err(err)) => {
+                            error!("Failed to get connection id from client id: {err:?}");
+                            return Ok(());
+                        }
+                        Err(err) => {
+                            error!("Failed to get connection id from client id: {err:?}");
+                            return Ok(());
+                        }
+                    };
+
+                    let value: Value = serde_json::from_str(&body).unwrap();
+                    let body = json!({"request_id": request_id, "body": value});
+
+                    if let Err(error) = self.send_message_to(client_conn_id, body.to_string()).await
+                    {
+                        error!("Failed to send WsRequest to {client_conn_id}: {error:?}");
+                    }
+                    self.ws_requests.insert(request_id, conn_id);
+                }
+
+                Command::WsResponse { response } => {
+                    if let Some(ws_id) = self.ws_requests.get(&response.request_id) {
+                        if let Err(error) = self
+                            .send_message_to(*ws_id, response.body.to_string())
+                            .await
+                        {
+                            error!("Failed to send WsResponse to {ws_id}: {error:?}");
+                        }
+                    } else {
+                        error!("unexpected ws response {}", response.request_id,);
+                    }
+                }
+
                 Command::Message { conn, msg, res_tx } => {
                     if let Err(error) = self.send_message_to(conn, &msg).await {
                         error!("Failed to send message to {conn}: {msg:?}: {error:?}");
@@ -211,6 +285,14 @@ impl ChatServer {
 
         Ok(())
     }
+}
+
+#[derive(Debug, Error)]
+pub enum WsRequestError {
+    #[error("Missing client ID: {0}")]
+    MissingClientId(String),
+    #[error("Invalid client ID: {0}")]
+    InvalidClientId(String),
 }
 
 /// Handle and command sender for chat server.
@@ -225,7 +307,8 @@ impl ChatServerHandle {
     /// Register client message sender and obtain connection ID.
     pub async fn connect(
         &self,
-        client_id: String,
+        client_id: &str,
+        sender: bool,
         conn_tx: mpsc::UnboundedSender<String>,
     ) -> ConnId {
         let (res_tx, res_rx) = oneshot::channel();
@@ -235,7 +318,8 @@ impl ChatServerHandle {
             .send(Command::Connect {
                 conn_tx,
                 res_tx,
-                client_id,
+                client_id: client_id.to_string(),
+                sender,
             })
             .unwrap();
 
@@ -258,6 +342,31 @@ impl ChatServerHandle {
 
         // unwrap: chat server does not drop our response channel
         res_rx.await.unwrap();
+    }
+
+    pub async fn ws_request(
+        &self,
+        conn_id: usize,
+        client_id: &str,
+        msg: impl Into<String>,
+    ) -> Result<(), WsRequestError> {
+        let request_id = thread_rng().gen::<usize>();
+
+        self.cmd_tx
+            .send(Command::WsRequest {
+                request_id,
+                conn_id,
+                client_id: client_id.to_string(),
+                body: msg.into(),
+            })
+            .unwrap();
+        Ok(())
+    }
+
+    pub async fn ws_response(&self, response: TunnelWsResponse) -> Result<(), WsRequestError> {
+        self.cmd_tx.send(Command::WsResponse { response }).unwrap();
+
+        Ok(())
     }
 
     /// Unregister message sender and broadcast disconnection message to current room.

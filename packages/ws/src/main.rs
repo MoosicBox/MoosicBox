@@ -21,8 +21,8 @@ use lambda_runtime::{service_fn, LambdaEvent};
 use log::debug;
 use moosicbox_core::app::Db;
 use moosicbox_ws::api::{
-    EventType, InboundMessageType, Response, WebsocketConnectError, WebsocketContext,
-    WebsocketDisconnectError, WebsocketMessageError, WebsocketSendError, WebsocketSender,
+    EventType, Response, WebsocketConnectError, WebsocketContext, WebsocketDisconnectError,
+    WebsocketMessageError, WebsocketSendError, WebsocketSender,
 };
 use serde_json::Value;
 use thiserror::Error;
@@ -37,31 +37,73 @@ async fn main() -> Result<(), actix_web::Error> {
     Ok(())
 }
 
-struct Message {
-    connection_id: String,
-    payload: String,
+struct ApiGatewayWebsocketSender<'a> {
+    api_context: &'a ApiGatewayWebsocketProxyRequestContext,
 }
 
-struct ApiGatewayWebsocketSender<'a> {
-    messages: &'a mut Vec<Message>,
+static SHARED_CONFIG: OnceCell<Arc<Mutex<SdkConfig>>> = OnceCell::new();
+
+async fn get_shared_config() -> Arc<Mutex<SdkConfig>> {
+    SHARED_CONFIG
+        .get_or_init(async {
+            Arc::new(Mutex::new(
+                aws_config::defaults(BehaviorVersion::v2023_11_09())
+                    .region(Region::new("us-east-1"))
+                    .load()
+                    .await,
+            ))
+        })
+        .await
+        .clone()
 }
 
 #[async_trait]
 impl WebsocketSender for ApiGatewayWebsocketSender<'_> {
-    async fn send(&mut self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
-        self.messages.push(Message {
-            connection_id: connection_id.into(),
-            payload: data.into(),
-        });
+    async fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
+        let domain = self.api_context.domain_name.clone().unwrap();
+        let stage = self.api_context.stage.clone().unwrap();
+        let endpoint_url = &format!("https://{domain}/{stage}");
+        let shared_config = get_shared_config().await;
+        let config = (*shared_config.clone().lock().unwrap()).clone();
+        let api_management_config = config::Builder::from(&config)
+            .endpoint_url(endpoint_url)
+            .build();
+        let client = Client::from_conf(api_management_config);
+        debug!("Sending message to {}", connection_id);
+        client
+            .post_to_connection()
+            .connection_id(connection_id)
+            .data(Blob::new(data))
+            .send()
+            .await
+            .map_err(|e| {
+                let service_error = e.into_service_error();
+                match service_error {
+                    PostToConnectionError::GoneException(err) => {
+                        WebsocketSendError::Unknown(err.to_string())
+                    }
+                    PostToConnectionError::ForbiddenException(err) => {
+                        WebsocketSendError::Unknown(err.to_string())
+                    }
+                    PostToConnectionError::LimitExceededException(err) => {
+                        WebsocketSendError::Unknown(err.to_string())
+                    }
+                    PostToConnectionError::PayloadTooLargeException(err) => {
+                        WebsocketSendError::Unknown(err.to_string())
+                    }
+                    _ => WebsocketSendError::Unknown(service_error.to_string()),
+                }
+            })?;
+
         Ok(())
     }
 
-    async fn send_all(&mut self, _data: &str) -> Result<(), WebsocketSendError> {
+    async fn send_all(&self, _data: &str) -> Result<(), WebsocketSendError> {
         Ok(())
     }
 
     async fn send_all_except(
-        &mut self,
+        &self,
         _connection_id: &str,
         _data: &str,
     ) -> Result<(), WebsocketSendError> {
@@ -72,11 +114,11 @@ impl WebsocketSender for ApiGatewayWebsocketSender<'_> {
 #[derive(Debug, Error)]
 pub enum WebsocketHandlerError {
     #[error(transparent)]
-    WebsocketConnectError(WebsocketConnectError),
+    WebsocketConnectError(#[from] WebsocketConnectError),
     #[error(transparent)]
-    WebsocketDisconnectError(WebsocketDisconnectError),
+    WebsocketDisconnectError(#[from] WebsocketDisconnectError),
     #[error(transparent)]
-    WebsocketMessageError(WebsocketMessageError),
+    WebsocketMessageError(#[from] WebsocketMessageError),
     #[error("Unknown: {0:?}")]
     Unknown(String),
 }
@@ -101,102 +143,32 @@ async fn handler(event: LambdaEvent<Value>) -> Result<Response, WebsocketHandler
     )
     .unwrap();
 
-    static SHARED_CONFIG: OnceCell<Arc<Mutex<SdkConfig>>> = OnceCell::new();
-    let shared_config = SHARED_CONFIG
-        .get_or_init(async {
-            Arc::new(Mutex::new(
-                aws_config::defaults(BehaviorVersion::v2023_11_09())
-                    .region(Region::new("us-east-1"))
-                    .load()
-                    .await,
-            ))
-        })
-        .await;
-
-    static DB: OnceLock<Arc<Mutex<Db>>> = OnceLock::new();
+    static DB: OnceLock<Db> = OnceLock::new();
     let db = DB.get_or_init(|| {
         let library = ::rusqlite::Connection::open_in_memory().unwrap();
         library
             .busy_timeout(Duration::from_millis(10))
             .expect("Failed to set busy timeout");
-        let db = Db {
+        Db {
             library: Arc::new(Mutex::new(library)),
-        };
-        Arc::new(Mutex::new(db))
+        }
     });
-
-    let mut messages = Vec::new();
 
     if let Ok(event_type) = EventType::from_str(api_context.clone().event_type.unwrap().as_str()) {
         let context = WebsocketContext {
             connection_id: api_context.clone().connection_id.unwrap(),
-            event_type,
         };
 
-        let mut sender = ApiGatewayWebsocketSender {
-            messages: &mut messages,
+        let sender = ApiGatewayWebsocketSender {
+            api_context: &api_context,
         };
-        let response = match context.event_type {
-            EventType::Connect => moosicbox_ws::api::connect(db.clone(), &mut sender, &context)
-                .await
-                .map_err(WebsocketHandlerError::WebsocketConnectError)?,
-            EventType::Disconnect => {
-                moosicbox_ws::api::disconnect(db.clone(), &mut sender, &context)
-                    .await
-                    .map_err(WebsocketHandlerError::WebsocketDisconnectError)?
-            }
+        let response = match event_type {
+            EventType::Connect => moosicbox_ws::api::connect(db, &sender, &context).await?,
+            EventType::Disconnect => moosicbox_ws::api::disconnect(db, &sender, &context).await?,
             EventType::Message => {
-                let body = serde_json::from_str::<Value>(
-                    event.payload.get("body").unwrap().as_str().unwrap(),
-                )
-                .unwrap();
-                let message_type =
-                    InboundMessageType::from_str(body.get("type").unwrap().as_str().unwrap())
-                        .unwrap();
-                let payload = body.get("payload");
-                moosicbox_ws::api::message(db.clone(), &mut sender, payload, message_type, &context)
-                    .await
-                    .map_err(WebsocketHandlerError::WebsocketMessageError)?
+                moosicbox_ws::api::process_message(db, event.payload, context, &sender).await?
             }
         };
-
-        if !messages.is_empty() {
-            let domain = &api_context.domain_name.unwrap();
-            let stage = &api_context.stage.unwrap();
-            let endpoint_url = &format!("https://{domain}/{stage}");
-            let config = (*shared_config.clone().lock().unwrap()).clone();
-            let api_management_config = config::Builder::from(&config)
-                .endpoint_url(endpoint_url)
-                .build();
-            let client = Client::from_conf(api_management_config);
-            for message in messages {
-                debug!("Sending message to {}", message.connection_id);
-                client
-                    .post_to_connection()
-                    .connection_id(message.connection_id)
-                    .data(Blob::new(message.payload))
-                    .send()
-                    .await
-                    .map_err(|e| {
-                        let service_error = e.into_service_error();
-                        match service_error {
-                            PostToConnectionError::GoneException(err) => {
-                                WebsocketHandlerError::Unknown(err.to_string())
-                            }
-                            PostToConnectionError::ForbiddenException(err) => {
-                                WebsocketHandlerError::Unknown(err.to_string())
-                            }
-                            PostToConnectionError::LimitExceededException(err) => {
-                                WebsocketHandlerError::Unknown(err.to_string())
-                            }
-                            PostToConnectionError::PayloadTooLargeException(err) => {
-                                WebsocketHandlerError::Unknown(err.to_string())
-                            }
-                            _ => WebsocketHandlerError::Unknown(service_error.to_string()),
-                        }
-                    })?;
-            }
-        }
 
         Ok(response)
     } else {

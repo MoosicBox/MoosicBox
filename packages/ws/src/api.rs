@@ -1,7 +1,8 @@
 use core::fmt;
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex, OnceLock},
+    str::FromStr,
+    sync::{Mutex, OnceLock},
 };
 
 use async_trait::async_trait;
@@ -75,15 +76,14 @@ pub enum OutboundMessageType {
 
 pub struct WebsocketContext {
     pub connection_id: String,
-    pub event_type: EventType,
 }
 
 #[derive(Debug, Error)]
 pub enum WebsocketSendError {
     #[error(transparent)]
     Db(#[from] DbError),
-    #[error("Unknown {message:?}")]
-    Unknown { message: String },
+    #[error("Unknown: {0}")]
+    Unknown(String),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -94,10 +94,10 @@ pub struct WebsocketConnectionData {
 
 #[async_trait]
 pub trait WebsocketSender {
-    async fn send(&mut self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError>;
-    async fn send_all(&mut self, data: &str) -> Result<(), WebsocketSendError>;
+    async fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError>;
+    async fn send_all(&self, data: &str) -> Result<(), WebsocketSendError>;
     async fn send_all_except(
-        &mut self,
+        &self,
         connection_id: &str,
         data: &str,
     ) -> Result<(), WebsocketSendError>;
@@ -112,8 +112,8 @@ pub enum WebsocketConnectError {
 }
 
 pub async fn connect(
-    _db: Arc<Mutex<Db>>,
-    _sender: &mut impl WebsocketSender,
+    _db: &Db,
+    _sender: &impl WebsocketSender,
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketConnectError> {
     info!("Connected {}", context.connection_id);
@@ -131,8 +131,8 @@ pub enum WebsocketDisconnectError {
 }
 
 pub async fn disconnect(
-    _db: Arc<Mutex<Db>>,
-    sender: &mut impl WebsocketSender,
+    _db: &Db,
+    sender: &impl WebsocketSender,
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketDisconnectError> {
     let connections = {
@@ -159,6 +159,25 @@ pub async fn disconnect(
     })
 }
 
+pub async fn process_message(
+    db: &Db,
+    body: Value,
+    context: WebsocketContext,
+    sender: &impl WebsocketSender,
+) -> Result<Response, WebsocketMessageError> {
+    let message_type = InboundMessageType::from_str(
+        body.get("type")
+            .ok_or(WebsocketMessageError::MissingMessageType)?
+            .as_str()
+            .ok_or(WebsocketMessageError::InvalidMessageType)?,
+    )
+    .map_err(|_| WebsocketMessageError::InvalidMessageType)?;
+
+    let payload = body.get("payload");
+
+    message(db, sender, payload, message_type, &context).await
+}
+
 #[derive(Debug, Error)]
 pub enum WebsocketMessageError {
     #[error("Missing message type")]
@@ -180,8 +199,8 @@ pub enum WebsocketMessageError {
 }
 
 pub async fn message(
-    db: Arc<Mutex<Db>>,
-    sender: &mut impl WebsocketSender,
+    db: &Db,
+    sender: &impl WebsocketSender,
     payload: Option<&Value>,
     message_type: InboundMessageType,
     context: &WebsocketContext,
@@ -208,7 +227,7 @@ pub async fn message(
                     }
                 })?;
 
-            register_connection(db.clone(), sender, context, &payload).await?;
+            register_connection(db, sender, context, &payload).await?;
 
             sender.send_all(&get_connections(db).await?).await?;
 
@@ -223,7 +242,7 @@ pub async fn message(
                     }
                 })?;
 
-            register_players(db.clone(), sender, context, &payload)
+            register_players(db, sender, context, &payload)
                 .await
                 .map_err(|e| WebsocketMessageError::Unknown {
                     message: e.to_string(),
@@ -249,7 +268,7 @@ pub async fn message(
                     message: e.to_string(),
                 })?;
 
-            set_session_active_players(db.clone(), sender, context, &payload).await?;
+            set_session_active_players(db, sender, context, &payload).await?;
 
             sender
                 .send_all_except(&context.connection_id, &get_connections(db).await?)
@@ -336,14 +355,13 @@ pub async fn message(
 }
 
 async fn get_sessions(
-    db: Arc<Mutex<Db>>,
-    sender: &mut impl WebsocketSender,
+    db: &Db,
+    sender: &impl WebsocketSender,
     context: &WebsocketContext,
     send_all: bool,
 ) -> Result<(), WebsocketSendError> {
     let sessions = {
-        let db = db.lock();
-        let library = db.as_ref().expect("No DB set").library.lock().unwrap();
+        let library = db.library.lock().unwrap();
         moosicbox_core::sqlite::db::get_sessions(&library)?
             .iter()
             .map(|session| session.to_api())
@@ -364,24 +382,22 @@ async fn get_sessions(
 }
 
 async fn create_session(
-    db: Arc<Mutex<Db>>,
-    sender: &mut impl WebsocketSender,
+    db: &Db,
+    sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &CreateSession,
 ) -> Result<(), WebsocketSendError> {
     {
-        let db = db.lock();
-        let library = db.as_ref().expect("No DB set").library.lock().unwrap();
+        let library = db.library.lock().unwrap();
         moosicbox_core::sqlite::db::create_session(&library, payload)?;
     }
     get_sessions(db, sender, context, true).await?;
     Ok(())
 }
 
-async fn get_connections(db: Arc<Mutex<Db>>) -> Result<String, WebsocketSendError> {
+async fn get_connections(db: &Db) -> Result<String, WebsocketSendError> {
     let connections = {
-        let db = db.lock();
-        let library = db.as_ref().expect("No DB set").library.lock().unwrap();
+        let library = db.library.lock().unwrap();
         moosicbox_core::sqlite::db::get_connections(&library)?
             .iter()
             .map(|connection| connection.to_api())
@@ -398,14 +414,13 @@ async fn get_connections(db: Arc<Mutex<Db>>) -> Result<String, WebsocketSendErro
 }
 
 async fn register_connection(
-    db: Arc<Mutex<Db>>,
-    _sender: &mut impl WebsocketSender,
+    db: &Db,
+    _sender: &impl WebsocketSender,
     _context: &WebsocketContext,
     payload: &RegisterConnection,
 ) -> Result<(), WebsocketSendError> {
     {
-        let db = db.lock();
-        let library = db.as_ref().expect("No DB set").library.lock().unwrap();
+        let library = db.library.lock().unwrap();
 
         moosicbox_core::sqlite::db::register_connection(&library, payload)?;
     }
@@ -413,14 +428,13 @@ async fn register_connection(
 }
 
 async fn register_players(
-    db: Arc<Mutex<Db>>,
-    sender: &mut impl WebsocketSender,
+    db: &Db,
+    sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &Vec<RegisterPlayer>,
 ) -> Result<(), WebsocketSendError> {
     {
-        let db = db.lock();
-        let library = db.as_ref().expect("No DB set").library.lock().unwrap();
+        let library = db.library.lock().unwrap();
 
         for player in payload {
             moosicbox_core::sqlite::db::create_player(&library, &context.connection_id, player)?;
@@ -431,14 +445,13 @@ async fn register_players(
 }
 
 async fn set_session_active_players(
-    db: Arc<Mutex<Db>>,
-    sender: &mut impl WebsocketSender,
+    db: &Db,
+    sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &SetSessionActivePlayers,
 ) -> Result<(), WebsocketMessageError> {
     {
-        let db = db.lock();
-        let library = db.as_ref().expect("No DB set").library.lock().unwrap();
+        let library = db.library.lock().unwrap();
 
         moosicbox_core::sqlite::db::set_session_active_players(&library, payload)?;
     }
@@ -457,14 +470,13 @@ pub enum UpdateSessionError {
 }
 
 async fn update_session(
-    db: Arc<Mutex<Db>>,
-    sender: &mut impl WebsocketSender,
+    db: &Db,
+    sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &UpdateSession,
 ) -> Result<(), UpdateSessionError> {
     let (before_session, session) = {
-        let db = db.lock();
-        let library = db.as_ref().expect("No DB set").library.lock().unwrap();
+        let library = db.library.lock().unwrap();
 
         let before_session = moosicbox_core::sqlite::db::get_session(&library, payload.session_id)
             .map_err(UpdateSessionError::Db)?
@@ -537,14 +549,13 @@ fn pause_session(session: &Session) {
 }
 
 async fn delete_session(
-    db: Arc<Mutex<Db>>,
-    sender: &mut impl WebsocketSender,
+    db: &Db,
+    sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &DeleteSession,
 ) -> Result<(), WebsocketSendError> {
     {
-        let db = db.lock();
-        let library = db.as_ref().expect("No DB set").library.lock().unwrap();
+        let library = db.library.lock().unwrap();
         moosicbox_core::sqlite::db::delete_session(&library, payload.session_id)?;
     }
 
@@ -554,7 +565,7 @@ async fn delete_session(
 }
 
 async fn get_connection_id(
-    sender: &mut impl WebsocketSender,
+    sender: &impl WebsocketSender,
     context: &WebsocketContext,
 ) -> Result<(), WebsocketSendError> {
     sender
@@ -570,7 +581,7 @@ async fn get_connection_id(
 }
 
 async fn playback_action(
-    _sender: &mut impl WebsocketSender,
+    _sender: &impl WebsocketSender,
     _context: &WebsocketContext,
     _payload: &Value,
 ) -> Result<(), WebsocketSendError> {

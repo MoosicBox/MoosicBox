@@ -5,6 +5,9 @@ use futures_util::{
     future::{select, Either},
     StreamExt as _,
 };
+use log::{debug, error};
+use moosicbox_tunnel::tunnel::TunnelWsResponse;
+use serde_json::Value;
 use tokio::{pin, sync::mpsc, time::interval};
 
 use crate::ws::server::ChatServerHandle;
@@ -22,6 +25,7 @@ pub async fn chat_ws(
     mut session: actix_ws::Session,
     mut msg_stream: actix_ws::MessageStream,
     client_id: String,
+    sender: bool,
 ) {
     log::info!("Connected");
 
@@ -31,7 +35,7 @@ pub async fn chat_ws(
     let (conn_tx, mut conn_rx) = mpsc::unbounded_channel();
 
     // unwrap: chat server is not dropped before the HTTP server
-    let conn_id = chat_server.connect(client_id, conn_tx).await;
+    let conn_id = chat_server.connect(&client_id, sender, conn_tx).await;
 
     log::info!("Connection id: {conn_id}");
 
@@ -50,35 +54,50 @@ pub async fn chat_ws(
 
         match select(messages, tick).await {
             // commands & messages received from client
-            Either::Left((Either::Left((Some(Ok(msg)), _)), _)) => {
-                match msg {
-                    Message::Ping(bytes) => {
-                        last_heartbeat = Instant::now();
-                        // unwrap:
-                        session.pong(&bytes).await.unwrap();
-                    }
+            Either::Left((Either::Left((Some(Ok(msg)), _)), _)) => match msg {
+                Message::Ping(bytes) => {
+                    last_heartbeat = Instant::now();
+                    session.pong(&bytes).await.unwrap();
+                }
 
-                    Message::Pong(_) => {
-                        last_heartbeat = Instant::now();
-                    }
+                Message::Pong(_) => {
+                    last_heartbeat = Instant::now();
+                }
 
-                    Message::Text(text) => {
-                        log::error!("Received unexpected text msg: {text:?}");
-                    }
-
-                    Message::Binary(bytes) => {
-                        last_heartbeat = Instant::now();
-
-                        chat_server.response(bytes);
-                    }
-
-                    Message::Close(reason) => break reason,
-
-                    _ => {
-                        break None;
+                Message::Text(text) => {
+                    if sender {
+                        debug!("Propagating ws response");
+                        let value: Value = serde_json::from_str(&text.to_string()).unwrap();
+                        if let Err(err) = chat_server
+                            .ws_response(TunnelWsResponse {
+                                request_id: serde_json::from_value(
+                                    value.get("request_id").unwrap().clone(),
+                                )
+                                .unwrap(),
+                                body: value.get("body").unwrap().clone(),
+                            })
+                            .await
+                        {
+                            error!("Failed to propagate ws response from tunnel_server: {err:?}");
+                        }
+                    } else if let Err(err) = chat_server.ws_request(conn_id, &client_id, text).await
+                    {
+                        error!("Failed to propagate ws request from tunnel_server: {err:?}");
                     }
                 }
-            }
+
+                Message::Binary(bytes) => {
+                    last_heartbeat = Instant::now();
+
+                    chat_server.response(bytes);
+                }
+
+                Message::Close(reason) => break reason,
+
+                _ => {
+                    break None;
+                }
+            },
 
             // client WebSocket stream error
             Either::Left((Either::Left((Some(Err(err)), _)), _)) => {

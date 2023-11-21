@@ -13,6 +13,7 @@ use tokio::task::spawn_local;
 #[serde(rename_all = "camelCase")]
 pub struct ConnectRequest {
     client_id: String,
+    sender: Option<bool>,
 }
 
 #[get("/ws")]
@@ -30,6 +31,7 @@ pub async fn websocket(
         session,
         msg_stream,
         query.client_id.clone(),
+        query.sender.unwrap_or(false),
     ));
 
     Ok(res)
