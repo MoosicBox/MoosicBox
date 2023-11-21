@@ -158,7 +158,7 @@ pub async fn album_artwork_endpoint(
                 .map_err(|e| {
                     AlbumArtworkError::File(file_path.to_str().unwrap().into(), format!("{e:?}"))
                 })
-                .unwrap();
+                .map_err(|e| ErrorInternalServerError(e.to_string()))?;
 
             Ok(file.into_response(&req))
         }
