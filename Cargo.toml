@@ -26,6 +26,7 @@ actix-web = "4.4.0"
 actix-ws = "0.2.5"
 async-once-cell = "0.5.3"
 async-trait = "0.1.74"
+audiotags = { git = "https://github.com/BSteffaniak/audiotags.git", branch = "bug/fix-track-no" }
 aws-config = "0.101.0"
 aws-sdk-apigatewaymanagement = "0.38.0"
 aws-sdk-ssm = "0.38.0"

@@ -10,7 +10,7 @@ actix-cors = "0.6.4"
 actix-files = "0.6.2"
 actix-web = "4.4.0"
 actix-ws = "0.2.5"
-audiotags = { git = "https://github.com/BSteffaniak/audiotags.git", branch = "bug/fix-track-no" }
+audiotags = { workspace = true }
 awc = "3.0.0-beta.9"
 enum-as-inner = "0.6.0"
 futures = { workspace = true }
