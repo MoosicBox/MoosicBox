@@ -45,6 +45,8 @@ COPY packages/tunnel packages/tunnel
 RUN cargo build --manifest-path=packages/tunnel/Cargo.toml --release --no-default-features
 RUN rm packages/tunnel/src/main.rs
 
+ARG TUNNEL_ACCESS_TOKEN
+ENV TUNNEL_ACCESS_TOKEN=${TUNNEL_ACCESS_TOKEN}
 COPY tunnel_server tunnel_server
 RUN cargo build --manifest-path=tunnel_server/Cargo.toml --release
 

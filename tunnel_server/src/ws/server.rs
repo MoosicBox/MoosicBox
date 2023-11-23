@@ -265,11 +265,7 @@ impl ChatServer {
                                 .map_err(|_| WsRequestError::InvalidClientId(client_id))
                         }) {
                         Ok(Ok(id)) => id,
-                        Ok(Err(err)) => {
-                            error!("Failed to get connection id from client id: {err:?}");
-                            return Ok(());
-                        }
-                        Err(err) => {
+                        Ok(Err(err)) | Err(err) => {
                             error!("Failed to get connection id from client id: {err:?}");
                             return Ok(());
                         }

@@ -47,6 +47,7 @@ futures-channel = "0.3.29"
 futures-util = { version = "0.3.17", default-features = false, features = [
     "std",
 ] }
+hex = "0.4.3"
 image = "0.24.7"
 io-streams = "0.15.0"
 lambda-web = { version = "0.2.1", features = ["actix4"] }
@@ -70,6 +71,7 @@ rustls = "0.21"
 serde = { version = "1", features = ["derive"] }
 serde-aux = "4.2.0"
 serde_json = "1.0.107"
+sha2 = "0.10.8"
 strum = "0.25.0"
 strum_macros = "0.25.3"
 symphonia = { version = "0.5.2", features = ["all"] }
@@ -77,4 +79,5 @@ thiserror = "1.0.48"
 tokio = { version = "1.24.2", features = ["sync", "io-util"] }
 tokio-tungstenite = { version = "0.20.1", features = ["native-tls-vendored"] }
 tokio-util = "0.7.4"
+uuid = { version = "1.6.1", features = ["v4"] }
 webp = "0.2.6"

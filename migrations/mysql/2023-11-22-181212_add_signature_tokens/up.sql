@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS signature_tokens (
+    token_hash VARCHAR(64) PRIMARY KEY NOT NULL,
+    client_id VARCHAR(64) NOT NULL,
+    expires DATETIME NOT NULL,
+    created DATETIME NOT NULL DEFAULT NOW(),
+    updated DATETIME NOT NULL DEFAULT NOW()
+);

@@ -67,7 +67,7 @@ pub async fn chat_ws(
                 Message::Text(text) => {
                     if sender {
                         debug!("Propagating ws response");
-                        let value: Value = serde_json::from_str(&text.to_string()).unwrap();
+                        let value: Value = serde_json::from_str(text.as_ref()).unwrap();
                         if let Err(err) = chat_server
                             .ws_response(TunnelWsResponse {
                                 request_id: serde_json::from_value(

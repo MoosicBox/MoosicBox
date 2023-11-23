@@ -1,3 +1,4 @@
+use crate::auth::SignatureAuthorized;
 use crate::ws::handler;
 use crate::CHAT_SERVER_HANDLE;
 use actix_web::HttpResponse;
@@ -21,6 +22,7 @@ pub async fn websocket(
     req: actix_web::HttpRequest,
     stream: web::Payload,
     query: web::Query<ConnectRequest>,
+    _: SignatureAuthorized,
 ) -> Result<HttpResponse, actix_web::Error> {
     let chat_server = CHAT_SERVER_HANDLE.lock().unwrap().as_ref().unwrap().clone();
     let (res, session, msg_stream) = actix_ws::handle(&req, stream)?;

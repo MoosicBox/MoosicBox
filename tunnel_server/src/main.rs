@@ -1,6 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 mod api;
+mod auth;
 mod ws;
 
 use actix_cors::Cors;
@@ -61,7 +62,12 @@ async fn main() -> Result<(), std::io::Error> {
             .wrap(middleware::Compress::default())
             .service(health_endpoint)
             .service(ws::api::websocket)
+            .service(api::auth_signature_token_endpoint)
+            .service(api::auth_validate_signature_token_endpoint)
             .service(api::track_endpoint)
+            .service(api::artist_cover_endpoint)
+            .service(api::album_cover_endpoint)
+            .service(api::tunnel_endpoint)
     };
 
     let mut http_server = actix_web::HttpServer::new(app);
