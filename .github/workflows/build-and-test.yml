@@ -26,6 +26,23 @@ jobs:
                       path: packages/files
                       os: ubuntu-latest
 
+                    - name: image
+                      path: packages/image
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: image
+
+                    - name: image-libvips
+                      path: packages/image
+                      dependencies: sudo apt-get install libvips-dev
+                      os: ubuntu-latest
+
+                    - name: image-windows
+                      path: packages/image
+                      os: windows-latest
+                      cargo: --no-default-features
+                      features: image
+
                     - name: menu
                       path: packages/menu
                       os: ubuntu-latest

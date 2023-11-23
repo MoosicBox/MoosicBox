@@ -1,0 +1,21 @@
+[package]
+authors = ["Braden Steffaniak"]
+edition = "2021"
+name    = "moosicbox_image"
+version = "0.1.0"
+
+[dependencies]
+bytes     = { workspace = true }
+image     = { workspace = true, optional = true }
+libvips   = { workspace = true, optional = true }
+log       = { workspace = true }
+once_cell = { workspace = true, optional = true }
+webp      = { workspace = true, optional = true }
+
+[features]
+default = ["image", "libvips"]
+
+fail-on-warnings = []
+
+image   = ["dep:image", "dep:webp"]
+libvips = ["dep:libvips", "dep:once_cell"]

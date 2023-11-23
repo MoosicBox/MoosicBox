@@ -4,6 +4,7 @@ members = [
     "tunnel_server",
     "packages/core",
     "packages/files",
+    "packages/image",
     "packages/menu",
     "packages/player",
     "packages/tunnel",
@@ -45,10 +46,12 @@ futures-channel = "0.3.29"
 futures-util = { version = "0.3.17", default-features = false, features = [
     "std",
 ] }
+image = "0.24.7"
 io-streams = "0.15.0"
 lambda-web = { version = "0.2.1", features = ["actix4"] }
 lambda_runtime = "0.8.2"
 lazy_static = "1.4.0"
+libvips = { git = "https://github.com/BSteffaniak/libvips-rust-bindings.git", branch = "support-windows" }
 log = { version = "0.4", features = ["release_max_level_trace"] }
 mysql = { version = "24.0.0", features = [
     "default-rustls",
@@ -73,3 +76,4 @@ thiserror = "1.0.48"
 tokio = { version = "1.24.2", features = ["sync", "io-util"] }
 tokio-tungstenite = { version = "0.20.1", features = ["native-tls-vendored"] }
 tokio-util = "0.7.4"
+webp = "0.2.6"
