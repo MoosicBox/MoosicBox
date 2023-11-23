@@ -506,7 +506,7 @@ impl TunnelSender {
         payload: Option<Value>,
         encoding: TunnelEncoding,
     ) {
-        let host = format!("http://0.0.0.0:{service_port}");
+        let host = format!("http://127.0.0.1:{service_port}");
 
         let mut query_string = query
             .as_object()
