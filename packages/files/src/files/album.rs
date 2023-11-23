@@ -19,6 +19,8 @@ pub enum AlbumCoverError {
     InvalidSource,
     #[error(transparent)]
     Db(#[from] DbError),
+    #[error("Failed to read file with path: {0} ({1})")]
+    File(String, String),
 }
 
 pub async fn get_album_cover(album_id: i32, db: Db) -> Result<AlbumCoverSource, AlbumCoverError> {
