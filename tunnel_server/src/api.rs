@@ -98,6 +98,10 @@ async fn handle_request(body: Option<Bytes>, req: HttpRequest) -> Result<HttpRes
     let path = req.path().strip_prefix('/').expect("Failed to get path");
     let query: Vec<_> = QString::from(req.query_string()).into();
     let query: HashMap<_, _> = query.into_iter().collect();
+    let client_id = query
+        .get("clientId")
+        .cloned()
+        .unwrap_or("123123".to_string());
     let query = serde_json::to_value(query).unwrap();
 
     info!("Received {method} call to {path} with {query} (id {request_id})");
@@ -109,7 +113,7 @@ async fn handle_request(body: Option<Bytes>, req: HttpRequest) -> Result<HttpRes
 
     debug!("Starting ws request for {request_id} {method} {path} {query:?}");
 
-    let (mut headers_rx, rx) = request(request_id, method, path, query, body).await?;
+    let (mut headers_rx, rx) = request(&client_id, request_id, method, path, query, body).await?;
 
     let mut builder = HttpResponse::Ok();
 
@@ -147,6 +151,7 @@ async fn handle_request(body: Option<Bytes>, req: HttpRequest) -> Result<HttpRes
 }
 
 async fn request(
+    client_id: &str,
     request_id: usize,
     method: &Method,
     path: &str,
@@ -160,7 +165,7 @@ async fn request(
     let chat_server = CHAT_SERVER_HANDLE.lock().unwrap().as_ref().unwrap().clone();
     chat_server.request_start(request_id, tx, headers_tx);
 
-    let conn_id = select_connection("123124")
+    let conn_id = select_connection(client_id)
         .ok_or(ErrorInternalServerError(
             "Could not get moosicbox server connection",
         ))?
