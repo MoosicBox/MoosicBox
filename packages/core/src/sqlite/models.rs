@@ -700,3 +700,29 @@ pub struct SetSeek {
     pub session_id: i32,
     pub seek: i32,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ClientAccessToken {
+    pub token: String,
+    pub client_id: String,
+    pub created: String,
+    pub updated: String,
+}
+
+impl AsModel<ClientAccessToken> for Row<'_> {
+    fn as_model(&self) -> ClientAccessToken {
+        ClientAccessToken {
+            token: self.get("token").unwrap(),
+            client_id: self.get("client_id").unwrap(),
+            created: self.get("created").unwrap(),
+            updated: self.get("updated").unwrap(),
+        }
+    }
+}
+
+impl AsId for ClientAccessToken {
+    fn as_id(&self) -> SqliteValue {
+        SqliteValue::String(self.token.clone())
+    }
+}

@@ -1,4 +1,4 @@
-use actix_web::error::ErrorInternalServerError;
+use actix_web::error::{ErrorBadRequest, ErrorInternalServerError};
 use actix_web::http::Method;
 use actix_web::web::{self, Json};
 use actix_web::{route, HttpResponse};
@@ -15,14 +15,35 @@ use std::collections::HashMap;
 use tokio::sync::mpsc::{channel, Receiver};
 use uuid::Uuid;
 
-use crate::auth::{hash_token, HeaderAuthorized, SignatureAuthorized};
-use crate::ws::db::{insert_signature_token, select_connection};
+use crate::auth::{
+    hash_token, ClientHeaderAuthorized, GeneralHeaderAuthorized, SignatureAuthorized,
+};
+use crate::ws::db::{insert_client_access_token, insert_signature_token, select_connection};
 use crate::CHAT_SERVER_HANDLE;
 
 #[route("/health", method = "GET")]
 pub async fn health_endpoint() -> Result<Json<Value>> {
     info!("Healthy");
     Ok(Json(json!({"healthy": true})))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthRegisterClientRequest {
+    client_id: String,
+}
+
+#[route("/auth/register-client", method = "POST", method = "HEAD")]
+pub async fn auth_register_client_endpoint(
+    query: web::Query<AuthRegisterClientRequest>,
+    _: GeneralHeaderAuthorized,
+) -> Result<Json<Value>> {
+    let token = &Uuid::new_v4().to_string();
+    let token_hash = &hash_token(token);
+
+    insert_client_access_token(&query.client_id, token_hash);
+
+    Ok(Json(json!({"token": token})))
 }
 
 #[derive(Deserialize, Clone)]
@@ -34,7 +55,7 @@ pub struct AuthRequest {
 #[route("/auth/signature-token", method = "POST", method = "HEAD")]
 pub async fn auth_signature_token_endpoint(
     query: web::Query<AuthRequest>,
-    _: HeaderAuthorized,
+    _: ClientHeaderAuthorized,
 ) -> Result<Json<Value>> {
     let token = &Uuid::new_v4().to_string();
     let token_hash = &hash_token(token);
@@ -80,7 +101,7 @@ pub async fn album_cover_endpoint(
 pub async fn tunnel_endpoint(
     body: Option<Bytes>,
     req: HttpRequest,
-    _: HeaderAuthorized,
+    _: ClientHeaderAuthorized,
 ) -> Result<HttpResponse> {
     handle_request(body, req).await
 }
@@ -101,7 +122,7 @@ async fn handle_request(body: Option<Bytes>, req: HttpRequest) -> Result<HttpRes
     let client_id = query
         .get("clientId")
         .cloned()
-        .unwrap_or("123123".to_string());
+        .ok_or(ErrorBadRequest("Missing clientId query param"))?;
     let query = serde_json::to_value(query).unwrap();
 
     info!("Received {method} call to {path} with {query} (id {request_id})");

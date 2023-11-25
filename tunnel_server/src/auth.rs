@@ -9,19 +9,19 @@ use once_cell::sync::Lazy;
 use qstring::QString;
 use sha2::{Digest, Sha256};
 
-use crate::ws::db::valid_token;
-
-pub struct HeaderAuthorized;
+use crate::ws::db::{valid_client_access_token, valid_signature_token};
 
 static TUNNEL_ACCESS_TOKEN: &str = std::env!("TUNNEL_ACCESS_TOKEN");
 
-impl FromRequest for HeaderAuthorized {
+pub struct GeneralHeaderAuthorized;
+
+impl FromRequest for GeneralHeaderAuthorized {
     type Error = actix_web::Error;
     type Future = Ready<Result<Self, actix_web::Error>>;
 
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
         if is_authorized(req) {
-            ok(HeaderAuthorized)
+            ok(GeneralHeaderAuthorized)
         } else {
             err(ErrorUnauthorized("Unauthorized"))
         }
@@ -38,6 +38,46 @@ fn is_authorized(req: &HttpRequest) -> bool {
             };
 
             return token == TUNNEL_ACCESS_TOKEN;
+        }
+    }
+
+    false
+}
+
+pub struct ClientHeaderAuthorized;
+
+impl FromRequest for ClientHeaderAuthorized {
+    type Error = actix_web::Error;
+    type Future = Ready<Result<Self, actix_web::Error>>;
+
+    fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
+        if client_is_authorized(req) {
+            ok(ClientHeaderAuthorized)
+        } else {
+            err(ErrorUnauthorized("Unauthorized"))
+        }
+    }
+}
+
+fn client_is_authorized(req: &HttpRequest) -> bool {
+    let query: Vec<_> = QString::from(req.query_string()).into();
+    let client_id = query
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case("clientId"))
+        .map(|(_, value)| value);
+
+    if let Some(client_id) = client_id {
+        if let Some(auth) = req.headers().get(http::header::AUTHORIZATION) {
+            if let Ok(auth) = auth.to_str() {
+                let token = if auth.to_lowercase().starts_with("bearer") {
+                    auth[6..].trim_start()
+                } else {
+                    auth
+                };
+
+                let token_hash = &hash_token(token);
+                return valid_client_access_token(client_id, token_hash);
+            }
         }
     }
 
@@ -104,7 +144,7 @@ fn is_signature_authorized(req: &HttpRequest) -> bool {
 
         if let Some(token) = signature {
             let token_hash = &hash_token(token);
-            return valid_token(client_id, token_hash);
+            return valid_signature_token(client_id, token_hash);
         }
     }
 

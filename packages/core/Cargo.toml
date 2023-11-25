@@ -1,22 +1,24 @@
 [package]
-name = "moosicbox_core"
-version = "0.1.0"
 authors = ["Braden Steffaniak"]
 edition = "2021"
+name    = "moosicbox_core"
+version = "0.1.0"
 
 [dependencies]
-actix-cors = "0.6.4"
-actix-web = "4"
-awc = "3.0.0-beta.9"
+actix-cors    = "0.6.4"
+actix-web     = "4"
+awc           = "3.0.0-beta.9"
 enum-as-inner = "0.6.0"
-futures = "0.3"
-log = { workspace = true }
-rusqlite = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
-strum = { workspace = true }
-strum_macros = { workspace = true }
-thiserror = { workspace = true }
+futures       = "0.3"
+log           = { workspace = true }
+reqwest       = { workspace = true, features = ["json"] }
+rusqlite      = { workspace = true }
+serde         = { workspace = true, features = ["derive"] }
+serde_json    = { workspace = true }
+strum         = { workspace = true }
+strum_macros  = { workspace = true }
+thiserror     = { workspace = true }
+uuid          = { workspace = true }
 
 [features]
 fail-on-warnings = []

@@ -9,8 +9,8 @@ use std::{
 use thiserror::Error;
 
 use super::models::{
-    ActivePlayer, Album, Artist, AsId, AsModel, AsModelQuery, CreateSession, NumberId, Player,
-    Session, SessionPlaylist, Track, UpdateSession,
+    ActivePlayer, Album, Artist, AsId, AsModel, AsModelQuery, ClientAccessToken, CreateSession,
+    NumberId, Player, Session, SessionPlaylist, Track, UpdateSession,
 };
 
 impl<T> From<PoisonError<T>> for DbError {
@@ -56,6 +56,60 @@ pub fn get_session_playlist_tracks(
         .query_map(params![session_playlist_id], |row| Ok(row.as_model()))?
         .filter_map(|t| t.ok())
         .collect())
+}
+
+pub fn get_client_id(db: &Connection) -> Result<Option<String>, DbError> {
+    Ok(db
+        .prepare_cached(
+            "
+            SELECT client_id
+            FROM client_access_tokens
+            WHERE expires IS NULL OR expires > date('now')
+            ORDER BY updated DESC
+            LIMIT 1
+            ",
+        )?
+        .query_map(params![], |row| Ok(row.get("client_id")))?
+        .find_map(|row| row.ok())
+        .transpose()?)
+}
+
+pub fn get_client_access_token(db: &Connection) -> Result<Option<(String, String)>, DbError> {
+    Ok(db
+        .prepare_cached(
+            "
+            SELECT client_id, token
+            FROM client_access_tokens
+            WHERE expires IS NULL OR expires > date('now')
+            ORDER BY updated DESC
+            LIMIT 1
+            ",
+        )?
+        .query_map(params![], |row| {
+            Ok((row.get("client_id").unwrap(), row.get("token").unwrap()))
+        })?
+        .find_map(|row| row.ok()))
+}
+
+pub fn create_client_access_token(
+    db: &Connection,
+    client_id: &str,
+    token: &str,
+) -> Result<(), DbError> {
+    upsert::<ClientAccessToken>(
+        db,
+        "client_access_tokens",
+        vec![
+            ("token", SqliteValue::String(token.to_string())),
+            ("client_id", SqliteValue::String(client_id.to_string())),
+        ],
+        vec![
+            ("token", SqliteValue::String(token.to_string())),
+            ("client_id", SqliteValue::String(client_id.to_string())),
+        ],
+    )?;
+
+    Ok(())
 }
 
 pub fn get_session_playlist(

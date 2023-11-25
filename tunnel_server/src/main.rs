@@ -62,6 +62,7 @@ async fn main() -> Result<(), std::io::Error> {
             .wrap(middleware::Compress::default())
             .service(health_endpoint)
             .service(ws::api::websocket)
+            .service(api::auth_register_client_endpoint)
             .service(api::auth_signature_token_endpoint)
             .service(api::auth_validate_signature_token_endpoint)
             .service(api::track_endpoint)

@@ -8,7 +8,10 @@ use actix_cors::Cors;
 use actix_web::{http, middleware, web, App, HttpServer};
 use lazy_static::lazy_static;
 use log::{debug, error, info};
-use moosicbox_core::app::{AppState, Db};
+use moosicbox_core::{
+    app::{AppState, Db},
+    auth::get_client_id_and_access_token,
+};
 use moosicbox_tunnel::{
     sender::{Method, TunnelMessage, TunnelSender},
     tunnel::TunnelEncoding,
@@ -26,6 +29,7 @@ use tokio::{
     task::spawn,
     try_join,
 };
+use url::Url;
 use ws::server::ChatServer;
 
 lazy_static! {
@@ -65,12 +69,38 @@ async fn main() -> std::io::Result<()> {
     let (chat_server, server_tx) = ChatServer::new(Arc::new(db.clone()));
     let chat_server = spawn(chat_server.run());
 
-    let (tunnel_join_handle, tunnel_handle) = if let Ok(host) = env::var("WS_HOST") {
-        let (mut tunnel, handle) = TunnelSender::new(host);
+    let (tunnel_join_handle, tunnel_handle) = if let Ok(url) = env::var("WS_HOST") {
+        let ws_url = url.clone();
+        let url = Url::parse(&url).expect("Invalid WS_HOST");
+        let hostname = url
+            .host_str()
+            .map(|s| s.to_string())
+            .expect("Invalid WS_HOST");
+        let host = format!(
+            "{}://{hostname}",
+            if url.scheme() == "wss" {
+                "https"
+            } else {
+                "http"
+            }
+        );
+        let (client_id, access_token) = {
+            let lock = db.library.lock();
+            let db = lock.as_ref().unwrap();
+            get_client_id_and_access_token(db, &host)
+                .await
+                .map_err(|e| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("Could not get access token: {e:?}"),
+                    )
+                })?
+        };
+        let (mut tunnel, handle) = TunnelSender::new(host, ws_url, client_id, access_token);
 
         (
             Some(RT.spawn(async move {
-                let rx = tunnel.start("123123".into());
+                let rx = tunnel.start();
 
                 while let Ok(m) = rx.recv() {
                     match m {

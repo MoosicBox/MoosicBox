@@ -56,6 +56,30 @@ impl FromRow for SignatureToken {
     }
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ClientAccessToken {
+    pub token_hash: String,
+    pub client_id: String,
+    pub expires: Option<NaiveDateTime>,
+    pub created: NaiveDateTime,
+    pub updated: NaiveDateTime,
+}
+
+impl FromRow for ClientAccessToken {
+    fn from_row_opt(row: Row) -> std::result::Result<Self, FromRowError>
+    where
+        Self: Sized,
+    {
+        Ok(ClientAccessToken {
+            token_hash: get_value_str(get_column_value(&row, "token_hash")).into(),
+            client_id: get_value_str(get_column_value(&row, "client_id")).into(),
+            expires: get_value_datetime_opt(get_column_value(&row, "expires")),
+            created: get_value_datetime(get_column_value(&row, "created")),
+            updated: get_value_datetime(get_column_value(&row, "updated")),
+        })
+    }
+}
+
 fn get_column_value<'a>(row: &'a Row, name: &'a str) -> &'a mysql::Value {
     return &row[row
         .columns_ref()
@@ -98,6 +122,13 @@ fn get_value_datetime(value: &mysql::Value) -> NaiveDateTime {
             NaiveDateTime::new(date, time)
         }
         _ => unreachable!(),
+    }
+}
+
+fn get_value_datetime_opt(value: &mysql::Value) -> Option<NaiveDateTime> {
+    match value {
+        mysql::Value::NULL => None,
+        _ => Some(get_value_datetime(value)),
     }
 }
 
@@ -182,6 +213,36 @@ pub fn delete_connection(tunnel_ws_id: &str) {
         .unwrap();
 }
 
+pub fn insert_client_access_token(client_id: &str, token_hash: &str) {
+    DB.lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_mut()
+        .expect("DB not initialized")
+        .exec_drop(
+            "
+            INSERT INTO `client_access_tokens` (token_hash, client_id, expires)
+            VALUES(?, ?, NULL)",
+            (token_hash, client_id),
+        )
+        .unwrap();
+}
+
+pub fn valid_client_access_token(client_id: &str, token_hash: &str) -> bool {
+    select_client_access_token(client_id, token_hash).is_some()
+}
+
+pub fn select_client_access_token(client_id: &str, token_hash: &str) -> Option<ClientAccessToken> {
+    DB.lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_mut()
+        .expect("DB not initialized")
+        .exec_first(
+            "SELECT * FROM client_access_tokens WHERE client_id=? AND token_hash = ? AND (expires IS NULL OR expires >= NOW())",
+            (client_id, token_hash,),
+        )
+        .unwrap()
+}
+
 pub fn insert_signature_token(client_id: &str, token_hash: &str) {
     DB.lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -196,7 +257,7 @@ pub fn insert_signature_token(client_id: &str, token_hash: &str) {
         .unwrap();
 }
 
-pub fn valid_token(client_id: &str, token_hash: &str) -> bool {
+pub fn valid_signature_token(client_id: &str, token_hash: &str) -> bool {
     select_signature_token(client_id, token_hash).is_some()
 }
 

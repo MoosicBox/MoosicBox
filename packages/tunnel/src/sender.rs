@@ -199,13 +199,21 @@ impl TunnelSenderHandle {
 
 pub struct TunnelSender {
     id: usize,
+    host: String,
     url: String,
+    client_id: String,
+    access_token: String,
     sender: Arc<Mutex<Option<UnboundedSender<Message>>>>,
     cancellation_token: CancellationToken,
 }
 
 impl TunnelSender {
-    pub fn new(url: String) -> (Self, TunnelSenderHandle) {
+    pub fn new(
+        host: String,
+        url: String,
+        client_id: String,
+        access_token: String,
+    ) -> (Self, TunnelSenderHandle) {
         let sender = Arc::new(Mutex::new(None));
         let cancellation_token = CancellationToken::new();
         let id = thread_rng().gen::<usize>();
@@ -217,7 +225,10 @@ impl TunnelSender {
         (
             Self {
                 id,
+                host,
                 url,
+                client_id,
+                access_token,
                 sender: sender.clone(),
                 cancellation_token: cancellation_token.clone(),
             },
@@ -240,13 +251,34 @@ impl TunnelSender {
         })
     }
 
-    pub fn start(&mut self, client_id: String) -> Receiver<TunnelMessage> {
-        self.start_tunnel(client_id, Self::message_handler)
+    pub fn start(&mut self) -> Receiver<TunnelMessage> {
+        self.start_tunnel(Self::message_handler)
+    }
+
+    async fn fetch_signature_token(
+        host: &str,
+        client_id: &str,
+        access_token: &str,
+    ) -> Result<Option<String>, reqwest::Error> {
+        let url = format!("{host}/auth/signature-token?clientId={client_id}");
+        let value: Value = reqwest::Client::new()
+            .post(url)
+            .header(reqwest::header::AUTHORIZATION, access_token)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await?;
+
+        if let Some(token) = value.get("token") {
+            Ok(token.as_str().map(|s| Some(s.to_string())).unwrap_or(None))
+        } else {
+            Ok(None)
+        }
     }
 
     fn start_tunnel<T>(
         &mut self,
-        client_id: String,
         handler: fn(sender: crossbeam_channel::Sender<T>, m: Message) -> Result<(), SendError<T>>,
     ) -> Receiver<T>
     where
@@ -254,12 +286,21 @@ impl TunnelSender {
     {
         let (tx, rx) = bounded(1024);
 
+        let host = self.host.clone();
         let url = self.url.clone();
+        let client_id = self.client_id.clone();
+        let access_token = self.access_token.clone();
         let sender_arc = self.sender.clone();
         let cancellation_token = self.cancellation_token.clone();
 
         RT.spawn(async move {
             let mut just_retried = false;
+            debug!("Fetching signature token...");
+            let token = match Self::fetch_signature_token(&host, &client_id, &access_token).await {
+                Ok(Some(token)) => token,
+                Ok(None) => panic!("Failed to fetch signature token"),
+                Err(err) => panic!("Failed to fetch signature token: {err:?}"),
+            };
 
             loop {
                 if cancellation_token.is_cancelled() {
@@ -271,7 +312,12 @@ impl TunnelSender {
                 sender_arc.lock().unwrap().replace(txf.clone());
 
                 debug!("Connecting to websocket...");
-                match connect_async(format!("{}?clientId={}&sender=true", url, client_id)).await {
+                match connect_async(format!(
+                    "{}?clientId={}&sender=true&signature={token}",
+                    url, client_id
+                ))
+                .await
+                {
                     Ok((ws_stream, _)) => {
                         just_retried = false;
                         debug!("WebSocket handshake has been successfully completed");
