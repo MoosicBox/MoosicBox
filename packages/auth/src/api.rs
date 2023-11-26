@@ -7,6 +7,7 @@ use actix_web::{
 use moosicbox_core::app::AppState;
 use serde::Deserialize;
 use serde_json::{json, Value};
+use url::form_urlencoded;
 
 use crate::{create_magic_token, get_credentials_from_magic_token, NonTunnelRequestAuthorized};
 
@@ -47,12 +48,19 @@ pub async fn create_magic_token_endpoint(
     data: web::Data<AppState>,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    let token = create_magic_token(
-        data.db.as_ref().unwrap(),
-        &data.tunnel_host.clone().unwrap(),
-    )
-    .await
-    .map_err(|e| ErrorInternalServerError(format!("Failed to create magic token: {e:?}")))?;
+    let tunnel_host = data.tunnel_host.clone().unwrap();
+    let token = create_magic_token(data.db.as_ref().unwrap(), &tunnel_host)
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to create magic token: {e:?}")))?;
 
-    Ok(Json(json!({"token": token})))
+    let api_url_param: String = form_urlencoded::Serializer::new(String::new())
+        .append_pair("apiUrl", &tunnel_host)
+        .finish();
+
+    let host = "https://moosicbox.com";
+
+    Ok(Json(json!({
+        "token": token,
+        "url": format!("{host}/auth/{token}?{api_url_param}")
+    })))
 }

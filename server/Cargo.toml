@@ -38,7 +38,7 @@ futures-util.workspace = true
 rand.workspace         = true
 rusqlite               = { workspace = true }
 tokio                  = { workspace = true, features = ["rt", "time", "macros"] }
-url                    = "2.5.0"
+url                    = { workspace = true }
 
 [features]
 default = ["cpal", "pulseaudio"]
