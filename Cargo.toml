@@ -2,6 +2,7 @@
 members = [
     "server",
     "tunnel_server",
+    "packages/auth",
     "packages/core",
     "packages/files",
     "packages/image",

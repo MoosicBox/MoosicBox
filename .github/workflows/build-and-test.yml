@@ -18,6 +18,17 @@ jobs:
 
             matrix:
                 package:
+                    - name: auth
+                      path: packages/auth
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+
+                    - name: auth-api
+                      path: packages/auth
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: api
+
                     - name: core
                       path: packages/core
                       os: ubuntu-latest

@@ -5,16 +5,13 @@ pub mod api;
 
 use actix::fut::{err, ok, Ready};
 use actix_web::{dev::Payload, error::ErrorUnauthorized, http, FromRequest, HttpRequest};
-use log::error;
 use rusqlite::Connection;
 use serde_json::Value;
 use uuid::Uuid;
 
-use moosicbox_core::{
-    app::Db,
-    sqlite::db::{create_client_access_token, get_client_access_token, save_magic_token, DbError},
-};
+use moosicbox_core::sqlite::db::{create_client_access_token, get_client_access_token, DbError};
 
+#[cfg(feature = "api")]
 pub(crate) fn get_credentials_from_magic_token(
     db: &Connection,
     magic_token: &str,
@@ -28,6 +25,7 @@ pub(crate) fn get_credentials_from_magic_token(
     }
 }
 
+#[cfg(feature = "api")]
 async fn tunnel_magic_token(
     tunnel_host: &str,
     client_id: &str,
@@ -51,7 +49,11 @@ async fn tunnel_magic_token(
     }
 }
 
-pub(crate) async fn create_magic_token(db: &Db, tunnel_host: &str) -> Result<String, DbError> {
+#[cfg(feature = "api")]
+pub(crate) async fn create_magic_token(
+    db: &moosicbox_core::app::Db,
+    tunnel_host: &str,
+) -> Result<String, DbError> {
     let magic_token = Uuid::new_v4().to_string();
 
     if let Some((client_id, access_token)) = {
@@ -62,10 +64,10 @@ pub(crate) async fn create_magic_token(db: &Db, tunnel_host: &str) -> Result<Str
         if let Err(err) =
             tunnel_magic_token(tunnel_host, &client_id, &access_token, &magic_token).await
         {
-            error!("Failed to register magic token to the tunnel: {err:?}");
+            log::error!("Failed to register magic token to the tunnel: {err:?}");
             return Err(DbError::Unknown);
         }
-        save_magic_token(
+        moosicbox_core::sqlite::db::save_magic_token(
             db.library.lock().as_ref().unwrap(),
             &magic_token,
             &client_id,

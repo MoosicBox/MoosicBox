@@ -5,6 +5,10 @@ WORKDIR /app
 COPY Cargo.toml Cargo.toml
 COPY Cargo.lock Cargo.lock
 
+ADD packages/auth/.cargo packages/auth/.cargo
+RUN mkdir -p packages/auth/src && echo "fn main() {}" > packages/auth/src/main.rs
+RUN echo "[package]\nname = \"moosicbox_auth\"\nversion = \"0.1.0\"" > packages/auth/Cargo.toml
+
 ADD packages/core/.cargo packages/core/.cargo
 RUN mkdir -p packages/core/src && echo "fn main() {}" > packages/core/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_core\"\nversion = \"0.1.0\"" > packages/core/Cargo.toml
