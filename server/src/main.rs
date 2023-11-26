@@ -189,6 +189,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(middleware::Compress::default())
             .app_data(web::Data::new(app_data))
             .app_data(web::Data::new(server_tx.clone()))
+            .service(api::health_endpoint)
             .service(api::websocket)
             .service(api::scan_endpoint)
             .service(moosicbox_auth::api::get_magic_token_endpoint)

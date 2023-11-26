@@ -2,16 +2,23 @@ use crate::scan::scan;
 use crate::ws::handler;
 use crate::ws::server::ChatServerHandle;
 use actix_web::error::ErrorInternalServerError;
-use actix_web::HttpResponse;
 use actix_web::{
     get, post,
     web::{self, Json},
     Result,
 };
+use actix_web::{route, HttpResponse};
+use log::info;
 use moosicbox_core::app::AppState;
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 use tokio::task::spawn_local;
+
+#[route("/health", method = "GET")]
+pub async fn health_endpoint() -> Result<Json<Value>> {
+    info!("Healthy");
+    Ok(Json(json!({"healthy": true})))
+}
 
 #[get("/ws")]
 pub async fn websocket(
