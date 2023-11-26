@@ -445,7 +445,10 @@ impl TunnelSender {
                     bytes_read += size;
                     debug!("Read {} bytes", bytes_read);
                     let bytes = &buf[..(size + offset)];
-                    self.send_bytes(bytes).unwrap();
+                    if let Err(err) = self.send_bytes(bytes) {
+                        error!("Failed to send bytes: {err:?}");
+                        break;
+                    }
                     if size == 0 {
                         break;
                     }
