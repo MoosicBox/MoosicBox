@@ -16,6 +16,7 @@ enum-as-inner = "0.6.0"
 futures = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
+moosicbox_auth = { path = "../packages/auth" }
 moosicbox_core = { path = "../packages/core" }
 moosicbox_files = { path = "../packages/files" }
 moosicbox_menu = { path = "../packages/menu" }
@@ -37,7 +38,7 @@ futures-util.workspace = true
 rand.workspace         = true
 rusqlite               = { workspace = true }
 tokio                  = { workspace = true, features = ["rt", "time", "macros"] }
-url = "2.5.0"
+url                    = "2.5.0"
 
 [features]
 default = ["cpal", "pulseaudio"]

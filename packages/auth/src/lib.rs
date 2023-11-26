@@ -1,8 +1,38 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+
+#[cfg(feature = "api")]
+pub mod api;
+
 use rusqlite::Connection;
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::sqlite::db::{create_client_access_token, get_client_access_token, DbError};
+use moosicbox_core::sqlite::db::{
+    create_client_access_token, get_client_access_token, save_magic_token, DbError,
+};
+
+pub(crate) fn get_credentials_from_magic_token(
+    db: &Connection,
+    magic_token: &str,
+) -> Result<Option<(String, String)>, DbError> {
+    if let Some((client_id, access_token)) =
+        moosicbox_core::sqlite::db::get_credentials_from_magic_token(db, &magic_token)?
+    {
+        Ok(Some((client_id, access_token)))
+    } else {
+        Ok(None)
+    }
+}
+
+pub(crate) fn create_magic_token(db: &Connection) -> Result<String, DbError> {
+    let magic_token = Uuid::new_v4().to_string();
+
+    if let Some((client_id, access_token)) = get_client_access_token(db)? {
+        save_magic_token(db, &magic_token, &client_id, &access_token)?;
+    }
+
+    Ok(magic_token)
+}
 
 fn create_client_id() -> String {
     Uuid::new_v4().to_string()

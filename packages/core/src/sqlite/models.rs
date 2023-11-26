@@ -726,3 +726,31 @@ impl AsId for ClientAccessToken {
         SqliteValue::String(self.token.clone())
     }
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MagicToken {
+    pub magic_token: String,
+    pub client_id: String,
+    pub access_token: String,
+    pub created: String,
+    pub updated: String,
+}
+
+impl AsModel<MagicToken> for Row<'_> {
+    fn as_model(&self) -> MagicToken {
+        MagicToken {
+            magic_token: self.get("magic_token").unwrap(),
+            client_id: self.get("client_id").unwrap(),
+            access_token: self.get("access_token").unwrap(),
+            created: self.get("created").unwrap(),
+            updated: self.get("updated").unwrap(),
+        }
+    }
+}
+
+impl AsId for MagicToken {
+    fn as_id(&self) -> SqliteValue {
+        SqliteValue::String(self.magic_token.clone())
+    }
+}

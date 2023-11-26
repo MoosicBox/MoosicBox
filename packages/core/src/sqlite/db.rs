@@ -10,7 +10,7 @@ use thiserror::Error;
 
 use super::models::{
     ActivePlayer, Album, Artist, AsId, AsModel, AsModelQuery, ClientAccessToken, CreateSession,
-    NumberId, Player, Session, SessionPlaylist, Track, UpdateSession,
+    MagicToken, NumberId, Player, Session, SessionPlaylist, Track, UpdateSession,
 };
 
 impl<T> From<PoisonError<T>> for DbError {
@@ -106,6 +106,78 @@ pub fn create_client_access_token(
         vec![
             ("token", SqliteValue::String(token.to_string())),
             ("client_id", SqliteValue::String(client_id.to_string())),
+        ],
+    )?;
+
+    Ok(())
+}
+
+pub fn delete_magic_token(db: &Connection, magic_token: &str) -> Result<(), DbError> {
+    db.prepare_cached(
+        "
+            DELETE FROM magic_tokens
+            WHERE magic_token=?1
+            ",
+    )?
+    .query(params![magic_token])?
+    .next()?;
+
+    Ok(())
+}
+
+pub fn get_credentials_from_magic_token(
+    db: &Connection,
+    magic_token: &str,
+) -> Result<Option<(String, String)>, DbError> {
+    if let Some((client_id, access_token)) = db
+        .prepare_cached(
+            "
+            SELECT client_id, access_token
+            FROM magic_tokens
+            WHERE (expires IS NULL OR expires > date('now')) AND magic_token = ?1
+            ",
+        )?
+        .query_map(params![magic_token], |row| {
+            Ok((
+                row.get("client_id").unwrap(),
+                row.get("access_token").unwrap(),
+            ))
+        })?
+        .find_map(|row| row.ok())
+    {
+        delete_magic_token(db, magic_token)?;
+
+        Ok(Some((client_id, access_token)))
+    } else {
+        Ok(None)
+    }
+}
+
+pub fn save_magic_token(
+    db: &Connection,
+    magic_token: &str,
+    client_id: &str,
+    access_token: &str,
+) -> Result<(), DbError> {
+    upsert::<MagicToken>(
+        db,
+        "magic_tokens",
+        vec![
+            ("magic_token", SqliteValue::String(magic_token.to_string())),
+            ("client_id", SqliteValue::String(client_id.to_string())),
+            (
+                "access_token",
+                SqliteValue::String(access_token.to_string()),
+            ),
+        ],
+        vec![
+            ("magic_token", SqliteValue::String(magic_token.to_string())),
+            ("client_id", SqliteValue::String(client_id.to_string())),
+            (
+                "access_token",
+                SqliteValue::String(access_token.to_string()),
+            ),
+            ("expires", SqliteValue::NowAdd("+1 Day".into())),
         ],
     )?;
 
@@ -647,6 +719,7 @@ pub enum SqliteValue {
     Number(i64),
     NumberOpt(Option<i64>),
     Real(f64),
+    NowAdd(String),
 }
 
 impl Display for SqliteValue {
@@ -661,6 +734,9 @@ impl Display for SqliteValue {
                     num_opt.map(|n| n.to_string()).unwrap_or("NULL".to_string())
                 }
                 SqliteValue::Real(num) => num.to_string(),
+                SqliteValue::NowAdd(add) => {
+                    format!("strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', '{add}'))")
+                }
             }
             .as_str(),
         )
@@ -718,6 +794,11 @@ fn build_where_props<'a>(values: &'a [(&'a str, SqliteValue)]) -> Vec<String> {
         .map(|(name, value)| match value {
             SqliteValue::StringOpt(None) => format!("{name} IS NULL"),
             SqliteValue::NumberOpt(None) => format!("{name} IS NULL"),
+            SqliteValue::NowAdd(add) => {
+                format!(
+                    "{name} = strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', '{add}'))"
+                )
+            }
             _ => format!("{name}=?"),
         })
         .collect()
@@ -738,6 +819,11 @@ fn build_set_props<'a>(values: &'a [(&'a str, SqliteValue)]) -> Vec<String> {
         props.push(match value {
             SqliteValue::StringOpt(None) => format!("{name}=NULL"),
             SqliteValue::NumberOpt(None) => format!("{name}=NULL"),
+            SqliteValue::NowAdd(add) => {
+                format!(
+                    "{name}=strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', '{add}'))"
+                )
+            }
             _ => {
                 i += 1;
                 format!("`{name}`=?{i}").to_string()
@@ -762,6 +848,9 @@ fn build_values_props<'a>(values: &'a [(&'a str, SqliteValue)]) -> Vec<String> {
         props.push(match value {
             SqliteValue::StringOpt(None) => "NULL".to_string(),
             SqliteValue::NumberOpt(None) => "NULL".to_string(),
+            SqliteValue::NowAdd(add) => {
+                format!("strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', '{add}'))")
+            }
             _ => {
                 i += 1;
                 format!("?{i}").to_string()
@@ -804,6 +893,7 @@ fn bind_values<'a>(
                 statement.raw_bind_parameter(i, *value)?;
                 i += 1;
             }
+            SqliteValue::NowAdd(_add) => (),
         }
     }
 

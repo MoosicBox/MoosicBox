@@ -8,10 +8,8 @@ use actix_cors::Cors;
 use actix_web::{http, middleware, web, App, HttpServer};
 use lazy_static::lazy_static;
 use log::{debug, error, info};
-use moosicbox_core::{
-    app::{AppState, Db},
-    auth::get_client_id_and_access_token,
-};
+use moosicbox_auth::get_client_id_and_access_token;
+use moosicbox_core::app::{AppState, Db};
 use moosicbox_tunnel::{
     sender::{Method, TunnelMessage, TunnelSender},
     tunnel::TunnelEncoding,
@@ -193,6 +191,8 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(server_tx.clone()))
             .service(api::websocket)
             .service(api::scan_endpoint)
+            .service(moosicbox_auth::api::get_magic_token_endpoint)
+            .service(moosicbox_auth::api::magic_token_endpoint)
             .service(moosicbox_menu::api::get_artists_endpoint)
             .service(moosicbox_menu::api::get_artist_endpoint)
             .service(moosicbox_menu::api::get_album_endpoint)
