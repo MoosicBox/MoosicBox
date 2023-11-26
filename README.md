@@ -20,13 +20,11 @@ A music server for cows
 
 ### Run
 
-1. `cd tunnel_server`
-1. `TUNNEL_ACCESS_TOKEN='your access token here' cargo server 8005`
+`TUNNEL_ACCESS_TOKEN='your access token here' cargo tunnel-server 8005`
 
 ### Development
 
-1. `cd tunnel_server`
-1. `TUNNEL_ACCESS_TOKEN='your access token here' RUST_BACKTRACE=1 RUST_LOG="moosicbox=debug" cargo server:debug 8005`
+`TUNNEL_ACCESS_TOKEN='your access token here' RUST_BACKTRACE=1 RUST_LOG="moosicbox=debug" cargo tunnel-server:debug 8005`
 
 ### Deploy
 

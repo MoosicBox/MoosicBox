@@ -9,6 +9,10 @@ server = "server:release"
 "server:debug:pulseaudio-simple" = "run --manifest-path=server/Cargo.toml --features=pulseaudio-simple"
 "server:pulseaudio-simple" = "run --manifest-path=server/Cargo.toml --release --features=pulseaudio-simple"
 
+"tunnel-server:debug" = "run --manifest-path=tunnel_server/Cargo.toml"
+"tunnel-server:release" = "run --manifest-path=tunnel_server/Cargo.toml --release"
+tunnel-server = "tunnel-server:release"
+
 [env]
 RUST_LOG = "info"
 
