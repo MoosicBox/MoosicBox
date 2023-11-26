@@ -64,6 +64,8 @@ async fn main() -> Result<(), std::io::Error> {
             .service(ws::api::websocket)
             .service(api::auth_register_client_endpoint)
             .service(api::auth_signature_token_endpoint)
+            .service(api::auth_get_magic_token_endpoint)
+            .service(api::auth_magic_token_endpoint)
             .service(api::auth_validate_signature_token_endpoint)
             .service(api::track_endpoint)
             .service(api::artist_cover_endpoint)

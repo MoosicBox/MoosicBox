@@ -6,6 +6,7 @@ use std::{
 use rusqlite::Connection;
 
 pub struct AppState {
+    pub tunnel_host: Option<String>,
     pub service_port: u16,
     pub db: Option<Db>,
 }

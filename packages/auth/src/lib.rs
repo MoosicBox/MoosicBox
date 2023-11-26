@@ -3,12 +3,14 @@
 #[cfg(feature = "api")]
 pub mod api;
 
+use log::error;
 use rusqlite::Connection;
 use serde_json::Value;
 use uuid::Uuid;
 
-use moosicbox_core::sqlite::db::{
-    create_client_access_token, get_client_access_token, save_magic_token, DbError,
+use moosicbox_core::{
+    app::Db,
+    sqlite::db::{create_client_access_token, get_client_access_token, save_magic_token, DbError},
 };
 
 pub(crate) fn get_credentials_from_magic_token(
@@ -16,7 +18,7 @@ pub(crate) fn get_credentials_from_magic_token(
     magic_token: &str,
 ) -> Result<Option<(String, String)>, DbError> {
     if let Some((client_id, access_token)) =
-        moosicbox_core::sqlite::db::get_credentials_from_magic_token(db, &magic_token)?
+        moosicbox_core::sqlite::db::get_credentials_from_magic_token(db, magic_token)?
     {
         Ok(Some((client_id, access_token)))
     } else {
@@ -24,11 +26,49 @@ pub(crate) fn get_credentials_from_magic_token(
     }
 }
 
-pub(crate) fn create_magic_token(db: &Connection) -> Result<String, DbError> {
+async fn tunnel_magic_token(
+    tunnel_host: &str,
+    client_id: &str,
+    access_token: &str,
+    magic_token: &str,
+) -> Result<bool, reqwest::Error> {
+    let url =
+        format!("{tunnel_host}/auth/magic-token?clientId={client_id}&magicToken={magic_token}");
+    let value: Value = reqwest::Client::new()
+        .post(url)
+        .header(reqwest::header::AUTHORIZATION, access_token)
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    if let Some(success) = value.get("success") {
+        Ok(success.as_bool().unwrap_or(false))
+    } else {
+        Ok(false)
+    }
+}
+
+pub(crate) async fn create_magic_token(db: &Db, tunnel_host: &str) -> Result<String, DbError> {
     let magic_token = Uuid::new_v4().to_string();
 
-    if let Some((client_id, access_token)) = get_client_access_token(db)? {
-        save_magic_token(db, &magic_token, &client_id, &access_token)?;
+    if let Some((client_id, access_token)) = {
+        let lock = db.library.lock();
+        let db = lock.as_ref().unwrap();
+        get_client_access_token(db)?
+    } {
+        if let Err(err) =
+            tunnel_magic_token(tunnel_host, &client_id, &access_token, &magic_token).await
+        {
+            error!("Failed to register magic token to the tunnel: {err:?}");
+            return Err(DbError::Unknown);
+        }
+        save_magic_token(
+            db.library.lock().as_ref().unwrap(),
+            &magic_token,
+            &client_id,
+            &access_token,
+        )?;
     }
 
     Ok(magic_token)

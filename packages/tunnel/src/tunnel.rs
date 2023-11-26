@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error, task::Poll, time::SystemTime};
+use std::{collections::HashMap, error::Error, fmt::Display, task::Poll, time::SystemTime};
 
 use bytes::Bytes;
 use futures_util::Stream;
@@ -8,7 +8,7 @@ use serde_json::Value;
 use strum_macros::EnumString;
 use tokio::sync::mpsc::Receiver;
 
-#[derive(Debug, Serialize, Deserialize, EnumString, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, EnumString, PartialEq, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum TunnelEncoding {
@@ -29,6 +29,48 @@ pub struct TunnelResponse {
     pub packet_id: u32,
     pub bytes: Bytes,
     pub headers: Option<HashMap<String, String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, EnumString)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum Method {
+    Head,
+    Get,
+    Post,
+    Put,
+    Patch,
+    Delete,
+}
+
+impl Display for Method {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
+pub enum TunnelRequest {
+    HttpRequest(TunnelHttpRequest),
+    WsRequest(TunnelWsRequest),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TunnelHttpRequest {
+    pub request_id: usize,
+    pub method: Method,
+    pub path: String,
+    pub query: Value,
+    pub payload: Option<Value>,
+    pub encoding: TunnelEncoding,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TunnelWsRequest {
+    pub request_id: usize,
+    pub body: Value,
 }
 
 impl From<Bytes> for TunnelResponse {

@@ -80,6 +80,30 @@ impl FromRow for ClientAccessToken {
     }
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MagicToken {
+    pub magic_token_hash: String,
+    pub client_id: String,
+    pub expires: Option<NaiveDateTime>,
+    pub created: NaiveDateTime,
+    pub updated: NaiveDateTime,
+}
+
+impl FromRow for MagicToken {
+    fn from_row_opt(row: Row) -> std::result::Result<Self, FromRowError>
+    where
+        Self: Sized,
+    {
+        Ok(MagicToken {
+            magic_token_hash: get_value_str(get_column_value(&row, "magic_token_hash")).into(),
+            client_id: get_value_str(get_column_value(&row, "client_id")).into(),
+            expires: get_value_datetime_opt(get_column_value(&row, "expires")),
+            created: get_value_datetime(get_column_value(&row, "created")),
+            updated: get_value_datetime(get_column_value(&row, "updated")),
+        })
+    }
+}
+
 fn get_column_value<'a>(row: &'a Row, name: &'a str) -> &'a mysql::Value {
     return &row[row
         .columns_ref()
@@ -239,6 +263,32 @@ pub fn select_client_access_token(client_id: &str, token_hash: &str) -> Option<C
         .exec_first(
             "SELECT * FROM client_access_tokens WHERE client_id=? AND token_hash = ? AND (expires IS NULL OR expires >= NOW())",
             (client_id, token_hash,),
+        )
+        .unwrap()
+}
+
+pub fn insert_magic_token(client_id: &str, token_hash: &str) {
+    DB.lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_mut()
+        .expect("DB not initialized")
+        .exec_drop(
+            "
+            INSERT INTO `magic_tokens` (magic_token_hash, client_id, expires)
+            VALUES(?, ?, NULL)",
+            (token_hash, client_id),
+        )
+        .unwrap();
+}
+
+pub fn select_magic_token(token_hash: &str) -> Option<MagicToken> {
+    DB.lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_mut()
+        .expect("DB not initialized")
+        .exec_first(
+            "SELECT * FROM magic_tokens WHERE magic_token_hash = ? AND (expires IS NULL OR expires >= NOW())",
+            (token_hash,),
         )
         .unwrap()
 }

@@ -27,6 +27,7 @@ async fn main() -> Result<(), Error> {
             .wrap(cors)
             .wrap(middleware::Compress::default())
             .app_data(web::Data::new(AppState {
+                tunnel_host: None,
                 service_port,
                 db: None,
             }))

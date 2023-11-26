@@ -35,7 +35,7 @@ pub async fn get_magic_token_endpoint(
     .map_err(|e| ErrorInternalServerError(format!("Failed to get magic token: {e:?}")))?
     {
         Ok(Json(
-            json!({"client_id": client_id, "access_token": access_token}),
+            json!({"clientId": client_id, "accessToken": access_token}),
         ))
     } else {
         Err(ErrorUnauthorized("Unauthorized"))
@@ -45,15 +45,10 @@ pub async fn get_magic_token_endpoint(
 #[route("/auth/magic-token", method = "POST")]
 pub async fn magic_token_endpoint(data: web::Data<AppState>) -> Result<Json<Value>> {
     let token = create_magic_token(
-        &data
-            .db
-            .clone()
-            .ok_or(ErrorInternalServerError("No DB set"))?
-            .library
-            .as_ref()
-            .lock()
-            .unwrap(),
+        data.db.as_ref().unwrap(),
+        &data.tunnel_host.clone().unwrap(),
     )
+    .await
     .map_err(|e| ErrorInternalServerError(format!("Failed to create magic token: {e:?}")))?;
 
     Ok(Json(json!({"token": token})))

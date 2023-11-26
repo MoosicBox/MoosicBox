@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 actix-web      = { workspace = true }
+log            = { workspace = true }
 moosicbox_core = { path = "../core" }
 reqwest        = { workspace = true, features = ["json"] }
 rusqlite       = { workspace = true }

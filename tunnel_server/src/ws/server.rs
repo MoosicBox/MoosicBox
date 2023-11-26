@@ -11,10 +11,10 @@ use std::{
 
 use bytes::Bytes;
 use log::{debug, error, info, warn};
-use moosicbox_tunnel::tunnel::{TunnelResponse, TunnelWsResponse};
+use moosicbox_tunnel::tunnel::{TunnelRequest, TunnelResponse, TunnelWsRequest, TunnelWsResponse};
 use rand::{thread_rng, Rng as _};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use strum_macros::EnumString;
 use thiserror::Error;
 use tokio::sync::{
@@ -272,9 +272,14 @@ impl ChatServer {
                     };
 
                     let value: Value = serde_json::from_str(&body).unwrap();
-                    let body = json!({"request_id": request_id, "body": value});
+                    let body = TunnelRequest::WsRequest(TunnelWsRequest {
+                        request_id,
+                        body: value,
+                    });
 
-                    if let Err(error) = self.send_message_to(client_conn_id, body.to_string()).await
+                    if let Err(error) = self
+                        .send_message_to(client_conn_id, serde_json::to_string(&body).unwrap())
+                        .await
                     {
                         error!("Failed to send WsRequest to {client_conn_id}: {error:?}");
                     }

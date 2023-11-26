@@ -11,14 +11,12 @@ use log::{debug, error, info};
 use moosicbox_auth::get_client_id_and_access_token;
 use moosicbox_core::app::{AppState, Db};
 use moosicbox_tunnel::{
-    sender::{Method, TunnelMessage, TunnelSender},
-    tunnel::TunnelEncoding,
+    sender::{TunnelMessage, TunnelSender},
+    tunnel::TunnelRequest,
 };
 use once_cell::sync::Lazy;
-use serde_json::Value;
 use std::{
     env,
-    str::FromStr,
     sync::{Arc, Mutex, OnceLock},
     time::Duration,
 };
@@ -67,7 +65,7 @@ async fn main() -> std::io::Result<()> {
     let (chat_server, server_tx) = ChatServer::new(Arc::new(db.clone()));
     let chat_server = spawn(chat_server.run());
 
-    let (tunnel_join_handle, tunnel_handle) = if let Ok(url) = env::var("WS_HOST") {
+    let (tunnel_host, tunnel_join_handle, tunnel_handle) = if let Ok(url) = env::var("WS_HOST") {
         let ws_url = url.clone();
         let url = Url::parse(&url).expect("Invalid WS_HOST");
         let hostname = url
@@ -75,11 +73,16 @@ async fn main() -> std::io::Result<()> {
             .map(|s| s.to_string())
             .expect("Invalid WS_HOST");
         let host = format!(
-            "{}://{hostname}",
+            "{}://{hostname}{}",
             if url.scheme() == "wss" {
                 "https"
             } else {
                 "http"
+            },
+            if let Some(port) = url.port() {
+                format!(":{port}")
+            } else {
+                "".to_string()
             }
         );
         let (client_id, access_token) = {
@@ -94,9 +97,10 @@ async fn main() -> std::io::Result<()> {
                     )
                 })?
         };
-        let (mut tunnel, handle) = TunnelSender::new(host, ws_url, client_id, access_token);
+        let (mut tunnel, handle) = TunnelSender::new(host.clone(), ws_url, client_id, access_token);
 
         (
+            Some(host),
             Some(RT.spawn(async move {
                 let rx = tunnel.start();
 
@@ -104,46 +108,41 @@ async fn main() -> std::io::Result<()> {
                     match m {
                         TunnelMessage::Text(m) => {
                             debug!("Received text TunnelMessage {}", &m);
-                            let value: Value = serde_json::from_str(&m).unwrap();
-                            let message_type = value.get("type").map(|t| t.as_str());
-
-                            if let Some(Some("TUNNEL_REQUEST")) = message_type {
-                                tunnel
+                            match serde_json::from_str(&m).unwrap() {
+                                TunnelRequest::HttpRequest(request) => tunnel
                                     .tunnel_request(
                                         db,
                                         service_port,
-                                        serde_json::from_value(
-                                            value.get("request_id").unwrap().clone(),
-                                        )
-                                        .unwrap(),
-                                        Method::from_str(
-                                            value.get("method").unwrap().as_str().unwrap(),
-                                        )
-                                        .unwrap(),
-                                        value.get("path").unwrap().as_str().unwrap().to_string(),
-                                        value.get("query").unwrap().clone(),
-                                        value.get("payload").cloned(),
-                                        TunnelEncoding::from_str(
-                                            value.get("encoding").unwrap().as_str().unwrap(),
-                                        )
-                                        .unwrap(),
+                                        request.request_id,
+                                        request.method,
+                                        request.path,
+                                        request.query,
+                                        request.payload,
+                                        request.encoding,
                                     )
                                     .await
-                                    .unwrap();
-                            } else {
-                                let request_id: usize = serde_json::from_value(
-                                    value.get("request_id").unwrap().clone(),
-                                )
-                                .unwrap();
-                                let body = value.get("body").unwrap();
-                                let sender =
-                                    CHAT_SERVER_HANDLE.lock().unwrap().as_ref().unwrap().clone();
-                                if let Err(err) = tunnel
-                                    .ws_request(db, request_id, body.clone(), sender)
-                                    .await
-                                {
-                                    debug!("value: {value:?}");
-                                    error!("Failed to propagate ws request {request_id}: {err:?}");
+                                    .unwrap(),
+                                TunnelRequest::WsRequest(request) => {
+                                    let sender = CHAT_SERVER_HANDLE
+                                        .lock()
+                                        .unwrap()
+                                        .as_ref()
+                                        .unwrap()
+                                        .clone();
+                                    if let Err(err) = tunnel
+                                        .ws_request(
+                                            db,
+                                            request.request_id,
+                                            request.body.clone(),
+                                            sender,
+                                        )
+                                        .await
+                                    {
+                                        error!(
+                                            "Failed to propagate ws request {}: {err:?}",
+                                            request.request_id
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -162,11 +161,12 @@ async fn main() -> std::io::Result<()> {
             Some(handle),
         )
     } else {
-        (None, None)
+        (None, None, None)
     };
 
     let app = move || {
         let app_data = AppState {
+            tunnel_host: tunnel_host.clone(),
             service_port,
             db: Some(db.clone()),
         };

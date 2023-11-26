@@ -1,30 +1,82 @@
-use actix_web::error::{ErrorBadRequest, ErrorInternalServerError};
-use actix_web::http::Method;
+use actix_web::error::{ErrorBadRequest, ErrorInternalServerError, ErrorUnauthorized};
 use actix_web::web::{self, Json};
 use actix_web::{route, HttpResponse};
 use actix_web::{HttpRequest, Result};
 use bytes::Bytes;
 use futures_util::StreamExt;
 use log::{debug, info};
-use moosicbox_tunnel::tunnel::{TunnelEncoding, TunnelResponse, TunnelStream};
+use moosicbox_tunnel::tunnel::{
+    Method, TunnelEncoding, TunnelHttpRequest, TunnelRequest, TunnelResponse, TunnelStream,
+};
 use qstring::QString;
 use rand::{thread_rng, Rng as _};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::str::FromStr;
 use tokio::sync::mpsc::{channel, Receiver};
 use uuid::Uuid;
 
 use crate::auth::{
     hash_token, ClientHeaderAuthorized, GeneralHeaderAuthorized, SignatureAuthorized,
 };
-use crate::ws::db::{insert_client_access_token, insert_signature_token, select_connection};
+use crate::ws::db::{
+    insert_client_access_token, insert_magic_token, insert_signature_token, select_connection,
+    select_magic_token,
+};
 use crate::CHAT_SERVER_HANDLE;
 
 #[route("/health", method = "GET")]
 pub async fn health_endpoint() -> Result<Json<Value>> {
     info!("Healthy");
     Ok(Json(json!({"healthy": true})))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthMagicTokenRequest {
+    magic_token: String,
+}
+
+#[route("/auth/magic-token", method = "GET")]
+pub async fn auth_get_magic_token_endpoint(
+    query: web::Query<AuthMagicTokenRequest>,
+) -> Result<HttpResponse> {
+    let token = &query.magic_token;
+    let token_hash = &hash_token(token);
+
+    if let Some(magic_token) = select_magic_token(token_hash) {
+        handle_request(
+            &magic_token.client_id,
+            &Method::Get,
+            "auth/magic-token",
+            json!({"magicToken": token}),
+            None,
+        )
+        .await
+    } else {
+        Err(ErrorUnauthorized("Unauthorized"))
+    }
+}
+
+#[route("/auth/magic-token", method = "POST")]
+pub async fn auth_magic_token_endpoint(
+    query: web::Query<AuthMagicTokenRequest>,
+    req: HttpRequest,
+    _: ClientHeaderAuthorized,
+) -> Result<Json<Value>> {
+    let token_hash = &hash_token(&query.magic_token);
+
+    let query: Vec<_> = QString::from(req.query_string()).into();
+    let client_id = query
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case("clientId"))
+        .map(|(_, value)| value)
+        .ok_or(ErrorBadRequest("Missing clientId"))?;
+
+    insert_magic_token(client_id, token_hash);
+
+    Ok(Json(json!({"success": true})))
 }
 
 #[derive(Deserialize, Clone)]
@@ -76,7 +128,7 @@ pub async fn track_endpoint(
     req: HttpRequest,
     _: SignatureAuthorized,
 ) -> Result<HttpResponse> {
-    handle_request(body, req).await
+    proxy_request(body, req).await
 }
 
 #[route("/artists/{artist_id}/{size}", method = "GET", method = "HEAD")]
@@ -85,7 +137,7 @@ pub async fn artist_cover_endpoint(
     req: HttpRequest,
     _: SignatureAuthorized,
 ) -> Result<HttpResponse> {
-    handle_request(body, req).await
+    proxy_request(body, req).await
 }
 
 #[route("/albums/{album_id}/{size}", method = "GET", method = "HEAD")]
@@ -94,7 +146,7 @@ pub async fn album_cover_endpoint(
     req: HttpRequest,
     _: SignatureAuthorized,
 ) -> Result<HttpResponse> {
-    handle_request(body, req).await
+    proxy_request(body, req).await
 }
 
 #[route("/{path:.*}", method = "GET", method = "POST", method = "HEAD")]
@@ -103,7 +155,7 @@ pub async fn tunnel_endpoint(
     req: HttpRequest,
     _: ClientHeaderAuthorized,
 ) -> Result<HttpResponse> {
-    handle_request(body, req).await
+    proxy_request(body, req).await
 }
 
 #[allow(dead_code)]
@@ -112,10 +164,8 @@ enum ResponseType {
     Body,
 }
 
-async fn handle_request(body: Option<Bytes>, req: HttpRequest) -> Result<HttpResponse> {
-    let request_id = thread_rng().gen::<usize>();
-
-    let method = req.method();
+async fn proxy_request(body: Option<Bytes>, req: HttpRequest) -> Result<HttpResponse> {
+    let method = Method::from_str(&req.method().to_string().to_uppercase()).unwrap();
     let path = req.path().strip_prefix('/').expect("Failed to get path");
     let query: Vec<_> = QString::from(req.query_string()).into();
     let query: HashMap<_, _> = query.into_iter().collect();
@@ -125,16 +175,26 @@ async fn handle_request(body: Option<Bytes>, req: HttpRequest) -> Result<HttpRes
         .ok_or(ErrorBadRequest("Missing clientId query param"))?;
     let query = serde_json::to_value(query).unwrap();
 
-    info!("Received {method} call to {path} with {query} (id {request_id})");
-
     let body = body
         .filter(|bytes| !bytes.is_empty())
         .map(|bytes| serde_json::from_slice(&bytes))
         .transpose()?;
 
-    debug!("Starting ws request for {request_id} {method} {path} {query:?}");
+    handle_request(&client_id, &method, path, query, body).await
+}
 
-    let (mut headers_rx, rx) = request(&client_id, request_id, method, path, query, body).await?;
+async fn handle_request(
+    client_id: &str,
+    method: &Method,
+    path: &str,
+    query: Value,
+    payload: Option<Value>,
+) -> Result<HttpResponse> {
+    let request_id = thread_rng().gen::<usize>();
+
+    debug!("Starting ws request for {request_id} {method} {path} {query:?} (id {request_id})");
+
+    let (mut headers_rx, rx) = request(client_id, request_id, method, path, query, payload).await?;
 
     let mut builder = HttpResponse::Ok();
 
@@ -198,15 +258,15 @@ async fn request(
     chat_server
         .send_message(
             conn_id,
-            serde_json::json!({
-                "type": "TUNNEL_REQUEST",
-                "request_id": request_id,
-                "method": method.to_string(),
-                "path": path,
-                "query": query,
-                "payload": payload,
-                "encoding": TunnelEncoding::Binary
-            })
+            &serde_json::to_value(TunnelRequest::HttpRequest(TunnelHttpRequest {
+                request_id,
+                method: method.clone(),
+                path: path.to_string(),
+                query,
+                payload,
+                encoding: TunnelEncoding::Binary,
+            }))
+            .unwrap()
             .to_string(),
         )
         .await;

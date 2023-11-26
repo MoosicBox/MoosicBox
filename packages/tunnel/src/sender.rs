@@ -19,10 +19,9 @@ use moosicbox_ws::api::{
     WebsocketContext, WebsocketMessageError, WebsocketSendError, WebsocketSender,
 };
 use rand::{thread_rng, Rng as _};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_aux::prelude::*;
 use serde_json::{json, Value};
-use strum_macros::EnumString;
 use thiserror::Error;
 use tokio::runtime::{self, Runtime};
 use tokio::select;
@@ -33,7 +32,7 @@ use tokio_tungstenite::{
 };
 use tokio_util::sync::CancellationToken;
 
-use crate::tunnel::TunnelEncoding;
+use crate::tunnel::{Method, TunnelEncoding};
 
 lazy_static! {
     static ref RT: Runtime = runtime::Builder::new_multi_thread()
@@ -71,18 +70,6 @@ pub enum TunnelRequestError {
     UnsupportedRoute,
     #[error("Websocket Message Error")]
     WebsocketMessage(#[from] WebsocketMessageError),
-}
-
-#[derive(Debug, Serialize, Deserialize, EnumString)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
-pub enum Method {
-    Head,
-    Get,
-    Post,
-    Put,
-    Patch,
-    Delete,
 }
 
 #[derive(Debug, Deserialize)]
@@ -265,8 +252,7 @@ impl TunnelSender {
             .post(url)
             .header(reqwest::header::AUTHORIZATION, access_token)
             .send()
-            .await
-            .unwrap()
+            .await?
             .json()
             .await?;
 
