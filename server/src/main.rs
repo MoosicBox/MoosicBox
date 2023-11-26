@@ -5,7 +5,7 @@ mod scan;
 mod ws;
 
 use actix_cors::Cors;
-use actix_web::{http, middleware, web, App, HttpServer};
+use actix_web::{http, middleware, web, App};
 use lazy_static::lazy_static;
 use log::{debug, error, info};
 use moosicbox_auth::get_client_id_and_access_token;
@@ -218,7 +218,13 @@ async fn main() -> std::io::Result<()> {
             .service(moosicbox_player::api::player_status_endpoint)
     };
 
-    let http_server = HttpServer::new(app).bind(("0.0.0.0", service_port))?.run();
+    let mut http_server = actix_web::HttpServer::new(app);
+
+    if let Ok(Ok(workers)) = env::var("ACTIX_WORKERS").map(|w| w.parse::<usize>()) {
+        http_server = http_server.workers(workers);
+    }
+
+    let http_server = http_server.bind(("0.0.0.0", service_port))?.run();
 
     try_join!(
         async move {
