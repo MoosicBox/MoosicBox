@@ -1,0 +1,21 @@
+services:
+    moosicbox_server:
+        image: moosicbox_server
+        build:
+            context: .
+            dockerfile: server/Dockerfile
+            args:
+                WS_HOST: "${WS_HOST}"
+                TUNNEL_ACCESS_TOKEN: "${TUNNEL_ACCESS_TOKEN}"
+        ports:
+            - "8010:8010"
+
+    moosicbox_tunnel_server:
+        image: moosicbox_tunnel_server
+        build:
+            context: .
+            dockerfile: tunnel_server/Dockerfile
+            args:
+                TUNNEL_ACCESS_TOKEN: "${TUNNEL_ACCESS_TOKEN}"
+        ports:
+            - "8004:8004"

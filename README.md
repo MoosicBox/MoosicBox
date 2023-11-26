@@ -10,21 +10,27 @@ A music server for cows
 
 ### Debug
 
-`cargo server:debug 8001`
-
-## Tunnel Server
-
-### Installation
-
-`pnpm install`
+`RUST_BACKTRACE=1 RUST_LOG="moosicbox=debug" cargo server:debug 8001`
 
 ### Deploy
 
-`pnpm sst deploy --stage stage-name`
+`WS_HOST="wss://tunnel2.moosicbox.com/ws" TUNNEL_ACCESS_TOKEN='your access token here' ./aws-deploy.sh moosicbox_server moosicbox-server`
+
+## Tunnel Server
+
+### Run
+
+1. `cd tunnel_server`
+1. `TUNNEL_ACCESS_TOKEN='your access token here' cargo server 8005`
 
 ### Development
 
-`pnpm sst dev`
+1. `cd tunnel_server`
+1. `TUNNEL_ACCESS_TOKEN='your access token here' RUST_BACKTRACE=1 RUST_LOG="moosicbox=debug" cargo server:debug 8005`
+
+### Deploy
+
+`TUNNEL_ACCESS_TOKEN='your access token here' ./aws-deploy.sh moosicbox_tunnel_server moosicbox-tunnel-server`
 
 ## Database
 
@@ -32,12 +38,12 @@ A music server for cows
 
 The SQLite database stores the music library data:
 
--   Artist metadata
--   Album metadata
--   Track metadata
--   Local WebSocket connection metadata
--   Audio Player configurations
--   Playback Sessions
+- Artist metadata
+- Album metadata
+- Track metadata
+- Local WebSocket connection metadata
+- Audio Player configurations
+- Playback Sessions
 
 #### Migrations
 
@@ -57,8 +63,8 @@ The SQLite database stores the music library data:
 
 The MySQL database stores the tunnel server configurations:
 
--   WebSocket connection mappings
-    -   Enables the tunnel server to know which WebSocket connection to tunnel data from
+- WebSocket connection mappings
+  - Enables the tunnel server to know which WebSocket connection to tunnel data from
 
 #### Migrations
 
