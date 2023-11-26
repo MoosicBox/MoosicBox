@@ -43,8 +43,14 @@ pub async fn get_magic_token_endpoint(
     }
 }
 
+#[derive(Deserialize)]
+pub struct CreateMagicTokenQuery {
+    host: Option<String>,
+}
+
 #[route("/auth/magic-token", method = "POST")]
 pub async fn create_magic_token_endpoint(
+    query: web::Query<CreateMagicTokenQuery>,
     data: web::Data<AppState>,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
@@ -57,10 +63,14 @@ pub async fn create_magic_token_endpoint(
         .append_pair("apiUrl", &tunnel_host)
         .finish();
 
-    let host = "https://moosicbox.com";
-
-    Ok(Json(json!({
-        "token": token,
-        "url": format!("{host}/auth/{token}?{api_url_param}")
-    })))
+    if let Some(host) = &query.host {
+        Ok(Json(json!({
+            "token": token,
+            "url": format!("{host}/auth/{token}?{api_url_param}")
+        })))
+    } else {
+        Ok(Json(json!({
+            "token": token,
+        })))
+    }
 }
