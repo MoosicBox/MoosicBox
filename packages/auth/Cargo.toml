@@ -5,6 +5,7 @@ name    = "moosicbox_auth"
 version = "0.1.0"
 
 [dependencies]
+actix          = { workspace = true }
 actix-web      = { workspace = true }
 log            = { workspace = true }
 moosicbox_core = { path = "../core" }

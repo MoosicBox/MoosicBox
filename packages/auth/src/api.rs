@@ -8,7 +8,7 @@ use moosicbox_core::app::AppState;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::{create_magic_token, get_credentials_from_magic_token};
+use crate::{create_magic_token, get_credentials_from_magic_token, NonTunnelRequestAuthorized};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -43,7 +43,10 @@ pub async fn get_magic_token_endpoint(
 }
 
 #[route("/auth/magic-token", method = "POST")]
-pub async fn magic_token_endpoint(data: web::Data<AppState>) -> Result<Json<Value>> {
+pub async fn create_magic_token_endpoint(
+    data: web::Data<AppState>,
+    _: NonTunnelRequestAuthorized,
+) -> Result<Json<Value>> {
     let token = create_magic_token(
         data.db.as_ref().unwrap(),
         &data.tunnel_host.clone().unwrap(),

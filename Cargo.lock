@@ -2786,6 +2786,7 @@ dependencies = [
 name = "moosicbox_auth"
 version = "0.1.0"
 dependencies = [
+ "actix",
  "actix-web",
  "log",
  "moosicbox_core",

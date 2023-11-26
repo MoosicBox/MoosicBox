@@ -573,6 +573,8 @@ impl TunnelSender {
             Method::Delete => client.delete(url),
         };
 
+        builder = builder.header("user-agent", "MOOSICBOX_TUNNEL");
+
         if let Some(body) = payload {
             builder = builder.json(&body);
         }

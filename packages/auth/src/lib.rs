@@ -3,6 +3,8 @@
 #[cfg(feature = "api")]
 pub mod api;
 
+use actix::fut::{err, ok, Ready};
+use actix_web::{dev::Payload, error::ErrorUnauthorized, http, FromRequest, HttpRequest};
 use log::error;
 use rusqlite::Connection;
 use serde_json::Value;
@@ -120,4 +122,29 @@ async fn register_client(host: &str, client_id: &str) -> Result<Option<String>, 
     } else {
         Ok(None)
     }
+}
+
+pub struct NonTunnelRequestAuthorized;
+
+impl FromRequest for NonTunnelRequestAuthorized {
+    type Error = actix_web::Error;
+    type Future = Ready<Result<Self, actix_web::Error>>;
+
+    fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
+        if is_authorized(req) {
+            ok(NonTunnelRequestAuthorized)
+        } else {
+            err(ErrorUnauthorized("Unauthorized"))
+        }
+    }
+}
+
+fn is_authorized(req: &HttpRequest) -> bool {
+    if let Some(user_agent) = req.headers().get(http::header::USER_AGENT) {
+        if let Ok(user_agent) = user_agent.to_str() {
+            return user_agent != "MOOSICBOX_TUNNEL";
+        }
+    }
+
+    true
 }

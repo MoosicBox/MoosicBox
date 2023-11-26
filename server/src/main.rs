@@ -192,7 +192,7 @@ async fn main() -> std::io::Result<()> {
             .service(api::websocket)
             .service(api::scan_endpoint)
             .service(moosicbox_auth::api::get_magic_token_endpoint)
-            .service(moosicbox_auth::api::magic_token_endpoint)
+            .service(moosicbox_auth::api::create_magic_token_endpoint)
             .service(moosicbox_menu::api::get_artists_endpoint)
             .service(moosicbox_menu::api::get_artist_endpoint)
             .service(moosicbox_menu::api::get_album_endpoint)
