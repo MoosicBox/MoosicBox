@@ -2,9 +2,9 @@ name: Build and Test
 
 on:
     push:
-        branches: ['master']
+        branches: ["master"]
     pull_request:
-        branches: ['master']
+        branches: ["master"]
 
 env:
     CARGO_TERM_COLOR: always
@@ -73,6 +73,14 @@ jobs:
                       path: tunnel_server
                       os: ubuntu-latest
                       env: TUNNEL_ACCESS_TOKEN=123
+
+                    - name: server-static-token-auth
+                      path: server
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
+                      cargo: --no-default-features
+                      features: static-token-auth,cpal
+                      env: STATIC_TOKEN=123
 
                     - name: server-cpal
                       path: server

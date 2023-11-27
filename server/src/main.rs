@@ -1,6 +1,8 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 mod api;
+#[cfg(feature = "static-token-auth")]
+mod auth;
 mod scan;
 mod ws;
 
@@ -184,10 +186,14 @@ async fn main() -> std::io::Result<()> {
             .unwrap()
             .replace(server_tx.clone());
 
-        App::new()
-            .wrap(cors)
-            .wrap(middleware::Compress::default())
-            .app_data(web::Data::new(app_data))
+        let app = App::new().wrap(cors).wrap(middleware::Compress::default());
+
+        #[cfg(feature = "static-token-auth")]
+        let app = app.wrap(crate::auth::StaticTokenAuth::new(
+            std::env!("STATIC_TOKEN").into(),
+        ));
+
+        app.app_data(web::Data::new(app_data))
             .app_data(web::Data::new(server_tx.clone()))
             .service(api::health_endpoint)
             .service(api::websocket)
