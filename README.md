@@ -14,7 +14,7 @@ A music server for cows
 
 ### Deploy
 
-`WS_HOST="wss://tunnel2.moosicbox.com/ws" TUNNEL_ACCESS_TOKEN='your access token here' ./aws-deploy.sh moosicbox_server moosicbox-server`
+`WS_HOST="wss://tunnel2.moosicbox.com/ws" TUNNEL_ACCESS_TOKEN='your access token here' STATIC_TOKEN='your static token here' ./aws-deploy.sh moosicbox_server moosicbox-server`
 
 ## Tunnel Server
 

@@ -87,7 +87,9 @@ RUN cargo build --manifest-path=packages/tunnel/Cargo.toml --release --no-defaul
 RUN rm packages/tunnel/src/main.rs
 
 COPY server server
-RUN cargo build --manifest-path=server/Cargo.toml --release --no-default-features --features=cpal
+ARG STATIC_TOKEN
+ENV STATIC_TOKEN=${STATIC_TOKEN}
+RUN cargo build --manifest-path=server/Cargo.toml --release --no-default-features --features=cpal,static-token-auth
 
 RUN cargo install diesel_cli --no-default-features --features sqlite
 COPY migrations/sqlite migrations/sqlite
