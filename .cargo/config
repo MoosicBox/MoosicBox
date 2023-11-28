@@ -1,6 +1,6 @@
 [alias]
-"server:debug" = "run --manifest-path=server/Cargo.toml"
-"server:release" = "run --manifest-path=server/Cargo.toml --release"
+"server:debug" = "server:debug:cpal"
+"server:release" = "server:cpal"
 server = "server:release"
 "server:debug:cpal" = "run --manifest-path=server/Cargo.toml --features=cpal"
 "server:cpal" = "run --manifest-path=server/Cargo.toml --release --features=cpal"
