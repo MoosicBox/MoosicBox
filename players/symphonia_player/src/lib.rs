@@ -241,10 +241,17 @@ fn play(
         }
     };
 
+    let result = if let Err(PlaybackError::AudioOutput(AudioOutputError::StreamEnd)) = result {
+        Ok(0)
+    } else {
+        result
+    };
+
     match result {
         Ok(code) => match code {
             2 => debug!("Aborted"),
             _ => {
+                debug!("Attempting to get audio_output to flush");
                 if let Some(audio_output) = audio_output.as_mut() {
                     audio_output.flush()?;
                 }
@@ -253,7 +260,9 @@ fn play(
         Err(PlaybackError::AudioOutput(AudioOutputError::Interrupt)) => {
             info!("Audio interrupt detected. Not flushing");
         }
-        _ => {}
+        Err(ref err) => {
+            error!("Encountered error {err:?}");
+        }
     };
 
     result
