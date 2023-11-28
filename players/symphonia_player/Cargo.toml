@@ -26,15 +26,16 @@ thiserror               = { workspace = true }
 tokio                   = { workspace = true }
 
 [features]
-default = ["cpal", "pulseaudio", "resampler"]
+default = ["cpal", "pulseaudio", "resampler", "opus"]
 
 fail-on-warnings = []
 
 # Player audio outputs
 asio                = ["cpal/asio"]
-cpal                = ["resampler"]
+cpal                = ["resampler", "dep:cpal"]
 jack                = ["cpal/jack"]
+opus                = ["resampler"]
 pulseaudio          = ["pulseaudio-standard", "pulseaudio-simple"]
 pulseaudio-simple   = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
 pulseaudio-standard = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
-resampler           = ["dep:arrayvec", "dep:cpal", "dep:rb", "dep:rubato"]
+resampler           = ["dep:arrayvec", "dep:rb", "dep:rubato"]

@@ -52,6 +52,7 @@ pub enum AudioOutputType {
     PulseAudioStandard,
     #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
     PulseAudioSimple,
+    #[cfg(feature = "opus")]
     Opus,
 }
 

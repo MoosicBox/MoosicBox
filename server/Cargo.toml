@@ -41,7 +41,7 @@ tokio                  = { workspace = true, features = ["rt", "time", "macros"]
 url                    = { workspace = true }
 
 [features]
-default = ["cpal", "pulseaudio", "static-token-auth"]
+default = ["cpal", "opus", "pulseaudio", "static-token-auth"]
 
 fail-on-warnings = []
 
@@ -49,6 +49,7 @@ fail-on-warnings = []
 asio                = ["moosicbox_player/asio"]
 cpal                = ["moosicbox_player/cpal"]
 jack                = ["moosicbox_player/jack"]
+opus                = ["moosicbox_player/opus"]
 pulseaudio          = ["moosicbox_player/pulseaudio"]
 pulseaudio-simple   = ["moosicbox_player/pulseaudio-simple"]
 pulseaudio-standard = ["moosicbox_player/pulseaudio-standard"]

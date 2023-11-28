@@ -34,6 +34,7 @@ mod pulseaudio;
 #[cfg(feature = "cpal")]
 mod cpal;
 
+#[cfg(feature = "opus")]
 mod opus;
 
 pub fn try_open(
@@ -44,6 +45,7 @@ pub fn try_open(
     #[cfg(all(
         not(any(
             feature = "cpal",
+            feature = "opus",
             feature = "pulseaudio-standard",
             feature = "pulseaudio-simple"
         )),
@@ -53,11 +55,12 @@ pub fn try_open(
 
     #[cfg(not(any(
         feature = "cpal",
+        feature = "opus",
         feature = "pulseaudio-standard",
         feature = "pulseaudio-simple",
         feature = "pulseaudio"
     )))]
-    compile_error!("Must specify a valid audio output feature. e.g. cpal, pulseaudio-standard, or pulseaudio-simple");
+    compile_error!("Must specify a valid audio output feature. e.g. cpal, opus, pulseaudio-standard, or pulseaudio-simple");
 
     match audio_output_type {
         #[cfg(feature = "cpal")]
@@ -66,6 +69,7 @@ pub fn try_open(
         AudioOutputType::PulseAudioStandard => pulseaudio::standard::try_open(spec, duration),
         #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
         AudioOutputType::PulseAudioSimple => pulseaudio::simple::try_open(spec, duration),
+        #[cfg(feature = "opus")]
         AudioOutputType::Opus => opus::encoder::try_open(spec, duration),
     }
 }

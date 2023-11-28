@@ -26,7 +26,7 @@ thiserror                  = { workspace = true }
 tokio                      = { workspace = true, features = ["rt", "time", "macros"] }
 
 [features]
-default = ["cpal", "pulseaudio"]
+default = ["cpal", "opus", "pulseaudio"]
 
 fail-on-warnings = []
 
@@ -34,6 +34,7 @@ fail-on-warnings = []
 asio                = ["moosicbox_symphonia_player/asio"]
 cpal                = ["moosicbox_symphonia_player/cpal"]
 jack                = ["moosicbox_symphonia_player/jack"]
+opus                = ["moosicbox_symphonia_player/opus"]
 pulseaudio          = ["pulseaudio-standard", "pulseaudio-simple"]
 pulseaudio-simple   = ["moosicbox_symphonia_player/pulseaudio-simple"]
 pulseaudio-standard = ["moosicbox_symphonia_player/pulseaudio-standard"]
