@@ -52,5 +52,6 @@ jack                = ["moosicbox_player/jack"]
 pulseaudio          = ["moosicbox_player/pulseaudio"]
 pulseaudio-simple   = ["moosicbox_player/pulseaudio-simple"]
 pulseaudio-standard = ["moosicbox_player/pulseaudio-standard"]
+resampler           = ["moosicbox_player/resampler"]
 
 static-token-auth = []

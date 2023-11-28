@@ -1,29 +1,29 @@
 [package]
-name = "moosicbox_player"
-version = "0.1.0"
 authors = ["Braden Steffaniak"]
 edition = "2021"
+name    = "moosicbox_player"
+version = "0.1.0"
 
 [dependencies]
-actix-cors = "0.6.4"
-actix-files = "0.6.2"
-actix-web = "4.4.0"
-awc = "3.0.0-beta.9"
-crossbeam-channel = { workspace = true }
-lambda-web = { version = "0.2.1", features=["actix4"] }
-lambda_runtime = "0.8.2"
-lazy_static = { workspace = true }
-log = { workspace = true }
-moosicbox_core = { path = "../core" }
+actix-cors                 = "0.6.4"
+actix-files                = "0.6.2"
+actix-web                  = "4.4.0"
+awc                        = "3.0.0-beta.9"
+crossbeam-channel          = { workspace = true }
+lambda-web                 = { version = "0.2.1", features = ["actix4"] }
+lambda_runtime             = "0.8.2"
+lazy_static                = { workspace = true }
+log                        = { workspace = true }
+moosicbox_core             = { path = "../core" }
 moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false }
-once_cell = { workspace = true }
-rand.workspace = true
-reqwest = { workspace = true, features = [ "json" ] }
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
-symphonia = { workspace = true }
-thiserror = { workspace = true }
-tokio = { workspace = true, features = ["rt", "time", "macros"] }
+once_cell                  = { workspace = true }
+rand.workspace             = true
+reqwest                    = { workspace = true, features = ["json"] }
+serde                      = { workspace = true, features = ["derive"] }
+serde_json                 = { workspace = true }
+symphonia                  = { workspace = true }
+thiserror                  = { workspace = true }
+tokio                      = { workspace = true, features = ["rt", "time", "macros"] }
 
 [features]
 default = ["cpal", "pulseaudio"]
@@ -31,9 +31,10 @@ default = ["cpal", "pulseaudio"]
 fail-on-warnings = []
 
 # Player audio outputs
-cpal = ["moosicbox_symphonia_player/cpal"]
-jack = ["moosicbox_symphonia_player/jack"]
-asio = ["moosicbox_symphonia_player/asio"]
-pulseaudio = ["pulseaudio-standard", "pulseaudio-simple"]
+asio                = ["moosicbox_symphonia_player/asio"]
+cpal                = ["moosicbox_symphonia_player/cpal"]
+jack                = ["moosicbox_symphonia_player/jack"]
+pulseaudio          = ["pulseaudio-standard", "pulseaudio-simple"]
+pulseaudio-simple   = ["moosicbox_symphonia_player/pulseaudio-simple"]
 pulseaudio-standard = ["moosicbox_symphonia_player/pulseaudio-standard"]
-pulseaudio-simple = ["moosicbox_symphonia_player/pulseaudio-simple"]
+resampler           = ["moosicbox_symphonia_player/resampler"]

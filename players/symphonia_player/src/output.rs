@@ -34,6 +34,8 @@ mod pulseaudio;
 #[cfg(feature = "cpal")]
 mod cpal;
 
+mod opus;
+
 pub fn try_open(
     audio_output_type: &AudioOutputType,
     spec: SignalSpec,
@@ -64,5 +66,6 @@ pub fn try_open(
         AudioOutputType::PulseAudioStandard => pulseaudio::standard::try_open(spec, duration),
         #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
         AudioOutputType::PulseAudioSimple => pulseaudio::simple::try_open(spec, duration),
+        AudioOutputType::Opus => opus::encoder::try_open(spec, duration),
     }
 }

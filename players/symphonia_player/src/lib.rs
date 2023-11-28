@@ -23,7 +23,7 @@ use thiserror::Error;
 pub mod media_sources;
 pub mod output;
 
-#[cfg(feature = "cpal")]
+#[cfg(feature = "resampler")]
 mod resampler;
 
 #[derive(Debug, Clone)]
@@ -52,6 +52,7 @@ pub enum AudioOutputType {
     PulseAudioStandard,
     #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
     PulseAudioSimple,
+    Opus,
 }
 
 #[allow(clippy::too_many_arguments)]
