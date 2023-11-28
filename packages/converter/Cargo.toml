@@ -1,0 +1,15 @@
+[package]
+authors = ["Braden Steffaniak"]
+edition = "2021"
+name    = "moosicbox_converter"
+version = "0.1.0"
+
+[dependencies]
+log       = { workspace = true }
+opus      = { workspace = true }
+thiserror = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = []

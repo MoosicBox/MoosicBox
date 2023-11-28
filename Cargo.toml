@@ -3,6 +3,7 @@ members = [
     "server",
     "tunnel_server",
     "packages/auth",
+    "packages/converter",
     "packages/core",
     "packages/files",
     "packages/image",
@@ -64,6 +65,7 @@ mysql = { version = "24.0.0", features = [
 ], default-features = false }
 once_cell = { version = "1.18.0" }
 openssl = { version = "0.10.55", features = ["v110"] }
+opus = "0.3.0"
 pretty_env_logger = "0.4"
 qstring = "0.7.2"
 rand = "0.8"

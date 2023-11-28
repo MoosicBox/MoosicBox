@@ -29,6 +29,11 @@ jobs:
                       cargo: --no-default-features
                       features: api
 
+                    - name: converter
+                      path: packages/converter
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+
                     - name: core
                       path: packages/core
                       os: ubuntu-latest
