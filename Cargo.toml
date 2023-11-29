@@ -82,6 +82,7 @@ strum_macros = "0.25.3"
 symphonia = { version = "0.5.2", features = ["all"] }
 thiserror = "1.0.48"
 tokio = { version = "1.24.2", features = ["sync", "io-util"] }
+tokio-stream = "0.1.14"
 tokio-tungstenite = { version = "0.20.1", features = ["native-tls-vendored"] }
 tokio-util = "0.7.4"
 url = "2.5.0"
