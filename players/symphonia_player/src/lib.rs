@@ -8,7 +8,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
-use output::AudioOutputError;
+use output::{AudioOutputError, AudioOutputHandler};
 use symphonia::core::codecs::{DecoderOptions, FinalizeResult, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, Track};
@@ -45,21 +45,10 @@ pub enum PlaybackError {
     Symphonia(#[from] Error),
 }
 
-pub enum AudioOutputType {
-    #[cfg(feature = "cpal")]
-    Cpal,
-    #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
-    PulseAudioStandard,
-    #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
-    PulseAudioSimple,
-    #[cfg(feature = "opus")]
-    Opus,
-}
-
 #[allow(clippy::too_many_arguments)]
 pub fn play_file_path_str(
     path_str: &str,
-    audio_output_type: &AudioOutputType,
+    audio_output_handler: &mut AudioOutputHandler,
     enable_gapless: bool,
     verify: bool,
     track_num: Option<usize>,
@@ -87,7 +76,7 @@ pub fn play_file_path_str(
     play_media_source(
         mss,
         &hint,
-        audio_output_type,
+        audio_output_handler,
         enable_gapless,
         verify,
         track_num,
@@ -101,7 +90,7 @@ pub fn play_file_path_str(
 pub fn play_media_source(
     media_source_stream: MediaSourceStream,
     hint: &Hint,
-    audio_output_type: &AudioOutputType,
+    audio_output_handler: &mut AudioOutputHandler,
     enable_gapless: bool,
     verify: bool,
     track_num: Option<usize>,
@@ -142,7 +131,7 @@ pub fn play_media_source(
             // Play it!
             play(
                 probed.format,
-                audio_output_type,
+                audio_output_handler,
                 track_num,
                 seek_time,
                 &decode_opts,
@@ -166,7 +155,7 @@ struct PlayTrackOptions {
 
 fn play(
     mut reader: Box<dyn FormatReader>,
-    audio_output_type: &AudioOutputType,
+    audio_output_handler: &mut AudioOutputHandler,
     track_num: Option<usize>,
     seek_time: Option<f64>,
     decode_opts: &DecoderOptions,
@@ -215,16 +204,12 @@ fn play(
         0
     };
 
-    // The audio output device.
-    let mut audio_output = None;
-
     let mut track_info = PlayTrackOptions { track_id, seek_ts };
 
     let result = loop {
         match play_track(
             &mut reader,
-            &mut audio_output,
-            audio_output_type,
+            audio_output_handler,
             track_info,
             decode_opts,
             progress.clone(),
@@ -254,7 +239,7 @@ fn play(
             2 => debug!("Aborted"),
             _ => {
                 debug!("Attempting to get audio_output to flush");
-                if let Some(audio_output) = audio_output.as_mut() {
+                if let Some(audio_output) = audio_output_handler.inner.as_mut() {
                     audio_output.flush()?;
                 }
             }
@@ -272,8 +257,7 @@ fn play(
 
 fn play_track(
     reader: &mut Box<dyn FormatReader>,
-    audio_output: &mut Option<Box<dyn output::AudioOutput>>,
-    audio_output_type: &AudioOutputType,
+    audio_output_handler: &mut AudioOutputHandler,
     play_opts: PlayTrackOptions,
     decode_opts: &DecoderOptions,
     progress: Arc<RwLock<Progress>>,
@@ -317,7 +301,7 @@ fn play_track(
             Ok(decoded) => {
                 trace!("Decoded packet");
                 // If the audio output is not open, try to open it.
-                if audio_output.is_none() {
+                if audio_output_handler.inner.is_none() {
                     trace!("Getting audio spec");
                     // Get the audio buffer specification. This is a description of the decoded
                     // audio buffer's sample format and sample rate.
@@ -329,8 +313,7 @@ fn play_track(
                     let duration = decoded.capacity() as u64;
 
                     trace!("Opening audio output");
-                    // Try to open the audio output.
-                    audio_output.replace(output::try_open(audio_output_type, spec, duration)?);
+                    audio_output_handler.try_open(spec, duration)?;
                 } else {
                     // TODO: Check the audio spec. and duration hasn't changed.
                 }
@@ -348,7 +331,7 @@ fn play_track(
                         progress.clone().write().unwrap().position = secs;
                     }
 
-                    if let Some(audio_output) = audio_output {
+                    if let Some(audio_output) = audio_output_handler.inner.as_mut() {
                         trace!("Writing decoded to audio output");
                         audio_output.write(decoded)?;
                         trace!("Wrote decoded to audio output");

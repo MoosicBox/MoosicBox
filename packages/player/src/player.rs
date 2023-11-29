@@ -19,7 +19,8 @@ use moosicbox_core::{
     },
 };
 use moosicbox_symphonia_player::{
-    media_sources::remote_bytestream::RemoteByteStream, output::AudioOutputError, AudioOutputType,
+    media_sources::remote_bytestream::RemoteByteStream,
+    output::{AudioOutputError, AudioOutputHandler},
     PlaybackError, Progress,
 };
 use rand::{thread_rng, Rng as _};
@@ -356,29 +357,43 @@ impl Player {
         };
         info!("Playing track with Symphonia: {}", track_id);
 
-        #[allow(unused)]
-        #[cfg(feature = "cpal")]
-        let audio_output_type = AudioOutputType::Cpal;
-        #[allow(unused)]
-        #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
-        let audio_output_type = AudioOutputType::PulseAudioSimple;
-        #[allow(unused)]
-        #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
-        let audio_output_type = AudioOutputType::PulseAudioStandard;
-
         let mut current_seek = seek;
         let mut retry_count = 0;
 
         loop {
+            if retry_count > 0 {
+                sleep(retry_options.unwrap().retry_delay).await;
+            }
             let playable_track = self
                 .track_or_id_to_playable(self.playback_type, track_or_id)
                 .await?;
             let mss = MediaSourceStream::new(playable_track.source, Default::default());
 
+            #[allow(unused)]
+            #[cfg(feature = "cpal")]
+            let mut audio_output_handler = AudioOutputHandler::new(Box::new(
+                moosicbox_symphonia_player::output::cpal::player::try_open,
+            ));
+            #[allow(unused)]
+            #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
+            let mut audio_output_handler = AudioOutputHandler::new(Box::new(
+                moosicbox_symphonia_player::output::pulseaudio::simple::try_open,
+            ));
+            #[allow(unused)]
+            #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
+            let mut audio_output_handler = AudioOutputHandler::new(Box::new(
+                moosicbox_symphonia_player::output::pulseaudio::standard::try_open,
+            ));
+            #[allow(unused)]
+            #[cfg(feature = "opus")]
+            let mut audio_output_handler = AudioOutputHandler::new(Box::new(
+                moosicbox_symphonia_player::output::opus::encoder::try_open,
+            ));
+
             if let Err(err) = moosicbox_symphonia_player::play_media_source(
                 mss,
                 &playable_track.hint,
-                &audio_output_type,
+                &mut audio_output_handler,
                 true,
                 true,
                 None,
@@ -397,7 +412,6 @@ impl Player {
                         }
                         current_seek = Some(playback.progress.read().unwrap().position);
                         warn!("Playback interrupted. Trying again at position {current_seek:?} (attempt {retry_count}/{})", retry_options.max_retry_count);
-                        sleep(retry_options.retry_delay).await;
                         continue;
                     }
                 }

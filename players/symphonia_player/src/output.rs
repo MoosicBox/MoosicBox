@@ -2,8 +2,6 @@ use symphonia::core::audio::{AudioBufferRef, SignalSpec};
 use symphonia::core::units::Duration;
 use thiserror::Error;
 
-use crate::AudioOutputType;
-
 pub trait AudioOutput {
     fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<usize, AudioOutputError>;
     fn flush(&mut self) -> Result<(), AudioOutputError>;
@@ -29,47 +27,35 @@ pub enum AudioOutputError {
     not(windows),
     any(feature = "pulseaudio-standard", feature = "pulseaudio-simple")
 ))]
-mod pulseaudio;
+pub mod pulseaudio;
 
 #[cfg(feature = "cpal")]
-mod cpal;
+pub mod cpal;
 
 #[cfg(feature = "opus")]
-mod opus;
+pub mod opus;
 
-pub fn try_open(
-    audio_output_type: &AudioOutputType,
-    spec: SignalSpec,
-    duration: Duration,
-) -> Result<Box<dyn AudioOutput>, AudioOutputError> {
-    #[cfg(all(
-        not(any(
-            feature = "cpal",
-            feature = "opus",
-            feature = "pulseaudio-standard",
-            feature = "pulseaudio-simple"
-        )),
-        feature = "pulseaudio"
-    ))]
-    compile_error!("Must use 'pulseaudio-standard' or 'pulseaudio-simple' feature");
+type OpenFunc = Box<dyn Fn(SignalSpec, Duration) -> Result<Box<dyn AudioOutput>, AudioOutputError>>;
 
-    #[cfg(not(any(
-        feature = "cpal",
-        feature = "opus",
-        feature = "pulseaudio-standard",
-        feature = "pulseaudio-simple",
-        feature = "pulseaudio"
-    )))]
-    compile_error!("Must specify a valid audio output feature. e.g. cpal, opus, pulseaudio-standard, or pulseaudio-simple");
+pub struct AudioOutputHandler {
+    pub(crate) inner: Option<Box<dyn AudioOutput>>,
+    pub(crate) try_open: OpenFunc,
+}
 
-    match audio_output_type {
-        #[cfg(feature = "cpal")]
-        AudioOutputType::Cpal => cpal::player::try_open(spec, duration),
-        #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
-        AudioOutputType::PulseAudioStandard => pulseaudio::standard::try_open(spec, duration),
-        #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
-        AudioOutputType::PulseAudioSimple => pulseaudio::simple::try_open(spec, duration),
-        #[cfg(feature = "opus")]
-        AudioOutputType::Opus => opus::encoder::try_open(spec, duration),
+impl AudioOutputHandler {
+    pub fn new(try_open: OpenFunc) -> Self {
+        Self {
+            inner: None,
+            try_open,
+        }
+    }
+
+    pub(crate) fn try_open(
+        &mut self,
+        spec: SignalSpec,
+        duration: Duration,
+    ) -> Result<(), AudioOutputError> {
+        self.inner = Some((*self.try_open)(spec, duration)?);
+        Ok(())
     }
 }
