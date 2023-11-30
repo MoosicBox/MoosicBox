@@ -52,7 +52,7 @@ async fn tunnel_magic_token(
 #[cfg(feature = "api")]
 pub(crate) async fn create_magic_token(
     db: &moosicbox_core::app::Db,
-    tunnel_host: &str,
+    tunnel_host: Option<String>,
 ) -> Result<String, DbError> {
     let magic_token = Uuid::new_v4().to_string();
 
@@ -61,11 +61,13 @@ pub(crate) async fn create_magic_token(
         let db = lock.as_ref().unwrap();
         get_client_access_token(db)?
     } {
-        if let Err(err) =
-            tunnel_magic_token(tunnel_host, &client_id, &access_token, &magic_token).await
-        {
-            log::error!("Failed to register magic token to the tunnel: {err:?}");
-            return Err(DbError::Unknown);
+        if let Some(tunnel_host) = tunnel_host {
+            if let Err(err) =
+                tunnel_magic_token(&tunnel_host, &client_id, &access_token, &magic_token).await
+            {
+                log::error!("Failed to register magic token to the tunnel: {err:?}");
+                return Err(DbError::Unknown);
+            }
         }
         moosicbox_core::sqlite::db::save_magic_token(
             db.library.lock().as_ref().unwrap(),
