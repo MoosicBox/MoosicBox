@@ -115,6 +115,10 @@ jobs:
                       cargo: --no-default-features
                       features: cpal
 
+                    - name: stream_utils
+                      path: packages/stream_utils
+                      os: ubuntu-latest
+
                     - name: symphonia_player-cpal-windows
                       path: players/symphonia_player
                       os: windows-latest

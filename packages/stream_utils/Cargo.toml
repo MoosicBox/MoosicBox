@@ -1,0 +1,15 @@
+[package]
+authors = ["Braden Steffaniak"]
+edition = "2021"
+name    = "moosicbox_stream_utils"
+version = "0.1.0"
+
+[dependencies]
+bytes        = { workspace = true }
+futures      = { workspace = true }
+log          = { workspace = true }
+thiserror    = { workspace = true }
+tokio        = { workspace = true }
+
+[features]
+fail-on-warnings = []
