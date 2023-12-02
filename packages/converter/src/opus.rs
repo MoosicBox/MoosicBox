@@ -191,27 +191,11 @@ impl OpusWrite<'_> {
 
 impl std::io::Write for OpusWrite<'_> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let info = /*if self.packet_num <= 1 {
-            self.packet_num += 1;
-            PacketWriteEndInfo::EndPage
-        } else if self.packet_num == 2 && self.page_num == 0 {
-            //self.absgp += 48000;
-            self.page_num += 1;
-            PacketWriteEndInfo::NormalPacket
-        } else if self.page_num == 49 {
-            self.absgp += 48000;
-            self.packet_num += 1;
-            self.page_num = 0;
-            //PacketWriteEndInfo::EndPage
-            PacketWriteEndInfo::NormalPacket
-        } else {
-            self.page_num += 1;
-            PacketWriteEndInfo::NormalPacket
-        };*/ PacketWriteEndInfo::NormalPacket;
+        let info = PacketWriteEndInfo::NormalPacket;
 
         let packet = OpusPacket {
             content: buf.to_vec(),
-            info, //: PacketWriteEndInfo::NormalPacket,
+            info,
             absgp: self.absgp,
             packet_num: self.packet_num,
             page_num: self.page_num,

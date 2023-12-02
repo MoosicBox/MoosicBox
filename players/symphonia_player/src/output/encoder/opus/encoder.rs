@@ -8,7 +8,6 @@ use crate::resampler::Resampler;
 use crate::{play_file_path_str, Progress};
 
 use bytes::Bytes;
-use futures::Stream;
 use lazy_static::lazy_static;
 use log::{debug, info};
 use moosicbox_converter::opus::encoder_opus;
@@ -17,8 +16,7 @@ use symphonia::core::audio::AudioBufferRef;
 use symphonia::core::audio::*;
 use symphonia::core::conv::ReversibleSample;
 use symphonia::core::units::Duration;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-use tokio_stream::wrappers::UnboundedReceiverStream;
+use tokio::sync::mpsc::UnboundedSender;
 
 lazy_static! {
     static ref RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
@@ -41,7 +39,7 @@ where
     bytes_read: usize,
     resampler: RefCell<Option<Resampler<T>>>,
     senders: RefCell<Vec<UnboundedSender<Bytes>>>,
-    on_bytes: RefCell<Option<W>>,
+    writer: RefCell<Option<W>>,
     encoder: RefCell<opus::Encoder>,
 }
 
@@ -58,7 +56,7 @@ where
             bytes_read: 0,
             resampler: RefCell::new(None),
             senders: RefCell::new(vec![]),
-            on_bytes: RefCell::new(Some(writer)),
+            writer: RefCell::new(Some(writer)),
             encoder: RefCell::new(encoder_opus().unwrap()),
         }
     }
@@ -80,99 +78,64 @@ where
             bytes_read: 0,
             resampler: RefCell::new(Some(Resampler::<T>::new(spec, 48000_usize, duration))),
             senders: RefCell::new(vec![]),
-            on_bytes: RefCell::new(None),
+            writer: RefCell::new(None),
             encoder: RefCell::new(encoder_opus().unwrap()),
         })
-    }
-
-    pub fn bytes_receiver(&mut self) -> UnboundedReceiver<Bytes> {
-        let (sender, receiver) = unbounded_channel();
-        self.senders.borrow_mut().push(sender);
-        receiver
-    }
-
-    pub fn stream(&mut self) -> impl Stream<Item = Bytes> {
-        let (sender, receiver) = unbounded_channel();
-        self.senders.borrow_mut().push(sender);
-        UnboundedReceiverStream::new(receiver)
     }
 
     fn write_output(&self, buf_size: usize) -> usize {
         let mut read = 0;
         let mut written = 0;
         let mut output_buf = vec![0_u8; buf_size];
-        //loop {
-        //match moosicbox_converter::encode_audiopus(&self.buf[read..read + buf_size]) {
-        match moosicbox_converter::opus::encode_opus_float(
-            &mut self.encoder.borrow_mut(),
-            &self.buf[read..read + buf_size],
-            &mut output_buf,
-        ) {
-            //Ok((_, output_buf)) => {
-            Ok(info) => {
-                // let len = output_buf.len();
-                // let bytes = Bytes::from(output_buf);
-                let len = info.output_size;
-                let bytes = Bytes::from(output_buf[written..written + info.output_size].to_vec());
-                self.senders.borrow_mut().retain(|sender| {
-                    if sender.send(bytes.clone()).is_err() {
-                        debug!("Receiver has disconnected. Removing sender.");
-                        false
-                    } else {
-                        true
-                    }
-                });
-                let mut binding = self.on_bytes.borrow_mut();
-                if let Some(on_bytes) = binding.as_mut() {
-                    loop {
-                        let count = on_bytes.write(&bytes).unwrap();
-                        if count >= bytes.len() {
-                            break;
+
+        loop {
+            match moosicbox_converter::opus::encode_opus_float(
+                &mut self.encoder.borrow_mut(),
+                &self.buf[read..read + buf_size],
+                &mut output_buf,
+            ) {
+                Ok(info) => {
+                    let len = info.output_size;
+                    let bytes =
+                        Bytes::from(output_buf[written..written + info.output_size].to_vec());
+                    self.senders.borrow_mut().retain(|sender| {
+                        if sender.send(bytes.clone()).is_err() {
+                            debug!("Receiver has disconnected. Removing sender.");
+                            false
+                        } else {
+                            true
+                        }
+                    });
+                    let mut binding = self.writer.borrow_mut();
+                    if let Some(on_bytes) = binding.as_mut() {
+                        loop {
+                            let count = on_bytes.write(&bytes).unwrap();
+                            if count >= bytes.len() {
+                                break;
+                            }
                         }
                     }
-                }
-                read += buf_size;
-                written += len;
-                if self.time % 1000 == 0 {
-                    debug!(
-                        "Info: read={} written={} input_consumed={} output_size={} len={}",
-                        read, written, buf_size, len, self.bytes_read
-                    );
-                }
+                    read += buf_size;
+                    written += len;
+                    if self.time % 1000 == 0 {
+                        debug!(
+                            "Info: read={} written={} input_consumed={} output_size={} len={}",
+                            read, written, buf_size, len, self.bytes_read
+                        );
+                    }
 
-                // if read >= self.buf.len() {
-                //     break;
-                // }
+                    if read >= self.buf.len() {
+                        break;
+                    }
+                }
+                Err(err) => {
+                    panic!("Failed to convert: {err:?}");
+                }
             }
-            Err(err) => {
-                panic!("Failed to convert: {err:?}");
-            } //}
         }
         written
     }
 }
-
-/*impl Stream for OpusEncoder<i16> {
-    type Item = Result<Bytes, Box<dyn std::error::Error>>;
-
-    fn poll_next(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
-        let this = self.get_mut();
-        match this.receiver.poll_recv(cx) {
-            Poll::Ready(Some(bytes)) => Poll::Ready(Some(Ok(bytes))),
-            Poll::Pending => {
-                debug!("Pending...");
-                Poll::Pending
-            }
-            Poll::Ready(None) => {
-                debug!("Finished");
-                Poll::Ready(None)
-            }
-        }
-    }
-}*/
 
 impl<T, W> AudioOutput for OpusEncoder<T, W>
 where
@@ -245,45 +208,13 @@ where
             }
         }
 
-        /*if self.pos >= STEREO_MIN {
-            self.bytes_read += self.write_output(STEREO_MIN);
-        }*/
-        let mut binding = self.on_bytes.borrow_mut();
+        let mut binding = self.writer.borrow_mut();
         if let Some(on_bytes) = binding.as_mut() {
             on_bytes.flush().unwrap();
         }
         if true {
             return Ok(());
         }
-
-        // let path = match std::env::consts::OS {
-        //     "windows" => "C:\\Users\\Brade\\test-win.opus",
-        //     _ => "/mnt/c/Users/Brade/test-lin.opus",
-        // };
-
-        // let _ = std::fs::remove_file(path);
-        // let file = std::fs::OpenOptions::new()
-        //     .create(true) // To create a new file
-        //     .write(true)
-        //     .open(path)
-        //     .unwrap();
-
-        // let _ = std::io::Write::write_all(&mut file, &self.output.borrow());
-        // moosicbox_converter::write_ogg(file, &self.output.borrow());
-
-        let read = std::fs::OpenOptions::new()
-            .read(true)
-            .open("/mnt/c/Users/Brade/test-lin.opus")
-            .unwrap();
-
-        let write = std::fs::OpenOptions::new()
-            .create(true) // To create a new file
-            .write(true)
-            .open("/mnt/c/Users/Brade/crayons3.opus")
-            .unwrap();
-
-        // let _ = std::io::Write::write_all(&mut file, &self.output.borrow());
-        moosicbox_converter::opus::read_write_ogg(read, write);
 
         Ok(())
     }
