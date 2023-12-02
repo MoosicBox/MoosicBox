@@ -480,6 +480,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "audiopus"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3743519567e9135cf6f9f1a509851cb0c8e4cb9d66feb286668afb1923bec458"
+dependencies = [
+ "audiopus_sys 0.1.8",
+]
+
+[[package]]
+name = "audiopus_sys"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "927791de46f70facea982dbfaf19719a41ce6064443403be631a85de6a58fff9"
+dependencies = [
+ "log",
+ "pkg-config",
+]
+
+[[package]]
 name = "audiopus_sys"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -513,6 +532,15 @@ name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
+
+[[package]]
+name = "autotools"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aef8da1805e028a172334c3b680f93e71126f2327622faef2ec3d893c0a4ad77"
+dependencies = [
+ "cc",
+]
 
 [[package]]
 name = "awc"
@@ -1717,6 +1745,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "fdk-aac"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3f3f988fa4114a728dbab7b64ef6d3adf5f4401f946c90dc17168f6e73b716c"
+dependencies = [
+ "fdk-aac-sys",
+]
+
+[[package]]
+name = "fdk-aac-sys"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24516d2611506d5cb1833555adc75f6baf9fe2706b9c13e6fc33a6b22c51ca83"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "flate2"
 version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2814,7 +2860,11 @@ dependencies = [
 name = "moosicbox_converter"
 version = "0.1.0"
 dependencies = [
+ "audiopus",
+ "fdk-aac",
  "log",
+ "mp3lame-encoder",
+ "ogg",
  "opus",
  "thiserror",
 ]
@@ -2845,15 +2895,23 @@ dependencies = [
  "actix-files",
  "actix-web",
  "awc",
+ "bytes",
  "lambda-web",
  "lambda_runtime 0.8.2",
  "log",
  "moosicbox_core",
  "moosicbox_image",
+ "moosicbox_stream_utils",
+ "moosicbox_symphonia_player",
  "regex",
  "serde",
  "serde_json",
+ "strum",
+ "strum_macros",
+ "symphonia",
  "thiserror",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
@@ -2893,13 +2951,17 @@ dependencies = [
  "actix-files",
  "actix-web",
  "awc",
+ "bytes",
  "crossbeam-channel",
+ "futures",
  "lambda-web",
  "lambda_runtime 0.8.2",
  "lazy_static",
  "log",
+ "moosicbox_converter",
  "moosicbox_core",
  "moosicbox_symphonia_player",
+ "ogg",
  "once_cell",
  "rand",
  "reqwest",
@@ -2948,6 +3010,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_stream_utils"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "futures",
+ "log",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_symphonia_player"
 version = "0.1.0"
 dependencies = [
@@ -2956,12 +3029,16 @@ dependencies = [
  "clap 3.2.25",
  "cpal",
  "crossbeam-channel",
+ "fdk-aac",
  "futures",
  "lazy_static",
  "libpulse-binding",
  "libpulse-simple-binding",
  "log",
  "moosicbox_converter",
+ "moosicbox_stream_utils",
+ "mp3lame-encoder",
+ "opus",
  "pretty_env_logger",
  "rangemap",
  "rb",
@@ -2970,6 +3047,7 @@ dependencies = [
  "symphonia",
  "thiserror",
  "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
@@ -3067,6 +3145,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "348bdc7300502f0801e5b57c448815713cd843b744ef9bda252a2698fdf90a0f"
 dependencies = [
  "thiserror",
+]
+
+[[package]]
+name = "mp3lame-encoder"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cae6c942b0426aedaf4df6549caf7ee8bbfdacb1ae5504d12d767bc995430c13"
+dependencies = [
+ "libc",
+ "mp3lame-sys",
+]
+
+[[package]]
+name = "mp3lame-sys"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99896fd43ed58e957c164c5f4a1e7d8e770f358835cc6920b2eab7ab6d1a7106"
+dependencies = [
+ "autotools",
+ "cc",
+ "libc",
 ]
 
 [[package]]
@@ -3393,6 +3492,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ogg"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "960d0efc0531a452c442c777288f704b300a5f743c04a14eba71f9aabc4897ac"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3458,7 +3566,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6526409b274a7e98e55ff59d96aafd38e6cd34d46b7dbbc32ce126dffcd75e8e"
 dependencies = [
- "audiopus_sys",
+ "audiopus_sys 0.2.2",
  "libc",
 ]
 

@@ -384,11 +384,6 @@ impl Player {
             let mut audio_output_handler = AudioOutputHandler::new(Box::new(
                 moosicbox_symphonia_player::output::pulseaudio::standard::try_open,
             ));
-            #[allow(unused)]
-            #[cfg(feature = "opus")]
-            let mut audio_output_handler = AudioOutputHandler::new(Box::new(
-                moosicbox_symphonia_player::output::opus::encoder::try_open,
-            ));
 
             if let Err(err) = moosicbox_symphonia_player::play_media_source(
                 mss,

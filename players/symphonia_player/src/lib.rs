@@ -141,7 +141,7 @@ pub fn play_media_source(
         }
         Err(err) => {
             // The input was not supported by any format reader.
-            info!("the input is not supported");
+            info!("the input is not supported: {err:?}");
             Err(PlaybackError::Symphonia(err))
         }
     }

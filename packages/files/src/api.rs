@@ -6,7 +6,8 @@ use actix_web::{
     HttpRequest, HttpResponse, Result,
 };
 use moosicbox_core::app::AppState;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use strum_macros::EnumString;
 
 use crate::files::{
     album::{get_album_cover, AlbumCoverError, AlbumCoverSource},
@@ -16,10 +17,23 @@ use crate::files::{
     },
 };
 
+#[derive(Debug, Clone, Serialize, Deserialize, EnumString)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum AudioFormat {
+    #[cfg(feature = "aac")]
+    Aac,
+    #[cfg(feature = "mp3")]
+    Mp3,
+    #[cfg(feature = "opus")]
+    Opus,
+}
+
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTrackQuery {
     pub track_id: i32,
+    pub format: Option<AudioFormat>,
 }
 
 impl From<TrackSourceError> for actix_web::Error {
@@ -42,13 +56,38 @@ pub async fn track_endpoint(
     )
     .await?
     {
-        TrackSource::LocalFilePath(path) => {
-            let path_buf = std::path::PathBuf::from(path);
-
-            Ok(actix_files::NamedFile::open_async(path_buf.as_path())
-                .await?
-                .into_response(&req))
-        }
+        TrackSource::LocalFilePath(path) => match query.format {
+            #[cfg(feature = "aac")]
+            Some(AudioFormat::Aac) => Ok(HttpResponse::Ok()
+                .insert_header((actix_web::http::header::CONTENT_TYPE, "audio/mp4"))
+                .streaming(
+                    moosicbox_symphonia_player::output::encoder::aac::encoder::encode_aac_stream(
+                        path,
+                    ),
+                )),
+            #[cfg(feature = "mp3")]
+            Some(AudioFormat::Mp3) => Ok(HttpResponse::Ok()
+                .insert_header((actix_web::http::header::CONTENT_TYPE, "audio/mp3"))
+                .streaming(
+                    moosicbox_symphonia_player::output::encoder::mp3::encoder::encode_mp3_stream(
+                        path,
+                    ),
+                )),
+            #[cfg(feature = "opus")]
+            Some(AudioFormat::Opus) => Ok(HttpResponse::Ok()
+                .insert_header((actix_web::http::header::CONTENT_TYPE, "audio/opus"))
+                .streaming(
+                    moosicbox_symphonia_player::output::encoder::opus::encoder::encode_opus_stream(
+                        path,
+                    ),
+                )),
+            _ => {
+                let path_buf = std::path::PathBuf::from(path);
+                Ok(actix_files::NamedFile::open_async(path_buf.as_path())
+                    .await?
+                    .into_response(&req))
+            }
+        },
     }
 }
 

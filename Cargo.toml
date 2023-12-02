@@ -9,6 +9,7 @@ members = [
     "packages/image",
     "packages/menu",
     "packages/player",
+    "packages/stream_utils",
     "packages/tunnel",
     "packages/ws",
     "players/symphonia_player",
@@ -28,6 +29,7 @@ actix-web = "4.4.0"
 actix-ws = "0.2.5"
 async-once-cell = "0.5.3"
 async-trait = "0.1.74"
+audiopus = "0.2.0"
 audiotags = { git = "https://github.com/BSteffaniak/audiotags.git", branch = "bug/fix-track-no" }
 awc = "3.0.0-beta.9"
 aws-config = "0.101.0"
@@ -46,6 +48,7 @@ derive_more = "0.99.7"
 dotenv = "0.15"
 enum-as-inner = "0.6.0"
 env_logger = "0.10"
+fdk-aac = "0.5.0"
 futures = "0.3"
 futures-channel = "0.3.29"
 futures-util = { version = "0.3.17", default-features = false, features = [
@@ -59,10 +62,12 @@ lambda_runtime = "0.8.2"
 lazy_static = "1.4.0"
 libvips = { git = "https://github.com/BSteffaniak/libvips-rust-bindings.git", branch = "support-windows" }
 log = { version = "0.4", features = ["release_max_level_trace"] }
+mp3lame-encoder = "0.1.4"
 mysql = { version = "24.0.0", features = [
     "default-rustls",
     "rustls-tls",
 ], default-features = false }
+ogg = "0.9.0"
 once_cell = { version = "1.18.0" }
 openssl = { version = "0.10.55", features = ["v110"] }
 opus = "0.3.0"
@@ -70,6 +75,7 @@ pretty_env_logger = "0.4"
 qstring = "0.7.2"
 rand = "0.8"
 rangemap = "1.3.0"
+regex = "1.9.5"
 reqwest = { version = "0.11.20", features = ["blocking", "stream"] }
 rusqlite = { version = "0.29.0", features = ["bundled"] }
 rustls = "0.21"

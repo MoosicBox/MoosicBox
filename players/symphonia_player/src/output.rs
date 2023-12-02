@@ -32,13 +32,13 @@ pub mod pulseaudio;
 #[cfg(feature = "cpal")]
 pub mod cpal;
 
-#[cfg(feature = "opus")]
-pub mod opus;
+pub mod encoder;
 
-type OpenFunc = Box<dyn Fn(SignalSpec, Duration) -> Result<Box<dyn AudioOutput>, AudioOutputError>>;
+type InnerType = Box<dyn AudioOutput>;
+type OpenFunc = Box<dyn FnMut(SignalSpec, Duration) -> Result<InnerType, AudioOutputError>>;
 
 pub struct AudioOutputHandler {
-    pub(crate) inner: Option<Box<dyn AudioOutput>>,
+    pub(crate) inner: Option<InnerType>,
     pub(crate) try_open: OpenFunc,
 }
 
