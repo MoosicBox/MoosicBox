@@ -30,7 +30,7 @@ impl std::io::Write for ByteWriter {
         if buf.is_empty() {
             return Ok(0);
         }
-        log::debug!("Sending bytes buf of size {}", buf.len());
+        log::trace!("Sending bytes buf of size {}", buf.len());
         let bytes: Bytes = buf.to_vec().into();
         self.senders.borrow_mut().retain(|sender| {
             if sender.send(bytes.clone()).is_err() {
@@ -62,7 +62,7 @@ impl Stream for ByteStream {
         let stream = self.get_mut();
         match stream.receiver.poll_recv(cx) {
             Poll::Ready(Some(response)) => {
-                log::debug!("Received bytes buf of size {}", response.len());
+                log::trace!("Received bytes buf of size {}", response.len());
                 Poll::Ready(Some(Ok(response)))
             }
             Poll::Pending => Poll::Pending,
