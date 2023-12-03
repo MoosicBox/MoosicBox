@@ -225,7 +225,6 @@ impl std::io::Write for OpusWrite<'_> {
     fn flush(&mut self) -> std::io::Result<()> {
         if let Some(packet) = self.packet.take() {
             let info = PacketWriteEndInfo::EndStream;
-            //let info = PacketWriteEndInfo::NormalPacket;
             let info_d = match info {
                 PacketWriteEndInfo::EndPage => "end_page",
                 PacketWriteEndInfo::NormalPacket => "normal",
