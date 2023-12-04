@@ -37,7 +37,7 @@ use crate::tunnel::{Method, TunnelEncoding};
 lazy_static! {
     static ref RT: Runtime = runtime::Builder::new_multi_thread()
         .enable_all()
-        .max_blocking_threads(4)
+        .max_blocking_threads(64)
         .build()
         .unwrap();
 }
