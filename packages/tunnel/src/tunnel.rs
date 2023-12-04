@@ -8,6 +8,9 @@ use serde_json::Value;
 use strum_macros::EnumString;
 use tokio::sync::mpsc::Receiver;
 
+#[cfg(feature = "base64")]
+static BASE64_TUNNEL_RESPONSE_PREFIX: &str = "TUNNEL_RESPONSE:";
+
 #[derive(Debug, Serialize, Deserialize, EnumString, PartialEq, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -93,6 +96,82 @@ impl From<Bytes> for TunnelResponse {
             bytes: data,
             headers,
         }
+    }
+}
+
+#[cfg(feature = "base64")]
+#[derive(Debug, thiserror::Error)]
+pub enum Base64DecodeError {
+    #[error("Invalid Content: {0:?}")]
+    InvalidContent(String),
+    #[error(transparent)]
+    Decode(#[from] base64::DecodeError),
+}
+
+#[cfg(feature = "base64")]
+impl TryFrom<&str> for TunnelResponse {
+    type Error = Base64DecodeError;
+
+    fn try_from(base64: &str) -> Result<Self, Self::Error> {
+        use base64::{engine::general_purpose, Engine};
+
+        let base64 = base64.strip_prefix(BASE64_TUNNEL_RESPONSE_PREFIX).ok_or(
+            Base64DecodeError::InvalidContent("Invalid TunnelRequest base64 data string".into()),
+        )?;
+
+        let request_id_pos =
+            base64
+                .chars()
+                .position(|c| c == '|')
+                .ok_or(Base64DecodeError::InvalidContent(
+                    "Missing request_id. Expected '|' delimiter".into(),
+                ))?;
+        let request_id = base64[..request_id_pos].parse::<usize>().unwrap();
+
+        let packet_id_pos = base64
+            .chars()
+            .skip(request_id_pos + 2)
+            .position(|c| c == '|')
+            .ok_or(Base64DecodeError::InvalidContent(
+                "Missing packet_id. Expected '|' delimiter".into(),
+            ))?;
+        let packet_id = base64[request_id_pos + 1..packet_id_pos]
+            .parse::<u32>()
+            .unwrap();
+
+        let headers = if packet_id == 1 {
+            let headers_pos = base64
+                .chars()
+                .skip(packet_id_pos + 2)
+                .position(|c| c == '}')
+                .ok_or(Base64DecodeError::InvalidContent(
+                    "Missing headers. Expected '}' delimiter".into(),
+                ))?;
+
+            let headers_str = &base64[packet_id_pos + 1..headers_pos];
+
+            Some(serde_json::from_str(headers_str).unwrap())
+        } else {
+            None
+        };
+
+        let bytes = Bytes::from(general_purpose::STANDARD.decode(base64)?);
+
+        Ok(TunnelResponse {
+            request_id,
+            packet_id,
+            bytes,
+            headers,
+        })
+    }
+}
+
+#[cfg(feature = "base64")]
+impl TryFrom<String> for TunnelResponse {
+    type Error = Base64DecodeError;
+
+    fn try_from(base64: String) -> Result<Self, Self::Error> {
+        base64.as_str().try_into()
     }
 }
 

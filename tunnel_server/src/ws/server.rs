@@ -9,7 +9,6 @@ use std::{
     },
 };
 
-use bytes::Bytes;
 use log::{debug, error, info, warn};
 use moosicbox_tunnel::tunnel::{TunnelRequest, TunnelResponse, TunnelWsRequest, TunnelWsResponse};
 use rand::{thread_rng, Rng as _};
@@ -54,7 +53,7 @@ enum Command {
     },
 
     Response {
-        bytes: Bytes,
+        response: TunnelResponse,
     },
 
     WsRequest {
@@ -218,8 +217,7 @@ impl ChatServer {
                     self.headers_senders.remove(&request_id);
                 }
 
-                Command::Response { bytes } => {
-                    let response: TunnelResponse = bytes.into();
+                Command::Response { response } => {
                     let request_id = response.request_id;
 
                     if let Some(headers) = &response.headers {
@@ -421,7 +419,7 @@ impl ChatServerHandle {
             .unwrap();
     }
 
-    pub fn response(&self, bytes: Bytes) {
-        self.cmd_tx.send(Command::Response { bytes }).unwrap();
+    pub fn response(&self, response: TunnelResponse) {
+        self.cmd_tx.send(Command::Response { response }).unwrap();
     }
 }

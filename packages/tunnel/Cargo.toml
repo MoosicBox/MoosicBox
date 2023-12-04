@@ -5,32 +5,33 @@ name    = "moosicbox_tunnel"
 version = "0.1.0"
 
 [dependencies]
-async-trait       = { workspace = true }
-base64            = { workspace = true, optional = true }
-bytes             = { workspace = true }
-crossbeam-channel = { workspace = true }
-futures-channel   = { workspace = true, optional = true }
-futures-util      = { workspace = true }
-lazy_static       = { workspace = true, optional = true }
-log               = { workspace = true }
-moosicbox_core    = { path = "../core", optional = true }
-moosicbox_files   = { path = "../files", optional = true }
-moosicbox_ws      = { path = "../ws", optional = true }
-once_cell         = { workspace = true, optional = true }
-rand              = { workspace = true }
-reqwest           = { workspace = true, features = ["json"], optional = true }
-serde             = { workspace = true, features = ["derive"] }
-serde-aux         = { workspace = true, optional = true }
-serde_json        = { workspace = true }
-strum             = { workspace = true }
-strum_macros      = { workspace = true }
-thiserror         = { workspace = true, optional = true }
-tokio             = { workspace = true }
-tokio-tungstenite = { workspace = true, optional = true }
-tokio-util        = { workspace = true }
+async-trait                = { workspace = true }
+base64                     = { workspace = true, optional = true }
+bytes                      = { workspace = true }
+crossbeam-channel          = { workspace = true }
+futures-channel            = { workspace = true, optional = true }
+futures-util               = { workspace = true }
+lazy_static                = { workspace = true, optional = true }
+log                        = { workspace = true }
+moosicbox_core             = { path = "../core", optional = true }
+moosicbox_files            = { path = "../files", optional = true }
+moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false, optional = true }
+moosicbox_ws               = { path = "../ws", optional = true }
+once_cell                  = { workspace = true, optional = true }
+rand                       = { workspace = true }
+reqwest                    = { workspace = true, features = ["json"], optional = true }
+serde                      = { workspace = true, features = ["derive"] }
+serde-aux                  = { workspace = true, optional = true }
+serde_json                 = { workspace = true }
+strum                      = { workspace = true }
+strum_macros               = { workspace = true }
+thiserror                  = { workspace = true, optional = true }
+tokio                      = { workspace = true }
+tokio-tungstenite          = { workspace = true, optional = true }
+tokio-util                 = { workspace = true }
 
 [features]
-default = ["sender", "base64"]
+default = ["sender", "base64", "aac", "mp3", "opus"]
 
 fail-on-warnings = []
 
@@ -40,6 +41,7 @@ sender = [
     "dep:lazy_static",
     "dep:moosicbox_core",
     "dep:moosicbox_files",
+    "dep:moosicbox_symphonia_player",
     "dep:moosicbox_ws",
     "dep:once_cell",
     "dep:reqwest",
@@ -47,3 +49,7 @@ sender = [
     "dep:thiserror",
     "dep:tokio-tungstenite",
 ]
+
+aac  = ["moosicbox_symphonia_player/aac"]
+mp3  = ["moosicbox_symphonia_player/mp3"]
+opus = ["moosicbox_symphonia_player/opus"]

@@ -38,8 +38,8 @@ lazy_static! {
         .unwrap();
 }
 
-static CHAT_SERVER_HANDLE: Lazy<std::sync::Mutex<Option<ws::server::ChatServerHandle>>> =
-    Lazy::new(|| std::sync::Mutex::new(None));
+static CHAT_SERVER_HANDLE: Lazy<std::sync::RwLock<Option<ws::server::ChatServerHandle>>> =
+    Lazy::new(|| std::sync::RwLock::new(None));
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -104,49 +104,54 @@ async fn main() -> std::io::Result<()> {
         (
             Some(host),
             Some(RT.spawn(async move {
-                let rx = tunnel.start();
+                let mut rx = tunnel.start();
 
-                while let Ok(m) = rx.recv() {
+                while let Some(m) = rx.recv().await {
                     match m {
                         TunnelMessage::Text(m) => {
                             debug!("Received text TunnelMessage {}", &m);
-                            match serde_json::from_str(&m).unwrap() {
-                                TunnelRequest::HttpRequest(request) => tunnel
-                                    .tunnel_request(
-                                        db,
-                                        service_port,
-                                        request.request_id,
-                                        request.method,
-                                        request.path,
-                                        request.query,
-                                        request.payload,
-                                        request.encoding,
-                                    )
-                                    .await
-                                    .unwrap(),
-                                TunnelRequest::WsRequest(request) => {
-                                    let sender = CHAT_SERVER_HANDLE
-                                        .lock()
-                                        .unwrap()
-                                        .as_ref()
-                                        .unwrap()
-                                        .clone();
-                                    if let Err(err) = tunnel
-                                        .ws_request(
+                            let tunnel = tunnel.clone();
+                            tokio::spawn(async move {
+                                println!("received request");
+                                match serde_json::from_str(&m).unwrap() {
+                                    TunnelRequest::HttpRequest(request) => tunnel
+                                        .tunnel_request(
                                             db,
+                                            service_port,
                                             request.request_id,
-                                            request.body.clone(),
-                                            sender,
+                                            request.method,
+                                            request.path,
+                                            request.query,
+                                            request.payload,
+                                            request.encoding,
                                         )
                                         .await
-                                    {
-                                        error!(
-                                            "Failed to propagate ws request {}: {err:?}",
-                                            request.request_id
-                                        );
+                                        .unwrap(),
+                                    TunnelRequest::WsRequest(request) => {
+                                        let sender = CHAT_SERVER_HANDLE
+                                            .read()
+                                            .unwrap_or_else(|e| e.into_inner())
+                                            .as_ref()
+                                            .ok_or("Failed to get chat server handle")?
+                                            .clone();
+                                        if let Err(err) = tunnel
+                                            .ws_request(
+                                                db,
+                                                request.request_id,
+                                                request.body.clone(),
+                                                sender,
+                                            )
+                                            .await
+                                        {
+                                            error!(
+                                                "Failed to propagate ws request {}: {err:?}",
+                                                request.request_id
+                                            );
+                                        }
                                     }
                                 }
-                            }
+                                Ok::<_, String>(())
+                            });
                         }
                         TunnelMessage::Binary(_) => todo!(),
                         TunnelMessage::Ping(_) => {}
@@ -182,7 +187,7 @@ async fn main() -> std::io::Result<()> {
             .max_age(3600);
 
         CHAT_SERVER_HANDLE
-            .lock()
+            .write()
             .unwrap()
             .replace(server_tx.clone());
 
@@ -235,9 +240,9 @@ async fn main() -> std::io::Result<()> {
     try_join!(
         async move {
             let resp = http_server.await;
-            CHAT_SERVER_HANDLE.lock().unwrap().take();
+            CHAT_SERVER_HANDLE.write().unwrap().take();
             if let Some(handle) = tunnel_handle {
-                handle.close().await.unwrap();
+                let _ = handle.close().await;
             }
             resp
         },

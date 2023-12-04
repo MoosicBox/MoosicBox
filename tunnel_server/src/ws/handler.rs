@@ -65,9 +65,13 @@ pub async fn chat_ws(
                 }
 
                 Message::Text(text) => {
-                    if sender {
+                    last_heartbeat = Instant::now();
+                    let text: &str = text.as_ref();
+                    if let Ok(response) = text.try_into() {
+                        chat_server.response(response);
+                    } else if sender {
                         debug!("Propagating ws response");
-                        let value: Value = serde_json::from_str(text.as_ref()).unwrap();
+                        let value: Value = serde_json::from_str(text).unwrap();
                         if let Err(err) = chat_server
                             .ws_response(TunnelWsResponse {
                                 request_id: serde_json::from_value(
@@ -89,7 +93,7 @@ pub async fn chat_ws(
                 Message::Binary(bytes) => {
                     last_heartbeat = Instant::now();
 
-                    chat_server.response(bytes);
+                    chat_server.response(bytes.into());
                 }
 
                 Message::Close(reason) => break reason,

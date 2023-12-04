@@ -9,6 +9,10 @@ ADD packages/auth/.cargo packages/auth/.cargo
 RUN mkdir -p packages/auth/src && echo "fn main() {}" > packages/auth/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_auth\"\nversion = \"0.1.0\"" > packages/auth/Cargo.toml
 
+ADD packages/converter/.cargo packages/converter/.cargo
+RUN mkdir -p packages/converter/src && echo "fn main() {}" > packages/converter/src/main.rs
+RUN echo "[package]\nname = \"moosicbox_converter\"\nversion = \"0.1.0\"" > packages/converter/Cargo.toml
+
 ADD packages/core/.cargo packages/core/.cargo
 RUN mkdir -p packages/core/src && echo "fn main() {}" > packages/core/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_core\"\nversion = \"0.1.0\"" > packages/core/Cargo.toml
@@ -41,6 +45,10 @@ ADD packages/ws/.cargo packages/ws/.cargo
 RUN mkdir -p packages/ws/src && echo "fn main() {}" > packages/ws/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_ws\"\nversion = \"0.1.0\"" > packages/ws/Cargo.toml
 
+ADD packages/stream_utils/.cargo packages/stream_utils/.cargo
+RUN mkdir -p packages/stream_utils/src && echo "fn main() {}" > packages/stream_utils/src/main.rs
+RUN echo "[package]\nname = \"moosicbox_stream_utils\"\nversion = \"0.1.0\"" > packages/stream_utils/Cargo.toml
+
 ADD players/symphonia_player/.cargo players/symphonia_player/.cargo
 RUN mkdir -p players/symphonia_player/src && echo "fn main() {}" > players/symphonia_player/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_symphonia_player\"\nversion = \"0.1.0\"" > players/symphonia_player/Cargo.toml
@@ -61,6 +69,19 @@ COPY packages/image packages/image
 RUN cargo build --manifest-path=packages/image/Cargo.toml --release
 RUN rm packages/image/src/main.rs
 
+RUN apt-get update && apt-get -y install libasound2-dev cmake
+COPY players/symphonia_player players/symphonia_player
+RUN cargo build --manifest-path=players/symphonia_player/Cargo.toml --release --no-default-features --features=cpal
+RUN rm players/symphonia_player/src/main.rs
+
+COPY packages/converter packages/converter
+RUN cargo build --manifest-path=packages/converter/Cargo.toml --release
+RUN rm packages/converter/src/main.rs
+
+COPY packages/stream_utils packages/stream_utils
+RUN cargo build --manifest-path=packages/stream_utils/Cargo.toml --release
+RUN rm packages/stream_utils/src/main.rs
+
 COPY packages/files packages/files
 RUN cargo build --manifest-path=packages/files/Cargo.toml --release
 RUN rm packages/files/src/main.rs
@@ -68,11 +89,6 @@ RUN rm packages/files/src/main.rs
 COPY packages/menu packages/menu
 RUN cargo build --manifest-path=packages/menu/Cargo.toml --release
 RUN rm packages/menu/src/main.rs
-
-RUN apt-get update && apt-get -y install libasound2-dev
-COPY players/symphonia_player players/symphonia_player
-RUN cargo build --manifest-path=players/symphonia_player/Cargo.toml --release --no-default-features --features=cpal
-RUN rm players/symphonia_player/src/main.rs
 
 COPY packages/player packages/player
 RUN cargo build --manifest-path=packages/player/Cargo.toml --release --no-default-features --features=cpal

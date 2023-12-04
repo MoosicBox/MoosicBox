@@ -3064,6 +3064,7 @@ dependencies = [
  "log",
  "moosicbox_core",
  "moosicbox_files",
+ "moosicbox_symphonia_player",
  "moosicbox_ws",
  "once_cell",
  "rand",
