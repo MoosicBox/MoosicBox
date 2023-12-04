@@ -101,6 +101,18 @@ jobs:
                       os: ubuntu-latest
                       env: TUNNEL_ACCESS_TOKEN=123
 
+                    - name: tunnel_server-base64
+                      path: tunnel_server
+                      os: ubuntu-latest
+                      env: TUNNEL_ACCESS_TOKEN=123
+                      features: base64
+
+                    - name: tunnel_server-base
+                      path: tunnel_server
+                      os: ubuntu-latest
+                      env: TUNNEL_ACCESS_TOKEN=123
+                      cargo: --no-default-features
+
                     - name: server-static-token-auth
                       path: server
                       os: ubuntu-latest

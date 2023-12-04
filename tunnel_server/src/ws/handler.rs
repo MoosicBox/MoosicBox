@@ -67,26 +67,39 @@ pub async fn chat_ws(
                 Message::Text(text) => {
                     last_heartbeat = Instant::now();
                     let text: &str = text.as_ref();
+
+                    #[allow(unused_mut)]
+                    let mut finished = false;
+
+                    #[cfg(feature = "base64")]
                     if let Ok(response) = text.try_into() {
                         chat_server.response(response);
-                    } else if sender {
-                        debug!("Propagating ws response");
-                        let value: Value = serde_json::from_str(text).unwrap();
-                        if let Err(err) = chat_server
-                            .ws_response(TunnelWsResponse {
-                                request_id: serde_json::from_value(
-                                    value.get("request_id").unwrap().clone(),
-                                )
-                                .unwrap(),
-                                body: value.get("body").unwrap().clone(),
-                            })
-                            .await
+                        finished = true
+                    }
+
+                    if !finished {
+                        if sender {
+                            debug!("Propagating ws response");
+                            let value: Value = serde_json::from_str(text).unwrap();
+                            if let Err(err) = chat_server
+                                .ws_response(TunnelWsResponse {
+                                    request_id: serde_json::from_value(
+                                        value.get("request_id").unwrap().clone(),
+                                    )
+                                    .unwrap(),
+                                    body: value.get("body").unwrap().clone(),
+                                })
+                                .await
+                            {
+                                error!(
+                                    "Failed to propagate ws response from tunnel_server: {err:?}"
+                                );
+                            }
+                        } else if let Err(err) =
+                            chat_server.ws_request(conn_id, &client_id, text).await
                         {
-                            error!("Failed to propagate ws response from tunnel_server: {err:?}");
+                            error!("Failed to propagate ws request from tunnel_server: {err:?}");
                         }
-                    } else if let Err(err) = chat_server.ws_request(conn_id, &client_id, text).await
-                    {
-                        error!("Failed to propagate ws request from tunnel_server: {err:?}");
                     }
                 }
 

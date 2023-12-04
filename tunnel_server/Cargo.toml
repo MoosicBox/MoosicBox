@@ -38,4 +38,8 @@ tokio             = { workspace = true, features = ["rt-multi-thread", "macros"]
 uuid              = { workspace = true }
 
 [features]
+default = ["base64"]
+
 fail-on-warnings = []
+
+base64 = ["moosicbox_tunnel/base64"]

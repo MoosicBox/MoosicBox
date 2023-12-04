@@ -41,9 +41,11 @@ tokio                  = { workspace = true, features = ["rt", "time", "macros"]
 url                    = { workspace = true }
 
 [features]
-default = ["cpal", "pulseaudio", "static-token-auth", "aac", "mp3", "opus"]
+default = ["cpal", "pulseaudio", "static-token-auth", "base64", "aac", "mp3", "opus"]
 
 fail-on-warnings = []
+
+base64 = ["moosicbox_tunnel/base64"]
 
 # Player audio outputs
 asio                = ["moosicbox_player/asio"]

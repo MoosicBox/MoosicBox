@@ -35,7 +35,7 @@ default = ["sender", "base64", "aac", "mp3", "opus"]
 
 fail-on-warnings = []
 
-base64 = ["dep:base64"]
+base64 = ["dep:base64", "dep:thiserror"]
 sender = [
     "dep:futures-channel",
     "dep:lazy_static",

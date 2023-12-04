@@ -9,6 +9,9 @@ use strum_macros::EnumString;
 use tokio::sync::mpsc::Receiver;
 
 #[cfg(feature = "base64")]
+use thiserror::Error;
+
+#[cfg(feature = "base64")]
 static BASE64_TUNNEL_RESPONSE_PREFIX: &str = "TUNNEL_RESPONSE:";
 
 #[derive(Debug, Serialize, Deserialize, EnumString, PartialEq, Clone)]
@@ -100,7 +103,7 @@ impl From<Bytes> for TunnelResponse {
 }
 
 #[cfg(feature = "base64")]
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 pub enum Base64DecodeError {
     #[error("Invalid Content: {0:?}")]
     InvalidContent(String),
