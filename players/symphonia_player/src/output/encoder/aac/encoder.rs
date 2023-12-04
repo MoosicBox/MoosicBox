@@ -140,7 +140,7 @@ where
 
 pub fn encode_aac_stream(path: String) -> ByteStream {
     let writer = ByteWriter::default();
-    let stream = (&writer).stream();
+    let stream = writer.stream();
 
     encode_aac(path, writer);
 
