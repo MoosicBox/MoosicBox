@@ -4,6 +4,7 @@ use std::{cell::RefCell, task::Poll};
 
 use bytes::Bytes;
 use futures::Stream;
+use thiserror::Error;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 #[derive(Clone)]
@@ -48,12 +49,15 @@ impl std::io::Write for ByteWriter {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum ByteStreamError {}
+
 pub struct ByteStream {
     receiver: UnboundedReceiver<Bytes>,
 }
 
 impl Stream for ByteStream {
-    type Item = Result<Bytes, Box<dyn std::error::Error>>;
+    type Item = Result<Bytes, ByteStreamError>;
 
     fn poll_next(
         self: std::pin::Pin<&mut Self>,
