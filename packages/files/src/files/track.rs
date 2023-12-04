@@ -34,7 +34,7 @@ pub async fn get_track_source(track_id: i32, db: Db) -> Result<TrackSource, Trac
         get_track(&library, track_id)?
     };
 
-    trace!("Got track {track:?}");
+    debug!("Got track {track:?}");
 
     if track.is_none() {
         return Err(TrackSourceError::NotFound(track_id));
