@@ -261,8 +261,12 @@ pub fn select_client_access_token(client_id: &str, token_hash: &str) -> Option<C
         .as_mut()
         .expect("DB not initialized")
         .exec_first(
-            "SELECT * FROM client_access_tokens WHERE client_id=? AND token_hash = ? AND (expires IS NULL OR expires >= NOW())",
-            (client_id, token_hash,),
+            "
+            SELECT * FROM client_access_tokens
+                WHERE client_id = ?
+                    AND token_hash = ?
+                    AND (expires IS NULL OR expires >= NOW())",
+            (client_id, token_hash),
         )
         .unwrap()
 }
