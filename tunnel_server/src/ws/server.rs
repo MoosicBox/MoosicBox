@@ -255,33 +255,33 @@ impl ChatServer {
                     request_id,
                     body,
                 } => {
-                    let client_conn_id = match select_connection(&client_id)
+                    if let Some(client_conn_id) = match select_connection(&client_id)
                         .ok_or_else(|| WsRequestError::MissingClientId(client_id.clone()))
                         .map(|conn| {
                             conn.tunnel_ws_id
                                 .parse::<usize>()
                                 .map_err(|_| WsRequestError::InvalidClientId(client_id))
                         }) {
-                        Ok(Ok(id)) => id,
+                        Ok(Ok(id)) => Some(id),
                         Ok(Err(err)) | Err(err) => {
                             error!("Failed to get connection id from client id: {err:?}");
-                            return Ok(());
+                            None
                         }
-                    };
+                    } {
+                        let value: Value = serde_json::from_str(&body).unwrap();
+                        let body = TunnelRequest::WsRequest(TunnelWsRequest {
+                            request_id,
+                            body: value,
+                        });
 
-                    let value: Value = serde_json::from_str(&body).unwrap();
-                    let body = TunnelRequest::WsRequest(TunnelWsRequest {
-                        request_id,
-                        body: value,
-                    });
-
-                    if let Err(error) = self
-                        .send_message_to(client_conn_id, serde_json::to_string(&body).unwrap())
-                        .await
-                    {
-                        error!("Failed to send WsRequest to {client_conn_id}: {error:?}");
+                        if let Err(error) = self
+                            .send_message_to(client_conn_id, serde_json::to_string(&body).unwrap())
+                            .await
+                        {
+                            error!("Failed to send WsRequest to {client_conn_id}: {error:?}");
+                        }
+                        self.ws_requests.insert(request_id, conn_id);
                     }
-                    self.ws_requests.insert(request_id, conn_id);
                 }
 
                 Command::WsResponse { response } => {
