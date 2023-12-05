@@ -3062,6 +3062,7 @@ dependencies = [
  "futures-util",
  "lazy_static",
  "log",
+ "moosicbox_auth",
  "moosicbox_core",
  "moosicbox_files",
  "moosicbox_symphonia_player",

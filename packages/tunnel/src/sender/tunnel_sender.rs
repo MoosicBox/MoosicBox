@@ -130,27 +130,6 @@ impl TunnelSender {
         self.start_tunnel(Self::message_handler)
     }
 
-    async fn fetch_signature_token(
-        host: &str,
-        client_id: &str,
-        access_token: &str,
-    ) -> Result<Option<String>, reqwest::Error> {
-        let url = format!("{host}/auth/signature-token?clientId={client_id}");
-        let value: Value = reqwest::Client::new()
-            .post(url)
-            .header(reqwest::header::AUTHORIZATION, access_token)
-            .send()
-            .await?
-            .json()
-            .await?;
-
-        if let Some(token) = value.get("token") {
-            Ok(token.as_str().map(|s| Some(s.to_string())).unwrap_or(None))
-        } else {
-            Ok(None)
-        }
-    }
-
     fn start_tunnel<T, O>(&mut self, handler: fn(sender: Sender<T>, m: Message) -> O) -> Receiver<T>
     where
         T: Send + 'static,
@@ -169,11 +148,13 @@ impl TunnelSender {
         RT.spawn(async move {
             let mut just_retried = false;
             log::debug!("Fetching signature token...");
-            let token = match Self::fetch_signature_token(&host, &client_id, &access_token).await {
-                Ok(Some(token)) => token,
-                Ok(None) => panic!("Failed to fetch signature token"),
-                Err(err) => panic!("Failed to fetch signature token: {err:?}"),
-            };
+            let token =
+                match moosicbox_auth::fetch_signature_token(&host, &client_id, &access_token).await
+                {
+                    Ok(Some(token)) => token,
+                    Ok(None) => panic!("Failed to fetch signature token"),
+                    Err(err) => panic!("Failed to fetch signature token: {err:?}"),
+                };
 
             loop {
                 if cancellation_token.is_cancelled() {

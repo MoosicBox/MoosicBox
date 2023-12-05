@@ -152,3 +152,24 @@ fn is_authorized(req: &HttpRequest) -> bool {
 
     true
 }
+
+pub async fn fetch_signature_token(
+    host: &str,
+    client_id: &str,
+    access_token: &str,
+) -> Result<Option<String>, reqwest::Error> {
+    let url = format!("{host}/auth/signature-token?clientId={client_id}");
+    let value: Value = reqwest::Client::new()
+        .post(url)
+        .header(reqwest::header::AUTHORIZATION, access_token)
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    if let Some(token) = value.get("token") {
+        Ok(token.as_str().map(|s| Some(s.to_string())).unwrap_or(None))
+    } else {
+        Ok(None)
+    }
+}

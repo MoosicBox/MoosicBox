@@ -13,6 +13,7 @@ futures-channel            = { workspace = true, optional = true }
 futures-util               = { workspace = true }
 lazy_static                = { workspace = true, optional = true }
 log                        = { workspace = true }
+moosicbox_auth             = { path = "../auth", optional = true }
 moosicbox_core             = { path = "../core", optional = true }
 moosicbox_files            = { path = "../files", optional = true }
 moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false, optional = true }
@@ -39,6 +40,7 @@ base64 = ["dep:base64", "dep:thiserror"]
 sender = [
     "dep:futures-channel",
     "dep:lazy_static",
+    "dep:moosicbox_auth",
     "dep:moosicbox_core",
     "dep:moosicbox_files",
     "dep:moosicbox_symphonia_player",
