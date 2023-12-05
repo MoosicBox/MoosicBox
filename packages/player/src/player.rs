@@ -85,17 +85,23 @@ pub struct Playback {
     pub tracks: Vec<TrackOrId>,
     pub playing: bool,
     pub position: u16,
+    pub quality: PlaybackQuality,
     pub progress: Arc<RwLock<Progress>>,
     pub abort: Arc<AtomicBool>,
 }
 
 impl Playback {
-    pub fn new(tracks: Vec<TrackOrId>, position: Option<u16>) -> Playback {
+    pub fn new(
+        tracks: Vec<TrackOrId>,
+        position: Option<u16>,
+        quality: PlaybackQuality,
+    ) -> Playback {
         Playback {
             id: thread_rng().gen::<usize>(),
             tracks,
             playing: true,
             position: position.unwrap_or_default(),
+            quality,
             progress: Arc::new(RwLock::new(Progress { position: 0.0 })),
             abort: Arc::new(AtomicBool::new(false)),
         }
@@ -163,6 +169,23 @@ pub enum PlaybackType {
     Default,
 }
 
+#[derive(Copy, Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum AudioFormat {
+    Aac,
+    Flac,
+    Mp3,
+    Opus,
+    #[default]
+    Source,
+}
+
+#[derive(Copy, Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaybackQuality {
+    pub format: AudioFormat,
+}
+
 #[derive(Copy, Clone)]
 pub struct PlaybackRetryOptions {
     pub max_retry_count: u32,
@@ -199,6 +222,7 @@ impl Player {
         album_id: i32,
         position: Option<u16>,
         seek: Option<f64>,
+        quality: PlaybackQuality,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
         let tracks = {
@@ -214,6 +238,7 @@ impl Player {
             tracks.into_iter().map(TrackOrId::Track).collect(),
             position,
             seek,
+            quality,
             retry_options,
         )
     }
@@ -223,9 +248,10 @@ impl Player {
         db: Option<Db>,
         track: TrackOrId,
         seek: Option<f64>,
+        quality: PlaybackQuality,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
-        self.play_tracks(db, vec![track], None, seek, retry_options)
+        self.play_tracks(db, vec![track], None, seek, quality, retry_options)
     }
 
     pub fn play_tracks(
@@ -234,6 +260,7 @@ impl Player {
         tracks: Vec<TrackOrId>,
         position: Option<u16>,
         seek: Option<f64>,
+        quality: PlaybackQuality,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
         if let Ok(playback) = self.get_playback() {
@@ -256,13 +283,13 @@ impl Player {
                             })
                             .expect("Failed to fetch track");
                         debug!("Got track {track:?}");
-                        TrackOrId::Track(track.expect("Track doesnt exist"))
+                        TrackOrId::Track(track.expect("Track doesn't exist"))
                     }
                     TrackOrId::Track(track) => TrackOrId::Track(track.clone()),
                 })
                 .collect()
         };
-        let playback = Playback::new(tracks, position);
+        let playback = Playback::new(tracks, position, quality);
 
         self.play_playback(playback, seek, retry_options)
     }
@@ -308,6 +335,7 @@ impl Player {
                     tracks: playback.tracks.clone(),
                     playing: true,
                     position: i as u16,
+                    quality: playback.quality.clone(),
                     progress: Arc::new(RwLock::new(Progress { position: 0.0 })),
                     abort: Arc::new(AtomicBool::new(false)),
                 };
@@ -365,7 +393,7 @@ impl Player {
                 sleep(retry_options.unwrap().retry_delay).await;
             }
             let playable_track = self
-                .track_or_id_to_playable(self.playback_type, track_or_id)
+                .track_or_id_to_playable(self.playback_type, track_or_id, &playback.quality)
                 .await?;
             let mss = MediaSourceStream::new(playable_track.source, Default::default());
 
@@ -536,6 +564,7 @@ impl Player {
             id: playback.id,
             tracks: playback.tracks.clone(),
             playing: true,
+            quality: playback.quality.clone(),
             position: position.unwrap_or(playback.position),
             progress: Arc::new(RwLock::new(Progress { position: 0.0 })),
             abort: Arc::new(AtomicBool::new(false)),
@@ -576,6 +605,7 @@ impl Player {
                 id,
                 tracks: playback.tracks.clone(),
                 playing: false,
+                quality: playback.quality.clone(),
                 position: playback.position,
                 progress: playback.progress,
                 abort: Arc::new(AtomicBool::new(false)),
@@ -611,6 +641,7 @@ impl Player {
             tracks: playback.tracks.clone(),
             playing: true,
             position: playback.position,
+            quality: playback.quality.clone(),
             progress: Arc::new(RwLock::new(Progress { position: 0.0 })),
             abort: Arc::new(AtomicBool::new(false)),
         };
@@ -644,25 +675,48 @@ impl Player {
         &self,
         track_or_id: &TrackOrId,
         host: &str,
+        quality: &PlaybackQuality,
     ) -> PlayableTrack {
         match track_or_id {
-            TrackOrId::Id(id) => self.track_id_to_playable_stream(*id, host).await,
-            TrackOrId::Track(track) => self.track_to_playable_stream(track, host).await,
+            TrackOrId::Id(id) => self.track_id_to_playable_stream(*id, host, quality).await,
+            TrackOrId::Track(track) => self.track_to_playable_stream(track, host, quality).await,
         }
     }
 
-    pub async fn track_to_playable_stream(&self, track: &Track, host: &str) -> PlayableTrack {
-        self.track_id_to_playable_stream(track.id, host).await
+    pub async fn track_to_playable_stream(
+        &self,
+        track: &Track,
+        host: &str,
+        quality: &PlaybackQuality,
+    ) -> PlayableTrack {
+        self.track_id_to_playable_stream(track.id, host, quality)
+            .await
     }
 
-    pub async fn track_id_to_playable_stream(&self, track_id: i32, host: &str) -> PlayableTrack {
+    pub async fn track_id_to_playable_stream(
+        &self,
+        track_id: i32,
+        host: &str,
+        quality: &PlaybackQuality,
+    ) -> PlayableTrack {
         let hint = Hint::new();
 
-        let url = format!("{host}/track/info?trackId={}", track_id);
+        let query = format!("?trackId={track_id}");
+
+        let query = match quality.format {
+            AudioFormat::Aac => query + "&format=AAC",
+            AudioFormat::Flac => query + "&format=FLAC",
+            AudioFormat::Mp3 => query + "&format=MP3",
+            AudioFormat::Opus => query + "&format=OPUS",
+            AudioFormat::Source => query,
+        };
+
+        let url = format!("{host}/track/info{query}");
         let res: Value = reqwest::get(&url).await.unwrap().json().await.unwrap();
         debug!("Got track info {res:?}");
         let size = res.get("bytes").unwrap().as_u64().unwrap();
-        let url = format!("{host}/track?trackId={}", track_id);
+        let url = format!("{host}/track{query}");
+
         let source = Box::new(RemoteByteStream::new(url, Some(size), true));
 
         PlayableTrack {
@@ -676,6 +730,7 @@ impl Player {
         &self,
         playback_type: PlaybackType,
         track_or_id: &TrackOrId,
+        quality: &PlaybackQuality,
     ) -> Result<PlayableTrack, PlayerError> {
         Ok(match playback_type {
             PlaybackType::File => match track_or_id {
@@ -686,6 +741,7 @@ impl Player {
                 self.track_or_id_to_playable_stream(
                     track_or_id,
                     self.host.as_ref().expect("Player url value missing"),
+                    quality,
                 )
                 .await
             }
@@ -694,6 +750,7 @@ impl Player {
                     self.track_id_to_playable_stream(
                         *id,
                         self.host.as_ref().expect("Player url value missing"),
+                        quality,
                     )
                     .await
                 }
