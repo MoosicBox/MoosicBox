@@ -51,7 +51,7 @@ RUN echo "[package]\nname = \"moosicbox_ws\"\nversion = \"0.1.0\"" > packages/ws
 
 ADD players/symphonia_player/.cargo players/symphonia_player/.cargo
 RUN mkdir -p players/symphonia_player/src && echo "fn main() {}" > players/symphonia_player/src/main.rs
-RUN echo "[package]\nname = \"moosicbox_symphonia_player\"\nversion = \"0.1.0\"" > players/symphonia_player/Cargo.toml
+ADD players/symphonia_player/Cargo.toml players/symphonia_player/Cargo.toml
 
 ADD server/.cargo server/.cargo
 RUN mkdir -p server/src && echo "fn main() {}" > server/src/main.rs
