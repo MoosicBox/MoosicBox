@@ -147,13 +147,16 @@ impl TunnelSender {
         RT.spawn(async move {
             let mut just_retried = false;
             log::debug!("Fetching signature token...");
-            let token =
+            let token = loop {
                 match moosicbox_auth::fetch_signature_token(&host, &client_id, &access_token).await
                 {
-                    Ok(Some(token)) => token,
-                    Ok(None) => panic!("Failed to fetch signature token"),
-                    Err(err) => panic!("Failed to fetch signature token: {err:?}"),
-                };
+                    Ok(Some(token)) => break token,
+                    _ => {
+                        log::error!("Failed to fetch signature token");
+                        sleep(Duration::from_millis(5000)).await;
+                    }
+                }
+            };
 
             loop {
                 let close_token = CancellationToken::new();
