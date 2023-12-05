@@ -143,7 +143,6 @@ impl TunnelSender {
         let access_token = self.access_token.clone();
         let sender_arc = self.sender.clone();
         let cancellation_token = self.cancellation_token.clone();
-        let close_token = CancellationToken::new();
 
         RT.spawn(async move {
             let mut just_retried = false;
@@ -157,6 +156,8 @@ impl TunnelSender {
                 };
 
             loop {
+                let close_token = CancellationToken::new();
+
                 if cancellation_token.is_cancelled() {
                     log::debug!("Closing tunnel");
                     break;
