@@ -84,10 +84,20 @@ async fn main() -> Result<(), std::io::Error> {
     try_join!(
         async move {
             let resp = http_server.await;
-            CHAT_SERVER_HANDLE.lock().unwrap().take();
+            CHAT_SERVER_HANDLE
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .take();
             resp
         },
-        async move { chat_server.await.unwrap() }
+        async move {
+            match chat_server.await {
+                Ok(value) => value,
+                Err(err) => {
+                    panic!("Failed to shut down chat server: {err:?}");
+                }
+            }
+        }
     )?;
 
     Ok(())
