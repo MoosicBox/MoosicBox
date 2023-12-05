@@ -28,7 +28,7 @@ use tokio_tungstenite::{
 };
 use tokio_util::sync::CancellationToken;
 
-use crate::sender::temp_sender::TempSender;
+use crate::sender::tunnel_websocket_sender::TunnelWebsocketSender;
 use crate::tunnel::{Method, TunnelEncoding};
 
 use super::{
@@ -805,7 +805,7 @@ impl TunnelSender {
         };
         let packet_id = 1_u32;
         log::debug!("Processing tunnel ws request");
-        let sender = TempSender {
+        let sender = TunnelWebsocketSender {
             id: self.id,
             packet_id,
             request_id,

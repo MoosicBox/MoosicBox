@@ -6,7 +6,7 @@ use tokio_tungstenite::tungstenite::Message;
 
 use super::tunnel_sender::TunnelResponseMessage;
 
-pub struct TempSender<T>
+pub struct TunnelWebsocketSender<T>
 where
     T: WebsocketSender + Send + Sync,
 {
@@ -17,7 +17,7 @@ where
     pub tunnel_sender: UnboundedSender<TunnelResponseMessage>,
 }
 
-impl<T> TempSender<T>
+impl<T> TunnelWebsocketSender<T>
 where
     T: WebsocketSender + Send + Sync,
 {
@@ -38,7 +38,7 @@ where
 }
 
 #[async_trait]
-impl<T> WebsocketSender for TempSender<T>
+impl<T> WebsocketSender for TunnelWebsocketSender<T>
 where
     T: WebsocketSender + Send + Sync,
 {

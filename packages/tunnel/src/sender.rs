@@ -6,8 +6,8 @@ use serde_aux::prelude::*;
 use thiserror::Error;
 use tokio_tungstenite::tungstenite::protocol::frame::Frame;
 
-pub mod temp_sender;
 pub mod tunnel_sender;
+pub mod tunnel_websocket_sender;
 
 #[derive(Debug, Error)]
 pub enum SendBytesError {
