@@ -13,7 +13,7 @@ use log::{debug, error, info};
 use moosicbox_auth::get_client_id_and_access_token;
 use moosicbox_core::app::{AppState, Db};
 use moosicbox_tunnel::{
-    sender::{TunnelMessage, TunnelSender},
+    sender::{tunnel_sender::TunnelSender, TunnelMessage},
     tunnel::TunnelRequest,
 };
 use once_cell::sync::Lazy;
