@@ -97,3 +97,13 @@ macro_rules! option_env_usize {
         }
     };
 }
+
+#[macro_export]
+macro_rules! default_env {
+    ($name:expr, $default:expr) => {
+        match option_env!($name) {
+            Some(v) => v,
+            None => $default,
+        }
+    };
+}
