@@ -18,6 +18,7 @@ lazy_static = { workspace = true }
 log = { workspace = true }
 moosicbox_auth = { path = "../packages/auth" }
 moosicbox_core = { path = "../packages/core" }
+moosicbox_env_utils = { path = "../packages/env_utils" }
 moosicbox_files = { path = "../packages/files" }
 moosicbox_menu = { path = "../packages/menu" }
 moosicbox_player = { path = "../packages/player", default-features = false }
@@ -41,7 +42,15 @@ tokio                  = { workspace = true, features = ["rt", "time", "macros"]
 url                    = { workspace = true }
 
 [features]
-default = ["cpal", "pulseaudio", "static-token-auth", "base64", "aac", "mp3", "opus"]
+default = [
+    "cpal",
+    "pulseaudio",
+    "static-token-auth",
+    "base64",
+    "aac",
+    "mp3",
+    "opus",
+]
 
 fail-on-warnings = []
 
