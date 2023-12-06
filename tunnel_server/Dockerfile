@@ -23,7 +23,7 @@ RUN echo "[package]\nname = \"moosicbox_files\"\nversion = \"0.1.0\"" > packages
 
 ADD packages/image/.cargo packages/image/.cargo
 RUN mkdir -p packages/image/src && echo "fn main() {}" > packages/image/src/main.rs
-RUN echo "[package]\nname = \"moosicbox_image\"\nversion = \"0.1.0\"" > packages/image/Cargo.toml
+ADD packages/image/Cargo.toml packages/image/Cargo.toml
 
 ADD packages/menu/.cargo packages/menu/.cargo
 RUN mkdir -p packages/menu/src && echo "fn main() {}" > packages/menu/src/main.rs
