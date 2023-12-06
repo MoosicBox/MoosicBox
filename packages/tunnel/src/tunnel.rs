@@ -6,7 +6,7 @@ use log::debug;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::EnumString;
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 #[cfg(feature = "base64")]
 use thiserror::Error;
@@ -191,8 +191,8 @@ pub struct TunnelStream<'a> {
     time_to_first_byte: Option<SystemTime>,
     packet_count: u32,
     byte_count: usize,
-    rx: Receiver<TunnelResponse>,
     done: bool,
+    rx: UnboundedReceiver<TunnelResponse>,
     on_end: &'a dyn Fn(usize),
     packet_queue: Vec<TunnelResponse>,
 }
@@ -200,7 +200,7 @@ pub struct TunnelStream<'a> {
 impl<'a> TunnelStream<'a> {
     pub fn new(
         request_id: usize,
-        rx: Receiver<TunnelResponse>,
+        rx: UnboundedReceiver<TunnelResponse>,
         on_end: &'a impl Fn(usize),
     ) -> TunnelStream<'a> {
         TunnelStream {

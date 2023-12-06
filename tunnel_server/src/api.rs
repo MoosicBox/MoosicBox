@@ -1,4 +1,4 @@
-use actix_web::error::{ErrorBadRequest, ErrorInternalServerError, ErrorUnauthorized};
+use actix_web::error::{ErrorBadRequest, ErrorUnauthorized};
 use actix_web::web::{self, Json};
 use actix_web::{route, HttpResponse};
 use actix_web::{HttpRequest, Result};
@@ -14,16 +14,17 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::str::FromStr;
-use tokio::sync::mpsc::{channel, Receiver};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
+use tokio::sync::oneshot;
 use uuid::Uuid;
 
 use crate::auth::{
     hash_token, ClientHeaderAuthorized, GeneralHeaderAuthorized, SignatureAuthorized,
 };
 use crate::ws::db::{
-    insert_client_access_token, insert_magic_token, insert_signature_token, select_connection,
-    select_magic_token,
+    insert_client_access_token, insert_magic_token, insert_signature_token, select_magic_token,
 };
+use crate::ws::server::ConnectionIdError;
 use crate::CHAT_SERVER_HANDLE;
 
 #[route("/health", method = "GET")]
@@ -194,11 +195,11 @@ async fn handle_request(
 
     debug!("Starting ws request for {request_id} {method} {path} {query:?} (id {request_id})");
 
-    let (mut headers_rx, rx) = request(client_id, request_id, method, path, query, payload).await?;
+    let (headers_rx, rx) = request(client_id, request_id, method, path, query, payload).await?;
 
     let mut builder = HttpResponse::Ok();
 
-    let headers = headers_rx.recv().await.unwrap();
+    let headers = headers_rx.await.unwrap();
     let response_type = ResponseType::Stream;
 
     for (key, value) in &headers {
@@ -206,9 +207,9 @@ async fn handle_request(
     }
 
     let tunnel_stream = TunnelStream::new(request_id, rx, &|request_id| {
-        info!("Request {request_id} ended");
+        debug!("Request {request_id} ended");
         CHAT_SERVER_HANDLE
-            .lock()
+            .read()
             .unwrap()
             .as_ref()
             .unwrap()
@@ -238,39 +239,43 @@ async fn request(
     path: &str,
     query: Value,
     payload: Option<Value>,
-) -> Result<(Receiver<HashMap<String, String>>, Receiver<TunnelResponse>)> {
-    let (headers_tx, headers_rx) = channel(64);
-    let (tx, rx) = channel(1024);
+) -> Result<(
+    oneshot::Receiver<HashMap<String, String>>,
+    UnboundedReceiver<TunnelResponse>,
+)> {
+    let (headers_tx, headers_rx) = oneshot::channel();
+    let (tx, rx) = unbounded_channel();
 
-    debug!("Sending server request {request_id}");
-    let chat_server = CHAT_SERVER_HANDLE.lock().unwrap().as_ref().unwrap().clone();
-    chat_server.request_start(request_id, tx, headers_tx);
+    let client_id = client_id.to_string();
+    let method = method.clone();
+    let path = path.to_string();
 
-    let conn_id = select_connection(client_id)
-        .ok_or(ErrorInternalServerError(
-            "Could not get moosicbox server connection",
-        ))?
-        .tunnel_ws_id
-        .parse::<usize>()
-        .map_err(|_| ErrorInternalServerError("Failed to parse connection id"))?;
+    tokio::spawn(async move {
+        debug!("Sending server request {request_id}");
+        let chat_server = CHAT_SERVER_HANDLE.read().unwrap().as_ref().unwrap().clone();
+        chat_server.request_start(request_id, tx, headers_tx);
 
-    debug!("Sending server request {request_id} to {conn_id}");
-    chat_server
-        .send_message(
-            conn_id,
-            &serde_json::to_value(TunnelRequest::HttpRequest(TunnelHttpRequest {
-                request_id,
-                method: method.clone(),
-                path: path.to_string(),
-                query,
-                payload,
-                encoding: TunnelEncoding::Binary,
-            }))
-            .unwrap()
-            .to_string(),
-        )
-        .await;
-    debug!("Sent server request {request_id} to {conn_id}");
+        let conn_id = chat_server.get_connection_id(&client_id)?;
+
+        debug!("Sending server request {request_id} to {conn_id}");
+        chat_server
+            .send_message(
+                conn_id,
+                &serde_json::to_value(TunnelRequest::HttpRequest(TunnelHttpRequest {
+                    request_id,
+                    method: method.clone(),
+                    path: path.to_string(),
+                    query,
+                    payload,
+                    encoding: TunnelEncoding::Binary,
+                }))
+                .unwrap()
+                .to_string(),
+            )
+            .await;
+        debug!("Sent server request {request_id} to {conn_id}");
+        Ok::<_, ConnectionIdError>(())
+    });
 
     Ok((headers_rx, rx))
 }

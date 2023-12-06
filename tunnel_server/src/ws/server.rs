@@ -17,7 +17,7 @@ use serde_json::Value;
 use strum_macros::EnumString;
 use thiserror::Error;
 use tokio::sync::{
-    mpsc::{self, error::SendError, Sender},
+    mpsc::{self, error::SendError, UnboundedSender},
     oneshot,
 };
 
@@ -44,8 +44,8 @@ enum Command {
 
     RequestStart {
         request_id: usize,
-        sender: Sender<TunnelResponse>,
-        headers_sender: Sender<HashMap<String, String>>,
+        sender: UnboundedSender<TunnelResponse>,
+        headers_sender: oneshot::Sender<HashMap<String, String>>,
     },
 
     RequestEnd {
@@ -83,8 +83,8 @@ enum Command {
 pub struct ChatServer {
     /// Map of connection IDs to their message receivers.
     sessions: HashMap<ConnId, mpsc::UnboundedSender<Msg>>,
-    senders: HashMap<usize, Sender<TunnelResponse>>,
-    headers_senders: HashMap<usize, Sender<HashMap<String, String>>>,
+    senders: HashMap<usize, UnboundedSender<TunnelResponse>>,
+    headers_senders: HashMap<usize, oneshot::Sender<HashMap<String, String>>>,
 
     /// Tracks total number of historical connections established.
     visitor_count: Arc<AtomicUsize>,
@@ -165,6 +165,7 @@ impl ChatServer {
 
         if sender {
             upsert_connection(&client_id, &id.to_string());
+            CACHE_CONNECTIONS_MAP.write().unwrap().insert(client_id, id);
         }
 
         let count = self.visitor_count.fetch_add(1, Ordering::SeqCst) + 1;
@@ -181,6 +182,11 @@ impl ChatServer {
         debug!("Visitor count: {count}");
 
         delete_connection(&conn_id.to_string());
+
+        CACHE_CONNECTIONS_MAP
+            .write()
+            .unwrap()
+            .retain(|_, id| *id != conn_id);
 
         // remove sender
         self.sessions.remove(&conn_id);
@@ -221,8 +227,8 @@ impl ChatServer {
                     let request_id = response.request_id;
 
                     if let Some(headers) = &response.headers {
-                        if let Some(sender) = self.headers_senders.get(&request_id) {
-                            if sender.send(headers.clone()).await.is_err() {
+                        if let Some(sender) = self.headers_senders.remove(&request_id) {
+                            if sender.send(headers.clone()).is_err() {
                                 warn!("Header sender dropped for request {}", request_id);
                                 self.headers_senders.remove(&request_id);
                             }
@@ -236,7 +242,7 @@ impl ChatServer {
                     }
 
                     if let Some(sender) = self.senders.get(&request_id) {
-                        if sender.send(response).await.is_err() {
+                        if sender.send(response).is_err() {
                             warn!("Sender dropped for request {}", request_id);
                             self.senders.remove(&request_id);
                         }
@@ -317,6 +323,17 @@ pub enum WsRequestError {
     #[error("Invalid client ID: {0}")]
     InvalidClientId(String),
 }
+
+#[derive(Error, Debug)]
+pub enum ConnectionIdError {
+    #[error("Invalid Connection ID '{0}'")]
+    Invalid(String),
+    #[error("Connection ID not found for client_id '{0}'")]
+    NotFound(String),
+}
+
+static CACHE_CONNECTIONS_MAP: once_cell::sync::Lazy<std::sync::RwLock<HashMap<String, usize>>> =
+    once_cell::sync::Lazy::new(|| std::sync::RwLock::new(HashMap::new()));
 
 /// Handle and command sender for chat server.
 ///
@@ -401,8 +418,8 @@ impl ChatServerHandle {
     pub fn request_start(
         &self,
         request_id: usize,
-        sender: Sender<TunnelResponse>,
-        headers_sender: Sender<HashMap<String, String>>,
+        sender: UnboundedSender<TunnelResponse>,
+        headers_sender: oneshot::Sender<HashMap<String, String>>,
     ) {
         self.cmd_tx
             .send(Command::RequestStart {
@@ -421,5 +438,30 @@ impl ChatServerHandle {
 
     pub fn response(&self, response: TunnelResponse) {
         self.cmd_tx.send(Command::Response { response }).unwrap();
+    }
+
+    pub fn get_connection_id(&self, client_id: &str) -> Result<usize, ConnectionIdError> {
+        let existing = {
+            let lock = CACHE_CONNECTIONS_MAP.read().unwrap();
+            lock.get(client_id).copied()
+        };
+        if let Some(conn_id) = existing {
+            Ok(conn_id)
+        } else {
+            let tunnel_ws_id = select_connection(client_id)
+                .ok_or(ConnectionIdError::NotFound(client_id.to_string()))?
+                .tunnel_ws_id;
+
+            let conn_id = tunnel_ws_id
+                .parse::<usize>()
+                .map_err(|_| ConnectionIdError::Invalid(tunnel_ws_id))?;
+
+            CACHE_CONNECTIONS_MAP
+                .write()
+                .unwrap()
+                .insert(client_id.to_string(), conn_id);
+
+            Ok(conn_id)
+        }
     }
 }
