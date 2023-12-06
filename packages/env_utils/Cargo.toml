@@ -1,0 +1,10 @@
+[package]
+authors = ["Braden Steffaniak"]
+edition = "2021"
+name    = "moosicbox_env_utils"
+version = "0.1.0"
+
+[dependencies]
+
+[features]
+fail-on-warnings = []

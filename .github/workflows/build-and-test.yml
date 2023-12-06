@@ -60,6 +60,10 @@ jobs:
                       path: packages/core
                       os: ubuntu-latest
 
+                    - name: env_utils
+                      path: packages/env_utils
+                      os: ubuntu-latest
+
                     - name: files
                       path: packages/files
                       os: ubuntu-latest

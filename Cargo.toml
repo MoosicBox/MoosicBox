@@ -5,6 +5,7 @@ members = [
     "packages/auth",
     "packages/converter",
     "packages/core",
+    "packages/env_utils",
     "packages/files",
     "packages/image",
     "packages/menu",
