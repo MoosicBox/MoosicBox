@@ -11,6 +11,7 @@ use futures_channel::mpsc::UnboundedSender;
 use futures_util::{future, pin_mut, Future, Stream, StreamExt};
 use lazy_static::lazy_static;
 use moosicbox_core::app::Db;
+use moosicbox_env_utils::default_env_usize;
 use moosicbox_files::api::AudioFormat;
 use moosicbox_files::files::album::{get_album_cover, AlbumCoverError, AlbumCoverSource};
 use moosicbox_files::files::track::{get_track_info, get_track_source, TrackSource};
@@ -89,6 +90,10 @@ static BINARY_REQUEST_BUFFER_OFFSET: Lazy<usize> = Lazy::new(|| {
     std::mem::size_of::<u32>() + // packet_id
     std::mem::size_of::<u8>() // last
 });
+
+static DEFAULT_WS_MAX_PACKET_SIZE: usize = 1024 * 64;
+static WS_MAX_PACKET_SIZE: usize =
+    default_env_usize!("WS_MAX_PACKET_SIZE", DEFAULT_WS_MAX_PACKET_SIZE);
 
 impl TunnelSender {
     pub fn new(
@@ -390,8 +395,6 @@ impl TunnelSender {
         headers: HashMap<String, String>,
         mut stream: impl Stream<Item = Result<Bytes, E>> + std::marker::Unpin,
     ) {
-        let buf_size = 1024 * 32;
-
         let mut bytes_read = 0_usize;
         let mut packet_id = 0_u32;
         let mut left_over: Option<Vec<u8>> = None;
@@ -399,7 +402,7 @@ impl TunnelSender {
 
         while !last {
             packet_id += 1;
-            let mut buf = vec![0_u8; buf_size];
+            let mut buf = vec![0_u8; WS_MAX_PACKET_SIZE];
             let mut offset =
                 Self::init_binary_request_buffer(request_id, packet_id, false, &headers, &mut buf);
 
@@ -423,15 +426,16 @@ impl TunnelSender {
                     match stream.next().await {
                         Some(Ok(data)) => {
                             let size = data.len();
-                            if offset + size <= buf_size {
+                            if offset + size <= WS_MAX_PACKET_SIZE {
                                 buf[offset..offset + size].copy_from_slice(&data);
                                 offset += size;
                                 read += size;
                             } else {
-                                buf[offset..buf_size].copy_from_slice(&data[..buf_size - offset]);
-                                left_over = Some(data[buf_size - offset..].to_vec());
-                                offset = buf_size;
-                                break buf_size;
+                                buf[offset..WS_MAX_PACKET_SIZE]
+                                    .copy_from_slice(&data[..WS_MAX_PACKET_SIZE - offset]);
+                                left_over = Some(data[WS_MAX_PACKET_SIZE - offset..].to_vec());
+                                offset = WS_MAX_PACKET_SIZE;
+                                break WS_MAX_PACKET_SIZE;
                             }
                         }
                         Some(Err(err)) => {
@@ -468,21 +472,19 @@ impl TunnelSender {
         headers: HashMap<String, String>,
         mut reader: impl std::io::Read,
     ) {
-        let buf_size = 1024 * 32;
-
         let mut bytes_read = 0_usize;
         let mut packet_id = 0_u32;
         let mut last = false;
 
         while !last {
             packet_id += 1;
-            let mut buf = vec![0_u8; buf_size];
+            let mut buf = vec![0_u8; WS_MAX_PACKET_SIZE];
             let offset =
                 Self::init_binary_request_buffer(request_id, packet_id, false, &headers, &mut buf);
 
             let mut read = 0;
 
-            while offset + read < buf_size {
+            while offset + read < WS_MAX_PACKET_SIZE {
                 match reader.read(&mut buf[offset + read..]) {
                     Ok(size) => {
                         if size == 0 {

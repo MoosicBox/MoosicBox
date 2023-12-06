@@ -15,6 +15,7 @@ lazy_static = { workspace = true, optional = true }
 log = { workspace = true }
 moosicbox_auth = { path = "../auth", optional = true }
 moosicbox_core = { path = "../core", optional = true }
+moosicbox_env_utils = { path = "../env_utils", optional = true }
 moosicbox_files = { path = "../files", optional = true }
 moosicbox_image = { path = "../image", default-features = false, features = [
     "image",
@@ -46,6 +47,7 @@ sender = [
     "dep:lazy_static",
     "dep:moosicbox_auth",
     "dep:moosicbox_core",
+    "dep:moosicbox_env_utils",
     "dep:moosicbox_files",
     "dep:moosicbox_image",
     "dep:moosicbox_symphonia_player",
