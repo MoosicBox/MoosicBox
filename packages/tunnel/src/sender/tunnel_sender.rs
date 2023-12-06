@@ -157,12 +157,21 @@ impl TunnelSender {
             let mut just_retried = false;
             log::debug!("Fetching signature token...");
             let token = loop {
+                if cancellation_token.is_cancelled() {
+                    log::debug!("Closing tunnel");
+                    return;
+                }
                 match moosicbox_auth::fetch_signature_token(&host, &client_id, &access_token).await
                 {
                     Ok(Some(token)) => break token,
                     _ => {
                         log::error!("Failed to fetch signature token");
-                        sleep(Duration::from_millis(5000)).await;
+                        select!(
+                            _ = sleep(Duration::from_millis(5000)) => {}
+                            _ = cancellation_token.cancelled() => {
+                                log::debug!("Cancelling retry")
+                            }
+                        );
                     }
                 }
             };
