@@ -16,10 +16,12 @@ log                        = { workspace = true }
 moosicbox_auth             = { path = "../auth", optional = true }
 moosicbox_core             = { path = "../core", optional = true }
 moosicbox_files            = { path = "../files", optional = true }
+moosicbox_image            = { path = "../image", optional = true }
 moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false, optional = true }
 moosicbox_ws               = { path = "../ws", optional = true }
 once_cell                  = { workspace = true, optional = true }
 rand                       = { workspace = true }
+regex                      = { workspace = true }
 reqwest                    = { workspace = true, features = ["json"], optional = true }
 serde                      = { workspace = true, features = ["derive"] }
 serde-aux                  = { workspace = true, optional = true }
@@ -43,6 +45,7 @@ sender = [
     "dep:moosicbox_auth",
     "dep:moosicbox_core",
     "dep:moosicbox_files",
+    "dep:moosicbox_image",
     "dep:moosicbox_symphonia_player",
     "dep:moosicbox_ws",
     "dep:once_cell",

@@ -12,10 +12,12 @@ use futures_util::{future, pin_mut, Future, Stream, StreamExt};
 use lazy_static::lazy_static;
 use moosicbox_core::app::Db;
 use moosicbox_files::api::AudioFormat;
+use moosicbox_files::files::album::{get_album_cover, AlbumCoverError, AlbumCoverSource};
 use moosicbox_files::files::track::{get_track_info, get_track_source, TrackSource};
 use moosicbox_ws::api::{WebsocketContext, WebsocketSender};
 use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng as _};
+use regex::Regex;
 use serde_json::Value;
 use thiserror::Error;
 use tokio::runtime::{self, Runtime};
@@ -809,18 +811,81 @@ impl TunnelSender {
                 _ => Err(TunnelRequestError::UnsupportedMethod),
             },
             _ => {
-                self.proxy_localhost_request(
-                    service_port,
-                    request_id,
-                    method,
-                    path,
-                    query,
-                    payload,
-                    encoding,
-                )
-                .await;
+                let re = Regex::new(r"^albums/(\d+)/(\d+)x(\d+)$").unwrap();
+                if let Some(caps) = re.captures(&path) {
+                    match method {
+                        Method::Get => {
+                            let album_id = caps.get(1).unwrap().as_str().parse::<i32>().unwrap();
+                            let width = caps.get(2).unwrap().as_str().parse::<u32>().unwrap();
+                            let height = caps.get(3).unwrap().as_str().parse::<u32>().unwrap();
+                            match get_album_cover(album_id, db.clone()).await.unwrap() {
+                                AlbumCoverSource::LocalFilePath(path) => {
+                                    let mut headers = HashMap::new();
+                                    let resized = {
+                                        use moosicbox_image::{
+                                            image::try_resize_local_file, Encoding,
+                                        };
+                                        if let Some(resized) = try_resize_local_file(
+                                            width,
+                                            height,
+                                            &path,
+                                            Encoding::Webp,
+                                            80,
+                                        )
+                                        .map_err(|e| {
+                                            AlbumCoverError::File(path.clone(), e.to_string())
+                                        })
+                                        .unwrap()
+                                        {
+                                            headers.insert(
+                                                "content-type".to_string(),
+                                                "image/webp".to_string(),
+                                            );
+                                            resized
+                                        } else {
+                                            headers.insert(
+                                                "content-type".to_string(),
+                                                "image/jpeg".to_string(),
+                                            );
+                                            try_resize_local_file(
+                                                width,
+                                                height,
+                                                &path,
+                                                Encoding::Jpeg,
+                                                80,
+                                            )
+                                            .map_err(|e| AlbumCoverError::File(path, e.to_string()))
+                                            .unwrap()
+                                            .expect("Failed to resize to jpeg image")
+                                        }
+                                    };
 
-                Ok(())
+                                    headers.insert(
+                                        "cache-control".to_string(),
+                                        format!("max-age={}", 86400u32 * 14),
+                                    );
+                                    self.send(request_id, headers, Cursor::new(resized), encoding);
+                                }
+                            }
+
+                            Ok(())
+                        }
+                        _ => Err(TunnelRequestError::UnsupportedMethod),
+                    }
+                } else {
+                    self.proxy_localhost_request(
+                        service_port,
+                        request_id,
+                        method,
+                        path,
+                        query,
+                        payload,
+                        encoding,
+                    )
+                    .await;
+
+                    Ok(())
+                }
             }
         }
     }
