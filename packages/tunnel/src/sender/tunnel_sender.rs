@@ -14,6 +14,7 @@ use moosicbox_core::app::Db;
 use moosicbox_files::api::AudioFormat;
 use moosicbox_files::files::track::{get_track_info, get_track_source, TrackSource};
 use moosicbox_ws::api::{WebsocketContext, WebsocketSender};
+use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng as _};
 use serde_json::Value;
 use thiserror::Error;
@@ -80,6 +81,12 @@ pub struct TunnelSender {
     sender: Arc<Mutex<Option<UnboundedSender<TunnelResponseMessage>>>>,
     cancellation_token: CancellationToken,
 }
+
+static BINARY_REQUEST_BUFFER_OFFSET: Lazy<usize> = Lazy::new(|| {
+    std::mem::size_of::<usize>() + // request_id
+    std::mem::size_of::<u32>() + // packet_id
+    std::mem::size_of::<u8>() // last
+});
 
 impl TunnelSender {
     pub fn new(
@@ -323,6 +330,7 @@ impl TunnelSender {
     fn init_binary_request_buffer(
         request_id: usize,
         packet_id: u32,
+        last: bool,
         headers: &HashMap<String, String>,
         buf: &mut [u8],
     ) -> usize {
@@ -337,6 +345,17 @@ impl TunnelSender {
         let len = packet_id_bytes.len();
         buf[offset..(offset + len)].copy_from_slice(&packet_id_bytes);
         offset += len;
+
+        let last_bytes = if last { 1u8 } else { 0u8 }.to_be_bytes();
+        let len = last_bytes.len();
+        buf[offset..(offset + len)].copy_from_slice(&last_bytes);
+        offset += len;
+
+        assert!(
+            offset == *BINARY_REQUEST_BUFFER_OFFSET,
+            "Invalid binary request buffer offset {offset} != {}",
+            *BINARY_REQUEST_BUFFER_OFFSET
+        );
 
         if packet_id == 1 {
             let headers = serde_json::to_string(&headers).unwrap();
@@ -365,11 +384,13 @@ impl TunnelSender {
         let mut bytes_read = 0_usize;
         let mut packet_id = 0_u32;
         let mut left_over: Option<Vec<u8>> = None;
+        let mut last = false;
 
-        loop {
+        while !last {
+            packet_id += 1;
             let mut buf = vec![0_u8; buf_size];
             let mut offset =
-                Self::init_binary_request_buffer(request_id, packet_id, &headers, &mut buf);
+                Self::init_binary_request_buffer(request_id, packet_id, false, &headers, &mut buf);
 
             let mut left_over_size = 0_usize;
             if let Some(mut left_over_str) = left_over.take() {
@@ -408,6 +429,8 @@ impl TunnelSender {
                         }
                         None => {
                             log::debug!("Received None");
+                            buf[*BINARY_REQUEST_BUFFER_OFFSET - 1] = 1;
+                            last = true;
                             break read;
                         }
                     }
@@ -418,16 +441,11 @@ impl TunnelSender {
 
             size += left_over_size;
 
-            packet_id += 1;
             bytes_read += size;
-            log::debug!("[{request_id}]: Read {size} bytes ({bytes_read} total)");
+            log::debug!("[{request_id}]: Read {size} bytes ({bytes_read} total) last={last}");
             let bytes = &buf[..offset];
             if let Err(err) = self.send_bytes(request_id, packet_id, bytes) {
                 log::error!("Failed to send bytes: {err:?}");
-                break;
-            }
-
-            if size == 0 {
                 break;
             }
         }
@@ -443,27 +461,37 @@ impl TunnelSender {
 
         let mut bytes_read = 0_usize;
         let mut packet_id = 0_u32;
+        let mut last = false;
 
-        loop {
+        while !last {
+            packet_id += 1;
             let mut buf = vec![0_u8; buf_size];
             let offset =
-                Self::init_binary_request_buffer(request_id, packet_id, &headers, &mut buf);
+                Self::init_binary_request_buffer(request_id, packet_id, false, &headers, &mut buf);
 
-            match reader.read(&mut buf[offset..]) {
-                Ok(size) => {
-                    packet_id += 1;
-                    bytes_read += size;
-                    log::debug!("Read {} bytes", bytes_read);
-                    let bytes = &buf[..(size + offset)];
-                    if let Err(err) = self.send_bytes(request_id, packet_id, bytes) {
-                        log::error!("Failed to send bytes: {err:?}");
-                        break;
+            let mut read = 0;
+
+            while offset + read < buf_size {
+                match reader.read(&mut buf[offset + read..]) {
+                    Ok(size) => {
+                        if size == 0 {
+                            buf[*BINARY_REQUEST_BUFFER_OFFSET - 1] = 1;
+                            last = true;
+                            break;
+                        }
+
+                        bytes_read += size;
+                        read += size;
+                        log::debug!("Read {size} bytes ({bytes_read} total)");
                     }
-                    if size == 0 {
-                        break;
-                    }
+                    Err(_err) => break,
                 }
-                Err(_err) => break,
+            }
+
+            let bytes = &buf[..(read + offset)];
+            if let Err(err) = self.send_bytes(request_id, packet_id, bytes) {
+                log::error!("Failed to send bytes: {err:?}");
+                break;
             }
         }
     }

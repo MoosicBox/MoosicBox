@@ -33,6 +33,7 @@ pub struct TunnelWsResponse {
 pub struct TunnelResponse {
     pub request_id: usize,
     pub packet_id: u32,
+    pub last: bool,
     pub bytes: Bytes,
     pub headers: Option<HashMap<String, String>>,
 }
@@ -81,9 +82,10 @@ pub struct TunnelWsRequest {
 
 impl From<Bytes> for TunnelResponse {
     fn from(bytes: Bytes) -> Self {
-        let mut data = bytes.slice(12..);
+        let mut data = bytes.slice(13..);
         let request_id = usize::from_be_bytes(bytes[..8].try_into().unwrap());
         let packet_id = u32::from_be_bytes(bytes[8..12].try_into().unwrap());
+        let last = u8::from_be_bytes(bytes[12..13].try_into().unwrap()) == 1;
         let headers = if packet_id == 1 {
             let len = u32::from_be_bytes(data[..4].try_into().unwrap()) as usize;
             let headers_bytes = &data.slice(4..(4 + len));
@@ -96,6 +98,7 @@ impl From<Bytes> for TunnelResponse {
         TunnelResponse {
             request_id,
             packet_id,
+            last,
             bytes: data,
             headers,
         }
@@ -142,16 +145,19 @@ impl TryFrom<&str> for TunnelResponse {
             .parse::<u32>()
             .unwrap();
 
+        let last_pos = packet_id_pos + 2;
+        let last = base64[packet_id_pos + 1..last_pos].parse::<u8>().unwrap() == 1;
+
         let headers = if packet_id == 1 {
             let headers_pos = base64
                 .chars()
-                .skip(packet_id_pos + 2)
+                .skip(last_pos + 2)
                 .position(|c| c == '}')
                 .ok_or(Base64DecodeError::InvalidContent(
                     "Missing headers. Expected '}' delimiter".into(),
                 ))?;
 
-            let headers_str = &base64[packet_id_pos + 1..headers_pos];
+            let headers_str = &base64[last_pos + 1..headers_pos];
 
             Some(serde_json::from_str(headers_str).unwrap())
         } else {
@@ -163,6 +169,7 @@ impl TryFrom<&str> for TunnelResponse {
         Ok(TunnelResponse {
             request_id,
             packet_id,
+            last,
             bytes,
             headers,
         })
@@ -185,6 +192,7 @@ pub struct TunnelStream<'a> {
     packet_count: u32,
     byte_count: usize,
     rx: Receiver<TunnelResponse>,
+    done: bool,
     on_end: &'a dyn Fn(usize),
     packet_queue: Vec<TunnelResponse>,
 }
@@ -201,6 +209,7 @@ impl<'a> TunnelStream<'a> {
             time_to_first_byte: None,
             packet_count: 0,
             byte_count: 0,
+            done: false,
             rx,
             on_end,
             packet_queue: vec![],
@@ -215,33 +224,19 @@ fn return_polled_bytes(
     if stream.time_to_first_byte.is_none() {
         stream.time_to_first_byte = Some(SystemTime::now());
     }
+
     stream.packet_count += 1;
+
     debug!(
-        "Received packet for {} {} {} bytes",
+        "Received packet for {} {} {} bytes last={}",
         stream.request_id,
         stream.packet_count,
-        response.bytes.len()
+        response.bytes.len(),
+        response.last,
     );
 
-    if response.bytes.is_empty() {
-        let end = SystemTime::now();
-
-        debug!(
-            "Byte count: {} (received {} packet{}, took {}ms total, {}ms to first byte)",
-            stream.byte_count,
-            stream.packet_count,
-            if stream.packet_count == 1 { "" } else { "s" },
-            end.duration_since(stream.start).unwrap().as_millis(),
-            stream
-                .time_to_first_byte
-                .map(|t| t.duration_since(stream.start).unwrap().as_millis())
-                .map(|t| t.to_string())
-                .unwrap_or("N/A".into())
-        );
-
-        (stream.on_end)(stream.request_id);
-
-        return Poll::Ready(None);
+    if response.last {
+        stream.done = true;
     }
 
     stream.byte_count += response.bytes.len();
@@ -257,6 +252,27 @@ impl Stream for TunnelStream<'_> {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
         let stream = self.get_mut();
+        if stream.done {
+            let end = SystemTime::now();
+
+            debug!(
+                "Byte count: {} (received {} packet{}, took {}ms total, {}ms to first byte)",
+                stream.byte_count,
+                stream.packet_count,
+                if stream.packet_count == 1 { "" } else { "s" },
+                end.duration_since(stream.start).unwrap().as_millis(),
+                stream
+                    .time_to_first_byte
+                    .map(|t| t.duration_since(stream.start).unwrap().as_millis())
+                    .map(|t| t.to_string())
+                    .unwrap_or("N/A".into())
+            );
+
+            (stream.on_end)(stream.request_id);
+
+            return Poll::Ready(None);
+        }
+
         debug!("Waiting for next packet");
         let response = match stream.rx.poll_recv(cx) {
             Poll::Ready(Some(response)) => response,
@@ -269,6 +285,10 @@ impl Stream for TunnelStream<'_> {
                 return Poll::Ready(None);
             }
         };
+
+        if response.packet_id == 1 && response.last {
+            return return_polled_bytes(stream, response);
+        }
 
         if stream
             .packet_queue
