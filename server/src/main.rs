@@ -40,9 +40,8 @@ fn main() -> std::io::Result<()> {
     };
 
     actix_web::rt::System::with_tokio_rt(|| {
-        let threads = if let Ok(Ok(workers)) = env::var("ACTIX_WORKERS").map(|w| w.parse::<usize>())
-        {
-            workers
+        let threads = if let Ok(Ok(max)) = env::var("MAX_THREADS").map(|w| w.parse::<usize>()) {
+            max
         } else {
             64
         };
