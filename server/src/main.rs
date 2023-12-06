@@ -114,7 +114,6 @@ fn main() -> std::io::Result<()> {
                                 debug!("Received text TunnelMessage {}", &m);
                                 let tunnel = tunnel.clone();
                                 spawn(async move {
-                                    println!("received request");
                                     match serde_json::from_str(&m).unwrap() {
                                         TunnelRequest::HttpRequest(request) => tunnel
                                             .tunnel_request(
