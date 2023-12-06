@@ -168,7 +168,7 @@ impl ChatServer {
         }
 
         let count = self.visitor_count.fetch_add(1, Ordering::SeqCst) + 1;
-        info!("Visitor count: {count}");
+        debug!("Visitor count: {count}");
 
         // send id back
         id
@@ -178,7 +178,7 @@ impl ChatServer {
     async fn disconnect(&mut self, conn_id: ConnId) {
         info!("Someone disconnected {conn_id}");
         let count = self.visitor_count.fetch_sub(1, Ordering::SeqCst) - 1;
-        info!("Visitor count: {count}");
+        debug!("Visitor count: {count}");
 
         delete_connection(&conn_id.to_string());
 

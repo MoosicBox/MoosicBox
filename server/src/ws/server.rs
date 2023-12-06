@@ -204,7 +204,7 @@ impl ChatServer {
         self.rooms.entry("main".to_owned()).or_default().insert(id);
 
         let count = self.visitor_count.fetch_add(1, Ordering::SeqCst);
-        info!("Visitor count: {}", count + 1);
+        debug!("Visitor count: {}", count + 1);
 
         let connection_id = id.to_string();
         let context = WebsocketContext { connection_id };
@@ -219,7 +219,7 @@ impl ChatServer {
     async fn disconnect(&mut self, conn_id: ConnId) -> Result<(), WebsocketDisconnectError> {
         info!("Someone disconnected {conn_id}");
         let count = self.visitor_count.fetch_sub(1, Ordering::SeqCst);
-        info!("Visitor count: {}", count - 1);
+        debug!("Visitor count: {}", count - 1);
 
         let mut rooms: Vec<String> = Vec::new();
 
