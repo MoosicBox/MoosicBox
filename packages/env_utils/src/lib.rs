@@ -1,5 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
+use thiserror::Error;
+
 #[derive(Clone, Copy, Debug)]
 pub enum ParseIntError {
     InvalidDigit,
@@ -65,6 +67,18 @@ pub const fn parse(b: &str) -> Result<usize, ParseIntError> {
     Ok(result)
 }
 
+#[derive(Error, Debug)]
+pub enum EnvUsizeError {
+    #[error(transparent)]
+    Var(#[from] std::env::VarError),
+    #[error(transparent)]
+    ParseInt(#[from] std::num::ParseIntError),
+}
+
+pub fn env_usize(name: &str) -> Result<usize, EnvUsizeError> {
+    Ok(std::env::var(name)?.parse::<usize>()?)
+}
+
 #[macro_export]
 macro_rules! env_usize {
     ($name:expr $(,)?) => {
@@ -75,6 +89,19 @@ macro_rules! env_usize {
     };
 }
 
+#[derive(Error, Debug)]
+pub enum DefaultEnvUsizeError {
+    #[error(transparent)]
+    ParseInt(#[from] std::num::ParseIntError),
+}
+
+pub fn default_env_usize(name: &str, default: usize) -> Result<usize, DefaultEnvUsizeError> {
+    match std::env::var(name) {
+        Ok(value) => Ok(value.parse::<usize>()?),
+        Err(_) => Ok(default),
+    }
+}
+
 #[macro_export]
 macro_rules! default_env_usize {
     ($name:expr, $default:expr) => {
@@ -83,6 +110,19 @@ macro_rules! default_env_usize {
             None => $default,
         }
     };
+}
+
+#[derive(Error, Debug)]
+pub enum OptionEnvUsizeError {
+    #[error(transparent)]
+    ParseInt(#[from] std::num::ParseIntError),
+}
+
+pub fn option_env_usize(name: &str) -> Result<Option<usize>, OptionEnvUsizeError> {
+    match std::env::var(name) {
+        Ok(value) => Ok(Some(value.parse::<usize>()?)),
+        Err(_) => Ok(None),
+    }
 }
 
 #[macro_export]
@@ -96,6 +136,13 @@ macro_rules! option_env_usize {
             None => None,
         }
     };
+}
+
+pub fn default_env(name: &str, default: &str) -> String {
+    match std::env::var(name) {
+        Ok(value) => value,
+        Err(_) => default.to_string(),
+    }
 }
 
 #[macro_export]

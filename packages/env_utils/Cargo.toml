@@ -5,6 +5,7 @@ name    = "moosicbox_env_utils"
 version = "0.1.0"
 
 [dependencies]
+thiserror = { workspace = true }
 
 [features]
 fail-on-warnings = []
