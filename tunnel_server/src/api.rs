@@ -124,7 +124,7 @@ pub async fn auth_validate_signature_token_endpoint(_: SignatureAuthorized) -> R
     Ok(Json(json!({"valid": true})))
 }
 
-#[route("/track", method = "GET", method = "HEAD")]
+#[route("/track", method = "GET", method = "HEAD", method = "OPTIONS")]
 pub async fn track_endpoint(
     body: Option<Bytes>,
     req: HttpRequest,
