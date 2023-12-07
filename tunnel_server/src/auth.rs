@@ -23,6 +23,10 @@ impl FromRequest for GeneralHeaderAuthorized {
         if is_authorized(req) {
             ok(GeneralHeaderAuthorized)
         } else {
+            log::warn!(
+                "Unauthorized GeneralHeaderAuthorized request to '{}'",
+                req.path()
+            );
             err(ErrorUnauthorized("Unauthorized"))
         }
     }
@@ -54,6 +58,10 @@ impl FromRequest for ClientHeaderAuthorized {
         if client_is_authorized(req) {
             ok(ClientHeaderAuthorized)
         } else {
+            log::warn!(
+                "Unauthorized ClientHeaderAuthorized request to '{}'",
+                req.path()
+            );
             err(ErrorUnauthorized("Unauthorized"))
         }
     }
@@ -94,6 +102,7 @@ impl FromRequest for QueryAuthorized {
         if is_query_authorized(req) {
             ok(QueryAuthorized)
         } else {
+            log::warn!("Unauthorized QueryAuthorized request to '{}'", req.path());
             err(ErrorUnauthorized("Unauthorized"))
         }
     }
@@ -124,6 +133,10 @@ impl FromRequest for SignatureAuthorized {
         if is_signature_authorized(req) {
             ok(SignatureAuthorized)
         } else {
+            log::warn!(
+                "Unauthorized SignatureAuthorized request to '{}'",
+                req.path()
+            );
             err(ErrorUnauthorized("Unauthorized"))
         }
     }
