@@ -9,7 +9,7 @@ use once_cell::sync::Lazy;
 use qstring::QString;
 use sha2::{Digest, Sha256};
 
-use crate::ws::db::{valid_client_access_token, valid_signature_token};
+use crate::ws::db::{valid_client_access_token, valid_signature_token, DatabaseError};
 
 static TUNNEL_ACCESS_TOKEN: &str = std::env!("TUNNEL_ACCESS_TOKEN");
 
@@ -55,7 +55,7 @@ impl FromRequest for ClientHeaderAuthorized {
     type Future = Ready<Result<Self, actix_web::Error>>;
 
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
-        if client_is_authorized(req) {
+        if client_is_authorized(req).is_ok_and(|auth| auth) {
             ok(ClientHeaderAuthorized)
         } else {
             log::warn!(
@@ -67,7 +67,7 @@ impl FromRequest for ClientHeaderAuthorized {
     }
 }
 
-fn client_is_authorized(req: &HttpRequest) -> bool {
+fn client_is_authorized(req: &HttpRequest) -> Result<bool, DatabaseError> {
     let query: Vec<_> = QString::from(req.query_string()).into();
     let client_id = query
         .iter()
@@ -89,7 +89,7 @@ fn client_is_authorized(req: &HttpRequest) -> bool {
         }
     }
 
-    false
+    Ok(false)
 }
 
 pub struct QueryAuthorized;
@@ -130,7 +130,7 @@ impl FromRequest for SignatureAuthorized {
     type Future = Ready<Result<Self, actix_web::Error>>;
 
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
-        if is_signature_authorized(req) {
+        if is_signature_authorized(req).is_ok_and(|auth| auth) {
             ok(SignatureAuthorized)
         } else {
             log::warn!(
@@ -142,7 +142,7 @@ impl FromRequest for SignatureAuthorized {
     }
 }
 
-fn is_signature_authorized(req: &HttpRequest) -> bool {
+fn is_signature_authorized(req: &HttpRequest) -> Result<bool, DatabaseError> {
     let query: Vec<_> = QString::from(req.query_string()).into();
     let client_id = query
         .iter()
@@ -161,7 +161,7 @@ fn is_signature_authorized(req: &HttpRequest) -> bool {
         }
     }
 
-    false
+    Ok(false)
 }
 
 static HASH_CACHE: Lazy<Mutex<HashMap<String, String>>> = Lazy::new(|| Mutex::new(HashMap::new()));

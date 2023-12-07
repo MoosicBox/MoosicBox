@@ -9,6 +9,13 @@ use mysql::{
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum DatabaseError {
+    #[error(transparent)]
+    MySql(#[from] mysql::Error),
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Connection {
@@ -158,7 +165,7 @@ fn get_value_datetime_opt(value: &mysql::Value) -> Option<NaiveDateTime> {
 
 static DB: Lazy<Mutex<Option<mysql::Conn>>> = Lazy::new(|| Mutex::new(None));
 
-pub async fn init() {
+pub async fn init() -> Result<(), DatabaseError> {
     let config = aws_config::defaults(BehaviorVersion::v2023_11_09())
         .region(Region::new("us-east-1"))
         .load()
@@ -196,11 +203,14 @@ pub async fn init() {
 
     DB.lock()
         .unwrap_or_else(|e| e.into_inner())
-        .replace(mysql::Conn::new(opts).unwrap());
+        .replace(mysql::Conn::new(opts)?);
+
+    Ok(())
 }
 
-pub fn upsert_connection(client_id: &str, tunnel_ws_id: &str) {
-    DB.lock()
+pub fn upsert_connection(client_id: &str, tunnel_ws_id: &str) -> Result<(), DatabaseError> {
+    Ok(DB
+        .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_mut()
         .expect("DB not initialized")
@@ -209,36 +219,36 @@ pub fn upsert_connection(client_id: &str, tunnel_ws_id: &str) {
             INSERT INTO `connections` (client_id, tunnel_ws_id) VALUES(?, ?)
             ON DUPLICATE KEY UPDATE `tunnel_ws_id` = ?, `updated` = NOW()",
             (client_id, tunnel_ws_id, tunnel_ws_id),
-        )
-        .unwrap();
+        )?)
 }
 
-pub fn select_connection(client_id: &str) -> Option<Connection> {
-    DB.lock()
+pub fn select_connection(client_id: &str) -> Result<Option<Connection>, DatabaseError> {
+    Ok(DB
+        .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_mut()
         .expect("DB not initialized")
         .exec_first(
             "SELECT * FROM connections WHERE client_id = ?",
             (client_id,),
-        )
-        .unwrap()
+        )?)
 }
 
-pub fn delete_connection(tunnel_ws_id: &str) {
-    DB.lock()
+pub fn delete_connection(tunnel_ws_id: &str) -> Result<(), DatabaseError> {
+    Ok(DB
+        .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_mut()
         .expect("DB not initialized")
         .exec_drop(
             "DELETE FROM `connections` WHERE tunnel_ws_id = ?",
             (tunnel_ws_id,),
-        )
-        .unwrap();
+        )?)
 }
 
-pub fn insert_client_access_token(client_id: &str, token_hash: &str) {
-    DB.lock()
+pub fn insert_client_access_token(client_id: &str, token_hash: &str) -> Result<(), DatabaseError> {
+    Ok(DB
+        .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_mut()
         .expect("DB not initialized")
@@ -247,16 +257,19 @@ pub fn insert_client_access_token(client_id: &str, token_hash: &str) {
             INSERT INTO `client_access_tokens` (token_hash, client_id, expires)
             VALUES(?, ?, NULL)",
             (token_hash, client_id),
-        )
-        .unwrap();
+        )?)
 }
 
-pub fn valid_client_access_token(client_id: &str, token_hash: &str) -> bool {
-    select_client_access_token(client_id, token_hash).is_some()
+pub fn valid_client_access_token(client_id: &str, token_hash: &str) -> Result<bool, DatabaseError> {
+    Ok(select_client_access_token(client_id, token_hash)?.is_some())
 }
 
-pub fn select_client_access_token(client_id: &str, token_hash: &str) -> Option<ClientAccessToken> {
-    DB.lock()
+pub fn select_client_access_token(
+    client_id: &str,
+    token_hash: &str,
+) -> Result<Option<ClientAccessToken>, DatabaseError> {
+    Ok(DB
+        .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_mut()
         .expect("DB not initialized")
@@ -267,12 +280,12 @@ pub fn select_client_access_token(client_id: &str, token_hash: &str) -> Option<C
                     AND token_hash = ?
                     AND (expires IS NULL OR expires >= NOW())",
             (client_id, token_hash),
-        )
-        .unwrap()
+        )?)
 }
 
-pub fn insert_magic_token(client_id: &str, token_hash: &str) {
-    DB.lock()
+pub fn insert_magic_token(client_id: &str, token_hash: &str) -> Result<(), DatabaseError> {
+    Ok(DB
+        .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_mut()
         .expect("DB not initialized")
@@ -281,24 +294,23 @@ pub fn insert_magic_token(client_id: &str, token_hash: &str) {
             INSERT INTO `magic_tokens` (magic_token_hash, client_id, expires)
             VALUES(?, ?, NULL)",
             (token_hash, client_id),
-        )
-        .unwrap();
+        )?)
 }
 
-pub fn select_magic_token(token_hash: &str) -> Option<MagicToken> {
-    DB.lock()
+pub fn select_magic_token(token_hash: &str) -> Result<Option<MagicToken>, DatabaseError> {
+    Ok(DB.lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_mut()
         .expect("DB not initialized")
         .exec_first(
             "SELECT * FROM magic_tokens WHERE magic_token_hash = ? AND (expires IS NULL OR expires >= NOW())",
             (token_hash,),
-        )
-        .unwrap()
+        )?)
 }
 
-pub fn insert_signature_token(client_id: &str, token_hash: &str) {
-    DB.lock()
+pub fn insert_signature_token(client_id: &str, token_hash: &str) -> Result<(), DatabaseError> {
+    Ok(DB
+        .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_mut()
         .expect("DB not initialized")
@@ -307,48 +319,49 @@ pub fn insert_signature_token(client_id: &str, token_hash: &str) {
             INSERT INTO `signature_tokens` (token_hash, client_id, expires)
             VALUES(?, ?, DATE_ADD(NOW(), INTERVAL 14 DAY))",
             (token_hash, client_id),
-        )
-        .unwrap();
+        )?)
 }
 
-pub fn valid_signature_token(client_id: &str, token_hash: &str) -> bool {
-    select_signature_token(client_id, token_hash).is_some()
+pub fn valid_signature_token(client_id: &str, token_hash: &str) -> Result<bool, DatabaseError> {
+    Ok(select_signature_token(client_id, token_hash)?.is_some())
 }
 
-pub fn select_signature_token(client_id: &str, token_hash: &str) -> Option<SignatureToken> {
-    DB.lock()
+pub fn select_signature_token(
+    client_id: &str,
+    token_hash: &str,
+) -> Result<Option<SignatureToken>, DatabaseError> {
+    Ok(DB.lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_mut()
         .expect("DB not initialized")
         .exec_first(
             "SELECT * FROM signature_tokens WHERE client_id=? AND token_hash = ? AND expires >= NOW()",
             (client_id, token_hash,),
-        )
-        .unwrap()
+        )?)
 }
 
 #[allow(dead_code)]
-pub fn select_signature_tokens(client_id: &str) -> Vec<SignatureToken> {
-    DB.lock()
+pub fn select_signature_tokens(client_id: &str) -> Result<Vec<SignatureToken>, DatabaseError> {
+    Ok(DB
+        .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_mut()
         .expect("DB not initialized")
         .exec(
             "SELECT * FROM signature_tokens WHERE client_id = ?",
             (client_id,),
-        )
-        .unwrap()
+        )?)
 }
 
 #[allow(dead_code)]
-pub fn delete_signature_token(token_hash: &str) {
-    DB.lock()
+pub fn delete_signature_token(token_hash: &str) -> Result<(), DatabaseError> {
+    Ok(DB
+        .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_mut()
         .expect("DB not initialized")
         .exec_drop(
             "DELETE FROM `signature_tokens` WHERE token_hash = ?",
             (token_hash,),
-        )
-        .unwrap();
+        )?)
 }

@@ -1,4 +1,4 @@
-use actix_web::error::{ErrorBadRequest, ErrorUnauthorized};
+use actix_web::error::{ErrorBadRequest, ErrorInternalServerError, ErrorUnauthorized};
 use actix_web::http::header;
 use actix_web::web::{self, Json};
 use actix_web::{route, HttpResponse};
@@ -48,7 +48,9 @@ pub async fn auth_get_magic_token_endpoint(
     let token = &query.magic_token;
     let token_hash = &hash_token(token);
 
-    if let Some(magic_token) = select_magic_token(token_hash) {
+    if let Some(magic_token) = select_magic_token(token_hash)
+        .map_err(|e| ErrorInternalServerError(format!("Error: {e:?}")))?
+    {
         handle_request(
             &magic_token.client_id,
             &Method::Get,
@@ -78,7 +80,8 @@ pub async fn auth_magic_token_endpoint(
         .map(|(_, value)| value)
         .ok_or(ErrorBadRequest("Missing clientId"))?;
 
-    insert_magic_token(client_id, token_hash);
+    insert_magic_token(client_id, token_hash)
+        .map_err(|e| ErrorInternalServerError(format!("Error: {e:?}")))?;
 
     Ok(Json(json!({"success": true})))
 }
@@ -97,7 +100,8 @@ pub async fn auth_register_client_endpoint(
     let token = &Uuid::new_v4().to_string();
     let token_hash = &hash_token(token);
 
-    insert_client_access_token(&query.client_id, token_hash);
+    insert_client_access_token(&query.client_id, token_hash)
+        .map_err(|e| ErrorInternalServerError(format!("Error: {e:?}")))?;
 
     Ok(Json(json!({"token": token})))
 }
@@ -116,7 +120,8 @@ pub async fn auth_signature_token_endpoint(
     let token = &Uuid::new_v4().to_string();
     let token_hash = &hash_token(token);
 
-    insert_signature_token(&query.client_id, token_hash);
+    insert_signature_token(&query.client_id, token_hash)
+        .map_err(|e| ErrorInternalServerError(format!("Error: {e:?}")))?;
 
     Ok(Json(json!({"token": token})))
 }
