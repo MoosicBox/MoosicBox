@@ -3056,6 +3056,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "tokio-util",
 ]
 
 [[package]]

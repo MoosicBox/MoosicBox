@@ -1,7 +1,5 @@
 use std::cmp::min;
 use std::io::{Read, Seek};
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
 
 use bytes::Bytes;
 use crossbeam_channel::{bounded, Receiver, Sender};
@@ -12,6 +10,7 @@ use reqwest::Client;
 use symphonia::core::io::MediaSource;
 use tokio::runtime::{self, Runtime};
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
 lazy_static! {
     static ref RT: Runtime = runtime::Builder::new_multi_thread()
@@ -39,7 +38,7 @@ struct RemoteByteStreamFetcher {
     receiver: Receiver<Bytes>,
     sender: Sender<Bytes>,
     abort_handle: Option<JoinHandle<()>>,
-    aborting: Arc<AtomicBool>,
+    abort: CancellationToken,
 }
 
 impl RemoteByteStreamFetcher {
@@ -57,7 +56,7 @@ impl RemoteByteStreamFetcher {
             receiver: rx,
             sender: tx,
             abort_handle: None,
-            aborting: Arc::new(AtomicBool::new(false)),
+            abort: CancellationToken::new(),
         };
 
         if autostart {
@@ -71,7 +70,7 @@ impl RemoteByteStreamFetcher {
         let url = self.url.clone();
         let sender = self.sender.clone();
         let ready_receiver = self.ready_receiver.clone();
-        let aborting = self.aborting.clone();
+        let abort = self.abort.clone();
         let start = self.start;
         let end = self.end;
         let bytes_range = format!(
@@ -93,7 +92,7 @@ impl RemoteByteStreamFetcher {
                 .bytes_stream();
 
             while let Some(item) = stream.next().await {
-                if aborting.load(std::sync::atomic::Ordering::SeqCst) {
+                if abort.is_cancelled() {
                     debug!("ABORTING");
                     break;
                 }
@@ -105,7 +104,7 @@ impl RemoteByteStreamFetcher {
                 }
             }
 
-            if aborting.load(std::sync::atomic::Ordering::SeqCst) {
+            if abort.is_cancelled() {
                 debug!("ABORTED");
             } else {
                 debug!("Finished reading from stream");
@@ -117,8 +116,7 @@ impl RemoteByteStreamFetcher {
     }
 
     fn abort(&mut self) {
-        self.aborting
-            .store(true, std::sync::atomic::Ordering::SeqCst);
+        self.abort.cancel();
 
         if let Some(handle) = &self.abort_handle {
             debug!("Aborting request");
@@ -127,8 +125,7 @@ impl RemoteByteStreamFetcher {
         } else {
             debug!("No join handle for request");
         }
-        self.aborting
-            .store(false, std::sync::atomic::Ordering::SeqCst);
+        self.abort = CancellationToken::new();
     }
 }
 
