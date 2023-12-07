@@ -16,6 +16,7 @@ use moosicbox_env_utils::default_env_usize;
 use moosicbox_files::api::AudioFormat;
 use moosicbox_files::files::album::{get_album_cover, AlbumCoverError, AlbumCoverSource};
 use moosicbox_files::files::track::{get_track_info, get_track_source, TrackSource};
+use moosicbox_files::range::{parse_ranges, Range};
 use moosicbox_ws::api::{WebsocketContext, WebsocketSender};
 use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng as _};
@@ -360,13 +361,20 @@ impl TunnelSender {
         &self,
         request_id: usize,
         headers: HashMap<String, String>,
+        ranges: Option<Vec<Range>>,
         stream: impl Stream<Item = Result<Bytes, E>> + std::marker::Unpin,
         encoding: TunnelEncoding,
     ) {
         match encoding {
-            TunnelEncoding::Binary => self.send_binary_stream(request_id, headers, stream).await,
+            TunnelEncoding::Binary => {
+                self.send_binary_stream(request_id, headers, ranges, stream)
+                    .await
+            }
             #[cfg(feature = "base64")]
-            TunnelEncoding::Base64 => self.send_base64_stream(request_id, headers, stream).await,
+            TunnelEncoding::Base64 => {
+                self.send_base64_stream(request_id, headers, ranges, stream)
+                    .await
+            }
         }
     }
 
@@ -420,10 +428,12 @@ impl TunnelSender {
         &self,
         request_id: usize,
         headers: HashMap<String, String>,
+        ranges: Option<Vec<Range>>,
         mut stream: impl Stream<Item = Result<Bytes, E>> + std::marker::Unpin,
     ) {
         let mut bytes_read = 0_usize;
-        let mut packet_id = 0_u32;
+        let mut bytes_consumed = 0_usize;
+        let mut packet_id = 1_u32;
         let mut left_over: Option<Vec<u8>> = None;
         let mut last = false;
 
@@ -432,10 +442,10 @@ impl TunnelSender {
                 log::debug!("Aborting send_binary_stream");
                 break;
             }
-            packet_id += 1;
             let mut buf = vec![0_u8; WS_MAX_PACKET_SIZE];
-            let mut offset =
+            let mut header_offset =
                 Self::init_binary_request_buffer(request_id, packet_id, false, &headers, &mut buf);
+            let mut offset = header_offset;
 
             let mut left_over_size = 0_usize;
             if let Some(mut left_over_str) = left_over.take() {
@@ -446,27 +456,34 @@ impl TunnelSender {
                 let len = left_over_str.len();
                 buf[offset..offset + len].copy_from_slice(&left_over_str);
                 offset += len;
+                bytes_consumed += len;
                 left_over_size = len;
             }
 
-            let mut size = 0_usize;
-            let mut read = 0_usize;
+            let mut packet_size = left_over_size;
+            let mut packet_bytes_read = 0;
 
             if left_over.is_none() {
-                let read_size = loop {
+                loop {
                     match stream.next().await {
                         Some(Ok(data)) => {
                             let size = data.len();
+                            bytes_read += size;
+                            packet_bytes_read += size;
                             if offset + size <= WS_MAX_PACKET_SIZE {
                                 buf[offset..offset + size].copy_from_slice(&data);
                                 offset += size;
-                                read += size;
+                                packet_size += size;
+                                bytes_consumed += size;
                             } else {
+                                let size_left_to_add = WS_MAX_PACKET_SIZE - offset;
                                 buf[offset..WS_MAX_PACKET_SIZE]
-                                    .copy_from_slice(&data[..WS_MAX_PACKET_SIZE - offset]);
-                                left_over = Some(data[WS_MAX_PACKET_SIZE - offset..].to_vec());
+                                    .copy_from_slice(&data[..size_left_to_add]);
+                                left_over = Some(data[size_left_to_add..].to_vec());
                                 offset = WS_MAX_PACKET_SIZE;
-                                break WS_MAX_PACKET_SIZE;
+                                packet_size += size_left_to_add;
+                                bytes_consumed += size_left_to_add;
+                                break;
                             }
                         }
                         Some(Err(err)) => {
@@ -477,24 +494,74 @@ impl TunnelSender {
                             log::debug!("Received None");
                             buf[*BINARY_REQUEST_BUFFER_OFFSET - 1] = 1;
                             last = true;
-                            break read;
+                            break;
                         }
                     }
-                };
-
-                size += read_size;
+                }
             }
 
-            size += left_over_size;
+            log::debug!(
+                "[{request_id}]: Read {packet_bytes_read} bytes ({bytes_read} total) last={last}"
+            );
 
-            bytes_read += size;
-            log::debug!("[{request_id}]: Read {size} bytes ({bytes_read} total) last={last}");
-            let bytes = &buf[..offset];
-            if let Err(err) = self.send_bytes(request_id, packet_id, bytes) {
-                log::error!("Failed to send bytes: {err:?}");
-                break;
+            if let Some(ranges) = &ranges {
+                let mut headers_bytes = vec![0_u8; header_offset];
+                let packet_start = bytes_consumed - packet_size;
+                let packet_end = bytes_consumed;
+                let matching_ranges = ranges
+                    .iter()
+                    .filter(|range| Self::does_range_overlap(range, packet_start, packet_end))
+                    .collect::<Vec<_>>();
+
+                for (i, range) in matching_ranges.iter().enumerate() {
+                    if i > 0 {
+                        header_offset = Self::init_binary_request_buffer(
+                            request_id, packet_id, false, &headers, &mut buf,
+                        );
+                    }
+                    headers_bytes[0..header_offset].copy_from_slice(&buf[..header_offset]);
+
+                    let start =
+                        std::cmp::max(range.start.unwrap_or(0), packet_start) - packet_start;
+                    let end =
+                        std::cmp::min(range.end.unwrap_or(usize::MAX), packet_end) - packet_start;
+
+                    if last && i == matching_ranges.len() - 1 {
+                        buf[*BINARY_REQUEST_BUFFER_OFFSET - 1] = 1;
+                    }
+
+                    if let Err(err) = self.send_bytes(
+                        request_id,
+                        packet_id,
+                        [
+                            &headers_bytes[..header_offset],
+                            &buf[header_offset + start..header_offset + end],
+                        ]
+                        .concat(),
+                    ) {
+                        log::error!("Failed to send bytes: {err:?}");
+                        return;
+                    }
+                    packet_id += 1;
+
+                    if end == bytes_consumed {
+                        break;
+                    }
+                }
+            } else {
+                let bytes = &buf[..offset];
+                if let Err(err) = self.send_bytes(request_id, packet_id, bytes) {
+                    log::error!("Failed to send bytes: {err:?}");
+                    break;
+                }
+                packet_id += 1;
             }
         }
+    }
+
+    fn does_range_overlap(range: &Range, packet_start: usize, packet_end: usize) -> bool {
+        !range.start.is_some_and(|start| start >= packet_end)
+            && !range.end.is_some_and(|end| end < packet_start)
     }
 
     fn send_binary(
@@ -649,8 +716,13 @@ impl TunnelSender {
         &self,
         request_id: usize,
         headers: HashMap<String, String>,
+        ranges: Option<Vec<Range>>,
         mut stream: impl Stream<Item = Result<Bytes, E>> + std::marker::Unpin,
     ) {
+        if ranges.is_some() {
+            todo!("Byte ranges for base64 not implemented");
+        }
+
         use std::cmp::min;
 
         let buf_size = 1024 * 32;
@@ -778,7 +850,7 @@ impl TunnelSender {
             .map(|(key, value)| (key.to_string(), value.to_str().unwrap().to_string()))
             .collect();
 
-        self.send_stream(request_id, headers, response.bytes_stream(), encoding)
+        self.send_stream(request_id, headers, None, response.bytes_stream(), encoding)
             .await;
     }
 
@@ -792,6 +864,7 @@ impl TunnelSender {
         path: String,
         query: Value,
         payload: Option<Value>,
+        headers: Option<Value>,
         encoding: TunnelEncoding,
     ) -> Result<(), TunnelRequestError> {
         let abort_token = CancellationToken::new();
@@ -809,8 +882,33 @@ impl TunnelSender {
                     let query = serde_json::from_value::<GetTrackQuery>(query)
                         .map_err(|e| TunnelRequestError::InvalidQuery(e.to_string()))?;
 
-                    let mut headers = HashMap::new();
-                    headers.insert("accept-ranges".to_string(), "bytes".to_string());
+                    let ranges = headers
+                        .and_then(|headers| {
+                            headers
+                                .get("range")
+                                .map(|range| range.as_str().unwrap().to_string())
+                        })
+                        .map(|range| {
+                            range
+                                .clone()
+                                .strip_prefix("bytes=")
+                                .map(|s| s.to_string())
+                                .ok_or(TunnelRequestError::BadRequest(format!(
+                                    "Invalid bytes range '{range:?}'"
+                                )))
+                        })
+                        .transpose()?
+                        .map(|range| {
+                            parse_ranges(&range).map_err(|e| {
+                                TunnelRequestError::BadRequest(format!(
+                                    "Invalid bytes range ({e:?})"
+                                ))
+                            })
+                        })
+                        .transpose()?;
+
+                    let mut response_headers = HashMap::new();
+                    response_headers.insert("accept-ranges".to_string(), "bytes".to_string());
 
                     if let Ok(TrackSource::LocalFilePath(path)) =
                         get_track_source(query.track_id, db.clone()).await
@@ -818,8 +916,9 @@ impl TunnelSender {
                         static CONTENT_TYPE: &str = "content-type";
                         match query.format {
                             Some(AudioFormat::Aac) => {
-                                headers.insert(CONTENT_TYPE.to_string(), "audio/mp4".to_string());
-                                self.send_stream(request_id, headers,
+                                response_headers
+                                    .insert(CONTENT_TYPE.to_string(), "audio/mp4".to_string());
+                                self.send_stream(request_id, response_headers, ranges,
                                     moosicbox_symphonia_player::output::encoder::aac::encoder::encode_aac_stream(
                                         path,
                                     ),
@@ -827,8 +926,9 @@ impl TunnelSender {
                                 ).await;
                             }
                             Some(AudioFormat::Mp3) => {
-                                headers.insert(CONTENT_TYPE.to_string(), "audio/mp3".to_string());
-                                self.send_stream(request_id, headers,
+                                response_headers
+                                    .insert(CONTENT_TYPE.to_string(), "audio/mp3".to_string());
+                                self.send_stream(request_id, response_headers, ranges,
                                     moosicbox_symphonia_player::output::encoder::mp3::encoder::encode_mp3_stream(
                                         path,
                                     ),
@@ -836,8 +936,9 @@ impl TunnelSender {
                                 ).await;
                             }
                             Some(AudioFormat::Opus) => {
-                                headers.insert(CONTENT_TYPE.to_string(), "audio/opus".to_string());
-                                self.send_stream(request_id, headers,
+                                response_headers
+                                    .insert(CONTENT_TYPE.to_string(), "audio/opus".to_string());
+                                self.send_stream(request_id, response_headers, ranges,
                                     moosicbox_symphonia_player::output::encoder::opus::encoder::encode_opus_stream(
                                         path,
                                     ),
@@ -845,8 +946,14 @@ impl TunnelSender {
                                 ).await;
                             }
                             _ => {
-                                headers.insert(CONTENT_TYPE.to_string(), "audio/flac".to_string());
-                                self.send(request_id, headers, File::open(path).unwrap(), encoding);
+                                response_headers
+                                    .insert(CONTENT_TYPE.to_string(), "audio/flac".to_string());
+                                self.send(
+                                    request_id,
+                                    response_headers,
+                                    File::open(path).unwrap(),
+                                    encoding,
+                                );
                             }
                         }
                     }

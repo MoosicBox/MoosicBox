@@ -23,6 +23,8 @@ pub enum SendMessageError {
 
 #[derive(Debug, Error)]
 pub enum TunnelRequestError {
+    #[error("Bad request: {0}")]
+    BadRequest(String),
     #[error("Invalid Query: {0}")]
     InvalidQuery(String),
     #[error("Unsupported Method")]

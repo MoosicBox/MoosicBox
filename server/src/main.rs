@@ -124,6 +124,7 @@ fn main() -> std::io::Result<()> {
                                                 request.path,
                                                 request.query,
                                                 request.payload,
+                                                request.headers,
                                                 request.encoding,
                                             )
                                             .await

@@ -71,6 +71,7 @@ pub struct TunnelHttpRequest {
     pub path: String,
     pub query: Value,
     pub payload: Option<Value>,
+    pub headers: Option<Value>,
     pub encoding: TunnelEncoding,
 }
 

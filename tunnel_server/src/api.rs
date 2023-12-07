@@ -1,4 +1,5 @@
 use actix_web::error::{ErrorBadRequest, ErrorUnauthorized};
+use actix_web::http::header;
 use actix_web::web::{self, Json};
 use actix_web::{route, HttpResponse};
 use actix_web::{HttpRequest, Result};
@@ -53,6 +54,7 @@ pub async fn auth_get_magic_token_endpoint(
             &Method::Get,
             "auth/magic-token",
             json!({"magicToken": token}),
+            None,
             None,
         )
         .await
@@ -166,6 +168,25 @@ enum ResponseType {
     Body,
 }
 
+fn get_headers_for_request(req: &HttpRequest) -> Option<Value> {
+    let mut headers = HashMap::<String, String>::new();
+
+    for (key, value) in req.headers().iter() {
+        match *key {
+            header::ACCEPT | header::RANGE => {
+                headers.insert(key.to_string(), value.to_str().unwrap().to_string());
+            }
+            _ => {}
+        }
+    }
+
+    if headers.is_empty() {
+        None
+    } else {
+        Some(serde_json::to_value(headers).unwrap())
+    }
+}
+
 async fn proxy_request(body: Option<Bytes>, req: HttpRequest) -> Result<HttpResponse> {
     let method = Method::from_str(&req.method().to_string().to_uppercase()).unwrap();
     let path = req.path().strip_prefix('/').expect("Failed to get path");
@@ -182,7 +203,9 @@ async fn proxy_request(body: Option<Bytes>, req: HttpRequest) -> Result<HttpResp
         .map(|bytes| serde_json::from_slice(&bytes))
         .transpose()?;
 
-    handle_request(&client_id, &method, path, query, body).await
+    let headers = get_headers_for_request(&req);
+
+    handle_request(&client_id, &method, path, query, body, headers).await
 }
 
 async fn handle_request(
@@ -191,6 +214,7 @@ async fn handle_request(
     path: &str,
     query: Value,
     payload: Option<Value>,
+    headers: Option<Value>,
 ) -> Result<HttpResponse> {
     let request_id = thread_rng().gen::<usize>();
     let abort_token = CancellationToken::new();
@@ -204,6 +228,7 @@ async fn handle_request(
         path,
         query,
         payload,
+        headers,
         abort_token.clone(),
     )
     .await?;
@@ -250,6 +275,7 @@ async fn request(
     path: &str,
     query: Value,
     payload: Option<Value>,
+    headers: Option<Value>,
     abort_token: CancellationToken,
 ) -> Result<(
     oneshot::Receiver<HashMap<String, String>>,
@@ -280,6 +306,7 @@ async fn request(
                     path: path.to_string(),
                     query,
                     payload,
+                    headers,
                     encoding: TunnelEncoding::Binary,
                 }))
                 .unwrap()
