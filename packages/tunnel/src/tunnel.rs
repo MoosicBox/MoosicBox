@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error, fmt::Display, task::Poll, time::SystemTime};
+use std::{collections::HashMap, fmt::Display, task::Poll, time::SystemTime};
 
 use bytes::Bytes;
 use futures_util::Stream;
@@ -6,10 +6,9 @@ use log::debug;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::EnumString;
-use tokio::sync::mpsc::UnboundedReceiver;
-
-#[cfg(feature = "base64")]
 use thiserror::Error;
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio_util::sync::CancellationToken;
 
 #[cfg(feature = "base64")]
 static BASE64_TUNNEL_RESPONSE_PREFIX: &str = "TUNNEL_RESPONSE:";
@@ -60,8 +59,9 @@ impl Display for Method {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
 pub enum TunnelRequest {
-    HttpRequest(TunnelHttpRequest),
-    WsRequest(TunnelWsRequest),
+    Http(TunnelHttpRequest),
+    Ws(TunnelWsRequest),
+    Abort(TunnelAbortRequest),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -78,6 +78,11 @@ pub struct TunnelHttpRequest {
 pub struct TunnelWsRequest {
     pub request_id: usize,
     pub body: Value,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TunnelAbortRequest {
+    pub request_id: usize,
 }
 
 impl From<Bytes> for TunnelResponse {
@@ -185,6 +190,12 @@ impl TryFrom<String> for TunnelResponse {
     }
 }
 
+#[derive(Debug, Error)]
+pub enum TunnelStreamError {
+    #[error("TunnelStream aborted")]
+    Aborted,
+}
+
 pub struct TunnelStream<'a> {
     start: SystemTime,
     request_id: usize,
@@ -195,12 +206,14 @@ pub struct TunnelStream<'a> {
     rx: UnboundedReceiver<TunnelResponse>,
     on_end: &'a dyn Fn(usize),
     packet_queue: Vec<TunnelResponse>,
+    abort_token: CancellationToken,
 }
 
 impl<'a> TunnelStream<'a> {
     pub fn new(
         request_id: usize,
         rx: UnboundedReceiver<TunnelResponse>,
+        abort_token: CancellationToken,
         on_end: &'a impl Fn(usize),
     ) -> TunnelStream<'a> {
         TunnelStream {
@@ -213,6 +226,7 @@ impl<'a> TunnelStream<'a> {
             rx,
             on_end,
             packet_queue: vec![],
+            abort_token,
         }
     }
 }
@@ -220,7 +234,7 @@ impl<'a> TunnelStream<'a> {
 fn return_polled_bytes(
     stream: &mut TunnelStream,
     response: TunnelResponse,
-) -> std::task::Poll<Option<Result<Bytes, Box<dyn Error>>>> {
+) -> std::task::Poll<Option<Result<Bytes, TunnelStreamError>>> {
     if stream.time_to_first_byte.is_none() {
         stream.time_to_first_byte = Some(SystemTime::now());
     }
@@ -245,13 +259,16 @@ fn return_polled_bytes(
 }
 
 impl Stream for TunnelStream<'_> {
-    type Item = Result<Bytes, Box<dyn Error>>;
+    type Item = Result<Bytes, TunnelStreamError>;
 
     fn poll_next(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
         let stream = self.get_mut();
+        if stream.abort_token.is_cancelled() {
+            return Poll::Ready(Some(Err(TunnelStreamError::Aborted)));
+        }
         if stream.done {
             let end = SystemTime::now();
 

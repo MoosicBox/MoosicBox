@@ -10,7 +10,9 @@ use std::{
 };
 
 use log::{debug, error, info, warn};
-use moosicbox_tunnel::tunnel::{TunnelRequest, TunnelResponse, TunnelWsRequest, TunnelWsResponse};
+use moosicbox_tunnel::tunnel::{
+    TunnelAbortRequest, TunnelRequest, TunnelResponse, TunnelWsRequest, TunnelWsResponse,
+};
 use rand::{thread_rng, Rng as _};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -20,6 +22,7 @@ use tokio::sync::{
     mpsc::{self, error::SendError, UnboundedSender},
     oneshot,
 };
+use tokio_util::sync::CancellationToken;
 
 use crate::ws::{
     db::{delete_connection, upsert_connection},
@@ -46,6 +49,7 @@ enum Command {
         request_id: usize,
         sender: UnboundedSender<TunnelResponse>,
         headers_sender: oneshot::Sender<HashMap<String, String>>,
+        abort_request_token: CancellationToken,
     },
 
     RequestEnd {
@@ -54,6 +58,7 @@ enum Command {
 
     Response {
         response: TunnelResponse,
+        conn_id: ConnId,
     },
 
     WsRequest {
@@ -85,6 +90,7 @@ pub struct ChatServer {
     sessions: HashMap<ConnId, mpsc::UnboundedSender<Msg>>,
     senders: HashMap<usize, UnboundedSender<TunnelResponse>>,
     headers_senders: HashMap<usize, oneshot::Sender<HashMap<String, String>>>,
+    abort_request_tokens: HashMap<usize, CancellationToken>,
 
     /// Tracks total number of historical connections established.
     visitor_count: Arc<AtomicUsize>,
@@ -125,12 +131,29 @@ impl ChatServer {
                 sessions: HashMap::new(),
                 senders: HashMap::new(),
                 headers_senders: HashMap::new(),
+                abort_request_tokens: HashMap::new(),
                 visitor_count: Arc::new(AtomicUsize::new(0)),
                 cmd_rx,
                 ws_requests: HashMap::new(),
             },
             ChatServerHandle { cmd_tx },
         )
+    }
+
+    async fn abort_request(
+        &self,
+        id: ConnId,
+        request_id: usize,
+    ) -> Result<(), WebsocketMessageError> {
+        debug!("Aborting request {request_id} (conn_id={id})");
+        if let Some(abort_token) = self.abort_request_tokens.get(&request_id) {
+            abort_token.cancel();
+        } else {
+            debug!("No abort token for request {request_id}");
+        }
+        let body = TunnelRequest::Abort(TunnelAbortRequest { request_id });
+        self.send_message_to(id, serde_json::to_string(&body).unwrap())
+            .await
     }
 
     /// Send message directly to the user.
@@ -213,17 +236,21 @@ impl ChatServer {
                     request_id,
                     sender,
                     headers_sender,
+                    abort_request_token,
                 } => {
                     self.senders.insert(request_id, sender);
                     self.headers_senders.insert(request_id, headers_sender);
+                    self.abort_request_tokens
+                        .insert(request_id, abort_request_token);
                 }
 
                 Command::RequestEnd { request_id } => {
                     self.senders.remove(&request_id);
                     self.headers_senders.remove(&request_id);
+                    self.abort_request_tokens.remove(&request_id);
                 }
 
-                Command::Response { response } => {
+                Command::Response { response, conn_id } => {
                     let request_id = response.request_id;
 
                     if let Some(headers) = &response.headers {
@@ -231,6 +258,9 @@ impl ChatServer {
                             if sender.send(headers.clone()).is_err() {
                                 warn!("Header sender dropped for request {}", request_id);
                                 self.headers_senders.remove(&request_id);
+                                if let Err(err) = self.abort_request(conn_id, request_id).await {
+                                    error!("Failed to abort request {request_id} {err:?}");
+                                }
                             }
                         } else {
                             error!(
@@ -243,8 +273,11 @@ impl ChatServer {
 
                     if let Some(sender) = self.senders.get(&request_id) {
                         if sender.send(response).is_err() {
-                            warn!("Sender dropped for request {}", request_id);
+                            debug!("Sender dropped for request {}", request_id);
                             self.senders.remove(&request_id);
+                            if let Err(err) = self.abort_request(conn_id, request_id).await {
+                                error!("Failed to abort request {request_id} {err:?}");
+                            }
                         }
                     } else {
                         error!(
@@ -275,7 +308,7 @@ impl ChatServer {
                         }
                     } {
                         let value: Value = serde_json::from_str(&body).unwrap();
-                        let body = TunnelRequest::WsRequest(TunnelWsRequest {
+                        let body = TunnelRequest::Ws(TunnelWsRequest {
                             request_id,
                             body: value,
                         });
@@ -420,12 +453,14 @@ impl ChatServerHandle {
         request_id: usize,
         sender: UnboundedSender<TunnelResponse>,
         headers_sender: oneshot::Sender<HashMap<String, String>>,
+        abort_request_token: CancellationToken,
     ) {
         self.cmd_tx
             .send(Command::RequestStart {
                 request_id,
                 sender,
                 headers_sender,
+                abort_request_token,
             })
             .unwrap();
     }
@@ -436,8 +471,10 @@ impl ChatServerHandle {
             .unwrap();
     }
 
-    pub fn response(&self, response: TunnelResponse) {
-        self.cmd_tx.send(Command::Response { response }).unwrap();
+    pub fn response(&self, conn_id: ConnId, response: TunnelResponse) {
+        self.cmd_tx
+            .send(Command::Response { conn_id, response })
+            .unwrap();
     }
 
     pub fn get_connection_id(&self, client_id: &str) -> Result<usize, ConnectionIdError> {

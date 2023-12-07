@@ -114,7 +114,7 @@ fn main() -> std::io::Result<()> {
                                 let tunnel = tunnel.clone();
                                 spawn(async move {
                                     match serde_json::from_str(&m).unwrap() {
-                                        TunnelRequest::HttpRequest(request) => tunnel
+                                        TunnelRequest::Http(request) => tunnel
                                             .tunnel_request(
                                                 db,
                                                 service_port,
@@ -127,7 +127,7 @@ fn main() -> std::io::Result<()> {
                                             )
                                             .await
                                             .unwrap(),
-                                        TunnelRequest::WsRequest(request) => {
+                                        TunnelRequest::Ws(request) => {
                                             let sender = CHAT_SERVER_HANDLE
                                                 .read()
                                                 .unwrap_or_else(|e| e.into_inner())
@@ -148,6 +148,10 @@ fn main() -> std::io::Result<()> {
                                                     request.request_id
                                                 );
                                             }
+                                        }
+                                        TunnelRequest::Abort(request) => {
+                                            log::debug!("Aborting request {}", request.request_id);
+                                            tunnel.abort_request(request.request_id);
                                         }
                                     }
                                     Ok::<_, String>(())

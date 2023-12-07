@@ -36,6 +36,7 @@ strum               = { workspace = true }
 strum_macros        = { workspace = true }
 thiserror           = { workspace = true }
 tokio               = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tokio-util          = { workspace = true }
 uuid                = { workspace = true }
 
 [features]

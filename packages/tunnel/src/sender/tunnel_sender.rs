@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Cursor;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 #[cfg(feature = "base64")]
 use base64::{engine::general_purpose, Engine as _};
 use bytes::Bytes;
 use futures_channel::mpsc::UnboundedSender;
+use futures_util::future::ready;
 use futures_util::{future, pin_mut, Future, Stream, StreamExt};
 use lazy_static::lazy_static;
 use moosicbox_core::app::Db;
@@ -83,6 +84,7 @@ pub struct TunnelSender {
     access_token: String,
     sender: Arc<Mutex<Option<UnboundedSender<TunnelResponseMessage>>>>,
     cancellation_token: CancellationToken,
+    abort_request_tokens: Arc<RwLock<HashMap<usize, CancellationToken>>>,
 }
 
 static BINARY_REQUEST_BUFFER_OFFSET: Lazy<usize> = Lazy::new(|| {
@@ -119,6 +121,7 @@ impl TunnelSender {
                 access_token,
                 sender: sender.clone(),
                 cancellation_token: cancellation_token.clone(),
+                abort_request_tokens: Arc::new(RwLock::new(HashMap::new())),
             },
             handle,
         )
@@ -144,6 +147,16 @@ impl TunnelSender {
         self.start_tunnel(Self::message_handler)
     }
 
+    fn is_request_aborted(
+        request_id: usize,
+        tokens: Arc<RwLock<HashMap<usize, CancellationToken>>>,
+    ) -> bool {
+        if let Some(token) = tokens.read().unwrap().get(&request_id) {
+            return token.is_cancelled();
+        }
+        false
+    }
+
     fn start_tunnel<T, O>(&mut self, handler: fn(sender: Sender<T>, m: Message) -> O) -> Receiver<T>
     where
         T: Send + 'static,
@@ -156,6 +169,7 @@ impl TunnelSender {
         let client_id = self.client_id.clone();
         let access_token = self.access_token.clone();
         let sender_arc = self.sender.clone();
+        let abort_request_tokens = self.abort_request_tokens.clone();
         let cancellation_token = self.cancellation_token.clone();
 
         RT.spawn(async move {
@@ -206,6 +220,19 @@ impl TunnelSender {
                         let (write, read) = ws_stream.split();
 
                         let ws_writer = rxf
+                            .filter(|message| {
+                                if Self::is_request_aborted(message.request_id, abort_request_tokens.clone()) {
+                                    log::debug!(
+                                        "Not sending message from aborted request request_id={} packet_id={} size={}",
+                                        message.request_id,
+                                        message.packet_id,
+                                        message.message.len()
+                                    );
+                                    return ready(false);
+                                }
+
+                                ready(true)
+                            })
                             .map(|message| {
                                 log::debug!(
                                     "Sending request_id={} packet_id={} size={}",
@@ -401,6 +428,10 @@ impl TunnelSender {
         let mut last = false;
 
         while !last {
+            if Self::is_request_aborted(request_id, self.abort_request_tokens.clone()) {
+                log::debug!("Aborting send_binary_stream");
+                break;
+            }
             packet_id += 1;
             let mut buf = vec![0_u8; WS_MAX_PACKET_SIZE];
             let mut offset =
@@ -477,6 +508,10 @@ impl TunnelSender {
         let mut last = false;
 
         while !last {
+            if Self::is_request_aborted(request_id, self.abort_request_tokens.clone()) {
+                log::debug!("Aborting send_binary");
+                break;
+            }
             packet_id += 1;
             let mut buf = vec![0_u8; WS_MAX_PACKET_SIZE];
             let offset =
@@ -551,6 +586,10 @@ impl TunnelSender {
         let mut packet_id = 0_u32;
 
         loop {
+            if Self::is_request_aborted(request_id, self.abort_request_tokens.clone()) {
+                log::debug!("Aborting send_base64");
+                break;
+            }
             let mut buf = vec![0_u8; buf_size];
             match reader.read(&mut buf) {
                 Ok(size) => {
@@ -621,6 +660,10 @@ impl TunnelSender {
         let mut packet_id = 0_u32;
 
         loop {
+            if Self::is_request_aborted(request_id, self.abort_request_tokens.clone()) {
+                log::debug!("Aborting send_base64_stream");
+                break;
+            }
             packet_id += 1;
 
             let mut buf = "".to_owned();
@@ -751,6 +794,15 @@ impl TunnelSender {
         payload: Option<Value>,
         encoding: TunnelEncoding,
     ) -> Result<(), TunnelRequestError> {
+        let abort_token = CancellationToken::new();
+
+        {
+            self.abort_request_tokens
+                .write()
+                .unwrap()
+                .insert(request_id, abort_token.clone());
+        }
+
         match path.to_lowercase().as_str() {
             "track" => match method {
                 Method::Get => {
@@ -922,5 +974,11 @@ impl TunnelSender {
         };
         moosicbox_ws::api::process_message(db, value, context, &sender).await?;
         Ok(())
+    }
+
+    pub fn abort_request(&self, request_id: usize) {
+        if let Some(token) = self.abort_request_tokens.read().unwrap().get(&request_id) {
+            token.cancel();
+        }
     }
 }

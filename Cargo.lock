@@ -2890,6 +2890,9 @@ dependencies = [
 [[package]]
 name = "moosicbox_env_utils"
 version = "0.1.0"
+dependencies = [
+ "thiserror",
+]
 
 [[package]]
 name = "moosicbox_files"
@@ -3119,6 +3122,7 @@ dependencies = [
  "strum_macros",
  "thiserror",
  "tokio",
+ "tokio-util",
  "uuid",
 ]
 

@@ -31,7 +31,7 @@ serde-aux = { workspace = true, optional = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
-thiserror = { workspace = true, optional = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-tungstenite = { workspace = true, optional = true }
 tokio-util = { workspace = true }
@@ -41,7 +41,7 @@ default = ["sender", "base64", "aac", "mp3", "opus"]
 
 fail-on-warnings = []
 
-base64 = ["dep:base64", "dep:thiserror"]
+base64 = ["dep:base64"]
 sender = [
     "dep:futures-channel",
     "dep:lazy_static",
@@ -55,7 +55,6 @@ sender = [
     "dep:once_cell",
     "dep:reqwest",
     "dep:serde-aux",
-    "dep:thiserror",
     "dep:tokio-tungstenite",
 ]
 
