@@ -82,5 +82,6 @@ RUN apt-get update && apt-get install -y ca-certificates curl
 COPY --from=builder /app/target/release/moosicbox_tunnel_server /
 EXPOSE 8004
 ENV RUST_LOG=info,moosicbox=debug
-ENV ACTIX_WORKERS=128
+ENV MAX_THREADS=64
+ENV ACTIX_WORKERS=32
 CMD ["./moosicbox_tunnel_server", "8004"]

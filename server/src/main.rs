@@ -37,13 +37,14 @@ fn main() -> std::io::Result<()> {
     let service_port = if args.len() > 1 {
         args[1].parse::<u16>().expect("Invalid port argument")
     } else {
-        default_env_usize!("PORT", 8000)
+        default_env_usize("PORT", 8000)
+            .unwrap_or(8000)
             .try_into()
             .expect("Invalid PORT environment variable")
     };
 
     actix_web::rt::System::with_tokio_rt(|| {
-        let threads = default_env_usize!("MAX_THREADS", 64);
+        let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
         log::debug!("Running with {threads} max blocking threads");
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
@@ -234,13 +235,13 @@ fn main() -> std::io::Result<()> {
 
         let mut http_server = actix_web::HttpServer::new(app);
 
-        if let Some(workers) = option_env_usize!("ACTIX_WORKERS") {
+        if let Ok(Some(workers)) = option_env_usize("ACTIX_WORKERS") {
             log::debug!("Running with {workers} Actix workers");
             http_server = http_server.workers(workers);
         }
 
         let http_server = http_server
-            .bind((default_env!("BIND_ADDR", "0.0.0.0"), service_port))?
+            .bind((default_env("BIND_ADDR", "0.0.0.0"), service_port))?
             .run();
 
         try_join!(
