@@ -1,3 +1,8 @@
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
+
 use actix_web::{
     error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     web::{self, Json},
@@ -5,6 +10,7 @@ use actix_web::{
 };
 use lambda_web::actix_web::{self, get, post};
 use moosicbox_core::app::AppState;
+use once_cell::sync::Lazy;
 use serde::Deserialize;
 use thiserror::Error;
 
@@ -47,12 +53,23 @@ impl From<PlayerError> for actix_web::Error {
     }
 }
 
+static PLAYER_CACHE: Lazy<Arc<Mutex<HashMap<String, Player>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
+
 fn get_player(host: Option<String>) -> Player {
-    if let Some(host) = host {
-        Player::new(Some(host), Some(super::player::PlaybackType::Stream))
-    } else {
-        Player::new(None, None)
-    }
+    PLAYER_CACHE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .entry(match &host {
+            Some(h) => format!("stream|${h}"),
+            None => "local".into(),
+        })
+        .or_insert(if let Some(host) = host {
+            Player::new(Some(host), Some(super::player::PlaybackType::Stream))
+        } else {
+            Player::new(None, None)
+        })
+        .clone()
 }
 
 const DEFAULT_PLAYBACK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
