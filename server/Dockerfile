@@ -17,6 +17,10 @@ ADD packages/core/.cargo packages/core/.cargo
 RUN mkdir -p packages/core/src && echo "fn main() {}" > packages/core/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_core\"\nversion = \"0.1.0\"" > packages/core/Cargo.toml
 
+ADD packages/env_utils/.cargo packages/env_utils/.cargo
+RUN mkdir -p packages/env_utils/src && echo "fn main() {}" > packages/env_utils/src/main.rs
+RUN echo "[package]\nname = \"moosicbox_env_utils\"\nversion = \"0.1.0\"" > packages/env_utils/Cargo.toml
+
 ADD packages/files/.cargo packages/files/.cargo
 RUN mkdir -p packages/files/src && echo "fn main() {}" > packages/files/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_files\"\nversion = \"0.1.0\"" > packages/files/Cargo.toml
@@ -56,6 +60,10 @@ RUN echo "[package]\nname = \"moosicbox_symphonia_player\"\nversion = \"0.1.0\""
 ADD server/.cargo server/.cargo
 RUN mkdir -p server/src && echo "fn main() {}" > server/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_server\"\nversion = \"0.1.0\"" > server/Cargo.toml
+
+COPY packages/env_utils packages/env_utils
+RUN cargo build --manifest-path=packages/env_utils/Cargo.toml --release
+RUN rm packages/env_utils/src/main.rs
 
 COPY packages/core packages/core
 RUN cargo build --manifest-path=packages/core/Cargo.toml --release
