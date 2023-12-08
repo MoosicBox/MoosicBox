@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use futures_channel::mpsc::UnboundedSender;
 use moosicbox_ws::api::{WebsocketSendError, WebsocketSender};
 use serde_json::{json, Value};
@@ -37,45 +36,38 @@ where
     }
 }
 
-#[async_trait]
 impl<T> WebsocketSender for TunnelWebsocketSender<T>
 where
     T: WebsocketSender + Send + Sync,
 {
-    async fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
+    fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
         let id = connection_id.parse::<usize>().unwrap();
 
         if id == self.id {
             self.send_tunnel(data);
         } else {
-            self.root_sender.send(connection_id, data).await?;
+            self.root_sender.send(connection_id, data)?;
         }
 
         Ok(())
     }
 
-    async fn send_all(&self, data: &str) -> Result<(), WebsocketSendError> {
+    fn send_all(&self, data: &str) -> Result<(), WebsocketSendError> {
         self.send_tunnel(data);
 
-        self.root_sender.send_all(data).await?;
+        self.root_sender.send_all(data)?;
 
         Ok(())
     }
 
-    async fn send_all_except(
-        &self,
-        connection_id: &str,
-        data: &str,
-    ) -> Result<(), WebsocketSendError> {
+    fn send_all_except(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
         let id = connection_id.parse::<usize>().unwrap();
 
         if id != self.id {
             self.send_tunnel(data);
         }
 
-        self.root_sender
-            .send_all_except(connection_id, data)
-            .await?;
+        self.root_sender.send_all_except(connection_id, data)?;
 
         Ok(())
     }

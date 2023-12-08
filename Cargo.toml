@@ -58,6 +58,7 @@ futures-util = { version = "0.3.17", default-features = false, features = [
 hex = "0.4.3"
 image = "0.24.7"
 io-streams = "0.15.0"
+kanal = "0.1.0-pre8"
 lambda-web = { version = "0.2.1", features = ["actix4"] }
 lambda_runtime = "0.8.2"
 lazy_static = "1.4.0"

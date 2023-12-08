@@ -1060,7 +1060,7 @@ impl TunnelSender {
         }
     }
 
-    pub async fn ws_request(
+    pub fn ws_request(
         &self,
         db: &Db,
         request_id: usize,
@@ -1079,7 +1079,7 @@ impl TunnelSender {
             root_sender: sender,
             tunnel_sender: self.sender.lock().unwrap().clone().unwrap(),
         };
-        moosicbox_ws::api::process_message(db, value, context, &sender).await?;
+        moosicbox_ws::api::process_message(db, value, context, &sender)?;
         Ok(())
     }
 

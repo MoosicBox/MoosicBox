@@ -136,15 +136,12 @@ fn main() -> std::io::Result<()> {
                                                 .as_ref()
                                                 .ok_or("Failed to get chat server handle")?
                                                 .clone();
-                                            if let Err(err) = tunnel
-                                                .ws_request(
-                                                    db,
-                                                    request.request_id,
-                                                    request.body.clone(),
-                                                    sender,
-                                                )
-                                                .await
-                                            {
+                                            if let Err(err) = tunnel.ws_request(
+                                                db,
+                                                request.request_id,
+                                                request.body.clone(),
+                                                sender,
+                                            ) {
                                                 error!(
                                                     "Failed to propagate ws request {}: {err:?}",
                                                     request.request_id

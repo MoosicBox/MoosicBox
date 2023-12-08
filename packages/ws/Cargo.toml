@@ -1,30 +1,29 @@
 [package]
-name = "moosicbox_ws"
-version = "0.1.0"
 authors = ["Braden Steffaniak"]
 edition = "2021"
+name    = "moosicbox_ws"
+version = "0.1.0"
 
 [dependencies]
-actix-cors = { workspace = true }
-actix-files = { workspace = true }
-actix-rt = { workspace = true }
-actix-web = { workspace = true }
-async-once-cell = { workspace = true }
-async-trait.workspace = true
-awc = "3.0.0-beta.9"
-aws-config = { workspace = true }
+actix-cors                   = { workspace = true }
+actix-files                  = { workspace = true }
+actix-rt                     = { workspace = true }
+actix-web                    = { workspace = true }
+async-once-cell              = { workspace = true }
+awc                          = "3.0.0-beta.9"
+aws-config                   = { workspace = true }
 aws-sdk-apigatewaymanagement = { workspace = true }
-aws_lambda_events = { workspace = true }
-env_logger.workspace = true
-lambda_runtime = "0.8.2"
-log = { workspace = true }
-moosicbox_core = { path = "../core" }
-regex = "1.9.5"
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
-strum = { workspace = true }
-strum_macros = { workspace = true }
-thiserror = { workspace = true }
+aws_lambda_events            = { workspace = true }
+env_logger.workspace         = true
+lambda_runtime               = "0.8.2"
+log                          = { workspace = true }
+moosicbox_core               = { path = "../core" }
+regex                        = "1.9.5"
+serde                        = { workspace = true, features = ["derive"] }
+serde_json                   = { workspace = true }
+strum                        = { workspace = true }
+strum_macros                 = { workspace = true }
+thiserror                    = { workspace = true }
 
 rusqlite = { workspace = true }
 

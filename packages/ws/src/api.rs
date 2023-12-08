@@ -5,7 +5,6 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-use async_trait::async_trait;
 use log::{debug, info, trace};
 use moosicbox_core::{
     app::Db,
@@ -92,15 +91,10 @@ pub struct WebsocketConnectionData {
     pub playing: bool,
 }
 
-#[async_trait]
 pub trait WebsocketSender {
-    async fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError>;
-    async fn send_all(&self, data: &str) -> Result<(), WebsocketSendError>;
-    async fn send_all_except(
-        &self,
-        connection_id: &str,
-        data: &str,
-    ) -> Result<(), WebsocketSendError>;
+    fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError>;
+    fn send_all(&self, data: &str) -> Result<(), WebsocketSendError>;
+    fn send_all_except(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError>;
 }
 
 static CONNECTION_DATA: OnceLock<Mutex<HashMap<String, WebsocketConnectionData>>> = OnceLock::new();
@@ -111,7 +105,7 @@ pub enum WebsocketConnectError {
     Unknown,
 }
 
-pub async fn connect(
+pub fn connect(
     _db: &Db,
     _sender: &impl WebsocketSender,
     context: &WebsocketContext,
@@ -130,7 +124,7 @@ pub enum WebsocketDisconnectError {
     Unknown,
 }
 
-pub async fn disconnect(
+pub fn disconnect(
     _db: &Db,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
@@ -148,7 +142,6 @@ pub async fn disconnect(
 
     sender
         .send(&context.connection_id, connections)
-        .await
         .map_err(|_e| WebsocketDisconnectError::Unknown)?;
 
     info!("Disconnected {}", context.connection_id);
@@ -159,7 +152,7 @@ pub async fn disconnect(
     })
 }
 
-pub async fn process_message(
+pub fn process_message(
     db: &Db,
     body: Value,
     context: WebsocketContext,
@@ -175,7 +168,7 @@ pub async fn process_message(
 
     let payload = body.get("payload");
 
-    message(db, sender, payload, message_type, &context).await
+    message(db, sender, payload, message_type, &context)
 }
 
 #[derive(Debug, Error)]
@@ -198,7 +191,7 @@ pub enum WebsocketMessageError {
     Unknown { message: String },
 }
 
-pub async fn message(
+pub fn message(
     db: &Db,
     sender: &impl WebsocketSender,
     payload: Option<&Value>,
@@ -211,11 +204,11 @@ pub async fn message(
     );
     match message_type {
         InboundMessageType::GetConnectionId => {
-            get_connection_id(sender, context).await?;
+            get_connection_id(sender, context)?;
             Ok::<_, WebsocketMessageError>(())
         }
         InboundMessageType::GetSessions => {
-            get_sessions(db, sender, context, false).await?;
+            get_sessions(db, sender, context, false)?;
             Ok(())
         }
         InboundMessageType::RegisterConnection => {
@@ -227,9 +220,9 @@ pub async fn message(
                     }
                 })?;
 
-            register_connection(db, sender, context, &payload).await?;
+            register_connection(db, sender, context, &payload)?;
 
-            sender.send_all(&get_connections(db).await?).await?;
+            sender.send_all(&get_connections(db)?)?;
 
             Ok(())
         }
@@ -242,19 +235,18 @@ pub async fn message(
                     }
                 })?;
 
-            register_players(db, sender, context, &payload)
-                .await
-                .map_err(|e| WebsocketMessageError::Unknown {
+            register_players(db, sender, context, &payload).map_err(|e| {
+                WebsocketMessageError::Unknown {
                     message: e.to_string(),
-                })?;
+                }
+            })?;
 
             sender
-                .send_all(&get_connections(db).await.map_err(|e| {
-                    WebsocketMessageError::Unknown {
+                .send_all(
+                    &get_connections(db).map_err(|e| WebsocketMessageError::Unknown {
                         message: e.to_string(),
-                    }
-                })?)
-                .await
+                    })?,
+                )
                 .map_err(|e| WebsocketMessageError::Unknown {
                     message: e.to_string(),
                 })?;
@@ -268,11 +260,9 @@ pub async fn message(
                     message: e.to_string(),
                 })?;
 
-            set_session_active_players(db, sender, context, &payload).await?;
+            set_session_active_players(db, sender, context, &payload)?;
 
-            sender
-                .send_all_except(&context.connection_id, &get_connections(db).await?)
-                .await?;
+            sender.send_all_except(&context.connection_id, &get_connections(db)?)?;
 
             Ok(())
         }
@@ -285,7 +275,7 @@ pub async fn message(
                     }
                 })?;
 
-            create_session(db, sender, context, &payload).await?;
+            create_session(db, sender, context, &payload)?;
             Ok(())
         }
         InboundMessageType::UpdateSession => {
@@ -297,7 +287,7 @@ pub async fn message(
                     }
                 })?;
 
-            update_session(db, sender, context, &payload).await?;
+            update_session(db, sender, context, &payload)?;
             Ok(())
         }
         InboundMessageType::DeleteSession => {
@@ -309,7 +299,7 @@ pub async fn message(
                     }
                 })?;
 
-            delete_session(db, sender, context, &payload).await?;
+            delete_session(db, sender, context, &payload)?;
             Ok(())
         }
         InboundMessageType::Ping => {
@@ -318,7 +308,7 @@ pub async fn message(
         }
         InboundMessageType::PlaybackAction => {
             let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
-            playback_action(sender, context, payload).await?;
+            playback_action(sender, context, payload)?;
             Ok(())
         }
         InboundMessageType::SetSeek => {
@@ -329,16 +319,14 @@ pub async fn message(
                 }
             })?;
 
-            sender
-                .send_all_except(
-                    &context.connection_id,
-                    &serde_json::json!({
-                        "type": OutboundMessageType::SetSeek,
-                        "payload": payload,
-                    })
-                    .to_string(),
-                )
-                .await?;
+            sender.send_all_except(
+                &context.connection_id,
+                &serde_json::json!({
+                    "type": OutboundMessageType::SetSeek,
+                    "payload": payload,
+                })
+                .to_string(),
+            )?;
 
             Ok(())
         }
@@ -354,7 +342,7 @@ pub async fn message(
     })
 }
 
-async fn get_sessions(
+fn get_sessions(
     db: &Db,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
@@ -375,13 +363,13 @@ async fn get_sessions(
     .to_string();
 
     if send_all {
-        sender.send_all(&sessions_json).await
+        sender.send_all(&sessions_json)
     } else {
-        sender.send(&context.connection_id, &sessions_json).await
+        sender.send(&context.connection_id, &sessions_json)
     }
 }
 
-async fn create_session(
+fn create_session(
     db: &Db,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
@@ -391,11 +379,11 @@ async fn create_session(
         let library = db.library.lock().unwrap();
         moosicbox_core::sqlite::db::create_session(&library, payload)?;
     }
-    get_sessions(db, sender, context, true).await?;
+    get_sessions(db, sender, context, true)?;
     Ok(())
 }
 
-async fn get_connections(db: &Db) -> Result<String, WebsocketSendError> {
+fn get_connections(db: &Db) -> Result<String, WebsocketSendError> {
     let connections = {
         let library = db.library.lock().unwrap();
         moosicbox_core::sqlite::db::get_connections(&library)?
@@ -413,7 +401,7 @@ async fn get_connections(db: &Db) -> Result<String, WebsocketSendError> {
     Ok(connections_json)
 }
 
-async fn register_connection(
+fn register_connection(
     db: &Db,
     _sender: &impl WebsocketSender,
     _context: &WebsocketContext,
@@ -427,7 +415,7 @@ async fn register_connection(
     Ok(())
 }
 
-async fn register_players(
+fn register_players(
     db: &Db,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
@@ -440,11 +428,11 @@ async fn register_players(
             moosicbox_core::sqlite::db::create_player(&library, &context.connection_id, player)?;
         }
     }
-    get_sessions(db, sender, context, true).await?;
+    get_sessions(db, sender, context, true)?;
     Ok(())
 }
 
-async fn set_session_active_players(
+fn set_session_active_players(
     db: &Db,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
@@ -455,7 +443,7 @@ async fn set_session_active_players(
 
         moosicbox_core::sqlite::db::set_session_active_players(&library, payload)?;
     }
-    get_sessions(db, sender, context, true).await?;
+    get_sessions(db, sender, context, true)?;
     Ok(())
 }
 
@@ -469,7 +457,7 @@ pub enum UpdateSessionError {
     Db(DbError),
 }
 
-async fn update_session(
+pub fn update_session(
     db: &Db,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
@@ -526,7 +514,6 @@ async fn update_session(
 
     sender
         .send_all_except(&context.connection_id, &session_updated)
-        .await
         .map_err(UpdateSessionError::WebsocketSend)?;
 
     Ok(())
@@ -548,7 +535,7 @@ fn pause_session(session: &Session) {
     }
 }
 
-async fn delete_session(
+fn delete_session(
     db: &Db,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
@@ -559,28 +546,26 @@ async fn delete_session(
         moosicbox_core::sqlite::db::delete_session(&library, payload.session_id)?;
     }
 
-    get_sessions(db, sender, context, true).await?;
+    get_sessions(db, sender, context, true)?;
 
     Ok(())
 }
 
-async fn get_connection_id(
+fn get_connection_id(
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
 ) -> Result<(), WebsocketSendError> {
-    sender
-        .send(
-            &context.connection_id,
-            &serde_json::json!({
-                "connectionId": context.connection_id,
-                "type": OutboundMessageType::ConnectionId
-            })
-            .to_string(),
-        )
-        .await
+    sender.send(
+        &context.connection_id,
+        &serde_json::json!({
+            "connectionId": context.connection_id,
+            "type": OutboundMessageType::ConnectionId
+        })
+        .to_string(),
+    )
 }
 
-async fn playback_action(
+fn playback_action(
     _sender: &impl WebsocketSender,
     _context: &WebsocketContext,
     _payload: &Value,

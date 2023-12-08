@@ -31,7 +31,7 @@ pub async fn chat_ws(
     let (conn_tx, mut conn_rx) = mpsc::unbounded_channel();
 
     // unwrap: chat server is not dropped before the HTTP server
-    let conn_id = chat_server.connect(conn_tx).await;
+    let conn_id = chat_server.connect(conn_tx);
 
     let close_reason = loop {
         // most of the futures we process need to be stack-pinned to work with select()
@@ -137,7 +137,7 @@ async fn process_text_msg(
             "/list" => {
                 log::info!("conn {conn}: listing rooms");
 
-                let rooms = chat_server.list_rooms().await;
+                let rooms = chat_server.list_rooms();
 
                 for room in rooms {
                     session.text(room).await.unwrap();
@@ -148,7 +148,7 @@ async fn process_text_msg(
                 Some(room) => {
                     log::info!("conn {conn}: joining room {room}");
 
-                    chat_server.join_room(conn, room).await;
+                    chat_server.join_room(conn, room);
 
                     session.text(format!("joined {room}")).await.unwrap();
                 }
@@ -182,6 +182,6 @@ async fn process_text_msg(
             None => msg.to_owned(),
         };
 
-        chat_server.send_message(conn, msg).await
+        chat_server.send_message(conn, msg)
     }
 }
