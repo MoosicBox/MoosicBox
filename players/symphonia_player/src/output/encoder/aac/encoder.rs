@@ -1,10 +1,8 @@
 use std::cell::RefCell;
-use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, RwLock};
 
 use crate::output::{AudioOutput, AudioOutputError, AudioOutputHandler};
 use crate::resampler::Resampler;
-use crate::{play_file_path_str, Progress};
+use crate::{play_file_path_str, PlaybackHandle};
 
 use bytes::Bytes;
 use lazy_static::lazy_static;
@@ -159,8 +157,7 @@ pub fn encode_aac<T: std::io::Write + Send + Clone + 'static>(
             Ok(Box::new(encoder))
         }));
 
-        let progress = Arc::new(RwLock::new(Progress { position: 0.0 }));
-        let abort = Arc::new(AtomicBool::new(false));
+        let handle = PlaybackHandle::default();
 
         if let Err(err) = play_file_path_str(
             &path,
@@ -169,8 +166,7 @@ pub fn encode_aac<T: std::io::Write + Send + Clone + 'static>(
             true,
             None,
             None,
-            progress.clone(),
-            abort.clone(),
+            &handle,
         ) {
             log::error!("Failed to encode to aac: {err:?}");
         }

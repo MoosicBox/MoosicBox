@@ -27,6 +27,7 @@ serde_json                 = { workspace = true }
 symphonia                  = { workspace = true }
 thiserror                  = { workspace = true }
 tokio                      = { workspace = true, features = ["rt", "time", "macros"] }
+tokio-util                 = { workspace = true }
 
 ogg.workspace = true
 

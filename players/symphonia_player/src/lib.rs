@@ -2,11 +2,10 @@
 #![warn(rust_2018_idioms)]
 #![forbid(unsafe_code)]
 
+use std::cell::RefCell;
 use std::fs::File;
 use std::io;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
 
 use output::{AudioOutputError, AudioOutputHandler};
 use symphonia::core::codecs::{DecoderOptions, FinalizeResult, CODEC_TYPE_NULL};
@@ -19,6 +18,7 @@ use symphonia::core::units::Time;
 
 use log::{debug, error, info, trace, warn};
 use thiserror::Error;
+use tokio_util::sync::CancellationToken;
 
 pub mod media_sources;
 pub mod output;
@@ -26,14 +26,46 @@ pub mod output;
 #[cfg(feature = "resampler")]
 mod resampler;
 
-#[derive(Debug, Clone)]
-pub struct Progress {
-    pub position: f64,
-}
-
 impl From<io::Error> for PlaybackError {
     fn from(err: io::Error) -> Self {
         PlaybackError::Symphonia(Error::IoError(err))
+    }
+}
+
+type ProgressListener<'a> = RefCell<Vec<Box<dyn FnMut(f64) + 'a>>>;
+
+pub struct PlaybackHandle<'a> {
+    progress_listeners: ProgressListener<'a>,
+    pub abort: CancellationToken,
+}
+
+impl Default for PlaybackHandle<'_> {
+    fn default() -> Self {
+        Self {
+            progress_listeners: RefCell::new(Vec::new()),
+            abort: CancellationToken::new(),
+        }
+    }
+}
+
+impl<'a> PlaybackHandle<'a> {
+    pub fn new(abort: CancellationToken) -> Self {
+        Self {
+            progress_listeners: RefCell::new(Vec::new()),
+            abort,
+        }
+    }
+
+    pub fn on_progress(&mut self, callback: impl FnMut(f64) + 'a) {
+        self.progress_listeners
+            .borrow_mut()
+            .push(Box::new(callback));
+    }
+
+    pub(crate) fn trigger_progress(&self, progress: f64) {
+        for callback in self.progress_listeners.borrow_mut().iter_mut() {
+            (callback)(progress);
+        }
     }
 }
 
@@ -53,8 +85,7 @@ pub fn play_file_path_str(
     verify: bool,
     track_num: Option<usize>,
     seek: Option<f64>,
-    progress: Arc<RwLock<Progress>>,
-    abort: Arc<AtomicBool>,
+    handle: &PlaybackHandle<'_>,
 ) -> Result<i32, PlaybackError> {
     // Create a hint to help the format registry guess what format reader is appropriate.
     let mut hint = Hint::new();
@@ -81,8 +112,7 @@ pub fn play_file_path_str(
         verify,
         track_num,
         seek,
-        progress.clone(),
-        abort.clone(),
+        handle,
     )
 }
 
@@ -95,8 +125,7 @@ pub fn play_media_source(
     verify: bool,
     track_num: Option<usize>,
     seek: Option<f64>,
-    progress: Arc<RwLock<Progress>>,
-    abort: Arc<AtomicBool>,
+    handle: &PlaybackHandle<'_>,
 ) -> Result<i32, PlaybackError> {
     // Use the default options for format readers other than for gapless playback.
     let format_opts = FormatOptions {
@@ -116,14 +145,7 @@ pub fn play_media_source(
     ) {
         Ok(probed) => {
             // If present, parse the seek argument.
-            let seek_time = seek.or_else(|| {
-                let position = progress.clone().read().unwrap().position;
-                if position == 0.0 {
-                    None
-                } else {
-                    Some(position)
-                }
-            });
+            let seek_time = seek;
 
             // Set the decoder options.
             let decode_opts = DecoderOptions { verify };
@@ -135,8 +157,7 @@ pub fn play_media_source(
                 track_num,
                 seek_time,
                 &decode_opts,
-                progress,
-                abort,
+                handle,
             )
         }
         Err(err) => {
@@ -159,8 +180,7 @@ fn play(
     track_num: Option<usize>,
     seek_time: Option<f64>,
     decode_opts: &DecoderOptions,
-    progress: Arc<RwLock<Progress>>,
-    abort: Arc<AtomicBool>,
+    handle: &PlaybackHandle<'_>,
 ) -> Result<i32, PlaybackError> {
     // If the user provided a track number, select that track if it exists, otherwise, select the
     // first track with a known codec.
@@ -212,8 +232,7 @@ fn play(
             audio_output_handler,
             track_info,
             decode_opts,
-            progress.clone(),
-            abort.clone(),
+            handle,
         ) {
             Err(PlaybackError::Symphonia(Error::ResetRequired)) => {
                 // Select the first supported track since the user's selected track number might no
@@ -260,8 +279,7 @@ fn play_track(
     audio_output_handler: &mut AudioOutputHandler,
     play_opts: PlayTrackOptions,
     decode_opts: &DecoderOptions,
-    progress: Arc<RwLock<Progress>>,
-    abort: Arc<AtomicBool>,
+    handle: &PlaybackHandle<'_>,
 ) -> Result<i32, PlaybackError> {
     // Get the selected track using the track ID.
     let track = match reader
@@ -281,7 +299,7 @@ fn play_track(
 
     // Decode and play the packets belonging to the selected track.
     let result = loop {
-        if abort.clone().load(Ordering::SeqCst) {
+        if handle.abort.is_cancelled() {
             return Ok(2);
         }
         // Get the next packet from the format reader.
@@ -328,7 +346,7 @@ fn play_track(
 
                         let secs = f64::from(t.seconds as u32) + t.frac;
 
-                        progress.clone().write().unwrap().position = secs;
+                        handle.trigger_progress(secs);
                     }
 
                     if let Some(audio_output) = audio_output_handler.inner.as_mut() {

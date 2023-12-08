@@ -1,10 +1,7 @@
 use std::{
     fs::File,
     path::Path,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, RwLock,
-    },
+    sync::{Arc, RwLock},
     u16, usize,
 };
 
@@ -21,7 +18,7 @@ use moosicbox_core::{
 use moosicbox_symphonia_player::{
     media_sources::remote_bytestream::RemoteByteStream,
     output::{AudioOutputError, AudioOutputHandler},
-    PlaybackError, Progress,
+    PlaybackError, PlaybackHandle,
 };
 use rand::{thread_rng, Rng as _};
 use serde::{Deserialize, Serialize};
@@ -35,6 +32,7 @@ use tokio::{
     runtime::{self, Runtime},
     time::sleep,
 };
+use tokio_util::sync::CancellationToken;
 
 lazy_static! {
     static ref RT: Runtime = runtime::Builder::new_multi_thread()
@@ -86,8 +84,8 @@ pub struct Playback {
     pub playing: bool,
     pub position: u16,
     pub quality: PlaybackQuality,
-    pub progress: Arc<RwLock<Progress>>,
-    pub abort: Arc<AtomicBool>,
+    pub progress: f64,
+    pub abort: CancellationToken,
 }
 
 impl Playback {
@@ -102,8 +100,8 @@ impl Playback {
             playing: true,
             position: position.unwrap_or_default(),
             quality,
-            progress: Arc::new(RwLock::new(Progress { position: 0.0 })),
-            abort: Arc::new(AtomicBool::new(false)),
+            progress: 0.0,
+            abort: CancellationToken::new(),
         }
     }
 }
@@ -130,7 +128,7 @@ impl ToApi<ApiPlayback> for Playback {
                 .collect(),
             playing: self.playing,
             position: self.position,
-            seek: self.progress.clone().read().unwrap().position,
+            seek: self.progress,
         }
     }
 }
@@ -152,6 +150,22 @@ pub struct PlaybackStatus {
 pub enum TrackOrId {
     Track(Track),
     Id(i32),
+}
+
+impl TrackOrId {
+    fn track(&self) -> Option<&Track> {
+        match self {
+            TrackOrId::Track(track) => Some(track),
+            TrackOrId::Id(_id) => None,
+        }
+    }
+
+    fn id(&self) -> i32 {
+        match self {
+            TrackOrId::Track(track) => track.id,
+            TrackOrId::Id(id) => *id,
+        }
+    }
 }
 
 pub struct PlayableTrack {
@@ -322,6 +336,16 @@ impl Player {
 
         let player = self.clone();
 
+        self.active_playback.write().unwrap().replace(Playback {
+            id: playback.id,
+            tracks: playback.tracks.clone(),
+            playing: true,
+            position: 0,
+            quality: playback.quality,
+            progress: seek.unwrap_or(0.0),
+            abort: CancellationToken::new(),
+        });
+
         RT.spawn(async move {
             let mut seek = seek;
 
@@ -330,32 +354,24 @@ impl Player {
                     continue;
                 }
 
-                let playback = Playback {
-                    id: playback.id,
-                    tracks: playback.tracks.clone(),
-                    playing: true,
-                    position: i as u16,
-                    quality: playback.quality,
-                    progress: Arc::new(RwLock::new(Progress { position: 0.0 })),
-                    abort: Arc::new(AtomicBool::new(false)),
-                };
-
                 player
                     .active_playback
                     .write()
                     .unwrap()
-                    .replace(playback.clone());
+                    .as_mut()
+                    .unwrap()
+                    .position = i as u16;
 
                 debug!("track {track_or_id:?} {seek:?}");
 
                 let seek = if seek.is_some() { seek.take() } else { None };
 
-                if let Err(err) = player.start_playback(&playback, seek, retry_options).await {
+                if let Err(err) = player.start_playback(seek, retry_options).await {
                     player.active_playback.write().unwrap().take();
                     return Err(err);
                 }
 
-                if playback.abort.load(Ordering::SeqCst) {
+                if playback.abort.is_cancelled() {
                     break;
                 }
             }
@@ -374,17 +390,9 @@ impl Player {
 
     async fn start_playback(
         &self,
-        playback: &Playback,
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
-        let track_or_id = &playback.tracks[playback.position as usize];
-        let track_id = match track_or_id {
-            TrackOrId::Id(id) => *id,
-            TrackOrId::Track(track_or_id) => track_or_id.id,
-        };
-        info!("Playing track with Symphonia: {}", track_id);
-
         let mut current_seek = seek;
         let mut retry_count = 0;
 
@@ -392,8 +400,19 @@ impl Player {
             if retry_count > 0 {
                 sleep(retry_options.unwrap().retry_delay).await;
             }
+            let (quality, abort, track_or_id) = {
+                let binding = self.active_playback.read().unwrap();
+                let playback = binding.as_ref().unwrap();
+                (
+                    playback.quality,
+                    playback.abort.clone(),
+                    playback.tracks[playback.position as usize].clone(),
+                )
+            };
+            let track_id = track_or_id.id();
+            info!("Playing track with Symphonia: {}", track_id);
             let playable_track = self
-                .track_or_id_to_playable(self.playback_type, track_or_id, &playback.quality)
+                .track_or_id_to_playable(self.playback_type, &track_or_id, &quality)
                 .await?;
             let mss = MediaSourceStream::new(playable_track.source, Default::default());
 
@@ -413,6 +432,14 @@ impl Player {
                 moosicbox_symphonia_player::output::pulseaudio::standard::try_open,
             ));
 
+            let track = track_or_id.track().unwrap().clone();
+            let mut handle = PlaybackHandle::new(abort.clone());
+            handle.on_progress(move |progress| {
+                let mut binding = self.active_playback.write().unwrap();
+                let playback = binding.as_mut().unwrap();
+                playback.progress = progress;
+            });
+
             if let Err(err) = moosicbox_symphonia_player::play_media_source(
                 mss,
                 &playable_track.hint,
@@ -421,8 +448,7 @@ impl Player {
                 true,
                 None,
                 current_seek,
-                playback.progress.clone(),
-                playback.abort.clone(),
+                &handle,
             ) {
                 if let Some(retry_options) = retry_options {
                     if let PlaybackError::AudioOutput(AudioOutputError::Interrupt) = err {
@@ -433,16 +459,17 @@ impl Player {
                             );
                             break;
                         }
-                        current_seek = Some(playback.progress.read().unwrap().position);
+                        let binding = self.active_playback.read().unwrap();
+                        let playback = binding.as_ref().unwrap();
+                        current_seek = Some(playback.progress);
                         warn!("Playback interrupted. Trying again at position {current_seek:?} (attempt {retry_count}/{})", retry_options.max_retry_count);
                         continue;
                     }
                 }
             }
+            info!("Finished playback for track {}", track_id);
             break;
         }
-
-        info!("Finished playback for track {}", track_id);
 
         Ok(())
     }
@@ -470,7 +497,7 @@ impl Player {
 
         debug!("Stopping playback {playback:?}");
 
-        playback.abort.clone().store(true, Ordering::SeqCst);
+        playback.abort.cancel();
 
         trace!("Waiting for playback completion response");
         if let Err(err) = self
@@ -566,8 +593,8 @@ impl Player {
             playing: true,
             quality: playback.quality,
             position: position.unwrap_or(playback.position),
-            progress: Arc::new(RwLock::new(Progress { position: 0.0 })),
-            abort: Arc::new(AtomicBool::new(false)),
+            progress: 0.0,
+            abort: CancellationToken::new(),
         };
 
         self.play_playback(playback, seek, retry_options)
@@ -589,7 +616,7 @@ impl Player {
             return Err(PlayerError::PlaybackNotPlaying(id));
         }
 
-        playback.abort.clone().store(true, Ordering::SeqCst);
+        playback.abort.cancel();
 
         trace!("Waiting for playback completion response");
         if let Err(err) = self.receiver.recv() {
@@ -608,7 +635,7 @@ impl Player {
                 quality: playback.quality,
                 position: playback.position,
                 progress: playback.progress,
-                abort: Arc::new(AtomicBool::new(false)),
+                abort: CancellationToken::new(),
             });
 
         Ok(PlaybackStatus {
@@ -634,7 +661,7 @@ impl Player {
             return Err(PlayerError::PlaybackAlreadyPlaying(id));
         }
 
-        let seek = Some(playback.progress.read().unwrap().position);
+        let seek = Some(playback.progress);
 
         let playback = Playback {
             id,
@@ -642,8 +669,8 @@ impl Player {
             playing: true,
             position: playback.position,
             quality: playback.quality,
-            progress: Arc::new(RwLock::new(Progress { position: 0.0 })),
-            abort: Arc::new(AtomicBool::new(false)),
+            progress: playback.progress,
+            abort: CancellationToken::new(),
         };
 
         self.play_playback(playback, seek, retry_options)
