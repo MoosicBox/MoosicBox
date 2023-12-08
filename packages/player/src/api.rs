@@ -80,6 +80,7 @@ const DEFAULT_PLAYBACK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOption
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayAlbumQuery {
+    pub session_id: Option<usize>,
     pub album_id: i32,
     pub position: Option<u16>,
     pub seek: Option<f64>,
@@ -94,6 +95,7 @@ pub async fn play_album_endpoint(
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(get_player(query.host.clone()).play_album(
         data.db.clone().expect("No DB bound on AppState"),
+        query.session_id,
         query.album_id,
         query.position,
         query.seek,
@@ -107,6 +109,7 @@ pub async fn play_album_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayTrackQuery {
+    pub session_id: Option<usize>,
     pub track_id: i32,
     pub seek: Option<f64>,
     pub host: Option<String>,
@@ -120,6 +123,7 @@ pub async fn play_track_endpoint(
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(get_player(query.host.clone()).play_track(
         Some(data.db.clone().expect("No DB bound on AppState")),
+        query.session_id,
         TrackOrId::Id(query.track_id),
         query.seek,
         PlaybackQuality {
@@ -132,6 +136,7 @@ pub async fn play_track_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayTracksQuery {
+    pub session_id: Option<usize>,
     pub track_ids: String,
     pub position: Option<u16>,
     pub seek: Option<f64>,
@@ -210,6 +215,7 @@ pub async fn play_tracks_endpoint(
     Ok(Json(
         get_player(query.host.clone()).play_tracks(
             Some(data.db.clone().expect("No DB bound on AppState")),
+            query.session_id,
             parse_track_id_ranges(&query.track_ids)
                 .map_err(|e| match e {
                     ParseTrackIdsError::ParseId(id) => {

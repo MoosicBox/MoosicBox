@@ -80,6 +80,7 @@ impl std::fmt::Debug for PlayableTrack {
 #[derive(Debug, Clone)]
 pub struct Playback {
     pub id: usize,
+    pub session_id: Option<usize>,
     pub tracks: Vec<TrackOrId>,
     pub playing: bool,
     pub position: u16,
@@ -93,9 +94,11 @@ impl Playback {
         tracks: Vec<TrackOrId>,
         position: Option<u16>,
         quality: PlaybackQuality,
+        session_id: Option<usize>,
     ) -> Playback {
         Playback {
             id: thread_rng().gen::<usize>(),
+            session_id,
             tracks,
             playing: true,
             position: position.unwrap_or_default(),
@@ -230,9 +233,11 @@ impl Player {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn play_album(
         &self,
         db: Db,
+        session_id: Option<usize>,
         album_id: i32,
         position: Option<u16>,
         seek: Option<f64>,
@@ -249,6 +254,7 @@ impl Player {
 
         self.play_tracks(
             Some(db),
+            session_id,
             tracks.into_iter().map(TrackOrId::Track).collect(),
             position,
             seek,
@@ -260,17 +266,28 @@ impl Player {
     pub fn play_track(
         &self,
         db: Option<Db>,
+        session_id: Option<usize>,
         track: TrackOrId,
         seek: Option<f64>,
         quality: PlaybackQuality,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
-        self.play_tracks(db, vec![track], None, seek, quality, retry_options)
+        self.play_tracks(
+            db,
+            session_id,
+            vec![track],
+            None,
+            seek,
+            quality,
+            retry_options,
+        )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn play_tracks(
         &self,
         db: Option<Db>,
+        session_id: Option<usize>,
         tracks: Vec<TrackOrId>,
         position: Option<u16>,
         seek: Option<f64>,
@@ -303,7 +320,7 @@ impl Player {
                 })
                 .collect()
         };
-        let playback = Playback::new(tracks, position, quality);
+        let playback = Playback::new(tracks, position, quality, session_id);
 
         self.play_playback(playback, seek, retry_options)
     }
@@ -338,6 +355,7 @@ impl Player {
 
         self.active_playback.write().unwrap().replace(Playback {
             id: playback.id,
+            session_id: playback.session_id,
             tracks: playback.tracks.clone(),
             playing: true,
             position: 0,
@@ -437,6 +455,9 @@ impl Player {
             handle.on_progress(move |progress| {
                 let mut binding = self.active_playback.write().unwrap();
                 let playback = binding.as_mut().unwrap();
+                if progress as usize != playback.progress as usize {
+                    println!("track: {}", track.id,)
+                }
                 playback.progress = progress;
             });
 
@@ -589,6 +610,7 @@ impl Player {
 
         let playback = Playback {
             id: playback.id,
+            session_id: playback.session_id,
             tracks: playback.tracks.clone(),
             playing: true,
             quality: playback.quality,
@@ -630,6 +652,7 @@ impl Player {
             .unwrap()
             .replace(Playback {
                 id,
+                session_id: playback.session_id,
                 tracks: playback.tracks.clone(),
                 playing: false,
                 quality: playback.quality,
@@ -665,6 +688,7 @@ impl Player {
 
         let playback = Playback {
             id,
+            session_id: playback.session_id,
             tracks: playback.tracks.clone(),
             playing: true,
             position: playback.position,
@@ -739,7 +763,8 @@ impl Player {
         };
 
         let url = format!("{host}/track/info{query}");
-        let res: Value = reqwest::get(&url).await.unwrap().json().await.unwrap();
+        let client = reqwest::Client::new().get(&url);
+        let res: Value = client.send().await.unwrap().json().await.unwrap();
         debug!("Got track info {res:?}");
         let size = res.get("bytes").unwrap().as_u64().unwrap();
         let url = format!("{host}/track{query}");
