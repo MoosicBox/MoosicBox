@@ -1071,7 +1071,7 @@ impl TunnelSender {
             connection_id: self.id.to_string(),
         };
         let packet_id = 1_u32;
-        log::debug!("Processing tunnel ws request");
+        log::debug!("Processing tunnel ws request {request_id} {packet_id}");
         let sender = TunnelWebsocketSender {
             id: self.id,
             packet_id,
@@ -1080,6 +1080,7 @@ impl TunnelSender {
             tunnel_sender: self.sender.lock().unwrap().clone().unwrap(),
         };
         moosicbox_ws::api::process_message(db, value, context, &sender)?;
+        log::debug!("Processed tunnel ws request {request_id} {packet_id}");
         Ok(())
     }
 
