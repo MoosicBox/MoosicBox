@@ -287,7 +287,7 @@ pub fn message(
                     }
                 })?;
 
-            update_session(db, sender, context, &payload)?;
+            update_session(db, sender, Some(context), &payload)?;
             Ok(())
         }
         InboundMessageType::DeleteSession => {
@@ -460,7 +460,7 @@ pub enum UpdateSessionError {
 pub fn update_session(
     db: &Db,
     sender: &impl WebsocketSender,
-    context: &WebsocketContext,
+    context: Option<&WebsocketContext>,
     payload: &UpdateSession,
 ) -> Result<(), UpdateSessionError> {
     let (before_session, session) = {
@@ -512,9 +512,15 @@ pub fn update_session(
     })
     .to_string();
 
-    sender
-        .send_all_except(&context.connection_id, &session_updated)
-        .map_err(UpdateSessionError::WebsocketSend)?;
+    if let Some(context) = context {
+        sender
+            .send_all_except(&context.connection_id, &session_updated)
+            .map_err(UpdateSessionError::WebsocketSend)?;
+    } else {
+        sender
+            .send_all(&session_updated)
+            .map_err(UpdateSessionError::WebsocketSend)?;
+    }
 
     Ok(())
 }
