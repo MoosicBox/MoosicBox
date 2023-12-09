@@ -301,46 +301,26 @@ impl ChatServer {
                     client_id,
                     request_id,
                     body,
-                } => {
-                    if let Some(connection) = match select_connection(&client_id) {
-                        Ok(connection) => Some(connection),
-                        Err(err) => {
-                            error!("Failed to get connection id from client id: {err:?}");
-                            None
-                        }
-                    } {
-                        if let Some(client_conn_id) = match connection
-                            .ok_or_else(|| WsRequestError::MissingClientId(client_id.clone()))
-                            .map(|conn| {
-                                conn.tunnel_ws_id
-                                    .parse::<usize>()
-                                    .map_err(|_| WsRequestError::InvalidClientId(client_id))
-                            }) {
-                            Ok(Ok(id)) => Some(id),
-                            Ok(Err(err)) | Err(err) => {
-                                error!("Failed to get connection id from client id: {err:?}");
-                                None
-                            }
-                        } {
-                            let value: Value = serde_json::from_str(&body).unwrap();
-                            let body = TunnelRequest::Ws(TunnelWsRequest {
-                                request_id,
-                                body: value,
-                            });
+                } => match get_connection_id(&client_id) {
+                    Ok(client_conn_id) => {
+                        let value: Value = serde_json::from_str(&body).unwrap();
+                        let body = TunnelRequest::Ws(TunnelWsRequest {
+                            request_id,
+                            body: value,
+                        });
 
-                            if let Err(error) = self
-                                .send_message_to(
-                                    client_conn_id,
-                                    serde_json::to_string(&body).unwrap(),
-                                )
-                                .await
-                            {
-                                error!("Failed to send WsRequest to {client_conn_id}: {error:?}");
-                            }
-                            self.ws_requests.insert(request_id, conn_id);
+                        if let Err(error) = self
+                            .send_message_to(client_conn_id, serde_json::to_string(&body).unwrap())
+                            .await
+                        {
+                            error!("Failed to send WsRequest to {client_conn_id}: {error:?}");
                         }
+                        self.ws_requests.insert(request_id, conn_id);
                     }
-                }
+                    Err(err) => {
+                        log::error!("Failed to get connection id: {err:?}");
+                    }
+                },
 
                 Command::WsResponse { response } => {
                     if let Some(ws_id) = self.ws_requests.get(&response.request_id) {
@@ -370,10 +350,6 @@ impl ChatServer {
 
 #[derive(Debug, Error)]
 pub enum WsRequestError {
-    #[error("Missing client ID: {0}")]
-    MissingClientId(String),
-    #[error("Invalid client ID: {0}")]
-    InvalidClientId(String),
     #[error(transparent)]
     Database(#[from] DatabaseError),
 }
@@ -501,27 +477,31 @@ impl ChatServerHandle {
     }
 
     pub fn get_connection_id(&self, client_id: &str) -> Result<usize, ConnectionIdError> {
-        let existing = {
-            let lock = CACHE_CONNECTIONS_MAP.read().unwrap();
-            lock.get(client_id).copied()
-        };
-        if let Some(conn_id) = existing {
-            Ok(conn_id)
-        } else {
-            let tunnel_ws_id = select_connection(client_id)?
-                .ok_or(ConnectionIdError::NotFound(client_id.to_string()))?
-                .tunnel_ws_id;
+        crate::ws::server::get_connection_id(client_id)
+    }
+}
 
-            let conn_id = tunnel_ws_id
-                .parse::<usize>()
-                .map_err(|_| ConnectionIdError::Invalid(tunnel_ws_id))?;
+pub fn get_connection_id(client_id: &str) -> Result<usize, ConnectionIdError> {
+    let existing = {
+        let lock = CACHE_CONNECTIONS_MAP.read().unwrap();
+        lock.get(client_id).copied()
+    };
+    if let Some(conn_id) = existing {
+        Ok(conn_id)
+    } else {
+        let tunnel_ws_id = select_connection(client_id)?
+            .ok_or(ConnectionIdError::NotFound(client_id.to_string()))?
+            .tunnel_ws_id;
 
-            CACHE_CONNECTIONS_MAP
-                .write()
-                .unwrap()
-                .insert(client_id.to_string(), conn_id);
+        let conn_id = tunnel_ws_id
+            .parse::<usize>()
+            .map_err(|_| ConnectionIdError::Invalid(tunnel_ws_id))?;
 
-            Ok(conn_id)
-        }
+        CACHE_CONNECTIONS_MAP
+            .write()
+            .unwrap()
+            .insert(client_id.to_string(), conn_id);
+
+        Ok(conn_id)
     }
 }
