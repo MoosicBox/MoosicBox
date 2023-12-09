@@ -110,7 +110,7 @@ pub struct ChatServer {
     visitor_count: Arc<AtomicUsize>,
 
     /// Command receiver.
-    cmd_rx: mpsc::UnboundedReceiver<Command>,
+    cmd_rx: kanal::Receiver<Command>,
 }
 
 impl ChatServer {
@@ -121,7 +121,7 @@ impl ChatServer {
         // create default room
         rooms.insert("main".to_owned(), HashSet::new());
 
-        let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
+        let (cmd_tx, cmd_rx) = kanal::unbounded();
 
         (
             Self {
@@ -316,7 +316,7 @@ impl ChatServer {
     }
 
     pub async fn run(mut self) -> io::Result<()> {
-        while let Some(cmd) = self.cmd_rx.recv().await {
+        while let Ok(cmd) = self.cmd_rx.recv() {
             self.process_command(cmd)?;
         }
 
@@ -329,7 +329,7 @@ impl ChatServer {
 /// Reduces boilerplate of setting up response channels in WebSocket handlers.
 #[derive(Debug, Clone)]
 pub struct ChatServerHandle {
-    cmd_tx: mpsc::UnboundedSender<Command>,
+    cmd_tx: kanal::Sender<Command>,
 }
 
 impl WebsocketSender for ChatServerHandle {
