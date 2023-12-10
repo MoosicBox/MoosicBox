@@ -3,6 +3,7 @@
 mod api;
 #[cfg(feature = "static-token-auth")]
 mod auth;
+mod playback_session;
 mod scan;
 mod ws;
 
@@ -29,6 +30,8 @@ use ws::server::ChatServer;
 static CHAT_SERVER_HANDLE: Lazy<std::sync::RwLock<Option<ws::server::ChatServerHandle>>> =
     Lazy::new(|| std::sync::RwLock::new(None));
 
+static DB: OnceLock<Db> = OnceLock::new();
+
 fn main() -> std::io::Result<()> {
     env_logger::init();
 
@@ -43,6 +46,8 @@ fn main() -> std::io::Result<()> {
             .expect("Invalid PORT environment variable")
     };
 
+    moosicbox_player::player::on_playback_event(crate::playback_session::on_playback_event);
+
     actix_web::rt::System::with_tokio_rt(|| {
         let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
         log::debug!("Running with {threads} max blocking threads");
@@ -53,7 +58,6 @@ fn main() -> std::io::Result<()> {
             .unwrap()
     })
     .block_on(async move {
-        static DB: OnceLock<Db> = OnceLock::new();
         let db = DB.get_or_init(|| {
             let library = ::rusqlite::Connection::open("library.db").unwrap();
             library
