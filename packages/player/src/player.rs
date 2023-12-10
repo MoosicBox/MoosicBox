@@ -20,6 +20,7 @@ use moosicbox_symphonia_player::{
     output::{AudioOutputError, AudioOutputHandler},
     PlaybackError, PlaybackHandle,
 };
+use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng as _};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -156,6 +157,7 @@ pub enum TrackOrId {
 }
 
 impl TrackOrId {
+    #[allow(unused)]
     fn track(&self) -> Option<&Track> {
         match self {
             TrackOrId::Track(track) => Some(track),
@@ -450,15 +452,18 @@ impl Player {
                 moosicbox_symphonia_player::output::pulseaudio::standard::try_open,
             ));
 
-            let track = track_or_id.track().unwrap().clone();
             let mut handle = PlaybackHandle::new(abort.clone());
             handle.on_progress(move |progress| {
                 let mut binding = self.active_playback.write().unwrap();
                 let playback = binding.as_mut().unwrap();
-                if progress as usize != playback.progress as usize {
-                    println!("track: {}", track.id,)
-                }
+                let old_progress = playback.progress;
                 playback.progress = progress;
+                for listener in PLAYBACK_EVENT_LISTENERS.read().unwrap().iter() {
+                    listener(PlaybackEvent::ProgressUpdate(
+                        playback.clone(),
+                        old_progress,
+                    ));
+                }
             });
 
             if let Err(err) = moosicbox_symphonia_player::play_media_source(
@@ -831,4 +836,16 @@ impl Player {
             Err(PlayerError::NoPlayersPlaying)
         }
     }
+}
+
+static PLAYBACK_EVENT_LISTENERS: Lazy<Arc<RwLock<Vec<fn(PlaybackEvent)>>>> =
+    Lazy::new(|| Arc::new(RwLock::new(Vec::new())));
+
+pub enum PlaybackEvent {
+    ProgressUpdate(Playback, f64),
+    PositionUpdate(Playback, u32),
+}
+
+pub fn on_playback_event(listener: fn(PlaybackEvent)) {
+    PLAYBACK_EVENT_LISTENERS.write().unwrap().push(listener);
 }
