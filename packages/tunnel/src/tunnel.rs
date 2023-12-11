@@ -51,7 +51,14 @@ pub enum Method {
 
 impl Display for Method {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        f.write_str(match self {
+            Method::Head => "HEAD",
+            Method::Get => "GET",
+            Method::Post => "POST",
+            Method::Put => "PUT",
+            Method::Patch => "PATCH",
+            Method::Delete => "DELETE",
+        })
     }
 }
 
