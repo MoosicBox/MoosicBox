@@ -7,7 +7,6 @@ use futures_util::{
 };
 use log::{debug, error};
 use moosicbox_tunnel::tunnel::TunnelWsResponse;
-use serde_json::Value;
 use tokio::{pin, sync::mpsc, time::interval};
 
 use crate::ws::server::ChatServerHandle;
@@ -79,21 +78,22 @@ pub async fn chat_ws(
 
                     if !finished {
                         if sender {
-                            debug!("Propagating ws response");
-                            let value: Value = serde_json::from_str(text).unwrap();
-                            if let Err(err) = chat_server
-                                .ws_response(TunnelWsResponse {
-                                    request_id: serde_json::from_value(
-                                        value.get("request_id").unwrap().clone(),
-                                    )
-                                    .unwrap(),
-                                    body: value.get("body").unwrap().clone(),
-                                })
-                                .await
-                            {
-                                error!(
-                                    "Failed to propagate ws response from tunnel_server: {err:?}"
-                                );
+                            let response: TunnelWsResponse =
+                                serde_json::from_str(text).expect("Invalid TunnelWsResponse");
+                            if response.request_id == 0 {
+                                debug!("Propagating ws message");
+                                if let Err(err) = chat_server.ws_message(response).await {
+                                    error!(
+                                        "Failed to propagate ws message from tunnel_server: {err:?}"
+                                    );
+                                }
+                            } else {
+                                debug!("Propagating ws response");
+                                if let Err(err) = chat_server.ws_response(response).await {
+                                    error!(
+                                        "Failed to propagate ws response from tunnel_server: {err:?}"
+                                    );
+                                }
                             }
                         } else if let Err(err) =
                             chat_server.ws_request(conn_id, &client_id, text).await

@@ -22,10 +22,14 @@ pub enum TunnelEncoding {
     Base64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TunnelWsResponse {
     pub request_id: usize,
     pub body: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exclude_connection_ids: Option<Vec<usize>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to_connection_ids: Option<Vec<usize>>,
 }
 
 #[derive(Debug)]
@@ -77,7 +81,9 @@ pub struct TunnelHttpRequest {
     pub method: Method,
     pub path: String,
     pub query: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub payload: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub headers: Option<Value>,
     pub encoding: TunnelEncoding,
 }
@@ -86,6 +92,8 @@ pub struct TunnelHttpRequest {
 pub struct TunnelWsRequest {
     pub request_id: usize,
     pub body: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connection_id: Option<Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

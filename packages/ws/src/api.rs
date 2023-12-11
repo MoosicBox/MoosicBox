@@ -91,10 +91,16 @@ pub struct WebsocketConnectionData {
     pub playing: bool,
 }
 
-pub trait WebsocketSender {
+pub trait WebsocketSender: Send {
     fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError>;
     fn send_all(&self, data: &str) -> Result<(), WebsocketSendError>;
     fn send_all_except(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError>;
+}
+
+impl core::fmt::Debug for dyn WebsocketSender {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{{WebsocketSender}}")
+    }
 }
 
 static CONNECTION_DATA: OnceLock<Mutex<HashMap<String, WebsocketConnectionData>>> = OnceLock::new();

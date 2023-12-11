@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Cursor;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 #[cfg(feature = "base64")]
@@ -17,7 +17,7 @@ use moosicbox_files::api::AudioFormat;
 use moosicbox_files::files::album::{get_album_cover, AlbumCoverError, AlbumCoverSource};
 use moosicbox_files::files::track::{get_track_info, get_track_source, TrackSource};
 use moosicbox_files::range::{parse_ranges, Range};
-use moosicbox_ws::api::{WebsocketContext, WebsocketSender};
+use moosicbox_ws::api::{WebsocketContext, WebsocketSendError, WebsocketSender};
 use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng as _};
 use regex::Regex;
@@ -35,7 +35,7 @@ use tokio_tungstenite::{
 use tokio_util::sync::CancellationToken;
 
 use crate::sender::tunnel_websocket_sender::TunnelWebsocketSender;
-use crate::tunnel::{Method, TunnelEncoding};
+use crate::tunnel::{Method, TunnelEncoding, TunnelWsResponse};
 
 use super::{
     GetTrackInfoQuery, GetTrackQuery, SendBytesError, SendMessageError, TunnelMessage,
@@ -58,7 +58,7 @@ pub enum CloseError {
 
 #[derive(Clone)]
 pub struct TunnelSenderHandle {
-    _sender: Arc<Mutex<Option<UnboundedSender<TunnelResponseMessage>>>>,
+    sender: Arc<RwLock<Option<UnboundedSender<TunnelResponseMessage>>>>,
     cancellation_token: CancellationToken,
 }
 
@@ -70,10 +70,66 @@ impl TunnelSenderHandle {
     }
 }
 
-pub struct TunnelResponseMessage {
+impl WebsocketSender for TunnelSenderHandle {
+    fn send(&self, conn_id: &str, data: &str) -> Result<(), moosicbox_ws::api::WebsocketSendError> {
+        if let Some(sender) = self.sender.read().unwrap().as_ref() {
+            sender
+                .unbounded_send(TunnelResponseMessage::Ws(TunnelResponseWs {
+                    message: data.into(),
+                    exclude_connection_ids: None,
+                    to_connection_ids: Some(vec![conn_id.parse::<usize>().unwrap()]),
+                }))
+                .map_err(|e| WebsocketSendError::Unknown(e.to_string()))?;
+        }
+        Ok(())
+    }
+
+    fn send_all(&self, data: &str) -> Result<(), moosicbox_ws::api::WebsocketSendError> {
+        if let Some(sender) = self.sender.read().unwrap().as_ref() {
+            sender
+                .unbounded_send(TunnelResponseMessage::Ws(TunnelResponseWs {
+                    message: data.into(),
+                    exclude_connection_ids: None,
+                    to_connection_ids: None,
+                }))
+                .map_err(|e| WebsocketSendError::Unknown(e.to_string()))?;
+        }
+        Ok(())
+    }
+
+    fn send_all_except(
+        &self,
+        conn_id: &str,
+        data: &str,
+    ) -> Result<(), moosicbox_ws::api::WebsocketSendError> {
+        if let Some(sender) = self.sender.read().unwrap().as_ref() {
+            sender
+                .unbounded_send(TunnelResponseMessage::Ws(TunnelResponseWs {
+                    message: data.into(),
+                    exclude_connection_ids: Some(vec![conn_id.parse::<usize>().unwrap()]),
+                    to_connection_ids: None,
+                }))
+                .map_err(|e| WebsocketSendError::Unknown(e.to_string()))?;
+        }
+        Ok(())
+    }
+}
+
+pub enum TunnelResponseMessage {
+    Packet(TunnelResponsePacket),
+    Ws(TunnelResponseWs),
+}
+
+pub struct TunnelResponsePacket {
     pub request_id: usize,
     pub packet_id: u32,
     pub message: Message,
+}
+
+pub struct TunnelResponseWs {
+    pub message: Message,
+    pub exclude_connection_ids: Option<Vec<usize>>,
+    pub to_connection_ids: Option<Vec<usize>>,
 }
 
 #[derive(Clone)]
@@ -83,7 +139,7 @@ pub struct TunnelSender {
     url: String,
     client_id: String,
     access_token: String,
-    sender: Arc<Mutex<Option<UnboundedSender<TunnelResponseMessage>>>>,
+    sender: Arc<RwLock<Option<UnboundedSender<TunnelResponseMessage>>>>,
     cancellation_token: CancellationToken,
     abort_request_tokens: Arc<RwLock<HashMap<usize, CancellationToken>>>,
 }
@@ -105,11 +161,11 @@ impl TunnelSender {
         client_id: String,
         access_token: String,
     ) -> (Self, TunnelSenderHandle) {
-        let sender = Arc::new(Mutex::new(None));
+        let sender = Arc::new(RwLock::new(None));
         let cancellation_token = CancellationToken::new();
         let id = thread_rng().gen::<usize>();
         let handle = TunnelSenderHandle {
-            _sender: sender.clone(),
+            sender: sender.clone(),
             cancellation_token: cancellation_token.clone(),
         };
 
@@ -205,7 +261,7 @@ impl TunnelSender {
                 }
                 let (txf, rxf) = futures_channel::mpsc::unbounded();
 
-                sender_arc.lock().unwrap().replace(txf.clone());
+                sender_arc.write().unwrap().replace(txf.clone());
 
                 log::debug!("Connecting to websocket...");
                 match connect_async(format!(
@@ -222,26 +278,54 @@ impl TunnelSender {
 
                         let ws_writer = rxf
                             .filter(|message| {
-                                if Self::is_request_aborted(message.request_id, abort_request_tokens.clone()) {
-                                    log::debug!(
-                                        "Not sending message from aborted request request_id={} packet_id={} size={}",
-                                        message.request_id,
-                                        message.packet_id,
-                                        message.message.len()
-                                    );
-                                    return ready(false);
+                                match message {
+                                    TunnelResponseMessage::Packet(packet) => {
+                                        if Self::is_request_aborted(packet.request_id, abort_request_tokens.clone()) {
+                                            log::debug!(
+                                                "Not sending packet from aborted request request_id={} packet_id={} size={}",
+                                                packet.request_id,
+                                                packet.packet_id,
+                                                packet.message.len()
+                                            );
+                                            return ready(false);
+                                        }
+                                    },
+                                    TunnelResponseMessage::Ws(_ws) => {}
                                 }
 
                                 ready(true)
                             })
                             .map(|message| {
-                                log::debug!(
-                                    "Sending request_id={} packet_id={} size={}",
-                                    message.request_id,
-                                    message.packet_id,
-                                    message.message.len()
-                                );
-                                Ok(message.message)
+                                match message {
+                                    TunnelResponseMessage::Packet(packet) => {
+                                        log::debug!(
+                                            "Sending packet from request request_id={} packet_id={} size={}",
+                                            packet.request_id,
+                                            packet.packet_id,
+                                            packet.message.len()
+                                        );
+                                        Ok(packet.message)
+                                    },
+                                    TunnelResponseMessage::Ws(ws) => {
+                                        if let Message::Text(text) = ws.message {
+                                            log::debug!(
+                                                "Sending ws message to={:?} exclude={:?} size={}",
+                                                ws.to_connection_ids,
+                                                ws.exclude_connection_ids,
+                                                text.len()
+                                            );
+                                            let value: Value = serde_json::from_str(&text).unwrap();
+                                            Ok(Message::Text(serde_json::to_string(&TunnelWsResponse {
+                                                request_id: 0,
+                                                body: value,
+                                                exclude_connection_ids: ws.exclude_connection_ids,
+                                                to_connection_ids: ws.to_connection_ids,
+                                            }).unwrap()))
+                                        } else {
+                                            Ok(ws.message)
+                                        }
+                                    }
+                                }
                             })
                             .forward(write);
 
@@ -301,13 +385,13 @@ impl TunnelSender {
         packet_id: u32,
         bytes: impl Into<Vec<u8>>,
     ) -> Result<(), SendBytesError> {
-        if let Some(sender) = self.sender.lock().unwrap().as_ref() {
+        if let Some(sender) = self.sender.read().unwrap().as_ref() {
             sender
-                .unbounded_send(TunnelResponseMessage {
+                .unbounded_send(TunnelResponseMessage::Packet(TunnelResponsePacket {
                     request_id,
                     packet_id,
                     message: Message::Binary(bytes.into()),
-                })
+                }))
                 .map_err(|err| SendBytesError::Unknown(format!("Failed to send_bytes: {err:?}")))?;
         } else {
             return Err(SendBytesError::Unknown(
@@ -324,13 +408,13 @@ impl TunnelSender {
         packet_id: u32,
         message: impl Into<String>,
     ) -> Result<(), SendMessageError> {
-        if let Some(sender) = self.sender.lock().unwrap().as_ref() {
+        if let Some(sender) = self.sender.read().unwrap().as_ref() {
             sender
-                .unbounded_send(TunnelResponseMessage {
+                .unbounded_send(TunnelResponseMessage::Packet(TunnelResponsePacket {
                     request_id,
                     packet_id,
                     message: Message::Text(message.into()),
-                })
+                }))
                 .map_err(|err| {
                     SendMessageError::Unknown(format!("Failed to send_message: {err:?}"))
                 })?;
@@ -1077,7 +1161,7 @@ impl TunnelSender {
             packet_id,
             request_id,
             root_sender: sender,
-            tunnel_sender: self.sender.lock().unwrap().clone().unwrap(),
+            tunnel_sender: self.sender.read().unwrap().clone().unwrap(),
         };
         moosicbox_ws::api::process_message(db, value, context, &sender)?;
         log::debug!("Processed tunnel ws request {request_id} {packet_id}");

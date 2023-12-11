@@ -68,6 +68,10 @@ enum Command {
         body: String,
     },
 
+    WsMessage {
+        message: TunnelWsResponse,
+    },
+
     WsResponse {
         response: TunnelWsResponse,
     },
@@ -88,6 +92,7 @@ enum Command {
 pub struct ChatServer {
     /// Map of connection IDs to their message receivers.
     sessions: HashMap<ConnId, mpsc::UnboundedSender<Msg>>,
+    clients: HashMap<ConnId, mpsc::UnboundedSender<Msg>>,
     senders: HashMap<usize, UnboundedSender<TunnelResponse>>,
     headers_senders: HashMap<usize, oneshot::Sender<HashMap<String, String>>>,
     abort_request_tokens: HashMap<usize, CancellationToken>,
@@ -129,6 +134,7 @@ impl ChatServer {
         (
             Self {
                 sessions: HashMap::new(),
+                clients: HashMap::new(),
                 senders: HashMap::new(),
                 headers_senders: HashMap::new(),
                 abort_request_tokens: HashMap::new(),
@@ -172,6 +178,37 @@ impl ChatServer {
         }
     }
 
+    /// Send message directly to the user.
+    async fn broadcast(&self, msg: impl Into<String>) -> Result<(), WebsocketMessageError> {
+        debug!("Broadcasting message");
+        let message = msg.into();
+
+        for (_id, session) in &self.clients {
+            // errors if client disconnected abruptly and hasn't been timed-out yet
+            session.send(message.clone())?
+        }
+        Ok(())
+    }
+
+    /// Send message directly to the user.
+    async fn broadcast_except(
+        &self,
+        ids: &[ConnId],
+        msg: impl Into<String>,
+    ) -> Result<(), WebsocketMessageError> {
+        debug!("Broadcasting message except {ids:?}");
+        let message = msg.into();
+
+        for (id, session) in &self.clients {
+            if ids.iter().any(|exclude| *exclude == *id) {
+                continue;
+            }
+            // errors if client disconnected abruptly and hasn't been timed-out yet
+            session.send(message.clone())?
+        }
+        Ok(())
+    }
+
     /// Register new session and assign unique ID to this session
     async fn connect(
         &mut self,
@@ -189,6 +226,8 @@ impl ChatServer {
         if sender {
             upsert_connection(&client_id, &id.to_string())?;
             CACHE_CONNECTIONS_MAP.write().unwrap().insert(client_id, id);
+        } else {
+            self.clients.insert(id, tx.clone());
         }
 
         let count = self.visitor_count.fetch_add(1, Ordering::SeqCst) + 1;
@@ -213,6 +252,7 @@ impl ChatServer {
 
         // remove sender
         self.sessions.remove(&conn_id);
+        self.clients.remove(&conn_id);
 
         Ok(())
     }
@@ -307,6 +347,7 @@ impl ChatServer {
                         let body = TunnelRequest::Ws(TunnelWsRequest {
                             request_id,
                             body: value,
+                            connection_id: None,
                         });
 
                         if let Err(error) = self
@@ -321,6 +362,28 @@ impl ChatServer {
                         log::error!("Failed to get connection id: {err:?}");
                     }
                 },
+
+                Command::WsMessage { message } => {
+                    if let Some(to_connection_ids) = message.to_connection_ids {
+                        for conn_id in to_connection_ids {
+                            if let Err(error) = self
+                                .send_message_to(conn_id, message.body.to_string())
+                                .await
+                            {
+                                error!("Failed to send WsResponse to {conn_id}: {error:?}");
+                            }
+                        }
+                    } else if let Some(exclude_connection_ids) = message.exclude_connection_ids {
+                        if let Err(error) = self
+                            .broadcast_except(&exclude_connection_ids, message.body.to_string())
+                            .await
+                        {
+                            error!("Failed to broadcast WsResponse: {error:?}");
+                        }
+                    } else if let Err(error) = self.broadcast(message.body.to_string()).await {
+                        error!("Failed to broadcast WsResponse: {error:?}");
+                    }
+                }
 
                 Command::WsResponse { response } => {
                     if let Some(ws_id) = self.ws_requests.get(&response.request_id) {
@@ -432,6 +495,12 @@ impl ChatServerHandle {
                 body: msg.into(),
             })
             .unwrap();
+        Ok(())
+    }
+
+    pub async fn ws_message(&self, message: TunnelWsResponse) -> Result<(), WsRequestError> {
+        self.cmd_tx.send(Command::WsMessage { message }).unwrap();
+
         Ok(())
     }
 

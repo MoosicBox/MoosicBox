@@ -27,11 +27,17 @@ impl WebsocketSender for ChatServer {
         let id = connection_id.parse::<usize>().unwrap();
         debug!("Sending to {id}");
         self.send_message_to(id, data.to_string())?;
+        for sender in &self.senders {
+            sender.send(connection_id, data)?
+        }
         Ok(())
     }
 
     fn send_all(&self, data: &str) -> Result<(), WebsocketSendError> {
         self.send_system_message("main", 0, data.to_string());
+        for sender in &self.senders {
+            sender.send_all(data)?
+        }
         Ok(())
     }
 
@@ -41,6 +47,9 @@ impl WebsocketSender for ChatServer {
             connection_id.parse::<usize>().unwrap(),
             data.to_string(),
         );
+        for sender in &self.senders {
+            sender.send_all_except(connection_id, data)?
+        }
         Ok(())
     }
 }
@@ -111,6 +120,8 @@ pub struct ChatServer {
 
     /// Command receiver.
     cmd_rx: kanal::Receiver<Command>,
+
+    senders: Vec<Box<dyn WebsocketSender>>,
 }
 
 impl ChatServer {
@@ -122,6 +133,7 @@ impl ChatServer {
         rooms.insert("main".to_owned(), HashSet::new());
 
         let (cmd_tx, cmd_rx) = kanal::unbounded();
+        let handle = ChatServerHandle { cmd_tx };
 
         (
             Self {
@@ -130,9 +142,14 @@ impl ChatServer {
                 db,
                 visitor_count: Arc::new(AtomicUsize::new(0)),
                 cmd_rx,
+                senders: vec![],
             },
-            ChatServerHandle { cmd_tx },
+            handle,
         )
+    }
+
+    pub fn add_sender(&mut self, sender: Box<dyn WebsocketSender>) {
+        self.senders.push(sender)
     }
 
     /// Send message to users in a room.

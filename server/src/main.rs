@@ -68,8 +68,7 @@ fn main() -> std::io::Result<()> {
             }
         });
 
-        let (chat_server, server_tx) = ChatServer::new(Arc::new(db.clone()));
-        let chat_server = spawn(chat_server.run());
+        let (mut chat_server, server_tx) = ChatServer::new(Arc::new(db.clone()));
 
         let (tunnel_host, tunnel_join_handle, tunnel_handle) = if let Ok(url) = env::var("WS_HOST")
         {
@@ -177,6 +176,12 @@ fn main() -> std::io::Result<()> {
             (None, None, None)
         };
 
+        if let Some(ref tunnel_handle) = tunnel_handle {
+            chat_server.add_sender(Box::new(tunnel_handle.clone()));
+        }
+
+        let chat_server_handle = spawn(async move { chat_server.run() });
+
         let app = move || {
             let app_data = AppState {
                 tunnel_host: tunnel_host.clone(),
@@ -255,7 +260,7 @@ fn main() -> std::io::Result<()> {
                 }
                 resp
             },
-            async move { chat_server.await.unwrap() },
+            async move { chat_server_handle.await.unwrap() },
             async move {
                 if let Some(handle) = tunnel_join_handle {
                     handle.await.unwrap()

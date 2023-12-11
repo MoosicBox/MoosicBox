@@ -3,7 +3,7 @@ use moosicbox_ws::api::{WebsocketSendError, WebsocketSender};
 use serde_json::{json, Value};
 use tokio_tungstenite::tungstenite::Message;
 
-use super::tunnel_sender::TunnelResponseMessage;
+use super::tunnel_sender::{TunnelResponseMessage, TunnelResponsePacket};
 
 pub struct TunnelWebsocketSender<T>
 where
@@ -27,11 +27,11 @@ where
         let value = json!({"request_id": request_id, "body": body});
 
         self.tunnel_sender
-            .unbounded_send(TunnelResponseMessage {
+            .unbounded_send(TunnelResponseMessage::Packet(TunnelResponsePacket {
                 request_id,
                 packet_id,
                 message: Message::Text(value.to_string()),
-            })
+            }))
             .unwrap();
     }
 }
