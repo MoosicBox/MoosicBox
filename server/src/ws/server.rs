@@ -315,7 +315,7 @@ impl ChatServer {
         Ok(())
     }
 
-    pub async fn run(mut self) -> io::Result<()> {
+    pub fn run(mut self) -> io::Result<()> {
         while let Ok(cmd) = self.cmd_rx.recv() {
             self.process_command(cmd)?;
         }
