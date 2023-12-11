@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fs::File,
     path::Path,
     sync::{Arc, RwLock},
@@ -34,6 +35,7 @@ use tokio::{
     time::sleep,
 };
 use tokio_util::sync::CancellationToken;
+use url::form_urlencoded;
 
 lazy_static! {
     static ref RT: Runtime = runtime::Builder::new_multi_thread()
@@ -212,23 +214,33 @@ pub struct PlaybackRetryOptions {
 }
 
 #[derive(Clone)]
+pub enum PlayerSource {
+    Local,
+    Remote {
+        host: String,
+        query: Option<HashMap<String, String>>,
+        headers: Option<HashMap<String, String>>,
+    },
+}
+
+#[derive(Clone)]
 pub struct Player {
     pub id: usize,
     playback_type: PlaybackType,
-    host: Option<String>,
+    source: PlayerSource,
     pub active_playback: Arc<RwLock<Option<Playback>>>,
     sender: Sender<()>,
     receiver: Receiver<()>,
 }
 
 impl Player {
-    pub fn new(host: Option<String>, playback_type: Option<PlaybackType>) -> Player {
+    pub fn new(source: PlayerSource, playback_type: Option<PlaybackType>) -> Player {
         let (tx, rx) = bounded(1);
 
         Player {
             id: thread_rng().gen::<usize>(),
             playback_type: playback_type.unwrap_or_default(),
-            host,
+            source,
             active_playback: Arc::new(RwLock::new(None)),
             sender: tx,
             receiver: rx,
@@ -730,56 +742,86 @@ impl Player {
     pub async fn track_or_id_to_playable_stream(
         &self,
         track_or_id: &TrackOrId,
-        host: &str,
         quality: &PlaybackQuality,
     ) -> PlayableTrack {
         match track_or_id {
-            TrackOrId::Id(id) => self.track_id_to_playable_stream(*id, host, quality).await,
-            TrackOrId::Track(track) => self.track_to_playable_stream(track, host, quality).await,
+            TrackOrId::Id(id) => self.track_id_to_playable_stream(*id, quality).await,
+            TrackOrId::Track(track) => self.track_to_playable_stream(track, quality).await,
         }
     }
 
     pub async fn track_to_playable_stream(
         &self,
         track: &Track,
-        host: &str,
         quality: &PlaybackQuality,
     ) -> PlayableTrack {
-        self.track_id_to_playable_stream(track.id, host, quality)
-            .await
+        self.track_id_to_playable_stream(track.id, quality).await
     }
 
     pub async fn track_id_to_playable_stream(
         &self,
         track_id: i32,
-        host: &str,
         quality: &PlaybackQuality,
     ) -> PlayableTrack {
         let hint = Hint::new();
 
-        let query = format!("?trackId={track_id}");
+        match &self.source {
+            PlayerSource::Remote {
+                host,
+                query,
+                headers,
+            } => {
+                let query_string = if let Some(query) = query {
+                    let mut serializer = form_urlencoded::Serializer::new(String::new());
+                    for (key, value) in query {
+                        serializer.append_pair(key, value);
+                    }
+                    serializer.finish()
+                } else {
+                    "".to_string()
+                };
 
-        let query = match quality.format {
-            AudioFormat::Aac => query + "&format=AAC",
-            AudioFormat::Flac => query + "&format=FLAC",
-            AudioFormat::Mp3 => query + "&format=MP3",
-            AudioFormat::Opus => query + "&format=OPUS",
-            AudioFormat::Source => query,
-        };
+                let query_string = if query_string.is_empty() {
+                    query_string
+                } else {
+                    format!("{query_string}&")
+                };
 
-        let url = format!("{host}/track/info{query}");
-        let client = reqwest::Client::new().get(&url);
-        let res: Value = client.send().await.unwrap().json().await.unwrap();
-        debug!("Got track info {res:?}");
-        let size = res.get("bytes").unwrap().as_u64().unwrap();
-        let url = format!("{host}/track{query}");
+                let query_string = format!("?{query_string}trackId={track_id}");
 
-        let source = Box::new(RemoteByteStream::new(url, Some(size), true));
+                let query_string = match quality.format {
+                    AudioFormat::Aac => query_string + "&format=AAC",
+                    AudioFormat::Flac => query_string + "&format=FLAC",
+                    AudioFormat::Mp3 => query_string + "&format=MP3",
+                    AudioFormat::Opus => query_string + "&format=OPUS",
+                    AudioFormat::Source => query_string,
+                };
 
-        PlayableTrack {
-            track_id,
-            source,
-            hint,
+                let url = format!("{host}/track/info{query_string}");
+                let mut client = reqwest::Client::new().get(&url);
+
+                if let Some(headers) = headers {
+                    for (key, value) in headers {
+                        client = client.header(key, value);
+                    }
+                }
+
+                let res: Value = client.send().await.unwrap().json().await.unwrap();
+                debug!("Got track info {res:?}");
+                let size = res.get("bytes").unwrap().as_u64().unwrap();
+                let url = format!("{host}/track{query_string}");
+
+                let source = Box::new(RemoteByteStream::new(url, Some(size), true));
+
+                PlayableTrack {
+                    track_id,
+                    source,
+                    hint,
+                }
+            }
+            PlayerSource::Local => {
+                unreachable!();
+            }
         }
     }
 
@@ -795,22 +837,11 @@ impl Player {
                 TrackOrId::Track(track) => self.track_to_playable_file(track),
             },
             PlaybackType::Stream => {
-                self.track_or_id_to_playable_stream(
-                    track_or_id,
-                    self.host.as_ref().expect("Player url value missing"),
-                    quality,
-                )
-                .await
+                self.track_or_id_to_playable_stream(track_or_id, quality)
+                    .await
             }
             PlaybackType::Default => match track_or_id {
-                TrackOrId::Id(id) => {
-                    self.track_id_to_playable_stream(
-                        *id,
-                        self.host.as_ref().expect("Player url value missing"),
-                        quality,
-                    )
-                    .await
-                }
+                TrackOrId::Id(id) => self.track_id_to_playable_stream(*id, quality).await,
                 TrackOrId::Track(track) => self.track_to_playable_file(track),
             },
         })

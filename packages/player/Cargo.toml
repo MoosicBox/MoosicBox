@@ -28,6 +28,7 @@ symphonia                  = { workspace = true }
 thiserror                  = { workspace = true }
 tokio                      = { workspace = true, features = ["rt", "time", "macros"] }
 tokio-util                 = { workspace = true }
+url                        = { workspace = true }
 
 ogg.workspace = true
 

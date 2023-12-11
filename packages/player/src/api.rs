@@ -16,7 +16,7 @@ use thiserror::Error;
 
 use crate::player::{
     ApiPlaybackStatus, AudioFormat, PlaybackQuality, PlaybackRetryOptions, PlaybackStatus, Player,
-    PlayerError, TrackOrId,
+    PlayerError, PlayerSource, TrackOrId,
 };
 
 impl From<PlayerError> for actix_web::Error {
@@ -65,9 +65,16 @@ fn get_player(host: Option<String>) -> Player {
             None => "local".into(),
         })
         .or_insert(if let Some(host) = host {
-            Player::new(Some(host), Some(super::player::PlaybackType::Stream))
+            Player::new(
+                PlayerSource::Remote {
+                    host,
+                    query: None,
+                    headers: None,
+                },
+                Some(super::player::PlaybackType::Stream),
+            )
         } else {
-            Player::new(None, None)
+            Player::new(PlayerSource::Local, None)
         })
         .clone()
 }
