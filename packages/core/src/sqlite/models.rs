@@ -387,7 +387,7 @@ pub struct ApiUpdateSession {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiUpdateSessionPlaylist {
-    pub id: i32,
+    pub session_playlist_id: i32,
     pub tracks: Vec<ApiTrack>,
 }
 

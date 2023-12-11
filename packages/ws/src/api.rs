@@ -501,7 +501,7 @@ pub fn update_session(
             .map(|_| session.position.expect("Position not set")),
         seek: payload.seek.map(|_| session.seek.expect("Seek not set")),
         playlist: payload.playlist.clone().map(|p| ApiUpdateSessionPlaylist {
-            id: p.session_playlist_id,
+            session_playlist_id: p.session_playlist_id,
             tracks: session.playlist.tracks.iter().map(|t| t.to_api()).collect(),
         }),
     };

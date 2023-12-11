@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Pod
+metadata:
+    name: moosicbox-tunnel-server
+    namespace: default
+spec:
+    containers:
+        - image: moosicbox_tunnel_server:test
+          name: tunnel-server
