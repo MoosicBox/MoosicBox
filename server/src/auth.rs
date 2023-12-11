@@ -75,6 +75,10 @@ where
             }
         }
 
+        log::warn!(
+            "Unauthorized StaticTokenAuthMiddleware request to '{}'",
+            req.path()
+        );
         Box::pin(async move { Err(ErrorUnauthorized("Unauthorized")) })
     }
 }

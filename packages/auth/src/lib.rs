@@ -138,6 +138,10 @@ impl FromRequest for NonTunnelRequestAuthorized {
         if is_authorized(req) {
             ok(NonTunnelRequestAuthorized)
         } else {
+            log::warn!(
+                "Unauthorized NonTunnelRequestAuthorized request to '{}'",
+                req.path()
+            );
             err(ErrorUnauthorized("Unauthorized"))
         }
     }

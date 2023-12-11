@@ -39,6 +39,7 @@ pub async fn get_magic_token_endpoint(
             json!({"clientId": client_id, "accessToken": access_token}),
         ))
     } else {
+        log::warn!("Unauthorized get magic-token request");
         Err(ErrorUnauthorized("Unauthorized"))
     }
 }
