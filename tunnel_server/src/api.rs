@@ -127,7 +127,7 @@ pub async fn auth_signature_token_endpoint(
     Ok(Json(json!({"token": token})))
 }
 
-#[route("/auth/validate-signature-token", method = "GET", method = "HEAD")]
+#[route("/auth/validate-signature-token", method = "POST", method = "HEAD")]
 pub async fn auth_validate_signature_token_endpoint(_: SignatureAuthorized) -> Result<Json<Value>> {
     Ok(Json(json!({"valid": true})))
 }
