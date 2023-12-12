@@ -4,6 +4,30 @@ A music server for cows
 
 ![MoosicBox](https://github.com/MoosicBox/Files/blob/master/animation.gif?raw=true)
 
+## Features
+
+Implemented:
+
+- Audio playback controls
+  - Next/previous track, seek track, queue tracks, adjust volume, etc
+- Control playback across applications (web and desktop)
+  - Supports multi simultaneous audio outputs
+- Audio encoding on the fly
+  - AAC (m4a), mp3, Opus (in progress)
+- Hi-Fi audio player
+- Automatic image optimization for requested size on demand
+- Tunnel server reverse proxy - allows access to local server from internet without any firewall configuration
+
+To-do (in no particular order):
+
+- Music streaming service integrations
+  - Tidal, Spotify, Qobuz
+- Shareable playlists via an authenticated link
+- Audio encoding cache
+- Image optimization cache
+- Audio file visualization on seek bar
+- End-to-end encryption option
+
 ## Local Server
 
 ### Run
