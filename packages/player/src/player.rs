@@ -876,6 +876,8 @@ fn trigger_playback_event(current: &Playback, previous: &Playback) {
         return;
     }
 
+    log::debug!("Triggering playback event: playing={playing:?} position={position:?} seek={seek:?} playlist={playlist:?}");
+
     let update = UpdateSession {
         session_id: session_id as i32,
         name: None,
