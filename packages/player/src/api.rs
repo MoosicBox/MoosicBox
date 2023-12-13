@@ -251,7 +251,6 @@ pub async fn play_tracks_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct StopTrackQuery {
-    pub playback_id: Option<usize>,
     pub host: Option<String>,
 }
 
@@ -260,15 +259,12 @@ pub async fn stop_track_endpoint(
     query: web::Query<StopTrackQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(
-        get_player(query.host.clone()).stop_track(query.playback_id)?,
-    ))
+    Ok(Json(get_player(query.host.clone()).stop_track()?))
 }
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SeekTrackQuery {
-    pub playback_id: Option<usize>,
     pub seek: f64,
     pub host: Option<String>,
 }
@@ -279,7 +275,6 @@ pub async fn seek_track_endpoint(
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(get_player(query.host.clone()).seek_track(
-        query.playback_id,
         query.seek,
         Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
     )?))
@@ -288,10 +283,10 @@ pub async fn seek_track_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdatePlaybackQuery {
-    pub playback_id: Option<usize>,
     pub position: Option<u16>,
     pub seek: Option<f64>,
     pub host: Option<String>,
+    pub track_ids: Option<String>,
 }
 
 #[post("/player/update-playback")]
@@ -299,18 +294,39 @@ pub async fn update_playback_endpoint(
     query: web::Query<UpdatePlaybackQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(get_player(query.host.clone()).update_playback(
-        query.playback_id,
-        query.position,
-        query.seek,
-        Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
-    )?))
+    Ok(Json(
+        get_player(query.host.clone()).update_playback(
+            query.position,
+            query.seek,
+            query
+                .track_ids
+                .clone()
+                .map(|track_ids| {
+                    Ok(parse_track_id_ranges(&track_ids)?
+                        .iter()
+                        .map(|id| TrackOrId::Id(*id))
+                        .collect())
+                })
+                .transpose()
+                .map_err(|e| match e {
+                    ParseTrackIdsError::ParseId(id) => {
+                        ErrorBadRequest(format!("Could not parse trackId '{id}'"))
+                    }
+                    ParseTrackIdsError::UnmatchedRange(range) => {
+                        ErrorBadRequest(format!("Unmatched range '{range}'"))
+                    }
+                    ParseTrackIdsError::RangeTooLarge(range) => {
+                        ErrorBadRequest(format!("Range too large '{range}'"))
+                    }
+                })?,
+            Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
+        )?,
+    ))
 }
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct NextTrackQuery {
-    pub playback_id: Option<usize>,
     pub seek: Option<f64>,
     pub host: Option<String>,
 }
@@ -321,7 +337,6 @@ pub async fn next_track_endpoint(
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(get_player(query.host.clone()).next_track(
-        query.playback_id,
         query.seek,
         Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
     )?))
@@ -330,7 +345,6 @@ pub async fn next_track_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PauseQuery {
-    pub playback_id: Option<usize>,
     pub host: Option<String>,
 }
 
@@ -339,15 +353,12 @@ pub async fn pause_playback_endpoint(
     query: web::Query<PauseQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(
-        get_player(query.host.clone()).pause_playback(query.playback_id)?,
-    ))
+    Ok(Json(get_player(query.host.clone()).pause_playback()?))
 }
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ResumeQuery {
-    pub playback_id: Option<usize>,
     pub host: Option<String>,
 }
 
@@ -356,16 +367,14 @@ pub async fn resume_playback_endpoint(
     query: web::Query<ResumeQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(get_player(query.host.clone()).resume_playback(
-        query.playback_id,
-        Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
-    )?))
+    Ok(Json(
+        get_player(query.host.clone()).resume_playback(Some(DEFAULT_PLAYBACK_RETRY_OPTIONS))?,
+    ))
 }
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviousTrackQuery {
-    pub playback_id: Option<usize>,
     pub seek: Option<f64>,
     pub host: Option<String>,
 }
@@ -376,7 +385,6 @@ pub async fn previous_track_endpoint(
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(get_player(query.host.clone()).previous_track(
-        query.playback_id,
         query.seek,
         Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
     )?))

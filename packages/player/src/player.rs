@@ -13,7 +13,7 @@ use moosicbox_core::{
     app::Db,
     sqlite::{
         db::{get_album_tracks, get_track},
-        models::{ToApi, Track},
+        models::{ToApi, Track, UpdateSession},
     },
 };
 use moosicbox_symphonia_player::{
@@ -159,15 +159,14 @@ pub enum TrackOrId {
 }
 
 impl TrackOrId {
-    #[allow(unused)]
-    fn track(&self) -> Option<&Track> {
+    pub fn track(&self) -> Option<&Track> {
         match self {
             TrackOrId::Track(track) => Some(track),
             TrackOrId::Id(_id) => None,
         }
     }
 
-    fn id(&self) -> i32 {
+    pub fn id(&self) -> i32 {
         match self {
             TrackOrId::Track(track) => track.id,
             TrackOrId::Id(id) => *id,
@@ -310,7 +309,7 @@ impl Player {
     ) -> Result<PlaybackStatus, PlayerError> {
         if let Ok(playback) = self.get_playback() {
             debug!("Stopping existing playback {}", playback.id);
-            self.stop(Some(playback.id))?;
+            self.stop()?;
         }
 
         let tracks = {
@@ -362,38 +361,29 @@ impl Player {
         self.assert_playback_playing(playback.id)?;
         if let Ok(playback) = self.get_playback() {
             debug!("Stopping existing playback {}", playback.id);
-            self.stop(Some(playback.id))?;
+            self.stop()?;
         }
+
+        self.active_playback
+            .write()
+            .unwrap()
+            .replace(playback.clone());
 
         let player = self.clone();
 
-        self.active_playback.write().unwrap().replace(Playback {
-            id: playback.id,
-            session_id: playback.session_id,
-            tracks: playback.tracks.clone(),
-            playing: true,
-            position: 0,
-            quality: playback.quality,
-            progress: seek.unwrap_or(0.0),
-            abort: CancellationToken::new(),
-        });
+        log::debug!(
+            "Playing playback: position={} tracks={:?}",
+            playback.position,
+            playback.tracks.iter().map(|t| t.id()).collect::<Vec<_>>()
+        );
+        let playback_id = playback.id;
 
         RT.spawn(async move {
             let mut seek = seek;
+            let mut playback = playback.clone();
 
-            for (i, track_or_id) in playback.tracks.iter().enumerate() {
-                if (i as u16) < playback.position {
-                    continue;
-                }
-
-                player
-                    .active_playback
-                    .write()
-                    .unwrap()
-                    .as_mut()
-                    .unwrap()
-                    .position = i as u16;
-
+            while (playback.position as usize) < playback.tracks.len() {
+                let track_or_id = &playback.tracks[playback.position as usize];
                 debug!("track {track_or_id:?} {seek:?}");
 
                 let seek = if seek.is_some() { seek.take() } else { None };
@@ -405,6 +395,17 @@ impl Player {
 
                 if playback.abort.is_cancelled() {
                     break;
+                } else {
+                    let mut binding = player.active_playback.write().unwrap();
+                    let active = binding.as_mut().unwrap();
+                    let old = active.clone();
+                    if ((active.position + 1) as usize) < active.tracks.len() {
+                        active.position += 1;
+                        trigger_playback_event(active, &old);
+                    } else {
+                        break;
+                    }
+                    playback = active.clone();
                 }
             }
 
@@ -416,7 +417,7 @@ impl Player {
 
         Ok(PlaybackStatus {
             success: true,
-            playback_id: playback.id,
+            playback_id,
         })
     }
 
@@ -442,7 +443,10 @@ impl Player {
                 )
             };
             let track_id = track_or_id.id();
-            info!("Playing track with Symphonia: {}", track_id);
+            info!(
+                "Playing track with Symphonia: {} {abort:?} {track_or_id:?}",
+                track_id
+            );
             let playable_track = self
                 .track_or_id_to_playable(self.playback_type, &track_or_id, &quality)
                 .await?;
@@ -467,14 +471,10 @@ impl Player {
             let mut handle = PlaybackHandle::new(abort.clone());
             handle.on_progress(move |progress| {
                 let mut binding = self.active_playback.write().unwrap();
-                let playback = binding.as_mut().unwrap();
-                let old_progress = playback.progress;
-                playback.progress = progress;
-                for listener in PLAYBACK_EVENT_LISTENERS.read().unwrap().iter() {
-                    listener(PlaybackEvent::ProgressUpdate(
-                        playback.clone(),
-                        old_progress,
-                    ));
+                if let Some(playback) = binding.as_mut() {
+                    let old = playback.clone();
+                    playback.progress = progress;
+                    trigger_playback_event(playback, &old);
                 }
             });
 
@@ -488,21 +488,24 @@ impl Player {
                 current_seek,
                 &handle,
             ) {
-                if let Some(retry_options) = retry_options {
-                    if let PlaybackError::AudioOutput(AudioOutputError::Interrupt) = err {
-                        retry_count += 1;
-                        if retry_count > retry_options.max_retry_count {
-                            error!(
-                                "Playback retry failed after {retry_count} attempts. Not retrying"
-                            );
-                            break;
-                        }
-                        let binding = self.active_playback.read().unwrap();
-                        let playback = binding.as_ref().unwrap();
-                        current_seek = Some(playback.progress);
-                        warn!("Playback interrupted. Trying again at position {current_seek:?} (attempt {retry_count}/{})", retry_options.max_retry_count);
-                        continue;
+                if retry_options.is_none() {
+                    error!("Track playback failed and no retry options: {err:?}");
+                    return Err(PlayerError::PlaybackError(err));
+                }
+
+                let retry_options = retry_options.unwrap();
+
+                if let PlaybackError::AudioOutput(AudioOutputError::Interrupt) = err {
+                    retry_count += 1;
+                    if retry_count > retry_options.max_retry_count {
+                        error!("Playback retry failed after {retry_count} attempts. Not retrying");
+                        break;
                     }
+                    let binding = self.active_playback.read().unwrap();
+                    let playback = binding.as_ref().unwrap();
+                    current_seek = Some(playback.progress);
+                    warn!("Playback interrupted. Trying again at position {current_seek:?} (attempt {retry_count}/{})", retry_options.max_retry_count);
+                    continue;
                 }
             }
             info!("Finished playback for track {}", track_id);
@@ -512,8 +515,8 @@ impl Player {
         Ok(())
     }
 
-    pub fn stop_track(&self, playback_id: Option<usize>) -> Result<PlaybackStatus, PlayerError> {
-        let playback = self.stop(playback_id)?;
+    pub fn stop_track(&self) -> Result<PlaybackStatus, PlayerError> {
+        let playback = self.stop()?;
 
         Ok(PlaybackStatus {
             success: true,
@@ -521,11 +524,8 @@ impl Player {
         })
     }
 
-    pub fn stop(&self, playback_id: Option<usize>) -> Result<Playback, PlayerError> {
-        if let Some(playback_id) = playback_id {
-            self.assert_playback_playing(playback_id)?;
-        }
-        info!("Stopping playback for playback_id {playback_id:?}");
+    pub fn stop(&self) -> Result<Playback, PlayerError> {
+        info!("Stopping playback for playback_id");
         let playback = self.get_playback()?;
 
         if !playback.playing {
@@ -551,11 +551,10 @@ impl Player {
 
     pub fn seek_track(
         &self,
-        playback_id: Option<usize>,
         seek: f64,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
-        let playback = self.stop(playback_id)?;
+        let playback = self.stop()?;
         let playback_id = playback.id;
         self.play_playback(playback, Some(seek), retry_options)?;
 
@@ -567,14 +566,10 @@ impl Player {
 
     pub fn next_track(
         &self,
-        playback_id: Option<usize>,
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
-        if let Some(playback_id) = playback_id {
-            self.assert_playback_playing(playback_id)?;
-        }
-        info!("Playing next track {playback_id:?} seek {seek:?}");
+        info!("Playing next track seek {seek:?}");
         let playback = self.get_playback()?;
 
         if playback.position + 1 >= playback.tracks.len() as u16 {
@@ -583,70 +578,53 @@ impl Player {
             ));
         }
 
-        self.update_playback(
-            playback_id,
-            Some(playback.position + 1),
-            seek,
-            retry_options,
-        )
+        self.update_playback(Some(playback.position + 1), seek, None, retry_options)
     }
 
     pub fn previous_track(
         &self,
-        playback_id: Option<usize>,
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
-        if let Some(playback_id) = playback_id {
-            self.assert_playback_playing(playback_id)?;
-        }
-        info!("Playing next track {playback_id:?} seek {seek:?}");
+        info!("Playing next track seek {seek:?}");
         let playback = self.get_playback()?;
 
         if playback.position == 0 {
             return Err(PlayerError::PositionOutOfBounds(-1));
         }
 
-        self.update_playback(
-            playback_id,
-            Some(playback.position - 1),
-            seek,
-            retry_options,
-        )
+        self.update_playback(Some(playback.position - 1), seek, None, retry_options)
     }
 
     pub fn update_playback(
         &self,
-        playback_id: Option<usize>,
         position: Option<u16>,
         seek: Option<f64>,
+        tracks: Option<Vec<TrackOrId>>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
-        info!("Updating playback id {playback_id:?} position {position:?} seek {seek:?}");
-        let playback = self.stop(playback_id)?;
+        info!("Updating playback position {position:?} seek {seek:?}");
+        let playback = self.get_playback()?;
+        let original = playback.clone();
 
         let playback = Playback {
             id: playback.id,
             session_id: playback.session_id,
-            tracks: playback.tracks.clone(),
-            playing: true,
+            tracks: tracks.unwrap_or_else(|| playback.tracks.clone()),
+            playing: playback.playing,
             quality: playback.quality,
             position: position.unwrap_or(playback.position),
-            progress: 0.0,
+            progress: seek.unwrap_or(0.0),
             abort: CancellationToken::new(),
         };
+
+        trigger_playback_event(&playback, &original);
 
         self.play_playback(playback, seek, retry_options)
     }
 
-    pub fn pause_playback(
-        &self,
-        playback_id: Option<usize>,
-    ) -> Result<PlaybackStatus, PlayerError> {
-        if let Some(playback_id) = playback_id {
-            self.assert_playback_playing(playback_id)?;
-        }
-        info!("Pausing playback id {playback_id:?}");
+    pub fn pause_playback(&self) -> Result<PlaybackStatus, PlayerError> {
+        info!("Pausing playback id");
         let playback = self.get_playback()?;
 
         let id = playback.id;
@@ -686,12 +664,8 @@ impl Player {
 
     pub fn resume_playback(
         &self,
-        playback_id: Option<usize>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
-        if let Some(playback_id) = playback_id {
-            self.assert_playback_playing(playback_id)?;
-        }
         info!("Resuming playback");
         let playback = self.get_playback()?;
 
@@ -869,14 +843,64 @@ impl Player {
     }
 }
 
-static PLAYBACK_EVENT_LISTENERS: Lazy<Arc<RwLock<Vec<fn(PlaybackEvent)>>>> =
+static PLAYBACK_EVENT_LISTENERS: Lazy<Arc<RwLock<Vec<fn(&UpdateSession, &Playback)>>>> =
     Lazy::new(|| Arc::new(RwLock::new(Vec::new())));
 
-pub enum PlaybackEvent {
-    ProgressUpdate(Playback, f64),
-    PositionUpdate(Playback, u32),
+pub fn on_playback_event(listener: fn(&UpdateSession, &Playback)) {
+    PLAYBACK_EVENT_LISTENERS.write().unwrap().push(listener);
 }
 
-pub fn on_playback_event(listener: fn(PlaybackEvent)) {
-    PLAYBACK_EVENT_LISTENERS.write().unwrap().push(listener);
+fn trigger_playback_event(current: &Playback, previous: &Playback) {
+    if current.session_id.is_none() {
+        return;
+    }
+    let session_id = current.session_id.unwrap();
+    let mut has_change = false;
+
+    let playing = if current.playing != previous.playing {
+        has_change = true;
+        Some(current.playing)
+    } else {
+        None
+    };
+    let position = if current.position != previous.position {
+        has_change = true;
+        Some(current.position as i32)
+    } else {
+        None
+    };
+    let seek = if current.progress as usize != previous.progress as usize {
+        has_change = true;
+        Some(current.progress as i32)
+    } else {
+        None
+    };
+    let track_ids = current.tracks.iter().map(|t| t.id()).collect::<Vec<_>>();
+    let playlist = if track_ids != previous.tracks.iter().map(|t| t.id()).collect::<Vec<_>>() {
+        has_change = true;
+        Some(moosicbox_core::sqlite::models::UpdateSessionPlaylist {
+            session_playlist_id: -1,
+            tracks: track_ids,
+        })
+    } else {
+        None
+    };
+
+    if !has_change {
+        return;
+    }
+
+    let update = UpdateSession {
+        session_id: session_id as i32,
+        name: None,
+        active: None,
+        playing,
+        position,
+        seek,
+        playlist,
+    };
+
+    for listener in PLAYBACK_EVENT_LISTENERS.read().unwrap().iter() {
+        listener(&update, current);
+    }
 }
