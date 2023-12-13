@@ -338,27 +338,12 @@ impl Player {
         self.play_playback(playback, seek, retry_options)
     }
 
-    fn assert_playback_playing(&self, playback_id: usize) -> Result<(), PlayerError> {
-        if self
-            .active_playback
-            .read()
-            .unwrap()
-            .clone()
-            .is_some_and(|p| p.id != playback_id)
-        {
-            return Err(PlayerError::PlaybackNotPlaying(playback_id));
-        }
-
-        Ok(())
-    }
-
     pub fn play_playback(
         &self,
         playback: Playback,
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
-        self.assert_playback_playing(playback.id)?;
         if let Ok(playback) = self.get_playback() {
             debug!("Stopping existing playback {}", playback.id);
             self.stop()?;
