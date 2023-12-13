@@ -580,6 +580,7 @@ impl AsId for Connection {
 pub struct ApiConnection {
     pub connection_id: String,
     pub name: String,
+    pub alive: bool,
     pub players: Vec<ApiPlayer>,
 }
 
@@ -588,6 +589,7 @@ impl ToApi<ApiConnection> for Connection {
         ApiConnection {
             connection_id: self.id.clone(),
             name: self.name.clone(),
+            alive: false,
             players: self.players.iter().map(|p| p.to_api()).collect(),
         }
     }

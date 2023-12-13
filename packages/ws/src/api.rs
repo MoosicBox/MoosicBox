@@ -1,9 +1,5 @@
 use core::fmt;
-use std::{
-    collections::HashMap,
-    str::FromStr,
-    sync::{Mutex, OnceLock},
-};
+use std::{collections::HashMap, str::FromStr, sync::RwLock};
 
 use log::{debug, info, trace};
 use moosicbox_core::{
@@ -11,12 +7,13 @@ use moosicbox_core::{
     sqlite::{
         db::DbError,
         models::{
-            ApiUpdateSession, ApiUpdateSessionPlaylist, CreateSession, DeleteSession, PlayerType,
-            RegisterConnection, RegisterPlayer, Session, SetSeek, SetSessionActivePlayers, ToApi,
-            UpdateSession,
+            ApiUpdateSession, ApiUpdateSessionPlaylist, Connection, CreateSession, DeleteSession,
+            PlayerType, RegisterConnection, RegisterPlayer, Session, SetSeek,
+            SetSessionActivePlayers, ToApi, UpdateSession,
         },
     },
 };
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::EnumString;
@@ -103,7 +100,8 @@ impl core::fmt::Debug for dyn WebsocketSender {
     }
 }
 
-static CONNECTION_DATA: OnceLock<Mutex<HashMap<String, WebsocketConnectionData>>> = OnceLock::new();
+static CONNECTION_DATA: Lazy<RwLock<HashMap<String, Connection>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
 
 #[derive(Debug, Error)]
 pub enum WebsocketConnectError {
@@ -131,15 +129,12 @@ pub enum WebsocketDisconnectError {
 }
 
 pub fn disconnect(
-    _db: &Db,
+    db: &Db,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketDisconnectError> {
     let connections = {
-        let mut connection_data = CONNECTION_DATA
-            .get_or_init(|| Mutex::new(HashMap::new()))
-            .lock()
-            .unwrap();
+        let mut connection_data = CONNECTION_DATA.write().unwrap();
 
         connection_data.remove(&context.connection_id);
 
@@ -148,6 +143,10 @@ pub fn disconnect(
 
     sender
         .send(&context.connection_id, connections)
+        .map_err(|_e| WebsocketDisconnectError::Unknown)?;
+
+    sender
+        .send_all(&get_connections(db).map_err(|_e| WebsocketDisconnectError::Unknown)?)
         .map_err(|_e| WebsocketDisconnectError::Unknown)?;
 
     info!("Disconnected {}", context.connection_id);
@@ -392,9 +391,16 @@ fn create_session(
 fn get_connections(db: &Db) -> Result<String, WebsocketSendError> {
     let connections = {
         let library = db.library.lock().unwrap();
+        let connection_data = CONNECTION_DATA.read().unwrap();
         moosicbox_core::sqlite::db::get_connections(&library)?
             .iter()
-            .map(|connection| connection.to_api())
+            .map(|connection| {
+                let mut api = connection.to_api();
+
+                api.alive = connection_data.values().any(|c| c.id == connection.id);
+
+                api
+            })
             .collect::<Vec<_>>()
     };
 
@@ -410,14 +416,19 @@ fn get_connections(db: &Db) -> Result<String, WebsocketSendError> {
 fn register_connection(
     db: &Db,
     _sender: &impl WebsocketSender,
-    _context: &WebsocketContext,
+    context: &WebsocketContext,
     payload: &RegisterConnection,
 ) -> Result<(), WebsocketSendError> {
-    {
+    let connection = {
         let library = db.library.lock().unwrap();
 
-        moosicbox_core::sqlite::db::register_connection(&library, payload)?;
-    }
+        moosicbox_core::sqlite::db::register_connection(&library, payload)?
+    };
+
+    let mut connection_data = CONNECTION_DATA.write().unwrap();
+
+    connection_data.insert(context.connection_id.clone(), connection);
+
     Ok(())
 }
 

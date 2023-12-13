@@ -3144,6 +3144,7 @@ dependencies = [
  "lambda_runtime 0.8.2",
  "log",
  "moosicbox_core",
+ "once_cell",
  "regex",
  "rusqlite",
  "serde",
