@@ -224,7 +224,7 @@ impl ChatServer {
         self.sessions.insert(id, tx.clone());
 
         if sender {
-            upsert_connection(&client_id, &id.to_string())?;
+            upsert_connection(&client_id, &id.to_string()).await?;
             CACHE_CONNECTIONS_MAP.write().unwrap().insert(client_id, id);
         } else {
             self.clients.insert(id, tx.clone());
@@ -243,7 +243,7 @@ impl ChatServer {
         let count = self.visitor_count.fetch_sub(1, Ordering::SeqCst) - 1;
         debug!("Visitor count: {count}");
 
-        delete_connection(&conn_id.to_string())?;
+        delete_connection(&conn_id.to_string()).await?;
 
         CACHE_CONNECTIONS_MAP
             .write()
@@ -341,7 +341,7 @@ impl ChatServer {
                     client_id,
                     request_id,
                     body,
-                } => match get_connection_id(&client_id) {
+                } => match get_connection_id(&client_id).await {
                     Ok(client_conn_id) => {
                         let value: Value = serde_json::from_str(&body).unwrap();
                         let body = TunnelRequest::Ws(TunnelWsRequest {
@@ -545,12 +545,12 @@ impl ChatServerHandle {
             .unwrap();
     }
 
-    pub fn get_connection_id(&self, client_id: &str) -> Result<usize, ConnectionIdError> {
-        crate::ws::server::get_connection_id(client_id)
+    pub async fn get_connection_id(&self, client_id: &str) -> Result<usize, ConnectionIdError> {
+        crate::ws::server::get_connection_id(client_id).await
     }
 }
 
-pub fn get_connection_id(client_id: &str) -> Result<usize, ConnectionIdError> {
+pub async fn get_connection_id(client_id: &str) -> Result<usize, ConnectionIdError> {
     let existing = {
         let lock = CACHE_CONNECTIONS_MAP.read().unwrap();
         lock.get(client_id).copied()
@@ -558,7 +558,8 @@ pub fn get_connection_id(client_id: &str) -> Result<usize, ConnectionIdError> {
     if let Some(conn_id) = existing {
         Ok(conn_id)
     } else {
-        let tunnel_ws_id = select_connection(client_id)?
+        let tunnel_ws_id = select_connection(client_id)
+            .await?
             .ok_or(ConnectionIdError::NotFound(client_id.to_string()))?
             .tunnel_ws_id;
 

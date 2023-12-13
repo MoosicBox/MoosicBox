@@ -3113,6 +3113,7 @@ dependencies = [
  "moosicbox_env_utils",
  "moosicbox_tunnel",
  "mysql",
+ "mysql_common",
  "once_cell",
  "qstring",
  "rand",

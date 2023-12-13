@@ -49,6 +49,7 @@ pub async fn auth_get_magic_token_endpoint(
     let token_hash = &hash_token(token);
 
     if let Some(magic_token) = select_magic_token(token_hash)
+        .await
         .map_err(|e| ErrorInternalServerError(format!("Error: {e:?}")))?
     {
         handle_request(
@@ -82,6 +83,7 @@ pub async fn auth_magic_token_endpoint(
         .ok_or(ErrorBadRequest("Missing clientId"))?;
 
     insert_magic_token(client_id, token_hash)
+        .await
         .map_err(|e| ErrorInternalServerError(format!("Error: {e:?}")))?;
 
     Ok(Json(json!({"success": true})))
@@ -102,6 +104,7 @@ pub async fn auth_register_client_endpoint(
     let token_hash = &hash_token(token);
 
     insert_client_access_token(&query.client_id, token_hash)
+        .await
         .map_err(|e| ErrorInternalServerError(format!("Error: {e:?}")))?;
 
     Ok(Json(json!({"token": token})))
@@ -122,6 +125,7 @@ pub async fn auth_signature_token_endpoint(
     let token_hash = &hash_token(token);
 
     insert_signature_token(&query.client_id, token_hash)
+        .await
         .map_err(|e| ErrorInternalServerError(format!("Error: {e:?}")))?;
 
     Ok(Json(json!({"token": token})))
@@ -300,7 +304,7 @@ async fn request(
         let chat_server = CHAT_SERVER_HANDLE.read().unwrap().as_ref().unwrap().clone();
         chat_server.request_start(request_id, tx, headers_tx, abort_token);
 
-        let conn_id = chat_server.get_connection_id(&client_id)?;
+        let conn_id = chat_server.get_connection_id(&client_id).await?;
 
         debug!("Sending server request {request_id} to {conn_id}");
         chat_server

@@ -26,6 +26,7 @@ log                 = { workspace = true }
 moosicbox_env_utils = { path = "../packages/env_utils" }
 moosicbox_tunnel    = { path = "../packages/tunnel", default-features = false }
 mysql               = { workspace = true }
+mysql_common        = { workspace = true }
 once_cell           = { workspace = true }
 qstring             = { workspace = true }
 rand                = { workspace = true }

@@ -69,6 +69,7 @@ mysql = { version = "24.0.0", features = [
     "default-rustls",
     "rustls-tls",
 ], default-features = false }
+mysql_common = { version = "0.30", default-features = false }
 ogg = "0.9.0"
 once_cell = { version = "1.18.0" }
 openssl = { version = "0.10.55", features = ["v110"] }

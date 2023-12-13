@@ -208,97 +208,162 @@ pub async fn init() -> Result<(), DatabaseError> {
     Ok(())
 }
 
-pub fn upsert_connection(client_id: &str, tunnel_ws_id: &str) -> Result<(), DatabaseError> {
-    Ok(DB
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .as_mut()
-        .expect("DB not initialized")
-        .exec_drop(
-            "
-            INSERT INTO `connections` (client_id, tunnel_ws_id) VALUES(?, ?)
-            ON DUPLICATE KEY UPDATE `tunnel_ws_id` = ?, `updated` = NOW()",
-            (client_id, tunnel_ws_id, tunnel_ws_id),
-        )?)
+async fn resilient_exec<T>(
+    exec: &impl Fn() -> Result<T, DatabaseError>,
+) -> Result<T, DatabaseError> {
+    static MAX_RETRY: u8 = 3;
+    let mut retries = 0;
+    loop {
+        match exec() {
+            Ok(value) => return Ok(value),
+            Err(err) => {
+                match err {
+                    DatabaseError::MySql(ref mysql_err) => match mysql_err {
+                        mysql::Error::CodecError(codec_err) => match codec_err {
+                            mysql_common::proto::codec::error::PacketCodecError::Io(_io_err) => {
+                                if retries >= MAX_RETRY {
+                                    return Err(err);
+                                }
+                                log::info!(
+                                    "MySQL IO error. Attempting reconnect... {}/{MAX_RETRY}",
+                                    retries + 1
+                                );
+                                if let Err(init_err) = init().await {
+                                    log::error!("Failed to reinitialize: {init_err:?}");
+                                    return Err(init_err);
+                                }
+                                retries += 1;
+                                continue;
+                            }
+                            _ => {}
+                        },
+                        _ => {}
+                    },
+                }
+                return Err(err);
+            }
+        }
+    }
 }
 
-pub fn select_connection(client_id: &str) -> Result<Option<Connection>, DatabaseError> {
-    Ok(DB
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .as_mut()
-        .expect("DB not initialized")
-        .exec_first(
-            "SELECT * FROM connections WHERE client_id = ?",
-            (client_id,),
-        )?)
+pub async fn upsert_connection(client_id: &str, tunnel_ws_id: &str) -> Result<(), DatabaseError> {
+    resilient_exec(&|| {
+        Ok(DB
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_mut()
+            .expect("DB not initialized")
+            .exec_drop(
+                "
+                INSERT INTO `connections` (client_id, tunnel_ws_id) VALUES(?, ?)
+                ON DUPLICATE KEY UPDATE `tunnel_ws_id` = ?, `updated` = NOW()",
+                (client_id, tunnel_ws_id, tunnel_ws_id),
+            )?)
+    })
+    .await
 }
 
-pub fn delete_connection(tunnel_ws_id: &str) -> Result<(), DatabaseError> {
-    Ok(DB
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .as_mut()
-        .expect("DB not initialized")
-        .exec_drop(
-            "DELETE FROM `connections` WHERE tunnel_ws_id = ?",
-            (tunnel_ws_id,),
-        )?)
+pub async fn select_connection(client_id: &str) -> Result<Option<Connection>, DatabaseError> {
+    resilient_exec(&|| {
+        Ok(DB
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_mut()
+            .expect("DB not initialized")
+            .exec_first(
+                "SELECT * FROM connections WHERE client_id = ?",
+                (client_id,),
+            )?)
+    })
+    .await
 }
 
-pub fn insert_client_access_token(client_id: &str, token_hash: &str) -> Result<(), DatabaseError> {
-    Ok(DB
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .as_mut()
-        .expect("DB not initialized")
-        .exec_drop(
-            "
-            INSERT INTO `client_access_tokens` (token_hash, client_id, expires)
-            VALUES(?, ?, NULL)",
-            (token_hash, client_id),
-        )?)
+pub async fn delete_connection(tunnel_ws_id: &str) -> Result<(), DatabaseError> {
+    resilient_exec(&|| {
+        Ok(DB
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_mut()
+            .expect("DB not initialized")
+            .exec_drop(
+                "DELETE FROM `connections` WHERE tunnel_ws_id = ?",
+                (tunnel_ws_id,),
+            )?)
+    })
+    .await
 }
 
-pub fn valid_client_access_token(client_id: &str, token_hash: &str) -> Result<bool, DatabaseError> {
-    Ok(select_client_access_token(client_id, token_hash)?.is_some())
+pub async fn insert_client_access_token(
+    client_id: &str,
+    token_hash: &str,
+) -> Result<(), DatabaseError> {
+    resilient_exec(&|| {
+        Ok(DB
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_mut()
+            .expect("DB not initialized")
+            .exec_drop(
+                "
+                INSERT INTO `client_access_tokens` (token_hash, client_id, expires)
+                VALUES(?, ?, NULL)",
+                (token_hash, client_id),
+            )?)
+    })
+    .await
 }
 
-pub fn select_client_access_token(
+pub async fn valid_client_access_token(
+    client_id: &str,
+    token_hash: &str,
+) -> Result<bool, DatabaseError> {
+    Ok(select_client_access_token(client_id, token_hash)
+        .await?
+        .is_some())
+}
+
+pub async fn select_client_access_token(
     client_id: &str,
     token_hash: &str,
 ) -> Result<Option<ClientAccessToken>, DatabaseError> {
-    Ok(DB
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .as_mut()
-        .expect("DB not initialized")
-        .exec_first(
-            "
-            SELECT * FROM client_access_tokens
-                WHERE client_id = ?
-                    AND token_hash = ?
-                    AND (expires IS NULL OR expires >= NOW())",
-            (client_id, token_hash),
-        )?)
+    resilient_exec(&|| {
+        Ok(DB
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_mut()
+            .expect("DB not initialized")
+            .exec_first(
+                "
+                SELECT * FROM client_access_tokens
+                    WHERE client_id = ?
+                        AND token_hash = ?
+                        AND (expires IS NULL OR expires >= NOW())",
+                (client_id, token_hash),
+            )?)
+    })
+    .await
 }
 
-pub fn insert_magic_token(client_id: &str, token_hash: &str) -> Result<(), DatabaseError> {
-    Ok(DB
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .as_mut()
-        .expect("DB not initialized")
-        .exec_drop(
-            "
-            INSERT INTO `magic_tokens` (magic_token_hash, client_id, expires)
-            VALUES(?, ?, NULL)",
-            (token_hash, client_id),
-        )?)
+pub async fn insert_magic_token(client_id: &str, token_hash: &str) -> Result<(), DatabaseError> {
+    resilient_exec(&|| {
+        Ok(DB
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_mut()
+            .expect("DB not initialized")
+            .exec_drop(
+                "
+                INSERT INTO `magic_tokens` (magic_token_hash, client_id, expires)
+                VALUES(?, ?, NULL)",
+                (token_hash, client_id),
+            )?)
+    })
+    .await
 }
 
-pub fn select_magic_token(token_hash: &str) -> Result<Option<MagicToken>, DatabaseError> {
-    Ok(DB.lock()
+pub async fn select_magic_token(token_hash: &str) -> Result<Option<MagicToken>, DatabaseError> {
+    resilient_exec(&|| {
+        Ok(DB.lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_mut()
         .expect("DB not initialized")
@@ -306,31 +371,45 @@ pub fn select_magic_token(token_hash: &str) -> Result<Option<MagicToken>, Databa
             "SELECT * FROM magic_tokens WHERE magic_token_hash = ? AND (expires IS NULL OR expires >= NOW())",
             (token_hash,),
         )?)
+    })
+    .await
 }
 
-pub fn insert_signature_token(client_id: &str, token_hash: &str) -> Result<(), DatabaseError> {
-    Ok(DB
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .as_mut()
-        .expect("DB not initialized")
-        .exec_drop(
-            "
-            INSERT INTO `signature_tokens` (token_hash, client_id, expires)
-            VALUES(?, ?, DATE_ADD(NOW(), INTERVAL 14 DAY))",
-            (token_hash, client_id),
-        )?)
+pub async fn insert_signature_token(
+    client_id: &str,
+    token_hash: &str,
+) -> Result<(), DatabaseError> {
+    resilient_exec(&|| {
+        Ok(DB
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_mut()
+            .expect("DB not initialized")
+            .exec_drop(
+                "
+                INSERT INTO `signature_tokens` (token_hash, client_id, expires)
+                VALUES(?, ?, DATE_ADD(NOW(), INTERVAL 14 DAY))",
+                (token_hash, client_id),
+            )?)
+    })
+    .await
 }
 
-pub fn valid_signature_token(client_id: &str, token_hash: &str) -> Result<bool, DatabaseError> {
-    Ok(select_signature_token(client_id, token_hash)?.is_some())
+pub async fn valid_signature_token(
+    client_id: &str,
+    token_hash: &str,
+) -> Result<bool, DatabaseError> {
+    Ok(select_signature_token(client_id, token_hash)
+        .await?
+        .is_some())
 }
 
-pub fn select_signature_token(
+pub async fn select_signature_token(
     client_id: &str,
     token_hash: &str,
 ) -> Result<Option<SignatureToken>, DatabaseError> {
-    Ok(DB.lock()
+    resilient_exec(&|| {
+        Ok(DB.lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_mut()
         .expect("DB not initialized")
@@ -338,30 +417,40 @@ pub fn select_signature_token(
             "SELECT * FROM signature_tokens WHERE client_id=? AND token_hash = ? AND expires >= NOW()",
             (client_id, token_hash,),
         )?)
+    })
+    .await
 }
 
 #[allow(dead_code)]
-pub fn select_signature_tokens(client_id: &str) -> Result<Vec<SignatureToken>, DatabaseError> {
-    Ok(DB
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .as_mut()
-        .expect("DB not initialized")
-        .exec(
-            "SELECT * FROM signature_tokens WHERE client_id = ?",
-            (client_id,),
-        )?)
+pub async fn select_signature_tokens(
+    client_id: &str,
+) -> Result<Vec<SignatureToken>, DatabaseError> {
+    resilient_exec(&|| {
+        Ok(DB
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_mut()
+            .expect("DB not initialized")
+            .exec(
+                "SELECT * FROM signature_tokens WHERE client_id = ?",
+                (client_id,),
+            )?)
+    })
+    .await
 }
 
 #[allow(dead_code)]
-pub fn delete_signature_token(token_hash: &str) -> Result<(), DatabaseError> {
-    Ok(DB
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .as_mut()
-        .expect("DB not initialized")
-        .exec_drop(
-            "DELETE FROM `signature_tokens` WHERE token_hash = ?",
-            (token_hash,),
-        )?)
+pub async fn delete_signature_token(token_hash: &str) -> Result<(), DatabaseError> {
+    resilient_exec(&|| {
+        Ok(DB
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_mut()
+            .expect("DB not initialized")
+            .exec_drop(
+                "DELETE FROM `signature_tokens` WHERE token_hash = ?",
+                (token_hash,),
+            )?)
+    })
+    .await
 }
