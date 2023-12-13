@@ -386,6 +386,7 @@ impl Player {
                     let old = active.clone();
                     if ((active.position + 1) as usize) < active.tracks.len() {
                         active.position += 1;
+                        active.progress = 0.0;
                         trigger_playback_event(active, &old);
                     } else {
                         break;
