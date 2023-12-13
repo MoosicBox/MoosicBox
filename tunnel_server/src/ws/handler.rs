@@ -81,7 +81,7 @@ pub async fn chat_ws(
                             let response: TunnelWsResponse =
                                 serde_json::from_str(text).expect("Invalid TunnelWsResponse");
                             if response.request_id == 0 {
-                                debug!("Propagating ws message");
+                                debug!("Propagating ws message {text}");
                                 if let Err(err) = chat_server.ws_message(response).await {
                                     error!(
                                         "Failed to propagate ws message from tunnel_server: {err:?}"
