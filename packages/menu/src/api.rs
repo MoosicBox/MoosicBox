@@ -9,9 +9,11 @@ use lambda_web::actix_web::{self, get};
 use moosicbox_core::{
     app::AppState,
     sqlite::{
+        db::get_tracks,
         menu::{get_album, get_artist},
         models::{Album, AlbumSort, AlbumSource, ApiAlbum, ApiArtist, ApiTrack, ArtistSort, ToApi},
     },
+    track_range::{parse_track_id_ranges, ParseTrackIdsError},
 };
 use moosicbox_core::{sqlite::menu::get_album_tracks, sqlite::menu::get_artist_albums};
 use serde::{Deserialize, Serialize};
@@ -145,6 +147,46 @@ pub async fn get_albums_endpoint(
             .into_iter()
             .map(|t| t.to_api())
             .collect(),
+    ))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTracksQuery {
+    track_ids: String,
+}
+
+#[get("/tracks")]
+pub async fn get_tracks_endpoint(
+    query: web::Query<GetTracksQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<Vec<ApiTrack>>> {
+    let ids = parse_track_id_ranges(&query.track_ids).map_err(|e| match e {
+        ParseTrackIdsError::ParseId(id) => {
+            ErrorBadRequest(format!("Could not parse trackId '{id}'"))
+        }
+        ParseTrackIdsError::UnmatchedRange(range) => {
+            ErrorBadRequest(format!("Unmatched range '{range}'"))
+        }
+        ParseTrackIdsError::RangeTooLarge(range) => {
+            ErrorBadRequest(format!("Range too large '{range}'"))
+        }
+    })?;
+    Ok(Json(
+        get_tracks(
+            &data
+                .db
+                .as_ref()
+                .expect("DB not set")
+                .library
+                .lock()
+                .unwrap(),
+            &ids,
+        )
+        .map_err(|_e| ErrorInternalServerError("Failed to fetch tracks"))?
+        .into_iter()
+        .map(|t| t.to_api())
+        .collect(),
     ))
 }
 
