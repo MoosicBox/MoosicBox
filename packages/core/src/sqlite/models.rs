@@ -359,11 +359,50 @@ pub struct UpdateSession {
     pub playlist: Option<UpdateSessionPlaylist>,
 }
 
+impl ToApi<ApiUpdateSession> for UpdateSession {
+    fn to_api(&self) -> ApiUpdateSession {
+        ApiUpdateSession {
+            session_id: self.session_id,
+            name: self.name.clone(),
+            active: self.active,
+            playing: self.playing,
+            position: self.position,
+            seek: self.seek,
+            playlist: self.playlist.as_ref().map(|p| p.to_api()),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSessionPlaylist {
     pub session_playlist_id: i32,
     pub tracks: Vec<i32>,
+}
+
+impl ToApi<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
+    fn to_api(&self) -> ApiUpdateSessionPlaylist {
+        ApiUpdateSessionPlaylist {
+            session_playlist_id: self.session_playlist_id,
+            tracks: self
+                .tracks
+                .iter()
+                .map(|id| ApiTrack {
+                    track_id: *id,
+                    number: 0,
+                    title: "".into(),
+                    duration: 0.0,
+                    artist: "".into(),
+                    artist_id: 0,
+                    date_released: None,
+                    album: "".into(),
+                    album_id: 0,
+                    contains_artwork: false,
+                    blur: false,
+                })
+                .collect(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
