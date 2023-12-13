@@ -130,14 +130,22 @@ impl FromRequest for SignatureAuthorized {
     type Future = Ready<Result<Self, actix_web::Error>>;
 
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
-        if is_signature_authorized(req).is_ok_and(|auth| auth) {
-            ok(SignatureAuthorized)
-        } else {
-            log::warn!(
-                "Unauthorized SignatureAuthorized request to '{}'",
-                req.path()
-            );
-            err(ErrorUnauthorized("Unauthorized"))
+        match is_signature_authorized(req) {
+            Ok(true) => ok(SignatureAuthorized),
+            Ok(false) => {
+                log::warn!(
+                    "Unauthorized SignatureAuthorized request to '{}'",
+                    req.path()
+                );
+                err(ErrorUnauthorized("Unauthorized"))
+            }
+            Err(error) => {
+                log::error!(
+                    "Unauthorized SignatureAuthorized request to '{}', error: {error:?}",
+                    req.path()
+                );
+                err(ErrorUnauthorized("Unauthorized"))
+            }
         }
     }
 }
