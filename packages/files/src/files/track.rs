@@ -4,7 +4,7 @@ use log::{debug, error, trace};
 use moosicbox_core::{
     app::Db,
     sqlite::{
-        db::{get_track, DbError},
+        db::{get_track, get_tracks, DbError},
         models::Track,
     },
 };
@@ -98,6 +98,22 @@ impl From<Track> for TrackInfo {
             blur: value.blur,
         }
     }
+}
+
+pub async fn get_tracks_info(
+    track_ids: Vec<i32>,
+    db: Db,
+) -> Result<Vec<TrackInfo>, TrackInfoError> {
+    debug!("Getting tracks info {track_ids:?}");
+
+    let tracks = {
+        let library = db.library.lock().unwrap();
+        get_tracks(&library, &track_ids)?
+    };
+
+    trace!("Got tracks {tracks:?}");
+
+    Ok(tracks.into_iter().map(|t| t.into()).collect())
 }
 
 pub async fn get_track_info(track_id: i32, db: Db) -> Result<TrackInfo, TrackInfoError> {

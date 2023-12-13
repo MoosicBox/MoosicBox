@@ -5,7 +5,10 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, HttpResponse, Result,
 };
-use moosicbox_core::app::AppState;
+use moosicbox_core::{
+    app::AppState,
+    track_range::{parse_track_id_ranges, ParseTrackIdsError},
+};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumString;
 
@@ -13,7 +16,8 @@ use crate::files::{
     album::{get_album_cover, AlbumCoverError, AlbumCoverSource},
     artist::{get_artist_cover, ArtistCoverError, ArtistCoverSource},
     track::{
-        get_track_info, get_track_source, TrackInfo, TrackInfoError, TrackSource, TrackSourceError,
+        get_track_info, get_track_source, get_tracks_info, TrackInfo, TrackInfoError, TrackSource,
+        TrackSourceError,
     },
 };
 
@@ -94,7 +98,7 @@ pub async fn track_endpoint(
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTrackInfoQuery {
-    pub track_id: i32,
+    pub track_id: usize,
 }
 
 impl From<TrackInfoError> for actix_web::Error {
@@ -110,7 +114,41 @@ pub async fn track_info_endpoint(
 ) -> Result<Json<TrackInfo>> {
     Ok(Json(
         get_track_info(
-            query.track_id,
+            query.track_id as i32,
+            data.db
+                .clone()
+                .ok_or(ErrorInternalServerError("No DB set"))?,
+        )
+        .await?,
+    ))
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTracksInfoQuery {
+    pub track_ids: String,
+}
+
+#[route("/tracks/info", method = "GET")]
+pub async fn tracks_info_endpoint(
+    query: web::Query<GetTracksInfoQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<Vec<TrackInfo>>> {
+    let ids = parse_track_id_ranges(&query.track_ids).map_err(|e| match e {
+        ParseTrackIdsError::ParseId(id) => {
+            ErrorBadRequest(format!("Could not parse trackId '{id}'"))
+        }
+        ParseTrackIdsError::UnmatchedRange(range) => {
+            ErrorBadRequest(format!("Unmatched range '{range}'"))
+        }
+        ParseTrackIdsError::RangeTooLarge(range) => {
+            ErrorBadRequest(format!("Range too large '{range}'"))
+        }
+    })?;
+
+    Ok(Json(
+        get_tracks_info(
+            ids,
             data.db
                 .clone()
                 .ok_or(ErrorInternalServerError("No DB set"))?,
