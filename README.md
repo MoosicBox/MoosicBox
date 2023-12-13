@@ -27,6 +27,7 @@ To-do (in no particular order):
 - Image optimization cache
 - Audio file visualization on seek bar
 - End-to-end encryption option
+- Schedule playback
 
 ## Local Server
 
