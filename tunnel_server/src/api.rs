@@ -225,7 +225,7 @@ async fn handle_request(
     let request_id = thread_rng().gen::<usize>();
     let abort_token = CancellationToken::new();
 
-    debug!("Starting ws request for {request_id} {method} {path} {query:?} (id {request_id})");
+    debug!("Starting ws request for {request_id} method={method} path={path} query={query:?} headers={headers:?} (id {request_id})");
 
     let (headers_rx, rx) = request(
         client_id,
