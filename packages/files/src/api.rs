@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use actix_web::{
     error::{ErrorBadRequest, ErrorInternalServerError},
     http::header::{CacheControl, CacheDirective, ContentType},
@@ -85,12 +87,11 @@ pub async fn track_endpoint(
                         path,
                     ),
                 )),
-            _ => {
-                let path_buf = std::path::PathBuf::from(path);
-                Ok(actix_files::NamedFile::open_async(path_buf.as_path())
+            None => Ok(
+                actix_files::NamedFile::open_async(PathBuf::from(path).as_path())
                     .await?
-                    .into_response(&req))
-            }
+                    .into_response(&req),
+            ),
         },
     }
 }
