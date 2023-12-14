@@ -501,7 +501,7 @@ dependencies = [
 [[package]]
 name = "audiotags"
 version = "0.5.0"
-source = "git+https://github.com/BSteffaniak/audiotags.git?branch=bug/fix-track-no#67f4bf8d61e2c4037461e3afefe939a761420c55"
+source = "git+https://github.com/BSteffaniak/audiotags.git?branch=master#09c0212d0ac7b523d00609627b075a5db91405df"
 dependencies = [
  "audiotags-dev-macro",
  "id3",
@@ -514,7 +514,7 @@ dependencies = [
 [[package]]
 name = "audiotags-dev-macro"
 version = "0.2.0"
-source = "git+https://github.com/BSteffaniak/audiotags.git?branch=bug/fix-track-no#67f4bf8d61e2c4037461e3afefe939a761420c55"
+source = "git+https://github.com/BSteffaniak/audiotags.git?branch=master#09c0212d0ac7b523d00609627b075a5db91405df"
 
 [[package]]
 name = "autocfg"
@@ -2786,8 +2786,7 @@ dependencies = [
 [[package]]
 name = "metaflac"
 version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1470d3cc1bb0d692af5eb3afb594330b8ba09fd91c32c4e1c6322172a5ba750"
+source = "git+https://github.com/MoosicBox/rust-metaflac.git?branch=master#c76f9e9185b2184f3c16dd35708430438428e849"
 dependencies = [
  "byteorder",
  "hex",
@@ -3015,6 +3014,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+ "tokio-util",
  "url",
 ]
 

@@ -27,7 +27,7 @@ pub async fn get_artist_cover(
 ) -> Result<ArtistCoverSource, ArtistCoverError> {
     let artist = {
         let library = db.library.lock().unwrap();
-        get_artist(&library, artist_id)?
+        get_artist(&library.inner, artist_id)?
     };
 
     if artist.is_none() {

@@ -355,7 +355,7 @@ fn get_sessions(
 ) -> Result<(), WebsocketSendError> {
     let sessions = {
         let library = db.library.lock().unwrap();
-        moosicbox_core::sqlite::db::get_sessions(&library)?
+        moosicbox_core::sqlite::db::get_sessions(&library.inner)?
             .iter()
             .map(|session| session.to_api())
             .collect::<Vec<_>>()
@@ -382,7 +382,7 @@ fn create_session(
 ) -> Result<(), WebsocketSendError> {
     {
         let library = db.library.lock().unwrap();
-        moosicbox_core::sqlite::db::create_session(&library, payload)?;
+        moosicbox_core::sqlite::db::create_session(&library.inner, payload)?;
     }
     get_sessions(db, sender, context, true)?;
     Ok(())
@@ -392,7 +392,7 @@ fn get_connections(db: &Db) -> Result<String, WebsocketSendError> {
     let connections = {
         let library = db.library.lock().unwrap();
         let connection_data = CONNECTION_DATA.read().unwrap();
-        moosicbox_core::sqlite::db::get_connections(&library)?
+        moosicbox_core::sqlite::db::get_connections(&library.inner)?
             .iter()
             .map(|connection| {
                 let mut api = connection.to_api();
@@ -422,7 +422,7 @@ fn register_connection(
     let connection = {
         let library = db.library.lock().unwrap();
 
-        moosicbox_core::sqlite::db::register_connection(&library, payload)?
+        moosicbox_core::sqlite::db::register_connection(&library.inner, payload)?
     };
 
     let mut connection_data = CONNECTION_DATA.write().unwrap();
@@ -442,7 +442,11 @@ fn register_players(
         let library = db.library.lock().unwrap();
 
         for player in payload {
-            moosicbox_core::sqlite::db::create_player(&library, &context.connection_id, player)?;
+            moosicbox_core::sqlite::db::create_player(
+                &library.inner,
+                &context.connection_id,
+                player,
+            )?;
         }
     }
     get_sessions(db, sender, context, true)?;
@@ -458,7 +462,7 @@ fn set_session_active_players(
     {
         let library = db.library.lock().unwrap();
 
-        moosicbox_core::sqlite::db::set_session_active_players(&library, payload)?;
+        moosicbox_core::sqlite::db::set_session_active_players(&library.inner, payload)?;
     }
     get_sessions(db, sender, context, true)?;
     Ok(())
@@ -483,15 +487,16 @@ pub fn update_session(
     let (before_session, session) = {
         let library = db.library.lock().unwrap();
 
-        let before_session = moosicbox_core::sqlite::db::get_session(&library, payload.session_id)
-            .map_err(UpdateSessionError::Db)?
-            .map(Ok)
-            .unwrap_or(Err(UpdateSessionError::NoSessionFound))?;
+        let before_session =
+            moosicbox_core::sqlite::db::get_session(&library.inner, payload.session_id)
+                .map_err(UpdateSessionError::Db)?
+                .map(Ok)
+                .unwrap_or(Err(UpdateSessionError::NoSessionFound))?;
 
-        moosicbox_core::sqlite::db::update_session(&library, payload)
+        moosicbox_core::sqlite::db::update_session(&library.inner, payload)
             .map_err(UpdateSessionError::Db)?;
 
-        let session = moosicbox_core::sqlite::db::get_session(&library, payload.session_id)
+        let session = moosicbox_core::sqlite::db::get_session(&library.inner, payload.session_id)
             .map_err(UpdateSessionError::Db)?
             .map(Ok)
             .unwrap_or(Err(UpdateSessionError::NoSessionFound))?;
@@ -566,7 +571,7 @@ fn delete_session(
 ) -> Result<(), WebsocketSendError> {
     {
         let library = db.library.lock().unwrap();
-        moosicbox_core::sqlite::db::delete_session(&library, payload.session_id)?;
+        moosicbox_core::sqlite::db::delete_session(&library.inner, payload.session_id)?;
     }
 
     get_sessions(db, sender, context, true)?;

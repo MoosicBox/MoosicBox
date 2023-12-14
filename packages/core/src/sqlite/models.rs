@@ -72,7 +72,6 @@ pub struct Track {
     pub number: i32,
     pub title: String,
     pub duration: f64,
-    pub bytes: u64,
     pub album: String,
     pub album_id: i32,
     pub date_released: Option<String>,
@@ -90,7 +89,6 @@ impl AsModel<Track> for Row<'_> {
             number: self.get("number").unwrap(),
             title: self.get("title").unwrap(),
             duration: self.get("duration").unwrap(),
-            bytes: self.get("bytes").unwrap(),
             album: self.get("album").unwrap_or_default(),
             album_id: self.get("album_id").unwrap(),
             date_released: self.get("date_released").unwrap_or_default(),
@@ -793,5 +791,30 @@ impl AsModel<MagicToken> for Row<'_> {
 impl AsId for MagicToken {
     fn as_id(&self) -> SqliteValue {
         SqliteValue::String(self.magic_token.clone())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+pub struct TrackSize {
+    pub id: i32,
+    pub track_id: i32,
+    pub bytes: u64,
+    pub format: String,
+}
+
+impl AsModel<TrackSize> for Row<'_> {
+    fn as_model(&self) -> TrackSize {
+        TrackSize {
+            id: self.get("id").unwrap(),
+            track_id: self.get("track_id").unwrap(),
+            bytes: self.get("bytes").unwrap(),
+            format: self.get("format").unwrap(),
+        }
+    }
+}
+
+impl AsId for TrackSize {
+    fn as_id(&self) -> SqliteValue {
+        SqliteValue::Number(self.id as i64)
     }
 }

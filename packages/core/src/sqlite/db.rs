@@ -8,9 +8,11 @@ use std::{
 };
 use thiserror::Error;
 
+use crate::types::PlaybackQuality;
+
 use super::models::{
     ActivePlayer, Album, Artist, AsId, AsModel, AsModelQuery, ClientAccessToken, CreateSession,
-    MagicToken, NumberId, Player, Session, SessionPlaylist, Track, UpdateSession,
+    MagicToken, NumberId, Player, Session, SessionPlaylist, Track, TrackSize, UpdateSession,
 };
 
 impl<T> From<PoisonError<T>> for DbError {
@@ -675,9 +677,55 @@ pub fn get_artist_albums(db: &Connection, artist_id: i32) -> Result<Vec<Album>, 
         .collect())
 }
 
+pub fn set_track_size(
+    db: &Connection,
+    id: i32,
+    quality: &PlaybackQuality,
+    bytes: u64,
+) -> Result<TrackSize, DbError> {
+    upsert(
+        db,
+        "track_sizes",
+        vec![
+            ("track_id", SqliteValue::Number(id as i64)),
+            (
+                "format",
+                SqliteValue::String(quality.format.as_ref().to_string()),
+            ),
+        ],
+        vec![
+            ("track_id", SqliteValue::Number(id as i64)),
+            (
+                "format",
+                SqliteValue::String(quality.format.as_ref().to_string()),
+            ),
+            ("bytes", SqliteValue::Number(bytes as i64)),
+        ],
+    )
+}
+
+pub fn get_track_size(
+    db: &Connection,
+    id: i32,
+    quality: &PlaybackQuality,
+) -> Result<Option<u64>, DbError> {
+    Ok(db
+        .prepare_cached(
+            "
+            SELECT bytes
+            FROM track_sizes
+            WHERE track_id=?1 AND format=?2",
+        )?
+        .query_map(params![id, quality.format.as_ref()], |row| {
+            Ok(row.get("bytes").unwrap())
+        })?
+        .find_map(|row| row.ok()))
+}
+
 pub fn get_track(db: &Connection, id: i32) -> Result<Option<Track>, DbError> {
     Ok(get_tracks(db, &vec![id])?.into_iter().next())
 }
+
 pub fn get_tracks(db: &Connection, ids: &Vec<i32>) -> Result<Vec<Track>, DbError> {
     if ids.is_empty() {
         return Ok(vec![]);
@@ -1171,7 +1219,6 @@ pub fn add_tracks(db: &Connection, tracks: Vec<InsertTrack>) -> Result<Vec<Track
                     ("number", SqliteValue::Number(insert.track.number as i64)),
                     ("duration", SqliteValue::Real(insert.track.duration)),
                     ("album_id", SqliteValue::Number(insert.album_id as i64)),
-                    ("bytes", SqliteValue::Number(insert.track.bytes as i64)),
                     ("title", SqliteValue::String(insert.track.title.clone())),
                     ("file", SqliteValue::String(insert.file.clone())),
                 ],

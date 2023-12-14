@@ -180,7 +180,8 @@ pub async fn get_tracks_endpoint(
                 .expect("DB not set")
                 .library
                 .lock()
-                .unwrap(),
+                .unwrap()
+                .inner,
             &ids,
         )
         .map_err(|_e| ErrorInternalServerError("Failed to fetch tracks"))?

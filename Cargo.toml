@@ -31,7 +31,7 @@ actix-ws = "0.2.5"
 async-once-cell = "0.5.3"
 async-trait = "0.1.74"
 audiopus = "0.2.0"
-audiotags = { git = "https://github.com/BSteffaniak/audiotags.git", branch = "bug/fix-track-no" }
+audiotags = { git = "https://github.com/BSteffaniak/audiotags.git", branch = "master" }
 awc = "3.0.0-beta.9"
 aws-config = "0.101.0"
 aws-sdk-apigatewaymanagement = "0.38.0"

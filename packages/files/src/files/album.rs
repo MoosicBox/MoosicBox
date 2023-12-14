@@ -26,7 +26,7 @@ pub enum AlbumCoverError {
 pub async fn get_album_cover(album_id: i32, db: Db) -> Result<AlbumCoverSource, AlbumCoverError> {
     let album = {
         let library = db.library.lock().unwrap();
-        get_album(&library, album_id)?
+        get_album(&library.inner, album_id)?
     };
 
     if album.is_none() {

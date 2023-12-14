@@ -113,7 +113,8 @@ pub async fn get_all_albums(
             .ok_or(GetAlbumsError::NoDb)?
             .library
             .lock()
-            .unwrap(),
+            .unwrap()
+            .inner,
     )?;
 
     Ok(sort_albums(filter_albums(albums, request), request))

@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use moosicbox_files::api::AudioFormat;
+use moosicbox_core::types::AudioFormat;
 use moosicbox_ws::api::WebsocketMessageError;
 use serde::Deserialize;
 use serde_aux::prelude::*;

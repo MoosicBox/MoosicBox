@@ -1,6 +1,7 @@
 use crate::scan::scan;
 use crate::ws::handler;
 use crate::ws::server::ChatServerHandle;
+use crate::CANCELLATION_TOKEN;
 use actix_web::error::ErrorInternalServerError;
 use actix_web::{
     get, post,
@@ -49,7 +50,8 @@ pub async fn scan_endpoint(
     query: web::Query<ScanQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<Value>> {
-    scan(&query.location, &data).map_err(|_e| ErrorInternalServerError("Failed to scan"))?;
+    scan(&query.location, &data, CANCELLATION_TOKEN.clone())
+        .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
 
     Ok(Json(serde_json::json!({"success": true})))
 }

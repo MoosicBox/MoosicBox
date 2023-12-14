@@ -15,6 +15,7 @@ use moosicbox_core::{
         db::{get_album_tracks, get_track},
         models::{ToApi, Track, UpdateSession},
     },
+    types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_symphonia_player::{
     media_sources::remote_bytestream::RemoteByteStream,
@@ -24,7 +25,6 @@ use moosicbox_symphonia_player::{
 use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng as _};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use symphonia::core::{
     io::{MediaSource, MediaSourceStream},
     probe::Hint,
@@ -189,23 +189,6 @@ pub enum PlaybackType {
     Default,
 }
 
-#[derive(Copy, Clone, Default, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum AudioFormat {
-    Aac,
-    Flac,
-    Mp3,
-    Opus,
-    #[default]
-    Source,
-}
-
-#[derive(Copy, Clone, Default, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PlaybackQuality {
-    pub format: AudioFormat,
-}
-
 #[derive(Copy, Clone)]
 pub struct PlaybackRetryOptions {
     pub max_retry_count: u32,
@@ -259,7 +242,7 @@ impl Player {
     ) -> Result<PlaybackStatus, PlayerError> {
         let tracks = {
             let library = db.library.lock().unwrap();
-            get_album_tracks(&library, album_id).map_err(|e| {
+            get_album_tracks(&library.inner, album_id).map_err(|e| {
                 error!("Failed to fetch album tracks: {e:?}");
                 PlayerError::AlbumFetchFailed(album_id)
             })?
@@ -320,7 +303,7 @@ impl Player {
                 .map(|track| match track {
                     TrackOrId::Id(track_id) => {
                         debug!("Fetching track {track_id}",);
-                        let track = get_track(&library, *track_id)
+                        let track = get_track(&library.inner, *track_id)
                             .map_err(|e| {
                                 error!("Failed to fetch track: {e:?}");
                                 PlayerError::TrackFetchFailed(*track_id)
@@ -751,14 +734,13 @@ impl Player {
 
                 let query_string = match quality.format {
                     AudioFormat::Aac => query_string + "&format=AAC",
-                    AudioFormat::Flac => query_string + "&format=FLAC",
                     AudioFormat::Mp3 => query_string + "&format=MP3",
                     AudioFormat::Opus => query_string + "&format=OPUS",
                     AudioFormat::Source => query_string,
                 };
 
-                let url = format!("{host}/track/info{query_string}");
-                let mut client = reqwest::Client::new().get(&url);
+                let url = format!("{host}/track{query_string}");
+                let mut client = reqwest::Client::new().head(&url);
 
                 if let Some(headers) = headers {
                     for (key, value) in headers {
@@ -766,9 +748,15 @@ impl Player {
                     }
                 }
 
-                let res: Value = client.send().await.unwrap().json().await.unwrap();
-                debug!("Got track info {res:?}");
-                let size = res.get("bytes").unwrap().as_u64().unwrap();
+                let res = client.send().await.unwrap();
+                let size = res
+                    .headers()
+                    .get("content-length")
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .parse::<u64>()
+                    .unwrap();
                 let url = format!("{host}/track{query_string}");
 
                 let source = Box::new(RemoteByteStream::new(url, Some(size), true));

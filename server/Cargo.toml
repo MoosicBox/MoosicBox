@@ -13,7 +13,9 @@ actix-ws = "0.2.5"
 audiotags = { workspace = true }
 awc = "3.0.0-beta.9"
 enum-as-inner = "0.6.0"
+env_logger.workspace = true
 futures = { workspace = true }
+futures-util.workspace = true
 kanal = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
@@ -29,16 +31,15 @@ moosicbox_tunnel = { path = "../packages/tunnel", default-features = false, feat
 moosicbox_ws = { path = "../packages/ws" }
 mp3-duration = "0.1.10"
 once_cell = { workspace = true }
+rand.workspace = true
 regex = "1.9.5"
+rusqlite = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-env_logger.workspace   = true
-futures-util.workspace = true
-rand.workspace         = true
-rusqlite               = { workspace = true }
-tokio                  = { workspace = true, features = ["rt", "time", "macros"] }
-url                    = { workspace = true }
+tokio = { workspace = true, features = ["rt", "time", "macros"] }
+tokio-util = { workspace = true }
+url = { workspace = true }
 
 [features]
 default = [

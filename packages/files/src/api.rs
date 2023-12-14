@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use actix_web::{
+    body::SizedStream,
     error::{ErrorBadRequest, ErrorInternalServerError},
     http::header::{CacheControl, CacheDirective, ContentType},
     route,
@@ -10,30 +11,18 @@ use actix_web::{
 use moosicbox_core::{
     app::AppState,
     track_range::{parse_track_id_ranges, ParseTrackIdsError},
+    types::{AudioFormat, PlaybackQuality},
 };
-use serde::{Deserialize, Serialize};
-use strum_macros::EnumString;
+use serde::Deserialize;
 
 use crate::files::{
     album::{get_album_cover, AlbumCoverError, AlbumCoverSource},
     artist::{get_artist_cover, ArtistCoverError, ArtistCoverSource},
     track::{
-        get_track_info, get_track_source, get_tracks_info, TrackInfo, TrackInfoError, TrackSource,
-        TrackSourceError,
+        get_or_init_track_size, get_track_info, get_track_source, get_tracks_info, TrackInfo,
+        TrackInfoError, TrackSource, TrackSourceError,
     },
 };
-
-#[derive(Debug, Clone, Serialize, Deserialize, EnumString)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
-pub enum AudioFormat {
-    #[cfg(feature = "aac")]
-    Aac,
-    #[cfg(feature = "mp3")]
-    Mp3,
-    #[cfg(feature = "opus")]
-    Opus,
-}
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -54,44 +43,63 @@ pub async fn track_endpoint(
     query: web::Query<GetTrackQuery>,
     data: web::Data<AppState>,
 ) -> Result<HttpResponse> {
-    match get_track_source(
+    let source = get_track_source(
         query.track_id,
         data.db
             .clone()
             .ok_or(ErrorInternalServerError("No DB set"))?,
     )
-    .await?
-    {
-        TrackSource::LocalFilePath(path) => match query.format {
+    .await?;
+
+    let format = query.format.unwrap_or_default();
+
+    let size = get_or_init_track_size(
+        query.track_id,
+        &source,
+        PlaybackQuality { format },
+        &data
+            .db
+            .as_ref()
+            .ok_or(ErrorInternalServerError("No DB set"))?
+            .library
+            .lock()
+            .unwrap(),
+    )?;
+
+    match source {
+        TrackSource::LocalFilePath(path) => match format {
             #[cfg(feature = "aac")]
-            Some(AudioFormat::Aac) => Ok(HttpResponse::Ok()
+            AudioFormat::Aac => Ok(HttpResponse::Ok()
                 .insert_header((actix_web::http::header::CONTENT_TYPE, "audio/mp4"))
-                .streaming(
+                .body(SizedStream::new(
+                    size,
                     moosicbox_symphonia_player::output::encoder::aac::encoder::encode_aac_stream(
                         path,
                     ),
-                )),
+                ))),
             #[cfg(feature = "mp3")]
-            Some(AudioFormat::Mp3) => Ok(HttpResponse::Ok()
+            AudioFormat::Mp3 => Ok(HttpResponse::Ok()
                 .insert_header((actix_web::http::header::CONTENT_TYPE, "audio/mp3"))
-                .streaming(
+                .body(SizedStream::new(
+                    size,
                     moosicbox_symphonia_player::output::encoder::mp3::encoder::encode_mp3_stream(
                         path,
                     ),
-                )),
+                ))),
             #[cfg(feature = "opus")]
-            Some(AudioFormat::Opus) => Ok(HttpResponse::Ok()
+            AudioFormat::Opus => Ok(HttpResponse::Ok()
                 .insert_header((actix_web::http::header::CONTENT_TYPE, "audio/opus"))
-                .streaming(
+                .body(SizedStream::new(
+                    size,
                     moosicbox_symphonia_player::output::encoder::opus::encoder::encode_opus_stream(
                         path,
                     ),
-                )),
-            None => Ok(
-                actix_files::NamedFile::open_async(PathBuf::from(path).as_path())
-                    .await?
-                    .into_response(&req),
-            ),
+                ))),
+            AudioFormat::Source => Ok(actix_files::NamedFile::open_async(
+                PathBuf::from(path).as_path(),
+            )
+            .await?
+            .into_response(&req)),
         },
     }
 }

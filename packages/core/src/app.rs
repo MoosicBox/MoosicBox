@@ -11,15 +11,23 @@ pub struct AppState {
     pub db: Option<Db>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Db {
-    pub library: Arc<Mutex<Connection>>,
+    pub library: Arc<Mutex<DbConnection>>,
 }
 
-impl fmt::Debug for Db {
+pub struct DbConnection {
+    pub inner: Connection,
+}
+
+impl From<Connection> for DbConnection {
+    fn from(value: Connection) -> Self {
+        DbConnection { inner: value }
+    }
+}
+
+impl fmt::Debug for DbConnection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Db")
-            .field("library", &"{{db connection}}")
-            .finish()
+        write!(f, "DbConnection")
     }
 }

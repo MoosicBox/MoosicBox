@@ -80,7 +80,8 @@ pub async fn get_all_artists(
             .ok_or(GetArtistsError::NoDb)?
             .library
             .lock()
-            .unwrap(),
+            .unwrap()
+            .inner,
     )?;
 
     Ok(sort_artists(filter_artists(artists, request), request))

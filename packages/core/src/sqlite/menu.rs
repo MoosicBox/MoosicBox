@@ -46,7 +46,7 @@ pub async fn get_artist(artist_id: i32, data: &AppState) -> Result<Artist, GetAr
             .library
             .lock()?;
 
-        match db::get_artist(&library, artist_id) {
+        match db::get_artist(&library.inner, artist_id) {
             Ok(artist) => {
                 if artist.is_none() {
                     return Err(GetArtistError::ArtistNotFound { artist_id });
@@ -102,7 +102,7 @@ pub async fn get_album(album_id: i32, data: &AppState) -> Result<Album, GetAlbum
             .library
             .lock()?;
 
-        match db::get_album(&library, album_id) {
+        match db::get_album(&library.inner, album_id) {
             Ok(album) => {
                 if album.is_none() {
                     return Err(GetAlbumError::AlbumNotFound { album_id });
@@ -152,7 +152,9 @@ pub async fn get_albums(data: &AppState) -> Result<Vec<Album>, GetAlbumsError> {
             .library
             .lock()?;
 
-        Ok::<CacheItemType, GetAlbumsError>(CacheItemType::Albums(super::db::get_albums(&library)?))
+        Ok::<CacheItemType, GetAlbumsError>(CacheItemType::Albums(super::db::get_albums(
+            &library.inner,
+        )?))
     })
     .await?
     .into_albums()
@@ -197,7 +199,8 @@ pub async fn get_album_tracks(
             .lock()?;
 
         Ok::<CacheItemType, GetAlbumTracksError>(CacheItemType::AlbumTracks(db::get_album_tracks(
-            &library, album_id,
+            &library.inner,
+            album_id,
         )?))
     })
     .await?
@@ -243,7 +246,7 @@ pub async fn get_artist_albums(
             .lock()?;
 
         Ok::<CacheItemType, GetArtistAlbumsError>(CacheItemType::ArtistAlbums(
-            db::get_artist_albums(&library, artist_id)?,
+            db::get_artist_albums(&library.inner, artist_id)?,
         ))
     })
     .await?

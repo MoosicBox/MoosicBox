@@ -11,7 +11,7 @@ use actix_cors::Cors;
 use actix_web::{http, middleware, web, App};
 use log::{debug, error, info};
 use moosicbox_auth::get_client_id_and_access_token;
-use moosicbox_core::app::{AppState, Db};
+use moosicbox_core::app::{AppState, Db, DbConnection};
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 use moosicbox_tunnel::{
     sender::{tunnel_sender::TunnelSender, TunnelMessage},
@@ -24,8 +24,11 @@ use std::{
     time::Duration,
 };
 use tokio::{task::spawn, try_join};
+use tokio_util::sync::CancellationToken;
 use url::Url;
 use ws::server::ChatServer;
+
+static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(|| CancellationToken::new());
 
 static CHAT_SERVER_HANDLE: Lazy<std::sync::RwLock<Option<ws::server::ChatServerHandle>>> =
     Lazy::new(|| std::sync::RwLock::new(None));
@@ -64,7 +67,7 @@ fn main() -> std::io::Result<()> {
                 .busy_timeout(Duration::from_millis(10))
                 .expect("Failed to set busy timeout");
             Db {
-                library: Arc::new(Mutex::new(library)),
+                library: Arc::new(Mutex::new(DbConnection { inner: library })),
             }
         });
 
@@ -257,6 +260,7 @@ fn main() -> std::io::Result<()> {
             async move {
                 let resp = http_server.await;
                 CHAT_SERVER_HANDLE.write().unwrap().take();
+                CANCELLATION_TOKEN.cancel();
                 if let Some(handle) = tunnel_handle {
                     let _ = handle.close().await;
                 }
