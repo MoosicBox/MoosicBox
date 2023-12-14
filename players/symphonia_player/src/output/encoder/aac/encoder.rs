@@ -108,8 +108,7 @@ where
                 .resample(decoded)
                 .ok_or(AudioOutputError::StreamEnd)?;
 
-            self.write_output(decoded);
-            Ok(decoded.len())
+            Ok(self.write_output(decoded))
         } else {
             let n_channels = s.spec().channels.count();
             let n_samples = s.frames() * n_channels;
@@ -124,8 +123,7 @@ where
                 }
             }
 
-            self.write_output(buf);
-            Ok(buf.len())
+            Ok(self.write_output(buf))
         }
     }
 

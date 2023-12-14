@@ -130,9 +130,7 @@ where
                 *dst = (*s).into_sample();
             }
         }
-        self.write_output(buf);
-
-        Ok(n_samples)
+        Ok(self.write_output(buf))
     }
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {

@@ -148,12 +148,14 @@ where
             .resample(decoded)
             .ok_or(AudioOutputError::StreamEnd)?;
 
-        let n_samples = decoded.len();
+        let mut written = 0;
 
         for sample in decoded.iter() {
             if self.pos == STEREO_20MS {
                 self.time += 20;
-                self.bytes_read += self.write_output(STEREO_20MS);
+                let byte_count = self.write_output(STEREO_20MS);
+                self.bytes_read += byte_count;
+                written += byte_count;
                 self.pos = 0;
                 if self.time % 1000 == 0 {
                     debug!("time: {}", self.time / 1000);
@@ -165,14 +167,15 @@ where
 
         if self.pos == STEREO_20MS {
             self.time += 20;
-            self.bytes_read += self.write_output(STEREO_20MS);
+            let byte_count = self.write_output(STEREO_20MS);
+            self.bytes_read += byte_count;
+            written += byte_count;
             self.pos = 0;
             if self.time % 1000 == 0 {
                 debug!("time: {}", self.time / 1000);
             }
         }
-
-        Ok(n_samples)
+        Ok(written)
     }
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
