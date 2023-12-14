@@ -32,7 +32,14 @@ impl From<io::Error> for PlaybackError {
     }
 }
 
-type ProgressListener<'a> = RefCell<Vec<Box<dyn FnMut(f64) + 'a>>>;
+#[derive(Clone, Debug)]
+pub struct PlaybackProgress {
+    pub secs: f64,
+    pub total_bytes_written: usize,
+    pub bytes_just_written: usize,
+}
+
+type ProgressListener<'a> = RefCell<Vec<Box<dyn FnMut(&PlaybackProgress) + 'a>>>;
 
 pub struct PlaybackHandle<'a> {
     progress_listeners: ProgressListener<'a>,
@@ -56,13 +63,13 @@ impl<'a> PlaybackHandle<'a> {
         }
     }
 
-    pub fn on_progress(&mut self, callback: impl FnMut(f64) + 'a) {
+    pub fn on_progress(&mut self, callback: impl FnMut(&PlaybackProgress) + 'a) {
         self.progress_listeners
             .borrow_mut()
             .push(Box::new(callback));
     }
 
-    pub(crate) fn trigger_progress(&self, progress: f64) {
+    pub(crate) fn trigger_progress(&self, progress: &PlaybackProgress) {
         for callback in self.progress_listeners.borrow_mut().iter_mut() {
             (callback)(progress);
         }
@@ -290,6 +297,7 @@ fn play_track(
         Some(track) => track,
         _ => return Ok(0),
     };
+    let mut total_bytes_written = 0;
 
     // Create a decoder for the track.
     let mut decoder = symphonia::default::get_codecs().make(&track.codec_params, decode_opts)?;
@@ -341,18 +349,28 @@ fn play_track(
                 // Write the decoded audio samples to the audio output if the presentation timestamp
                 // for the packet is >= the seeked position (0 if not seeking).
                 if ts >= play_opts.seek_ts {
+                    let bytes_just_written =
+                        if let Some(audio_output) = audio_output_handler.inner.as_mut() {
+                            trace!("Writing decoded to audio output");
+                            let written = audio_output.write(decoded)?;
+                            trace!("Wrote decoded to audio output");
+                            written
+                        } else {
+                            0
+                        };
+
+                    total_bytes_written += bytes_just_written;
+
                     if let Some(tb) = tb {
                         let t = tb.calc_time(ts);
 
                         let secs = f64::from(t.seconds as u32) + t.frac;
 
-                        handle.trigger_progress(secs);
-                    }
-
-                    if let Some(audio_output) = audio_output_handler.inner.as_mut() {
-                        trace!("Writing decoded to audio output");
-                        audio_output.write(decoded)?;
-                        trace!("Wrote decoded to audio output");
+                        handle.trigger_progress(&PlaybackProgress {
+                            secs,
+                            bytes_just_written,
+                            total_bytes_written,
+                        });
                     }
                 } else {
                     trace!("Not to seeked position yet. Continuing decode");

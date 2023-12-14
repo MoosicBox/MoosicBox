@@ -234,38 +234,45 @@ pub fn encode_opus_stream(path: String) -> ByteStream {
     let writer = ByteWriter::default();
     let stream = writer.stream();
 
-    encode_opus(path, writer);
+    encode_opus_spawn(path, writer);
 
     stream
 }
 
-pub fn encode_opus<T: std::io::Write + Send + Clone + 'static>(
+pub fn encode_opus_spawn<T: std::io::Write + Send + Clone + 'static>(
     path: String,
     writer: T,
-) -> tokio::task::JoinHandle<()> {
+) -> tokio::task::JoinHandle<usize> {
     let path = path.clone();
-    RT.spawn(async move {
-        let mut audio_output_handler = AudioOutputHandler::new(Box::new(move |spec, duration| {
-            let mut encoder: OpusEncoder<i16, T> = OpusEncoder::new(writer.clone());
-            encoder.open(spec, duration);
-            Ok(Box::new(encoder))
-        }));
+    RT.spawn(async move { encode_opus(path, writer) })
+}
 
-        let mut handle = PlaybackHandle::default();
-        handle.on_progress(|progress| {
-            log::debug!("Encoding progress: {progress}s");
-        });
+pub fn encode_opus<T: std::io::Write + Send + Clone + 'static>(path: String, writer: T) -> usize {
+    let mut audio_output_handler = AudioOutputHandler::new(Box::new(move |spec, duration| {
+        let mut encoder: OpusEncoder<i16, T> = OpusEncoder::new(writer.clone());
+        encoder.open(spec, duration);
+        Ok(Box::new(encoder))
+    }));
 
-        if let Err(err) = play_file_path_str(
-            &path,
-            &mut audio_output_handler,
-            true,
-            true,
-            None,
-            None,
-            &handle,
-        ) {
-            log::error!("Failed to encode to opus: {err:?}");
-        }
-    })
+    let written = RefCell::new(0);
+    let mut handle = PlaybackHandle::default();
+    handle.on_progress(|progress| {
+        log::debug!("Encoding progress: {progress:?}");
+        *written.borrow_mut() = progress.total_bytes_written;
+    });
+
+    if let Err(err) = play_file_path_str(
+        &path,
+        &mut audio_output_handler,
+        true,
+        true,
+        None,
+        None,
+        &handle,
+    ) {
+        log::error!("Failed to encode to opus: {err:?}");
+    }
+
+    let total_written = *written.borrow();
+    total_written
 }

@@ -459,7 +459,7 @@ impl Player {
                 let mut binding = self.active_playback.write().unwrap();
                 if let Some(playback) = binding.as_mut() {
                     let old = playback.clone();
-                    playback.progress = progress;
+                    playback.progress = progress.secs;
                     trigger_playback_event(playback, &old);
                 }
             });
