@@ -248,7 +248,10 @@ pub fn encode_opus<T: std::io::Write + Send + Clone + 'static>(
             Ok(Box::new(encoder))
         }));
 
-        let handle = PlaybackHandle::default();
+        let mut handle = PlaybackHandle::default();
+        handle.on_progress(|progress| {
+            log::debug!("Encoding progress: {progress}s");
+        });
 
         if let Err(err) = play_file_path_str(
             &path,
