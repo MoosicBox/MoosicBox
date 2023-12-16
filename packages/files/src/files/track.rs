@@ -153,7 +153,17 @@ pub fn get_or_init_track_size(
                     path.to_string(),
                     std::io::empty(),
                 ) as u64;
-                set_track_size(&connection.inner, track_id, &quality, size)?;
+                set_track_size(
+                    &connection.inner,
+                    track_id,
+                    &quality,
+                    size,
+                    Some(None),
+                    Some(None),
+                    Some(None),
+                    Some(None),
+                    Some(None),
+                )?;
                 Ok(size)
             }
             #[cfg(feature = "mp3")]
@@ -162,7 +172,17 @@ pub fn get_or_init_track_size(
                     path.to_string(),
                     std::io::empty(),
                 ) as u64;
-                set_track_size(&connection.inner, track_id, &quality, size)?;
+                set_track_size(
+                    &connection.inner,
+                    track_id,
+                    &quality,
+                    size,
+                    Some(None),
+                    Some(None),
+                    Some(None),
+                    Some(None),
+                    Some(None),
+                )?;
                 Ok(size)
             }
             #[cfg(feature = "opus")]
@@ -171,12 +191,32 @@ pub fn get_or_init_track_size(
                     path.to_string(),
                     std::io::empty(),
                 ) as u64;
-                set_track_size(&connection.inner, track_id, &quality, size)?;
+                set_track_size(
+                    &connection.inner,
+                    track_id,
+                    &quality,
+                    size,
+                    Some(None),
+                    Some(None),
+                    Some(None),
+                    Some(None),
+                    Some(None),
+                )?;
                 Ok(size)
             }
             AudioFormat::Source => {
                 let size = { File::open(path).unwrap().metadata().unwrap().len() };
-                set_track_size(&connection.inner, track_id, &quality, size)?;
+                set_track_size(
+                    &connection.inner,
+                    track_id,
+                    &quality,
+                    size,
+                    Some(None),
+                    Some(None),
+                    Some(None),
+                    Some(None),
+                    Some(None),
+                )?;
                 Ok(size)
             }
         },

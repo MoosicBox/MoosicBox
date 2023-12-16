@@ -63,6 +63,7 @@ lambda-web = { version = "0.2.1", features = ["actix4"] }
 lambda_runtime = "0.8.2"
 lazy_static = "1.4.0"
 libvips = { git = "https://github.com/BSteffaniak/libvips-rust-bindings.git", branch = "support-windows" }
+lofty = "0.17.1"
 log = { version = "0.4", features = ["release_max_level_trace"] }
 mp3lame-encoder = "0.1.4"
 mysql = { version = "24.0.0", features = [

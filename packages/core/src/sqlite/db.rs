@@ -677,31 +677,60 @@ pub fn get_artist_albums(db: &Connection, artist_id: i32) -> Result<Vec<Album>, 
         .collect())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn set_track_size(
     db: &Connection,
-    id: i32,
+    track_id: i32,
     quality: &PlaybackQuality,
     bytes: u64,
+    bit_depth: Option<Option<u8>>,
+    audio_bitrate: Option<Option<u32>>,
+    overall_bitrate: Option<Option<u32>>,
+    sample_rate: Option<Option<u32>>,
+    channels: Option<Option<u8>>,
 ) -> Result<TrackSize, DbError> {
-    upsert(
-        db,
-        "track_sizes",
-        vec![
-            ("track_id", SqliteValue::Number(id as i64)),
-            (
-                "format",
-                SqliteValue::String(quality.format.as_ref().to_string()),
-            ),
-        ],
-        vec![
-            ("track_id", SqliteValue::Number(id as i64)),
-            (
-                "format",
-                SqliteValue::String(quality.format.as_ref().to_string()),
-            ),
-            ("bytes", SqliteValue::Number(bytes as i64)),
-        ],
-    )
+    let mut filters = vec![
+        ("track_id", SqliteValue::Number(track_id as i64)),
+        (
+            "format",
+            SqliteValue::String(quality.format.as_ref().to_string()),
+        ),
+    ];
+
+    if let Some(bit_depth) = bit_depth {
+        filters.push((
+            "bit_depth",
+            SqliteValue::NumberOpt(bit_depth.map(|x| x as i64)),
+        ));
+    }
+    if let Some(audio_bitrate) = audio_bitrate {
+        filters.push((
+            "audio_bitrate",
+            SqliteValue::NumberOpt(audio_bitrate.map(|x| x as i64)),
+        ));
+    }
+    if let Some(overall_bitrate) = overall_bitrate {
+        filters.push((
+            "overall_bitrate",
+            SqliteValue::NumberOpt(overall_bitrate.map(|x| x as i64)),
+        ));
+    }
+    if let Some(sample_rate) = sample_rate {
+        filters.push((
+            "sample_rate",
+            SqliteValue::NumberOpt(sample_rate.map(|x| x as i64)),
+        ));
+    }
+    if let Some(channels) = channels {
+        filters.push((
+            "channels",
+            SqliteValue::NumberOpt(channels.map(|x| x as i64)),
+        ));
+    }
+
+    let mut values = filters.clone();
+    values.push(("bytes", SqliteValue::Number(bytes as i64)));
+    upsert(db, "track_sizes", filters, values)
 }
 
 pub fn get_track_size(

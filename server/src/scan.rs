@@ -1,4 +1,5 @@
 use audiotags::{AudioTag, Tag};
+use lofty::AudioFile;
 use log::info;
 use moosicbox_core::{
     app::AppState,
@@ -48,16 +49,37 @@ struct ScanTrack {
     name: String,
     bytes: u64,
     duration: f64,
+    bit_depth: Option<u8>,
+    audio_bitrate: Option<u32>,
+    overall_bitrate: Option<u32>,
+    sample_rate: Option<u32>,
+    channels: Option<u8>,
 }
 
 impl ScanTrack {
-    fn new(path: &str, number: u32, name: &str, duration: f64, bytes: u64) -> Self {
+    fn new(
+        path: &str,
+        number: u32,
+        name: &str,
+        duration: f64,
+        bytes: u64,
+        bit_depth: &Option<u8>,
+        audio_bitrate: &Option<u32>,
+        overall_bitrate: &Option<u32>,
+        sample_rate: &Option<u32>,
+        channels: &Option<u8>,
+    ) -> Self {
         Self {
             path: path.to_string(),
             number,
             name: name.to_string(),
             duration,
             bytes,
+            bit_depth: bit_depth.clone(),
+            audio_bitrate: audio_bitrate.clone(),
+            overall_bitrate: overall_bitrate.clone(),
+            sample_rate: sample_rate.clone(),
+            channels: channels.clone(),
         }
     }
 }
@@ -91,6 +113,11 @@ impl ScanAlbum {
         title: &str,
         duration: f64,
         bytes: u64,
+        bit_depth: &Option<u8>,
+        audio_bitrate: &Option<u32>,
+        overall_bitrate: &Option<u32>,
+        sample_rate: &Option<u32>,
+        channels: &Option<u8>,
     ) -> Arc<RwLock<ScanTrack>> {
         if let Some(track) = {
             let tracks = self.tracks.read().unwrap_or_else(|e| e.into_inner());
@@ -105,7 +132,16 @@ impl ScanAlbum {
             track
         } else {
             let track = Arc::new(RwLock::new(ScanTrack::new(
-                path, number, title, duration, bytes,
+                path,
+                number,
+                title,
+                duration,
+                bytes,
+                bit_depth,
+                audio_bitrate,
+                overall_bitrate,
+                sample_rate,
+                channels,
             )));
             self.tracks.write().unwrap().push(track.clone());
 
@@ -360,6 +396,11 @@ pub fn scan(directory: &str, data: &AppState, _token: CancellationToken) -> Resu
                 format: AudioFormat::Source,
             },
             track.bytes,
+            Some(track.bit_depth),
+            Some(track.audio_bitrate),
+            Some(track.overall_bitrate),
+            Some(track.sample_rate),
+            Some(track.channels),
         )
         .unwrap();
     }
@@ -424,6 +465,10 @@ fn scan_track(
     metadata: Metadata,
 ) -> Result<(), ScanError> {
     let tag = Tag::new().read_from_path(path.to_str().unwrap())?;
+    let lofty_tag = lofty::Probe::open(path.clone())
+        .expect("ERROR: Bad path provided!")
+        .read()
+        .expect("ERROR: Failed to read file!");
 
     let duration = if path.to_str().unwrap().ends_with(".mp3") {
         mp3_duration::from_path(path.as_path())
@@ -461,11 +506,22 @@ fn scan_track(
         .unwrap()
         .to_string();
 
+    let audio_bitrate = &lofty_tag.properties().audio_bitrate();
+    let overall_bitrate = &lofty_tag.properties().overall_bitrate();
+    let sample_rate = &lofty_tag.properties().sample_rate();
+    let bit_depth = &lofty_tag.properties().bit_depth();
+    let channels = &lofty_tag.properties().channels();
+
     log::debug!("====== {} ======", path.clone().to_str().unwrap());
     log::debug!("title: {}", title);
     log::debug!("number: {}", number);
     log::debug!("duration: {}", duration);
     log::debug!("bytes: {}", bytes);
+    log::debug!("audio_bitrate: {:?}", audio_bitrate);
+    log::debug!("overall_bitrate: {:?}", overall_bitrate);
+    log::debug!("sample_rate: {:?}", sample_rate);
+    log::debug!("bit_depth: {:?}", bit_depth);
+    log::debug!("channels: {:?}", channels);
     log::debug!("album title: {}", album);
     log::debug!("artist directory name: {}", artist_dir_name);
     log::debug!("album directory name: {}", album_dir_name);
@@ -518,6 +574,11 @@ fn scan_track(
         &title,
         duration,
         bytes,
+        bit_depth,
+        audio_bitrate,
+        overall_bitrate,
+        sample_rate,
+        channels,
     );
 
     Ok(())
@@ -525,12 +586,12 @@ fn scan_track(
 
 static MUSIC_FILE_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r".+\.(flac|m4a|mp3)").unwrap());
 
-type Fnnn = fn(PathBuf, Arc<RwLock<ScanOutput>>, Metadata) -> Result<(), ScanError>;
+type ScanTrackFn = fn(PathBuf, Arc<RwLock<ScanOutput>>, Metadata) -> Result<(), ScanError>;
 
 fn process_dir_entry(
     p: DirEntry,
     output: Arc<RwLock<ScanOutput>>,
-    fun: Fnnn,
+    fun: ScanTrackFn,
 ) -> Result<(), ScanError> {
     let metadata = p.metadata().unwrap();
 
@@ -548,7 +609,7 @@ fn process_dir_entry(
 fn scan_dir(
     path: PathBuf,
     output: Arc<RwLock<ScanOutput>>,
-    fun: Fnnn,
+    fun: ScanTrackFn,
     top: bool,
 ) -> Result<(), ScanError> {
     let dir = match fs::read_dir(path) {
