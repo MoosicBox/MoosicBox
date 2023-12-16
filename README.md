@@ -28,6 +28,11 @@ To-do (in no particular order):
 - Audio file visualization on seek bar
 - End-to-end encryption option
 - Schedule playback
+- Save tracks hosted on server locally on clients
+  - Source quality and/or encoded lossy
+- Enable switching between different bitrates within encodings
+- Enable on the fly switching encoding/bitrates during playback
+- Pre-load next playback track
 
 ## Local Server
 
