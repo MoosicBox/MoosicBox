@@ -5,18 +5,17 @@ name    = "moosicbox_files"
 version = "0.1.0"
 
 [dependencies]
+moosicbox_core             = { path = "../core" }
+moosicbox_image            = { path = "../image", default-features = false }
+moosicbox_stream_utils     = { path = "../stream_utils" }
+moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false }
+
 actix-cors                 = { workspace = true }
 actix-files                = { workspace = true }
 actix-web                  = { workspace = true }
 awc                        = { workspace = true }
 bytes                      = { workspace = true }
-lambda-web                 = { workspace = true }
-lambda_runtime             = { workspace = true }
 log                        = { workspace = true }
-moosicbox_core             = { path = "../core" }
-moosicbox_image            = { path = "../image", default-features = false }
-moosicbox_stream_utils     = { path = "../stream_utils" }
-moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false }
 regex                      = { workspace = true }
 serde                      = { workspace = true, features = ["derive"] }
 serde_json                 = { workspace = true }

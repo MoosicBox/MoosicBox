@@ -5,21 +5,20 @@ name    = "moosicbox_ws"
 version = "0.1.0"
 
 [dependencies]
+moosicbox_core = { path = "../core" }
+
 actix-cors                   = { workspace = true }
 actix-files                  = { workspace = true }
 actix-rt                     = { workspace = true }
 actix-web                    = { workspace = true }
 async-once-cell              = { workspace = true }
-awc                          = "3.0.0-beta.9"
+awc                          = { workspace = true }
 aws-config                   = { workspace = true }
 aws-sdk-apigatewaymanagement = { workspace = true }
-aws_lambda_events            = { workspace = true }
-env_logger.workspace         = true
-lambda_runtime               = "0.8.2"
+env_logger                   = { workspace = true }
 log                          = { workspace = true }
-moosicbox_core               = { path = "../core" }
 once_cell                    = { workspace = true }
-regex                        = "1.9.5"
+regex                        = { workspace = true }
 serde                        = { workspace = true, features = ["derive"] }
 serde_json                   = { workspace = true }
 strum                        = { workspace = true }

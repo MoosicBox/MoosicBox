@@ -5,32 +5,30 @@ name    = "moosicbox_player"
 version = "0.1.0"
 
 [dependencies]
-actix-cors                 = "0.6.4"
-actix-files                = "0.6.2"
-actix-web                  = "4.4.0"
-awc                        = "3.0.0-beta.9"
-bytes                      = { workspace = true }
-crossbeam-channel          = { workspace = true }
-futures                    = { workspace = true }
-lambda-web                 = { version = "0.2.1", features = ["actix4"] }
-lambda_runtime             = "0.8.2"
-lazy_static                = { workspace = true }
-log                        = { workspace = true }
 moosicbox_converter        = { path = "../converter" }
 moosicbox_core             = { path = "../core" }
 moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false }
-once_cell                  = { workspace = true }
-rand.workspace             = true
-reqwest                    = { workspace = true, features = ["json"] }
-serde                      = { workspace = true, features = ["derive"] }
-serde_json                 = { workspace = true }
-symphonia                  = { workspace = true }
-thiserror                  = { workspace = true }
-tokio                      = { workspace = true, features = ["rt", "time", "macros"] }
-tokio-util                 = { workspace = true }
-url                        = { workspace = true }
 
-ogg.workspace = true
+actix-cors        = { workspace = true }
+actix-files       = { workspace = true }
+actix-web         = { workspace = true }
+awc               = { workspace = true }
+bytes             = { workspace = true }
+crossbeam-channel = { workspace = true }
+futures           = { workspace = true }
+lazy_static       = { workspace = true }
+log               = { workspace = true }
+ogg               = { workspace = true }
+once_cell         = { workspace = true }
+rand              = { workspace = true }
+reqwest           = { workspace = true, features = ["json"] }
+serde             = { workspace = true, features = ["derive"] }
+serde_json        = { workspace = true }
+symphonia         = { workspace = true }
+thiserror         = { workspace = true }
+tokio             = { workspace = true, features = ["rt", "time", "macros"] }
+tokio-util        = { workspace = true }
+url               = { workspace = true }
 
 [features]
 default = ["cpal", "aac", "mp3", "opus", "pulseaudio"]

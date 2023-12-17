@@ -10,35 +10,36 @@ name = "moosicbox_tunnel_server"
 path = "src/main.rs"
 
 [dependencies]
-actix-cors          = { workspace = true }
-actix-web           = { workspace = true }
-actix-ws            = { workspace = true }
-aws-config          = { workspace = true }
-aws-sdk-ssm         = { workspace = true }
-bytes               = { workspace = true }
-chrono              = { workspace = true }
-crossbeam-channel   = { workspace = true }
-env_logger          = { workspace = true }
-futures-util        = { workspace = true }
-hex                 = { workspace = true }
-lazy_static         = { workspace = true }
-log                 = { workspace = true }
 moosicbox_env_utils = { path = "../packages/env_utils" }
 moosicbox_tunnel    = { path = "../packages/tunnel", default-features = false }
-mysql               = { workspace = true }
-mysql_common        = { workspace = true }
-once_cell           = { workspace = true }
-qstring             = { workspace = true }
-rand                = { workspace = true }
-serde               = { workspace = true, features = ["derive"] }
-serde_json          = { workspace = true }
-sha2                = { workspace = true }
-strum               = { workspace = true }
-strum_macros        = { workspace = true }
-thiserror           = { workspace = true }
-tokio               = { workspace = true, features = ["rt-multi-thread", "macros"] }
-tokio-util          = { workspace = true }
-uuid                = { workspace = true }
+
+actix-cors        = { workspace = true }
+actix-web         = { workspace = true }
+actix-ws          = { workspace = true }
+aws-config        = { workspace = true }
+aws-sdk-ssm       = { workspace = true }
+bytes             = { workspace = true }
+chrono            = { workspace = true }
+crossbeam-channel = { workspace = true }
+env_logger        = { workspace = true }
+futures-util      = { workspace = true }
+hex               = { workspace = true }
+lazy_static       = { workspace = true }
+log               = { workspace = true }
+mysql             = { workspace = true }
+mysql_common      = { workspace = true }
+once_cell         = { workspace = true }
+qstring           = { workspace = true }
+rand              = { workspace = true }
+serde             = { workspace = true, features = ["derive"] }
+serde_json        = { workspace = true }
+sha2              = { workspace = true }
+strum             = { workspace = true }
+strum_macros      = { workspace = true }
+thiserror         = { workspace = true }
+tokio             = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tokio-util        = { workspace = true }
+uuid              = { workspace = true }
 
 [features]
 default = ["base64"]
