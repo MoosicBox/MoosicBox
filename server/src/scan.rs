@@ -20,7 +20,7 @@ use std::{
     io::Write,
     num::ParseIntError,
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
+    sync::{atomic::AtomicU32, Arc, RwLock},
     thread,
 };
 use thiserror::Error;
@@ -200,12 +200,14 @@ impl ScanArtist {
 #[derive(Clone)]
 struct ScanOutput {
     artists: Arc<RwLock<Vec<Arc<RwLock<ScanArtist>>>>>,
+    count: Arc<AtomicU32>,
 }
 
 impl ScanOutput {
     fn new() -> Self {
         Self {
             artists: Arc::new(RwLock::new(Vec::new())),
+            count: Arc::new(AtomicU32::new(0)),
         }
     }
 
@@ -574,10 +576,16 @@ fn scan_track(
         None => album_artist,
     };
 
-    let artist = output
-        .write()
-        .unwrap_or_else(|e| e.into_inner())
-        .add_artist(&album_artist);
+    let mut output = output.write().unwrap_or_else(|e| e.into_inner());
+
+    let count = output
+        .count
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        + 1;
+
+    log::info!("Scanning track {count}");
+
+    let artist = output.add_artist(&album_artist);
     let mut artist = artist.write().unwrap_or_else(|e| e.into_inner());
     let album = artist.add_album(&album, &date_released, path_album.to_str().unwrap());
     let mut album = album.write().unwrap_or_else(|e| e.into_inner());
