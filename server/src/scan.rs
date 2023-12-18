@@ -6,7 +6,7 @@ use moosicbox_core::{
     sqlite::{
         db::{
             add_album_maps_and_get_albums, add_artist_maps_and_get_artists, add_tracks,
-            set_track_size, DbError, InsertTrack, SqliteValue,
+            set_track_sizes, DbError, InsertTrack, SetTrackSize, SqliteValue,
         },
         models::Track,
     },
@@ -422,22 +422,24 @@ pub fn scan(directory: &str, data: &AppState, token: CancellationToken) -> Resul
     }
 
     let db_track_sizes_start = std::time::SystemTime::now();
-    for (track, db_track) in tracks.iter().zip(db_tracks.iter()) {
-        set_track_size(
-            &library.inner,
-            db_track.id,
-            &PlaybackQuality {
+    let track_sizes = tracks
+        .iter()
+        .zip(db_tracks.iter())
+        .map(|(track, db_track)| SetTrackSize {
+            track_id: db_track.id,
+            quality: PlaybackQuality {
                 format: AudioFormat::Source,
             },
-            track.bytes,
-            Some(track.bit_depth),
-            Some(track.audio_bitrate),
-            Some(track.overall_bitrate),
-            Some(track.sample_rate),
-            Some(track.channels),
-        )
-        .unwrap();
-    }
+            bytes: track.bytes,
+            bit_depth: Some(track.bit_depth),
+            audio_bitrate: Some(track.audio_bitrate),
+            overall_bitrate: Some(track.overall_bitrate),
+            sample_rate: Some(track.sample_rate),
+            channels: Some(track.channels),
+        })
+        .collect::<Vec<_>>();
+
+    set_track_sizes(&library.inner, &track_sizes).unwrap();
 
     let db_track_sizes_end = std::time::SystemTime::now();
     info!(
@@ -591,28 +593,33 @@ fn scan_track(
     let album = artist.add_album(&album, &date_released, path_album.to_str().unwrap());
     let mut album = album.write().unwrap_or_else(|e| e.into_inner());
 
-    log::debug!("cover: {:?}", album.cover);
-
     if album.cover.is_none() && !album.searched_cover {
         album.searched_cover = true;
-        if let Some(artwork) = search_for_artwork(path_album.clone(), "cover", Some(tag)) {
-            album.cover = Some(artwork.file_name().unwrap().to_str().unwrap().to_string());
+        if let Some(cover) = search_for_artwork(path_album.clone(), "cover", Some(tag)) {
+            let cover = Some(cover.file_name().unwrap().to_str().unwrap().to_string());
+
             log::debug!(
-                "Found artwork for {}: {}",
+                "Found album artwork for {}: {:?}",
                 path_album.to_str().unwrap(),
-                album.cover.clone().unwrap()
+                cover
             );
+
+            album.cover = cover;
         }
     }
+
     if artist.cover.is_none() && !artist.searched_cover {
         artist.searched_cover = true;
         if let Some(cover) = search_for_artwork(path_album.clone(), "artist", None) {
-            artist.cover = Some(cover.to_str().unwrap().to_string());
+            let cover = Some(cover.file_name().unwrap().to_str().unwrap().to_string());
+
             log::debug!(
-                "Found cover for {}: {}",
+                "Found artist cover for {}: {:?}",
                 path_album.to_str().unwrap(),
-                artist.cover.clone().unwrap()
+                cover
             );
+
+            artist.cover = cover;
         }
     }
 
