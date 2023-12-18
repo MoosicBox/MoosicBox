@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use super::{
     db::{self, DbError},
-    models::{Album, Artist, Track},
+    models::{Album, Artist},
 };
 
 #[derive(Debug, Error)]
@@ -158,53 +158,6 @@ pub async fn get_albums(data: &AppState) -> Result<Vec<Album>, GetAlbumsError> {
     })
     .await?
     .into_albums()
-    .unwrap())
-}
-
-#[derive(Debug, Error)]
-pub enum GetAlbumTracksError {
-    #[error("Poison error")]
-    Poison,
-    #[error(transparent)]
-    Json(#[from] awc::error::JsonPayloadError),
-    #[error(transparent)]
-    Sqlite(#[from] rusqlite::Error),
-    #[error(transparent)]
-    Db(#[from] DbError),
-    #[error("No DB set")]
-    NoDb,
-}
-
-impl<T> From<PoisonError<T>> for GetAlbumTracksError {
-    fn from(_err: PoisonError<T>) -> Self {
-        Self::Poison
-    }
-}
-
-pub async fn get_album_tracks(
-    album_id: i32,
-    data: &AppState,
-) -> Result<Vec<Track>, GetAlbumTracksError> {
-    let request = CacheRequest {
-        key: format!("sqlite|local_album_tracks|{album_id}"),
-        expiration: Duration::from_secs(5 * 60),
-    };
-
-    Ok(get_or_set_to_cache(request, || async {
-        let library = data
-            .db
-            .as_ref()
-            .ok_or(GetAlbumTracksError::NoDb)?
-            .library
-            .lock()?;
-
-        Ok::<CacheItemType, GetAlbumTracksError>(CacheItemType::AlbumTracks(db::get_album_tracks(
-            &library.inner,
-            album_id,
-        )?))
-    })
-    .await?
-    .into_album_tracks()
     .unwrap())
 }
 

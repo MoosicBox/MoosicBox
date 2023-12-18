@@ -6,6 +6,7 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
+use moosicbox_core::sqlite::menu::get_artist_albums;
 use moosicbox_core::{
     app::AppState,
     sqlite::{
@@ -15,13 +16,15 @@ use moosicbox_core::{
     },
     track_range::{parse_track_id_ranges, ParseTrackIdsError},
 };
-use moosicbox_core::{sqlite::menu::get_album_tracks, sqlite::menu::get_artist_albums};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
 use crate::library::{
-    albums::{get_album_versions, get_all_albums, AlbumFilters, AlbumsRequest, ApiAlbumVersion},
+    albums::{
+        get_album_tracks, get_album_versions, get_all_albums, AlbumFilters, AlbumsRequest,
+        ApiAlbumVersion,
+    },
     artists::{get_all_artists, ArtistFilters, ArtistsRequest},
 };
 
@@ -204,7 +207,6 @@ pub async fn get_album_tracks_endpoint(
 ) -> Result<Json<Vec<ApiTrack>>> {
     Ok(Json(
         get_album_tracks(query.album_id, &data)
-            .await
             .map_err(|_e| ErrorInternalServerError("Failed to fetch tracks"))?
             .into_iter()
             .map(|t| t.to_api())
