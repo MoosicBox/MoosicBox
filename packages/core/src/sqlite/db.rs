@@ -1440,31 +1440,6 @@ pub struct InsertTrack {
     pub file: String,
 }
 
-// pub fn add_tracks(db: &Connection, tracks: Vec<InsertTrack>) -> Result<Vec<Track>, DbError> {
-//     Ok(tracks
-//         .iter()
-//         .map(|insert| {
-//             upsert(
-//                 db,
-//                 "tracks",
-//                 vec![
-//                     ("number", SqliteValue::Number(insert.track.number as i64)),
-//                     ("album_id", SqliteValue::Number(insert.album_id as i64)),
-//                     ("title", SqliteValue::String(insert.track.title.clone())),
-//                 ],
-//                 vec![
-//                     ("number", SqliteValue::Number(insert.track.number as i64)),
-//                     ("duration", SqliteValue::Real(insert.track.duration)),
-//                     ("album_id", SqliteValue::Number(insert.album_id as i64)),
-//                     ("title", SqliteValue::String(insert.track.title.clone())),
-//                     ("file", SqliteValue::String(insert.file.clone())),
-//                 ],
-//             )
-//         })
-//         .filter_map(|track| track.ok())
-//         .collect())
-// }
-
 pub fn add_tracks(db: &Connection, tracks: Vec<InsertTrack>) -> Result<Vec<Track>, DbError> {
     let values = tracks
         .iter()
