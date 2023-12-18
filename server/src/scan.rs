@@ -242,7 +242,7 @@ pub fn scan(directory: &str, data: &AppState, token: CancellationToken) -> Resul
         output.clone(),
         token,
         scan_track,
-        true,
+        Some(10),
     )?;
     let end = std::time::SystemTime::now();
     let output = output.read().unwrap();
@@ -638,7 +638,7 @@ fn process_dir_entry(
     let metadata = p.metadata().unwrap();
 
     if metadata.is_dir() {
-        scan_dir(p.path(), output.clone(), token.clone(), fun, false)?;
+        scan_dir(p.path(), output.clone(), token.clone(), fun, None)?;
     } else if metadata.is_file()
         && MUSIC_FILE_PATTERN.is_match(p.path().file_name().unwrap().to_str().unwrap())
     {
@@ -653,26 +653,27 @@ fn scan_dir(
     output: Arc<RwLock<ScanOutput>>,
     token: CancellationToken,
     fun: ScanTrackFn,
-    top: bool,
+    max_parallel: Option<u8>,
 ) -> Result<(), ScanError> {
     let dir = match fs::read_dir(path) {
         Ok(dir) => dir,
         Err(_err) => return Ok(()),
     };
-    let mut spots = vec![];
-    let mut c = 0;
 
-    for p in dir.filter_map(|p| p.ok()) {
-        if spots.len() < 20 {
-            spots.push(vec![p]);
-        } else {
-            spots[c % 20].push(p);
+    if let Some(max_parallel) = max_parallel {
+        let mut chunks = vec![];
+        let mut c = 0;
+
+        for p in dir.filter_map(|p| p.ok()) {
+            if chunks.len() < (max_parallel as usize) {
+                chunks.push(vec![p]);
+            } else {
+                chunks[c % (max_parallel as usize)].push(p);
+            }
+            c += 1;
         }
-        c += 1;
-    }
 
-    if top {
-        let mut handles = spots
+        let mut handles = chunks
             .into_iter()
             .map(move |batch| {
                 let output = output.clone();
@@ -692,13 +693,11 @@ fn scan_dir(
             cur_thread.join().unwrap();
         }
     } else {
-        for spot in spots {
-            for p in spot {
-                if token.is_cancelled() {
-                    break;
-                }
-                process_dir_entry(p, output.clone(), token.clone(), fun).unwrap();
+        for p in dir.filter_map(|p| p.ok()) {
+            if token.is_cancelled() {
+                break;
             }
+            process_dir_entry(p, output.clone(), token.clone(), fun).unwrap();
         }
     }
 
