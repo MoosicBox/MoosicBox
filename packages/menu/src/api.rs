@@ -21,7 +21,7 @@ use serde_json::Value;
 use thiserror::Error;
 
 use crate::library::{
-    albums::{get_all_albums, AlbumFilters, AlbumsRequest},
+    albums::{get_album_versions, get_all_albums, AlbumFilters, AlbumsRequest, ApiAlbumVersion},
     artists::{get_all_artists, ArtistFilters, ArtistsRequest},
 };
 
@@ -206,6 +206,26 @@ pub async fn get_album_tracks_endpoint(
         get_album_tracks(query.album_id, &data)
             .await
             .map_err(|_e| ErrorInternalServerError("Failed to fetch tracks"))?
+            .into_iter()
+            .map(|t| t.to_api())
+            .collect(),
+    ))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GetAlbumVersionsQuery {
+    album_id: i32,
+}
+
+#[get("/album/versions")]
+pub async fn get_album_versions_endpoint(
+    query: web::Query<GetAlbumVersionsQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<Vec<ApiAlbumVersion>>> {
+    Ok(Json(
+        get_album_versions(query.album_id, &data)
+            .map_err(|_e| ErrorInternalServerError("Failed to fetch album versions"))?
             .into_iter()
             .map(|t| t.to_api())
             .collect(),

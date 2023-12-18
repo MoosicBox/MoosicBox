@@ -1,9 +1,12 @@
+use std::sync::PoisonError;
+
 use moosicbox_core::{
     app::AppState,
     sqlite::{
         db::{get_albums, DbError},
-        models::{Album, AlbumSort, AlbumSource},
+        models::{Album, AlbumSort, AlbumSource, ApiTrack, ToApi, Track},
     },
+    types::AudioFormat,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -118,6 +121,136 @@ pub async fn get_all_albums(
     )?;
 
     Ok(sort_albums(filter_albums(albums, request), request))
+}
+
+#[derive(Debug, Error)]
+pub enum GetAlbumTracksError {
+    #[error("Poison error")]
+    Poison,
+    #[error(transparent)]
+    Json(#[from] awc::error::JsonPayloadError),
+    #[error(transparent)]
+    Db(#[from] DbError),
+    #[error("No DB set")]
+    NoDb,
+}
+
+impl<T> From<PoisonError<T>> for GetAlbumTracksError {
+    fn from(_err: PoisonError<T>) -> Self {
+        Self::Poison
+    }
+}
+
+pub fn get_album_tracks(album_id: i32, data: &AppState) -> Result<Vec<Track>, GetAlbumTracksError> {
+    let library = data
+        .db
+        .as_ref()
+        .ok_or(GetAlbumTracksError::NoDb)?
+        .library
+        .lock()?;
+
+    Ok(moosicbox_core::sqlite::db::get_album_tracks(
+        &library.inner,
+        album_id,
+    )?)
+}
+
+#[derive(Clone)]
+pub struct AlbumVersion {
+    pub tracks: Vec<Track>,
+    pub format: Option<AudioFormat>,
+    pub bit_depth: Option<u8>,
+    pub audio_bitrate: Option<u32>,
+    pub overall_bitrate: Option<u32>,
+    pub sample_rate: Option<u32>,
+    pub channels: Option<u8>,
+}
+
+impl ToApi<ApiAlbumVersion> for AlbumVersion {
+    fn to_api(&self) -> ApiAlbumVersion {
+        ApiAlbumVersion {
+            tracks: self.tracks.iter().map(|track| track.to_api()).collect(),
+            format: self.format,
+            bit_depth: self.bit_depth,
+            audio_bitrate: self.audio_bitrate,
+            overall_bitrate: self.overall_bitrate,
+            sample_rate: self.sample_rate,
+            channels: self.channels,
+        }
+    }
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiAlbumVersion {
+    pub tracks: Vec<ApiTrack>,
+    pub format: Option<AudioFormat>,
+    pub bit_depth: Option<u8>,
+    pub audio_bitrate: Option<u32>,
+    pub overall_bitrate: Option<u32>,
+    pub sample_rate: Option<u32>,
+    pub channels: Option<u8>,
+}
+
+#[derive(Debug, Error)]
+pub enum GetAlbumVersionsError {
+    #[error(transparent)]
+    GetAlbumTracks(#[from] GetAlbumTracksError),
+}
+
+pub fn get_album_versions(
+    album_id: i32,
+    data: &AppState,
+) -> Result<Vec<AlbumVersion>, GetAlbumVersionsError> {
+    let tracks = get_album_tracks(album_id, data)?;
+
+    let mut versions = vec![];
+
+    for track in tracks {
+        if versions.is_empty() {
+            versions.push(AlbumVersion {
+                tracks: vec![track.clone()],
+                format: Some(track.format),
+                bit_depth: track.bit_depth,
+                audio_bitrate: None,
+                overall_bitrate: None,
+                sample_rate: track.sample_rate,
+                channels: track.channels,
+            });
+            continue;
+        }
+
+        if let Some(existing_version) = versions
+            .iter_mut()
+            .find(|v| v.sample_rate == track.sample_rate && v.bit_depth == track.bit_depth)
+        {
+            existing_version.tracks.push(track);
+        } else {
+            versions.push(AlbumVersion {
+                tracks: vec![track.clone()],
+                format: Some(track.format),
+                bit_depth: track.bit_depth,
+                audio_bitrate: None,
+                overall_bitrate: None,
+                sample_rate: track.sample_rate,
+                channels: track.channels,
+            });
+            continue;
+        }
+    }
+
+    versions.sort_by(|a, b| {
+        b.sample_rate
+            .unwrap_or_default()
+            .cmp(&a.sample_rate.unwrap_or_default())
+    });
+    versions.sort_by(|a, b| {
+        b.bit_depth
+            .unwrap_or_default()
+            .cmp(&a.bit_depth.unwrap_or_default())
+    });
+
+    Ok(versions)
 }
 
 #[cfg(test)]
