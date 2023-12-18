@@ -4,7 +4,7 @@ use log::{debug, error, trace};
 use moosicbox_core::{
     app::{Db, DbConnection},
     sqlite::{
-        db::{get_track, get_track_size, get_tracks, set_track_size, DbError},
+        db::{get_track, get_track_size, get_tracks, set_track_size, DbError, SetTrackSize},
         models::Track,
     },
     types::{AudioFormat, PlaybackQuality},
@@ -155,14 +155,16 @@ pub fn get_or_init_track_size(
                 ) as u64;
                 set_track_size(
                     &connection.inner,
-                    track_id,
-                    &quality,
-                    size,
-                    Some(None),
-                    Some(None),
-                    Some(None),
-                    Some(None),
-                    Some(None),
+                    SetTrackSize {
+                        track_id,
+                        quality,
+                        bytes: size,
+                        bit_depth: Some(None),
+                        audio_bitrate: Some(None),
+                        overall_bitrate: Some(None),
+                        sample_rate: Some(None),
+                        channels: Some(None),
+                    },
                 )?;
                 Ok(size)
             }
@@ -174,14 +176,16 @@ pub fn get_or_init_track_size(
                 ) as u64;
                 set_track_size(
                     &connection.inner,
-                    track_id,
-                    &quality,
-                    size,
-                    Some(None),
-                    Some(None),
-                    Some(None),
-                    Some(None),
-                    Some(None),
+                    SetTrackSize {
+                        track_id,
+                        quality,
+                        bytes: size,
+                        bit_depth: Some(None),
+                        audio_bitrate: Some(None),
+                        overall_bitrate: Some(None),
+                        sample_rate: Some(None),
+                        channels: Some(None),
+                    },
                 )?;
                 Ok(size)
             }
@@ -193,14 +197,16 @@ pub fn get_or_init_track_size(
                 ) as u64;
                 set_track_size(
                     &connection.inner,
-                    track_id,
-                    &quality,
-                    size,
-                    Some(None),
-                    Some(None),
-                    Some(None),
-                    Some(None),
-                    Some(None),
+                    SetTrackSize {
+                        track_id,
+                        quality,
+                        bytes: size,
+                        bit_depth: Some(None),
+                        audio_bitrate: Some(None),
+                        overall_bitrate: Some(None),
+                        sample_rate: Some(None),
+                        channels: Some(None),
+                    },
                 )?;
                 Ok(size)
             }
@@ -208,14 +214,16 @@ pub fn get_or_init_track_size(
                 let size = { File::open(path).unwrap().metadata().unwrap().len() };
                 set_track_size(
                     &connection.inner,
-                    track_id,
-                    &quality,
-                    size,
-                    Some(None),
-                    Some(None),
-                    Some(None),
-                    Some(None),
-                    Some(None),
+                    SetTrackSize {
+                        track_id,
+                        quality,
+                        bytes: size,
+                        bit_depth: Some(None),
+                        audio_bitrate: Some(None),
+                        overall_bitrate: Some(None),
+                        sample_rate: Some(None),
+                        channels: Some(None),
+                    },
                 )?;
                 Ok(size)
             }

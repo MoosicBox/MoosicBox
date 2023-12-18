@@ -677,60 +677,86 @@ pub fn get_artist_albums(db: &Connection, artist_id: i32) -> Result<Vec<Album>, 
         .collect())
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn set_track_size(
+pub struct SetTrackSize {
+    pub track_id: i32,
+    pub quality: PlaybackQuality,
+    pub bytes: u64,
+    pub bit_depth: Option<Option<u8>>,
+    pub audio_bitrate: Option<Option<u32>>,
+    pub overall_bitrate: Option<Option<u32>>,
+    pub sample_rate: Option<Option<u32>>,
+    pub channels: Option<Option<u8>>,
+}
+
+pub fn set_track_size(db: &Connection, value: SetTrackSize) -> Result<TrackSize, DbError> {
+    Ok(set_track_sizes(db, &[value])?.first().unwrap().clone())
+}
+
+pub fn set_track_sizes(
     db: &Connection,
-    track_id: i32,
-    quality: &PlaybackQuality,
-    bytes: u64,
-    bit_depth: Option<Option<u8>>,
-    audio_bitrate: Option<Option<u32>>,
-    overall_bitrate: Option<Option<u32>>,
-    sample_rate: Option<Option<u32>>,
-    channels: Option<Option<u8>>,
-) -> Result<TrackSize, DbError> {
-    let mut filters = vec![
-        ("track_id", SqliteValue::Number(track_id as i64)),
-        (
+    values: &[SetTrackSize],
+) -> Result<Vec<TrackSize>, DbError> {
+    let values = values
+        .iter()
+        .map(|v| {
+            let mut values = vec![
+                ("track_id", SqliteValue::Number(v.track_id as i64)),
+                (
+                    "format",
+                    SqliteValue::String(v.quality.format.as_ref().to_string()),
+                ),
+                ("bytes", SqliteValue::Number(v.bytes as i64)),
+            ];
+
+            if let Some(bit_depth) = v.bit_depth {
+                values.push((
+                    "bit_depth",
+                    SqliteValue::NumberOpt(bit_depth.map(|x| x as i64)),
+                ));
+            }
+            if let Some(audio_bitrate) = v.audio_bitrate {
+                values.push((
+                    "audio_bitrate",
+                    SqliteValue::NumberOpt(audio_bitrate.map(|x| x as i64)),
+                ));
+            }
+            if let Some(overall_bitrate) = v.overall_bitrate {
+                values.push((
+                    "overall_bitrate",
+                    SqliteValue::NumberOpt(overall_bitrate.map(|x| x as i64)),
+                ));
+            }
+            if let Some(sample_rate) = v.sample_rate {
+                values.push((
+                    "sample_rate",
+                    SqliteValue::NumberOpt(sample_rate.map(|x| x as i64)),
+                ));
+            }
+            if let Some(channels) = v.channels {
+                values.push((
+                    "channels",
+                    SqliteValue::NumberOpt(channels.map(|x| x as i64)),
+                ));
+            }
+
+            values
+        })
+        .collect::<Vec<_>>();
+
+    upsert_muli(
+        db,
+        "track_sizes",
+        &[
+            "track_id",
             "format",
-            SqliteValue::String(quality.format.as_ref().to_string()),
-        ),
-    ];
-
-    if let Some(bit_depth) = bit_depth {
-        filters.push((
-            "bit_depth",
-            SqliteValue::NumberOpt(bit_depth.map(|x| x as i64)),
-        ));
-    }
-    if let Some(audio_bitrate) = audio_bitrate {
-        filters.push((
             "audio_bitrate",
-            SqliteValue::NumberOpt(audio_bitrate.map(|x| x as i64)),
-        ));
-    }
-    if let Some(overall_bitrate) = overall_bitrate {
-        filters.push((
             "overall_bitrate",
-            SqliteValue::NumberOpt(overall_bitrate.map(|x| x as i64)),
-        ));
-    }
-    if let Some(sample_rate) = sample_rate {
-        filters.push((
+            "bit_depth",
             "sample_rate",
-            SqliteValue::NumberOpt(sample_rate.map(|x| x as i64)),
-        ));
-    }
-    if let Some(channels) = channels {
-        filters.push((
             "channels",
-            SqliteValue::NumberOpt(channels.map(|x| x as i64)),
-        ));
-    }
-
-    let mut values = filters.clone();
-    values.push(("bytes", SqliteValue::Number(bytes as i64)));
-    upsert(db, "track_sizes", filters, values)
+        ],
+        &values,
+    )
 }
 
 pub fn get_track_size(
@@ -835,7 +861,7 @@ where
         build_where_clause(filters),
     ))?;
 
-    bind_values(&mut statement, filters)?;
+    bind_values(&mut statement, filters, false)?;
 
     Ok(statement
         .raw_query()
@@ -881,7 +907,7 @@ fn build_where_props<'a>(values: &'a [(&'a str, SqliteValue)]) -> Vec<String> {
         .collect()
 }
 
-fn build_set_clause<'a>(values: &'a Vec<(&'a str, SqliteValue)>) -> String {
+fn build_set_clause<'a>(values: &'a [(&'a str, SqliteValue)]) -> String {
     if values.is_empty() {
         "".to_string()
     } else {
@@ -919,9 +945,20 @@ fn build_values_clause<'a>(values: &'a Vec<(&'a str, SqliteValue)>) -> String {
 }
 
 fn build_values_props<'a>(values: &'a [(&'a str, SqliteValue)]) -> Vec<String> {
-    let mut i = 0;
+    build_values_props_offset(values, 0, false)
+}
+
+fn build_values_props_offset<'a>(
+    values: &'a [(&'a str, SqliteValue)],
+    offset: u16,
+    constant_inc: bool,
+) -> Vec<String> {
+    let mut i = offset;
     let mut props = Vec::new();
     for (_name, value) in values {
+        if constant_inc {
+            i += 1;
+        }
         props.push(match value {
             SqliteValue::StringOpt(None) => "NULL".to_string(),
             SqliteValue::NumberOpt(None) => "NULL".to_string(),
@@ -929,7 +966,9 @@ fn build_values_props<'a>(values: &'a [(&'a str, SqliteValue)]) -> Vec<String> {
                 format!("strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', '{add}'))")
             }
             _ => {
-                i += 1;
+                if !constant_inc {
+                    i += 1;
+                }
                 format!("?{i}").to_string()
             }
         });
@@ -940,37 +979,53 @@ fn build_values_props<'a>(values: &'a [(&'a str, SqliteValue)]) -> Vec<String> {
 fn bind_values<'a>(
     statement: &mut Statement<'_>,
     values: &'a Vec<(&'a str, SqliteValue)>,
+    constant_inc: bool,
 ) -> Result<(), DbError> {
     let mut i = 1;
     for (_key, value) in values {
         match value {
             SqliteValue::String(value) => {
                 statement.raw_bind_parameter(i, value)?;
-                i += 1;
+                if !constant_inc {
+                    i += 1;
+                }
             }
             SqliteValue::StringOpt(Some(value)) => {
                 statement.raw_bind_parameter(i, value)?;
-                i += 1;
+                if !constant_inc {
+                    i += 1;
+                }
             }
             SqliteValue::StringOpt(None) => (),
             SqliteValue::Bool(value) => {
                 statement.raw_bind_parameter(i, if *value { 1 } else { 0 })?;
-                i += 1;
+                if !constant_inc {
+                    i += 1;
+                }
             }
             SqliteValue::Number(value) => {
                 statement.raw_bind_parameter(i, *value)?;
-                i += 1;
+                if !constant_inc {
+                    i += 1;
+                }
             }
             SqliteValue::NumberOpt(Some(value)) => {
                 statement.raw_bind_parameter(i, *value)?;
-                i += 1;
+                if !constant_inc {
+                    i += 1;
+                }
             }
             SqliteValue::NumberOpt(None) => (),
             SqliteValue::Real(value) => {
                 statement.raw_bind_parameter(i, *value)?;
-                i += 1;
+                if !constant_inc {
+                    i += 1;
+                }
             }
             SqliteValue::NowAdd(_add) => (),
+        }
+        if constant_inc {
+            i += 1;
         }
     }
 
@@ -998,7 +1053,7 @@ where
     );
 
     let mut statement = connection.prepare_cached(&statement)?;
-    bind_values(&mut statement, &values)?;
+    bind_values(&mut statement, &values, false)?;
     let mut query = statement.raw_query();
 
     let value = query.next().transpose().ok_or(DbError::Unknown)??;
@@ -1010,7 +1065,7 @@ fn update_and_get_row<'a, T>(
     connection: &'a Connection,
     table_name: &str,
     id: SqliteValue,
-    values: &Vec<(&'a str, SqliteValue)>,
+    values: &[(&'a str, SqliteValue)],
 ) -> Result<Option<T>, DbError>
 where
     for<'b> Row<'b>: AsModel<T>,
@@ -1031,10 +1086,139 @@ where
     );
 
     let mut statement = connection.prepare_cached(&statement)?;
-    bind_values(&mut statement, &[values.clone(), vec![("id", id)]].concat())?;
+    bind_values(&mut statement, &[values, &[("id", id)]].concat(), false)?;
     let mut query = statement.raw_query();
 
     Ok(query.next()?.map(|row| row.as_model()))
+}
+
+fn upsert_muli<'a, T>(
+    connection: &'a Connection,
+    table_name: &str,
+    unique: &[&str],
+    values: &'a [Vec<(&'a str, SqliteValue)>],
+) -> Result<Vec<T>, DbError>
+where
+    for<'b> Row<'b>: AsModel<T>,
+    T: AsId,
+{
+    let mut results = vec![];
+
+    if values.is_empty() {
+        return Ok(results);
+    }
+
+    let mut pos = 0;
+    let mut i = 0;
+    let mut last_i = i;
+
+    for value in values {
+        let count = value.len();
+        if pos + count >= (i16::MAX - 1) as usize {
+            results.append(&mut upsert_chunk(
+                connection,
+                table_name,
+                unique,
+                &values[last_i..i],
+            )?);
+            last_i = i;
+            pos = 0;
+        }
+        i += 1;
+        pos += count;
+    }
+
+    if i > last_i {
+        results.append(&mut upsert_chunk(
+            connection,
+            table_name,
+            unique,
+            &values[last_i..],
+        )?);
+    }
+
+    Ok(results)
+}
+
+fn upsert_chunk<'a, T>(
+    connection: &'a Connection,
+    table_name: &str,
+    unique: &[&str],
+    values: &'a [Vec<(&'a str, SqliteValue)>],
+) -> Result<Vec<T>, DbError>
+where
+    for<'b> Row<'b>: AsModel<T>,
+    T: AsId,
+{
+    let first = values[0].clone();
+    let expected_value_size = values[0].len();
+
+    if let Some(bad_row) = values.iter().skip(1).find(|v| {
+        v.len() != expected_value_size || v.iter().enumerate().any(|(i, c)| c.0 != first[i].0)
+    }) {
+        log::error!("Bad row: {bad_row:?}. Expected to match schema of first row: {first:?}");
+        return Err(DbError::InvalidRequest);
+    }
+
+    let set_clause = values[0]
+        .iter()
+        .map(|(name, _value)| format!("`{name}` = EXCLUDED.`{name}`"))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let column_names = values[0]
+        .iter()
+        .map(|(key, _v)| format!("`{key}`"))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let values_str_list = values
+        .iter()
+        .enumerate()
+        .map(|(i, v)| {
+            format!(
+                "({})",
+                build_values_props_offset(v, (i * expected_value_size) as u16, true).join(", ")
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let values_str = values_str_list.join(", ");
+
+    let unique_conflict = unique
+        .iter()
+        .map(|name| {
+            if name.starts_with('`') {
+                name.to_string()
+            } else {
+                format!("`{name}`")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let statement = format!(
+        "
+        INSERT INTO {table_name} ({column_names})
+        VALUES {values_str}
+        ON CONFLICT({unique_conflict}) DO UPDATE
+            SET {set_clause}
+        RETURNING *"
+    );
+
+    let all_values = values
+        .iter()
+        .flat_map(|f| f.iter().cloned())
+        .collect::<Vec<_>>();
+
+    let mut statement = connection.prepare_cached(&statement)?;
+    bind_values(&mut statement, &all_values, true)?;
+
+    Ok(statement
+        .raw_query()
+        .mapped(|row| Ok(row.as_model()))
+        .filter_map(|row| row.ok())
+        .collect())
 }
 
 fn upsert<'a, T>(
@@ -1232,27 +1416,44 @@ pub struct InsertTrack {
     pub file: String,
 }
 
+// pub fn add_tracks(db: &Connection, tracks: Vec<InsertTrack>) -> Result<Vec<Track>, DbError> {
+//     Ok(tracks
+//         .iter()
+//         .map(|insert| {
+//             upsert(
+//                 db,
+//                 "tracks",
+//                 vec![
+//                     ("number", SqliteValue::Number(insert.track.number as i64)),
+//                     ("album_id", SqliteValue::Number(insert.album_id as i64)),
+//                     ("title", SqliteValue::String(insert.track.title.clone())),
+//                 ],
+//                 vec![
+//                     ("number", SqliteValue::Number(insert.track.number as i64)),
+//                     ("duration", SqliteValue::Real(insert.track.duration)),
+//                     ("album_id", SqliteValue::Number(insert.album_id as i64)),
+//                     ("title", SqliteValue::String(insert.track.title.clone())),
+//                     ("file", SqliteValue::String(insert.file.clone())),
+//                 ],
+//             )
+//         })
+//         .filter_map(|track| track.ok())
+//         .collect())
+// }
+
 pub fn add_tracks(db: &Connection, tracks: Vec<InsertTrack>) -> Result<Vec<Track>, DbError> {
-    Ok(tracks
+    let values = tracks
         .iter()
         .map(|insert| {
-            upsert(
-                db,
-                "tracks",
-                vec![
-                    ("number", SqliteValue::Number(insert.track.number as i64)),
-                    ("album_id", SqliteValue::Number(insert.album_id as i64)),
-                    ("title", SqliteValue::String(insert.track.title.clone())),
-                ],
-                vec![
-                    ("number", SqliteValue::Number(insert.track.number as i64)),
-                    ("duration", SqliteValue::Real(insert.track.duration)),
-                    ("album_id", SqliteValue::Number(insert.album_id as i64)),
-                    ("title", SqliteValue::String(insert.track.title.clone())),
-                    ("file", SqliteValue::String(insert.file.clone())),
-                ],
-            )
+            vec![
+                ("number", SqliteValue::Number(insert.track.number as i64)),
+                ("duration", SqliteValue::Real(insert.track.duration)),
+                ("album_id", SqliteValue::Number(insert.album_id as i64)),
+                ("title", SqliteValue::String(insert.track.title.clone())),
+                ("file", SqliteValue::String(insert.file.clone())),
+            ]
         })
-        .filter_map(|track| track.ok())
-        .collect())
+        .collect::<Vec<_>>();
+
+    upsert_muli(db, "tracks", &["file"], values.as_slice())
 }
