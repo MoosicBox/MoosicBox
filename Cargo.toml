@@ -64,7 +64,7 @@ lazy_static = "1.4.0"
 libpulse-binding = "2.28.1"
 libpulse-simple-binding = "2.28.1"
 libvips = { git = "https://github.com/BSteffaniak/libvips-rust-bindings.git", branch = "support-windows" }
-lofty = "0.17.1"
+lofty = { git = "https://github.com/BSteffaniak/lofty-rs.git", branch = "master" }
 log = { version = "0.4", features = ["release_max_level_trace"] }
 mp3-duration = "0.1.10"
 mp3lame-encoder = "0.1.4"

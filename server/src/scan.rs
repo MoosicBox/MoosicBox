@@ -1,5 +1,5 @@
 use audiotags::{AudioTag, Tag};
-use lofty::AudioFile;
+use lofty::{AudioFile, ParseOptions};
 use log::info;
 use moosicbox_core::{
     app::AppState,
@@ -510,6 +510,7 @@ fn scan_track(
     let tag = Tag::new().read_from_path(path.to_str().unwrap())?;
     let lofty_tag = lofty::Probe::open(path.clone())
         .expect("ERROR: Bad path provided!")
+        .options(ParseOptions::new().read_picture(false))
         .read()
         .expect("ERROR: Failed to read file!");
 
