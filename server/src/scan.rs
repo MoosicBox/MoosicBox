@@ -530,8 +530,6 @@ fn scan_track(
         .to_string();
     let date_released = tag.date().map(|date| date.to_string());
 
-    let multi_artist_pattern = Regex::new(r"\S,\S").unwrap();
-
     let path_artist = path.clone().parent().unwrap().parent().unwrap().to_owned();
     let artist_dir_name = path_artist
         .file_name()
@@ -571,7 +569,7 @@ fn scan_track(
     log::debug!("date_released: {:?}", date_released);
     log::debug!("contains cover: {:?}", tag.album_cover().is_some());
 
-    let album_artist = match multi_artist_pattern.find(album_artist.as_str()) {
+    let album_artist = match MULTI_ARTIST_PATTERN.find(album_artist.as_str()) {
         Some(comma) => album_artist[..comma.start() + 1].to_string(),
         None => album_artist,
     };
@@ -626,6 +624,7 @@ fn scan_track(
 }
 
 static MUSIC_FILE_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r".+\.(flac|m4a|mp3)").unwrap());
+static MULTI_ARTIST_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\S,\S").unwrap());
 
 type ScanTrackFn = fn(PathBuf, Arc<RwLock<ScanOutput>>, Metadata) -> Result<(), ScanError>;
 
