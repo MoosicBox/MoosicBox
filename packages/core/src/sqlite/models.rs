@@ -4,6 +4,8 @@ use rusqlite::{types::FromSql, Row};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumString;
 
+use crate::types::AudioFormat;
+
 use super::db::{
     get_players, get_session_active_players, get_session_playlist, get_session_playlist_tracks,
     DbError, SqliteValue,
@@ -80,6 +82,13 @@ pub struct Track {
     pub file: Option<String>,
     pub artwork: Option<String>,
     pub blur: bool,
+    pub bytes: u64,
+    pub format: AudioFormat,
+    pub bit_depth: Option<u8>,
+    pub audio_bitrate: Option<u32>,
+    pub overall_bitrate: Option<u32>,
+    pub sample_rate: Option<u32>,
+    pub channels: Option<u8>,
 }
 
 impl AsModel<Track> for Row<'_> {
@@ -97,6 +106,14 @@ impl AsModel<Track> for Row<'_> {
             file: self.get("file").unwrap(),
             artwork: self.get("artwork").unwrap_or_default(),
             blur: self.get::<_, u16>("blur").unwrap_or_default() == 1,
+            bytes: self.get("bytes").unwrap_or_default(),
+            format: AudioFormat::from_str(self.get::<_, String>("format").unwrap().as_str())
+                .unwrap(),
+            bit_depth: self.get("bit_depth").unwrap_or_default(),
+            audio_bitrate: self.get("audio_bitrate").unwrap_or_default(),
+            overall_bitrate: self.get("overall_bitrate").unwrap_or_default(),
+            sample_rate: self.get("sample_rate").unwrap_or_default(),
+            channels: self.get("channels").unwrap_or_default(),
         }
     }
 }
@@ -121,6 +138,13 @@ pub struct ApiTrack {
     pub album_id: i32,
     pub contains_artwork: bool,
     pub blur: bool,
+    pub bytes: u64,
+    pub format: AudioFormat,
+    pub bit_depth: Option<u8>,
+    pub audio_bitrate: Option<u32>,
+    pub overall_bitrate: Option<u32>,
+    pub sample_rate: Option<u32>,
+    pub channels: Option<u8>,
 }
 
 impl ToApi<ApiTrack> for Track {
@@ -137,6 +161,13 @@ impl ToApi<ApiTrack> for Track {
             album_id: self.album_id,
             contains_artwork: self.artwork.is_some(),
             blur: self.blur,
+            bytes: self.bytes,
+            format: self.format,
+            bit_depth: self.bit_depth,
+            audio_bitrate: self.audio_bitrate,
+            overall_bitrate: self.overall_bitrate,
+            sample_rate: self.sample_rate,
+            channels: self.channels,
         }
     }
 }
@@ -397,6 +428,13 @@ impl ToApi<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
                     album_id: 0,
                     contains_artwork: false,
                     blur: false,
+                    bytes: 0,
+                    format: AudioFormat::Source,
+                    bit_depth: None,
+                    audio_bitrate: None,
+                    overall_bitrate: None,
+                    sample_rate: None,
+                    channels: None,
                 })
                 .collect(),
         }

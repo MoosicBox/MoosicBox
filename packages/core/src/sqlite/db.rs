@@ -46,11 +46,19 @@ pub fn get_session_playlist_tracks(
                 albums.date_released as date_released,
                 artists.title as artist,
                 artists.id as artist_id,
-                albums.artwork
+                albums.artwork,
+                track_sizes.format,
+                track_sizes.bytes,
+                track_sizes.bit_depth,
+                track_sizes.audio_bitrate,
+                track_sizes.overall_bitrate,
+                track_sizes.sample_rate,
+                track_sizes.channels
             FROM session_playlist_tracks
             JOIN tracks ON tracks.id=session_playlist_tracks.track_id
             JOIN albums ON albums.id=tracks.album_id
             JOIN artists ON artists.id=albums.artist_id
+            JOIN track_sizes ON tracks.id=track_sizes.track_id AND track_sizes.format='SOURCE'
             WHERE session_playlist_tracks.session_playlist_id=?1
             ORDER BY number ASC
             ",
@@ -651,10 +659,18 @@ pub fn get_album_tracks(db: &Connection, album_id: i32) -> Result<Vec<Track>, Db
                 albums.date_released as date_released,
                 artists.title as artist,
                 artists.id as artist_id,
-                albums.artwork
+                albums.artwork,
+                track_sizes.format,
+                track_sizes.bytes,
+                track_sizes.bit_depth,
+                track_sizes.audio_bitrate,
+                track_sizes.overall_bitrate,
+                track_sizes.sample_rate,
+                track_sizes.channels
             FROM tracks
             JOIN albums ON albums.id=tracks.album_id
             JOIN artists ON artists.id=albums.artist_id
+            JOIN track_sizes ON tracks.id=track_sizes.track_id AND track_sizes.format='SOURCE'
             WHERE tracks.album_id=?1
             ORDER BY number ASC",
         )?
@@ -794,10 +810,18 @@ pub fn get_tracks(db: &Connection, ids: &Vec<i32>) -> Result<Vec<Track>, DbError
                 albums.date_released as date_released,
                 artists.title as artist,
                 artists.id as artist_id,
-                albums.artwork
+                albums.artwork,
+                track_sizes.format,
+                track_sizes.bytes,
+                track_sizes.bit_depth,
+                track_sizes.audio_bitrate,
+                track_sizes.overall_bitrate,
+                track_sizes.sample_rate,
+                track_sizes.channels
             FROM tracks
             JOIN albums ON albums.id=tracks.album_id
             JOIN artists ON artists.id=albums.artist_id
+            JOIN track_sizes ON tracks.id=track_sizes.track_id AND track_sizes.format='SOURCE'
             WHERE tracks.id IN ({ids_param})"
     ))?;
 
