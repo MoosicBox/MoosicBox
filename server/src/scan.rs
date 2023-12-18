@@ -292,7 +292,7 @@ pub fn scan(directory: &str, data: &AppState, token: CancellationToken) -> Resul
         .ok_or(ScanError::NoDb)?
         .library
         .lock()
-        .unwrap();
+        .unwrap_or_else(|e| e.into_inner());
 
     let db_artists_start = std::time::SystemTime::now();
     let db_artists = add_artist_maps_and_get_artists(
