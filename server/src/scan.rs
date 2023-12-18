@@ -281,7 +281,7 @@ pub fn scan(directory: &str, data: &AppState, _token: CancellationToken) -> Resu
         "Finished initial scan in {}ms {artist_count} artists, {album_count} albums, {track_count} tracks",
         end.duration_since(start).unwrap().as_millis()
     );
-    let start = std::time::SystemTime::now();
+    let db_start = std::time::SystemTime::now();
 
     let library = data
         .db
@@ -291,6 +291,7 @@ pub fn scan(directory: &str, data: &AppState, _token: CancellationToken) -> Resu
         .lock()
         .unwrap();
 
+    let db_artists_start = std::time::SystemTime::now();
     let db_artists = add_artist_maps_and_get_artists(
         &library.inner,
         artists
@@ -305,6 +306,15 @@ pub fn scan(directory: &str, data: &AppState, _token: CancellationToken) -> Resu
     )
     .unwrap();
 
+    let db_artists_end = std::time::SystemTime::now();
+    info!(
+        "Finished db artists update for scan in {}ms",
+        db_artists_end
+            .duration_since(db_artists_start)
+            .unwrap()
+            .as_millis()
+    );
+
     if artist_count != db_artists.len() {
         return Err(ScanError::InvalidData(format!(
             "Expected {} artists, but received {}",
@@ -313,6 +323,7 @@ pub fn scan(directory: &str, data: &AppState, _token: CancellationToken) -> Resu
         )));
     }
 
+    let db_albums_start = std::time::SystemTime::now();
     let album_maps = artists
         .iter()
         .zip(db_artists.iter())
@@ -344,6 +355,15 @@ pub fn scan(directory: &str, data: &AppState, _token: CancellationToken) -> Resu
 
     let db_albums = add_album_maps_and_get_albums(&library.inner, album_maps).unwrap();
 
+    let db_albums_end = std::time::SystemTime::now();
+    info!(
+        "Finished db albums update for scan in {}ms",
+        db_albums_end
+            .duration_since(db_albums_start)
+            .unwrap()
+            .as_millis()
+    );
+
     if album_count != db_albums.len() {
         return Err(ScanError::InvalidData(format!(
             "Expected {} albums, but received {}",
@@ -352,6 +372,7 @@ pub fn scan(directory: &str, data: &AppState, _token: CancellationToken) -> Resu
         )));
     }
 
+    let db_tracks_start = std::time::SystemTime::now();
     let insert_tracks = albums
         .iter()
         .zip(db_albums.iter())
@@ -380,6 +401,15 @@ pub fn scan(directory: &str, data: &AppState, _token: CancellationToken) -> Resu
 
     let db_tracks = add_tracks(&library.inner, insert_tracks).unwrap();
 
+    let db_tracks_end = std::time::SystemTime::now();
+    info!(
+        "Finished db tracks update for scan in {}ms",
+        db_tracks_end
+            .duration_since(db_tracks_start)
+            .unwrap()
+            .as_millis()
+    );
+
     if track_count != db_tracks.len() {
         return Err(ScanError::InvalidData(format!(
             "Expected {} tracks, but received {}",
@@ -388,6 +418,7 @@ pub fn scan(directory: &str, data: &AppState, _token: CancellationToken) -> Resu
         )));
     }
 
+    let db_track_sizes_start = std::time::SystemTime::now();
     for (track, db_track) in tracks.iter().zip(db_tracks.iter()) {
         set_track_size(
             &library.inner,
@@ -405,10 +436,19 @@ pub fn scan(directory: &str, data: &AppState, _token: CancellationToken) -> Resu
         .unwrap();
     }
 
+    let db_track_sizes_end = std::time::SystemTime::now();
+    info!(
+        "Finished db track_sizes update for scan in {}ms",
+        db_track_sizes_end
+            .duration_since(db_track_sizes_start)
+            .unwrap()
+            .as_millis()
+    );
+
     let end = std::time::SystemTime::now();
     info!(
         "Finished db update for scan in {}ms. Total scan took {}ms",
-        end.duration_since(start).unwrap().as_millis(),
+        end.duration_since(db_start).unwrap().as_millis(),
         end.duration_since(total_start).unwrap().as_millis()
     );
 
