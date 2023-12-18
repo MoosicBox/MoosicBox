@@ -233,13 +233,14 @@ impl ScanOutput {
     }
 }
 
-pub fn scan(directory: &str, data: &AppState, _token: CancellationToken) -> Result<(), ScanError> {
+pub fn scan(directory: &str, data: &AppState, token: CancellationToken) -> Result<(), ScanError> {
     let total_start = std::time::SystemTime::now();
     let start = std::time::SystemTime::now();
     let output = Arc::new(RwLock::new(ScanOutput::new()));
     scan_dir(
         Path::new(directory).to_path_buf(),
         output.clone(),
+        token,
         scan_track,
         true,
     )?;
@@ -631,12 +632,13 @@ type ScanTrackFn = fn(PathBuf, Arc<RwLock<ScanOutput>>, Metadata) -> Result<(), 
 fn process_dir_entry(
     p: DirEntry,
     output: Arc<RwLock<ScanOutput>>,
+    token: CancellationToken,
     fun: ScanTrackFn,
 ) -> Result<(), ScanError> {
     let metadata = p.metadata().unwrap();
 
     if metadata.is_dir() {
-        scan_dir(p.path(), output.clone(), fun, false)?;
+        scan_dir(p.path(), output.clone(), token.clone(), fun, false)?;
     } else if metadata.is_file()
         && MUSIC_FILE_PATTERN.is_match(p.path().file_name().unwrap().to_str().unwrap())
     {
@@ -649,6 +651,7 @@ fn process_dir_entry(
 fn scan_dir(
     path: PathBuf,
     output: Arc<RwLock<ScanOutput>>,
+    token: CancellationToken,
     fun: ScanTrackFn,
     top: bool,
 ) -> Result<(), ScanError> {
@@ -673,9 +676,13 @@ fn scan_dir(
             .into_iter()
             .map(move |batch| {
                 let output = output.clone();
+                let token = token.clone();
                 thread::spawn(move || {
                     for p in batch {
-                        process_dir_entry(p, output.clone(), fun).unwrap();
+                        if token.is_cancelled() {
+                            break;
+                        }
+                        process_dir_entry(p, output.clone(), token.clone(), fun).unwrap();
                     }
                 })
             })
@@ -687,7 +694,10 @@ fn scan_dir(
     } else {
         for spot in spots {
             for p in spot {
-                process_dir_entry(p, output.clone(), fun).unwrap();
+                if token.is_cancelled() {
+                    break;
+                }
+                process_dir_entry(p, output.clone(), token.clone(), fun).unwrap();
             }
         }
     }
