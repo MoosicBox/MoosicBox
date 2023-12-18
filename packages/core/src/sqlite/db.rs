@@ -1073,7 +1073,7 @@ where
             let str2 = format!("{updated:?}");
 
             if str1 == str2 {
-                debug!("No updates to {table_name}");
+                log::trace!("No updates to {table_name}");
             } else {
                 debug!("Changed {table_name} from {str1} to {str2}");
             }
