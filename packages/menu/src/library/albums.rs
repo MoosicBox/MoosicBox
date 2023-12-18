@@ -210,7 +210,7 @@ pub fn get_album_versions(
         if versions.is_empty() {
             versions.push(AlbumVersion {
                 tracks: vec![track.clone()],
-                format: Some(track.format),
+                format: track.format,
                 bit_depth: track.bit_depth,
                 audio_bitrate: None,
                 overall_bitrate: None,
@@ -228,7 +228,7 @@ pub fn get_album_versions(
         } else {
             versions.push(AlbumVersion {
                 tracks: vec![track.clone()],
-                format: Some(track.format),
+                format: track.format,
                 bit_depth: track.bit_depth,
                 audio_bitrate: None,
                 overall_bitrate: None,

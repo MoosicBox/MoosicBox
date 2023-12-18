@@ -83,7 +83,7 @@ pub struct Track {
     pub artwork: Option<String>,
     pub blur: bool,
     pub bytes: u64,
-    pub format: AudioFormat,
+    pub format: Option<AudioFormat>,
     pub bit_depth: Option<u8>,
     pub audio_bitrate: Option<u32>,
     pub overall_bitrate: Option<u32>,
@@ -107,8 +107,10 @@ impl AsModel<Track> for Row<'_> {
             artwork: self.get("artwork").unwrap_or_default(),
             blur: self.get::<_, u16>("blur").unwrap_or_default() == 1,
             bytes: self.get("bytes").unwrap_or_default(),
-            format: AudioFormat::from_str(self.get::<_, String>("format").unwrap().as_str())
-                .unwrap(),
+            format: self
+                .get::<_, Option<String>>("format")
+                .unwrap_or(None)
+                .map(|s| AudioFormat::from_str(&s).unwrap()),
             bit_depth: self.get("bit_depth").unwrap_or_default(),
             audio_bitrate: self.get("audio_bitrate").unwrap_or_default(),
             overall_bitrate: self.get("overall_bitrate").unwrap_or_default(),
@@ -139,7 +141,7 @@ pub struct ApiTrack {
     pub contains_artwork: bool,
     pub blur: bool,
     pub bytes: u64,
-    pub format: AudioFormat,
+    pub format: Option<AudioFormat>,
     pub bit_depth: Option<u8>,
     pub audio_bitrate: Option<u32>,
     pub overall_bitrate: Option<u32>,
@@ -429,7 +431,7 @@ impl ToApi<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
                     contains_artwork: false,
                     blur: false,
                     bytes: 0,
-                    format: AudioFormat::Source,
+                    format: None,
                     bit_depth: None,
                     audio_bitrate: None,
                     overall_bitrate: None,
