@@ -625,7 +625,9 @@ pub fn get_albums(db: &Connection) -> Result<Vec<Album>, DbError> {
             FROM albums
             JOIN tracks ON tracks.album_id=albums.id
             JOIN track_sizes ON track_sizes.track_id=tracks.id
-            JOIN artists ON artists.id=albums.artist_id",
+            JOIN artists ON artists.id=albums.artist_id
+            ORDER BY albums.id desc
+        ",
     )?
     .query([])?
     .as_model_mut()
@@ -648,7 +650,9 @@ pub fn get_all_album_version_qualities(
             FROM albums
             JOIN tracks ON tracks.album_id=albums.id
             JOIN track_sizes ON track_sizes.track_id=tracks.id
-            WHERE albums.id=({ids_str})",
+            WHERE albums.id=({ids_str})
+            ORDER BY albums.id desc
+            ",
         ))?;
 
     for (i, id) in album_ids.iter().enumerate() {
@@ -775,6 +779,7 @@ pub fn get_artist_albums(db: &Connection, artist_id: i32) -> Result<Vec<Album>, 
             JOIN track_sizes ON track_sizes.track_id=tracks.id
             JOIN artists ON artists.id=albums.artist_id
             WHERE albums.artist_id=?1
+            ORDER BY albums.id desc
         ",
     )?
     .query(params![artist_id])?
