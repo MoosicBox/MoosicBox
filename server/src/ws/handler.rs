@@ -88,7 +88,9 @@ pub async fn chat_ws(
 
             // chat messages received from other room participants
             Either::Left((Either::Right((Some(chat_msg), _)), _)) => {
-                session.text(chat_msg).await.unwrap();
+                if let Err(err) = session.text(chat_msg).await {
+                    log::error!("Failed to send text message: {err:?}");
+                }
             }
 
             // all connection's message senders were dropped
