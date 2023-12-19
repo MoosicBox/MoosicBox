@@ -160,8 +160,6 @@ pub struct AlbumVersion {
     pub tracks: Vec<Track>,
     pub format: Option<AudioFormat>,
     pub bit_depth: Option<u8>,
-    pub audio_bitrate: Option<u32>,
-    pub overall_bitrate: Option<u32>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
 }
@@ -172,8 +170,6 @@ impl ToApi<ApiAlbumVersion> for AlbumVersion {
             tracks: self.tracks.iter().map(|track| track.to_api()).collect(),
             format: self.format,
             bit_depth: self.bit_depth,
-            audio_bitrate: self.audio_bitrate,
-            overall_bitrate: self.overall_bitrate,
             sample_rate: self.sample_rate,
             channels: self.channels,
         }
@@ -199,8 +195,6 @@ pub struct ApiAlbumVersion {
     pub tracks: Vec<ApiTrack>,
     pub format: Option<AudioFormat>,
     pub bit_depth: Option<u8>,
-    pub audio_bitrate: Option<u32>,
-    pub overall_bitrate: Option<u32>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
 }
@@ -225,8 +219,6 @@ pub fn get_album_versions(
                 tracks: vec![track.clone()],
                 format: track.format,
                 bit_depth: track.bit_depth,
-                audio_bitrate: None,
-                overall_bitrate: None,
                 sample_rate: track.sample_rate,
                 channels: track.channels,
             });
@@ -243,8 +235,6 @@ pub fn get_album_versions(
                 tracks: vec![track.clone()],
                 format: track.format,
                 bit_depth: track.bit_depth,
-                audio_bitrate: None,
-                overall_bitrate: None,
                 sample_rate: track.sample_rate,
                 channels: track.channels,
             });
