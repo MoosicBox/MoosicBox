@@ -180,6 +180,19 @@ impl ToApi<ApiAlbumVersion> for AlbumVersion {
     }
 }
 
+pub fn sort_album_versions(versions: &mut [AlbumVersion]) {
+    versions.sort_by(|a, b| {
+        b.sample_rate
+            .unwrap_or_default()
+            .cmp(&a.sample_rate.unwrap_or_default())
+    });
+    versions.sort_by(|a, b| {
+        b.bit_depth
+            .unwrap_or_default()
+            .cmp(&a.bit_depth.unwrap_or_default())
+    });
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiAlbumVersion {
@@ -239,16 +252,7 @@ pub fn get_album_versions(
         }
     }
 
-    versions.sort_by(|a, b| {
-        b.sample_rate
-            .unwrap_or_default()
-            .cmp(&a.sample_rate.unwrap_or_default())
-    });
-    versions.sort_by(|a, b| {
-        b.bit_depth
-            .unwrap_or_default()
-            .cmp(&a.bit_depth.unwrap_or_default())
-    });
+    sort_album_versions(&mut versions);
 
     Ok(versions)
 }

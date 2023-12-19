@@ -11,8 +11,9 @@ use thiserror::Error;
 use crate::types::PlaybackQuality;
 
 use super::models::{
-    ActivePlayer, Album, Artist, AsId, AsModel, AsModelQuery, ClientAccessToken, CreateSession,
-    MagicToken, NumberId, Player, Session, SessionPlaylist, Track, TrackSize, UpdateSession,
+    ActivePlayer, Album, AlbumVersionQuality, Artist, AsId, AsModel, AsModelQuery,
+    AsModelResultMut, ClientAccessToken, CreateSession, MagicToken, NumberId, Player, Session,
+    SessionPlaylist, Track, TrackSize, UpdateSession,
 };
 
 impl<T> From<PoisonError<T>> for DbError {
@@ -612,16 +613,96 @@ pub fn get_artists(db: &Connection) -> Result<Vec<Artist>, DbError> {
 }
 
 pub fn get_albums(db: &Connection) -> Result<Vec<Album>, DbError> {
-    Ok(db
-        .prepare_cached(
-            "
-            SELECT albums.*, artists.title as artist
+    db.prepare_cached(
+        "
+            SELECT DISTINCT
+                albums.*,
+                albums.id as album_id,
+                track_sizes.bit_depth,
+                track_sizes.sample_rate,
+                track_sizes.channels,
+                artists.title as artist
             FROM albums
+            JOIN tracks ON tracks.album_id=albums.id
+            JOIN track_sizes ON track_sizes.track_id=tracks.id
             JOIN artists ON artists.id=albums.artist_id",
-        )?
+    )?
+    .query([])?
+    .as_model_mut()
+}
+
+pub fn get_all_album_version_qualities(
+    db: &Connection,
+    album_ids: Vec<i32>,
+) -> Result<Vec<AlbumVersionQuality>, DbError> {
+    let ids_str = album_ids
+        .iter()
+        .enumerate()
+        .map(|(i, _id)| format!("?{}", i + 1))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut query = db
+        .prepare_cached(&format!(
+            "
+            SELECT DISTINCT albums.id as album_id, track_sizes.bit_depth, track_sizes.sample_rate, track_sizes.channels
+            FROM albums
+            JOIN tracks ON tracks.album_id=albums.id
+            JOIN track_sizes ON track_sizes.track_id=tracks.id
+            WHERE albums.id=({ids_str})",
+        ))?;
+
+    for (i, id) in album_ids.iter().enumerate() {
+        query.raw_bind_parameter(i + 1, id)?;
+    }
+
+    let mut versions = query
         .query_map([], |row| Ok(row.as_model()))?
         .filter_map(|c| c.ok())
-        .collect())
+        .collect::<Vec<_>>();
+
+    versions.sort_by(|a: &AlbumVersionQuality, b: &AlbumVersionQuality| {
+        b.sample_rate
+            .unwrap_or_default()
+            .cmp(&a.sample_rate.unwrap_or_default())
+    });
+    versions.sort_by(|a: &AlbumVersionQuality, b: &AlbumVersionQuality| {
+        b.bit_depth
+            .unwrap_or_default()
+            .cmp(&a.bit_depth.unwrap_or_default())
+    });
+
+    Ok(versions)
+}
+
+pub fn get_album_version_qualities(
+    db: &Connection,
+    album_id: i32,
+) -> Result<Vec<AlbumVersionQuality>, DbError> {
+    let mut versions = db
+        .prepare_cached(
+            "
+            SELECT DISTINCT track_sizes.bit_depth, track_sizes.sample_rate, track_sizes.channels
+            FROM albums
+            JOIN tracks ON tracks.album_id=albums.id
+            JOIN track_sizes ON track_sizes.track_id=tracks.id
+            WHERE albums.id=?1",
+        )?
+        .query_map(params![album_id], |row| Ok(row.as_model()))?
+        .filter_map(|c| c.ok())
+        .collect::<Vec<_>>();
+
+    versions.sort_by(|a: &AlbumVersionQuality, b: &AlbumVersionQuality| {
+        b.sample_rate
+            .unwrap_or_default()
+            .cmp(&a.sample_rate.unwrap_or_default())
+    });
+    versions.sort_by(|a: &AlbumVersionQuality, b: &AlbumVersionQuality| {
+        b.bit_depth
+            .unwrap_or_default()
+            .cmp(&a.bit_depth.unwrap_or_default())
+    });
+
+    Ok(versions)
 }
 
 pub fn get_artist(db: &Connection, id: i32) -> Result<Option<Artist>, DbError> {
@@ -637,16 +718,16 @@ pub fn get_artist(db: &Connection, id: i32) -> Result<Option<Artist>, DbError> {
 }
 
 pub fn get_album(db: &Connection, id: i32) -> Result<Option<Album>, DbError> {
-    Ok(db
-        .prepare_cached(
-            "
+    db.prepare_cached(
+        "
             SELECT albums.*, artists.title as artist
             FROM albums
             JOIN artists ON artists.id=albums.artist_id
             WHERE albums.id=?1",
-        )?
-        .query_map(params![id], |row| Ok(row.as_model()))?
-        .find_map(|row| row.ok()))
+    )?
+    .query_map(params![id], |row| Ok(row.as_model_query(db)))?
+    .find_map(|row| row.ok())
+    .transpose()
 }
 
 pub fn get_album_tracks(db: &Connection, album_id: i32) -> Result<Vec<Track>, DbError> {
@@ -680,17 +761,24 @@ pub fn get_album_tracks(db: &Connection, album_id: i32) -> Result<Vec<Track>, Db
 }
 
 pub fn get_artist_albums(db: &Connection, artist_id: i32) -> Result<Vec<Album>, DbError> {
-    Ok(db
-        .prepare_cached(
-            "
-            SELECT albums.*, artists.title as artist
+    db.prepare_cached(
+        "
+            SELECT DISTINCT
+                albums.*,
+                albums.id as album_id,
+                track_sizes.bit_depth,
+                track_sizes.sample_rate,
+                track_sizes.channels,
+                artists.title as artist
             FROM albums
+            JOIN tracks ON tracks.album_id=albums.id
+            JOIN track_sizes ON track_sizes.track_id=tracks.id
             JOIN artists ON artists.id=albums.artist_id
-            WHERE albums.artist_id=?1",
-        )?
-        .query_map(params![artist_id], |row| Ok(row.as_model()))?
-        .filter_map(|row| row.ok())
-        .collect())
+            WHERE albums.artist_id=?1
+        ",
+    )?
+    .query(params![artist_id])?
+    .as_model_mut()
 }
 
 #[derive(Debug, Clone)]

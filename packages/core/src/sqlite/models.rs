@@ -1,18 +1,26 @@
 use std::str::FromStr;
 
-use rusqlite::{types::FromSql, Row};
+use rusqlite::{types::FromSql, Row, Rows};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumString;
 
 use crate::types::AudioFormat;
 
 use super::db::{
-    get_players, get_session_active_players, get_session_playlist, get_session_playlist_tracks,
-    DbError, SqliteValue,
+    get_album_version_qualities, get_players, get_session_active_players, get_session_playlist,
+    get_session_playlist_tracks, DbError, SqliteValue,
 };
 
 pub trait AsModel<T> {
     fn as_model(&self) -> T;
+}
+
+pub trait AsModelResult<T, E> {
+    fn as_model(&self) -> Result<T, E>;
+}
+
+pub trait AsModelResultMut<T, E> {
+    fn as_model_mut(&mut self) -> Result<T, E>;
 }
 
 pub trait AsId {
@@ -234,6 +242,33 @@ impl ToApi<ApiArtist> for Artist {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+pub struct AlbumVersionQuality {
+    pub bit_depth: Option<u8>,
+    pub sample_rate: Option<u32>,
+    pub channels: Option<u8>,
+}
+
+impl ToApi<ApiAlbumVersionQuality> for AlbumVersionQuality {
+    fn to_api(&self) -> ApiAlbumVersionQuality {
+        ApiAlbumVersionQuality {
+            bit_depth: self.bit_depth,
+            sample_rate: self.sample_rate,
+            channels: self.channels,
+        }
+    }
+}
+
+impl AsModel<AlbumVersionQuality> for Row<'_> {
+    fn as_model(&self) -> AlbumVersionQuality {
+        AlbumVersionQuality {
+            bit_depth: self.get("bit_depth").unwrap_or_default(),
+            sample_rate: self.get("sample_rate").unwrap(),
+            channels: self.get("channels").unwrap(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 pub struct Album {
     pub id: i32,
     pub title: String,
@@ -245,6 +280,7 @@ pub struct Album {
     pub directory: Option<String>,
     pub source: AlbumSource,
     pub blur: bool,
+    pub versions: Vec<AlbumVersionQuality>,
 }
 
 impl AsModel<Album> for Row<'_> {
@@ -260,7 +296,70 @@ impl AsModel<Album> for Row<'_> {
             directory: self.get("directory").unwrap(),
             source: AlbumSource::Local,
             blur: self.get::<_, u16>("blur").unwrap() == 1,
+            versions: vec![],
         }
+    }
+}
+
+pub fn sort_album_versions(versions: &mut [AlbumVersionQuality]) {
+    versions.sort_by(|a, b| {
+        b.sample_rate
+            .unwrap_or_default()
+            .cmp(&a.sample_rate.unwrap_or_default())
+    });
+    versions.sort_by(|a, b| {
+        b.bit_depth
+            .unwrap_or_default()
+            .cmp(&a.bit_depth.unwrap_or_default())
+    });
+}
+
+impl AsModelResultMut<Vec<Album>, DbError> for Rows<'_> {
+    fn as_model_mut(&mut self) -> Result<Vec<Album>, DbError> {
+        let mut results: Vec<Album> = vec![];
+        let mut last_album_id = 0;
+
+        while let Some(row) = self.next()? {
+            let album_id: i32 = row.get("album_id").unwrap();
+
+            if album_id != last_album_id {
+                if let Some(ref mut album) = results.last_mut() {
+                    sort_album_versions(&mut album.versions);
+                }
+                results.push(row.as_model());
+                last_album_id = album_id;
+            }
+
+            if let Some(ref mut album) = results.last_mut() {
+                album.versions.push(row.as_model());
+            }
+        }
+
+        if let Some(ref mut album) = results.last_mut() {
+            sort_album_versions(&mut album.versions);
+        }
+
+        Ok(results)
+    }
+}
+
+impl AsModelQuery<Album> for Row<'_> {
+    fn as_model_query(&self, db: &rusqlite::Connection) -> Result<Album, DbError> {
+        let id = self.get("id").unwrap();
+
+        Ok(Album {
+            id,
+            artist: self.get("artist").unwrap_or_default(),
+            artist_id: self.get("artist_id").unwrap(),
+            title: self.get("title").unwrap(),
+            date_released: self.get("date_released").unwrap(),
+            date_added: self.get("date_added").unwrap(),
+            artwork: self.get("artwork").unwrap(),
+            directory: self.get("directory").unwrap(),
+            source: AlbumSource::Local,
+            blur: self.get::<_, u16>("blur").unwrap() == 1,
+            versions: get_album_version_qualities(db, id)?,
+        })
     }
 }
 
@@ -268,6 +367,14 @@ impl AsId for Album {
     fn as_id(&self) -> SqliteValue {
         SqliteValue::Number(self.id as i64)
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiAlbumVersionQuality {
+    pub bit_depth: Option<u8>,
+    pub sample_rate: Option<u32>,
+    pub channels: Option<u8>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -282,6 +389,7 @@ pub struct ApiAlbum {
     pub date_added: Option<String>,
     pub source: AlbumSource,
     pub blur: bool,
+    pub versions: Vec<ApiAlbumVersionQuality>,
 }
 
 impl ToApi<ApiAlbum> for Album {
@@ -296,6 +404,7 @@ impl ToApi<ApiAlbum> for Album {
             date_added: self.date_added.clone(),
             source: self.source.clone(),
             blur: self.blur,
+            versions: self.versions.iter().map(|v| v.to_api()).collect(),
         }
     }
 }
