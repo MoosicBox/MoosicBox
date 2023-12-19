@@ -62,6 +62,8 @@ pub async fn get_track_source(track_id: i32, db: Db) -> Result<TrackSource, Trac
 
 #[derive(Debug, Error)]
 pub enum TrackInfoError {
+    #[error("Format not supported: {0:?}")]
+    UnsupportedFormat(AudioFormat),
     #[error("Track not found: {0}")]
     NotFound(i32),
     #[error(transparent)]
@@ -168,6 +170,8 @@ pub fn get_or_init_track_size(
                 )?;
                 Ok(size)
             }
+            #[cfg(feature = "flac")]
+            AudioFormat::Flac => Err(TrackInfoError::UnsupportedFormat(quality.format)),
             #[cfg(feature = "mp3")]
             AudioFormat::Mp3 => {
                 let size = moosicbox_symphonia_player::output::encoder::mp3::encoder::encode_mp3(

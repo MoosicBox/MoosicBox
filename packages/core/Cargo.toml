@@ -19,10 +19,11 @@ strum_macros  = { workspace = true }
 thiserror     = { workspace = true }
 
 [features]
-default = ["aac", "mp3", "opus"]
+default = ["aac", "flac", "mp3", "opus"]
 
 fail-on-warnings = []
 
 aac  = []
+flac = []
 mp3  = []
 opus = []

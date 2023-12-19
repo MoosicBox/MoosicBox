@@ -621,7 +621,8 @@ pub fn get_albums(db: &Connection) -> Result<Vec<Album>, DbError> {
                 track_sizes.bit_depth,
                 track_sizes.sample_rate,
                 track_sizes.channels,
-                artists.title as artist
+                artists.title as artist,
+                tracks.format
             FROM albums
             JOIN tracks ON tracks.album_id=albums.id
             JOIN track_sizes ON track_sizes.track_id=tracks.id
@@ -643,17 +644,21 @@ pub fn get_all_album_version_qualities(
         .map(|(i, _id)| format!("?{}", i + 1))
         .collect::<Vec<_>>()
         .join(", ");
-    let mut query = db
-        .prepare_cached(&format!(
-            "
-            SELECT DISTINCT albums.id as album_id, track_sizes.bit_depth, track_sizes.sample_rate, track_sizes.channels
+    let mut query = db.prepare_cached(&format!(
+        "
+            SELECT DISTINCT
+                albums.id as album_id,
+                track_sizes.bit_depth,
+                track_sizes.sample_rate,
+                track_sizes.channels,
+                tracks.format
             FROM albums
             JOIN tracks ON tracks.album_id=albums.id
             JOIN track_sizes ON track_sizes.track_id=tracks.id
             WHERE albums.id=({ids_str})
             ORDER BY albums.id desc
             ",
-        ))?;
+    ))?;
 
     for (i, id) in album_ids.iter().enumerate() {
         query.raw_bind_parameter(i + 1, id)?;
@@ -685,7 +690,11 @@ pub fn get_album_version_qualities(
     let mut versions = db
         .prepare_cached(
             "
-            SELECT DISTINCT track_sizes.bit_depth, track_sizes.sample_rate, track_sizes.channels
+            SELECT DISTINCT 
+                track_sizes.bit_depth,
+                track_sizes.sample_rate,
+                track_sizes.channels,
+                tracks.format
             FROM albums
             JOIN tracks ON tracks.album_id=albums.id
             JOIN track_sizes ON track_sizes.track_id=tracks.id
@@ -773,7 +782,8 @@ pub fn get_artist_albums(db: &Connection, artist_id: i32) -> Result<Vec<Album>, 
                 track_sizes.bit_depth,
                 track_sizes.sample_rate,
                 track_sizes.channels,
-                artists.title as artist
+                artists.title as artist,
+                tracks.format
             FROM albums
             JOIN tracks ON tracks.album_id=albums.id
             JOIN track_sizes ON track_sizes.track_id=tracks.id

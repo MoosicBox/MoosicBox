@@ -9,6 +9,8 @@ use strum_macros::{AsRefStr, EnumString};
 pub enum AudioFormat {
     #[cfg(feature = "aac")]
     Aac,
+    #[cfg(feature = "flac")]
+    Flac,
     #[cfg(feature = "mp3")]
     Mp3,
     #[cfg(feature = "opus")]

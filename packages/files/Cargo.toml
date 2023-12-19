@@ -10,24 +10,24 @@ moosicbox_image            = { path = "../image", default-features = false }
 moosicbox_stream_utils     = { path = "../stream_utils" }
 moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false }
 
-actix-cors                 = { workspace = true }
-actix-files                = { workspace = true }
-actix-web                  = { workspace = true }
-awc                        = { workspace = true }
-bytes                      = { workspace = true }
-log                        = { workspace = true }
-regex                      = { workspace = true }
-serde                      = { workspace = true, features = ["derive"] }
-serde_json                 = { workspace = true }
-strum                      = { workspace = true }
-strum_macros               = { workspace = true }
-symphonia                  = { workspace = true }
-thiserror                  = { workspace = true }
-tokio                      = { workspace = true }
-tokio-stream               = { workspace = true }
+actix-cors   = { workspace = true }
+actix-files  = { workspace = true }
+actix-web    = { workspace = true }
+awc          = { workspace = true }
+bytes        = { workspace = true }
+log          = { workspace = true }
+regex        = { workspace = true }
+serde        = { workspace = true, features = ["derive"] }
+serde_json   = { workspace = true }
+strum        = { workspace = true }
+strum_macros = { workspace = true }
+symphonia    = { workspace = true }
+thiserror    = { workspace = true }
+tokio        = { workspace = true }
+tokio-stream = { workspace = true }
 
 [features]
-default = ["image", "aac", "mp3", "opus"]
+default = ["image", "aac", "flac", "mp3", "opus"]
 
 fail-on-warnings = []
 
@@ -35,5 +35,6 @@ image   = ["moosicbox_image/image"]
 libvips = ["moosicbox_image/libvips"]
 
 aac  = ["moosicbox_symphonia_player/aac"]
+flac = []
 mp3  = ["moosicbox_symphonia_player/mp3"]
 opus = ["moosicbox_symphonia_player/opus"]

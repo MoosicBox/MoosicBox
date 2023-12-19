@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use actix_web::{
     body::SizedStream,
-    error::{ErrorBadRequest, ErrorInternalServerError},
+    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     http::header::{CacheControl, CacheDirective, ContentType},
     route,
     web::{self, Json},
@@ -10,6 +10,7 @@ use actix_web::{
 };
 use moosicbox_core::{
     app::AppState,
+    sqlite::db::get_track,
     track_range::{parse_track_id_ranges, ParseTrackIdsError},
     types::{AudioFormat, PlaybackQuality},
 };
@@ -77,6 +78,32 @@ pub async fn track_endpoint(
                         path,
                     ),
                 ))),
+            #[cfg(feature = "flac")]
+            AudioFormat::Flac => {
+                let track = get_track(
+                    &data
+                        .db
+                        .as_ref()
+                        .ok_or(ErrorInternalServerError("No DB set"))?
+                        .library
+                        .lock()
+                        .unwrap()
+                        .inner,
+                    query.track_id,
+                )
+                .map_err(|e| ErrorInternalServerError(format!("DbError: {}", e)))?
+                .ok_or(ErrorNotFound(format!("Missing track {}", query.track_id)))?;
+
+                if track.format != Some(AudioFormat::Flac) {
+                    return Err(ErrorBadRequest("Unsupported format FLAC"));
+                }
+
+                Ok(
+                    actix_files::NamedFile::open_async(PathBuf::from(path).as_path())
+                        .await?
+                        .into_response(&req),
+                )
+            }
             #[cfg(feature = "mp3")]
             AudioFormat::Mp3 => Ok(HttpResponse::Ok()
                 .insert_header((actix_web::http::header::CONTENT_TYPE, "audio/mp3"))

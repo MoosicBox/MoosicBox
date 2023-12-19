@@ -118,7 +118,9 @@ impl AsModel<Track> for Row<'_> {
             format: self
                 .get::<_, Option<String>>("format")
                 .unwrap_or(None)
-                .map(|s| AudioFormat::from_str(&s).unwrap()),
+                .map(|s| {
+                    AudioFormat::from_str(&s).unwrap_or_else(|_e| panic!("Invalid format: {s}"))
+                }),
             bit_depth: self.get("bit_depth").unwrap_or_default(),
             audio_bitrate: self.get("audio_bitrate").unwrap_or_default(),
             overall_bitrate: self.get("overall_bitrate").unwrap_or_default(),
@@ -243,6 +245,7 @@ impl ToApi<ApiArtist> for Artist {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 pub struct AlbumVersionQuality {
+    pub format: Option<AudioFormat>,
     pub bit_depth: Option<u8>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
@@ -251,6 +254,7 @@ pub struct AlbumVersionQuality {
 impl ToApi<ApiAlbumVersionQuality> for AlbumVersionQuality {
     fn to_api(&self) -> ApiAlbumVersionQuality {
         ApiAlbumVersionQuality {
+            format: self.format,
             bit_depth: self.bit_depth,
             sample_rate: self.sample_rate,
             channels: self.channels,
@@ -261,6 +265,12 @@ impl ToApi<ApiAlbumVersionQuality> for AlbumVersionQuality {
 impl AsModel<AlbumVersionQuality> for Row<'_> {
     fn as_model(&self) -> AlbumVersionQuality {
         AlbumVersionQuality {
+            format: self
+                .get::<_, Option<String>>("format")
+                .unwrap_or(None)
+                .map(|s| {
+                    AudioFormat::from_str(&s).unwrap_or_else(|_e| panic!("Invalid format: {s}"))
+                }),
             bit_depth: self.get("bit_depth").unwrap_or_default(),
             sample_rate: self.get("sample_rate").unwrap(),
             channels: self.get("channels").unwrap(),
@@ -372,6 +382,7 @@ impl AsId for Album {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiAlbumVersionQuality {
+    pub format: Option<AudioFormat>,
     pub bit_depth: Option<u8>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,

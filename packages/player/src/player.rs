@@ -734,6 +734,7 @@ impl Player {
 
                 let query_string = match quality.format {
                     AudioFormat::Aac => query_string + "&format=AAC",
+                    AudioFormat::Flac => query_string + "&format=FLAC",
                     AudioFormat::Mp3 => query_string + "&format=MP3",
                     AudioFormat::Opus => query_string + "&format=OPUS",
                     AudioFormat::Source => query_string,
