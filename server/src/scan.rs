@@ -525,10 +525,14 @@ fn scan_track(
     };
 
     let bytes = metadata.len();
-    let title = tag.title().unwrap().to_string();
+    let title = tag.title().unwrap_or("(untitled)").to_string();
     let number = tag.track_number().unwrap_or(1) as i32;
     let album = tag.album_title().unwrap_or("(none)").to_string();
-    let artist_name = tag.artist().or(tag.album_artist()).unwrap().to_string();
+    let artist_name = tag
+        .artist()
+        .or(tag.album_artist())
+        .unwrap_or("(none)")
+        .to_string();
     let album_artist = tag
         .album_artist()
         .unwrap_or(artist_name.as_str())
