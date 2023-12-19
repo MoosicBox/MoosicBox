@@ -615,7 +615,7 @@ fn scan_track(
     if artist.cover.is_none() && !artist.searched_cover {
         artist.searched_cover = true;
         if let Some(cover) = search_for_artwork(path_album.clone(), "artist", None) {
-            let cover = Some(cover.file_name().unwrap().to_str().unwrap().to_string());
+            let cover = Some(cover.to_str().unwrap().to_string());
 
             log::debug!(
                 "Found artist cover for {}: {:?}",
