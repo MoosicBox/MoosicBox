@@ -20,6 +20,7 @@ use std::{
     io::Write,
     num::ParseIntError,
     path::{Path, PathBuf},
+    str::FromStr,
     sync::{atomic::AtomicU32, Arc, RwLock},
     thread,
 };
@@ -47,8 +48,9 @@ struct ScanTrack {
     path: String,
     number: u32,
     name: String,
-    bytes: u64,
     duration: f64,
+    bytes: u64,
+    format: AudioFormat,
     bit_depth: Option<u8>,
     audio_bitrate: Option<u32>,
     overall_bitrate: Option<u32>,
@@ -63,6 +65,7 @@ impl ScanTrack {
         name: &str,
         duration: f64,
         bytes: u64,
+        format: AudioFormat,
         bit_depth: &Option<u8>,
         audio_bitrate: &Option<u32>,
         overall_bitrate: &Option<u32>,
@@ -75,6 +78,7 @@ impl ScanTrack {
             name: name.to_string(),
             duration,
             bytes,
+            format,
             bit_depth: bit_depth.clone(),
             audio_bitrate: audio_bitrate.clone(),
             overall_bitrate: overall_bitrate.clone(),
@@ -113,6 +117,7 @@ impl ScanAlbum {
         title: &str,
         duration: f64,
         bytes: u64,
+        format: AudioFormat,
         bit_depth: &Option<u8>,
         audio_bitrate: &Option<u32>,
         overall_bitrate: &Option<u32>,
@@ -137,6 +142,7 @@ impl ScanAlbum {
                 title,
                 duration,
                 bytes,
+                format,
                 bit_depth,
                 audio_bitrate,
                 overall_bitrate,
@@ -428,7 +434,7 @@ pub fn scan(directory: &str, data: &AppState, token: CancellationToken) -> Resul
         .map(|(track, db_track)| SetTrackSize {
             track_id: db_track.id,
             quality: PlaybackQuality {
-                format: AudioFormat::Source,
+                format: track.format,
             },
             bytes: track.bytes,
             bit_depth: Some(track.bit_depth),
@@ -524,6 +530,13 @@ fn scan_track(
         tag.duration().unwrap()
     };
 
+    let extension = path
+        .extension()
+        .and_then(std::ffi::OsStr::to_str)
+        .unwrap_or("")
+        .to_uppercase();
+
+    let format = AudioFormat::from_str(&extension).unwrap_or_default();
     let bytes = metadata.len();
     let title = tag.title().unwrap_or("(untitled)").to_string();
     let number = tag.track_number().unwrap_or(1) as i32;
@@ -562,6 +575,7 @@ fn scan_track(
 
     log::debug!("====== {} ======", path.clone().to_str().unwrap());
     log::debug!("title: {}", title);
+    log::debug!("format: {:?}", format);
     log::debug!("number: {}", number);
     log::debug!("duration: {}", duration);
     log::debug!("bytes: {}", bytes);
@@ -633,6 +647,7 @@ fn scan_track(
         &title,
         duration,
         bytes,
+        format,
         bit_depth,
         audio_bitrate,
         overall_bitrate,

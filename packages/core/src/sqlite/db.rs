@@ -59,9 +59,9 @@ pub fn get_session_playlist_tracks(
             JOIN tracks ON tracks.id=session_playlist_tracks.track_id
             JOIN albums ON albums.id=tracks.album_id
             JOIN artists ON artists.id=albums.artist_id
-            JOIN track_sizes ON tracks.id=track_sizes.track_id AND track_sizes.format='SOURCE'
+            JOIN track_sizes ON tracks.id=track_sizes.track_id AND track_sizes.format=tracks.format
             WHERE session_playlist_tracks.session_playlist_id=?1
-            ORDER BY number ASC
+            ORDER BY session_playlist_tracks.id ASC
             ",
         )?
         .query_map(params![session_playlist_id], |row| Ok(row.as_model()))?
@@ -340,9 +340,16 @@ pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<Sessio
         .as_ref()
         .map(|p| {
             let tracks = get_tracks(db, &p.tracks)?;
-            tracks
+
+            let tracks = p
+                .tracks
                 .iter()
-                .map(|track| {
+                .map(|id| tracks.iter().find(|t| t.id == *id).unwrap().clone())
+                .collect::<Vec<_>>();
+
+            p.tracks
+                .iter()
+                .map(|id| {
                     insert_and_get_row::<NumberId>(
                         db,
                         "session_playlist_tracks",
@@ -351,7 +358,7 @@ pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<Sessio
                                 "session_playlist_id",
                                 SqliteValue::Number(playlist_id.unwrap()),
                             ),
-                            ("track_id", SqliteValue::Number(track.id as i64)),
+                            ("track_id", SqliteValue::Number(*id as i64)),
                         ],
                     )
                 })
@@ -764,7 +771,7 @@ pub fn get_album_tracks(db: &Connection, album_id: i32) -> Result<Vec<Track>, Db
             FROM tracks
             JOIN albums ON albums.id=tracks.album_id
             JOIN artists ON artists.id=albums.artist_id
-            JOIN track_sizes ON tracks.id=track_sizes.track_id AND track_sizes.format='SOURCE'
+            JOIN track_sizes ON tracks.id=track_sizes.track_id AND track_sizes.format=tracks.format
             WHERE tracks.album_id=?1
             ORDER BY number ASC",
         )?
@@ -925,7 +932,7 @@ pub fn get_tracks(db: &Connection, ids: &Vec<i32>) -> Result<Vec<Track>, DbError
             FROM tracks
             JOIN albums ON albums.id=tracks.album_id
             JOIN artists ON artists.id=albums.artist_id
-            JOIN track_sizes ON tracks.id=track_sizes.track_id AND track_sizes.format='SOURCE'
+            JOIN track_sizes ON tracks.id=track_sizes.track_id AND track_sizes.format=tracks.format
             WHERE tracks.id IN ({ids_param})"
     ))?;
 
