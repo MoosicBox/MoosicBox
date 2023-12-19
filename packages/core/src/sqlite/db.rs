@@ -693,6 +693,7 @@ pub fn get_artist_albums(db: &Connection, artist_id: i32) -> Result<Vec<Album>, 
         .collect())
 }
 
+#[derive(Debug, Clone)]
 pub struct SetTrackSize {
     pub track_id: i32,
     pub quality: PlaybackQuality,
@@ -764,12 +765,12 @@ pub fn set_track_sizes(
         "track_sizes",
         &[
             "track_id",
-            "format",
-            "audio_bitrate",
-            "overall_bitrate",
-            "bit_depth",
-            "sample_rate",
-            "channels",
+            "ifnull(`format`, '')",
+            "ifnull(`audio_bitrate`, 0)",
+            "ifnull(`overall_bitrate`, 0)",
+            "ifnull(`bit_depth`, 0)",
+            "ifnull(`sample_rate`, 0)",
+            "ifnull(`channels`, 0)",
         ],
         &values,
     )
@@ -1209,17 +1210,7 @@ where
 
     let values_str = values_str_list.join(", ");
 
-    let unique_conflict = unique
-        .iter()
-        .map(|name| {
-            if name.starts_with('`') {
-                name.to_string()
-            } else {
-                format!("`{name}`")
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
+    let unique_conflict = unique.join(", ");
 
     let statement = format!(
         "
