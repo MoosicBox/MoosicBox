@@ -1551,6 +1551,12 @@ pub fn add_tracks(db: &Connection, tracks: Vec<InsertTrack>) -> Result<Vec<Track
                 ("album_id", SqliteValue::Number(insert.album_id as i64)),
                 ("title", SqliteValue::String(insert.track.title.clone())),
                 ("file", SqliteValue::String(insert.file.clone())),
+                (
+                    "format",
+                    SqliteValue::String(
+                        insert.track.format.unwrap_or_default().as_ref().to_string(),
+                    ),
+                ),
             ]
         })
         .collect::<Vec<_>>();

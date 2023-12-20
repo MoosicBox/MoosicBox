@@ -20,7 +20,6 @@ use std::{
     io::Write,
     num::ParseIntError,
     path::{Path, PathBuf},
-    str::FromStr,
     sync::{atomic::AtomicU32, Arc, RwLock},
     thread,
 };
@@ -400,6 +399,7 @@ pub fn scan(directory: &str, data: &AppState, token: CancellationToken) -> Resul
                             number: track.number as i32,
                             title: track.name.clone(),
                             duration: track.duration,
+                            format: Some(track.format),
                             ..Default::default()
                         },
                     }
@@ -536,7 +536,13 @@ fn scan_track(
         .unwrap_or("")
         .to_uppercase();
 
-    let format = AudioFormat::from_str(&extension).unwrap_or_default();
+    let format = match extension.as_str() {
+        "M4A" => AudioFormat::Aac,
+        "FLAC" => AudioFormat::Flac,
+        "MP3" => AudioFormat::Mp3,
+        "OPUS" => AudioFormat::Opus,
+        _ => AudioFormat::Source,
+    };
     let bytes = metadata.len();
     let title = tag.title().unwrap_or("(untitled)").to_string();
     let number = tag.track_number().unwrap_or(1) as i32;
