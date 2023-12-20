@@ -323,7 +323,7 @@ impl Player {
 
     pub fn play_playback(
         &self,
-        playback: Playback,
+        mut playback: Playback,
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
@@ -331,6 +331,8 @@ impl Player {
             debug!("Stopping existing playback {}", playback.id);
             self.stop()?;
         }
+
+        playback.playing = true;
 
         self.active_playback
             .write()
@@ -357,7 +359,13 @@ impl Player {
                 let seek = if seek.is_some() { seek.take() } else { None };
 
                 if let Err(err) = player.start_playback(seek, retry_options).await {
-                    player.active_playback.write().unwrap().take();
+                    player
+                        .active_playback
+                        .write()
+                        .unwrap()
+                        .as_mut()
+                        .unwrap()
+                        .playing = false;
                     return Err(err);
                 }
 
@@ -378,7 +386,13 @@ impl Player {
                 }
             }
 
-            player.active_playback.write().unwrap().take();
+            player
+                .active_playback
+                .write()
+                .unwrap()
+                .as_mut()
+                .unwrap()
+                .playing = false;
             player.sender.send(())?;
 
             Ok::<_, PlayerError>(0)
