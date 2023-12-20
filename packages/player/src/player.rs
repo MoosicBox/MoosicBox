@@ -327,6 +327,7 @@ impl Player {
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
+        info!("Playing playback...");
         if let Ok(playback) = self.get_playback() {
             debug!("Stopping existing playback {}", playback.id);
             self.stop()?;
@@ -351,8 +352,12 @@ impl Player {
         RT.spawn(async move {
             let mut seek = seek;
             let mut playback = playback.clone();
+            let abort = playback.abort;
 
-            while (playback.position as usize) < playback.tracks.len() {
+            while !abort.is_cancelled()
+                && playback.playing
+                && (playback.position as usize) < playback.tracks.len()
+            {
                 let track_or_id = &playback.tracks[playback.position as usize];
                 debug!("track {track_or_id:?} {seek:?}");
 
@@ -369,21 +374,23 @@ impl Player {
                     return Err(err);
                 }
 
-                if playback.abort.is_cancelled() {
+                if abort.is_cancelled() {
                     break;
-                } else {
-                    let mut binding = player.active_playback.write().unwrap();
-                    let active = binding.as_mut().unwrap();
-                    let old = active.clone();
-                    if ((active.position + 1) as usize) < active.tracks.len() {
-                        active.position += 1;
-                        active.progress = 0.0;
-                        trigger_playback_event(active, &old);
-                    } else {
-                        break;
-                    }
-                    playback = active.clone();
                 }
+
+                let mut binding = player.active_playback.write().unwrap();
+                let active = binding.as_mut().unwrap();
+
+                if ((active.position + 1) as usize) >= active.tracks.len() {
+                    break;
+                }
+
+                let old = active.clone();
+                active.position += 1;
+                active.progress = 0.0;
+                trigger_playback_event(active, &old);
+
+                playback = active.clone();
             }
 
             player
@@ -393,6 +400,7 @@ impl Player {
                 .as_mut()
                 .unwrap()
                 .playing = false;
+
             player.sender.send(())?;
 
             Ok::<_, PlayerError>(0)
@@ -561,7 +569,14 @@ impl Player {
             ));
         }
 
-        self.update_playback(Some(playback.position + 1), seek, None, retry_options)
+        self.update_playback(
+            Some(playback.position + 1),
+            seek,
+            None,
+            None,
+            None,
+            retry_options,
+        )
     }
 
     pub fn previous_track(
@@ -576,7 +591,14 @@ impl Player {
             return Err(PlayerError::PositionOutOfBounds(-1));
         }
 
-        self.update_playback(Some(playback.position - 1), seek, None, retry_options)
+        self.update_playback(
+            Some(playback.position - 1),
+            seek,
+            None,
+            None,
+            None,
+            retry_options,
+        )
     }
 
     pub fn update_playback(
@@ -584,10 +606,19 @@ impl Player {
         position: Option<u16>,
         seek: Option<f64>,
         tracks: Option<Vec<TrackOrId>>,
+        quality: Option<PlaybackQuality>,
+        session_id: Option<usize>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
-        info!("Updating playback position {position:?} seek {seek:?}");
-        let playback = self.get_playback()?;
+        info!("Updating playback: position={position:?} seek={seek:?} tracks={tracks:?}");
+        let playback = self.get_playback().unwrap_or_else(|_e| {
+            Playback::new(
+                tracks.clone().unwrap_or_default(),
+                position,
+                quality.unwrap_or_default(),
+                session_id,
+            )
+        });
         let original = playback.clone();
 
         let playback = Playback {

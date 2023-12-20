@@ -227,6 +227,8 @@ pub struct UpdatePlaybackQuery {
     pub seek: Option<f64>,
     pub host: Option<String>,
     pub track_ids: Option<String>,
+    pub quality: Option<PlaybackQuality>,
+    pub session_id: Option<usize>,
 }
 
 #[post("/player/update-playback")]
@@ -259,6 +261,8 @@ pub async fn update_playback_endpoint(
                         ErrorBadRequest(format!("Range too large '{range}'"))
                     }
                 })?,
+            query.quality,
+            query.session_id,
             Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
         )?,
     ))
