@@ -375,6 +375,7 @@ impl Player {
                 }
 
                 if abort.is_cancelled() {
+                    log::debug!("Playback cancelled. Breaking");
                     break;
                 }
 
@@ -382,6 +383,7 @@ impl Player {
                 let active = binding.as_mut().unwrap();
 
                 if ((active.position + 1) as usize) >= active.tracks.len() {
+                    log::debug!("Playback position at end of tracks. Breaking");
                     break;
                 }
 
@@ -392,6 +394,8 @@ impl Player {
 
                 playback = active.clone();
             }
+
+            log::debug!("Finished playback on all tracks");
 
             player
                 .active_playback
