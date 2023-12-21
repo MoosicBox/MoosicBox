@@ -90,7 +90,7 @@ pub struct Playback {
     pub position: u16,
     pub quality: PlaybackQuality,
     pub progress: f64,
-    pub volume: Option<f64>,
+    pub volume: Arc<AtomicF64>,
     pub abort: CancellationToken,
 }
 
@@ -98,7 +98,7 @@ impl Playback {
     pub fn new(
         tracks: Vec<TrackOrId>,
         position: Option<u16>,
-        volume: Option<f64>,
+        volume: AtomicF64,
         quality: PlaybackQuality,
         session_id: Option<usize>,
     ) -> Playback {
@@ -110,7 +110,7 @@ impl Playback {
             position: position.unwrap_or_default(),
             quality,
             progress: 0.0,
-            volume,
+            volume: Arc::new(volume),
             abort: CancellationToken::new(),
         }
     }
@@ -326,7 +326,13 @@ impl Player {
                 })
                 .collect()
         };
-        let playback = Playback::new(tracks, position, volume, quality, session_id);
+        let playback = Playback::new(
+            tracks,
+            position,
+            AtomicF64::new(volume.unwrap_or(1.0)),
+            quality,
+            session_id,
+        );
 
         self.play_playback(playback, seek, retry_options)
     }
@@ -443,7 +449,7 @@ impl Player {
                 let playback = binding.as_ref().unwrap();
                 (
                     playback.quality,
-                    playback.volume,
+                    playback.volume.clone(),
                     playback.abort.clone(),
                     playback.tracks[playback.position as usize].clone(),
                 )
@@ -484,8 +490,6 @@ impl Player {
                 }
             });
 
-            let volume = volume.map(AtomicF64::new);
-
             if let Err(err) = moosicbox_symphonia_player::play_media_source(
                 mss,
                 &playable_track.hint,
@@ -494,7 +498,7 @@ impl Player {
                 true,
                 None,
                 current_seek,
-                &volume,
+                &Some(volume.as_ref()),
                 &handle,
             ) {
                 if retry_options.is_none() {
@@ -640,7 +644,7 @@ impl Player {
             Playback::new(
                 tracks.clone().unwrap_or_default(),
                 position,
-                volume,
+                AtomicF64::new(volume.unwrap_or(1.0)),
                 quality.unwrap_or_default(),
                 session_id,
             )
@@ -654,18 +658,24 @@ impl Player {
             playing: playback.playing,
             quality: playback.quality,
             position: position.unwrap_or(playback.position),
-            volume: volume.or(playback.volume),
             progress: if play {
                 seek.unwrap_or(0.0)
             } else {
                 playback.progress
             },
+            volume: playback.volume,
             abort: if play {
                 CancellationToken::new()
             } else {
                 playback.abort
             },
         };
+
+        if let Some(volume) = volume {
+            playback
+                .volume
+                .store(volume, std::sync::atomic::Ordering::SeqCst);
+        }
 
         trigger_playback_event(&playback, &original);
 

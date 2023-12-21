@@ -96,7 +96,7 @@ pub fn play_file_path_str(
     verify: bool,
     track_num: Option<usize>,
     seek: Option<f64>,
-    volume: &Option<AtomicF64>,
+    volume: &Option<&AtomicF64>,
     handle: &PlaybackHandle<'_>,
 ) -> Result<i32, PlaybackError> {
     // Create a hint to help the format registry guess what format reader is appropriate.
@@ -138,7 +138,7 @@ pub fn play_media_source(
     verify: bool,
     track_num: Option<usize>,
     seek: Option<f64>,
-    volume: &Option<AtomicF64>,
+    volume: &Option<&AtomicF64>,
     handle: &PlaybackHandle<'_>,
 ) -> Result<i32, PlaybackError> {
     // Use the default options for format readers other than for gapless playback.
@@ -195,7 +195,7 @@ fn play(
     track_num: Option<usize>,
     seek_time: Option<f64>,
     decode_opts: &DecoderOptions,
-    volume: &Option<AtomicF64>,
+    volume: &Option<&AtomicF64>,
     handle: &PlaybackHandle<'_>,
 ) -> Result<i32, PlaybackError> {
     // If the user provided a track number, select that track if it exists, otherwise, select the
@@ -296,7 +296,7 @@ fn play_track(
     audio_output_handler: &mut AudioOutputHandler,
     play_opts: PlayTrackOptions,
     decode_opts: &DecoderOptions,
-    volume: &Option<AtomicF64>,
+    volume: &Option<&AtomicF64>,
     handle: &PlaybackHandle<'_>,
 ) -> Result<i32, PlaybackError> {
     // Get the selected track using the track ID.
