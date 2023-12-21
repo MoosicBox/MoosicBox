@@ -436,6 +436,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9338790e78aa95a416786ec8389546c4b6a1dfc3dc36071ed9518a9413a542eb"
 
 [[package]]
+name = "atomic_float"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62af46d040ba9df09edc6528dae9d8e49f5f3e82f55b7d2ec31a733c38dbc49d"
+
+[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2830,6 +2836,7 @@ dependencies = [
  "actix-cors",
  "actix-files",
  "actix-web",
+ "atomic_float",
  "awc",
  "bytes",
  "crossbeam-channel",
@@ -2908,6 +2915,7 @@ name = "moosicbox_symphonia_player"
 version = "0.1.0"
 dependencies = [
  "arrayvec",
+ "atomic_float",
  "bytes",
  "clap 3.2.25",
  "cpal",

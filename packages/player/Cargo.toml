@@ -12,6 +12,7 @@ moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-
 actix-cors        = { workspace = true }
 actix-files       = { workspace = true }
 actix-web         = { workspace = true }
+atomic_float      = { workspace = true }
 awc               = { workspace = true }
 bytes             = { workspace = true }
 crossbeam-channel = { workspace = true }

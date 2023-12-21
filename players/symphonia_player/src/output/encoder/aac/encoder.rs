@@ -172,6 +172,7 @@ pub fn encode_aac<T: std::io::Write + Send + Clone + 'static>(path: String, writ
         true,
         None,
         None,
+        &None,
         &handle,
     ) {
         log::error!("Failed to encode to aac: {err:?}");

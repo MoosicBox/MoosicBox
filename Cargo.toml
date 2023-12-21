@@ -31,6 +31,7 @@ actix-ws = "0.2.5"
 arrayvec = "0.7.1"
 async-once-cell = "0.5.3"
 async-trait = "0.1.74"
+atomic_float = "0.1.0"
 audiopus = "0.2.0"
 audiotags = { git = "https://github.com/BSteffaniak/audiotags.git", branch = "master" }
 awc = "3.0.0-beta.9"

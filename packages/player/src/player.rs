@@ -6,6 +6,7 @@ use std::{
     u16, usize,
 };
 
+use atomic_float::AtomicF64;
 use crossbeam_channel::{bounded, Receiver, SendError, Sender};
 use lazy_static::lazy_static;
 use log::{debug, error, info, trace, warn};
@@ -89,6 +90,7 @@ pub struct Playback {
     pub position: u16,
     pub quality: PlaybackQuality,
     pub progress: f64,
+    pub volume: Option<f64>,
     pub abort: CancellationToken,
 }
 
@@ -96,6 +98,7 @@ impl Playback {
     pub fn new(
         tracks: Vec<TrackOrId>,
         position: Option<u16>,
+        volume: Option<f64>,
         quality: PlaybackQuality,
         session_id: Option<usize>,
     ) -> Playback {
@@ -107,6 +110,7 @@ impl Playback {
             position: position.unwrap_or_default(),
             quality,
             progress: 0.0,
+            volume,
             abort: CancellationToken::new(),
         }
     }
@@ -237,6 +241,7 @@ impl Player {
         album_id: i32,
         position: Option<u16>,
         seek: Option<f64>,
+        volume: Option<f64>,
         quality: PlaybackQuality,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
@@ -254,17 +259,20 @@ impl Player {
             tracks.into_iter().map(TrackOrId::Track).collect(),
             position,
             seek,
+            volume,
             quality,
             retry_options,
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn play_track(
         &self,
         db: Option<Db>,
         session_id: Option<usize>,
         track: TrackOrId,
         seek: Option<f64>,
+        volume: Option<f64>,
         quality: PlaybackQuality,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
@@ -274,6 +282,7 @@ impl Player {
             vec![track],
             None,
             seek,
+            volume,
             quality,
             retry_options,
         )
@@ -287,6 +296,7 @@ impl Player {
         tracks: Vec<TrackOrId>,
         position: Option<u16>,
         seek: Option<f64>,
+        volume: Option<f64>,
         quality: PlaybackQuality,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
@@ -316,7 +326,7 @@ impl Player {
                 })
                 .collect()
         };
-        let playback = Playback::new(tracks, position, quality, session_id);
+        let playback = Playback::new(tracks, position, volume, quality, session_id);
 
         self.play_playback(playback, seek, retry_options)
     }
@@ -428,11 +438,12 @@ impl Player {
             if retry_count > 0 {
                 sleep(retry_options.unwrap().retry_delay).await;
             }
-            let (quality, abort, track_or_id) = {
+            let (quality, volume, abort, track_or_id) = {
                 let binding = self.active_playback.read().unwrap();
                 let playback = binding.as_ref().unwrap();
                 (
                     playback.quality,
+                    playback.volume,
                     playback.abort.clone(),
                     playback.tracks[playback.position as usize].clone(),
                 )
@@ -473,6 +484,8 @@ impl Player {
                 }
             });
 
+            let volume = volume.map(AtomicF64::new);
+
             if let Err(err) = moosicbox_symphonia_player::play_media_source(
                 mss,
                 &playable_track.hint,
@@ -481,6 +494,7 @@ impl Player {
                 true,
                 None,
                 current_seek,
+                &volume,
                 &handle,
             ) {
                 if retry_options.is_none() {
@@ -579,6 +593,7 @@ impl Player {
             None,
             None,
             None,
+            None,
             retry_options,
         )
     }
@@ -601,14 +616,17 @@ impl Player {
             None,
             None,
             None,
+            None,
             retry_options,
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn update_playback(
         &self,
         position: Option<u16>,
         seek: Option<f64>,
+        volume: Option<f64>,
         tracks: Option<Vec<TrackOrId>>,
         quality: Option<PlaybackQuality>,
         session_id: Option<usize>,
@@ -619,6 +637,7 @@ impl Player {
             Playback::new(
                 tracks.clone().unwrap_or_default(),
                 position,
+                volume,
                 quality.unwrap_or_default(),
                 session_id,
             )
@@ -633,6 +652,7 @@ impl Player {
             quality: playback.quality,
             position: position.unwrap_or(playback.position),
             progress: seek.unwrap_or(0.0),
+            volume: volume.or(playback.volume),
             abort: CancellationToken::new(),
         };
 
@@ -671,6 +691,7 @@ impl Player {
                 quality: playback.quality,
                 position: playback.position,
                 progress: playback.progress,
+                volume: playback.volume,
                 abort: CancellationToken::new(),
             });
 
@@ -703,6 +724,7 @@ impl Player {
             position: playback.position,
             quality: playback.quality,
             progress: playback.progress,
+            volume: playback.volume,
             abort: CancellationToken::new(),
         };
 

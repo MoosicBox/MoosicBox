@@ -9,6 +9,7 @@ moosicbox_converter    = { path = "../../packages/converter" }
 moosicbox_stream_utils = { path = "../../packages/stream_utils" }
 
 arrayvec                = { workspace = true, optional = true }
+atomic_float            = { workspace = true }
 bytes                   = { workspace = true }
 clap                    = { workspace = true }
 cpal                    = { workspace = true, optional = true }

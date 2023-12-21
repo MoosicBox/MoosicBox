@@ -94,6 +94,7 @@ pub struct PlayAlbumQuery {
     pub album_id: i32,
     pub position: Option<u16>,
     pub seek: Option<f64>,
+    pub volume: Option<f64>,
     pub host: Option<String>,
     pub format: Option<AudioFormat>,
 }
@@ -109,6 +110,7 @@ pub async fn play_album_endpoint(
         query.album_id,
         query.position,
         query.seek,
+        query.volume,
         PlaybackQuality {
             format: query.format.unwrap_or_default(),
         },
@@ -122,6 +124,7 @@ pub struct PlayTrackQuery {
     pub session_id: Option<usize>,
     pub track_id: i32,
     pub seek: Option<f64>,
+    pub volume: Option<f64>,
     pub host: Option<String>,
     pub format: Option<AudioFormat>,
 }
@@ -136,6 +139,7 @@ pub async fn play_track_endpoint(
         query.session_id,
         TrackOrId::Id(query.track_id),
         query.seek,
+        query.volume,
         PlaybackQuality {
             format: query.format.unwrap_or_default(),
         },
@@ -150,6 +154,7 @@ pub struct PlayTracksQuery {
     pub track_ids: String,
     pub position: Option<u16>,
     pub seek: Option<f64>,
+    pub volume: Option<f64>,
     pub host: Option<String>,
     pub format: Option<AudioFormat>,
 }
@@ -180,6 +185,7 @@ pub async fn play_tracks_endpoint(
                 .collect(),
             query.position,
             query.seek,
+            query.volume,
             PlaybackQuality {
                 format: query.format.unwrap_or_default(),
             },
@@ -225,6 +231,7 @@ pub async fn seek_track_endpoint(
 pub struct UpdatePlaybackQuery {
     pub position: Option<u16>,
     pub seek: Option<f64>,
+    pub volume: Option<f64>,
     pub host: Option<String>,
     pub track_ids: Option<String>,
     pub quality: Option<PlaybackQuality>,
@@ -240,6 +247,7 @@ pub async fn update_playback_endpoint(
         get_player(query.host.clone()).update_playback(
             query.position,
             query.seek,
+            query.volume,
             query
                 .track_ids
                 .clone()
