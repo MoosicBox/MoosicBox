@@ -588,6 +588,7 @@ impl Player {
         }
 
         self.update_playback(
+            true,
             Some(playback.position + 1),
             seek,
             None,
@@ -611,6 +612,7 @@ impl Player {
         }
 
         self.update_playback(
+            true,
             Some(playback.position - 1),
             seek,
             None,
@@ -624,6 +626,7 @@ impl Player {
     #[allow(clippy::too_many_arguments)]
     pub fn update_playback(
         &self,
+        play: bool,
         position: Option<u16>,
         seek: Option<f64>,
         volume: Option<f64>,
@@ -651,14 +654,35 @@ impl Player {
             playing: playback.playing,
             quality: playback.quality,
             position: position.unwrap_or(playback.position),
-            progress: seek.unwrap_or(0.0),
             volume: volume.or(playback.volume),
-            abort: CancellationToken::new(),
+            progress: if play {
+                seek.unwrap_or(0.0)
+            } else {
+                playback.progress
+            },
+            abort: if play {
+                CancellationToken::new()
+            } else {
+                playback.abort
+            },
         };
 
         trigger_playback_event(&playback, &original);
 
-        self.play_playback(playback, seek, retry_options)
+        let playback_id = playback.id;
+
+        if play {
+            self.play_playback(playback, seek, retry_options)
+        } else {
+            self.active_playback
+                .write()
+                .unwrap()
+                .replace(playback.clone());
+            Ok(PlaybackStatus {
+                success: true,
+                playback_id,
+            })
+        }
     }
 
     pub fn pause_playback(&self) -> Result<PlaybackStatus, PlayerError> {
