@@ -985,14 +985,14 @@ fn select<T>(
     connection: &Connection,
     table_name: &str,
     filters: &Vec<(&str, SqliteValue)>,
-    values: &[&str],
+    columns: &[&str],
 ) -> Result<Vec<T>, DbError>
 where
     for<'b> Row<'b>: AsModel<T>,
 {
     let mut statement = connection.prepare_cached(&format!(
         "SELECT {} FROM {table_name} {}",
-        values.join(" AND "),
+        columns.join(", "),
         build_where_clause(filters),
     ))?;
 
