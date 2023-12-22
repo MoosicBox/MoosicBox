@@ -515,6 +515,7 @@ pub fn update_session(
 
     let response = ApiUpdateSession {
         session_id: session.id,
+        play: payload.play,
         name: payload.name.clone().map(|_| session.name),
         active: payload.active.map(|_| session.active),
         playing: payload.playing.map(|_| session.playing),

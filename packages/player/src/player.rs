@@ -974,6 +974,7 @@ fn trigger_playback_event(current: &Playback, previous: &Playback) {
 
     let update = UpdateSession {
         session_id: session_id as i32,
+        play: None,
         name: None,
         active: None,
         playing,

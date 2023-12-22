@@ -497,6 +497,8 @@ pub struct CreateSessionPlaylist {
 pub struct UpdateSession {
     pub session_id: i32,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub play: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub active: Option<bool>,
@@ -514,6 +516,7 @@ impl ToApi<ApiUpdateSession> for UpdateSession {
     fn to_api(&self) -> ApiUpdateSession {
         ApiUpdateSession {
             session_id: self.session_id,
+            play: self.play,
             name: self.name.clone(),
             active: self.active,
             playing: self.playing,
@@ -567,6 +570,8 @@ impl ToApi<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
 #[serde(rename_all = "camelCase")]
 pub struct ApiUpdateSession {
     pub session_id: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub play: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
