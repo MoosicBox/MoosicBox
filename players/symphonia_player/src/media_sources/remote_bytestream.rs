@@ -26,6 +26,7 @@ pub struct RemoteByteStream {
     size: Option<u64>,
     read_position: usize,
     fetcher: RemoteByteStreamFetcher,
+    abort: CancellationToken,
 }
 
 struct RemoteByteStreamFetcher {
@@ -39,10 +40,17 @@ struct RemoteByteStreamFetcher {
     sender: Sender<Bytes>,
     abort_handle: Option<JoinHandle<()>>,
     abort: CancellationToken,
+    stream_abort: CancellationToken,
 }
 
 impl RemoteByteStreamFetcher {
-    pub fn new(url: String, start: u64, end: Option<u64>, autostart: bool) -> Self {
+    pub fn new(
+        url: String,
+        start: u64,
+        end: Option<u64>,
+        autostart: bool,
+        stream_abort: CancellationToken,
+    ) -> Self {
         let (tx, rx) = bounded(1);
         let (tx_ready, rx_ready) = bounded(1);
 
@@ -57,6 +65,7 @@ impl RemoteByteStreamFetcher {
             sender: tx,
             abort_handle: None,
             abort: CancellationToken::new(),
+            stream_abort,
         };
 
         if autostart {
@@ -71,6 +80,7 @@ impl RemoteByteStreamFetcher {
         let sender = self.sender.clone();
         let ready_receiver = self.ready_receiver.clone();
         let abort = self.abort.clone();
+        let stream_abort = self.stream_abort.clone();
         let start = self.start;
         let end = self.end;
         let bytes_range = format!(
@@ -92,7 +102,7 @@ impl RemoteByteStreamFetcher {
                 .bytes_stream();
 
             while let Some(item) = stream.next().await {
-                if abort.is_cancelled() {
+                if abort.is_cancelled() || stream_abort.is_cancelled() {
                     debug!("ABORTING");
                     break;
                 }
@@ -104,8 +114,11 @@ impl RemoteByteStreamFetcher {
                 }
             }
 
-            if abort.is_cancelled() {
+            if abort.is_cancelled() || stream_abort.is_cancelled() {
                 debug!("ABORTED");
+                if let Err(err) = sender.send(Bytes::new()) {
+                    log::warn!("Failed to send empty bytes: {err:?}");
+                }
             } else {
                 debug!("Finished reading from stream");
                 if sender.send(Bytes::new()).is_ok() && ready_receiver.recv().is_err() {
@@ -136,13 +149,19 @@ impl Drop for RemoteByteStreamFetcher {
 }
 
 impl RemoteByteStream {
-    pub fn new(url: String, size: Option<u64>, autostart_fetch: bool) -> Self {
+    pub fn new(
+        url: String,
+        size: Option<u64>,
+        autostart_fetch: bool,
+        abort: CancellationToken,
+    ) -> Self {
         RemoteByteStream {
             url: url.clone(),
             finished: false,
             size,
             read_position: 0,
-            fetcher: RemoteByteStreamFetcher::new(url, 0, size, autostart_fetch),
+            fetcher: RemoteByteStreamFetcher::new(url, 0, size, autostart_fetch, abort.clone()),
+            abort,
         }
     }
 }
@@ -233,8 +252,13 @@ impl Seek for RemoteByteStream {
         info!("Seeking: pos[{seek_position}] type[{pos:?}]");
 
         self.read_position = seek_position;
-        self.fetcher =
-            RemoteByteStreamFetcher::new(self.url.clone(), seek_position as u64, self.size, true);
+        self.fetcher = RemoteByteStreamFetcher::new(
+            self.url.clone(),
+            seek_position as u64,
+            self.size,
+            true,
+            self.abort.clone(),
+        );
 
         Ok(seek_position as u64)
     }

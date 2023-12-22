@@ -872,7 +872,17 @@ impl Player {
                     .unwrap();
                 let url = format!("{host}/track{query_string}");
 
-                let source = Box::new(RemoteByteStream::new(url, Some(size), true));
+                let source = Box::new(RemoteByteStream::new(
+                    url,
+                    Some(size),
+                    true,
+                    self.active_playback
+                        .read()
+                        .unwrap()
+                        .as_ref()
+                        .map(|p| p.abort.clone())
+                        .unwrap_or_default(),
+                ));
 
                 PlayableTrack {
                     track_id,
