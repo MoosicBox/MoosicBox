@@ -106,7 +106,7 @@ impl Playback {
             id: thread_rng().gen::<usize>(),
             session_id,
             tracks,
-            playing: true,
+            playing: false,
             position: position.unwrap_or_default(),
             quality,
             progress: 0.0,
@@ -158,7 +158,7 @@ pub struct PlaybackStatus {
 
 #[derive(Debug, Clone)]
 pub enum TrackOrId {
-    Track(Track),
+    Track(Box<Track>),
     Id(i32),
 }
 
@@ -256,7 +256,11 @@ impl Player {
         self.play_tracks(
             Some(db),
             session_id,
-            tracks.into_iter().map(TrackOrId::Track).collect(),
+            tracks
+                .into_iter()
+                .map(Box::new)
+                .map(TrackOrId::Track)
+                .collect(),
             position,
             seek,
             volume,
@@ -320,7 +324,7 @@ impl Player {
                             })
                             .expect("Failed to fetch track");
                         debug!("Got track {track:?}");
-                        TrackOrId::Track(track.expect("Track doesn't exist"))
+                        TrackOrId::Track(Box::new(track.expect("Track doesn't exist")))
                     }
                     TrackOrId::Track(track) => TrackOrId::Track(track.clone()),
                 })
@@ -349,6 +353,14 @@ impl Player {
             self.stop()?;
         }
 
+        if playback.tracks.is_empty() {
+            log::debug!("No tracks to play for {playback:?}");
+            return Ok(PlaybackStatus {
+                success: true,
+                playback_id: playback.id,
+            });
+        }
+
         playback.playing = true;
 
         self.active_playback
@@ -368,7 +380,7 @@ impl Player {
         RT.spawn(async move {
             let mut seek = seek;
             let mut playback = playback.clone();
-            let abort = playback.abort;
+            let abort = playback.abort.clone();
 
             while !abort.is_cancelled()
                 && playback.playing
@@ -380,6 +392,7 @@ impl Player {
                 let seek = if seek.is_some() { seek.take() } else { None };
 
                 if let Err(err) = player.start_playback(seek, retry_options).await {
+                    log::error!("Playback error occurred: {err:?}");
                     player
                         .active_playback
                         .write()
@@ -387,6 +400,7 @@ impl Player {
                         .as_mut()
                         .unwrap()
                         .playing = false;
+                    player.sender.send(())?;
                     return Err(err);
                 }
 
@@ -411,7 +425,13 @@ impl Player {
                 playback = active.clone();
             }
 
-            log::debug!("Finished playback on all tracks");
+            log::debug!(
+                "Finished playback on all tracks. aborted={} playing={} position={} len={}",
+                abort.is_cancelled(),
+                playback.playing,
+                playback.position,
+                playback.tracks.len()
+            );
 
             player
                 .active_playback
@@ -549,22 +569,30 @@ impl Player {
         info!("Stopping playback for playback_id");
         let playback = self.get_playback()?;
 
-        debug!("Stopping playback {playback:?}");
+        debug!("Aborting playback {playback:?} for stop");
         playback.abort.cancel();
 
         if !playback.playing {
-            debug!("Playback {playback:?} not playing");
+            debug!("Playback not playing: {playback:?}");
             return Ok(playback);
         }
 
         trace!("Waiting for playback completion response");
         if let Err(err) = self
             .receiver
-            .recv_timeout(std::time::Duration::from_secs(2))
+            .recv_timeout(std::time::Duration::from_secs(5))
         {
-            error!("Sender correlated with receiver has dropped: {err:?}");
+            match err {
+                crossbeam_channel::RecvTimeoutError::Timeout => {
+                    log::error!("Playback timed out waiting for abort completion")
+                }
+                crossbeam_channel::RecvTimeoutError::Disconnected => {
+                    log::error!("Sender associated with playback disconnected")
+                }
+            }
+        } else {
+            trace!("Playback successfully stopped");
         }
-        trace!("Playback successfully stopped");
 
         Ok(playback)
     }
@@ -599,7 +627,9 @@ impl Player {
         }
 
         self.update_playback(
-            true,
+            Some(true),
+            None,
+            None,
             Some(playback.position + 1),
             seek,
             None,
@@ -623,7 +653,9 @@ impl Player {
         }
 
         self.update_playback(
-            true,
+            Some(true),
+            None,
+            None,
             Some(playback.position - 1),
             seek,
             None,
@@ -637,7 +669,9 @@ impl Player {
     #[allow(clippy::too_many_arguments)]
     pub fn update_playback(
         &self,
-        play: bool,
+        play: Option<bool>,
+        stop: Option<bool>,
+        playing: Option<bool>,
         position: Option<u16>,
         seek: Option<f64>,
         volume: Option<f64>,
@@ -646,8 +680,45 @@ impl Player {
         session_id: Option<usize>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
-        info!("Updating playback: position={position:?} seek={seek:?} tracks={tracks:?}");
-        let playback = self.get_playback().unwrap_or_else(|_e| {
+        log::debug!(
+            "\
+            update_playback:\n\t\
+            play={play:?}\n\t\
+            stop={stop:?}\n\t\
+            playing={playing:?}\n\t\
+            position={position:?}\n\t\
+            seek={seek:?}\n\t\
+            volume={volume:?}\n\t\
+            tracks={tracks:?}\n\t\
+            quality={quality:?}\n\t\
+            session_id={session_id:?}\
+            "
+        );
+
+        if stop.unwrap_or(false) {
+            return Ok(PlaybackStatus {
+                success: true,
+                playback_id: self.stop()?.id,
+            });
+        }
+
+        let mut should_play = play.unwrap_or(false);
+
+        let playback = if let Ok(playback) = self.get_playback() {
+            log::trace!("update_playback: existing playback={playback:?}");
+            if playback.playing {
+                if let Some(false) = playing {
+                    self.stop()?;
+                }
+            } else {
+                should_play = should_play || playing.unwrap_or(false);
+            }
+
+            playback
+        } else {
+            log::trace!("update_playback: no existing playback");
+            should_play = should_play || playing.unwrap_or(false);
+
             Playback::new(
                 tracks.clone().unwrap_or_default(),
                 position,
@@ -655,23 +726,26 @@ impl Player {
                 quality.unwrap_or_default(),
                 session_id,
             )
-        });
+        };
+
+        log::debug!("update_playback: should_play={should_play}");
+
         let original = playback.clone();
 
         let playback = Playback {
             id: playback.id,
             session_id: playback.session_id,
             tracks: tracks.unwrap_or_else(|| playback.tracks.clone()),
-            playing: playback.playing,
-            quality: playback.quality,
+            playing: playing.unwrap_or(playback.playing),
+            quality: quality.unwrap_or(playback.quality),
             position: position.unwrap_or(playback.position),
-            progress: if play {
+            progress: if play.unwrap_or(false) {
                 seek.unwrap_or(0.0)
             } else {
-                playback.progress
+                seek.unwrap_or(playback.progress)
             },
             volume: playback.volume,
-            abort: if play {
+            abort: if should_play {
                 CancellationToken::new()
             } else {
                 playback.abort
@@ -687,14 +761,21 @@ impl Player {
         trigger_playback_event(&playback, &original);
 
         let playback_id = playback.id;
+        let seek = if playback.progress != 0.0 {
+            Some(playback.progress)
+        } else {
+            None
+        };
 
-        if play {
+        if should_play {
             self.play_playback(playback, seek, retry_options)
         } else {
+            log::debug!("update_playback: updating active playback to {playback:?}");
             self.active_playback
                 .write()
                 .unwrap()
                 .replace(playback.clone());
+
             Ok(PlaybackStatus {
                 success: true,
                 playback_id,
@@ -708,6 +789,7 @@ impl Player {
 
         let id = playback.id;
 
+        info!("Aborting playback id {id} for pause");
         playback.abort.cancel();
 
         if !playback.playing {
@@ -940,10 +1022,12 @@ impl Player {
     }
 }
 
-static PLAYBACK_EVENT_LISTENERS: Lazy<Arc<RwLock<Vec<fn(&UpdateSession, &Playback)>>>> =
+type PlaybackEventCallback = fn(&UpdateSession, &Playback);
+
+static PLAYBACK_EVENT_LISTENERS: Lazy<Arc<RwLock<Vec<PlaybackEventCallback>>>> =
     Lazy::new(|| Arc::new(RwLock::new(Vec::new())));
 
-pub fn on_playback_event(listener: fn(&UpdateSession, &Playback)) {
+pub fn on_playback_event(listener: PlaybackEventCallback) {
     PLAYBACK_EVENT_LISTENERS.write().unwrap().push(listener);
 }
 
@@ -992,6 +1076,7 @@ fn trigger_playback_event(current: &Playback, previous: &Playback) {
     let update = UpdateSession {
         session_id: session_id as i32,
         play: None,
+        stop: None,
         name: None,
         active: None,
         playing,

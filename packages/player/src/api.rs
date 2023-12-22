@@ -230,6 +230,8 @@ pub async fn seek_track_endpoint(
 #[serde(rename_all = "camelCase")]
 pub struct UpdatePlaybackQuery {
     pub play: Option<bool>,
+    pub stop: Option<bool>,
+    pub playing: Option<bool>,
     pub position: Option<u16>,
     pub seek: Option<f64>,
     pub volume: Option<f64>,
@@ -246,7 +248,9 @@ pub async fn update_playback_endpoint(
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(
         get_player(query.host.clone()).update_playback(
-            query.play.unwrap_or(false),
+            query.play,
+            query.stop,
+            query.playing,
             query.position,
             query.seek,
             query.volume,
