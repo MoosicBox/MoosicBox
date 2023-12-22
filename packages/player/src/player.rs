@@ -439,8 +439,16 @@ impl Player {
     ) -> Result<(), PlayerError> {
         let mut current_seek = seek;
         let mut retry_count = 0;
+        let abort = self
+            .active_playback
+            .read()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .abort
+            .clone();
 
-        loop {
+        while !abort.is_cancelled() {
             if retry_count > 0 {
                 sleep(retry_options.unwrap().retry_delay).await;
             }
@@ -541,14 +549,13 @@ impl Player {
         info!("Stopping playback for playback_id");
         let playback = self.get_playback()?;
 
+        debug!("Stopping playback {playback:?}");
+        playback.abort.cancel();
+
         if !playback.playing {
             debug!("Playback {playback:?} not playing");
             return Ok(playback);
         }
-
-        debug!("Stopping playback {playback:?}");
-
-        playback.abort.cancel();
 
         trace!("Waiting for playback completion response");
         if let Err(err) = self
@@ -701,11 +708,11 @@ impl Player {
 
         let id = playback.id;
 
+        playback.abort.cancel();
+
         if !playback.playing {
             return Err(PlayerError::PlaybackNotPlaying(id));
         }
-
-        playback.abort.cancel();
 
         trace!("Waiting for playback completion response");
         if let Err(err) = self.receiver.recv() {
