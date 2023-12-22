@@ -31,7 +31,7 @@ To-do (in no particular order):
 - Save tracks hosted on server locally on clients
   - Source quality and/or encoded lossy
 - Enable switching between different bitrates within encodings
-- Enable on the fly switching encoding/bitrates during playback
+- Enable on the fly switching audio quality during playback
 - Pre-load next playback track
 
 ## Local Server
