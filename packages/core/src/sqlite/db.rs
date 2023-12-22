@@ -388,13 +388,25 @@ pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<Sessio
         values.push(("seek", SqliteValue::Number(session.seek.unwrap() as i64)))
     }
 
-    let new_session: Session = update_and_get_row(
-        db,
-        "sessions",
-        SqliteValue::Number(session.session_id as i64),
-        &values,
-    )?
-    .expect("Session failed to update");
+    let new_session: Session = if values.is_empty() {
+        select::<Session>(
+            db,
+            "sessions",
+            &vec![("id", SqliteValue::Number(session.session_id as i64))],
+            &["*"],
+        )?
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| panic!("No session exists for id {}", session.session_id))
+    } else {
+        update_and_get_row(
+            db,
+            "sessions",
+            SqliteValue::Number(session.session_id as i64),
+            &values,
+        )?
+        .expect("Session failed to update")
+    };
 
     let playlist = if session.playlist.is_some() {
         SessionPlaylist {
