@@ -511,6 +511,8 @@ pub struct UpdateSession {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub seek: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub volume: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub playlist: Option<UpdateSessionPlaylist>,
 }
 
@@ -525,6 +527,7 @@ impl ToApi<ApiUpdateSession> for UpdateSession {
             playing: self.playing,
             position: self.position,
             seek: self.seek,
+            volume: self.volume,
             playlist: self.playlist.as_ref().map(|p| p.to_api()),
         }
     }
@@ -588,6 +591,8 @@ pub struct ApiUpdateSession {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub seek: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub volume: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub playlist: Option<ApiUpdateSessionPlaylist>,
 }
 
@@ -613,6 +618,7 @@ pub struct Session {
     pub playing: bool,
     pub position: Option<i32>,
     pub seek: Option<i32>,
+    pub volume: Option<f64>,
     pub active_players: Vec<Player>,
     pub playlist: SessionPlaylist,
 }
@@ -626,6 +632,7 @@ impl AsModel<Session> for Row<'_> {
             playing: self.get::<_, u16>("playing").unwrap() == 1,
             position: self.get("position").unwrap(),
             seek: self.get("seek").unwrap(),
+            volume: self.get("volume").unwrap(),
             ..Default::default()
         }
     }
@@ -642,6 +649,7 @@ impl AsModelQuery<Session> for Row<'_> {
                 playing: self.get::<_, u16>("playing").unwrap() == 1,
                 position: self.get("position").unwrap(),
                 seek: self.get("seek").unwrap(),
+                volume: self.get("volume").unwrap(),
                 active_players: get_session_active_players(db, id)?,
                 playlist,
             }),
@@ -665,6 +673,7 @@ pub struct ApiSession {
     pub playing: bool,
     pub position: Option<i32>,
     pub seek: Option<i32>,
+    pub volume: Option<f64>,
     pub active_players: Vec<ApiPlayer>,
     pub playlist: ApiSessionPlaylist,
 }
@@ -678,6 +687,7 @@ impl ToApi<ApiSession> for Session {
             playing: self.playing,
             position: self.position,
             seek: self.seek,
+            volume: self.volume,
             active_players: self.active_players.iter().map(|p| p.to_api()).collect(),
             playlist: self.playlist.to_api(),
         }

@@ -306,6 +306,7 @@ pub fn create_session(db: &Connection, session: &CreateSession) -> Result<Sessio
         playing: new_session.playing,
         position: new_session.position,
         seek: new_session.seek,
+        volume: new_session.volume,
         name: new_session.name,
         active_players: get_session_active_players(db, new_session.id)?,
         playlist,
@@ -369,23 +370,23 @@ pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<Sessio
 
     let mut values = Vec::new();
 
-    if session.name.is_some() {
-        values.push(("name", SqliteValue::String(session.name.clone().unwrap())))
+    if let Some(name) = &session.name {
+        values.push(("name", SqliteValue::String(name.clone())))
     }
-    if session.active.is_some() {
-        values.push(("active", SqliteValue::Bool(session.active.unwrap())))
+    if let Some(active) = session.active {
+        values.push(("active", SqliteValue::Bool(active)))
     }
-    if session.playing.is_some() {
-        values.push(("playing", SqliteValue::Bool(session.playing.unwrap())))
+    if let Some(playing) = session.playing {
+        values.push(("playing", SqliteValue::Bool(playing)))
     }
-    if session.position.is_some() {
-        values.push((
-            "position",
-            SqliteValue::Number(session.position.unwrap() as i64),
-        ))
+    if let Some(position) = session.position {
+        values.push(("position", SqliteValue::Number(position as i64)))
     }
-    if session.seek.is_some() {
-        values.push(("seek", SqliteValue::Number(session.seek.unwrap() as i64)))
+    if let Some(seek) = session.seek {
+        values.push(("seek", SqliteValue::Number(seek as i64)))
+    }
+    if let Some(volume) = session.volume {
+        values.push(("volume", SqliteValue::Real(volume)))
     }
 
     let new_session: Session = if values.is_empty() {
@@ -425,6 +426,7 @@ pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<Sessio
         playing: new_session.playing,
         position: new_session.position,
         seek: new_session.seek,
+        volume: new_session.volume,
         name: new_session.name,
         active_players: get_session_active_players(db, new_session.id)?,
         playlist,

@@ -1056,6 +1056,13 @@ fn trigger_playback_event(current: &Playback, previous: &Playback) {
     } else {
         None
     };
+    let current_volume = current.volume.load(std::sync::atomic::Ordering::SeqCst);
+    let volume = if current_volume != previous.volume.load(std::sync::atomic::Ordering::SeqCst) {
+        has_change = true;
+        Some(current_volume)
+    } else {
+        None
+    };
     let track_ids = current.tracks.iter().map(|t| t.id()).collect::<Vec<_>>();
     let playlist = if track_ids != previous.tracks.iter().map(|t| t.id()).collect::<Vec<_>>() {
         has_change = true;
@@ -1071,7 +1078,16 @@ fn trigger_playback_event(current: &Playback, previous: &Playback) {
         return;
     }
 
-    log::debug!("Triggering playback event: playing={playing:?} position={position:?} seek={seek:?} playlist={playlist:?}");
+    log::debug!(
+        "\
+        Triggering playback event:\n\t\
+        playing={playing:?}\n\t\
+        position={position:?}\n\t\
+        seek={seek:?}\n\t\
+        volume={volume:?}\n\t\
+        playlist={playlist:?}\
+        "
+    );
 
     let update = UpdateSession {
         session_id: session_id as i32,
@@ -1082,6 +1098,7 @@ fn trigger_playback_event(current: &Playback, previous: &Playback) {
         playing,
         position,
         seek,
+        volume,
         playlist,
     };
 
