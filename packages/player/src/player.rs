@@ -515,7 +515,6 @@ impl Player {
 
             audio_output_handler
                 .with_filter(Box::new(move |decoded, packet, track| {
-                    println!("Got data {:?}", decoded.capacity());
                     if let Some(tb) = track.codec_params.time_base {
                         let ts = packet.ts();
                         let t = tb.calc_time(ts);
