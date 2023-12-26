@@ -41,9 +41,9 @@ type AudioFilter =
     Box<dyn FnMut(&mut AudioBufferRef<'_>, &Packet, &Track) -> Result<(), AudioOutputError>>;
 
 pub struct AudioOutputHandler {
-    pub(crate) filters: Vec<AudioFilter>,
-    pub(crate) open_outputs: Vec<OpenFunc>,
-    pub(crate) outputs: Vec<InnerType>,
+    filters: Vec<AudioFilter>,
+    open_outputs: Vec<OpenFunc>,
+    outputs: Vec<InnerType>,
 }
 
 impl AudioOutputHandler {
@@ -63,7 +63,27 @@ impl AudioOutputHandler {
         self.open_outputs.push(open_output);
     }
 
-    pub fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<(), AudioOutputError> {
+    fn run_filters(
+        &mut self,
+        decoded: &mut AudioBufferRef<'_>,
+        packet: &Packet,
+        track: &Track,
+    ) -> Result<(), AudioOutputError> {
+        for filter in &mut self.filters {
+            log::debug!("Running audio filter");
+            filter(decoded, packet, track)?;
+        }
+        Ok(())
+    }
+
+    pub fn write(
+        &mut self,
+        mut decoded: AudioBufferRef<'_>,
+        packet: &Packet,
+        track: &Track,
+    ) -> Result<(), AudioOutputError> {
+        self.run_filters(&mut decoded, packet, track)?;
+
         let len = self.outputs.len();
 
         for (i, output) in self.outputs.iter_mut().enumerate() {
@@ -85,7 +105,7 @@ impl AudioOutputHandler {
         Ok(())
     }
 
-    pub(crate) fn try_open(
+    pub fn try_open(
         &mut self,
         spec: SignalSpec,
         duration: Duration,

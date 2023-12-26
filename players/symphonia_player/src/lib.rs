@@ -337,13 +337,8 @@ fn play_track(
                         mix_volume(&mut decoded, volume);
                     }
 
-                    for filter in &mut audio_output_handler.filters {
-                        trace!("Running audio filter");
-                        filter(&mut decoded, &packet, &track)?;
-                    }
-
                     trace!("Writing decoded to audio output");
-                    audio_output_handler.write(decoded)?;
+                    audio_output_handler.write(decoded, &packet, &track)?;
                     trace!("Wrote decoded to audio output");
                 } else {
                     trace!("Not to seeked position yet. Continuing decode");
