@@ -1,4 +1,5 @@
 use symphonia::core::audio::{AudioBufferRef, SignalSpec};
+use symphonia::core::formats::{Packet, Track};
 use symphonia::core::units::Duration;
 use thiserror::Error;
 
@@ -36,25 +37,52 @@ pub mod encoder;
 
 type InnerType = Box<dyn AudioOutput>;
 type OpenFunc = Box<dyn FnMut(SignalSpec, Duration) -> Result<InnerType, AudioOutputError>>;
-type AudioFilter = Box<dyn FnMut(&mut AudioBufferRef<'_>) -> Result<(), AudioOutputError>>;
+type AudioFilter =
+    Box<dyn FnMut(&mut AudioBufferRef<'_>, &Packet, &Track) -> Result<(), AudioOutputError>>;
 
 pub struct AudioOutputHandler {
-    pub(crate) inner: Option<InnerType>,
     pub(crate) filters: Vec<AudioFilter>,
-    pub(crate) try_open: OpenFunc,
+    pub(crate) open_outputs: Vec<OpenFunc>,
+    pub(crate) outputs: Vec<InnerType>,
 }
 
 impl AudioOutputHandler {
-    pub fn new(try_open: OpenFunc) -> Self {
+    pub fn new() -> Self {
         Self {
-            inner: None,
             filters: vec![],
-            try_open,
+            open_outputs: vec![],
+            outputs: vec![],
         }
     }
 
-    pub fn filter(&mut self, filter: AudioFilter) {
+    pub fn with_filter(&mut self, filter: AudioFilter) {
         self.filters.push(filter);
+    }
+
+    pub fn with_output(&mut self, open_output: OpenFunc) {
+        self.open_outputs.push(open_output);
+    }
+
+    pub fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<(), AudioOutputError> {
+        let len = self.outputs.len();
+
+        for (i, output) in self.outputs.iter_mut().enumerate() {
+            if i == len - 1 {
+                output.write(decoded)?;
+                break;
+            } else {
+                output.write(decoded.clone())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn flush(&mut self) -> Result<(), AudioOutputError> {
+        for output in self.outputs.iter_mut() {
+            output.flush()?;
+        }
+        Ok(())
     }
 
     pub(crate) fn try_open(
@@ -62,7 +90,15 @@ impl AudioOutputHandler {
         spec: SignalSpec,
         duration: Duration,
     ) -> Result<(), AudioOutputError> {
-        self.inner = Some((*self.try_open)(spec, duration)?);
+        for mut open_func in self.open_outputs.drain(..) {
+            self.outputs.push((*open_func)(spec, duration)?);
+        }
         Ok(())
+    }
+}
+
+impl Default for AudioOutputHandler {
+    fn default() -> Self {
+        Self::new()
     }
 }

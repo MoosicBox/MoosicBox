@@ -146,24 +146,21 @@ pub fn encode_aac_stream(path: String) -> ByteStream {
 pub fn encode_aac_spawn<T: std::io::Write + Send + Clone + 'static>(
     path: String,
     writer: T,
-) -> tokio::task::JoinHandle<usize> {
+) -> tokio::task::JoinHandle<()> {
     let path = path.clone();
     RT.spawn(async move { encode_aac(path, writer) })
 }
 
-pub fn encode_aac<T: std::io::Write + Send + Clone + 'static>(path: String, writer: T) -> usize {
-    let mut audio_output_handler = AudioOutputHandler::new(Box::new(move |spec, duration| {
-        let mut encoder: AacEncoder<T> = AacEncoder::new(writer.clone());
+pub fn encode_aac<T: std::io::Write + Send + Clone + 'static>(path: String, writer: T) {
+    let mut audio_output_handler = AudioOutputHandler::new();
+
+    audio_output_handler.with_output(Box::new(move |spec, duration| {
+        let mut encoder = AacEncoder::new(writer.clone());
         encoder.open(spec, duration);
         Ok(Box::new(encoder))
     }));
 
-    let written = RefCell::new(0);
-    let mut handle = PlaybackHandle::default();
-    handle.on_progress(|progress| {
-        log::debug!("Encoding progress: {progress:?}");
-        *written.borrow_mut() = progress.total_bytes_written;
-    });
+    let handle = PlaybackHandle::default();
 
     if let Err(err) = play_file_path_str(
         &path,
@@ -177,7 +174,4 @@ pub fn encode_aac<T: std::io::Write + Send + Clone + 'static>(path: String, writ
     ) {
         log::error!("Failed to encode to aac: {err:?}");
     }
-
-    let total_written = *written.borrow();
-    total_written
 }

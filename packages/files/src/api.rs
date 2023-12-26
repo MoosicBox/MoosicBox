@@ -8,12 +8,15 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, HttpResponse, Result,
 };
+use lazy_static::lazy_static;
 use moosicbox_core::{
     app::AppState,
     sqlite::db::get_track,
     track_range::{parse_track_id_ranges, ParseTrackIdsError},
     types::{AudioFormat, PlaybackQuality},
 };
+use moosicbox_stream_utils::ByteWriter;
+use moosicbox_symphonia_player::{output::AudioOutputHandler, play_file_path_str, PlaybackHandle};
 use serde::Deserialize;
 
 use crate::files::{
@@ -24,6 +27,14 @@ use crate::files::{
         TrackInfoError, TrackSource, TrackSourceError,
     },
 };
+
+lazy_static! {
+    static ref RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .max_blocking_threads(4)
+        .build()
+        .unwrap();
+}
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -67,17 +78,82 @@ pub async fn track_endpoint(
             .unwrap(),
     )?;
 
+    let writer = ByteWriter::default();
+    let stream = writer.stream();
+
+    {
+        let source = source.clone();
+        RT.spawn(async move {
+            let audio_output_handler = match format {
+                #[cfg(feature = "aac")]
+                AudioFormat::Aac => {
+                    use moosicbox_symphonia_player::output::encoder::aac::encoder::AacEncoder;
+                    let mut audio_output_handler = AudioOutputHandler::new();
+                    audio_output_handler.with_output(Box::new(move |spec, duration| {
+                        let mut encoder = AacEncoder::new(writer.clone());
+                        encoder.open(spec, duration);
+                        Ok(Box::new(encoder))
+                    }));
+                    Some(audio_output_handler)
+                }
+                #[cfg(feature = "flac")]
+                AudioFormat::Flac => None,
+                #[cfg(feature = "mp3")]
+                AudioFormat::Mp3 => {
+                    use moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder;
+                    let encoder_writer = writer.clone();
+                    let mut audio_output_handler = AudioOutputHandler::new();
+                    audio_output_handler.with_output(Box::new(move |spec, duration| {
+                        let mut encoder = Mp3Encoder::new(encoder_writer.clone());
+                        encoder.open(spec, duration);
+                        Ok(Box::new(encoder))
+                    }));
+                    Some(audio_output_handler)
+                }
+                #[cfg(feature = "opus")]
+                AudioFormat::Opus => {
+                    use moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder;
+                    let encoder_writer = writer.clone();
+                    let mut audio_output_handler = AudioOutputHandler::new();
+                    audio_output_handler.with_output(Box::new(move |spec, duration| {
+                        let mut encoder: OpusEncoder<i16, ByteWriter> =
+                            OpusEncoder::new(encoder_writer.clone());
+                        encoder.open(spec, duration);
+                        Ok(Box::new(encoder))
+                    }));
+                    Some(audio_output_handler)
+                }
+                AudioFormat::Source => None,
+            };
+
+            if let Some(mut audio_output_handler) = audio_output_handler {
+                let handle = PlaybackHandle::default();
+                match source {
+                    TrackSource::LocalFilePath(ref path) => {
+                        if let Err(err) = play_file_path_str(
+                            path,
+                            &mut audio_output_handler,
+                            true,
+                            true,
+                            None,
+                            None,
+                            &None,
+                            &handle,
+                        ) {
+                            log::error!("Failed to encode to aac: {err:?}");
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     match source {
         TrackSource::LocalFilePath(path) => match format {
             #[cfg(feature = "aac")]
             AudioFormat::Aac => Ok(HttpResponse::Ok()
                 .insert_header((actix_web::http::header::CONTENT_TYPE, "audio/mp4"))
-                .body(SizedStream::new(
-                    size,
-                    moosicbox_symphonia_player::output::encoder::aac::encoder::encode_aac_stream(
-                        path,
-                    ),
-                ))),
+                .body(SizedStream::new(size, stream))),
             #[cfg(feature = "flac")]
             AudioFormat::Flac => {
                 let track = get_track(
@@ -107,21 +183,11 @@ pub async fn track_endpoint(
             #[cfg(feature = "mp3")]
             AudioFormat::Mp3 => Ok(HttpResponse::Ok()
                 .insert_header((actix_web::http::header::CONTENT_TYPE, "audio/mp3"))
-                .body(SizedStream::new(
-                    size,
-                    moosicbox_symphonia_player::output::encoder::mp3::encoder::encode_mp3_stream(
-                        path,
-                    ),
-                ))),
+                .body(SizedStream::new(size, stream))),
             #[cfg(feature = "opus")]
             AudioFormat::Opus => Ok(HttpResponse::Ok()
                 .insert_header((actix_web::http::header::CONTENT_TYPE, "audio/opus"))
-                .body(SizedStream::new(
-                    size,
-                    moosicbox_symphonia_player::output::encoder::opus::encoder::encode_opus_stream(
-                        path,
-                    ),
-                ))),
+                .body(SizedStream::new(size, stream))),
             AudioFormat::Source => Ok(actix_files::NamedFile::open_async(
                 PathBuf::from(path).as_path(),
             )

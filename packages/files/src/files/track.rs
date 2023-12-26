@@ -9,6 +9,7 @@ use moosicbox_core::{
     },
     types::{AudioFormat, PlaybackQuality},
 };
+use moosicbox_stream_utils::ByteWriter;
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -147,90 +148,53 @@ pub fn get_or_init_track_size(
         return Ok(size);
     }
 
-    match source {
+    let writer = ByteWriter::default();
+
+    let bytes = match source {
         TrackSource::LocalFilePath(ref path) => match quality.format {
             #[cfg(feature = "aac")]
             AudioFormat::Aac => {
-                let size = moosicbox_symphonia_player::output::encoder::aac::encoder::encode_aac(
+                moosicbox_symphonia_player::output::encoder::aac::encoder::encode_aac(
                     path.to_string(),
-                    std::io::empty(),
-                ) as u64;
-                set_track_size(
-                    &connection.inner,
-                    SetTrackSize {
-                        track_id,
-                        quality,
-                        bytes: size,
-                        bit_depth: Some(None),
-                        audio_bitrate: Some(None),
-                        overall_bitrate: Some(None),
-                        sample_rate: Some(None),
-                        channels: Some(None),
-                    },
-                )?;
-                Ok(size)
+                    writer.clone(),
+                );
+                writer.bytes_written()
             }
             #[cfg(feature = "flac")]
-            AudioFormat::Flac => Err(TrackInfoError::UnsupportedFormat(quality.format)),
+            AudioFormat::Flac => return Err(TrackInfoError::UnsupportedFormat(quality.format)),
             #[cfg(feature = "mp3")]
             AudioFormat::Mp3 => {
-                let size = moosicbox_symphonia_player::output::encoder::mp3::encoder::encode_mp3(
+                moosicbox_symphonia_player::output::encoder::mp3::encoder::encode_mp3(
                     path.to_string(),
-                    std::io::empty(),
-                ) as u64;
-                set_track_size(
-                    &connection.inner,
-                    SetTrackSize {
-                        track_id,
-                        quality,
-                        bytes: size,
-                        bit_depth: Some(None),
-                        audio_bitrate: Some(None),
-                        overall_bitrate: Some(None),
-                        sample_rate: Some(None),
-                        channels: Some(None),
-                    },
-                )?;
-                Ok(size)
+                    writer.clone(),
+                );
+                writer.bytes_written()
             }
             #[cfg(feature = "opus")]
             AudioFormat::Opus => {
-                let size = moosicbox_symphonia_player::output::encoder::opus::encoder::encode_opus(
+                moosicbox_symphonia_player::output::encoder::opus::encoder::encode_opus(
                     path.to_string(),
-                    std::io::empty(),
-                ) as u64;
-                set_track_size(
-                    &connection.inner,
-                    SetTrackSize {
-                        track_id,
-                        quality,
-                        bytes: size,
-                        bit_depth: Some(None),
-                        audio_bitrate: Some(None),
-                        overall_bitrate: Some(None),
-                        sample_rate: Some(None),
-                        channels: Some(None),
-                    },
-                )?;
-                Ok(size)
+                    writer.clone(),
+                );
+                writer.bytes_written()
             }
-            AudioFormat::Source => {
-                let size = { File::open(path).unwrap().metadata().unwrap().len() };
-                set_track_size(
-                    &connection.inner,
-                    SetTrackSize {
-                        track_id,
-                        quality,
-                        bytes: size,
-                        bit_depth: Some(None),
-                        audio_bitrate: Some(None),
-                        overall_bitrate: Some(None),
-                        sample_rate: Some(None),
-                        channels: Some(None),
-                    },
-                )?;
-                Ok(size)
-            }
+            AudioFormat::Source => File::open(path).unwrap().metadata().unwrap().len(),
         },
-    }
+    };
+
+    set_track_size(
+        &connection.inner,
+        SetTrackSize {
+            track_id,
+            quality,
+            bytes,
+            bit_depth: Some(None),
+            audio_bitrate: Some(None),
+            overall_bitrate: Some(None),
+            sample_rate: Some(None),
+            channels: Some(None),
+        },
+    )?;
+
+    Ok(bytes)
 }

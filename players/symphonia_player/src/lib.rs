@@ -2,7 +2,6 @@
 #![warn(rust_2018_idioms)]
 #![forbid(unsafe_code)]
 
-use std::cell::RefCell;
 use std::fs::File;
 use std::io;
 use std::path::Path;
@@ -43,40 +42,21 @@ pub struct PlaybackProgress {
     pub bytes_just_written: usize,
 }
 
-type ProgressListener<'a> = RefCell<Vec<Box<dyn FnMut(&PlaybackProgress) + 'a>>>;
-
-pub struct PlaybackHandle<'a> {
-    progress_listeners: ProgressListener<'a>,
+pub struct PlaybackHandle {
     pub abort: CancellationToken,
 }
 
-impl Default for PlaybackHandle<'_> {
+impl Default for PlaybackHandle {
     fn default() -> Self {
         Self {
-            progress_listeners: RefCell::new(Vec::new()),
             abort: CancellationToken::new(),
         }
     }
 }
 
-impl<'a> PlaybackHandle<'a> {
+impl PlaybackHandle {
     pub fn new(abort: CancellationToken) -> Self {
-        Self {
-            progress_listeners: RefCell::new(Vec::new()),
-            abort,
-        }
-    }
-
-    pub fn on_progress(&mut self, callback: impl FnMut(&PlaybackProgress) + 'a) {
-        self.progress_listeners
-            .borrow_mut()
-            .push(Box::new(callback));
-    }
-
-    pub(crate) fn trigger_progress(&self, progress: &PlaybackProgress) {
-        for callback in self.progress_listeners.borrow_mut().iter_mut() {
-            (callback)(progress);
-        }
+        Self { abort }
     }
 }
 
@@ -97,7 +77,7 @@ pub fn play_file_path_str(
     track_num: Option<usize>,
     seek: Option<f64>,
     volume: &Option<&AtomicF64>,
-    handle: &PlaybackHandle<'_>,
+    handle: &PlaybackHandle,
 ) -> Result<i32, PlaybackError> {
     // Create a hint to help the format registry guess what format reader is appropriate.
     let mut hint = Hint::new();
@@ -139,7 +119,7 @@ pub fn play_media_source(
     track_num: Option<usize>,
     seek: Option<f64>,
     volume: &Option<&AtomicF64>,
-    handle: &PlaybackHandle<'_>,
+    handle: &PlaybackHandle,
 ) -> Result<i32, PlaybackError> {
     // Use the default options for format readers other than for gapless playback.
     let format_opts = FormatOptions {
@@ -196,7 +176,7 @@ fn play(
     seek_time: Option<f64>,
     decode_opts: &DecoderOptions,
     volume: &Option<&AtomicF64>,
-    handle: &PlaybackHandle<'_>,
+    handle: &PlaybackHandle,
 ) -> Result<i32, PlaybackError> {
     // If the user provided a track number, select that track if it exists, otherwise, select the
     // first track with a known codec.
@@ -275,9 +255,7 @@ fn play(
             2 => debug!("Aborted"),
             _ => {
                 debug!("Attempting to get audio_output to flush");
-                if let Some(audio_output) = audio_output_handler.inner.as_mut() {
-                    audio_output.flush()?;
-                }
+                audio_output_handler.flush()?;
             }
         },
         Err(PlaybackError::AudioOutput(AudioOutputError::Interrupt)) => {
@@ -297,7 +275,7 @@ fn play_track(
     play_opts: PlayTrackOptions,
     decode_opts: &DecoderOptions,
     volume: &Option<&AtomicF64>,
-    handle: &PlaybackHandle<'_>,
+    handle: &PlaybackHandle,
 ) -> Result<i32, PlaybackError> {
     // Get the selected track using the track ID.
     let track = match reader
@@ -307,14 +285,11 @@ fn play_track(
     {
         Some(track) => track,
         _ => return Ok(0),
-    };
-    let mut total_bytes_written = 0;
+    }
+    .clone();
 
     // Create a decoder for the track.
     let mut decoder = symphonia::default::get_codecs().make(&track.codec_params, decode_opts)?;
-
-    // Get the selected track's timebase and duration.
-    let tb = track.codec_params.time_base;
 
     // Decode and play the packets belonging to the selected track.
     let result = loop {
@@ -338,60 +313,38 @@ fn play_track(
             Ok(mut decoded) => {
                 trace!("Decoded packet");
                 // If the audio output is not open, try to open it.
-                if audio_output_handler.inner.is_none() {
-                    trace!("Getting audio spec");
-                    // Get the audio buffer specification. This is a description of the decoded
-                    // audio buffer's sample format and sample rate.
-                    let spec = *decoded.spec();
+                trace!("Getting audio spec");
+                // Get the audio buffer specification. This is a description of the decoded
+                // audio buffer's sample format and sample rate.
+                let spec = *decoded.spec();
 
-                    // Get the capacity of the decoded buffer. Note that this is capacity, not
-                    // length! The capacity of the decoded buffer is constant for the life of the
-                    // decoder, but the length is not.
-                    let duration = decoded.capacity() as u64;
+                // Get the capacity of the decoded buffer. Note that this is capacity, not
+                // length! The capacity of the decoded buffer is constant for the life of the
+                // decoder, but the length is not.
+                let duration = decoded.capacity() as u64;
 
-                    trace!("Opening audio output");
-                    audio_output_handler.try_open(spec, duration)?;
-                } else {
-                    // TODO: Check the audio spec. and duration hasn't changed.
-                }
-
-                for filter in &mut audio_output_handler.filters {
-                    filter(&mut decoded)?;
-                }
+                trace!("Opening audio output");
+                audio_output_handler.try_open(spec, duration)?;
 
                 let ts = packet.ts();
 
                 // Write the decoded audio samples to the audio output if the presentation timestamp
                 // for the packet is >= the seeked position (0 if not seeking).
                 if ts >= play_opts.seek_ts {
-                    let bytes_just_written =
-                        if let Some(audio_output) = audio_output_handler.inner.as_mut() {
-                            if let Some(volume) = volume {
-                                let volume = volume.load(std::sync::atomic::Ordering::SeqCst);
-                                trace!("Mixing volume to {volume}");
-                                mix_volume(&mut decoded, volume);
-                            }
-                            trace!("Writing decoded to audio output");
-                            let written = audio_output.write(decoded)?;
-                            trace!("Wrote decoded to audio output");
-                            written
-                        } else {
-                            0
-                        };
-
-                    total_bytes_written += bytes_just_written;
-
-                    if let Some(tb) = tb {
-                        let t = tb.calc_time(ts);
-
-                        let secs = f64::from(t.seconds as u32) + t.frac;
-
-                        handle.trigger_progress(&PlaybackProgress {
-                            secs,
-                            bytes_just_written,
-                            total_bytes_written,
-                        });
+                    if let Some(volume) = volume {
+                        let volume = volume.load(std::sync::atomic::Ordering::SeqCst);
+                        trace!("Mixing volume to {volume}");
+                        mix_volume(&mut decoded, volume);
                     }
+
+                    for filter in &mut audio_output_handler.filters {
+                        trace!("Running audio filter");
+                        filter(&mut decoded, &packet, &track)?;
+                    }
+
+                    trace!("Writing decoded to audio output");
+                    audio_output_handler.write(decoded)?;
+                    trace!("Wrote decoded to audio output");
                 } else {
                     trace!("Not to seeked position yet. Continuing decode");
                 }

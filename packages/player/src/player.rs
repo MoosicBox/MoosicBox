@@ -492,31 +492,44 @@ impl Player {
                 .await?;
             let mss = MediaSourceStream::new(playable_track.source, Default::default());
 
+            let mut audio_output_handler = AudioOutputHandler::new();
+
             #[allow(unused)]
             #[cfg(feature = "cpal")]
-            let mut audio_output_handler = AudioOutputHandler::new(Box::new(
+            audio_output_handler.with_output(Box::new(
                 moosicbox_symphonia_player::output::cpal::player::try_open,
             ));
             #[allow(unused)]
             #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
-            let mut audio_output_handler = AudioOutputHandler::new(Box::new(
+            audio_output_handler.with_output(Box::new(
                 moosicbox_symphonia_player::output::pulseaudio::simple::try_open,
             ));
             #[allow(unused)]
             #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
-            let mut audio_output_handler = AudioOutputHandler::new(Box::new(
+            audio_output_handler.with_output(Box::new(
                 moosicbox_symphonia_player::output::pulseaudio::standard::try_open,
             ));
 
-            let mut handle = PlaybackHandle::new(abort.clone());
-            handle.on_progress(move |progress| {
-                let mut binding = self.active_playback.write().unwrap();
-                if let Some(playback) = binding.as_mut() {
-                    let old = playback.clone();
-                    playback.progress = progress.secs;
-                    trigger_playback_event(playback, &old);
+            let active_playback = self.active_playback.clone();
+
+            audio_output_handler.with_filter(Box::new(move |decoded, packet, track| {
+                println!("Got data {:?}", decoded.capacity());
+                if let Some(tb) = track.codec_params.time_base {
+                    let ts = packet.ts();
+                    let t = tb.calc_time(ts);
+                    let secs = f64::from(t.seconds as u32) + t.frac;
+
+                    let mut binding = active_playback.write().unwrap();
+                    if let Some(playback) = binding.as_mut() {
+                        let old = playback.clone();
+                        playback.progress = secs;
+                        trigger_playback_event(playback, &old);
+                    }
                 }
-            });
+                Ok(())
+            }));
+
+            let handle = PlaybackHandle::new(abort.clone());
 
             if let Err(err) = moosicbox_symphonia_player::play_media_source(
                 mss,
