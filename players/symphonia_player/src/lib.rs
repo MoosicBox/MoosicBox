@@ -24,7 +24,7 @@ use crate::volume_mixer::mix_volume;
 
 pub mod media_sources;
 pub mod output;
-mod volume_mixer;
+pub mod volume_mixer;
 
 #[cfg(feature = "resampler")]
 mod resampler;
