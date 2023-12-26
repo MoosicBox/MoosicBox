@@ -22,7 +22,7 @@ use moosicbox_symphonia_player::{
     media_sources::remote_bytestream::RemoteByteStream,
     output::{AudioOutputError, AudioOutputHandler},
     volume_mixer::mix_volume,
-    PlaybackError, PlaybackHandle,
+    PlaybackError,
 };
 use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng as _};
@@ -513,29 +513,28 @@ impl Player {
 
             let active_playback = self.active_playback.clone();
 
-            audio_output_handler.with_filter(Box::new(move |decoded, packet, track| {
-                println!("Got data {:?}", decoded.capacity());
-                if let Some(tb) = track.codec_params.time_base {
-                    let ts = packet.ts();
-                    let t = tb.calc_time(ts);
-                    let secs = f64::from(t.seconds as u32) + t.frac;
+            audio_output_handler
+                .with_filter(Box::new(move |decoded, packet, track| {
+                    println!("Got data {:?}", decoded.capacity());
+                    if let Some(tb) = track.codec_params.time_base {
+                        let ts = packet.ts();
+                        let t = tb.calc_time(ts);
+                        let secs = f64::from(t.seconds as u32) + t.frac;
 
-                    let mut binding = active_playback.write().unwrap();
-                    if let Some(playback) = binding.as_mut() {
-                        let old = playback.clone();
-                        playback.progress = secs;
-                        trigger_playback_event(playback, &old);
+                        let mut binding = active_playback.write().unwrap();
+                        if let Some(playback) = binding.as_mut() {
+                            let old = playback.clone();
+                            playback.progress = secs;
+                            trigger_playback_event(playback, &old);
+                        }
                     }
-                }
-                Ok(())
-            }));
-
-            audio_output_handler.with_filter(Box::new(move |decoded, _packet, _track| {
-                mix_volume(decoded, volume.load(std::sync::atomic::Ordering::SeqCst));
-                Ok(())
-            }));
-
-            let handle = PlaybackHandle::new(abort.clone());
+                    Ok(())
+                }))
+                .with_filter(Box::new(move |decoded, _packet, _track| {
+                    mix_volume(decoded, volume.load(std::sync::atomic::Ordering::SeqCst));
+                    Ok(())
+                }))
+                .with_cancellation_token(abort.clone());
 
             if let Err(err) = moosicbox_symphonia_player::play_media_source(
                 mss,
@@ -545,7 +544,6 @@ impl Player {
                 true,
                 None,
                 current_seek,
-                &handle,
             ) {
                 if retry_options.is_none() {
                     error!("Track playback failed and no retry options: {err:?}");

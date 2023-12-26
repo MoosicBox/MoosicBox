@@ -17,7 +17,6 @@ use symphonia::core::units::Time;
 
 use log::{debug, error, info, trace, warn};
 use thiserror::Error;
-use tokio_util::sync::CancellationToken;
 
 pub mod media_sources;
 pub mod output;
@@ -29,31 +28,6 @@ mod resampler;
 impl From<io::Error> for PlaybackError {
     fn from(err: io::Error) -> Self {
         PlaybackError::Symphonia(Error::IoError(err))
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct PlaybackProgress {
-    pub secs: f64,
-    pub total_bytes_written: usize,
-    pub bytes_just_written: usize,
-}
-
-pub struct PlaybackHandle {
-    pub abort: CancellationToken,
-}
-
-impl Default for PlaybackHandle {
-    fn default() -> Self {
-        Self {
-            abort: CancellationToken::new(),
-        }
-    }
-}
-
-impl PlaybackHandle {
-    pub fn new(abort: CancellationToken) -> Self {
-        Self { abort }
     }
 }
 
@@ -73,7 +47,6 @@ pub fn play_file_path_str(
     verify: bool,
     track_num: Option<usize>,
     seek: Option<f64>,
-    handle: &PlaybackHandle,
 ) -> Result<i32, PlaybackError> {
     // Create a hint to help the format registry guess what format reader is appropriate.
     let mut hint = Hint::new();
@@ -100,7 +73,6 @@ pub fn play_file_path_str(
         verify,
         track_num,
         seek,
-        handle,
     )
 }
 
@@ -113,7 +85,6 @@ pub fn play_media_source(
     verify: bool,
     track_num: Option<usize>,
     seek: Option<f64>,
-    handle: &PlaybackHandle,
 ) -> Result<i32, PlaybackError> {
     // Use the default options for format readers other than for gapless playback.
     let format_opts = FormatOptions {
@@ -145,7 +116,6 @@ pub fn play_media_source(
                 track_num,
                 seek_time,
                 &decode_opts,
-                handle,
             )
         }
         Err(err) => {
@@ -168,7 +138,6 @@ fn play(
     track_num: Option<usize>,
     seek_time: Option<f64>,
     decode_opts: &DecoderOptions,
-    handle: &PlaybackHandle,
 ) -> Result<i32, PlaybackError> {
     // If the user provided a track number, select that track if it exists, otherwise, select the
     // first track with a known codec.
@@ -215,13 +184,7 @@ fn play(
     let mut track_info = PlayTrackOptions { track_id, seek_ts };
 
     let result = loop {
-        match play_track(
-            &mut reader,
-            audio_output_handler,
-            track_info,
-            decode_opts,
-            handle,
-        ) {
+        match play_track(&mut reader, audio_output_handler, track_info, decode_opts) {
             Err(PlaybackError::Symphonia(Error::ResetRequired)) => {
                 // Select the first supported track since the user's selected track number might no
                 // longer be valid or make sense.
@@ -265,7 +228,6 @@ fn play_track(
     audio_output_handler: &mut AudioOutputHandler,
     play_opts: PlayTrackOptions,
     decode_opts: &DecoderOptions,
-    handle: &PlaybackHandle,
 ) -> Result<i32, PlaybackError> {
     // Get the selected track using the track ID.
     let track = match reader
@@ -283,7 +245,11 @@ fn play_track(
 
     // Decode and play the packets belonging to the selected track.
     let result = loop {
-        if handle.abort.is_cancelled() {
+        if audio_output_handler
+            .cancellation_token
+            .as_ref()
+            .is_some_and(|token| token.is_cancelled())
+        {
             return Ok(2);
         }
         // Get the next packet from the format reader.

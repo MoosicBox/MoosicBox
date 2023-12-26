@@ -2,6 +2,7 @@ use symphonia::core::audio::{AudioBufferRef, SignalSpec};
 use symphonia::core::formats::{Packet, Track};
 use symphonia::core::units::Duration;
 use thiserror::Error;
+use tokio_util::sync::CancellationToken;
 
 pub trait AudioOutput {
     fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<usize, AudioOutputError>;
@@ -41,6 +42,7 @@ type AudioFilter =
     Box<dyn FnMut(&mut AudioBufferRef<'_>, &Packet, &Track) -> Result<(), AudioOutputError>>;
 
 pub struct AudioOutputHandler {
+    pub cancellation_token: Option<CancellationToken>,
     filters: Vec<AudioFilter>,
     open_outputs: Vec<OpenFunc>,
     outputs: Vec<InnerType>,
@@ -49,18 +51,26 @@ pub struct AudioOutputHandler {
 impl AudioOutputHandler {
     pub fn new() -> Self {
         Self {
+            cancellation_token: None,
             filters: vec![],
             open_outputs: vec![],
             outputs: vec![],
         }
     }
 
-    pub fn with_filter(&mut self, filter: AudioFilter) {
+    pub fn with_filter(&mut self, filter: AudioFilter) -> &mut Self {
         self.filters.push(filter);
+        self
     }
 
-    pub fn with_output(&mut self, open_output: OpenFunc) {
+    pub fn with_output(&mut self, open_output: OpenFunc) -> &mut Self {
         self.open_outputs.push(open_output);
+        self
+    }
+
+    pub fn with_cancellation_token(&mut self, cancellation_token: CancellationToken) -> &mut Self {
+        self.cancellation_token.replace(cancellation_token);
+        self
     }
 
     fn run_filters(

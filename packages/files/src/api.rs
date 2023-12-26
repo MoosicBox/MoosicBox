@@ -16,7 +16,7 @@ use moosicbox_core::{
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_stream_utils::ByteWriter;
-use moosicbox_symphonia_player::{output::AudioOutputHandler, play_file_path_str, PlaybackHandle};
+use moosicbox_symphonia_player::{output::AudioOutputHandler, play_file_path_str};
 use serde::Deserialize;
 
 use crate::files::{
@@ -127,7 +127,6 @@ pub async fn track_endpoint(
             };
 
             if let Some(mut audio_output_handler) = audio_output_handler {
-                let handle = PlaybackHandle::default();
                 match source {
                     TrackSource::LocalFilePath(ref path) => {
                         if let Err(err) = play_file_path_str(
@@ -137,7 +136,6 @@ pub async fn track_endpoint(
                             true,
                             None,
                             None,
-                            &handle,
                         ) {
                             log::error!("Failed to encode to aac: {err:?}");
                         }

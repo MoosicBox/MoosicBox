@@ -2,8 +2,8 @@ use std::cell::RefCell;
 use std::fs::File;
 
 use crate::output::{AudioOutput, AudioOutputError, AudioOutputHandler};
+use crate::play_file_path_str;
 use crate::resampler::Resampler;
-use crate::{play_file_path_str, PlaybackHandle};
 
 use bytes::Bytes;
 use lazy_static::lazy_static;
@@ -256,17 +256,7 @@ pub fn encode_opus<T: std::io::Write + Send + Clone + 'static>(path: String, wri
         Ok(Box::new(encoder))
     }));
 
-    let handle = PlaybackHandle::default();
-
-    if let Err(err) = play_file_path_str(
-        &path,
-        &mut audio_output_handler,
-        true,
-        true,
-        None,
-        None,
-        &handle,
-    ) {
+    if let Err(err) = play_file_path_str(&path, &mut audio_output_handler, true, true, None, None) {
         log::error!("Failed to encode to opus: {err:?}");
     }
 }
