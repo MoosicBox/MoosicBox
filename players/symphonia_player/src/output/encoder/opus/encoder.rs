@@ -265,7 +265,6 @@ pub fn encode_opus<T: std::io::Write + Send + Clone + 'static>(path: String, wri
         true,
         None,
         None,
-        &None,
         &handle,
     ) {
         log::error!("Failed to encode to opus: {err:?}");

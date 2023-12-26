@@ -6,7 +6,6 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
-use atomic_float::AtomicF64;
 use output::{AudioOutputError, AudioOutputHandler};
 use symphonia::core::codecs::{DecoderOptions, FinalizeResult, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error;
@@ -19,8 +18,6 @@ use symphonia::core::units::Time;
 use log::{debug, error, info, trace, warn};
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
-
-use crate::volume_mixer::mix_volume;
 
 pub mod media_sources;
 pub mod output;
@@ -76,7 +73,6 @@ pub fn play_file_path_str(
     verify: bool,
     track_num: Option<usize>,
     seek: Option<f64>,
-    volume: &Option<&AtomicF64>,
     handle: &PlaybackHandle,
 ) -> Result<i32, PlaybackError> {
     // Create a hint to help the format registry guess what format reader is appropriate.
@@ -104,7 +100,6 @@ pub fn play_file_path_str(
         verify,
         track_num,
         seek,
-        volume,
         handle,
     )
 }
@@ -118,7 +113,6 @@ pub fn play_media_source(
     verify: bool,
     track_num: Option<usize>,
     seek: Option<f64>,
-    volume: &Option<&AtomicF64>,
     handle: &PlaybackHandle,
 ) -> Result<i32, PlaybackError> {
     // Use the default options for format readers other than for gapless playback.
@@ -151,7 +145,6 @@ pub fn play_media_source(
                 track_num,
                 seek_time,
                 &decode_opts,
-                volume,
                 handle,
             )
         }
@@ -175,7 +168,6 @@ fn play(
     track_num: Option<usize>,
     seek_time: Option<f64>,
     decode_opts: &DecoderOptions,
-    volume: &Option<&AtomicF64>,
     handle: &PlaybackHandle,
 ) -> Result<i32, PlaybackError> {
     // If the user provided a track number, select that track if it exists, otherwise, select the
@@ -228,7 +220,6 @@ fn play(
             audio_output_handler,
             track_info,
             decode_opts,
-            volume,
             handle,
         ) {
             Err(PlaybackError::Symphonia(Error::ResetRequired)) => {
@@ -274,7 +265,6 @@ fn play_track(
     audio_output_handler: &mut AudioOutputHandler,
     play_opts: PlayTrackOptions,
     decode_opts: &DecoderOptions,
-    volume: &Option<&AtomicF64>,
     handle: &PlaybackHandle,
 ) -> Result<i32, PlaybackError> {
     // Get the selected track using the track ID.
@@ -310,7 +300,7 @@ fn play_track(
         trace!("Decoding packet");
         // Decode the packet into audio samples.
         match decoder.decode(&packet) {
-            Ok(mut decoded) => {
+            Ok(decoded) => {
                 trace!("Decoded packet");
 
                 if audio_output_handler.contains_outputs_to_open() {
@@ -332,12 +322,6 @@ fn play_track(
                 // Write the decoded audio samples to the audio output if the presentation timestamp
                 // for the packet is >= the seeked position (0 if not seeking).
                 if ts >= play_opts.seek_ts {
-                    if let Some(volume) = volume {
-                        let volume = volume.load(std::sync::atomic::Ordering::SeqCst);
-                        trace!("Mixing volume to {volume}");
-                        mix_volume(&mut decoded, volume);
-                    }
-
                     trace!("Writing decoded to audio output");
                     audio_output_handler.write(decoded, &packet, &track)?;
                     trace!("Wrote decoded to audio output");

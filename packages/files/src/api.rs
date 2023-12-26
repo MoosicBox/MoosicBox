@@ -137,7 +137,6 @@ pub async fn track_endpoint(
                             true,
                             None,
                             None,
-                            &None,
                             &handle,
                         ) {
                             log::error!("Failed to encode to aac: {err:?}");

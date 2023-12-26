@@ -182,7 +182,6 @@ pub fn encode_mp3<T: std::io::Write + Send + Clone + 'static>(path: String, writ
         true,
         None,
         None,
-        &None,
         &handle,
     ) {
         log::error!("Failed to encode to mp3: {err:?}");

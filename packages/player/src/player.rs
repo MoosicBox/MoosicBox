@@ -21,6 +21,7 @@ use moosicbox_core::{
 use moosicbox_symphonia_player::{
     media_sources::remote_bytestream::RemoteByteStream,
     output::{AudioOutputError, AudioOutputHandler},
+    volume_mixer::mix_volume,
     PlaybackError, PlaybackHandle,
 };
 use once_cell::sync::Lazy;
@@ -529,6 +530,11 @@ impl Player {
                 Ok(())
             }));
 
+            audio_output_handler.with_filter(Box::new(move |decoded, _packet, _track| {
+                mix_volume(decoded, volume.load(std::sync::atomic::Ordering::SeqCst));
+                Ok(())
+            }));
+
             let handle = PlaybackHandle::new(abort.clone());
 
             if let Err(err) = moosicbox_symphonia_player::play_media_source(
@@ -539,7 +545,6 @@ impl Player {
                 true,
                 None,
                 current_seek,
-                &Some(volume.as_ref()),
                 &handle,
             ) {
                 if retry_options.is_none() {
