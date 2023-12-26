@@ -105,6 +105,10 @@ impl AudioOutputHandler {
         Ok(())
     }
 
+    pub fn contains_outputs_to_open(&self) -> bool {
+        !self.open_outputs.is_empty()
+    }
+
     pub fn try_open(
         &mut self,
         spec: SignalSpec,

@@ -312,19 +312,20 @@ fn play_track(
         match decoder.decode(&packet) {
             Ok(mut decoded) => {
                 trace!("Decoded packet");
-                // If the audio output is not open, try to open it.
-                trace!("Getting audio spec");
-                // Get the audio buffer specification. This is a description of the decoded
-                // audio buffer's sample format and sample rate.
-                let spec = *decoded.spec();
 
-                // Get the capacity of the decoded buffer. Note that this is capacity, not
-                // length! The capacity of the decoded buffer is constant for the life of the
-                // decoder, but the length is not.
-                let duration = decoded.capacity() as u64;
+                if audio_output_handler.contains_outputs_to_open() {
+                    trace!("Getting audio spec");
+                    // Get the audio buffer specification. This is a description of the decoded
+                    // audio buffer's sample format and sample rate.
+                    let spec = *decoded.spec();
 
-                trace!("Opening audio output");
-                audio_output_handler.try_open(spec, duration)?;
+                    // Get the capacity of the decoded buffer. Note that this is capacity, not
+                    // length! The capacity of the decoded buffer is constant for the life of the
+                    // decoder, but the length is not.
+                    let duration = decoded.capacity() as u64;
+
+                    audio_output_handler.try_open(spec, duration)?;
+                }
 
                 let ts = packet.ts();
 
