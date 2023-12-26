@@ -378,10 +378,10 @@ impl ChatServer {
                             .broadcast_except(&exclude_connection_ids, message.body.to_string())
                             .await
                         {
-                            error!("Failed to broadcast WsResponse: {error:?}");
+                            error!("Failed to broadcast_except WsMessage: {error:?}");
                         }
                     } else if let Err(error) = self.broadcast(message.body.to_string()).await {
-                        error!("Failed to broadcast WsResponse: {error:?}");
+                        error!("Failed to broadcast WsMessage: {error:?}");
                     }
                 }
 
