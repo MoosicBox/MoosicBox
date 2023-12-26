@@ -36,9 +36,11 @@ pub mod encoder;
 
 type InnerType = Box<dyn AudioOutput>;
 type OpenFunc = Box<dyn FnMut(SignalSpec, Duration) -> Result<InnerType, AudioOutputError>>;
+type AudioFilter = Box<dyn FnMut(&mut AudioBufferRef<'_>) -> Result<(), AudioOutputError>>;
 
 pub struct AudioOutputHandler {
     pub(crate) inner: Option<InnerType>,
+    pub(crate) filters: Vec<AudioFilter>,
     pub(crate) try_open: OpenFunc,
 }
 
@@ -46,8 +48,13 @@ impl AudioOutputHandler {
     pub fn new(try_open: OpenFunc) -> Self {
         Self {
             inner: None,
+            filters: vec![],
             try_open,
         }
+    }
+
+    pub fn filter(&mut self, filter: AudioFilter) {
+        self.filters.push(filter);
     }
 
     pub(crate) fn try_open(

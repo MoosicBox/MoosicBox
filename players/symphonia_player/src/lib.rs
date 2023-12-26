@@ -355,6 +355,10 @@ fn play_track(
                     // TODO: Check the audio spec. and duration hasn't changed.
                 }
 
+                for filter in &mut audio_output_handler.filters {
+                    filter(&mut decoded)?;
+                }
+
                 let ts = packet.ts();
 
                 // Write the decoded audio samples to the audio output if the presentation timestamp
