@@ -1,6 +1,10 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
-use std::{cell::RefCell, task::Poll};
+use std::{
+    cell::RefCell,
+    sync::{Arc, RwLock},
+    task::Poll,
+};
 
 use bytes::Bytes;
 use futures::Stream;
@@ -9,6 +13,7 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 #[derive(Clone)]
 pub struct ByteWriter {
+    written: Arc<RwLock<u64>>,
     senders: RefCell<Vec<UnboundedSender<Bytes>>>,
 }
 
@@ -16,11 +21,16 @@ impl ByteWriter {
     pub fn stream(&self) -> ByteStream {
         ByteStream::from(self)
     }
+
+    pub fn bytes_written(&self) -> u64 {
+        *self.written.read().unwrap()
+    }
 }
 
 impl Default for ByteWriter {
     fn default() -> Self {
         Self {
+            written: Arc::new(RwLock::new(0)),
             senders: RefCell::new(vec![]),
         }
     }
@@ -31,7 +41,19 @@ impl std::io::Write for ByteWriter {
         if buf.is_empty() {
             return Ok(0);
         }
-        log::trace!("Sending bytes buf of size {}", buf.len());
+
+        let len = buf.len();
+
+        {
+            *self.written.write().unwrap() += len as u64;
+
+            if self.senders.borrow().is_empty() {
+                log::trace!("No senders associated with ByteWriter. Eating {len} bytes");
+                return Ok(len);
+            }
+        }
+
+        log::trace!("Sending bytes buf of size {len}");
         let bytes: Bytes = buf.to_vec().into();
         self.senders.borrow_mut().retain(|sender| {
             if sender.send(bytes.clone()).is_err() {
