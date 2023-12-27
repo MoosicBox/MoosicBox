@@ -23,8 +23,8 @@ use crate::files::{
     album::{get_album_cover, AlbumCoverError, AlbumCoverSource},
     artist::{get_artist_cover, ArtistCoverError, ArtistCoverSource},
     track::{
-        get_or_init_track_size, get_track_info, get_track_source, get_tracks_info, TrackInfo,
-        TrackInfoError, TrackSource, TrackSourceError,
+        get_or_init_track_size, get_or_init_track_visualization, get_track_info, get_track_source,
+        get_tracks_info, TrackInfo, TrackInfoError, TrackSource, TrackSourceError,
     },
 };
 
@@ -47,6 +47,40 @@ impl From<TrackSourceError> for actix_web::Error {
     fn from(err: TrackSourceError) -> Self {
         ErrorInternalServerError(err.to_string())
     }
+}
+
+impl From<TrackInfoError> for actix_web::Error {
+    fn from(err: TrackInfoError) -> Self {
+        ErrorInternalServerError(err.to_string())
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTrackVisualizationQuery {
+    pub track_id: i32,
+    pub max: Option<u16>,
+}
+
+#[route("/track/visualization", method = "GET")]
+pub async fn track_visualization_endpoint(
+    _req: HttpRequest,
+    query: web::Query<GetTrackVisualizationQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<Vec<u8>>> {
+    let source = get_track_source(
+        query.track_id,
+        data.db
+            .clone()
+            .ok_or(ErrorInternalServerError("No DB set"))?,
+    )
+    .await?;
+
+    Ok(Json(get_or_init_track_visualization(
+        query.track_id,
+        &source,
+        query.max.unwrap_or(333),
+    )?))
 }
 
 #[route("/track", method = "GET", method = "HEAD")]
@@ -198,12 +232,6 @@ pub async fn track_endpoint(
 #[serde(rename_all = "camelCase")]
 pub struct GetTrackInfoQuery {
     pub track_id: usize,
-}
-
-impl From<TrackInfoError> for actix_web::Error {
-    fn from(err: TrackInfoError) -> Self {
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[route("/track/info", method = "GET")]

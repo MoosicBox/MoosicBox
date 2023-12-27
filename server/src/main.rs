@@ -228,6 +228,7 @@ fn main() -> std::io::Result<()> {
                 .service(moosicbox_menu::api::get_album_versions_endpoint)
                 .service(moosicbox_menu::api::get_artist_albums_endpoint)
                 .service(moosicbox_files::api::track_endpoint)
+                .service(moosicbox_files::api::track_visualization_endpoint)
                 .service(moosicbox_files::api::track_info_endpoint)
                 .service(moosicbox_files::api::tracks_info_endpoint)
                 .service(moosicbox_files::api::artist_cover_endpoint)
