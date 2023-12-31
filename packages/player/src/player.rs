@@ -495,17 +495,14 @@ impl Player {
 
             let mut audio_output_handler = AudioOutputHandler::new();
 
-            #[allow(unused)]
             #[cfg(feature = "cpal")]
             audio_output_handler.with_output(Box::new(
                 moosicbox_symphonia_player::output::cpal::player::try_open,
             ));
-            #[allow(unused)]
             #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
             audio_output_handler.with_output(Box::new(
                 moosicbox_symphonia_player::output::pulseaudio::simple::try_open,
             ));
-            #[allow(unused)]
             #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
             audio_output_handler.with_output(Box::new(
                 moosicbox_symphonia_player::output::pulseaudio::standard::try_open,
