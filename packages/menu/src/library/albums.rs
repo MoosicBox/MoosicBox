@@ -225,10 +225,11 @@ pub fn get_album_versions(
             continue;
         }
 
-        if let Some(existing_version) = versions
-            .iter_mut()
-            .find(|v| v.sample_rate == track.sample_rate && v.bit_depth == track.bit_depth)
-        {
+        if let Some(existing_version) = versions.iter_mut().find(|v| {
+            v.sample_rate == track.sample_rate
+                && v.bit_depth == track.bit_depth
+                && v.tracks[0].directory() == track.directory()
+        }) {
             existing_version.tracks.push(track);
         } else {
             versions.push(AlbumVersion {
