@@ -7,7 +7,7 @@ use std::{
 };
 
 use atomic_float::AtomicF64;
-use crossbeam_channel::{bounded, Receiver, SendError, Sender};
+use crossbeam_channel::{bounded, Receiver, SendError};
 use lazy_static::lazy_static;
 use log::{debug, error, info, trace, warn};
 use moosicbox_core::{
@@ -216,21 +216,17 @@ pub struct Player {
     playback_type: PlaybackType,
     source: PlayerSource,
     pub active_playback: Arc<RwLock<Option<Playback>>>,
-    sender: Sender<()>,
-    receiver: Receiver<()>,
+    receiver: Arc<RwLock<Option<Receiver<()>>>>,
 }
 
 impl Player {
     pub fn new(source: PlayerSource, playback_type: Option<PlaybackType>) -> Player {
-        let (tx, rx) = bounded(1);
-
         Player {
             id: thread_rng().gen::<usize>(),
             playback_type: playback_type.unwrap_or_default(),
             source,
             active_playback: Arc::new(RwLock::new(None)),
-            sender: tx,
-            receiver: rx,
+            receiver: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -362,6 +358,10 @@ impl Player {
             });
         }
 
+        let (tx, rx) = bounded(1);
+
+        self.receiver.write().unwrap().replace(rx);
+
         playback.playing = true;
 
         self.active_playback
@@ -401,7 +401,7 @@ impl Player {
                         .as_mut()
                         .unwrap()
                         .playing = false;
-                    player.sender.send(())?;
+                    tx.send(())?;
                     return Err(err);
                 }
 
@@ -442,7 +442,7 @@ impl Player {
                 .unwrap()
                 .playing = false;
 
-            player.sender.send(())?;
+            tx.send(())?;
 
             Ok::<_, PlayerError>(0)
         });
@@ -593,20 +593,21 @@ impl Player {
         }
 
         trace!("Waiting for playback completion response");
-        if let Err(err) = self
-            .receiver
-            .recv_timeout(std::time::Duration::from_secs(5))
-        {
-            match err {
-                crossbeam_channel::RecvTimeoutError::Timeout => {
-                    log::error!("Playback timed out waiting for abort completion")
+        if let Some(receiver) = self.receiver.write().unwrap().take() {
+            if let Err(err) = receiver.recv_timeout(std::time::Duration::from_secs(5)) {
+                match err {
+                    crossbeam_channel::RecvTimeoutError::Timeout => {
+                        log::error!("Playback timed out waiting for abort completion")
+                    }
+                    crossbeam_channel::RecvTimeoutError::Disconnected => {
+                        log::error!("Sender associated with playback disconnected")
+                    }
                 }
-                crossbeam_channel::RecvTimeoutError::Disconnected => {
-                    log::error!("Sender associated with playback disconnected")
-                }
+            } else {
+                trace!("Playback successfully stopped");
             }
         } else {
-            trace!("Playback successfully stopped");
+            log::debug!("No receiver to wait for completion response with");
         }
 
         Ok(playback)
@@ -812,8 +813,12 @@ impl Player {
         }
 
         trace!("Waiting for playback completion response");
-        if let Err(err) = self.receiver.recv() {
-            error!("Sender correlated with receiver has dropped: {err:?}");
+        if let Some(receiver) = self.receiver.write().unwrap().take() {
+            if let Err(err) = receiver.recv() {
+                error!("Sender correlated with receiver has dropped: {err:?}");
+            }
+        } else {
+            log::debug!("No receiver to wait for completion response with");
         }
         trace!("Playback successfully stopped");
 
