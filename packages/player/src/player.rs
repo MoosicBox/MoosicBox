@@ -801,7 +801,7 @@ impl Player {
 
     pub fn pause_playback(&self) -> Result<PlaybackStatus, PlayerError> {
         info!("Pausing playback id");
-        let playback = self.get_playback()?;
+        let mut playback = self.get_playback()?;
 
         let id = playback.id;
 
@@ -822,21 +822,14 @@ impl Player {
         }
         trace!("Playback successfully stopped");
 
+        playback.playing = false;
+        playback.abort = CancellationToken::new();
+
         self.active_playback
             .clone()
             .write()
             .unwrap()
-            .replace(Playback {
-                id,
-                session_id: playback.session_id,
-                tracks: playback.tracks.clone(),
-                playing: false,
-                quality: playback.quality,
-                position: playback.position,
-                progress: playback.progress,
-                volume: playback.volume,
-                abort: CancellationToken::new(),
-            });
+            .replace(playback);
 
         Ok(PlaybackStatus {
             success: true,
@@ -849,7 +842,7 @@ impl Player {
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
         info!("Resuming playback");
-        let playback = self.get_playback()?;
+        let mut playback = self.get_playback()?;
 
         let id = playback.id;
 
@@ -859,17 +852,8 @@ impl Player {
 
         let seek = Some(playback.progress);
 
-        let playback = Playback {
-            id,
-            session_id: playback.session_id,
-            tracks: playback.tracks.clone(),
-            playing: true,
-            position: playback.position,
-            quality: playback.quality,
-            progress: playback.progress,
-            volume: playback.volume,
-            abort: CancellationToken::new(),
-        };
+        playback.playing = true;
+        playback.abort = CancellationToken::new();
 
         self.play_playback(playback, seek, retry_options)
     }
