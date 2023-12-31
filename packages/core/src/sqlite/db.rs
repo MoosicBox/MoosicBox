@@ -1526,18 +1526,10 @@ pub fn add_album_maps_and_get_albums(
             if !album.contains_key("artist_id") || !album.contains_key("title") {
                 return Err(DbError::InvalidRequest);
             }
-            let filters = if album.contains_key("directory") && album.get("directory").is_some() {
-                vec![("directory", album.get("directory").unwrap().clone())]
-            } else {
-                let mut values = vec![
-                    ("artist_id", album.get("artist_id").unwrap().clone()),
-                    ("title", album.get("title").unwrap().clone()),
-                ];
-                if album.contains_key("directory") {
-                    values.push(("directory", album.get("directory").unwrap().clone()));
-                }
-                values
-            };
+            let filters = vec![
+                ("artist_id", album.get("artist_id").unwrap().clone()),
+                ("title", album.get("title").unwrap().clone()),
+            ];
             let row =
                 upsert_and_get_row(db, "albums", filters, album.into_iter().collect::<Vec<_>>())?;
 
