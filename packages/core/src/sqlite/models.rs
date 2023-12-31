@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr};
 
 use rusqlite::{types::FromSql, Row, Rows};
 use serde::{Deserialize, Serialize};
@@ -97,6 +97,15 @@ pub struct Track {
     pub overall_bitrate: Option<u32>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
+}
+
+impl Track {
+    pub fn directory(&self) -> Option<String> {
+        self.file
+            .as_ref()
+            .and_then(|f| PathBuf::from_str(f).ok())
+            .map(|p| p.parent().unwrap().to_str().unwrap().to_string())
+    }
 }
 
 impl AsModel<Track> for Row<'_> {
