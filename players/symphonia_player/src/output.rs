@@ -80,7 +80,7 @@ impl AudioOutputHandler {
         track: &Track,
     ) -> Result<(), AudioOutputError> {
         for filter in &mut self.filters {
-            log::debug!("Running audio filter");
+            log::trace!("Running audio filter");
             filter(decoded, packet, track)?;
         }
         Ok(())
