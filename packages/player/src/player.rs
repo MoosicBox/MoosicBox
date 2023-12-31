@@ -508,6 +508,10 @@ impl Player {
                 moosicbox_symphonia_player::output::pulseaudio::standard::try_open,
             ));
 
+            if !audio_output_handler.contains_outputs_to_open() {
+                log::warn!("No outputs set for the audio_output_handler");
+            }
+
             let active_playback = self.active_playback.clone();
 
             audio_output_handler
