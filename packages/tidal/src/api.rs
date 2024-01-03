@@ -4,14 +4,13 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
-use moosicbox_core::{
-    app::AppState,
-    sqlite::db::{create_tidal_config, get_tidal_access_token},
-};
+use moosicbox_core::app::AppState;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 use url::form_urlencoded;
+
+use crate::db::{create_tidal_config, get_tidal_access_token};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]

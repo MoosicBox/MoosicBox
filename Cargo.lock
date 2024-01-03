@@ -2954,6 +2954,7 @@ dependencies = [
  "log",
  "moosicbox_core",
  "reqwest",
+ "rusqlite",
  "serde",
  "serde_json",
  "strum",
