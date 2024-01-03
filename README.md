@@ -33,6 +33,10 @@ To-do (in no particular order):
 - Enable switching between different bitrates within encodings
 - Enable on the fly switching audio quality during playback
 - Pre-load next playback track
+- Global search functionality
+- Shuffle playback
+- Current playback screen
+- Listen-only connections
 
 ## Local Server
 
