@@ -4,13 +4,16 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
-use moosicbox_core::app::AppState;
+use moosicbox_core::{app::AppState, sqlite::models::ToApi};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 use url::form_urlencoded;
 
-use crate::db::{create_tidal_config, get_tidal_access_token};
+use crate::{
+    db::{create_tidal_config, get_tidal_access_token, get_tidal_config},
+    models::{ApiTidalAlbum, TidalAlbum},
+};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -202,4 +205,114 @@ pub async fn tidal_track_url_endpoint(
     Ok(Json(serde_json::json!({
         "urls": urls,
     })))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalFavoriteAlbumsQuery {
+    offset: Option<u32>,
+    limit: Option<u32>,
+}
+
+#[route("/tidal/favorites/albums", method = "GET")]
+pub async fn tidal_favorite_albums_endpoint(
+    query: web::Query<TidalFavoriteAlbumsQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<Vec<ApiTidalAlbum>>> {
+    let query_string = form_urlencoded::Serializer::new(String::new())
+        .append_pair("offset", &query.offset.unwrap_or(0).to_string())
+        .append_pair("limit", &query.limit.unwrap_or(100).to_string())
+        .append_pair("order", "DATE")
+        .append_pair("orderDirection", "DESC")
+        .append_pair("countryCode", "US")
+        .append_pair("locale", "en_US")
+        .append_pair("deviceType", "BROWSER")
+        .finish();
+
+    let config = get_tidal_config(
+        &data
+            .db
+            .clone()
+            .expect("Db not set")
+            .library
+            .lock()
+            .as_ref()
+            .unwrap()
+            .inner,
+    )
+    .map_err(|e| {
+        ErrorInternalServerError(format!("Failed to get tidal config access token: {e:?}"))
+    })?
+    .ok_or(ErrorInternalServerError("No access token available"))?;
+
+    let url = format!(
+        "https://api.tidal.com/v1/users/{}/favorites/albums?{query_string}",
+        config.user_id
+    );
+    println!("test.... {url}");
+
+    let value: Value = reqwest::Client::new()
+        .get(url)
+        .header(
+            reqwest::header::AUTHORIZATION,
+            format!("Bearer {}", config.access_token),
+        )
+        .send()
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to get track url: {e:?}")))?
+        .json()
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to get track url: {e:?}")))?;
+
+    let items = value
+        .get("items")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item.get("item").unwrap())
+        .map(|item| item.as_object().unwrap())
+        .map(|item| TidalAlbum {
+            id: item.get("id").unwrap().as_u64().unwrap() as u32,
+            artist_id: item
+                .get("artist")
+                .unwrap()
+                .get("id")
+                .unwrap()
+                .as_u64()
+                .unwrap() as u32,
+            audio_quality: item
+                .get("audioQuality")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_string(),
+            copyright: item.get("copyright").unwrap().as_str().unwrap().to_string(),
+            cover: item.get("cover").unwrap().as_str().unwrap().to_string(),
+            duration: item.get("duration").unwrap().as_u64().unwrap() as u32,
+            explicit: item.get("explicit").unwrap().as_bool().unwrap(),
+            number_of_tracks: item.get("numberOfTracks").unwrap().as_u64().unwrap() as u32,
+            popularity: item.get("popularity").unwrap().as_u64().unwrap() as u32,
+            release_date: item
+                .get("releaseDate")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_string(),
+            title: item.get("title").unwrap().as_str().unwrap().to_string(),
+            media_metadata_tags: item
+                .get("mediaMetadata")
+                .unwrap()
+                .get("tags")
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_str().unwrap().to_string())
+                .collect::<Vec<_>>(),
+        })
+        .map(|album| album.to_api())
+        .collect::<Vec<_>>();
+
+    Ok(Json(items))
 }

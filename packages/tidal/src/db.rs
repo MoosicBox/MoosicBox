@@ -43,7 +43,7 @@ pub fn create_tidal_config(
     Ok(())
 }
 
-pub fn get_tidal_access_token(db: &Connection) -> Result<Option<String>, DbError> {
+pub fn get_tidal_config(db: &Connection) -> Result<Option<TidalConfig>, DbError> {
     let mut configs = select::<TidalConfig>(db, "tidal_config", &vec![], &["*"])?
         .into_iter()
         .collect::<Vec<_>>();
@@ -54,5 +54,9 @@ pub fn get_tidal_access_token(db: &Connection) -> Result<Option<String>, DbError
 
     configs.sort_by(|a, b| a.issued_at.cmp(&b.issued_at));
 
-    Ok(configs.iter().map(|c| c.access_token.clone()).next())
+    Ok(configs.first().cloned())
+}
+
+pub fn get_tidal_access_token(db: &Connection) -> Result<Option<String>, DbError> {
+    Ok(get_tidal_config(db)?.map(|c| c.access_token.clone()))
 }
