@@ -37,6 +37,7 @@ To-do (in no particular order):
 - Shuffle playback
 - Current playback screen
 - Listen-only connections
+- Support MPEG-DASH encoding
 
 ## Local Server
 
