@@ -247,6 +247,7 @@ fn main() -> std::io::Result<()> {
                 .service(moosicbox_player::api::player_status_endpoint)
                 .service(moosicbox_tidal::api::tidal_device_authorization_endpoint)
                 .service(moosicbox_tidal::api::tidal_device_authorization_token_endpoint)
+                .service(moosicbox_tidal::api::tidal_track_url_endpoint)
         };
 
         let mut http_server = actix_web::HttpServer::new(app);
