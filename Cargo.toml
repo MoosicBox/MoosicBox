@@ -11,6 +11,7 @@ members = [
     "packages/menu",
     "packages/player",
     "packages/stream_utils",
+    "packages/tidal",
     "packages/tunnel",
     "packages/ws",
     "players/symphonia_player",

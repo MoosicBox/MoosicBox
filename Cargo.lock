@@ -2885,6 +2885,7 @@ dependencies = [
  "moosicbox_files",
  "moosicbox_menu",
  "moosicbox_player",
+ "moosicbox_tidal",
  "moosicbox_tunnel",
  "moosicbox_ws",
  "mp3-duration",
@@ -2941,6 +2942,21 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util",
+]
+
+[[package]]
+name = "moosicbox_tidal"
+version = "0.1.0"
+dependencies = [
+ "actix-cors",
+ "actix-files",
+ "actix-web",
+ "log",
+ "moosicbox_core",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

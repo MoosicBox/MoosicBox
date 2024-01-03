@@ -1,0 +1,20 @@
+[package]
+authors = ["Braden Steffaniak"]
+edition = "2021"
+name    = "moosicbox_tidal"
+version = "0.1.0"
+
+[dependencies]
+moosicbox_core = { path = "../core" }
+
+actix-cors  = { workspace = true }
+actix-files = { workspace = true }
+actix-web   = { workspace = true }
+log         = { workspace = true }
+reqwest     = { workspace = true }
+serde       = { workspace = true, features = ["derive"] }
+serde_json  = { workspace = true }
+thiserror   = { workspace = true }
+
+[features]
+fail-on-warnings = []
