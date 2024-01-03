@@ -13,7 +13,7 @@ use crate::types::PlaybackQuality;
 use super::models::{
     ActivePlayer, Album, AlbumVersionQuality, Artist, AsId, AsModel, AsModelQuery,
     AsModelResultMut, ClientAccessToken, CreateSession, MagicToken, NumberId, Player, Session,
-    SessionPlaylist, Track, TrackSize, UpdateSession,
+    SessionPlaylist, TidalConfig, Track, TrackSize, UpdateSession,
 };
 
 impl<T> From<PoisonError<T>> for DbError {
@@ -189,6 +189,46 @@ pub fn save_magic_token(
                 SqliteValue::String(access_token.to_string()),
             ),
             ("expires", SqliteValue::NowAdd("+1 Day".into())),
+        ],
+    )?;
+
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn create_tidal_config(
+    db: &Connection,
+    access_token: &str,
+    refresh_token: &str,
+    client_name: &str,
+    expires_in: u32,
+    scope: &str,
+    token_type: &str,
+    user: &str,
+    user_id: u32,
+) -> Result<(), DbError> {
+    upsert::<TidalConfig>(
+        db,
+        "tidal_config",
+        vec![(
+            "refresh_token",
+            SqliteValue::String(refresh_token.to_string()),
+        )],
+        vec![
+            (
+                "access_token",
+                SqliteValue::String(access_token.to_string()),
+            ),
+            (
+                "refresh_token",
+                SqliteValue::String(refresh_token.to_string()),
+            ),
+            ("client_name", SqliteValue::String(client_name.to_string())),
+            ("expires_in", SqliteValue::Number(expires_in as i64)),
+            ("scope", SqliteValue::String(scope.to_string())),
+            ("token_type", SqliteValue::String(token_type.to_string())),
+            ("user", SqliteValue::String(user.to_string())),
+            ("user_id", SqliteValue::Number(user_id as i64)),
         ],
     )?;
 
