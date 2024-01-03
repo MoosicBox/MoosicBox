@@ -235,6 +235,20 @@ pub fn create_tidal_config(
     Ok(())
 }
 
+pub fn get_tidal_access_token(db: &Connection) -> Result<Option<String>, DbError> {
+    let mut configs = select::<TidalConfig>(db, "tidal_config", &vec![], &["*"])?
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    if configs.is_empty() {
+        return Err(DbError::Unknown);
+    }
+
+    configs.sort_by(|a, b| a.issued_at.cmp(&b.issued_at));
+
+    Ok(configs.iter().map(|c| c.access_token.clone()).next())
+}
+
 pub fn get_session_playlist(
     db: &Connection,
     session_id: i32,
