@@ -12,6 +12,13 @@ use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
 use url::form_urlencoded;
 
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum TidalDeviceType {
+    Browser,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalAlbum {
@@ -182,13 +189,14 @@ trait ToUrl {
 enum TidalApiEndpoint {
     DeviceAuthorization,
     DeviceAuthorizationToken,
-    TrackUrl,
+    Artist,
+    FavoriteArtists,
+    Album,
     FavoriteAlbums,
     ArtistAlbums,
-    AlbumTracks,
-    Album,
-    Artist,
     Track,
+    AlbumTracks,
+    TrackUrl,
 }
 
 static TIDAL_AUTH_API_BASE_URL: &str = "https://auth.tidal.com/v1";
@@ -201,13 +209,16 @@ impl ToUrl for TidalApiEndpoint {
                 format!("{TIDAL_AUTH_API_BASE_URL}/oauth2/device_authorization")
             }
             Self::DeviceAuthorizationToken => format!("{TIDAL_AUTH_API_BASE_URL}/oauth2/token"),
-            Self::TrackUrl => format!("{TIDAL_API_BASE_URL}/tracks/:trackId/urlpostpaywall"),
+            Self::Artist => format!("{TIDAL_API_BASE_URL}/artists/:artistId"),
+            Self::FavoriteArtists => {
+                format!("{TIDAL_API_BASE_URL}/users/:userId/favorites/artists")
+            }
+            Self::Album => format!("{TIDAL_API_BASE_URL}/albums/:albumId"),
             Self::FavoriteAlbums => format!("{TIDAL_API_BASE_URL}/users/:userId/favorites/albums"),
             Self::ArtistAlbums => format!("{TIDAL_API_BASE_URL}/artists/:artistId/albums"),
-            Self::AlbumTracks => format!("{TIDAL_API_BASE_URL}/albums/:albumId/tracks"),
-            Self::Album => format!("{TIDAL_API_BASE_URL}/albums/:albumId"),
-            Self::Artist => format!("{TIDAL_API_BASE_URL}/artists/:artistId"),
             Self::Track => format!("{TIDAL_API_BASE_URL}/tracks/:trackId"),
+            Self::AlbumTracks => format!("{TIDAL_API_BASE_URL}/albums/:albumId/tracks"),
+            Self::TrackUrl => format!("{TIDAL_API_BASE_URL}/tracks/:trackId/urlpostpaywall"),
         }
     }
 }
@@ -438,6 +449,116 @@ pub async fn track_url(
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum TidalArtistOrder {
+    Date,
+}
+
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum TidalArtistOrderDirection {
+    Asc,
+    Desc,
+}
+
+#[derive(Debug, Error)]
+pub enum TidalFavoriteArtistsError {
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    #[error("No access token available")]
+    NoAccessTokenAvailable,
+    #[error("No user ID available")]
+    NoUserIdAvailable,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn favorite_artists(
+    #[cfg(feature = "db")] db: &rusqlite::Connection,
+    offset: Option<u32>,
+    limit: Option<u32>,
+    order: Option<TidalArtistOrder>,
+    order_direction: Option<TidalArtistOrderDirection>,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+    access_token: Option<String>,
+    user_id: Option<u32>,
+) -> Result<(Vec<TidalArtist>, u32), TidalFavoriteArtistsError> {
+    #[cfg(feature = "db")]
+    let (access_token, user_id) = {
+        match (access_token.clone(), user_id) {
+            (Some(access_token), Some(user_id)) => (access_token, user_id),
+            _ => {
+                let config = db::get_tidal_config(db)?
+                    .ok_or(TidalFavoriteArtistsError::NoAccessTokenAvailable)?;
+                (
+                    access_token.unwrap_or(config.access_token),
+                    user_id.unwrap_or(config.user_id),
+                )
+            }
+        }
+    };
+
+    #[cfg(not(feature = "db"))]
+    let (access_token, user_id) = (
+        access_token.ok_or(TidalFavoriteArtistsError::NoAccessTokenAvailable)?,
+        user_id.ok_or(TidalFavoriteArtistsError::NoUserIdAvailable)?,
+    );
+
+    let url = tidal_api_endpoint!(
+        FavoriteArtists,
+        &[(":userId", &user_id.to_string())],
+        &[
+            ("offset", &offset.unwrap_or(0).to_string()),
+            ("limit", &limit.unwrap_or(100).to_string()),
+            ("order", order.unwrap_or(TidalArtistOrder::Date).as_ref()),
+            (
+                "orderDirection",
+                order_direction
+                    .unwrap_or(TidalArtistOrderDirection::Desc)
+                    .as_ref(),
+            ),
+            ("countryCode", &country_code.clone().unwrap_or("US".into())),
+            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "deviceType",
+                device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
+            ),
+        ]
+    );
+
+    let value: Value = reqwest::Client::new()
+        .get(url)
+        .header(
+            reqwest::header::AUTHORIZATION,
+            format!("Bearer {}", access_token),
+        )
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    let items = value
+        .get("items")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item.get("item").unwrap())
+        .map(|item| item.as_model())
+        .collect::<Vec<_>>();
+
+    let count = value.get("totalNumberOfItems").unwrap().as_u64().unwrap() as u32;
+
+    Ok((items, count))
+}
+
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum TidalAlbumOrder {
     Date,
 }
@@ -448,13 +569,6 @@ pub enum TidalAlbumOrder {
 pub enum TidalAlbumOrderDirection {
     Asc,
     Desc,
-}
-
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
-pub enum TidalDeviceType {
-    Browser,
 }
 
 #[derive(Debug, Error)]
