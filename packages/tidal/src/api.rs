@@ -260,7 +260,6 @@ pub async fn tidal_favorite_albums_endpoint(
         "https://api.tidal.com/v1/users/{}/favorites/albums?{query_string}",
         config.user_id
     );
-    println!("test.... {url}");
 
     let value: Value = reqwest::Client::new()
         .get(url)
