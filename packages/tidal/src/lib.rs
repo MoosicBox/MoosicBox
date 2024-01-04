@@ -164,6 +164,7 @@ enum TidalApiEndpoint {
     DeviceAuthorizationToken,
     TrackUrl,
     FavoriteAlbums,
+    ArtistAlbums,
     AlbumTracks,
     Album,
     Artist,
@@ -182,6 +183,7 @@ impl ToUrl for TidalApiEndpoint {
             Self::DeviceAuthorizationToken => format!("{TIDAL_AUTH_API_BASE_URL}/oauth2/token"),
             Self::TrackUrl => format!("{TIDAL_API_BASE_URL}/tracks/:trackId/urlpostpaywall"),
             Self::FavoriteAlbums => format!("{TIDAL_API_BASE_URL}/users/:userId/favorites/albums"),
+            Self::ArtistAlbums => format!("{TIDAL_API_BASE_URL}/artists/:artistId/albums"),
             Self::AlbumTracks => format!("{TIDAL_API_BASE_URL}/albums/:albumId/tracks"),
             Self::Album => format!("{TIDAL_API_BASE_URL}/albums/:albumId"),
             Self::Artist => format!("{TIDAL_API_BASE_URL}/artists/:artistId"),
@@ -522,6 +524,82 @@ pub async fn favorite_albums(
         .unwrap()
         .iter()
         .map(|item| item.get("item").unwrap())
+        .map(|item| item.as_model())
+        .collect::<Vec<_>>();
+
+    let count = value.get("totalNumberOfItems").unwrap().as_u64().unwrap() as u32;
+
+    Ok((items, count))
+}
+
+#[derive(Debug, Error)]
+pub enum TidalArtistAlbumsError {
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    #[error("No access token available")]
+    NoAccessTokenAvailable,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn artist_albums(
+    #[cfg(feature = "db")] db: &rusqlite::Connection,
+    artist_id: u32,
+    offset: Option<u32>,
+    limit: Option<u32>,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+    access_token: Option<String>,
+) -> Result<(Vec<TidalAlbum>, u32), TidalArtistAlbumsError> {
+    #[cfg(feature = "db")]
+    let access_token = match access_token {
+        Some(access_token) => access_token,
+        _ => {
+            let config =
+                db::get_tidal_config(db)?.ok_or(TidalArtistAlbumsError::NoAccessTokenAvailable)?;
+
+            access_token.unwrap_or(config.access_token)
+        }
+    };
+
+    #[cfg(not(feature = "db"))]
+    let access_token = access_token.ok_or(TidalArtistAlbumsError::NoAccessTokenAvailable)?;
+
+    let url = tidal_api_endpoint!(
+        ArtistAlbums,
+        &[(":artistId", &artist_id.to_string())],
+        &[
+            ("offset", &offset.unwrap_or(0).to_string()),
+            ("limit", &limit.unwrap_or(100).to_string()),
+            ("countryCode", &country_code.clone().unwrap_or("US".into())),
+            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "deviceType",
+                device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
+            ),
+        ]
+    );
+
+    let value: Value = reqwest::Client::new()
+        .get(url)
+        .header(
+            reqwest::header::AUTHORIZATION,
+            format!("Bearer {}", access_token),
+        )
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    let items = value
+        .get("items")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
         .map(|item| item.as_model())
         .collect::<Vec<_>>();
 

@@ -9,11 +9,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    album, album_tracks, artist, device_authorization, device_authorization_token, favorite_albums,
-    track, track_url, TidalAlbum, TidalAlbumError, TidalAlbumOrder, TidalAlbumOrderDirection,
-    TidalAlbumTracksError, TidalArtist, TidalArtistError, TidalAudioQuality,
-    TidalDeviceAuthorizationError, TidalDeviceAuthorizationTokenError, TidalDeviceType,
-    TidalFavoriteAlbumsError, TidalTrack, TidalTrackError, TidalTrackUrlError,
+    album, album_tracks, artist, artist_albums, device_authorization, device_authorization_token,
+    favorite_albums, track, track_url, TidalAlbum, TidalAlbumError, TidalAlbumOrder,
+    TidalAlbumOrderDirection, TidalAlbumTracksError, TidalArtist, TidalArtistAlbumsError,
+    TidalArtistError, TidalAudioQuality, TidalDeviceAuthorizationError,
+    TidalDeviceAuthorizationTokenError, TidalDeviceType, TidalFavoriteAlbumsError, TidalTrack,
+    TidalTrackError, TidalTrackUrlError,
 };
 
 impl ToApi<ApiTidalAlbum> for TidalAlbum {
@@ -263,6 +264,58 @@ pub async fn favorite_albums_endpoint(
             .get(TIDAL_ACCESS_TOKEN_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
         query.user_id,
+    )
+    .await?;
+
+    Ok(Json(serde_json::json!({
+        "count": count,
+        "items": items.iter().map(|item| item.to_api()).collect::<Vec<_>>(),
+    })))
+}
+
+impl From<TidalArtistAlbumsError> for actix_web::Error {
+    fn from(err: TidalArtistAlbumsError) -> Self {
+        ErrorInternalServerError(err.to_string())
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalArtistAlbumsQuery {
+    artist_id: u32,
+    offset: Option<u32>,
+    limit: Option<u32>,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+}
+
+#[route("/tidal/artists/albums", method = "GET")]
+pub async fn artist_albums_endpoint(
+    req: HttpRequest,
+    query: web::Query<TidalArtistAlbumsQuery>,
+    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<Value>> {
+    let (items, count) = artist_albums(
+        #[cfg(feature = "db")]
+        &data
+            .db
+            .clone()
+            .expect("Db not set")
+            .library
+            .lock()
+            .as_ref()
+            .unwrap()
+            .inner,
+        query.artist_id,
+        query.offset,
+        query.limit,
+        query.country_code.clone(),
+        query.locale.clone(),
+        query.device_type,
+        req.headers()
+            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
     )
     .await?;
 
