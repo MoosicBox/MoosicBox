@@ -146,15 +146,17 @@ impl AsModel<TidalTrack> for Value {
 #[serde(rename_all = "camelCase")]
 pub struct TidalArtist {
     pub id: u32,
-    pub picture: String,
+    pub picture: Option<String>,
     pub popularity: u32,
     pub name: String,
 }
 
 impl TidalArtist {
-    pub fn picture_url(&self, size: u16) -> String {
-        let picture_path = self.picture.replace('-', "/");
-        format!("https://resources.tidal.com/images/{picture_path}/{size}x{size}.jpg")
+    pub fn picture_url(&self, size: u16) -> Option<String> {
+        self.picture.as_ref().map(|picture| {
+            let picture_path = picture.replace('-', "/");
+            format!("https://resources.tidal.com/images/{picture_path}/{size}x{size}.jpg")
+        })
     }
 }
 
@@ -162,7 +164,11 @@ impl AsModel<TidalArtist> for Value {
     fn as_model(&self) -> TidalArtist {
         TidalArtist {
             id: self.get("id").unwrap().as_u64().unwrap() as u32,
-            picture: self.get("picture").unwrap().as_str().unwrap().to_string(),
+            picture: self
+                .get("picture")
+                .unwrap()
+                .as_str()
+                .map(|pic| pic.to_string()),
             popularity: self.get("popularity").unwrap().as_u64().unwrap() as u32,
             name: self.get("name").unwrap().as_str().unwrap().to_string(),
         }

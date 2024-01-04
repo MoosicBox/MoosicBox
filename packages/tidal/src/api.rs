@@ -104,7 +104,7 @@ impl ToApi<ApiTidalArtist> for TidalArtist {
 #[serde(rename_all = "camelCase")]
 pub struct ApiTidalArtist {
     pub id: u32,
-    pub picture: String,
+    pub picture: Option<String>,
     pub popularity: u32,
     pub name: String,
 }
