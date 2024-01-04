@@ -160,15 +160,13 @@ pub async fn device_authorization_token_endpoint(
     Ok(Json(
         device_authorization_token(
             #[cfg(feature = "db")]
-            &data
-                .db
+            data.db
                 .clone()
                 .expect("Db not set")
                 .library
                 .lock()
                 .as_ref()
-                .unwrap()
-                .inner,
+                .unwrap(),
             query.client_id.clone(),
             query.client_secret.clone(),
             query.device_code.clone(),
@@ -201,15 +199,13 @@ pub async fn track_url_endpoint(
     Ok(Json(
         track_url(
             #[cfg(feature = "db")]
-            &data
-                .db
+            data.db
                 .clone()
                 .expect("Db not set")
                 .library
                 .lock()
                 .as_ref()
-                .unwrap()
-                .inner,
+                .unwrap(),
             query.audio_quality,
             query.track_id,
             req.headers()
@@ -247,15 +243,13 @@ pub async fn favorite_artists_endpoint(
 ) -> Result<Json<Value>> {
     let (items, count) = favorite_artists(
         #[cfg(feature = "db")]
-        &data
-            .db
+        data.db
             .clone()
             .expect("Db not set")
             .library
             .lock()
             .as_ref()
-            .unwrap()
-            .inner,
+            .unwrap(),
         query.offset,
         query.limit,
         query.order,
@@ -303,15 +297,13 @@ pub async fn favorite_albums_endpoint(
 ) -> Result<Json<Value>> {
     let (items, count) = favorite_albums(
         #[cfg(feature = "db")]
-        &data
-            .db
+        data.db
             .clone()
             .expect("Db not set")
             .library
             .lock()
             .as_ref()
-            .unwrap()
-            .inner,
+            .unwrap(),
         query.offset,
         query.limit,
         query.order,
@@ -359,15 +351,13 @@ pub async fn favorite_tracks_endpoint(
 ) -> Result<Json<Value>> {
     let (items, count) = favorite_tracks(
         #[cfg(feature = "db")]
-        &data
-            .db
+        data.db
             .clone()
             .expect("Db not set")
             .library
             .lock()
             .as_ref()
-            .unwrap()
-            .inner,
+            .unwrap(),
         query.offset,
         query.limit,
         query.order,
@@ -413,15 +403,13 @@ pub async fn artist_albums_endpoint(
 ) -> Result<Json<Value>> {
     let (items, count) = artist_albums(
         #[cfg(feature = "db")]
-        &data
-            .db
+        data.db
             .clone()
             .expect("Db not set")
             .library
             .lock()
             .as_ref()
-            .unwrap()
-            .inner,
+            .unwrap(),
         query.artist_id,
         query.offset,
         query.limit,
@@ -465,15 +453,13 @@ pub async fn album_tracks_endpoint(
 ) -> Result<Json<Value>> {
     let (items, count) = album_tracks(
         #[cfg(feature = "db")]
-        &data
-            .db
+        data.db
             .clone()
             .expect("Db not set")
             .library
             .lock()
             .as_ref()
-            .unwrap()
-            .inner,
+            .unwrap(),
         query.album_id,
         query.offset,
         query.limit,
@@ -515,15 +501,13 @@ pub async fn album_endpoint(
 ) -> Result<Json<ApiTidalAlbum>> {
     let album = album(
         #[cfg(feature = "db")]
-        &data
-            .db
+        data.db
             .clone()
             .expect("Db not set")
             .library
             .lock()
             .as_ref()
-            .unwrap()
-            .inner,
+            .unwrap(),
         query.album_id,
         query.country_code.clone(),
         query.locale.clone(),
@@ -560,15 +544,13 @@ pub async fn artist_endpoint(
 ) -> Result<Json<ApiTidalArtist>> {
     let artist = artist(
         #[cfg(feature = "db")]
-        &data
-            .db
+        data.db
             .clone()
             .expect("Db not set")
             .library
             .lock()
             .as_ref()
-            .unwrap()
-            .inner,
+            .unwrap(),
         query.artist_id,
         query.country_code.clone(),
         query.locale.clone(),
@@ -605,15 +587,13 @@ pub async fn track_endpoint(
 ) -> Result<Json<ApiTidalTrack>> {
     let track = track(
         #[cfg(feature = "db")]
-        &data
-            .db
+        data.db
             .clone()
             .expect("Db not set")
             .library
             .lock()
             .as_ref()
-            .unwrap()
-            .inner,
+            .unwrap(),
         query.track_id,
         query.country_code.clone(),
         query.locale.clone(),
