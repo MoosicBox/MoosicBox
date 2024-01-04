@@ -82,6 +82,7 @@ macro_rules! tidal_api_endpoint {
 
 pub async fn device_authorization(
     client_id: String,
+    open: bool,
 ) -> Result<Value, TidalDeviceAuthorizationError> {
     let url = tidal_api_endpoint!(DeviceAuthorization);
 
@@ -105,9 +106,21 @@ pub async fn device_authorization(
         .unwrap();
 
     let device_code = value.get("deviceCode").unwrap().as_str().unwrap();
+    let url = format!("https://{verification_uri_complete}");
+
+    if open {
+        match open::that(&url) {
+            Ok(_) => {
+                log::debug!("Opened url in default browser");
+            }
+            Err(err) => {
+                log::error!("Failed to open url in default web browser: {err:?}");
+            }
+        }
+    }
 
     Ok(serde_json::json!({
-        "url": format!("https://{verification_uri_complete}"),
+        "url": url,
         "device_code": device_code,
     }))
 }

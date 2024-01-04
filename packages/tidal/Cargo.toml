@@ -16,6 +16,7 @@ actix-web   = { workspace = true, optional = true }
 rusqlite = { workspace = true, optional = true }
 
 log          = { workspace = true }
+open         = { workspace = true }
 reqwest      = { workspace = true, features = ["json"] }
 serde        = { workspace = true, features = ["derive"] }
 serde_json   = { workspace = true }

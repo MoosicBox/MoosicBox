@@ -26,13 +26,16 @@ static TIDAL_ACCESS_TOKEN_HEADER: &str = "x-tidal-access-token";
 #[serde(rename_all = "camelCase")]
 pub struct TidalDeviceAuthorizationQuery {
     client_id: String,
+    open: Option<bool>,
 }
 
 #[route("/tidal/auth/device-authorization", method = "POST")]
 pub async fn device_authorization_endpoint(
     query: web::Query<TidalDeviceAuthorizationQuery>,
 ) -> Result<Json<Value>> {
-    Ok(Json(device_authorization(query.client_id.clone()).await?))
+    Ok(Json(
+        device_authorization(query.client_id.clone(), query.open.unwrap_or(false)).await?,
+    ))
 }
 
 impl From<TidalDeviceAuthorizationTokenError> for actix_web::Error {
