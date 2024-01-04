@@ -12,12 +12,6 @@ use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
 use url::form_urlencoded;
 
-#[derive(Debug, Error)]
-pub enum TidalDeviceAuthorizationError {
-    #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
-}
-
 trait ToUrl {
     fn to_url(&self) -> String;
 }
@@ -80,6 +74,12 @@ macro_rules! tidal_api_endpoint {
     ($name:ident, $params:expr, $query:expr) => {
         attach_query_string(&tidal_api_endpoint!($name, $params), $query)
     };
+}
+
+#[derive(Debug, Error)]
+pub enum TidalDeviceAuthorizationError {
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
 }
 
 pub async fn device_authorization(
@@ -506,7 +506,7 @@ pub async fn favorite_albums(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
     user_id: Option<u32>,
-) -> Result<Vec<ApiTidalAlbum>, TidalFavoriteAlbumsError> {
+) -> Result<(Vec<ApiTidalAlbum>, u32), TidalFavoriteAlbumsError> {
     #[cfg(feature = "db")]
     let (access_token, user_id) = {
         match (access_token.clone(), user_id) {
@@ -572,7 +572,9 @@ pub async fn favorite_albums(
         .map(|album: TidalAlbum| album.to_api())
         .collect::<Vec<_>>();
 
-    Ok(items)
+    let count = value.get("totalNumberOfItems").unwrap().as_u64().unwrap() as u32;
+
+    Ok((items, count))
 }
 
 #[derive(Debug, Error)]
@@ -596,7 +598,7 @@ pub async fn album_tracks(
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
-) -> Result<Vec<ApiTidalTrack>, TidalAlbumTracksError> {
+) -> Result<(Vec<ApiTidalTrack>, u32), TidalAlbumTracksError> {
     #[cfg(feature = "db")]
     let access_token = match access_token {
         Some(access_token) => access_token,
@@ -647,5 +649,7 @@ pub async fn album_tracks(
         .map(|album: TidalTrack| album.to_api())
         .collect::<Vec<_>>();
 
-    Ok(items)
+    let count = value.get("totalNumberOfItems").unwrap().as_u64().unwrap() as u32;
+
+    Ok((items, count))
 }

@@ -9,9 +9,9 @@ use serde_json::Value;
 
 use crate::{
     album_tracks, device_authorization, device_authorization_token, favorite_albums, track_url,
-    ApiTidalAlbum, ApiTidalTrack, TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError,
-    TidalAudioQuality, TidalDeviceAuthorizationError, TidalDeviceAuthorizationTokenError,
-    TidalDeviceType, TidalFavoriteAlbumsError, TidalTrackUrlError,
+    TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError, TidalAudioQuality,
+    TidalDeviceAuthorizationError, TidalDeviceAuthorizationTokenError, TidalDeviceType,
+    TidalFavoriteAlbumsError, TidalTrackUrlError,
 };
 
 impl From<TidalDeviceAuthorizationError> for actix_web::Error {
@@ -146,33 +146,36 @@ pub async fn favorite_albums_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteAlbumsQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<Vec<ApiTidalAlbum>>> {
-    Ok(Json(
-        favorite_albums(
-            #[cfg(feature = "db")]
-            &data
-                .db
-                .clone()
-                .expect("Db not set")
-                .library
-                .lock()
-                .as_ref()
-                .unwrap()
-                .inner,
-            query.offset,
-            query.limit,
-            query.order,
-            query.order_direction,
-            query.country_code.clone(),
-            query.locale.clone(),
-            query.device_type,
-            req.headers()
-                .get(TIDAL_ACCESS_TOKEN_HEADER)
-                .map(|x| x.to_str().unwrap().to_string()),
-            query.user_id,
-        )
-        .await?,
-    ))
+) -> Result<Json<Value>> {
+    let (items, count) = favorite_albums(
+        #[cfg(feature = "db")]
+        &data
+            .db
+            .clone()
+            .expect("Db not set")
+            .library
+            .lock()
+            .as_ref()
+            .unwrap()
+            .inner,
+        query.offset,
+        query.limit,
+        query.order,
+        query.order_direction,
+        query.country_code.clone(),
+        query.locale.clone(),
+        query.device_type,
+        req.headers()
+            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+        query.user_id,
+    )
+    .await?;
+
+    Ok(Json(serde_json::json!({
+        "count": count,
+        "items": items,
+    })))
 }
 
 impl From<TidalAlbumTracksError> for actix_web::Error {
@@ -197,29 +200,32 @@ pub async fn album_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAlbumTracksQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<Vec<ApiTidalTrack>>> {
-    Ok(Json(
-        album_tracks(
-            #[cfg(feature = "db")]
-            &data
-                .db
-                .clone()
-                .expect("Db not set")
-                .library
-                .lock()
-                .as_ref()
-                .unwrap()
-                .inner,
-            query.album_id,
-            query.offset,
-            query.limit,
-            query.country_code.clone(),
-            query.locale.clone(),
-            query.device_type,
-            req.headers()
-                .get(TIDAL_ACCESS_TOKEN_HEADER)
-                .map(|x| x.to_str().unwrap().to_string()),
-        )
-        .await?,
-    ))
+) -> Result<Json<Value>> {
+    let (items, count) = album_tracks(
+        #[cfg(feature = "db")]
+        &data
+            .db
+            .clone()
+            .expect("Db not set")
+            .library
+            .lock()
+            .as_ref()
+            .unwrap()
+            .inner,
+        query.album_id,
+        query.offset,
+        query.limit,
+        query.country_code.clone(),
+        query.locale.clone(),
+        query.device_type,
+        req.headers()
+            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+    )
+    .await?;
+
+    Ok(Json(serde_json::json!({
+        "count": count,
+        "items": items,
+    })))
 }
