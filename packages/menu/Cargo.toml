@@ -5,12 +5,14 @@ name    = "moosicbox_menu"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_core = { path = "../core" }
+moosicbox_core  = { path = "../core" }
+moosicbox_tidal = { path = "../tidal" }
 
 actix-cors  = { workspace = true }
 actix-files = { workspace = true }
 actix-web   = { workspace = true }
 awc         = { workspace = true }
+futures     = { workspace = true }
 log         = { workspace = true }
 serde       = { workspace = true, features = ["derive"] }
 serde_json  = { workspace = true }
