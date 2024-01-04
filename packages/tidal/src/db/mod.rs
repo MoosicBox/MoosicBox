@@ -1,7 +1,9 @@
 use moosicbox_core::sqlite::db::{select, upsert, DbError, SqliteValue};
 use rusqlite::Connection;
 
-use crate::models::TidalConfig;
+pub mod models;
+
+use crate::db::models::TidalConfig;
 
 #[allow(clippy::too_many_arguments)]
 pub fn create_tidal_config(

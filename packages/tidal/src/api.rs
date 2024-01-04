@@ -10,9 +10,9 @@ use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 use url::form_urlencoded;
 
-use crate::{
-    db::{create_tidal_config, get_tidal_access_token, get_tidal_config},
+use crate::db::{
     models::{ApiTidalAlbum, TidalAlbum},
+    {create_tidal_config, get_tidal_access_token, get_tidal_config},
 };
 
 #[derive(Deserialize)]
