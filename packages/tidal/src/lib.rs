@@ -167,6 +167,7 @@ enum TidalApiEndpoint {
     AlbumTracks,
     Album,
     Artist,
+    Track,
 }
 
 static TIDAL_AUTH_API_BASE_URL: &str = "https://auth.tidal.com/v1";
@@ -184,6 +185,7 @@ impl ToUrl for TidalApiEndpoint {
             Self::AlbumTracks => format!("{TIDAL_API_BASE_URL}/albums/:albumId/tracks"),
             Self::Album => format!("{TIDAL_API_BASE_URL}/albums/:albumId"),
             Self::Artist => format!("{TIDAL_API_BASE_URL}/artists/:artistId"),
+            Self::Track => format!("{TIDAL_API_BASE_URL}/tracks/:trackId"),
         }
     }
 }
@@ -702,6 +704,67 @@ pub async fn artist(
     let url = tidal_api_endpoint!(
         Artist,
         &[(":artistId", &artist_id.to_string())],
+        &[
+            ("countryCode", &country_code.clone().unwrap_or("US".into())),
+            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "deviceType",
+                device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
+            ),
+        ]
+    );
+
+    let value: Value = reqwest::Client::new()
+        .get(url)
+        .header(
+            reqwest::header::AUTHORIZATION,
+            format!("Bearer {}", access_token),
+        )
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    Ok(value.as_model())
+}
+
+#[derive(Debug, Error)]
+pub enum TidalTrackError {
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    #[error("No access token available")]
+    NoAccessTokenAvailable,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn track(
+    #[cfg(feature = "db")] db: &rusqlite::Connection,
+    track_id: u32,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+    access_token: Option<String>,
+) -> Result<TidalTrack, TidalTrackError> {
+    #[cfg(feature = "db")]
+    let access_token = match access_token {
+        Some(access_token) => access_token,
+        _ => {
+            let config =
+                db::get_tidal_config(db)?.ok_or(TidalTrackError::NoAccessTokenAvailable)?;
+
+            access_token.unwrap_or(config.access_token)
+        }
+    };
+
+    #[cfg(not(feature = "db"))]
+    let access_token = access_token.ok_or(TidalTrackError::NoAccessTokenAvailable)?;
+
+    let url = tidal_api_endpoint!(
+        Track,
+        &[(":trackId", &track_id.to_string())],
         &[
             ("countryCode", &country_code.clone().unwrap_or("US".into())),
             ("locale", &locale.clone().unwrap_or("en_US".into())),
