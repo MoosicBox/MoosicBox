@@ -218,11 +218,38 @@ pub async fn tidal_track_url_endpoint(
     })))
 }
 
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum TidalAlbumOrder {
+    Date,
+}
+
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum TidalAlbumOrderDirection {
+    Asc,
+    Desc,
+}
+
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum TidalDeviceType {
+    Browser,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalFavoriteAlbumsQuery {
     offset: Option<u32>,
     limit: Option<u32>,
+    order: Option<TidalAlbumOrder>,
+    order_direction: Option<TidalAlbumOrderDirection>,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
 }
 
 #[route("/tidal/favorites/albums", method = "GET")]
@@ -233,11 +260,29 @@ pub async fn tidal_favorite_albums_endpoint(
     let query_string = form_urlencoded::Serializer::new(String::new())
         .append_pair("offset", &query.offset.unwrap_or(0).to_string())
         .append_pair("limit", &query.limit.unwrap_or(100).to_string())
-        .append_pair("order", "DATE")
-        .append_pair("orderDirection", "DESC")
-        .append_pair("countryCode", "US")
-        .append_pair("locale", "en_US")
-        .append_pair("deviceType", "BROWSER")
+        .append_pair(
+            "order",
+            query.order.unwrap_or(TidalAlbumOrder::Date).as_ref(),
+        )
+        .append_pair(
+            "orderDirection",
+            query
+                .order_direction
+                .unwrap_or(TidalAlbumOrderDirection::Desc)
+                .as_ref(),
+        )
+        .append_pair(
+            "countryCode",
+            &query.country_code.clone().unwrap_or("US".into()),
+        )
+        .append_pair("locale", &query.locale.clone().unwrap_or("en_US".into()))
+        .append_pair(
+            "deviceType",
+            query
+                .device_type
+                .unwrap_or(TidalDeviceType::Browser)
+                .as_ref(),
+        )
         .finish();
 
     let config = get_tidal_config(
