@@ -27,6 +27,7 @@ enum TidalApiEndpoint {
     DeviceAuthorizationToken,
     TrackUrl,
     FavoriteAlbums,
+    AlbumTracks,
 }
 
 static TIDAL_AUTH_API_BASE_URL: &str = "https://auth.tidal.com/v1";
@@ -41,6 +42,7 @@ impl ToUrl for TidalApiEndpoint {
             Self::DeviceAuthorizationToken => format!("{TIDAL_AUTH_API_BASE_URL}/oauth2/token"),
             Self::TrackUrl => format!("{TIDAL_API_BASE_URL}/tracks/:trackId/urlpostpaywall"),
             Self::FavoriteAlbums => format!("{TIDAL_API_BASE_URL}/users/:userId/favorites/albums"),
+            Self::AlbumTracks => format!("{TIDAL_API_BASE_URL}/albums/:albumId/tracks"),
         }
     }
 }
@@ -381,6 +383,104 @@ pub struct ApiTidalAlbum {
     pub media_metadata_tags: Vec<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalTrack {
+    pub id: u32,
+    pub track_number: u32,
+    pub album_id: u32,
+    pub artist_id: u32,
+    pub audio_quality: String,
+    pub copyright: String,
+    pub duration: u32,
+    pub explicit: bool,
+    pub isrc: String,
+    pub popularity: u32,
+    pub title: String,
+    pub media_metadata_tags: Vec<String>,
+}
+
+impl AsModel<TidalTrack> for Value {
+    fn as_model(&self) -> TidalTrack {
+        TidalTrack {
+            id: self.get("id").unwrap().as_u64().unwrap() as u32,
+            track_number: self.get("trackNumber").unwrap().as_u64().unwrap() as u32,
+            album_id: self
+                .get("album")
+                .unwrap()
+                .get("id")
+                .unwrap()
+                .as_u64()
+                .unwrap() as u32,
+            artist_id: self
+                .get("artist")
+                .unwrap()
+                .get("id")
+                .unwrap()
+                .as_u64()
+                .unwrap() as u32,
+            audio_quality: self
+                .get("audioQuality")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_string(),
+            copyright: self.get("copyright").unwrap().as_str().unwrap().to_string(),
+            duration: self.get("duration").unwrap().as_u64().unwrap() as u32,
+            explicit: self.get("explicit").unwrap().as_bool().unwrap(),
+            isrc: self.get("isrc").unwrap().as_str().unwrap().to_string(),
+            popularity: self.get("popularity").unwrap().as_u64().unwrap() as u32,
+            title: self.get("title").unwrap().as_str().unwrap().to_string(),
+            media_metadata_tags: self
+                .get("mediaMetadata")
+                .unwrap()
+                .get("tags")
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_str().unwrap().to_string())
+                .collect::<Vec<_>>(),
+        }
+    }
+}
+
+impl ToApi<ApiTidalTrack> for TidalTrack {
+    fn to_api(&self) -> ApiTidalTrack {
+        ApiTidalTrack {
+            id: self.id,
+            track_number: self.track_number,
+            album_id: self.album_id,
+            artist_id: self.artist_id,
+            audio_quality: self.audio_quality.clone(),
+            copyright: self.copyright.clone(),
+            duration: self.duration,
+            explicit: self.explicit,
+            isrc: self.isrc.clone(),
+            popularity: self.popularity,
+            title: self.title.clone(),
+            media_metadata_tags: self.media_metadata_tags.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiTidalTrack {
+    pub id: u32,
+    pub track_number: u32,
+    pub album_id: u32,
+    pub artist_id: u32,
+    pub audio_quality: String,
+    pub copyright: String,
+    pub duration: u32,
+    pub explicit: bool,
+    pub isrc: String,
+    pub popularity: u32,
+    pub title: String,
+    pub media_metadata_tags: Vec<String>,
+}
+
 #[derive(Debug, Error)]
 pub enum TidalFavoriteAlbumsError {
     #[error(transparent)]
@@ -470,6 +570,81 @@ pub async fn favorite_albums(
         .map(|item| item.get("item").unwrap())
         .map(|item| item.as_model())
         .map(|album: TidalAlbum| album.to_api())
+        .collect::<Vec<_>>();
+
+    Ok(items)
+}
+
+#[derive(Debug, Error)]
+pub enum TidalAlbumTracksError {
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    #[error("No access token available")]
+    NoAccessTokenAvailable,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn album_tracks(
+    #[cfg(feature = "db")] db: &rusqlite::Connection,
+    album_id: u32,
+    offset: Option<u32>,
+    limit: Option<u32>,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+    access_token: Option<String>,
+) -> Result<Vec<ApiTidalTrack>, TidalAlbumTracksError> {
+    #[cfg(feature = "db")]
+    let access_token = match access_token {
+        Some(access_token) => access_token,
+        _ => {
+            let config =
+                db::get_tidal_config(db)?.ok_or(TidalAlbumTracksError::NoAccessTokenAvailable)?;
+
+            access_token.unwrap_or(config.access_token)
+        }
+    };
+
+    #[cfg(not(feature = "db"))]
+    let access_token = access_token.ok_or(TidalAlbumTracksError::NoAccessTokenAvailable)?;
+
+    let url = tidal_api_endpoint!(
+        AlbumTracks,
+        &[(":albumId", &album_id.to_string())],
+        &[
+            ("offset", &offset.unwrap_or(0).to_string()),
+            ("limit", &limit.unwrap_or(100).to_string()),
+            ("countryCode", &country_code.clone().unwrap_or("US".into())),
+            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "deviceType",
+                device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
+            ),
+        ]
+    );
+
+    let value: Value = reqwest::Client::new()
+        .get(url)
+        .header(
+            reqwest::header::AUTHORIZATION,
+            format!("Bearer {}", access_token),
+        )
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    let items = value
+        .get("items")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item.as_model())
+        .map(|album: TidalTrack| album.to_api())
         .collect::<Vec<_>>();
 
     Ok(items)

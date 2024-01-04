@@ -8,10 +8,10 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::{
-    device_authorization, device_authorization_token, favorite_albums, track_url, ApiTidalAlbum,
-    TidalAlbumOrder, TidalAlbumOrderDirection, TidalAudioQuality, TidalDeviceAuthorizationError,
-    TidalDeviceAuthorizationTokenError, TidalDeviceType, TidalFavoriteAlbumsError,
-    TidalTrackUrlError,
+    album_tracks, device_authorization, device_authorization_token, favorite_albums, track_url,
+    ApiTidalAlbum, ApiTidalTrack, TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError,
+    TidalAudioQuality, TidalDeviceAuthorizationError, TidalDeviceAuthorizationTokenError,
+    TidalDeviceType, TidalFavoriteAlbumsError, TidalTrackUrlError,
 };
 
 impl From<TidalDeviceAuthorizationError> for actix_web::Error {
@@ -170,6 +170,55 @@ pub async fn favorite_albums_endpoint(
                 .get(TIDAL_ACCESS_TOKEN_HEADER)
                 .map(|x| x.to_str().unwrap().to_string()),
             query.user_id,
+        )
+        .await?,
+    ))
+}
+
+impl From<TidalAlbumTracksError> for actix_web::Error {
+    fn from(err: TidalAlbumTracksError) -> Self {
+        ErrorInternalServerError(err.to_string())
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalAlbumTracksQuery {
+    album_id: u32,
+    offset: Option<u32>,
+    limit: Option<u32>,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+}
+
+#[route("/tidal/albums/tracks", method = "GET")]
+pub async fn album_tracks_endpoint(
+    req: HttpRequest,
+    query: web::Query<TidalAlbumTracksQuery>,
+    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<Vec<ApiTidalTrack>>> {
+    Ok(Json(
+        album_tracks(
+            #[cfg(feature = "db")]
+            &data
+                .db
+                .clone()
+                .expect("Db not set")
+                .library
+                .lock()
+                .as_ref()
+                .unwrap()
+                .inner,
+            query.album_id,
+            query.offset,
+            query.limit,
+            query.country_code.clone(),
+            query.locale.clone(),
+            query.device_type,
+            req.headers()
+                .get(TIDAL_ACCESS_TOKEN_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
         )
         .await?,
     ))
