@@ -44,10 +44,45 @@ impl ToUrl for TidalApiEndpoint {
     }
 }
 
+fn replace_all(value: &str, params: &[(&str, &str)]) -> String {
+    let mut string = value.to_string();
+
+    for (key, value) in params {
+        string = string.replace(key, value);
+    }
+
+    string
+}
+
+fn attach_query_string(value: &str, query: &[(&str, &str)]) -> String {
+    let mut query_string = form_urlencoded::Serializer::new(String::new());
+
+    for (key, value) in query {
+        query_string.append_pair(key, value);
+    }
+
+    format!("{}?{}", value, &query_string.finish())
+}
+
+#[macro_export]
+macro_rules! tidal_api_endpoint {
+    ($name:ident $(,)?) => {
+        TidalApiEndpoint::$name.to_url()
+    };
+
+    ($name:ident, $params:expr) => {
+        replace_all(tidal_api_endpoint!($name), $params)
+    };
+
+    ($name:ident, $params:expr, $query:expr) => {
+        attach_query_string(&tidal_api_endpoint!($name, $params), $query)
+    };
+}
+
 pub async fn device_authorization(
     client_id: String,
 ) -> Result<Value, TidalDeviceAuthorizationError> {
-    let url = TidalApiEndpoint::DeviceAuthorization.to_url();
+    let url = tidal_api_endpoint!(DeviceAuthorization);
 
     let params = [
         ("client_id", client_id.clone()),
@@ -92,7 +127,7 @@ pub async fn device_authorization_token(
     device_code: String,
     #[cfg(feature = "db")] persist: Option<bool>,
 ) -> Result<Value, TidalDeviceAuthorizationTokenError> {
-    let url = TidalApiEndpoint::DeviceAuthorizationToken.to_url();
+    let url = tidal_api_endpoint!(DeviceAuthorizationToken);
 
     let params = [
         ("client_id", client_id.clone()),
@@ -170,12 +205,6 @@ pub async fn track_url(
     track_id: u32,
     access_token: Option<String>,
 ) -> Result<Value, TidalTrackUrlError> {
-    let query_string = form_urlencoded::Serializer::new(String::new())
-        .append_pair("audioquality", audio_quality.as_ref())
-        .append_pair("urlusagemode", "STREAM")
-        .append_pair("assetpresentation", "FULL")
-        .finish();
-
     #[cfg(feature = "db")]
     let access_token = access_token.unwrap_or(
         db::get_tidal_access_token(db)?.ok_or(TidalTrackUrlError::NoAccessTokenAvailable)?,
@@ -184,11 +213,15 @@ pub async fn track_url(
     #[cfg(not(feature = "db"))]
     let access_token = access_token.ok_or(TidalTrackUrlError::NoAccessTokenAvailable)?;
 
-    let url = TidalApiEndpoint::TrackUrl
-        .to_url()
-        .replace(":trackId", &track_id.to_string())
-        + "?"
-        + &query_string;
+    let url = tidal_api_endpoint!(
+        TrackUrl,
+        &[(":trackId", &track_id.to_string())],
+        &[
+            ("audioquality", audio_quality.as_ref()),
+            ("urlusagemode", "STREAM"),
+            ("assetpresentation", "FULL")
+        ]
+    );
 
     let value: Value = reqwest::Client::new()
         .get(url)
@@ -360,24 +393,6 @@ pub async fn favorite_albums(
     access_token: Option<String>,
     user_id: Option<u32>,
 ) -> Result<Vec<ApiTidalAlbum>, TidalFavoriteAlbumsError> {
-    let query_string = form_urlencoded::Serializer::new(String::new())
-        .append_pair("offset", &offset.unwrap_or(0).to_string())
-        .append_pair("limit", &limit.unwrap_or(100).to_string())
-        .append_pair("order", order.unwrap_or(TidalAlbumOrder::Date).as_ref())
-        .append_pair(
-            "orderDirection",
-            order_direction
-                .unwrap_or(TidalAlbumOrderDirection::Desc)
-                .as_ref(),
-        )
-        .append_pair("countryCode", &country_code.clone().unwrap_or("US".into()))
-        .append_pair("locale", &locale.clone().unwrap_or("en_US".into()))
-        .append_pair(
-            "deviceType",
-            device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
-        )
-        .finish();
-
     #[cfg(feature = "db")]
     let (access_token, user_id) = {
         match (access_token.clone(), user_id) {
@@ -399,11 +414,27 @@ pub async fn favorite_albums(
         user_id.ok_or(TidalFavoriteAlbumsError::NoUserIdAvailable)?,
     );
 
-    let url = TidalApiEndpoint::FavoriteAlbums
-        .to_url()
-        .replace(":userId", &user_id.to_string())
-        + "?"
-        + &query_string;
+    let url = tidal_api_endpoint!(
+        FavoriteAlbums,
+        &[(":userId", &user_id.to_string())],
+        &[
+            ("offset", &offset.unwrap_or(0).to_string()),
+            ("limit", &limit.unwrap_or(100).to_string()),
+            ("order", order.unwrap_or(TidalAlbumOrder::Date).as_ref()),
+            (
+                "orderDirection",
+                order_direction
+                    .unwrap_or(TidalAlbumOrderDirection::Desc)
+                    .as_ref(),
+            ),
+            ("countryCode", &country_code.clone().unwrap_or("US".into())),
+            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "deviceType",
+                device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
+            ),
+        ]
+    );
 
     let value: Value = reqwest::Client::new()
         .get(url)
