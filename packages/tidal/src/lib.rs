@@ -19,7 +19,7 @@ pub enum TidalDeviceAuthorizationError {
 }
 
 trait ToUrl {
-    fn to_url(&self) -> &str;
+    fn to_url(&self) -> String;
 }
 
 enum TidalApiEndpoint {
@@ -29,17 +29,18 @@ enum TidalApiEndpoint {
     FavoriteAlbums,
 }
 
+static TIDAL_AUTH_API_BASE_URL: &str = "https://auth.tidal.com/v1";
+static TIDAL_API_BASE_URL: &str = "https://api.tidal.com/v1";
+
 impl ToUrl for TidalApiEndpoint {
-    fn to_url(&self) -> &str {
+    fn to_url(&self) -> String {
         match self {
-            TidalApiEndpoint::DeviceAuthorization => {
-                "https://auth.tidal.com/v1/oauth2/device_authorization"
+            Self::DeviceAuthorization => {
+                format!("{TIDAL_AUTH_API_BASE_URL}/oauth2/device_authorization")
             }
-            TidalApiEndpoint::DeviceAuthorizationToken => "https://auth.tidal.com/v1/oauth2/token",
-            TidalApiEndpoint::TrackUrl => "https://api.tidal.com/v1/tracks/:trackId/urlpostpaywall",
-            TidalApiEndpoint::FavoriteAlbums => {
-                "https://api.tidal.com/v1/users/:userId/favorites/albums"
-            }
+            Self::DeviceAuthorizationToken => format!("{TIDAL_AUTH_API_BASE_URL}/oauth2/token"),
+            Self::TrackUrl => format!("{TIDAL_API_BASE_URL}/tracks/:trackId/urlpostpaywall"),
+            Self::FavoriteAlbums => format!("{TIDAL_API_BASE_URL}/users/:userId/favorites/albums"),
         }
     }
 }
@@ -71,7 +72,7 @@ macro_rules! tidal_api_endpoint {
     };
 
     ($name:ident, $params:expr) => {
-        replace_all(tidal_api_endpoint!($name), $params)
+        replace_all(&tidal_api_endpoint!($name), $params)
     };
 
     ($name:ident, $params:expr, $query:expr) => {
