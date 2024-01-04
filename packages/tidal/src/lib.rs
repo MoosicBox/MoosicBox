@@ -1,23 +1,16 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
+#[cfg(feature = "api")]
 pub mod api;
+#[cfg(feature = "db")]
 pub mod db;
 
-use moosicbox_core::sqlite::{
-    db::DbError,
-    models::{AsModel, ToApi},
-};
-use rusqlite::Connection;
+use moosicbox_core::sqlite::models::{AsModel, ToApi};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
 use url::form_urlencoded;
-
-use crate::db::{
-    models::ApiTidalAlbum,
-    {create_tidal_config, get_tidal_access_token, get_tidal_config},
-};
 
 #[derive(Debug, Error)]
 pub enum TidalDeviceAuthorizationError {
@@ -61,16 +54,17 @@ pub async fn tidal_device_authorization(
 pub enum TidalDeviceAuthorizationTokenError {
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
+    #[cfg(feature = "db")]
     #[error(transparent)]
-    Db(#[from] DbError),
+    Db(#[from] moosicbox_core::sqlite::db::DbError),
 }
 
 pub async fn tidal_device_authorization_token(
-    db: &Connection,
+    #[cfg(feature = "db")] db: &rusqlite::Connection,
     client_id: String,
     client_secret: String,
     device_code: String,
-    persist: Option<bool>,
+    #[cfg(feature = "db")] persist: Option<bool>,
 ) -> Result<Value, TidalDeviceAuthorizationTokenError> {
     let url = "https://auth.tidal.com/v1/oauth2/token";
 
@@ -96,6 +90,7 @@ pub async fn tidal_device_authorization_token(
     let access_token = value.get("access_token").unwrap().as_str().unwrap();
     let refresh_token = value.get("refresh_token").unwrap().as_str().unwrap();
 
+    #[cfg(feature = "db")]
     if persist.unwrap_or(false) {
         let client_name = value.get("clientName").unwrap().as_str().unwrap();
         let expires_in = value.get("expires_in").unwrap().as_u64().unwrap() as u32;
@@ -104,7 +99,7 @@ pub async fn tidal_device_authorization_token(
         let user = serde_json::to_string(value.get("user").unwrap()).unwrap();
         let user_id = value.get("user_id").unwrap().as_u64().unwrap() as u32;
 
-        create_tidal_config(
+        db::create_tidal_config(
             db,
             access_token,
             refresh_token,
@@ -136,16 +131,18 @@ pub enum TidalAudioQuality {
 pub enum TidalTrackUrlError {
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
+    #[cfg(feature = "db")]
     #[error(transparent)]
-    Db(#[from] DbError),
+    Db(#[from] moosicbox_core::sqlite::db::DbError),
     #[error("No access token available")]
     NoAccessTokenAvailable,
 }
 
 pub async fn tidal_track_url(
-    db: &Connection,
+    #[cfg(feature = "db")] db: &rusqlite::Connection,
     audio_quality: TidalAudioQuality,
     track_id: u32,
+    access_token: Option<String>,
 ) -> Result<Value, TidalTrackUrlError> {
     let query_string = form_urlencoded::Serializer::new(String::new())
         .append_pair("audioquality", audio_quality.as_ref())
@@ -153,8 +150,13 @@ pub async fn tidal_track_url(
         .append_pair("assetpresentation", "FULL")
         .finish();
 
-    let access_token =
-        get_tidal_access_token(db)?.ok_or(TidalTrackUrlError::NoAccessTokenAvailable)?;
+    #[cfg(feature = "db")]
+    let access_token = access_token.unwrap_or(
+        db::get_tidal_access_token(db)?.ok_or(TidalTrackUrlError::NoAccessTokenAvailable)?,
+    );
+
+    #[cfg(not(feature = "db"))]
+    let access_token = access_token.ok_or(TidalTrackUrlError::NoAccessTokenAvailable)?;
 
     let url = format!(
         "https://api.tidal.com/v1/tracks/{}/urlpostpaywall?{query_string}",
@@ -208,19 +210,119 @@ pub enum TidalDeviceType {
     Browser,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalAlbum {
+    pub id: u32,
+    pub artist_id: u32,
+    pub audio_quality: String,
+    pub copyright: String,
+    pub cover: String,
+    pub duration: u32,
+    pub explicit: bool,
+    pub number_of_tracks: u32,
+    pub popularity: u32,
+    pub release_date: String,
+    pub title: String,
+    pub media_metadata_tags: Vec<String>,
+}
+
+impl AsModel<TidalAlbum> for Value {
+    fn as_model(&self) -> TidalAlbum {
+        TidalAlbum {
+            id: self.get("id").unwrap().as_u64().unwrap() as u32,
+            artist_id: self
+                .get("artist")
+                .unwrap()
+                .get("id")
+                .unwrap()
+                .as_u64()
+                .unwrap() as u32,
+            audio_quality: self
+                .get("audioQuality")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_string(),
+            copyright: self.get("copyright").unwrap().as_str().unwrap().to_string(),
+            cover: self.get("cover").unwrap().as_str().unwrap().to_string(),
+            duration: self.get("duration").unwrap().as_u64().unwrap() as u32,
+            explicit: self.get("explicit").unwrap().as_bool().unwrap(),
+            number_of_tracks: self.get("numberOfTracks").unwrap().as_u64().unwrap() as u32,
+            popularity: self.get("popularity").unwrap().as_u64().unwrap() as u32,
+            release_date: self
+                .get("releaseDate")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_string(),
+            title: self.get("title").unwrap().as_str().unwrap().to_string(),
+            media_metadata_tags: self
+                .get("mediaMetadata")
+                .unwrap()
+                .get("tags")
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_str().unwrap().to_string())
+                .collect::<Vec<_>>(),
+        }
+    }
+}
+
+impl ToApi<ApiTidalAlbum> for TidalAlbum {
+    fn to_api(&self) -> ApiTidalAlbum {
+        ApiTidalAlbum {
+            id: self.id,
+            artist_id: self.artist_id,
+            audio_quality: self.audio_quality.clone(),
+            copyright: self.copyright.clone(),
+            cover: self.cover.clone(),
+            duration: self.duration,
+            explicit: self.explicit,
+            number_of_tracks: self.number_of_tracks,
+            popularity: self.popularity,
+            release_date: self.release_date.clone(),
+            title: self.title.clone(),
+            media_metadata_tags: self.media_metadata_tags.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiTidalAlbum {
+    pub id: u32,
+    pub artist_id: u32,
+    pub audio_quality: String,
+    pub copyright: String,
+    pub cover: String,
+    pub duration: u32,
+    pub explicit: bool,
+    pub number_of_tracks: u32,
+    pub popularity: u32,
+    pub release_date: String,
+    pub title: String,
+    pub media_metadata_tags: Vec<String>,
+}
+
 #[derive(Debug, Error)]
 pub enum TidalFavoriteAlbumsError {
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
+    #[cfg(feature = "db")]
     #[error(transparent)]
-    Db(#[from] DbError),
+    Db(#[from] moosicbox_core::sqlite::db::DbError),
     #[error("No access token available")]
     NoAccessTokenAvailable,
+    #[error("No user ID available")]
+    NoUserIdAvailable,
 }
 
 #[allow(clippy::too_many_arguments)]
 pub async fn tidal_favorite_albums(
-    db: &Connection,
+    #[cfg(feature = "db")] db: &rusqlite::Connection,
     offset: Option<u32>,
     limit: Option<u32>,
     order: Option<TidalAlbumOrder>,
@@ -228,6 +330,8 @@ pub async fn tidal_favorite_albums(
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
+    access_token: Option<String>,
+    user_id: Option<u32>,
 ) -> Result<Vec<ApiTidalAlbum>, TidalFavoriteAlbumsError> {
     let query_string = form_urlencoded::Serializer::new(String::new())
         .append_pair("offset", &offset.unwrap_or(0).to_string())
@@ -247,18 +351,37 @@ pub async fn tidal_favorite_albums(
         )
         .finish();
 
-    let config = get_tidal_config(db)?.ok_or(TidalFavoriteAlbumsError::NoAccessTokenAvailable)?;
+    #[cfg(feature = "db")]
+    let (access_token, user_id) = {
+        match (access_token.clone(), user_id) {
+            (Some(access_token), Some(user_id)) => (access_token, user_id),
+            _ => {
+                let config = db::get_tidal_config(db)?
+                    .ok_or(TidalFavoriteAlbumsError::NoAccessTokenAvailable)?;
+                (
+                    access_token.unwrap_or(config.access_token),
+                    user_id.unwrap_or(config.user_id),
+                )
+            }
+        }
+    };
+
+    #[cfg(not(feature = "db"))]
+    let (access_token, user_id) = (
+        access_token.ok_or(TidalFavoriteAlbumsError::NoAccessTokenAvailable)?,
+        user_id.ok_or(TidalFavoriteAlbumsError::NoUserIdAvailable)?,
+    );
 
     let url = format!(
         "https://api.tidal.com/v1/users/{}/favorites/albums?{query_string}",
-        config.user_id
+        user_id
     );
 
     let value: Value = reqwest::Client::new()
         .get(url)
         .header(
             reqwest::header::AUTHORIZATION,
-            format!("Bearer {}", config.access_token),
+            format!("Bearer {}", access_token),
         )
         .send()
         .await?
@@ -273,7 +396,7 @@ pub async fn tidal_favorite_albums(
         .iter()
         .map(|item| item.get("item").unwrap())
         .map(|item| item.as_model())
-        .map(|album| album.to_api())
+        .map(|album: TidalAlbum| album.to_api())
         .collect::<Vec<_>>();
 
     Ok(items)

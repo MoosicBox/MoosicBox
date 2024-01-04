@@ -7,12 +7,16 @@ version = "0.1.0"
 [dependencies]
 moosicbox_core = { path = "../core" }
 
-actix-cors   = { workspace = true }
-actix-files  = { workspace = true }
-actix-web    = { workspace = true }
+# API Dependencies
+actix-cors  = { workspace = true, optional = true }
+actix-files = { workspace = true, optional = true }
+actix-web   = { workspace = true, optional = true }
+
+# DB Dependencies
+rusqlite = { workspace = true, optional = true }
+
 log          = { workspace = true }
-reqwest      = { workspace = true }
-rusqlite     = { workspace = true }
+reqwest      = { workspace = true, features = ["json"] }
 serde        = { workspace = true, features = ["derive"] }
 serde_json   = { workspace = true }
 strum        = { workspace = true }
@@ -21,4 +25,9 @@ thiserror    = { workspace = true }
 url          = { workspace = true }
 
 [features]
+default = ["api", "db"]
+
 fail-on-warnings = []
+
+api = ["dep:actix-cors", "dep:actix-files", "dep:actix-web"]
+db  = ["dep:rusqlite"]

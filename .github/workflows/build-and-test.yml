@@ -153,6 +153,27 @@ jobs:
                       cargo: --no-default-features
                       features: cpal
 
+                    - name: tidal
+                      path: packages/tidal
+                      os: ubuntu-latest
+
+                    - name: tidal-no-default-features
+                      path: packages/tidal
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+
+                    - name: tidal-api
+                      path: packages/tidal
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: api
+
+                    - name: tidal-db
+                      path: packages/tidal
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: db
+
                     - name: stream_utils
                       path: packages/stream_utils
                       os: ubuntu-latest

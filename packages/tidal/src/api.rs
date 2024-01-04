@@ -2,17 +2,16 @@ use actix_web::{
     error::ErrorInternalServerError,
     route,
     web::{self, Json},
-    Result,
+    HttpRequest, Result,
 };
-use moosicbox_core::app::AppState;
 use serde::Deserialize;
 use serde_json::Value;
 
 use crate::{
-    db::models::ApiTidalAlbum, tidal_device_authorization, tidal_device_authorization_token,
-    tidal_favorite_albums, tidal_track_url, TidalAlbumOrder, TidalAlbumOrderDirection,
-    TidalAudioQuality, TidalDeviceAuthorizationError, TidalDeviceAuthorizationTokenError,
-    TidalDeviceType, TidalFavoriteAlbumsError, TidalTrackUrlError,
+    tidal_device_authorization, tidal_device_authorization_token, tidal_favorite_albums,
+    tidal_track_url, ApiTidalAlbum, TidalAlbumOrder, TidalAlbumOrderDirection, TidalAudioQuality,
+    TidalDeviceAuthorizationError, TidalDeviceAuthorizationTokenError, TidalDeviceType,
+    TidalFavoriteAlbumsError, TidalTrackUrlError,
 };
 
 impl From<TidalDeviceAuthorizationError> for actix_web::Error {
@@ -20,6 +19,8 @@ impl From<TidalDeviceAuthorizationError> for actix_web::Error {
         ErrorInternalServerError(err.to_string())
     }
 }
+
+static TIDAL_ACCESS_TOKEN_HEADER: &str = "x-tidal-access-token";
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,16 +49,18 @@ pub struct TidalDeviceAuthorizationTokenQuery {
     client_id: String,
     client_secret: String,
     device_code: String,
+    #[cfg(feature = "db")]
     persist: Option<bool>,
 }
 
 #[route("/tidal/auth/device-authorization/token", method = "POST")]
 pub async fn tidal_device_authorization_token_endpoint(
     query: web::Query<TidalDeviceAuthorizationTokenQuery>,
-    data: web::Data<AppState>,
+    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<Value>> {
     Ok(Json(
         tidal_device_authorization_token(
+            #[cfg(feature = "db")]
             &data
                 .db
                 .clone()
@@ -70,6 +73,7 @@ pub async fn tidal_device_authorization_token_endpoint(
             query.client_id.clone(),
             query.client_secret.clone(),
             query.device_code.clone(),
+            #[cfg(feature = "db")]
             query.persist,
         )
         .await?,
@@ -91,11 +95,13 @@ pub struct TidalTrackUrlQuery {
 
 #[route("/tidal/track/url", method = "GET")]
 pub async fn tidal_track_url_endpoint(
+    req: HttpRequest,
     query: web::Query<TidalTrackUrlQuery>,
-    data: web::Data<AppState>,
+    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<Value>> {
     Ok(Json(
         tidal_track_url(
+            #[cfg(feature = "db")]
             &data
                 .db
                 .clone()
@@ -107,6 +113,9 @@ pub async fn tidal_track_url_endpoint(
                 .inner,
             query.audio_quality,
             query.track_id,
+            req.headers()
+                .get(TIDAL_ACCESS_TOKEN_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
         )
         .await?,
     ))
@@ -128,15 +137,18 @@ pub struct TidalFavoriteAlbumsQuery {
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
+    user_id: Option<u32>,
 }
 
 #[route("/tidal/favorites/albums", method = "GET")]
 pub async fn tidal_favorite_albums_endpoint(
+    req: HttpRequest,
     query: web::Query<TidalFavoriteAlbumsQuery>,
-    data: web::Data<AppState>,
+    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<Vec<ApiTidalAlbum>>> {
     Ok(Json(
         tidal_favorite_albums(
+            #[cfg(feature = "db")]
             &data
                 .db
                 .clone()
@@ -153,6 +165,10 @@ pub async fn tidal_favorite_albums_endpoint(
             query.country_code.clone(),
             query.locale.clone(),
             query.device_type,
+            req.headers()
+                .get(TIDAL_ACCESS_TOKEN_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+            query.user_id,
         )
         .await?,
     ))
