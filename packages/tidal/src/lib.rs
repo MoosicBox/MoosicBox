@@ -18,10 +18,36 @@ pub enum TidalDeviceAuthorizationError {
     Reqwest(#[from] reqwest::Error),
 }
 
+trait ToUrl {
+    fn to_url(&self) -> &str;
+}
+
+enum TidalApiEndpoint {
+    DeviceAuthorization,
+    DeviceAuthorizationToken,
+    TrackUrl,
+    FavoriteAlbums,
+}
+
+impl ToUrl for TidalApiEndpoint {
+    fn to_url(&self) -> &str {
+        match self {
+            TidalApiEndpoint::DeviceAuthorization => {
+                "https://auth.tidal.com/v1/oauth2/device_authorization"
+            }
+            TidalApiEndpoint::DeviceAuthorizationToken => "https://auth.tidal.com/v1/oauth2/token",
+            TidalApiEndpoint::TrackUrl => "https://api.tidal.com/v1/tracks/:trackId/urlpostpaywall",
+            TidalApiEndpoint::FavoriteAlbums => {
+                "https://api.tidal.com/v1/users/:userId/favorites/albums"
+            }
+        }
+    }
+}
+
 pub async fn device_authorization(
     client_id: String,
 ) -> Result<Value, TidalDeviceAuthorizationError> {
-    let url = "https://auth.tidal.com/v1/oauth2/device_authorization";
+    let url = TidalApiEndpoint::DeviceAuthorization.to_url();
 
     let params = [
         ("client_id", client_id.clone()),
@@ -66,7 +92,7 @@ pub async fn device_authorization_token(
     device_code: String,
     #[cfg(feature = "db")] persist: Option<bool>,
 ) -> Result<Value, TidalDeviceAuthorizationTokenError> {
-    let url = "https://auth.tidal.com/v1/oauth2/token";
+    let url = TidalApiEndpoint::DeviceAuthorizationToken.to_url();
 
     let params = [
         ("client_id", client_id.clone()),
@@ -158,10 +184,11 @@ pub async fn track_url(
     #[cfg(not(feature = "db"))]
     let access_token = access_token.ok_or(TidalTrackUrlError::NoAccessTokenAvailable)?;
 
-    let url = format!(
-        "https://api.tidal.com/v1/tracks/{}/urlpostpaywall?{query_string}",
-        track_id
-    );
+    let url = TidalApiEndpoint::TrackUrl
+        .to_url()
+        .replace(":trackId", &track_id.to_string())
+        + "?"
+        + &query_string;
 
     let value: Value = reqwest::Client::new()
         .get(url)
@@ -372,10 +399,11 @@ pub async fn favorite_albums(
         user_id.ok_or(TidalFavoriteAlbumsError::NoUserIdAvailable)?,
     );
 
-    let url = format!(
-        "https://api.tidal.com/v1/users/{}/favorites/albums?{query_string}",
-        user_id
-    );
+    let url = TidalApiEndpoint::FavoriteAlbums
+        .to_url()
+        .replace(":userId", &user_id.to_string())
+        + "?"
+        + &query_string;
 
     let value: Value = reqwest::Client::new()
         .get(url)
