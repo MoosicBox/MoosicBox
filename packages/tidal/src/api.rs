@@ -4,14 +4,17 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
-use moosicbox_core::{app::AppState, sqlite::models::ToApi};
+use moosicbox_core::{
+    app::AppState,
+    sqlite::models::{AsModel, ToApi},
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 use url::form_urlencoded;
 
 use crate::db::{
-    models::{ApiTidalAlbum, TidalAlbum},
+    models::ApiTidalAlbum,
     {create_tidal_config, get_tidal_access_token, get_tidal_config},
 };
 
@@ -279,46 +282,7 @@ pub async fn tidal_favorite_albums_endpoint(
         .unwrap()
         .iter()
         .map(|item| item.get("item").unwrap())
-        .map(|item| item.as_object().unwrap())
-        .map(|item| TidalAlbum {
-            id: item.get("id").unwrap().as_u64().unwrap() as u32,
-            artist_id: item
-                .get("artist")
-                .unwrap()
-                .get("id")
-                .unwrap()
-                .as_u64()
-                .unwrap() as u32,
-            audio_quality: item
-                .get("audioQuality")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .to_string(),
-            copyright: item.get("copyright").unwrap().as_str().unwrap().to_string(),
-            cover: item.get("cover").unwrap().as_str().unwrap().to_string(),
-            duration: item.get("duration").unwrap().as_u64().unwrap() as u32,
-            explicit: item.get("explicit").unwrap().as_bool().unwrap(),
-            number_of_tracks: item.get("numberOfTracks").unwrap().as_u64().unwrap() as u32,
-            popularity: item.get("popularity").unwrap().as_u64().unwrap() as u32,
-            release_date: item
-                .get("releaseDate")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .to_string(),
-            title: item.get("title").unwrap().as_str().unwrap().to_string(),
-            media_metadata_tags: item
-                .get("mediaMetadata")
-                .unwrap()
-                .get("tags")
-                .unwrap()
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|v| v.as_str().unwrap().to_string())
-                .collect::<Vec<_>>(),
-        })
+        .map(|item| item.as_model())
         .map(|album| album.to_api())
         .collect::<Vec<_>>();
 

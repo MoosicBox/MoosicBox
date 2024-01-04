@@ -4,6 +4,7 @@ use moosicbox_core::sqlite::{
 };
 use rusqlite::Row;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -62,6 +63,50 @@ pub struct TidalAlbum {
     pub release_date: String,
     pub title: String,
     pub media_metadata_tags: Vec<String>,
+}
+
+impl AsModel<TidalAlbum> for Value {
+    fn as_model(&self) -> TidalAlbum {
+        TidalAlbum {
+            id: self.get("id").unwrap().as_u64().unwrap() as u32,
+            artist_id: self
+                .get("artist")
+                .unwrap()
+                .get("id")
+                .unwrap()
+                .as_u64()
+                .unwrap() as u32,
+            audio_quality: self
+                .get("audioQuality")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_string(),
+            copyright: self.get("copyright").unwrap().as_str().unwrap().to_string(),
+            cover: self.get("cover").unwrap().as_str().unwrap().to_string(),
+            duration: self.get("duration").unwrap().as_u64().unwrap() as u32,
+            explicit: self.get("explicit").unwrap().as_bool().unwrap(),
+            number_of_tracks: self.get("numberOfTracks").unwrap().as_u64().unwrap() as u32,
+            popularity: self.get("popularity").unwrap().as_u64().unwrap() as u32,
+            release_date: self
+                .get("releaseDate")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_string(),
+            title: self.get("title").unwrap().as_str().unwrap().to_string(),
+            media_metadata_tags: self
+                .get("mediaMetadata")
+                .unwrap()
+                .get("tags")
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_str().unwrap().to_string())
+                .collect::<Vec<_>>(),
+        }
+    }
 }
 
 impl ToApi<ApiTidalAlbum> for TidalAlbum {
