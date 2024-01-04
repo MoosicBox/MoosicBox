@@ -5,12 +5,155 @@ pub mod api;
 #[cfg(feature = "db")]
 pub mod db;
 
-use moosicbox_core::sqlite::models::{AsModel, ToApi};
+use moosicbox_core::sqlite::models::AsModel;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
 use url::form_urlencoded;
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalAlbum {
+    pub id: u32,
+    pub artist_id: u32,
+    pub audio_quality: String,
+    pub copyright: String,
+    pub cover: String,
+    pub duration: u32,
+    pub explicit: bool,
+    pub number_of_tracks: u32,
+    pub popularity: u32,
+    pub release_date: String,
+    pub title: String,
+    pub media_metadata_tags: Vec<String>,
+}
+
+impl AsModel<TidalAlbum> for Value {
+    fn as_model(&self) -> TidalAlbum {
+        TidalAlbum {
+            id: self.get("id").unwrap().as_u64().unwrap() as u32,
+            artist_id: self
+                .get("artist")
+                .unwrap()
+                .get("id")
+                .unwrap()
+                .as_u64()
+                .unwrap() as u32,
+            audio_quality: self
+                .get("audioQuality")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_string(),
+            copyright: self.get("copyright").unwrap().as_str().unwrap().to_string(),
+            cover: self.get("cover").unwrap().as_str().unwrap().to_string(),
+            duration: self.get("duration").unwrap().as_u64().unwrap() as u32,
+            explicit: self.get("explicit").unwrap().as_bool().unwrap(),
+            number_of_tracks: self.get("numberOfTracks").unwrap().as_u64().unwrap() as u32,
+            popularity: self.get("popularity").unwrap().as_u64().unwrap() as u32,
+            release_date: self
+                .get("releaseDate")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_string(),
+            title: self.get("title").unwrap().as_str().unwrap().to_string(),
+            media_metadata_tags: self
+                .get("mediaMetadata")
+                .unwrap()
+                .get("tags")
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_str().unwrap().to_string())
+                .collect::<Vec<_>>(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalTrack {
+    pub id: u32,
+    pub track_number: u32,
+    pub album_id: u32,
+    pub artist_id: u32,
+    pub audio_quality: String,
+    pub copyright: String,
+    pub duration: u32,
+    pub explicit: bool,
+    pub isrc: String,
+    pub popularity: u32,
+    pub title: String,
+    pub media_metadata_tags: Vec<String>,
+}
+
+impl AsModel<TidalTrack> for Value {
+    fn as_model(&self) -> TidalTrack {
+        TidalTrack {
+            id: self.get("id").unwrap().as_u64().unwrap() as u32,
+            track_number: self.get("trackNumber").unwrap().as_u64().unwrap() as u32,
+            album_id: self
+                .get("album")
+                .unwrap()
+                .get("id")
+                .unwrap()
+                .as_u64()
+                .unwrap() as u32,
+            artist_id: self
+                .get("artist")
+                .unwrap()
+                .get("id")
+                .unwrap()
+                .as_u64()
+                .unwrap() as u32,
+            audio_quality: self
+                .get("audioQuality")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_string(),
+            copyright: self.get("copyright").unwrap().as_str().unwrap().to_string(),
+            duration: self.get("duration").unwrap().as_u64().unwrap() as u32,
+            explicit: self.get("explicit").unwrap().as_bool().unwrap(),
+            isrc: self.get("isrc").unwrap().as_str().unwrap().to_string(),
+            popularity: self.get("popularity").unwrap().as_u64().unwrap() as u32,
+            title: self.get("title").unwrap().as_str().unwrap().to_string(),
+            media_metadata_tags: self
+                .get("mediaMetadata")
+                .unwrap()
+                .get("tags")
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_str().unwrap().to_string())
+                .collect::<Vec<_>>(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalArtist {
+    pub id: u32,
+    pub picture: String,
+    pub popularity: u32,
+    pub name: String,
+}
+
+impl AsModel<TidalArtist> for Value {
+    fn as_model(&self) -> TidalArtist {
+        TidalArtist {
+            id: self.get("id").unwrap().as_u64().unwrap() as u32,
+            picture: self.get("picture").unwrap().as_str().unwrap().to_string(),
+            popularity: self.get("popularity").unwrap().as_u64().unwrap() as u32,
+            name: self.get("name").unwrap().as_str().unwrap().to_string(),
+        }
+    }
+}
 
 trait ToUrl {
     fn to_url(&self) -> String;
@@ -288,241 +431,6 @@ pub enum TidalDeviceType {
     Browser,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct TidalAlbum {
-    pub id: u32,
-    pub artist_id: u32,
-    pub audio_quality: String,
-    pub copyright: String,
-    pub cover: String,
-    pub duration: u32,
-    pub explicit: bool,
-    pub number_of_tracks: u32,
-    pub popularity: u32,
-    pub release_date: String,
-    pub title: String,
-    pub media_metadata_tags: Vec<String>,
-}
-
-impl AsModel<TidalAlbum> for Value {
-    fn as_model(&self) -> TidalAlbum {
-        TidalAlbum {
-            id: self.get("id").unwrap().as_u64().unwrap() as u32,
-            artist_id: self
-                .get("artist")
-                .unwrap()
-                .get("id")
-                .unwrap()
-                .as_u64()
-                .unwrap() as u32,
-            audio_quality: self
-                .get("audioQuality")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .to_string(),
-            copyright: self.get("copyright").unwrap().as_str().unwrap().to_string(),
-            cover: self.get("cover").unwrap().as_str().unwrap().to_string(),
-            duration: self.get("duration").unwrap().as_u64().unwrap() as u32,
-            explicit: self.get("explicit").unwrap().as_bool().unwrap(),
-            number_of_tracks: self.get("numberOfTracks").unwrap().as_u64().unwrap() as u32,
-            popularity: self.get("popularity").unwrap().as_u64().unwrap() as u32,
-            release_date: self
-                .get("releaseDate")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .to_string(),
-            title: self.get("title").unwrap().as_str().unwrap().to_string(),
-            media_metadata_tags: self
-                .get("mediaMetadata")
-                .unwrap()
-                .get("tags")
-                .unwrap()
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|v| v.as_str().unwrap().to_string())
-                .collect::<Vec<_>>(),
-        }
-    }
-}
-
-impl ToApi<ApiTidalAlbum> for TidalAlbum {
-    fn to_api(&self) -> ApiTidalAlbum {
-        ApiTidalAlbum {
-            id: self.id,
-            artist_id: self.artist_id,
-            audio_quality: self.audio_quality.clone(),
-            copyright: self.copyright.clone(),
-            cover: self.cover.clone(),
-            duration: self.duration,
-            explicit: self.explicit,
-            number_of_tracks: self.number_of_tracks,
-            popularity: self.popularity,
-            release_date: self.release_date.clone(),
-            title: self.title.clone(),
-            media_metadata_tags: self.media_metadata_tags.clone(),
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct ApiTidalAlbum {
-    pub id: u32,
-    pub artist_id: u32,
-    pub audio_quality: String,
-    pub copyright: String,
-    pub cover: String,
-    pub duration: u32,
-    pub explicit: bool,
-    pub number_of_tracks: u32,
-    pub popularity: u32,
-    pub release_date: String,
-    pub title: String,
-    pub media_metadata_tags: Vec<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct TidalTrack {
-    pub id: u32,
-    pub track_number: u32,
-    pub album_id: u32,
-    pub artist_id: u32,
-    pub audio_quality: String,
-    pub copyright: String,
-    pub duration: u32,
-    pub explicit: bool,
-    pub isrc: String,
-    pub popularity: u32,
-    pub title: String,
-    pub media_metadata_tags: Vec<String>,
-}
-
-impl AsModel<TidalTrack> for Value {
-    fn as_model(&self) -> TidalTrack {
-        TidalTrack {
-            id: self.get("id").unwrap().as_u64().unwrap() as u32,
-            track_number: self.get("trackNumber").unwrap().as_u64().unwrap() as u32,
-            album_id: self
-                .get("album")
-                .unwrap()
-                .get("id")
-                .unwrap()
-                .as_u64()
-                .unwrap() as u32,
-            artist_id: self
-                .get("artist")
-                .unwrap()
-                .get("id")
-                .unwrap()
-                .as_u64()
-                .unwrap() as u32,
-            audio_quality: self
-                .get("audioQuality")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .to_string(),
-            copyright: self.get("copyright").unwrap().as_str().unwrap().to_string(),
-            duration: self.get("duration").unwrap().as_u64().unwrap() as u32,
-            explicit: self.get("explicit").unwrap().as_bool().unwrap(),
-            isrc: self.get("isrc").unwrap().as_str().unwrap().to_string(),
-            popularity: self.get("popularity").unwrap().as_u64().unwrap() as u32,
-            title: self.get("title").unwrap().as_str().unwrap().to_string(),
-            media_metadata_tags: self
-                .get("mediaMetadata")
-                .unwrap()
-                .get("tags")
-                .unwrap()
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|v| v.as_str().unwrap().to_string())
-                .collect::<Vec<_>>(),
-        }
-    }
-}
-
-impl ToApi<ApiTidalTrack> for TidalTrack {
-    fn to_api(&self) -> ApiTidalTrack {
-        ApiTidalTrack {
-            id: self.id,
-            track_number: self.track_number,
-            album_id: self.album_id,
-            artist_id: self.artist_id,
-            audio_quality: self.audio_quality.clone(),
-            copyright: self.copyright.clone(),
-            duration: self.duration,
-            explicit: self.explicit,
-            isrc: self.isrc.clone(),
-            popularity: self.popularity,
-            title: self.title.clone(),
-            media_metadata_tags: self.media_metadata_tags.clone(),
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct ApiTidalTrack {
-    pub id: u32,
-    pub track_number: u32,
-    pub album_id: u32,
-    pub artist_id: u32,
-    pub audio_quality: String,
-    pub copyright: String,
-    pub duration: u32,
-    pub explicit: bool,
-    pub isrc: String,
-    pub popularity: u32,
-    pub title: String,
-    pub media_metadata_tags: Vec<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct TidalArtist {
-    pub id: u32,
-    pub picture: String,
-    pub popularity: u32,
-    pub name: String,
-}
-
-impl AsModel<TidalArtist> for Value {
-    fn as_model(&self) -> TidalArtist {
-        TidalArtist {
-            id: self.get("id").unwrap().as_u64().unwrap() as u32,
-            picture: self.get("picture").unwrap().as_str().unwrap().to_string(),
-            popularity: self.get("popularity").unwrap().as_u64().unwrap() as u32,
-            name: self.get("name").unwrap().as_str().unwrap().to_string(),
-        }
-    }
-}
-
-impl ToApi<ApiTidalArtist> for TidalArtist {
-    fn to_api(&self) -> ApiTidalArtist {
-        ApiTidalArtist {
-            id: self.id,
-            picture: self.picture.clone(),
-            popularity: self.popularity,
-            name: self.name.clone(),
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct ApiTidalArtist {
-    pub id: u32,
-    pub picture: String,
-    pub popularity: u32,
-    pub name: String,
-}
-
 #[derive(Debug, Error)]
 pub enum TidalFavoriteAlbumsError {
     #[error(transparent)]
@@ -548,7 +456,7 @@ pub async fn favorite_albums(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
     user_id: Option<u32>,
-) -> Result<(Vec<ApiTidalAlbum>, u32), TidalFavoriteAlbumsError> {
+) -> Result<(Vec<TidalAlbum>, u32), TidalFavoriteAlbumsError> {
     #[cfg(feature = "db")]
     let (access_token, user_id) = {
         match (access_token.clone(), user_id) {
@@ -611,7 +519,6 @@ pub async fn favorite_albums(
         .iter()
         .map(|item| item.get("item").unwrap())
         .map(|item| item.as_model())
-        .map(|album: TidalAlbum| album.to_api())
         .collect::<Vec<_>>();
 
     let count = value.get("totalNumberOfItems").unwrap().as_u64().unwrap() as u32;
@@ -640,7 +547,7 @@ pub async fn album_tracks(
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
-) -> Result<(Vec<ApiTidalTrack>, u32), TidalAlbumTracksError> {
+) -> Result<(Vec<TidalTrack>, u32), TidalAlbumTracksError> {
     #[cfg(feature = "db")]
     let access_token = match access_token {
         Some(access_token) => access_token,
@@ -688,7 +595,6 @@ pub async fn album_tracks(
         .unwrap()
         .iter()
         .map(|item| item.as_model())
-        .map(|album: TidalTrack| album.to_api())
         .collect::<Vec<_>>();
 
     let count = value.get("totalNumberOfItems").unwrap().as_u64().unwrap() as u32;

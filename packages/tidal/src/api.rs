@@ -5,24 +5,116 @@ use actix_web::{
     HttpRequest, Result,
 };
 use moosicbox_core::sqlite::models::ToApi;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
     album_tracks, artist, device_authorization, device_authorization_token, favorite_albums,
-    track_url, ApiTidalArtist, TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError,
-    TidalArtistError, TidalAudioQuality, TidalDeviceAuthorizationError,
-    TidalDeviceAuthorizationTokenError, TidalDeviceType, TidalFavoriteAlbumsError,
+    track_url, TidalAlbum, TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError,
+    TidalArtist, TidalArtistError, TidalAudioQuality, TidalDeviceAuthorizationError,
+    TidalDeviceAuthorizationTokenError, TidalDeviceType, TidalFavoriteAlbumsError, TidalTrack,
     TidalTrackUrlError,
 };
+
+impl ToApi<ApiTidalAlbum> for TidalAlbum {
+    fn to_api(&self) -> ApiTidalAlbum {
+        ApiTidalAlbum {
+            id: self.id,
+            artist_id: self.artist_id,
+            audio_quality: self.audio_quality.clone(),
+            copyright: self.copyright.clone(),
+            cover: self.cover.clone(),
+            duration: self.duration,
+            explicit: self.explicit,
+            number_of_tracks: self.number_of_tracks,
+            popularity: self.popularity,
+            release_date: self.release_date.clone(),
+            title: self.title.clone(),
+            media_metadata_tags: self.media_metadata_tags.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiTidalAlbum {
+    pub id: u32,
+    pub artist_id: u32,
+    pub audio_quality: String,
+    pub copyright: String,
+    pub cover: String,
+    pub duration: u32,
+    pub explicit: bool,
+    pub number_of_tracks: u32,
+    pub popularity: u32,
+    pub release_date: String,
+    pub title: String,
+    pub media_metadata_tags: Vec<String>,
+}
+
+impl ToApi<ApiTidalTrack> for TidalTrack {
+    fn to_api(&self) -> ApiTidalTrack {
+        ApiTidalTrack {
+            id: self.id,
+            track_number: self.track_number,
+            album_id: self.album_id,
+            artist_id: self.artist_id,
+            audio_quality: self.audio_quality.clone(),
+            copyright: self.copyright.clone(),
+            duration: self.duration,
+            explicit: self.explicit,
+            isrc: self.isrc.clone(),
+            popularity: self.popularity,
+            title: self.title.clone(),
+            media_metadata_tags: self.media_metadata_tags.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiTidalTrack {
+    pub id: u32,
+    pub track_number: u32,
+    pub album_id: u32,
+    pub artist_id: u32,
+    pub audio_quality: String,
+    pub copyright: String,
+    pub duration: u32,
+    pub explicit: bool,
+    pub isrc: String,
+    pub popularity: u32,
+    pub title: String,
+    pub media_metadata_tags: Vec<String>,
+}
+
+impl ToApi<ApiTidalArtist> for TidalArtist {
+    fn to_api(&self) -> ApiTidalArtist {
+        ApiTidalArtist {
+            id: self.id,
+            picture: self.picture.clone(),
+            popularity: self.popularity,
+            name: self.name.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiTidalArtist {
+    pub id: u32,
+    pub picture: String,
+    pub popularity: u32,
+    pub name: String,
+}
+
+static TIDAL_ACCESS_TOKEN_HEADER: &str = "x-tidal-access-token";
 
 impl From<TidalDeviceAuthorizationError> for actix_web::Error {
     fn from(err: TidalDeviceAuthorizationError) -> Self {
         ErrorInternalServerError(err.to_string())
     }
 }
-
-static TIDAL_ACCESS_TOKEN_HEADER: &str = "x-tidal-access-token";
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -176,7 +268,7 @@ pub async fn favorite_albums_endpoint(
 
     Ok(Json(serde_json::json!({
         "count": count,
-        "items": items,
+        "items": items.iter().map(|item| item.to_api()).collect::<Vec<_>>(),
     })))
 }
 
@@ -228,7 +320,7 @@ pub async fn album_tracks_endpoint(
 
     Ok(Json(serde_json::json!({
         "count": count,
-        "items": items,
+        "items": items.iter().map(|item| item.to_api()).collect::<Vec<_>>(),
     })))
 }
 
