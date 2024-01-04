@@ -23,6 +23,7 @@ pub enum TidalDeviceType {
 #[serde(rename_all = "camelCase")]
 pub struct TidalAlbum {
     pub id: u32,
+    pub artist: String,
     pub artist_id: u32,
     pub audio_quality: String,
     pub copyright: String,
@@ -47,6 +48,14 @@ impl AsModel<TidalAlbum> for Value {
     fn as_model(&self) -> TidalAlbum {
         TidalAlbum {
             id: self.get("id").unwrap().as_u64().unwrap() as u32,
+            artist: self
+                .get("artist")
+                .unwrap()
+                .get("name")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_string(),
             artist_id: self
                 .get("artist")
                 .unwrap()

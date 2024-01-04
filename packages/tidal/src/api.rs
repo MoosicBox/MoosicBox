@@ -22,6 +22,7 @@ impl ToApi<ApiTidalAlbum> for TidalAlbum {
     fn to_api(&self) -> ApiTidalAlbum {
         ApiTidalAlbum {
             id: self.id,
+            artist: self.artist.clone(),
             artist_id: self.artist_id,
             audio_quality: self.audio_quality.clone(),
             copyright: self.copyright.clone(),
@@ -41,6 +42,7 @@ impl ToApi<ApiTidalAlbum> for TidalAlbum {
 #[serde(rename_all = "camelCase")]
 pub struct ApiTidalAlbum {
     pub id: u32,
+    pub artist: String,
     pub artist_id: u32,
     pub audio_quality: String,
     pub copyright: String,
