@@ -18,7 +18,7 @@ pub enum TidalDeviceAuthorizationError {
     Reqwest(#[from] reqwest::Error),
 }
 
-pub async fn tidal_device_authorization(
+pub async fn device_authorization(
     client_id: String,
 ) -> Result<Value, TidalDeviceAuthorizationError> {
     let url = "https://auth.tidal.com/v1/oauth2/device_authorization";
@@ -59,7 +59,7 @@ pub enum TidalDeviceAuthorizationTokenError {
     Db(#[from] moosicbox_core::sqlite::db::DbError),
 }
 
-pub async fn tidal_device_authorization_token(
+pub async fn device_authorization_token(
     #[cfg(feature = "db")] db: &rusqlite::Connection,
     client_id: String,
     client_secret: String,
@@ -138,7 +138,7 @@ pub enum TidalTrackUrlError {
     NoAccessTokenAvailable,
 }
 
-pub async fn tidal_track_url(
+pub async fn track_url(
     #[cfg(feature = "db")] db: &rusqlite::Connection,
     audio_quality: TidalAudioQuality,
     track_id: u32,
@@ -321,7 +321,7 @@ pub enum TidalFavoriteAlbumsError {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn tidal_favorite_albums(
+pub async fn favorite_albums(
     #[cfg(feature = "db")] db: &rusqlite::Connection,
     offset: Option<u32>,
     limit: Option<u32>,

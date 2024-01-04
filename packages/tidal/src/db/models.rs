@@ -1,10 +1,9 @@
 use moosicbox_core::sqlite::{
     db::SqliteValue,
-    models::{AsId, AsModel, ToApi},
+    models::{AsId, AsModel},
 };
 use rusqlite::Row;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -46,101 +45,4 @@ impl AsId for TidalConfig {
     fn as_id(&self) -> SqliteValue {
         SqliteValue::Number(self.id as i64)
     }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct TidalAlbum {
-    pub id: u32,
-    pub artist_id: u32,
-    pub audio_quality: String,
-    pub copyright: String,
-    pub cover: String,
-    pub duration: u32,
-    pub explicit: bool,
-    pub number_of_tracks: u32,
-    pub popularity: u32,
-    pub release_date: String,
-    pub title: String,
-    pub media_metadata_tags: Vec<String>,
-}
-
-impl AsModel<TidalAlbum> for Value {
-    fn as_model(&self) -> TidalAlbum {
-        TidalAlbum {
-            id: self.get("id").unwrap().as_u64().unwrap() as u32,
-            artist_id: self
-                .get("artist")
-                .unwrap()
-                .get("id")
-                .unwrap()
-                .as_u64()
-                .unwrap() as u32,
-            audio_quality: self
-                .get("audioQuality")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .to_string(),
-            copyright: self.get("copyright").unwrap().as_str().unwrap().to_string(),
-            cover: self.get("cover").unwrap().as_str().unwrap().to_string(),
-            duration: self.get("duration").unwrap().as_u64().unwrap() as u32,
-            explicit: self.get("explicit").unwrap().as_bool().unwrap(),
-            number_of_tracks: self.get("numberOfTracks").unwrap().as_u64().unwrap() as u32,
-            popularity: self.get("popularity").unwrap().as_u64().unwrap() as u32,
-            release_date: self
-                .get("releaseDate")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .to_string(),
-            title: self.get("title").unwrap().as_str().unwrap().to_string(),
-            media_metadata_tags: self
-                .get("mediaMetadata")
-                .unwrap()
-                .get("tags")
-                .unwrap()
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|v| v.as_str().unwrap().to_string())
-                .collect::<Vec<_>>(),
-        }
-    }
-}
-
-impl ToApi<ApiTidalAlbum> for TidalAlbum {
-    fn to_api(&self) -> ApiTidalAlbum {
-        ApiTidalAlbum {
-            id: self.id,
-            artist_id: self.artist_id,
-            audio_quality: self.audio_quality.clone(),
-            copyright: self.copyright.clone(),
-            cover: self.cover.clone(),
-            duration: self.duration,
-            explicit: self.explicit,
-            number_of_tracks: self.number_of_tracks,
-            popularity: self.popularity,
-            release_date: self.release_date.clone(),
-            title: self.title.clone(),
-            media_metadata_tags: self.media_metadata_tags.clone(),
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct ApiTidalAlbum {
-    pub id: u32,
-    pub artist_id: u32,
-    pub audio_quality: String,
-    pub copyright: String,
-    pub cover: String,
-    pub duration: u32,
-    pub explicit: bool,
-    pub number_of_tracks: u32,
-    pub popularity: u32,
-    pub release_date: String,
-    pub title: String,
-    pub media_metadata_tags: Vec<String>,
 }

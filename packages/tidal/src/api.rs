@@ -8,10 +8,10 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::{
-    tidal_device_authorization, tidal_device_authorization_token, tidal_favorite_albums,
-    tidal_track_url, ApiTidalAlbum, TidalAlbumOrder, TidalAlbumOrderDirection, TidalAudioQuality,
-    TidalDeviceAuthorizationError, TidalDeviceAuthorizationTokenError, TidalDeviceType,
-    TidalFavoriteAlbumsError, TidalTrackUrlError,
+    device_authorization, device_authorization_token, favorite_albums, track_url, ApiTidalAlbum,
+    TidalAlbumOrder, TidalAlbumOrderDirection, TidalAudioQuality, TidalDeviceAuthorizationError,
+    TidalDeviceAuthorizationTokenError, TidalDeviceType, TidalFavoriteAlbumsError,
+    TidalTrackUrlError,
 };
 
 impl From<TidalDeviceAuthorizationError> for actix_web::Error {
@@ -29,12 +29,10 @@ pub struct TidalDeviceAuthorizationQuery {
 }
 
 #[route("/tidal/auth/device-authorization", method = "POST")]
-pub async fn tidal_device_authorization_endpoint(
+pub async fn device_authorization_endpoint(
     query: web::Query<TidalDeviceAuthorizationQuery>,
 ) -> Result<Json<Value>> {
-    Ok(Json(
-        tidal_device_authorization(query.client_id.clone()).await?,
-    ))
+    Ok(Json(device_authorization(query.client_id.clone()).await?))
 }
 
 impl From<TidalDeviceAuthorizationTokenError> for actix_web::Error {
@@ -54,12 +52,12 @@ pub struct TidalDeviceAuthorizationTokenQuery {
 }
 
 #[route("/tidal/auth/device-authorization/token", method = "POST")]
-pub async fn tidal_device_authorization_token_endpoint(
+pub async fn device_authorization_token_endpoint(
     query: web::Query<TidalDeviceAuthorizationTokenQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<Value>> {
     Ok(Json(
-        tidal_device_authorization_token(
+        device_authorization_token(
             #[cfg(feature = "db")]
             &data
                 .db
@@ -94,13 +92,13 @@ pub struct TidalTrackUrlQuery {
 }
 
 #[route("/tidal/track/url", method = "GET")]
-pub async fn tidal_track_url_endpoint(
+pub async fn track_url_endpoint(
     req: HttpRequest,
     query: web::Query<TidalTrackUrlQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<Value>> {
     Ok(Json(
-        tidal_track_url(
+        track_url(
             #[cfg(feature = "db")]
             &data
                 .db
@@ -141,13 +139,13 @@ pub struct TidalFavoriteAlbumsQuery {
 }
 
 #[route("/tidal/favorites/albums", method = "GET")]
-pub async fn tidal_favorite_albums_endpoint(
+pub async fn favorite_albums_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteAlbumsQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<Vec<ApiTidalAlbum>>> {
     Ok(Json(
-        tidal_favorite_albums(
+        favorite_albums(
             #[cfg(feature = "db")]
             &data
                 .db
