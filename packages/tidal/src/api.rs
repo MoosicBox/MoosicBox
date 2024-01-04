@@ -24,7 +24,7 @@ impl ToApi<ApiTidalAlbum> for TidalAlbum {
             artist_id: self.artist_id,
             audio_quality: self.audio_quality.clone(),
             copyright: self.copyright.clone(),
-            cover: self.cover.clone(),
+            cover: self.cover_url(1280),
             duration: self.duration,
             explicit: self.explicit,
             number_of_tracks: self.number_of_tracks,
@@ -93,7 +93,7 @@ impl ToApi<ApiTidalArtist> for TidalArtist {
     fn to_api(&self) -> ApiTidalArtist {
         ApiTidalArtist {
             id: self.id,
-            picture: self.picture.clone(),
+            picture: self.picture_url(750),
             popularity: self.popularity,
             name: self.name.clone(),
         }

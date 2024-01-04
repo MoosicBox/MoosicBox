@@ -29,6 +29,13 @@ pub struct TidalAlbum {
     pub media_metadata_tags: Vec<String>,
 }
 
+impl TidalAlbum {
+    pub fn cover_url(&self, size: u16) -> String {
+        let cover_path = self.cover.replace('-', "/");
+        format!("https://resources.tidal.com/images/{cover_path}/{size}x{size}.jpg")
+    }
+}
+
 impl AsModel<TidalAlbum> for Value {
     fn as_model(&self) -> TidalAlbum {
         TidalAlbum {
@@ -142,6 +149,13 @@ pub struct TidalArtist {
     pub picture: String,
     pub popularity: u32,
     pub name: String,
+}
+
+impl TidalArtist {
+    pub fn picture_url(&self, size: u16) -> String {
+        let picture_path = self.picture.replace('-', "/");
+        format!("https://resources.tidal.com/images/{picture_path}/{size}x{size}.jpg")
+    }
 }
 
 impl AsModel<TidalArtist> for Value {
