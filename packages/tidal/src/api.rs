@@ -37,10 +37,14 @@ pub async fn tidal_device_authorization_endpoint(
         .form(&params)
         .send()
         .await
-        .map_err(|_| ErrorInternalServerError("Failed to get device authorization link"))?
+        .map_err(|e| {
+            ErrorInternalServerError(format!("Failed to get device authorization link: {e:?}"))
+        })?
         .json()
         .await
-        .map_err(|_| ErrorInternalServerError("Failed to get device authorization link"))?;
+        .map_err(|e| {
+            ErrorInternalServerError(format!("Failed to get device authorization link: {e:?}"))
+        })?;
 
     let verification_uri_complete = value
         .get("verificationUriComplete")
@@ -88,10 +92,14 @@ pub async fn tidal_device_authorization_token_endpoint(
         .form(&params)
         .send()
         .await
-        .map_err(|_| ErrorInternalServerError("Failed to get device authorization token"))?
+        .map_err(|e| {
+            ErrorInternalServerError(format!("Failed to get device authorization token: {e:?}"))
+        })?
         .json()
         .await
-        .map_err(|_| ErrorInternalServerError("Failed to get device authorization token"))?;
+        .map_err(|e| {
+            ErrorInternalServerError(format!("Failed to get device authorization token: {e:?}"))
+        })?;
 
     let access_token = value.get("access_token").unwrap().as_str().unwrap();
     let refresh_token = value.get("refresh_token").unwrap().as_str().unwrap();
