@@ -250,6 +250,7 @@ fn main() -> std::io::Result<()> {
                 .service(moosicbox_tidal::api::track_url_endpoint)
                 .service(moosicbox_tidal::api::favorite_artists_endpoint)
                 .service(moosicbox_tidal::api::favorite_albums_endpoint)
+                .service(moosicbox_tidal::api::favorite_tracks_endpoint)
                 .service(moosicbox_tidal::api::artist_albums_endpoint)
                 .service(moosicbox_tidal::api::album_tracks_endpoint)
                 .service(moosicbox_tidal::api::album_endpoint)

@@ -195,6 +195,7 @@ enum TidalApiEndpoint {
     FavoriteAlbums,
     ArtistAlbums,
     Track,
+    FavoriteTracks,
     AlbumTracks,
     TrackUrl,
 }
@@ -217,6 +218,7 @@ impl ToUrl for TidalApiEndpoint {
             Self::FavoriteAlbums => format!("{TIDAL_API_BASE_URL}/users/:userId/favorites/albums"),
             Self::ArtistAlbums => format!("{TIDAL_API_BASE_URL}/artists/:artistId/albums"),
             Self::Track => format!("{TIDAL_API_BASE_URL}/tracks/:trackId"),
+            Self::FavoriteTracks => format!("{TIDAL_API_BASE_URL}/users/:userId/favorites/tracks"),
             Self::AlbumTracks => format!("{TIDAL_API_BASE_URL}/albums/:albumId/tracks"),
             Self::TrackUrl => format!("{TIDAL_API_BASE_URL}/tracks/:trackId/urlpostpaywall"),
         }
@@ -629,6 +631,116 @@ pub async fn favorite_albums(
                 "orderDirection",
                 order_direction
                     .unwrap_or(TidalAlbumOrderDirection::Desc)
+                    .as_ref(),
+            ),
+            ("countryCode", &country_code.clone().unwrap_or("US".into())),
+            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "deviceType",
+                device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
+            ),
+        ]
+    );
+
+    let value: Value = reqwest::Client::new()
+        .get(url)
+        .header(
+            reqwest::header::AUTHORIZATION,
+            format!("Bearer {}", access_token),
+        )
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    let items = value
+        .get("items")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item.get("item").unwrap())
+        .map(|item| item.as_model())
+        .collect::<Vec<_>>();
+
+    let count = value.get("totalNumberOfItems").unwrap().as_u64().unwrap() as u32;
+
+    Ok((items, count))
+}
+
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum TidalTrackOrder {
+    Date,
+}
+
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum TidalTrackOrderDirection {
+    Asc,
+    Desc,
+}
+
+#[derive(Debug, Error)]
+pub enum TidalFavoriteTracksError {
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    #[error("No access token available")]
+    NoAccessTokenAvailable,
+    #[error("No user ID available")]
+    NoUserIdAvailable,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn favorite_tracks(
+    #[cfg(feature = "db")] db: &rusqlite::Connection,
+    offset: Option<u32>,
+    limit: Option<u32>,
+    order: Option<TidalTrackOrder>,
+    order_direction: Option<TidalTrackOrderDirection>,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+    access_token: Option<String>,
+    user_id: Option<u32>,
+) -> Result<(Vec<TidalTrack>, u32), TidalFavoriteTracksError> {
+    #[cfg(feature = "db")]
+    let (access_token, user_id) = {
+        match (access_token.clone(), user_id) {
+            (Some(access_token), Some(user_id)) => (access_token, user_id),
+            _ => {
+                let config = db::get_tidal_config(db)?
+                    .ok_or(TidalFavoriteTracksError::NoAccessTokenAvailable)?;
+                (
+                    access_token.unwrap_or(config.access_token),
+                    user_id.unwrap_or(config.user_id),
+                )
+            }
+        }
+    };
+
+    #[cfg(not(feature = "db"))]
+    let (access_token, user_id) = (
+        access_token.ok_or(TidalFavoriteTracksError::NoAccessTokenAvailable)?,
+        user_id.ok_or(TidalFavoriteTracksError::NoUserIdAvailable)?,
+    );
+
+    let url = tidal_api_endpoint!(
+        FavoriteTracks,
+        &[(":userId", &user_id.to_string())],
+        &[
+            ("offset", &offset.unwrap_or(0).to_string()),
+            ("limit", &limit.unwrap_or(100).to_string()),
+            ("order", order.unwrap_or(TidalTrackOrder::Date).as_ref()),
+            (
+                "orderDirection",
+                order_direction
+                    .unwrap_or(TidalTrackOrderDirection::Desc)
                     .as_ref(),
             ),
             ("countryCode", &country_code.clone().unwrap_or("US".into())),

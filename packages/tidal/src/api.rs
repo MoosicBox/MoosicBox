@@ -10,12 +10,12 @@ use serde_json::Value;
 
 use crate::{
     album, album_tracks, artist, artist_albums, device_authorization, device_authorization_token,
-    favorite_albums, favorite_artists, track, track_url, TidalAlbum, TidalAlbumError,
-    TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError, TidalArtist,
+    favorite_albums, favorite_artists, favorite_tracks, track, track_url, TidalAlbum,
+    TidalAlbumError, TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError, TidalArtist,
     TidalArtistAlbumsError, TidalArtistError, TidalArtistOrder, TidalArtistOrderDirection,
     TidalAudioQuality, TidalDeviceAuthorizationError, TidalDeviceAuthorizationTokenError,
-    TidalDeviceType, TidalFavoriteAlbumsError, TidalFavoriteArtistsError, TidalTrack,
-    TidalTrackError, TidalTrackUrlError,
+    TidalDeviceType, TidalFavoriteAlbumsError, TidalFavoriteArtistsError, TidalFavoriteTracksError,
+    TidalTrack, TidalTrackError, TidalTrackOrder, TidalTrackOrderDirection, TidalTrackUrlError,
 };
 
 impl ToApi<ApiTidalAlbum> for TidalAlbum {
@@ -300,6 +300,62 @@ pub async fn favorite_albums_endpoint(
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<Value>> {
     let (items, count) = favorite_albums(
+        #[cfg(feature = "db")]
+        &data
+            .db
+            .clone()
+            .expect("Db not set")
+            .library
+            .lock()
+            .as_ref()
+            .unwrap()
+            .inner,
+        query.offset,
+        query.limit,
+        query.order,
+        query.order_direction,
+        query.country_code.clone(),
+        query.locale.clone(),
+        query.device_type,
+        req.headers()
+            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+        query.user_id,
+    )
+    .await?;
+
+    Ok(Json(serde_json::json!({
+        "count": count,
+        "items": items.iter().map(|item| item.to_api()).collect::<Vec<_>>(),
+    })))
+}
+
+impl From<TidalFavoriteTracksError> for actix_web::Error {
+    fn from(err: TidalFavoriteTracksError) -> Self {
+        ErrorInternalServerError(err.to_string())
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalFavoriteTracksQuery {
+    offset: Option<u32>,
+    limit: Option<u32>,
+    order: Option<TidalTrackOrder>,
+    order_direction: Option<TidalTrackOrderDirection>,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+    user_id: Option<u32>,
+}
+
+#[route("/tidal/favorites/tracks", method = "GET")]
+pub async fn favorite_tracks_endpoint(
+    req: HttpRequest,
+    query: web::Query<TidalFavoriteTracksQuery>,
+    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<Value>> {
+    let (items, count) = favorite_tracks(
         #[cfg(feature = "db")]
         &data
             .db
