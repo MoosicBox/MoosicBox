@@ -22,6 +22,7 @@ enum TidalApiEndpoint {
     TrackUrl,
     FavoriteAlbums,
     AlbumTracks,
+    Artist,
 }
 
 static TIDAL_AUTH_API_BASE_URL: &str = "https://auth.tidal.com/v1";
@@ -37,6 +38,7 @@ impl ToUrl for TidalApiEndpoint {
             Self::TrackUrl => format!("{TIDAL_API_BASE_URL}/tracks/:trackId/urlpostpaywall"),
             Self::FavoriteAlbums => format!("{TIDAL_API_BASE_URL}/users/:userId/favorites/albums"),
             Self::AlbumTracks => format!("{TIDAL_API_BASE_URL}/albums/:albumId/tracks"),
+            Self::Artist => format!("{TIDAL_API_BASE_URL}/artists/:artistId"),
         }
     }
 }
@@ -481,6 +483,46 @@ pub struct ApiTidalTrack {
     pub media_metadata_tags: Vec<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalArtist {
+    pub id: u32,
+    pub picture: String,
+    pub popularity: u32,
+    pub name: String,
+}
+
+impl AsModel<TidalArtist> for Value {
+    fn as_model(&self) -> TidalArtist {
+        TidalArtist {
+            id: self.get("id").unwrap().as_u64().unwrap() as u32,
+            picture: self.get("picture").unwrap().as_str().unwrap().to_string(),
+            popularity: self.get("popularity").unwrap().as_u64().unwrap() as u32,
+            name: self.get("name").unwrap().as_str().unwrap().to_string(),
+        }
+    }
+}
+
+impl ToApi<ApiTidalArtist> for TidalArtist {
+    fn to_api(&self) -> ApiTidalArtist {
+        ApiTidalArtist {
+            id: self.id,
+            picture: self.picture.clone(),
+            popularity: self.popularity,
+            name: self.name.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiTidalArtist {
+    pub id: u32,
+    pub picture: String,
+    pub popularity: u32,
+    pub name: String,
+}
+
 #[derive(Debug, Error)]
 pub enum TidalFavoriteAlbumsError {
     #[error(transparent)]
@@ -652,4 +694,65 @@ pub async fn album_tracks(
     let count = value.get("totalNumberOfItems").unwrap().as_u64().unwrap() as u32;
 
     Ok((items, count))
+}
+
+#[derive(Debug, Error)]
+pub enum TidalArtistError {
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    #[error("No access token available")]
+    NoAccessTokenAvailable,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn artist(
+    #[cfg(feature = "db")] db: &rusqlite::Connection,
+    artist_id: u32,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+    access_token: Option<String>,
+) -> Result<TidalArtist, TidalArtistError> {
+    #[cfg(feature = "db")]
+    let access_token = match access_token {
+        Some(access_token) => access_token,
+        _ => {
+            let config =
+                db::get_tidal_config(db)?.ok_or(TidalArtistError::NoAccessTokenAvailable)?;
+
+            access_token.unwrap_or(config.access_token)
+        }
+    };
+
+    #[cfg(not(feature = "db"))]
+    let access_token = access_token.ok_or(TidalArtistError::NoAccessTokenAvailable)?;
+
+    let url = tidal_api_endpoint!(
+        Artist,
+        &[(":artistId", &artist_id.to_string())],
+        &[
+            ("countryCode", &country_code.clone().unwrap_or("US".into())),
+            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "deviceType",
+                device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
+            ),
+        ]
+    );
+
+    let value: Value = reqwest::Client::new()
+        .get(url)
+        .header(
+            reqwest::header::AUTHORIZATION,
+            format!("Bearer {}", access_token),
+        )
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    Ok(value.as_model())
 }

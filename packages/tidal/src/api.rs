@@ -4,14 +4,16 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, Result,
 };
+use moosicbox_core::sqlite::models::ToApi;
 use serde::Deserialize;
 use serde_json::Value;
 
 use crate::{
-    album_tracks, device_authorization, device_authorization_token, favorite_albums, track_url,
-    TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError, TidalAudioQuality,
-    TidalDeviceAuthorizationError, TidalDeviceAuthorizationTokenError, TidalDeviceType,
-    TidalFavoriteAlbumsError, TidalTrackUrlError,
+    album_tracks, artist, device_authorization, device_authorization_token, favorite_albums,
+    track_url, ApiTidalArtist, TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError,
+    TidalArtistError, TidalAudioQuality, TidalDeviceAuthorizationError,
+    TidalDeviceAuthorizationTokenError, TidalDeviceType, TidalFavoriteAlbumsError,
+    TidalTrackUrlError,
 };
 
 impl From<TidalDeviceAuthorizationError> for actix_web::Error {
@@ -228,4 +230,49 @@ pub async fn album_tracks_endpoint(
         "count": count,
         "items": items,
     })))
+}
+
+impl From<TidalArtistError> for actix_web::Error {
+    fn from(err: TidalArtistError) -> Self {
+        ErrorInternalServerError(err.to_string())
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalArtistQuery {
+    artist_id: u32,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+}
+
+#[route("/tidal/artists", method = "GET")]
+pub async fn artist_endpoint(
+    req: HttpRequest,
+    query: web::Query<TidalArtistQuery>,
+    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<ApiTidalArtist>> {
+    let artist = artist(
+        #[cfg(feature = "db")]
+        &data
+            .db
+            .clone()
+            .expect("Db not set")
+            .library
+            .lock()
+            .as_ref()
+            .unwrap()
+            .inner,
+        query.artist_id,
+        query.country_code.clone(),
+        query.locale.clone(),
+        query.device_type,
+        req.headers()
+            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+    )
+    .await?;
+
+    Ok(Json(artist.to_api()))
 }
