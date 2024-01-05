@@ -297,13 +297,7 @@ pub async fn favorite_albums_endpoint(
 ) -> Result<Json<Value>> {
     let (items, count) = favorite_albums(
         #[cfg(feature = "db")]
-        data.db
-            .clone()
-            .expect("Db not set")
-            .library
-            .lock()
-            .as_ref()
-            .unwrap(),
+        data.db.as_ref().unwrap(),
         query.offset,
         query.limit,
         query.order,

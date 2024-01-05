@@ -597,7 +597,7 @@ pub enum TidalFavoriteAlbumsError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn favorite_albums(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::DbConnection,
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     offset: Option<u32>,
     limit: Option<u32>,
     order: Option<TidalAlbumOrder>,
@@ -613,7 +613,7 @@ pub async fn favorite_albums(
         match (access_token.clone(), user_id) {
             (Some(access_token), Some(user_id)) => (access_token, user_id),
             _ => {
-                let config = db::get_tidal_config(&db.inner)?
+                let config = db::get_tidal_config(&db.library.lock().unwrap().inner)?
                     .ok_or(TidalFavoriteAlbumsError::NoAccessTokenAvailable)?;
                 (
                     access_token.unwrap_or(config.access_token),
