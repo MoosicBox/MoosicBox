@@ -274,8 +274,8 @@ fn main() -> std::io::Result<()> {
             async move {
                 let resp = http_server.await;
                 CHAT_SERVER_HANDLE.write().unwrap().take();
-                CANCELLATION_TOKEN.cancel();
                 moosicbox_scan::cancel();
+                CANCELLATION_TOKEN.cancel();
                 if let Some(handle) = tunnel_handle {
                     let _ = handle.close().await;
                 }
@@ -284,7 +284,7 @@ fn main() -> std::io::Result<()> {
             async move { chat_server_handle.await.unwrap() },
             async move {
                 if let Some(handle) = tunnel_join_handle {
-                    handle.await.unwrap()
+                    handle.await.unwrap();
                 }
                 Ok(())
             }
