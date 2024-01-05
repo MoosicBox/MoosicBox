@@ -43,6 +43,7 @@ pub async fn run_scan_endpoint(
         .transpose()?;
 
     scan(data.db.as_ref().unwrap(), origins)
+        .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
 
     Ok(Json(serde_json::json!({"success": true})))

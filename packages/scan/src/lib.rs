@@ -15,12 +15,15 @@ use tokio_util::sync::CancellationToken;
 pub mod api;
 #[cfg(feature = "local")]
 pub mod local;
+#[cfg(feature = "tidal")]
+pub mod tidal;
 
 pub mod db;
 
 static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
 
 pub fn cancel() {
+    log::debug!("Cancelling scan");
     CANCELLATION_TOKEN.cancel();
 }
 
@@ -41,9 +44,12 @@ pub enum ScanError {
     #[cfg(feature = "local")]
     #[error(transparent)]
     Local(#[from] local::ScanError),
+    #[cfg(feature = "tidal")]
+    #[error(transparent)]
+    Tidal(#[from] tidal::ScanError),
 }
 
-pub fn scan(db: &Db, origins: Option<Vec<ScanOrigin>>) -> Result<(), ScanError> {
+pub async fn scan(db: &Db, origins: Option<Vec<ScanOrigin>>) -> Result<(), ScanError> {
     let enabled_origins = get_enabled_scan_origins(db.library.lock().as_ref().unwrap())?;
 
     let search_origins = origins
@@ -61,7 +67,7 @@ pub fn scan(db: &Db, origins: Option<Vec<ScanOrigin>>) -> Result<(), ScanError> 
             #[cfg(feature = "local")]
             ScanOrigin::Local => scan_local(db)?,
             #[cfg(feature = "tidal")]
-            ScanOrigin::Tidal => unimplemented!("Tidal scan is unimplemented"),
+            ScanOrigin::Tidal => scan_tidal(db).await?,
         }
     }
 
@@ -87,6 +93,22 @@ pub fn scan_local(db: &Db) -> Result<(), local::ScanError> {
     for path in paths {
         local::scan(path, db, CANCELLATION_TOKEN.clone())?;
     }
+
+    Ok(())
+}
+
+#[cfg(feature = "tidal")]
+pub async fn scan_tidal(db: &Db) -> Result<(), tidal::ScanError> {
+    let enabled_origins = get_enabled_scan_origins(&db.library.lock().unwrap())?;
+    let enabled = enabled_origins
+        .into_iter()
+        .any(|origin| origin == ScanOrigin::Tidal);
+
+    if !enabled {
+        return Ok(());
+    }
+
+    tidal::scan(db, CANCELLATION_TOKEN.clone()).await?;
 
     Ok(())
 }

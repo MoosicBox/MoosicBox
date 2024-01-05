@@ -10,12 +10,16 @@ moosicbox_core = { path = "../core" }
 # API Dependencies
 actix-web = { workspace = true, optional = true }
 
-audiotags    = { workspace = true }
-bytes        = { workspace = true }
+# Tidal Dependencies
+moosicbox_tidal = { path = "../tidal", optional = true }
+
+# Local Dependencies
+audiotags    = { workspace = true, optional = true }
+lofty        = { workspace = true, optional = true }
+mp3-duration = { workspace = true, optional = true }
+
 futures      = { workspace = true }
-lofty        = { workspace = true }
 log          = { workspace = true }
-mp3-duration = { workspace = true }
 once_cell    = { workspace = true }
 regex        = { workspace = true }
 rusqlite     = { workspace = true }
@@ -33,5 +37,5 @@ default = ["api", "local", "tidal"]
 fail-on-warnings = []
 
 api   = ["dep:actix-web"]
-local = []
-tidal = []
+local = ["dep:audiotags", "dep:lofty", "dep:mp3-duration"]
+tidal = ["dep:moosicbox_tidal"]
