@@ -12,8 +12,8 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::{
-    add_scan_path, disable_scan_origin, enable_scan_origin, get_scan_paths, remove_scan_path, scan,
-    ScanOrigin, CANCELLATION_TOKEN,
+    add_scan_path, disable_scan_origin, enable_scan_origin, get_scan_origins, get_scan_paths,
+    remove_scan_path, scan, ScanOrigin, CANCELLATION_TOKEN,
 };
 
 #[derive(Deserialize, Clone)]
@@ -68,6 +68,21 @@ pub async fn run_scan_path_endpoint(
     .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
 
     Ok(Json(serde_json::json!({"success": true})))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GetScanOriginsQuery {}
+
+#[get("/scan-origins")]
+pub async fn get_scan_origins_endpoint(
+    _query: web::Query<GetScanOriginsQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<Value>> {
+    let origins = get_scan_origins(&data.db.as_ref().unwrap().library.lock().unwrap())
+        .map_err(|e| ErrorInternalServerError(format!("Failed to get scan origins: {e:?}")))?;
+
+    Ok(Json(serde_json::json!({"origins": origins})))
 }
 
 #[derive(Deserialize, Clone)]
