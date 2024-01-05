@@ -18,7 +18,6 @@ moosicbox_tunnel = { path = "../packages/tunnel", default-features = false, feat
 ] }
 moosicbox_ws = { path = "../packages/ws" }
 
-actix         = { workspace = true }
 actix-cors    = { workspace = true }
 actix-files   = { workspace = true }
 actix-web     = { workspace = true }
