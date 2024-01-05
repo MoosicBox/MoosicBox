@@ -58,6 +58,7 @@ struct ScanTrack {
 }
 
 impl ScanTrack {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         path: &str,
         number: u32,
@@ -78,11 +79,11 @@ impl ScanTrack {
             duration,
             bytes,
             format,
-            bit_depth: bit_depth.clone(),
-            audio_bitrate: audio_bitrate.clone(),
-            overall_bitrate: overall_bitrate.clone(),
-            sample_rate: sample_rate.clone(),
-            channels: channels.clone(),
+            bit_depth: *bit_depth,
+            audio_bitrate: *audio_bitrate,
+            overall_bitrate: *overall_bitrate,
+            sample_rate: *sample_rate,
+            channels: *channels,
         }
     }
 }
@@ -109,6 +110,7 @@ impl ScanAlbum {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn add_track(
         &mut self,
         path: &str,
@@ -131,7 +133,7 @@ impl ScanAlbum {
                     let t = entry.read().unwrap_or_else(|e| e.into_inner());
                     t.path == path
                 })
-                .map(|entry| entry.clone())
+                .cloned()
         } {
             track
         } else {
@@ -187,7 +189,7 @@ impl ScanArtist {
                     let a = entry.read().unwrap_or_else(|e| e.into_inner());
                     a.name == name
                 })
-                .map(|entry| entry.clone())
+                .cloned()
         } {
             album
         } else {
@@ -225,7 +227,7 @@ impl ScanOutput {
                     let a = entry.read().unwrap_or_else(|e| e.into_inner());
                     a.name == name
                 })
-                .map(|entry| entry.clone())
+                .cloned()
         } {
             artist
         } else {
@@ -696,15 +698,13 @@ fn scan_dir(
 
     if let Some(max_parallel) = max_parallel {
         let mut chunks = vec![];
-        let mut c = 0;
 
-        for p in dir.filter_map(|p| p.ok()) {
+        for (c, p) in dir.filter_map(|p| p.ok()).enumerate() {
             if chunks.len() < (max_parallel as usize) {
                 chunks.push(vec![p]);
             } else {
                 chunks[c % (max_parallel as usize)].push(p);
             }
-            c += 1;
         }
 
         let mut handles = chunks
