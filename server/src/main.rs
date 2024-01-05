@@ -4,7 +4,6 @@ mod api;
 #[cfg(feature = "static-token-auth")]
 mod auth;
 mod playback_session;
-mod scan;
 mod ws;
 
 use actix_cors::Cors;
@@ -28,7 +27,7 @@ use tokio_util::sync::CancellationToken;
 use url::Url;
 use ws::server::ChatServer;
 
-static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(|| CancellationToken::new());
+static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
 
 static CHAT_SERVER_HANDLE: Lazy<std::sync::RwLock<Option<ws::server::ChatServerHandle>>> =
     Lazy::new(|| std::sync::RwLock::new(None));
@@ -216,7 +215,7 @@ fn main() -> std::io::Result<()> {
                 .app_data(web::Data::new(server_tx.clone()))
                 .service(api::health_endpoint)
                 .service(api::websocket)
-                .service(api::scan_endpoint)
+                .service(moosicbox_scan::api::scan_endpoint)
                 .service(moosicbox_auth::api::get_magic_token_endpoint)
                 .service(moosicbox_auth::api::create_magic_token_endpoint)
                 .service(moosicbox_menu::api::get_artists_endpoint)
@@ -274,6 +273,7 @@ fn main() -> std::io::Result<()> {
                 let resp = http_server.await;
                 CHAT_SERVER_HANDLE.write().unwrap().take();
                 CANCELLATION_TOKEN.cancel();
+                moosicbox_scan::cancel();
                 if let Some(handle) = tunnel_handle {
                     let _ = handle.close().await;
                 }

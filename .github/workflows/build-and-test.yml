@@ -153,6 +153,21 @@ jobs:
                       cargo: --no-default-features
                       features: cpal
 
+                    - name: scan
+                      path: packages/scan
+                      os: ubuntu-latest
+
+                    - name: scan-no-default-features
+                      path: packages/scan
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+
+                    - name: scan-api
+                      path: packages/scan
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: api
+
                     - name: tidal
                       path: packages/tidal
                       os: ubuntu-latest

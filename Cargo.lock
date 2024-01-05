@@ -2882,6 +2882,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_scan"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "audiotags",
+ "bytes",
+ "futures",
+ "lofty",
+ "log",
+ "moosicbox_core",
+ "mp3-duration",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "moosicbox_server"
 version = "0.1.0"
 dependencies = [
@@ -2890,7 +2911,6 @@ dependencies = [
  "actix-files",
  "actix-web",
  "actix-ws",
- "audiotags",
  "awc",
  "enum-as-inner",
  "env_logger 0.10.0",
@@ -2898,7 +2918,6 @@ dependencies = [
  "futures-util",
  "kanal",
  "lazy_static",
- "lofty",
  "log",
  "moosicbox_auth",
  "moosicbox_core",
@@ -2906,10 +2925,10 @@ dependencies = [
  "moosicbox_files",
  "moosicbox_menu",
  "moosicbox_player",
+ "moosicbox_scan",
  "moosicbox_tidal",
  "moosicbox_tunnel",
  "moosicbox_ws",
- "mp3-duration",
  "once_cell",
  "rand",
  "regex",
@@ -2969,8 +2988,6 @@ dependencies = [
 name = "moosicbox_tidal"
 version = "0.1.0"
 dependencies = [
- "actix-cors",
- "actix-files",
  "actix-web",
  "log",
  "moosicbox_core",

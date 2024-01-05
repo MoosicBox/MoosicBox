@@ -1,17 +1,12 @@
-use crate::scan::scan;
 use crate::ws::handler;
 use crate::ws::server::ChatServerHandle;
-use crate::CANCELLATION_TOKEN;
-use actix_web::error::ErrorInternalServerError;
 use actix_web::{
-    get, post,
+    get,
     web::{self, Json},
     Result,
 };
 use actix_web::{route, HttpResponse};
 use log::info;
-use moosicbox_core::app::AppState;
-use serde::Deserialize;
 use serde_json::{json, Value};
 use tokio::task::spawn_local;
 
@@ -37,21 +32,4 @@ pub async fn websocket(
     ));
 
     Ok(res)
-}
-
-#[derive(Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct ScanQuery {
-    location: String,
-}
-
-#[post("/scan")]
-pub async fn scan_endpoint(
-    query: web::Query<ScanQuery>,
-    data: web::Data<AppState>,
-) -> Result<Json<Value>> {
-    scan(&query.location, &data, CANCELLATION_TOKEN.clone())
-        .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
-
-    Ok(Json(serde_json::json!({"success": true})))
 }
