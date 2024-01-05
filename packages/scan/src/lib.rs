@@ -5,6 +5,7 @@ use tokio_util::sync::CancellationToken;
 
 #[cfg(feature = "api")]
 pub mod api;
+#[cfg(feature = "local")]
 pub mod local;
 
 static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
