@@ -71,6 +71,7 @@ fn main() -> std::io::Result<()> {
         });
 
         let (mut chat_server, server_tx) = ChatServer::new(Arc::new(db.clone()));
+        CHAT_SERVER_HANDLE.write().unwrap().replace(server_tx);
 
         let (tunnel_host, tunnel_join_handle, tunnel_handle) = if let Ok(url) = env::var("WS_HOST")
         {
@@ -199,11 +200,6 @@ fn main() -> std::io::Result<()> {
                 .supports_credentials()
                 .max_age(3600);
 
-            CHAT_SERVER_HANDLE
-                .write()
-                .unwrap()
-                .replace(server_tx.clone());
-
             let app = App::new().wrap(cors).wrap(middleware::Compress::default());
 
             #[cfg(feature = "static-token-auth")]
@@ -212,7 +208,6 @@ fn main() -> std::io::Result<()> {
             ));
 
             app.app_data(web::Data::new(app_data))
-                .app_data(web::Data::new(server_tx.clone()))
                 .service(api::health_endpoint)
                 .service(api::websocket)
                 .service(moosicbox_scan::api::run_scan_endpoint)
