@@ -1,4 +1,4 @@
-use std::sync::PoisonError;
+use std::sync::{Mutex, PoisonError};
 
 use futures::future::join_all;
 use moosicbox_core::{
@@ -130,13 +130,7 @@ pub async fn get_all_albums(
                         .inner,
                 )?),
                 AlbumSource::Tidal => Ok(get_tidal_albums(
-                    &data
-                        .db
-                        .as_ref()
-                        .ok_or(GetAlbumsError::NoDb)?
-                        .library
-                        .lock()
-                        .unwrap(),
+                    &data.db.as_ref().ok_or(GetAlbumsError::NoDb)?.library,
                 )
                 .await?),
                 AlbumSource::Qobuz => unimplemented!("Qobuz is unimplemented"),
@@ -169,7 +163,7 @@ pub enum GetTidalAlbumsError {
     NoDb,
 }
 
-pub async fn get_tidal_albums(db: &DbConnection) -> Result<Vec<Album>, GetTidalAlbumsError> {
+pub async fn get_tidal_albums(db: &Mutex<DbConnection>) -> Result<Vec<Album>, GetTidalAlbumsError> {
     let mut all_tidal_albums = vec![];
     let limit = 100;
     let mut offset = 0;
@@ -178,7 +172,7 @@ pub async fn get_tidal_albums(db: &DbConnection) -> Result<Vec<Album>, GetTidalA
         log::debug!("Fetching Tidal albums offset={offset} limit={limit}");
 
         let (tidal_albums, count) = moosicbox_tidal::favorite_albums(
-            db,
+            db.lock().as_ref().unwrap(),
             Some(offset),
             Some(limit),
             None,
