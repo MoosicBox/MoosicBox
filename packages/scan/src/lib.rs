@@ -19,6 +19,7 @@ pub mod local;
 pub mod tidal;
 
 pub mod db;
+mod output;
 
 static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
 
