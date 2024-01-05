@@ -1,21 +1,13 @@
 use audiotags::{AudioTag, Tag};
 use lofty::{AudioFile, ParseOptions};
-use log::info;
 use moosicbox_core::{
     app::Db,
-    sqlite::{
-        db::{
-            add_album_maps_and_get_albums, add_artist_maps_and_get_artists, add_tracks,
-            set_track_sizes, DbError, InsertTrack, SetTrackSize, SqliteValue,
-        },
-        models::Track,
-    },
-    types::{AudioFormat, PlaybackQuality},
+    sqlite::{db::DbError, models::TrackSource},
+    types::AudioFormat,
 };
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::{
-    collections::HashMap,
     fs::{self, DirEntry, Metadata},
     io::Write,
     num::ParseIntError,
@@ -26,7 +18,7 @@ use std::{
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 
-use crate::output::ScanOutput;
+use crate::output::{ScanOutput, UpdateDatabaseError};
 
 #[derive(Debug, Error)]
 pub enum ScanError {
@@ -34,14 +26,14 @@ pub enum ScanError {
     Db(#[from] DbError),
     #[error("No DB set")]
     NoDb,
-    #[error("Invalid data: {0}")]
-    InvalidData(String),
     #[error(transparent)]
     ParseInt(#[from] ParseIntError),
     #[error(transparent)]
     Tag(#[from] audiotags::error::Error),
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    #[error(transparent)]
+    UpdateDatabase(#[from] UpdateDatabaseError),
 }
 
 pub fn scan(directory: &str, db: &Db, token: CancellationToken) -> Result<(), ScanError> {
@@ -56,209 +48,17 @@ pub fn scan(directory: &str, db: &Db, token: CancellationToken) -> Result<(), Sc
         Some(10),
     )?;
     let end = std::time::SystemTime::now();
-    let output = output.read().unwrap();
-    let artists = output
-        .artists
-        .read()
-        .unwrap()
-        .iter()
-        .map(|artist| artist.read().unwrap().clone())
-        .collect::<Vec<_>>();
-    let artist_count = artists.len();
-    let albums = artists
-        .iter()
-        .flat_map(|artist| {
-            let artist = artist.albums.read().unwrap();
-            let x = artist
-                .iter()
-                .map(|a| a.read().unwrap().clone())
-                .collect::<Vec<_>>();
-            x
-        })
-        .collect::<Vec<_>>();
-    let album_count = albums.len();
-    let tracks = albums
-        .iter()
-        .flat_map(|album| {
-            let album = album.tracks.read().unwrap();
-            let x = album
-                .iter()
-                .map(|a| a.read().unwrap().clone())
-                .collect::<Vec<_>>();
-            x
-        })
-        .collect::<Vec<_>>();
-    let track_count = tracks.len();
-    info!(
-        "Finished initial scan in {}ms {artist_count} artists, {album_count} albums, {track_count} tracks",
+    log::info!(
+        "Finished initial scan in {}ms",
         end.duration_since(start).unwrap().as_millis()
     );
-    let db_start = std::time::SystemTime::now();
 
-    let library = db.library.lock().unwrap_or_else(|e| e.into_inner());
-
-    let db_artists_start = std::time::SystemTime::now();
-    let db_artists = add_artist_maps_and_get_artists(
-        &library.inner,
-        artists
-            .iter()
-            .map(|artist| {
-                HashMap::from([
-                    ("title", SqliteValue::String(artist.name.clone())),
-                    ("cover", SqliteValue::StringOpt(artist.cover.clone())),
-                ])
-            })
-            .collect(),
-    )
-    .unwrap();
-
-    let db_artists_end = std::time::SystemTime::now();
-    info!(
-        "Finished db artists update for scan in {}ms",
-        db_artists_end
-            .duration_since(db_artists_start)
-            .unwrap()
-            .as_millis()
-    );
-
-    if artist_count != db_artists.len() {
-        return Err(ScanError::InvalidData(format!(
-            "Expected {} artists, but received {}",
-            artist_count,
-            db_artists.len()
-        )));
-    }
-
-    let db_albums_start = std::time::SystemTime::now();
-    let album_maps = artists
-        .iter()
-        .zip(db_artists.iter())
-        .flat_map(|(artist, db)| {
-            artist
-                .albums
-                .read()
-                .unwrap()
-                .iter()
-                .map(|album| {
-                    let album = album.read().unwrap();
-                    HashMap::from([
-                        ("artist_id", SqliteValue::Number(db.id as i64)),
-                        ("title", SqliteValue::String(album.name.clone())),
-                        (
-                            "date_released",
-                            SqliteValue::StringOpt(album.date_released.clone()),
-                        ),
-                        ("artwork", SqliteValue::StringOpt(album.cover.clone())),
-                        (
-                            "directory",
-                            SqliteValue::StringOpt(Some(album.directory.clone())),
-                        ),
-                    ])
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
-
-    let db_albums = add_album_maps_and_get_albums(&library.inner, album_maps).unwrap();
-
-    let db_albums_end = std::time::SystemTime::now();
-    info!(
-        "Finished db albums update for scan in {}ms",
-        db_albums_end
-            .duration_since(db_albums_start)
-            .unwrap()
-            .as_millis()
-    );
-
-    if album_count != db_albums.len() {
-        return Err(ScanError::InvalidData(format!(
-            "Expected {} albums, but received {}",
-            album_count,
-            db_albums.len()
-        )));
-    }
-
-    let db_tracks_start = std::time::SystemTime::now();
-    let insert_tracks = albums
-        .iter()
-        .zip(db_albums.iter())
-        .flat_map(|(album, db)| {
-            album
-                .tracks
-                .read()
-                .unwrap()
-                .iter()
-                .map(|track| {
-                    let track = track.read().unwrap();
-                    InsertTrack {
-                        album_id: db.id,
-                        file: track.path.clone(),
-                        track: Track {
-                            number: track.number as i32,
-                            title: track.name.clone(),
-                            duration: track.duration,
-                            format: Some(track.format),
-                            ..Default::default()
-                        },
-                    }
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
-
-    let db_tracks = add_tracks(&library.inner, insert_tracks).unwrap();
-
-    let db_tracks_end = std::time::SystemTime::now();
-    info!(
-        "Finished db tracks update for scan in {}ms",
-        db_tracks_end
-            .duration_since(db_tracks_start)
-            .unwrap()
-            .as_millis()
-    );
-
-    if track_count != db_tracks.len() {
-        return Err(ScanError::InvalidData(format!(
-            "Expected {} tracks, but received {}",
-            track_count,
-            db_tracks.len()
-        )));
-    }
-
-    let db_track_sizes_start = std::time::SystemTime::now();
-    let track_sizes = tracks
-        .iter()
-        .zip(db_tracks.iter())
-        .map(|(track, db_track)| SetTrackSize {
-            track_id: db_track.id,
-            quality: PlaybackQuality {
-                format: track.format,
-            },
-            bytes: track.bytes,
-            bit_depth: Some(track.bit_depth),
-            audio_bitrate: Some(track.audio_bitrate),
-            overall_bitrate: Some(track.overall_bitrate),
-            sample_rate: Some(track.sample_rate),
-            channels: Some(track.channels),
-        })
-        .collect::<Vec<_>>();
-
-    set_track_sizes(&library.inner, &track_sizes).unwrap();
-
-    let db_track_sizes_end = std::time::SystemTime::now();
-    info!(
-        "Finished db track_sizes update for scan in {}ms",
-        db_track_sizes_end
-            .duration_since(db_track_sizes_start)
-            .unwrap()
-            .as_millis()
-    );
+    output.read().unwrap().update_database(db)?;
 
     let end = std::time::SystemTime::now();
-    info!(
-        "Finished db update for scan in {}ms. Total scan took {}ms",
-        end.duration_since(db_start).unwrap().as_millis(),
-        end.duration_since(total_start).unwrap().as_millis()
+    log::info!(
+        "Finished total scan in {}ms",
+        end.duration_since(total_start).unwrap().as_millis(),
     );
 
     Ok(())
@@ -457,6 +257,7 @@ fn scan_track(
         overall_bitrate,
         sample_rate,
         channels,
+        TrackSource::Local,
     );
 
     Ok(())

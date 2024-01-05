@@ -2,7 +2,7 @@ use std::{path::PathBuf, str::FromStr};
 
 use rusqlite::{types::FromSql, Row, Rows};
 use serde::{Deserialize, Serialize};
-use strum_macros::EnumString;
+use strum_macros::{AsRefStr, EnumString};
 
 use crate::types::AudioFormat;
 
@@ -75,6 +75,15 @@ impl AsId for StringId {
     }
 }
 
+#[derive(Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum TrackSource {
+    #[default]
+    Local,
+    Tidal,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Track {
@@ -97,6 +106,7 @@ pub struct Track {
     pub overall_bitrate: Option<u32>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
+    pub source: TrackSource,
 }
 
 impl Track {
@@ -135,6 +145,8 @@ impl AsModel<Track> for Row<'_> {
             overall_bitrate: self.get("overall_bitrate").unwrap_or_default(),
             sample_rate: self.get("sample_rate").unwrap_or_default(),
             channels: self.get("channels").unwrap_or_default(),
+            source: TrackSource::from_str(&self.get::<_, String>("source").unwrap())
+                .expect("Missing source"),
         }
     }
 }
@@ -166,6 +178,7 @@ pub struct ApiTrack {
     pub overall_bitrate: Option<u32>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
+    pub source: TrackSource,
 }
 
 impl ToApi<ApiTrack> for Track {
@@ -189,6 +202,7 @@ impl ToApi<ApiTrack> for Track {
             overall_bitrate: self.overall_bitrate,
             sample_rate: self.sample_rate,
             channels: self.channels,
+            source: self.source,
         }
     }
 }
@@ -575,6 +589,7 @@ impl ToApi<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
                     overall_bitrate: None,
                     sample_rate: None,
                     channels: None,
+                    source: TrackSource::default(),
                 })
                 .collect(),
         }
