@@ -157,16 +157,23 @@ jobs:
                       path: packages/scan
                       os: ubuntu-latest
 
-                    - name: scan-no-default-features
-                      path: packages/scan
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-
                     - name: scan-api
                       path: packages/scan
                       os: ubuntu-latest
                       cargo: --no-default-features
                       features: api
+
+                    - name: scan-local
+                      path: packages/scan
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: local
+
+                    - name: scan-tidal
+                      path: packages/scan
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: tidal
 
                     - name: tidal
                       path: packages/tidal

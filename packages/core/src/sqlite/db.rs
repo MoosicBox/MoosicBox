@@ -995,6 +995,30 @@ impl Display for SqliteValue {
     }
 }
 
+pub fn select_distinct<T>(
+    connection: &Connection,
+    table_name: &str,
+    filters: &Vec<(&str, SqliteValue)>,
+    columns: &[&str],
+) -> Result<Vec<T>, DbError>
+where
+    for<'b> Row<'b>: AsModel<T>,
+{
+    let mut statement = connection.prepare_cached(&format!(
+        "SELECT DISTINCT {} FROM {table_name} {}",
+        columns.join(", "),
+        build_where_clause(filters),
+    ))?;
+
+    bind_values(&mut statement, filters, false)?;
+
+    Ok(statement
+        .raw_query()
+        .mapped(|row| Ok(row.as_model()))
+        .filter_map(|row| row.ok())
+        .collect::<Vec<_>>())
+}
+
 pub fn select<T>(
     connection: &Connection,
     table_name: &str,
@@ -1007,6 +1031,28 @@ where
     let mut statement = connection.prepare_cached(&format!(
         "SELECT {} FROM {table_name} {}",
         columns.join(", "),
+        build_where_clause(filters),
+    ))?;
+
+    bind_values(&mut statement, filters, false)?;
+
+    Ok(statement
+        .raw_query()
+        .mapped(|row| Ok(row.as_model()))
+        .filter_map(|row| row.ok())
+        .collect::<Vec<_>>())
+}
+
+pub fn delete<T>(
+    connection: &Connection,
+    table_name: &str,
+    filters: &Vec<(&str, SqliteValue)>,
+) -> Result<Vec<T>, DbError>
+where
+    for<'b> Row<'b>: AsModel<T>,
+{
+    let mut statement = connection.prepare_cached(&format!(
+        "DELETE FROM {table_name} {} RETURNING *",
         build_where_clause(filters),
     ))?;
 

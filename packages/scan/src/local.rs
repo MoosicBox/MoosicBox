@@ -2,7 +2,7 @@ use audiotags::{AudioTag, Tag};
 use lofty::{AudioFile, ParseOptions};
 use log::info;
 use moosicbox_core::{
-    app::AppState,
+    app::Db,
     sqlite::{
         db::{
             add_album_maps_and_get_albums, add_artist_maps_and_get_artists, add_tracks,
@@ -240,7 +240,7 @@ impl ScanOutput {
     }
 }
 
-pub fn scan(directory: &str, data: &AppState, token: CancellationToken) -> Result<(), ScanError> {
+pub fn scan(directory: &str, db: &Db, token: CancellationToken) -> Result<(), ScanError> {
     let total_start = std::time::SystemTime::now();
     let start = std::time::SystemTime::now();
     let output = Arc::new(RwLock::new(ScanOutput::new()));
@@ -291,13 +291,7 @@ pub fn scan(directory: &str, data: &AppState, token: CancellationToken) -> Resul
     );
     let db_start = std::time::SystemTime::now();
 
-    let library = data
-        .db
-        .as_ref()
-        .ok_or(ScanError::NoDb)?
-        .library
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let library = db.library.lock().unwrap_or_else(|e| e.into_inner());
 
     let db_artists_start = std::time::SystemTime::now();
     let db_artists = add_artist_maps_and_get_artists(

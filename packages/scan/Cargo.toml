@@ -18,16 +18,20 @@ log          = { workspace = true }
 mp3-duration = { workspace = true }
 once_cell    = { workspace = true }
 regex        = { workspace = true }
+rusqlite     = { workspace = true }
 serde        = { workspace = true, features = ["derive"] }
 serde_json   = { workspace = true }
+strum        = { workspace = true }
+strum_macros = { workspace = true }
 thiserror    = { workspace = true }
 tokio        = { workspace = true }
 tokio-util   = { workspace = true }
 
 [features]
-default = ["api", "local"]
+default = ["api", "local", "tidal"]
 
 fail-on-warnings = []
 
 api   = ["dep:actix-web"]
 local = []
+tidal = []
