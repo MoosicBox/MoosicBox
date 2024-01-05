@@ -1,15 +1,13 @@
-use std::sync::{Mutex, PoisonError};
+use std::sync::PoisonError;
 
-use futures::future::join_all;
 use moosicbox_core::{
-    app::{AppState, DbConnection},
+    app::AppState,
     sqlite::{
         db::{get_albums, DbError},
         models::{Album, AlbumSort, AlbumSource, ApiTrack, ToApi, Track},
     },
     types::AudioFormat,
 };
-use moosicbox_tidal::TidalFavoriteAlbumsError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -103,8 +101,6 @@ pub fn sort_albums(mut albums: Vec<Album>, request: &AlbumsRequest) -> Vec<Album
 pub enum GetAlbumsError {
     #[error(transparent)]
     Db(#[from] DbError),
-    #[error(transparent)]
-    Tidal(#[from] GetTidalAlbumsError),
     #[error("No DB set")]
     NoDb,
 }
@@ -113,107 +109,18 @@ pub async fn get_all_albums(
     data: &AppState,
     request: &AlbumsRequest,
 ) -> Result<Vec<Album>, GetAlbumsError> {
-    let sources = request.sources.clone().unwrap_or(vec![AlbumSource::Local]);
-
-    let albums_requests = sources
-        .iter()
-        .map(|source| async move {
-            match source {
-                AlbumSource::Local => Ok(get_albums(
-                    &data
-                        .db
-                        .as_ref()
-                        .ok_or(GetAlbumsError::NoDb)?
-                        .library
-                        .lock()
-                        .unwrap()
-                        .inner,
-                )?),
-                AlbumSource::Tidal => Ok(get_tidal_albums(
-                    &data.db.as_ref().ok_or(GetAlbumsError::NoDb)?.library,
-                )
-                .await?),
-                AlbumSource::Qobuz => unimplemented!("Qobuz is unimplemented"),
-            }
-        })
-        .collect::<Vec<_>>();
-
-    let albums = join_all(albums_requests)
-        .await
-        .into_iter()
-        .map(|a: Result<Vec<Album>, GetAlbumsError>| {
-            a.unwrap_or_else(|err| {
-                eprintln!("Failed to get albums: {err:?}");
-                vec![]
-            })
-        })
-        .collect::<Vec<_>>()
-        .concat();
+    let albums = get_albums(
+        &data
+            .db
+            .as_ref()
+            .ok_or(GetAlbumsError::NoDb)?
+            .library
+            .lock()
+            .unwrap()
+            .inner,
+    )?;
 
     Ok(sort_albums(filter_albums(albums, request), request))
-}
-
-#[derive(Debug, Error)]
-pub enum GetTidalAlbumsError {
-    #[error(transparent)]
-    DbError(#[from] DbError),
-    #[error(transparent)]
-    TidalFavoriteAlbums(#[from] TidalFavoriteAlbumsError),
-    #[error("No DB set")]
-    NoDb,
-}
-
-pub async fn get_tidal_albums(db: &Mutex<DbConnection>) -> Result<Vec<Album>, GetTidalAlbumsError> {
-    let mut all_tidal_albums = vec![];
-    let limit = 100;
-    let mut offset = 0;
-
-    loop {
-        log::debug!("Fetching Tidal albums offset={offset} limit={limit}");
-
-        let (tidal_albums, count) = moosicbox_tidal::favorite_albums(
-            db.lock().as_ref().unwrap(),
-            Some(offset),
-            Some(limit),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .await?;
-
-        log::debug!("Fetched Tidal albums offset={offset} limit={limit}: page_count={}, total_count={count}", tidal_albums.len());
-
-        all_tidal_albums.extend_from_slice(&tidal_albums);
-
-        if all_tidal_albums.len() >= (count as usize) {
-            break;
-        }
-
-        offset += tidal_albums.len() as u32;
-    }
-
-    let albums = all_tidal_albums
-        .into_iter()
-        .map(|album| Album {
-            id: album.id as i32,
-            title: album.title.clone(),
-            artist: album.artist.clone(),
-            artist_id: album.artist_id as i32,
-            date_released: Some(album.release_date.clone()),
-            date_added: None,
-            artwork: Some(album.cover_url(1280)),
-            directory: None,
-            source: AlbumSource::Tidal,
-            blur: false,
-            versions: vec![],
-        })
-        .collect::<Vec<_>>();
-
-    Ok(albums)
 }
 
 #[derive(Debug, Error)]
