@@ -26,7 +26,7 @@ pub struct TidalAlbum {
     pub artist: String,
     pub artist_id: u32,
     pub audio_quality: String,
-    pub copyright: String,
+    pub copyright: Option<String>,
     pub cover: String,
     pub duration: u32,
     pub explicit: bool,
@@ -69,7 +69,9 @@ impl AsModel<TidalAlbum> for Value {
                 .as_str()
                 .unwrap()
                 .to_string(),
-            copyright: self.get("copyright").unwrap().as_str().unwrap().to_string(),
+            copyright: self
+                .get("copyright")
+                .and_then(|c| c.as_str().map(|c| c.to_string())),
             cover: self.get("cover").unwrap().as_str().unwrap().to_string(),
             duration: self.get("duration").unwrap().as_u64().unwrap() as u32,
             explicit: self.get("explicit").unwrap().as_bool().unwrap(),
@@ -104,7 +106,7 @@ pub struct TidalTrack {
     pub album_id: u32,
     pub artist_id: u32,
     pub audio_quality: String,
-    pub copyright: String,
+    pub copyright: Option<String>,
     pub duration: u32,
     pub explicit: bool,
     pub isrc: String,
@@ -138,7 +140,9 @@ impl AsModel<TidalTrack> for Value {
                 .as_str()
                 .unwrap()
                 .to_string(),
-            copyright: self.get("copyright").unwrap().as_str().unwrap().to_string(),
+            copyright: self
+                .get("copyright")
+                .and_then(|c| c.as_str().map(|c| c.to_string())),
             duration: self.get("duration").unwrap().as_u64().unwrap() as u32,
             explicit: self.get("explicit").unwrap().as_bool().unwrap(),
             isrc: self.get("isrc").unwrap().as_str().unwrap().to_string(),
