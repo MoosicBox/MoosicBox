@@ -1,12 +1,12 @@
 [alias]
 server                             = "server:release"
-"server:cpal"                      = "run --manifest-path=server/Cargo.toml --release --no-default-features --features=cpal"
+"server:cpal"                      = "run --manifest-path=server/Cargo.toml --release --no-default-features --features=cpal,aac,mp3,opus"
 "server:debug"                     = "server:debug:cpal"
-"server:debug:cpal"                = "run --manifest-path=server/Cargo.toml --no-default-features --features=cpal"
-"server:debug:pulseaudio-simple"   = "run --manifest-path=server/Cargo.toml --no-default-features --features=pulseaudio-simple"
-"server:debug:pulseaudio-standard" = "run --manifest-path=server/Cargo.toml --no-default-features --features=pulseaudio-standard"
-"server:pulseaudio-simple"         = "run --manifest-path=server/Cargo.toml --release --no-default-features --features=pulseaudio-simple"
-"server:pulseaudio-standard"       = "run --manifest-path=server/Cargo.toml --release --no-default-features --features=pulseaudio-standard"
+"server:debug:cpal"                = "run --manifest-path=server/Cargo.toml --no-default-features --features=cpal,aac,mp3,opus"
+"server:debug:pulseaudio-simple"   = "run --manifest-path=server/Cargo.toml --no-default-features --features=pulseaudio-simple,aac,mp3,opus"
+"server:debug:pulseaudio-standard" = "run --manifest-path=server/Cargo.toml --no-default-features --features=pulseaudio-standard,aac,mp3,opus"
+"server:pulseaudio-simple"         = "run --manifest-path=server/Cargo.toml --release --no-default-features --features=pulseaudio-simple,aac,mp3,opus"
+"server:pulseaudio-standard"       = "run --manifest-path=server/Cargo.toml --release --no-default-features --features=pulseaudio-standard,aac,mp3,opus"
 "server:release"                   = "server:cpal"
 
 tunnel-server           = "tunnel-server:release"
