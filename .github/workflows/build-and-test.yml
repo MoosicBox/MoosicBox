@@ -157,12 +157,6 @@ jobs:
                       path: packages/scan
                       os: ubuntu-latest
 
-                    - name: scan-api
-                      path: packages/scan
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: api
-
                     - name: scan-local
                       path: packages/scan
                       os: ubuntu-latest
