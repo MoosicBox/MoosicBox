@@ -22,9 +22,9 @@ pub enum TidalDeviceType {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalAlbum {
-    pub id: u32,
+    pub id: u64,
     pub artist: String,
-    pub artist_id: u32,
+    pub artist_id: u64,
     pub audio_quality: String,
     pub copyright: Option<String>,
     pub cover: String,
@@ -47,7 +47,7 @@ impl TidalAlbum {
 impl AsModel<TidalAlbum> for Value {
     fn as_model(&self) -> TidalAlbum {
         TidalAlbum {
-            id: self.get("id").unwrap().as_u64().unwrap() as u32,
+            id: self.get("id").unwrap().as_u64().unwrap(),
             artist: self
                 .get("artist")
                 .unwrap()
@@ -62,7 +62,7 @@ impl AsModel<TidalAlbum> for Value {
                 .get("id")
                 .unwrap()
                 .as_u64()
-                .unwrap() as u32,
+                .unwrap(),
             audio_quality: self
                 .get("audioQuality")
                 .unwrap()
@@ -101,10 +101,10 @@ impl AsModel<TidalAlbum> for Value {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalTrack {
-    pub id: u32,
+    pub id: u64,
     pub track_number: u32,
-    pub album_id: u32,
-    pub artist_id: u32,
+    pub album_id: u64,
+    pub artist_id: u64,
     pub audio_quality: String,
     pub copyright: Option<String>,
     pub duration: u32,
@@ -118,7 +118,7 @@ pub struct TidalTrack {
 impl AsModel<TidalTrack> for Value {
     fn as_model(&self) -> TidalTrack {
         TidalTrack {
-            id: self.get("id").unwrap().as_u64().unwrap() as u32,
+            id: self.get("id").unwrap().as_u64().unwrap(),
             track_number: self.get("trackNumber").unwrap().as_u64().unwrap() as u32,
             album_id: self
                 .get("album")
@@ -126,14 +126,14 @@ impl AsModel<TidalTrack> for Value {
                 .get("id")
                 .unwrap()
                 .as_u64()
-                .unwrap() as u32,
+                .unwrap(),
             artist_id: self
                 .get("artist")
                 .unwrap()
                 .get("id")
                 .unwrap()
                 .as_u64()
-                .unwrap() as u32,
+                .unwrap(),
             audio_quality: self
                 .get("audioQuality")
                 .unwrap()
@@ -165,7 +165,7 @@ impl AsModel<TidalTrack> for Value {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalArtist {
-    pub id: u32,
+    pub id: u64,
     pub picture: Option<String>,
     pub popularity: u32,
     pub name: String,
@@ -183,7 +183,7 @@ impl TidalArtist {
 impl AsModel<TidalArtist> for Value {
     fn as_model(&self) -> TidalArtist {
         TidalArtist {
-            id: self.get("id").unwrap().as_u64().unwrap() as u32,
+            id: self.get("id").unwrap().as_u64().unwrap(),
             picture: self
                 .get("picture")
                 .unwrap()
@@ -415,7 +415,7 @@ pub enum TidalTrackUrlError {
 pub async fn track_url(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     audio_quality: TidalAudioQuality,
-    track_id: u32,
+    track_id: u64,
     access_token: Option<String>,
 ) -> Result<Vec<String>, TidalTrackUrlError> {
     #[cfg(feature = "db")]
@@ -499,7 +499,7 @@ pub async fn favorite_artists(
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
-    user_id: Option<u32>,
+    user_id: Option<u64>,
 ) -> Result<(Vec<TidalArtist>, u32), TidalFavoriteArtistsError> {
     #[cfg(feature = "db")]
     let (access_token, user_id) = {
@@ -609,7 +609,7 @@ pub async fn favorite_albums(
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
-    user_id: Option<u32>,
+    user_id: Option<u64>,
 ) -> Result<(Vec<TidalAlbum>, u32), TidalFavoriteAlbumsError> {
     #[cfg(feature = "db")]
     let (access_token, user_id) = {
@@ -719,7 +719,7 @@ pub async fn favorite_tracks(
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
-    user_id: Option<u32>,
+    user_id: Option<u64>,
 ) -> Result<(Vec<TidalTrack>, u32), TidalFavoriteTracksError> {
     #[cfg(feature = "db")]
     let (access_token, user_id) = {
@@ -804,7 +804,7 @@ pub enum TidalArtistAlbumsError {
 #[allow(clippy::too_many_arguments)]
 pub async fn artist_albums(
     #[cfg(feature = "db")] db: &moosicbox_core::app::DbConnection,
-    artist_id: u32,
+    artist_id: u64,
     offset: Option<u32>,
     limit: Option<u32>,
     country_code: Option<String>,
@@ -882,7 +882,7 @@ pub enum TidalAlbumTracksError {
 #[allow(clippy::too_many_arguments)]
 pub async fn album_tracks(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    album_id: u32,
+    album_id: u64,
     offset: Option<u32>,
     limit: Option<u32>,
     country_code: Option<String>,
@@ -961,7 +961,7 @@ pub enum TidalAlbumError {
 #[allow(clippy::too_many_arguments)]
 pub async fn album(
     #[cfg(feature = "db")] db: &moosicbox_core::app::DbConnection,
-    album_id: u32,
+    album_id: u64,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -1024,7 +1024,7 @@ pub enum TidalArtistError {
 #[allow(clippy::too_many_arguments)]
 pub async fn artist(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    artist_id: u32,
+    artist_id: u64,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -1089,7 +1089,7 @@ pub enum TidalTrackError {
 #[allow(clippy::too_many_arguments)]
 pub async fn track(
     #[cfg(feature = "db")] db: &moosicbox_core::app::DbConnection,
-    track_id: u32,
+    track_id: u64,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,

@@ -41,9 +41,9 @@ impl ToApi<ApiTidalAlbum> for TidalAlbum {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiTidalAlbum {
-    pub id: u32,
+    pub id: u64,
     pub artist: String,
-    pub artist_id: u32,
+    pub artist_id: u64,
     pub audio_quality: String,
     pub copyright: Option<String>,
     pub cover: String,
@@ -78,10 +78,10 @@ impl ToApi<ApiTidalTrack> for TidalTrack {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiTidalTrack {
-    pub id: u32,
+    pub id: u64,
     pub track_number: u32,
-    pub album_id: u32,
-    pub artist_id: u32,
+    pub album_id: u64,
+    pub artist_id: u64,
     pub audio_quality: String,
     pub copyright: Option<String>,
     pub duration: u32,
@@ -106,7 +106,7 @@ impl ToApi<ApiTidalArtist> for TidalArtist {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiTidalArtist {
-    pub id: u32,
+    pub id: u64,
     pub picture: Option<String>,
     pub popularity: u32,
     pub name: String,
@@ -187,7 +187,7 @@ impl From<TidalTrackUrlError> for actix_web::Error {
 #[serde(rename_all = "camelCase")]
 pub struct TidalTrackUrlQuery {
     audio_quality: TidalAudioQuality,
-    track_id: u32,
+    track_id: u64,
 }
 
 #[route("/tidal/track/url", method = "GET")]
@@ -226,7 +226,7 @@ pub struct TidalFavoriteArtistsQuery {
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
-    user_id: Option<u32>,
+    user_id: Option<u64>,
 }
 
 #[route("/tidal/favorites/artists", method = "GET")]
@@ -280,7 +280,7 @@ pub struct TidalFavoriteAlbumsQuery {
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
-    user_id: Option<u32>,
+    user_id: Option<u64>,
 }
 
 #[route("/tidal/favorites/albums", method = "GET")]
@@ -328,7 +328,7 @@ pub struct TidalFavoriteTracksQuery {
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
-    user_id: Option<u32>,
+    user_id: Option<u64>,
 }
 
 #[route("/tidal/favorites/tracks", method = "GET")]
@@ -375,7 +375,7 @@ impl From<TidalArtistAlbumsError> for actix_web::Error {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalArtistAlbumsQuery {
-    artist_id: u32,
+    artist_id: u64,
     offset: Option<u32>,
     limit: Option<u32>,
     country_code: Option<String>,
@@ -425,7 +425,7 @@ impl From<TidalAlbumTracksError> for actix_web::Error {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalAlbumTracksQuery {
-    album_id: u32,
+    album_id: u64,
     offset: Option<u32>,
     limit: Option<u32>,
     country_code: Option<String>,
@@ -469,7 +469,7 @@ impl From<TidalAlbumError> for actix_web::Error {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalAlbumQuery {
-    album_id: u32,
+    album_id: u64,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -512,7 +512,7 @@ impl From<TidalArtistError> for actix_web::Error {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalArtistQuery {
-    artist_id: u32,
+    artist_id: u64,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -549,7 +549,7 @@ impl From<TidalTrackError> for actix_web::Error {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalTrackQuery {
-    track_id: u32,
+    track_id: u64,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,

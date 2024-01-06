@@ -17,7 +17,7 @@ pub struct TidalConfig {
     pub scope: String,
     pub token_type: String,
     pub user: String,
-    pub user_id: u32,
+    pub user_id: u64,
     pub created: String,
     pub updated: String,
 }
