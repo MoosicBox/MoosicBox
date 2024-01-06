@@ -880,7 +880,7 @@ pub enum TidalAlbumTracksError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn album_tracks(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::DbConnection,
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     album_id: u32,
     offset: Option<u32>,
     limit: Option<u32>,
@@ -893,7 +893,7 @@ pub async fn album_tracks(
     let access_token = match access_token {
         Some(access_token) => access_token,
         _ => {
-            let config = db::get_tidal_config(&db.inner)?
+            let config = db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner)?
                 .ok_or(TidalAlbumTracksError::NoAccessTokenAvailable)?;
 
             access_token.unwrap_or(config.access_token)
@@ -1017,7 +1017,7 @@ pub enum TidalArtistError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn artist(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::DbConnection,
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     artist_id: u32,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1028,8 +1028,8 @@ pub async fn artist(
     let access_token = match access_token {
         Some(access_token) => access_token,
         _ => {
-            let config =
-                db::get_tidal_config(&db.inner)?.ok_or(TidalArtistError::NoAccessTokenAvailable)?;
+            let config = db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner)?
+                .ok_or(TidalArtistError::NoAccessTokenAvailable)?;
 
             access_token.unwrap_or(config.access_token)
         }

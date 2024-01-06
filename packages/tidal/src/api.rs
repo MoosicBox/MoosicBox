@@ -447,13 +447,7 @@ pub async fn album_tracks_endpoint(
 ) -> Result<Json<Value>> {
     let (items, count) = album_tracks(
         #[cfg(feature = "db")]
-        data.db
-            .clone()
-            .expect("Db not set")
-            .library
-            .lock()
-            .as_ref()
-            .unwrap(),
+        data.db.as_ref().expect("Db not set"),
         query.album_id,
         query.offset,
         query.limit,
@@ -538,13 +532,7 @@ pub async fn artist_endpoint(
 ) -> Result<Json<ApiTidalArtist>> {
     let artist = artist(
         #[cfg(feature = "db")]
-        data.db
-            .clone()
-            .expect("Db not set")
-            .library
-            .lock()
-            .as_ref()
-            .unwrap(),
+        data.db.as_ref().expect("Db not set"),
         query.artist_id,
         query.country_code.clone(),
         query.locale.clone(),
