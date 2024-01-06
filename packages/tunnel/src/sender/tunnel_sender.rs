@@ -17,11 +17,17 @@ use moosicbox_env_utils::default_env_usize;
 use moosicbox_files::files::album::{get_album_cover, AlbumCoverError, AlbumCoverSource};
 use moosicbox_files::files::track::{get_track_info, get_track_source, TrackSource};
 use moosicbox_files::range::{parse_ranges, Range};
+use moosicbox_stream_utils::ByteWriter;
+use moosicbox_symphonia_player::media_sources::remote_bytestream::RemoteByteStream;
+use moosicbox_symphonia_player::output::AudioOutputHandler;
+use moosicbox_symphonia_player::play_media_source;
 use moosicbox_ws::api::{WebsocketContext, WebsocketSendError, WebsocketSender};
 use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng as _};
 use regex::Regex;
 use serde_json::Value;
+use symphonia::core::io::MediaSourceStream;
+use symphonia::core::probe::Hint;
 use thiserror::Error;
 use tokio::runtime::{self, Runtime};
 use tokio::select;
@@ -887,7 +893,6 @@ impl TunnelSender {
         encoding: TunnelEncoding,
     ) {
         let host = format!("http://127.0.0.1:{service_port}");
-
         let mut query_string = query
             .as_object()
             .unwrap()
@@ -910,6 +915,38 @@ impl TunnelSender {
         }
 
         let url = format!("{host}/{path}{query_string}");
+
+        self.proxy_request(&url, request_id, method, payload, encoding)
+            .await
+    }
+
+    async fn proxy_request(
+        &self,
+        url: &str,
+        request_id: usize,
+        method: Method,
+        payload: Option<Value>,
+        encoding: TunnelEncoding,
+    ) {
+        let response = self.http_request(url, method, payload, true).await;
+
+        let headers = response
+            .headers()
+            .iter()
+            .map(|(key, value)| (key.to_string(), value.to_str().unwrap().to_string()))
+            .collect();
+
+        self.send_stream(request_id, headers, None, response.bytes_stream(), encoding)
+            .await;
+    }
+
+    async fn http_request(
+        &self,
+        url: &str,
+        method: Method,
+        payload: Option<Value>,
+        user_agent_header: bool,
+    ) -> reqwest::Response {
         let client = reqwest::Client::new();
 
         let mut builder = match method {
@@ -921,21 +958,15 @@ impl TunnelSender {
             Method::Delete => client.delete(url),
         };
 
-        builder = builder.header("user-agent", "MOOSICBOX_TUNNEL");
+        if user_agent_header {
+            builder = builder.header("user-agent", "MOOSICBOX_TUNNEL");
+        }
 
         if let Some(body) = payload {
             builder = builder.json(&body);
         }
 
-        let response = builder.send().await.unwrap();
-        let headers = response
-            .headers()
-            .iter()
-            .map(|(key, value)| (key.to_string(), value.to_str().unwrap().to_string()))
-            .collect();
-
-        self.send_stream(request_id, headers, None, response.bytes_stream(), encoding)
-            .await;
+        builder.send().await.unwrap()
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -994,51 +1025,139 @@ impl TunnelSender {
                     let mut response_headers = HashMap::new();
                     response_headers.insert("accept-ranges".to_string(), "bytes".to_string());
 
-                    if let Ok(TrackSource::LocalFilePath(path)) =
-                        get_track_source(query.track_id, db.clone()).await
-                    {
-                        static CONTENT_TYPE: &str = "content-type";
-                        match query.format {
-                            Some(AudioFormat::Aac) => {
-                                response_headers
-                                    .insert(CONTENT_TYPE.to_string(), "audio/mp4".to_string());
-                                self.send_stream(request_id, response_headers, ranges,
-                                    moosicbox_symphonia_player::output::encoder::aac::encoder::encode_aac_stream(
-                                        path,
-                                    ),
-                                    encoding,
-                                ).await;
+                    match get_track_source(query.track_id, db.clone()).await {
+                        Ok(TrackSource::LocalFilePath(path)) => {
+                            static CONTENT_TYPE: &str = "content-type";
+                            match query.format {
+                                #[cfg(feature = "aac")]
+                                Some(AudioFormat::Aac) => {
+                                    response_headers
+                                        .insert(CONTENT_TYPE.to_string(), "audio/mp4".to_string());
+                                    self.send_stream(request_id, response_headers, ranges,
+                                        moosicbox_symphonia_player::output::encoder::aac::encoder::encode_aac_stream(
+                                            path,
+                                        ),
+                                        encoding,
+                                    ).await;
+                                }
+                                #[cfg(feature = "mp3")]
+                                Some(AudioFormat::Mp3) => {
+                                    response_headers
+                                        .insert(CONTENT_TYPE.to_string(), "audio/mp3".to_string());
+                                    self.send_stream(request_id, response_headers, ranges,
+                                        moosicbox_symphonia_player::output::encoder::mp3::encoder::encode_mp3_stream(
+                                            path,
+                                        ),
+                                        encoding,
+                                    ).await;
+                                }
+                                #[cfg(feature = "opus")]
+                                Some(AudioFormat::Opus) => {
+                                    response_headers
+                                        .insert(CONTENT_TYPE.to_string(), "audio/opus".to_string());
+                                    self.send_stream(request_id, response_headers, ranges,
+                                        moosicbox_symphonia_player::output::encoder::opus::encoder::encode_opus_stream(
+                                            path,
+                                        ),
+                                        encoding,
+                                    ).await;
+                                }
+                                _ => {
+                                    response_headers
+                                        .insert(CONTENT_TYPE.to_string(), "audio/flac".to_string());
+                                    self.send(
+                                        request_id,
+                                        response_headers,
+                                        File::open(path).unwrap(),
+                                        encoding,
+                                    );
+                                }
                             }
-                            Some(AudioFormat::Mp3) => {
-                                response_headers
-                                    .insert(CONTENT_TYPE.to_string(), "audio/mp3".to_string());
-                                self.send_stream(request_id, response_headers, ranges,
-                                    moosicbox_symphonia_player::output::encoder::mp3::encoder::encode_mp3_stream(
-                                        path,
-                                    ),
-                                    encoding,
-                                ).await;
-                            }
-                            Some(AudioFormat::Opus) => {
-                                response_headers
-                                    .insert(CONTENT_TYPE.to_string(), "audio/opus".to_string());
-                                self.send_stream(request_id, response_headers, ranges,
-                                    moosicbox_symphonia_player::output::encoder::opus::encoder::encode_opus_stream(
-                                        path,
-                                    ),
-                                    encoding,
-                                ).await;
-                            }
-                            _ => {
-                                response_headers
-                                    .insert(CONTENT_TYPE.to_string(), "audio/flac".to_string());
-                                self.send(
-                                    request_id,
-                                    response_headers,
-                                    File::open(path).unwrap(),
-                                    encoding,
-                                );
-                            }
+                        }
+                        Ok(TrackSource::Tidal(tidal_path)) => {
+                            let writer = ByteWriter::default();
+                            let stream = writer.stream();
+
+                            RT.spawn(async move {
+                                let mut audio_output_handler = AudioOutputHandler::new();
+
+                                let format = match query.format {
+                                    #[cfg(feature = "aac")]
+                                    None | Some(AudioFormat::Source) => AudioFormat::Aac,
+                                    #[cfg(all(not(feature = "aac"), feature = "mp3"))]
+                                    None | Some(AudioFormat::Source) => AudioFormat::Mp3,
+                                    #[cfg(all(not(feature = "aac"), not(feature = "mp3"), feature = "opus"))]
+                                    None | Some(AudioFormat::Source) => AudioFormat::Opus,
+                                    #[cfg(all(not(feature = "aac"), not(feature = "mp3"), not(feature = "opus")))]
+                                    None | Some(AudioFormat::Source) => panic!("Audio format is unsupported for Tidal"),
+                                    Some(AudioFormat::Flac) => panic!("FLAC audio format is unsupported for Tidal"),
+                                    _ => query.format.unwrap()
+                                };
+
+                                log::debug!("Sending audio stream with format: {format:?}");
+
+                                match format {
+                                    #[cfg(feature = "aac")]
+                                    AudioFormat::Aac => {
+                                        log::debug!("Using AAC encoder for output");
+                                        audio_output_handler.with_output(Box::new(move |spec, duration| {
+                                            let mut encoder = moosicbox_symphonia_player::output::encoder::aac::encoder::AacEncoder::new(writer.clone());
+                                            encoder.open(spec, duration);
+                                            Ok(Box::new(encoder))
+                                        }));
+                                    }
+                                    #[cfg(feature = "mp3")]
+                                    AudioFormat::Mp3 => {
+                                        log::debug!("Using MP3 encoder for output");
+                                        audio_output_handler.with_output(Box::new(move |spec, duration| {
+                                            let mut encoder = moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder::new(writer.clone());
+                                            encoder.open(spec, duration);
+                                            Ok(Box::new(encoder))
+                                        }));
+                                    }
+                                    #[cfg(feature = "opus")]
+                                    AudioFormat::Opus => {
+                                        log::debug!("Using OPUS encoder for output");
+                                        audio_output_handler.with_output(Box::new(move |spec, duration| {
+                                            let mut encoder: moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder<i16, ByteWriter> = moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder::new(writer.clone());
+                                            encoder.open(spec, duration);
+                                            Ok(Box::new(encoder))
+                                        }));
+                                    }
+                                    _ => {}
+                                }
+
+                                let source = Box::new(RemoteByteStream::new(
+                                    tidal_path,
+                                    None,
+                                    true,
+                                    CancellationToken::new(),
+                                ));
+
+                                if let Err(err) = play_media_source(
+                                    MediaSourceStream::new(source, Default::default()),
+                                    &Hint::new(),
+                                    &mut audio_output_handler,
+                                    true,
+                                    true,
+                                    None,
+                                    None,
+                                ) {
+                                    log::error!("Failed to encode to {:?}: {err:?}", query.format);
+                                }
+                            });
+
+                            self.send_stream(
+                                request_id,
+                                response_headers,
+                                ranges,
+                                stream,
+                                encoding,
+                            )
+                            .await;
+                        }
+                        Err(err) => {
+                            log::error!("Failed to get track source: {err:?}");
                         }
                     }
 

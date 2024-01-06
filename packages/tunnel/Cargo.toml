@@ -12,6 +12,7 @@ moosicbox_files = { path = "../files", optional = true }
 moosicbox_image = { path = "../image", default-features = false, features = [
     "image",
 ], optional = true }
+moosicbox_stream_utils = { path = "../stream_utils", optional = true }
 moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false, optional = true }
 moosicbox_ws = { path = "../ws", optional = true }
 
@@ -31,6 +32,7 @@ serde-aux         = { workspace = true, optional = true }
 serde_json        = { workspace = true }
 strum             = { workspace = true }
 strum_macros      = { workspace = true }
+symphonia         = { workspace = true }
 thiserror         = { workspace = true }
 tokio             = { workspace = true }
 tokio-tungstenite = { workspace = true, optional = true }
@@ -50,6 +52,7 @@ sender = [
     "dep:moosicbox_env_utils",
     "dep:moosicbox_files",
     "dep:moosicbox_image",
+    "dep:moosicbox_stream_utils",
     "dep:moosicbox_symphonia_player",
     "dep:moosicbox_ws",
     "dep:once_cell",
