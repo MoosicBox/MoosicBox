@@ -231,6 +231,7 @@ impl ScanAlbum {
         }
     }
 
+    #[allow(unused)]
     pub async fn search_cover(
         &mut self,
         url: String,
@@ -307,6 +308,7 @@ impl ScanArtist {
         }
     }
 
+    #[allow(unused)]
     pub async fn search_cover(
         &mut self,
         url: String,

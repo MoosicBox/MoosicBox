@@ -12,7 +12,6 @@ actix-web = { workspace = true, optional = true }
 
 # Tidal Dependencies
 moosicbox_tidal = { path = "../tidal", optional = true }
-reqwest         = { workspace = true, optional = true }
 
 # Local Dependencies
 audiotags    = { workspace = true, optional = true }
@@ -24,13 +23,14 @@ home         = { workspace = true }
 log          = { workspace = true }
 once_cell    = { workspace = true }
 regex        = { workspace = true }
+reqwest      = { workspace = true }
 rusqlite     = { workspace = true }
 serde        = { workspace = true, features = ["derive"] }
 serde_json   = { workspace = true }
 strum        = { workspace = true }
 strum_macros = { workspace = true }
 thiserror    = { workspace = true }
-tokio        = { workspace = true }
+tokio        = { workspace = true, features = ["macros"] }
 tokio-util   = { workspace = true }
 
 [features]
@@ -40,4 +40,4 @@ fail-on-warnings = []
 
 api   = ["dep:actix-web"]
 local = ["dep:audiotags", "dep:lofty", "dep:mp3-duration"]
-tidal = ["dep:moosicbox_tidal", "dep:reqwest"]
+tidal = ["dep:moosicbox_tidal"]
