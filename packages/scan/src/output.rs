@@ -28,10 +28,11 @@ static CONFIG_DIR: Lazy<PathBuf> = Lazy::new(|| {
     home_dir.join(".local").join("moosicbox").join("cache")
 });
 
+static NON_ALPHA_NUMERIC_REGEX: Lazy<regex::Regex> =
+    Lazy::new(|| regex::Regex::new(r"[^A-Za-z0-9_]").expect("Invalid Regex"));
+
 pub fn sanitize_filename(string: &str) -> String {
-    string
-        .replace(|c: char| !c.is_ascii(), "_")
-        .replace([':', '.', '&', ' ', '\t', '\n', '\r', '/', '\\'], "_")
+    NON_ALPHA_NUMERIC_REGEX.replace_all(string, "_").to_string()
 }
 
 fn save_bytes_to_file(bytes: &[u8], path: &PathBuf) {
@@ -101,6 +102,7 @@ pub struct ScanTrack {
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
     pub source: TrackSource,
+    pub tidal_id: Option<u64>,
 }
 
 impl ScanTrack {
@@ -118,6 +120,7 @@ impl ScanTrack {
         sample_rate: &Option<u32>,
         channels: &Option<u8>,
         source: TrackSource,
+        tidal_id: &Option<u64>,
     ) -> Self {
         Self {
             path: path.map(|p| p.to_string()),
@@ -132,6 +135,7 @@ impl ScanTrack {
             sample_rate: *sample_rate,
             channels: *channels,
             source,
+            tidal_id: *tidal_id,
         }
     }
 }
@@ -145,6 +149,7 @@ pub struct ScanAlbum {
     pub date_released: Option<String>,
     pub directory: String,
     pub tracks: Arc<RwLock<Vec<Arc<RwLock<ScanTrack>>>>>,
+    pub tidal_id: Option<u64>,
 }
 
 impl ScanAlbum {
@@ -153,6 +158,7 @@ impl ScanAlbum {
         name: &str,
         date_released: &Option<String>,
         directory: &str,
+        tidal_id: &Option<u64>,
     ) -> Self {
         Self {
             artist,
@@ -162,6 +168,7 @@ impl ScanAlbum {
             date_released: date_released.clone(),
             directory: directory.to_string(),
             tracks: Arc::new(RwLock::new(Vec::new())),
+            tidal_id: *tidal_id,
         }
     }
 
@@ -180,6 +187,7 @@ impl ScanAlbum {
         sample_rate: &Option<u32>,
         channels: &Option<u8>,
         source: TrackSource,
+        tidal_id: &Option<u64>,
     ) -> Arc<RwLock<ScanTrack>> {
         if let Some(track) = {
             let tracks = self.tracks.read().await;
@@ -215,6 +223,7 @@ impl ScanAlbum {
                 sample_rate,
                 channels,
                 source,
+                tidal_id,
             )));
             self.tracks.write().await.push(track.clone());
 
@@ -250,15 +259,17 @@ pub struct ScanArtist {
     pub cover: Option<String>,
     pub searched_cover: bool,
     pub albums: Arc<RwLock<Vec<Arc<RwLock<ScanAlbum>>>>>,
+    pub tidal_id: Option<u64>,
 }
 
 impl ScanArtist {
-    pub fn new(name: &str) -> Self {
+    pub fn new(name: &str, tidal_id: &Option<u64>) -> Self {
         Self {
             name: name.to_string(),
             cover: None,
             searched_cover: false,
             albums: Arc::new(RwLock::new(Vec::new())),
+            tidal_id: *tidal_id,
         }
     }
 
@@ -267,6 +278,7 @@ impl ScanArtist {
         name: &str,
         date_released: &Option<String>,
         directory: &str,
+        tidal_id: &Option<u64>,
     ) -> Arc<RwLock<ScanAlbum>> {
         if let Some(album) = {
             let albums = self.albums.read().await;
@@ -287,6 +299,7 @@ impl ScanArtist {
                 name,
                 date_released,
                 directory,
+                tidal_id,
             )));
             self.albums.write().await.push(album.clone());
 
@@ -335,7 +348,11 @@ impl ScanOutput {
         }
     }
 
-    pub async fn add_artist(&mut self, name: &str) -> Arc<RwLock<ScanArtist>> {
+    pub async fn add_artist(
+        &mut self,
+        name: &str,
+        tidal_id: &Option<u64>,
+    ) -> Arc<RwLock<ScanArtist>> {
         if let Some(artist) = {
             let artists = self.artists.read().await;
             let mut maybe_entry = None;
@@ -350,7 +367,7 @@ impl ScanOutput {
         } {
             artist
         } else {
-            let artist = Arc::new(RwLock::new(ScanArtist::new(name)));
+            let artist = Arc::new(RwLock::new(ScanArtist::new(name, tidal_id)));
             self.artists.write().await.push(artist.clone());
 
             artist
@@ -415,10 +432,14 @@ impl ScanOutput {
             artists
                 .iter()
                 .map(|artist| {
-                    HashMap::from([
+                    let mut values = HashMap::from([
                         ("title", SqliteValue::String(artist.name.clone())),
                         ("cover", SqliteValue::StringOpt(artist.cover.clone())),
-                    ])
+                    ]);
+                    if let Some(tidal_id) = artist.tidal_id {
+                        values.insert("tidal_id", SqliteValue::Number(tidal_id as i64));
+                    }
+                    values
                 })
                 .collect(),
         )
@@ -446,7 +467,7 @@ impl ScanOutput {
             |(artist, db)| async {
                 join_all(artist.albums.read().await.iter().map(|album| async {
                     let album = album.read().await;
-                    HashMap::from([
+                    let mut values = HashMap::from([
                         ("artist_id", SqliteValue::Number(db.id as i64)),
                         ("title", SqliteValue::String(album.name.clone())),
                         (
@@ -458,7 +479,11 @@ impl ScanOutput {
                             "directory",
                             SqliteValue::StringOpt(Some(album.directory.clone())),
                         ),
-                    ])
+                    ]);
+                    if let Some(tidal_id) = album.tidal_id {
+                        values.insert("tidal_id", SqliteValue::Number(tidal_id as i64));
+                    }
+                    values
                 }))
                 .await
             },
@@ -503,6 +528,7 @@ impl ScanOutput {
                     InsertTrack {
                         album_id: db.id,
                         file: track.path.clone(),
+                        tidal_id: track.tidal_id,
                         track: Track {
                             number: track.number as i32,
                             title: track.name.clone(),

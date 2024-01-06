@@ -1595,6 +1595,7 @@ pub struct InsertTrack {
     pub track: Track,
     pub album_id: i32,
     pub file: Option<String>,
+    pub tidal_id: Option<u64>,
 }
 
 pub fn add_tracks(db: &Connection, tracks: Vec<InsertTrack>) -> Result<Vec<Track>, DbError> {
@@ -1622,6 +1623,10 @@ pub fn add_tracks(db: &Connection, tracks: Vec<InsertTrack>) -> Result<Vec<Track
                 values.push(("file", SqliteValue::String(file.clone())));
             }
 
+            if let Some(tidal_id) = &insert.tidal_id {
+                values.push(("tidal_id", SqliteValue::Number(*tidal_id as i64)));
+            }
+
             values
         })
         .collect::<Vec<_>>();
@@ -1637,6 +1642,7 @@ pub fn add_tracks(db: &Connection, tracks: Vec<InsertTrack>) -> Result<Vec<Track
             "`number`",
             "ifnull(`format`, '')",
             "`source`",
+            "ifnull(`tidal_id`, 0)",
         ],
         values.as_slice(),
     )

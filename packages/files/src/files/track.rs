@@ -78,7 +78,9 @@ pub async fn get_track_source(track_id: i32, db: Db) -> Result<TrackSource, Trac
             moosicbox_tidal::track_url(
                 &db,
                 moosicbox_tidal::TidalAudioQuality::High,
-                272404271,
+                track
+                    .tidal_id
+                    .unwrap_or_else(|| panic!("Track {track_id} is missing tidal_id")),
                 None,
             )
             .await?

@@ -214,10 +214,10 @@ fn scan_track(
 
         log::info!("Scanning track {count}");
 
-        let artist = output.add_artist(&album_artist).await;
+        let artist = output.add_artist(&album_artist, &None).await;
         let mut artist = artist.write().await;
         let album = artist
-            .add_album(&album, &date_released, path_album.to_str().unwrap())
+            .add_album(&album, &date_released, path_album.to_str().unwrap(), &None)
             .await;
         let mut album = album.write().await;
 
@@ -265,6 +265,7 @@ fn scan_track(
                 sample_rate,
                 channels,
                 TrackSource::Local,
+                &None,
             )
             .await;
 

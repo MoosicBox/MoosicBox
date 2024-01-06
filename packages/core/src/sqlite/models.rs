@@ -107,6 +107,7 @@ pub struct Track {
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
     pub source: TrackSource,
+    pub tidal_id: Option<u64>,
 }
 
 impl Track {
@@ -147,6 +148,7 @@ impl AsModel<Track> for Row<'_> {
             channels: self.get("channels").unwrap_or_default(),
             source: TrackSource::from_str(&self.get::<_, String>("source").unwrap())
                 .expect("Missing source"),
+            tidal_id: self.get("tidal_id").unwrap(),
         }
     }
 }
@@ -212,6 +214,7 @@ pub struct Artist {
     pub id: i32,
     pub title: String,
     pub cover: Option<String>,
+    pub tidal_id: Option<u64>,
 }
 
 impl AsModel<Artist> for Row<'_> {
@@ -220,6 +223,7 @@ impl AsModel<Artist> for Row<'_> {
             id: self.get("id").unwrap(),
             title: self.get("title").unwrap(),
             cover: self.get("cover").unwrap(),
+            tidal_id: self.get("tidal_id").unwrap(),
         }
     }
 }
@@ -317,6 +321,7 @@ pub struct Album {
     pub source: AlbumSource,
     pub blur: bool,
     pub versions: Vec<AlbumVersionQuality>,
+    pub tidal_id: Option<u64>,
 }
 
 impl AsModel<Album> for Row<'_> {
@@ -333,6 +338,7 @@ impl AsModel<Album> for Row<'_> {
             source: AlbumSource::Local,
             blur: self.get::<_, u16>("blur").unwrap() == 1,
             versions: vec![],
+            tidal_id: self.get("tidal_id").unwrap(),
         }
     }
 }
@@ -395,6 +401,7 @@ impl AsModelQuery<Album> for Row<'_> {
             source: AlbumSource::Local,
             blur: self.get::<_, u16>("blur").unwrap() == 1,
             versions: get_album_version_qualities(db, id)?,
+            tidal_id: self.get("tidal_id").unwrap(),
         })
     }
 }

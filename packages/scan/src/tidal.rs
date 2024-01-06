@@ -127,7 +127,13 @@ async fn scan_albums(
 
         log::info!("Scanning album {count}/{total}");
 
-        let scan_artist = { output.write().await.add_artist(&album.artist).await };
+        let scan_artist = {
+            output
+                .write()
+                .await
+                .add_artist(&album.artist, &Some(album.artist_id))
+                .await
+        };
 
         let scan_album = {
             scan_artist
@@ -141,6 +147,7 @@ async fn scan_albums(
                         .join(&sanitize_filename(&album.title))
                         .to_str()
                         .unwrap(),
+                    &Some(album.id),
                 )
                 .await
         };
@@ -250,6 +257,7 @@ async fn scan_tracks(
                 &None,
                 &None,
                 TrackSource::Tidal,
+                &Some(track.id),
             )
             .await;
     }
