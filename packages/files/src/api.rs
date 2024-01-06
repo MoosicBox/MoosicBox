@@ -16,8 +16,13 @@ use moosicbox_core::{
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_stream_utils::ByteWriter;
-use moosicbox_symphonia_player::{output::AudioOutputHandler, play_file_path_str};
+use moosicbox_symphonia_player::{
+    media_sources::remote_bytestream::RemoteByteStream, output::AudioOutputHandler,
+    play_file_path_str, play_media_source,
+};
 use serde::Deserialize;
+use symphonia::core::{io::MediaSourceStream, probe::Hint};
+use tokio_util::sync::CancellationToken;
 
 use crate::files::{
     album::{get_album_cover, AlbumCoverError, AlbumCoverSource},
@@ -174,6 +179,25 @@ pub async fn track_endpoint(
                             log::error!("Failed to encode to aac: {err:?}");
                         }
                     }
+                    TrackSource::Tidal(tidal_track_url) => {
+                        let source = Box::new(RemoteByteStream::new(
+                            tidal_track_url,
+                            Some(size),
+                            true,
+                            CancellationToken::new(),
+                        ));
+                        if let Err(err) = play_media_source(
+                            MediaSourceStream::new(source, Default::default()),
+                            &Hint::new(),
+                            &mut audio_output_handler,
+                            true,
+                            true,
+                            None,
+                            None,
+                        ) {
+                            log::error!("Failed to encode to aac: {err:?}");
+                        }
+                    }
                 }
             }
         });
@@ -225,6 +249,16 @@ pub async fn track_endpoint(
             .await?
             .into_response(&req)),
         },
+        TrackSource::Tidal(tidal_track_url) => {
+            let client = reqwest::Client::new();
+            let bytes = client
+                .get(tidal_track_url)
+                .send()
+                .await
+                .unwrap()
+                .bytes_stream();
+            Ok(HttpResponse::Ok().streaming(bytes))
+        }
     }
 }
 

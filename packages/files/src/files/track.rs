@@ -15,6 +15,7 @@ use moosicbox_core::{
 };
 use moosicbox_stream_utils::ByteWriter;
 use moosicbox_symphonia_player::{output::AudioOutputHandler, play_file_path_str, PlaybackError};
+use moosicbox_tidal::TidalTrackUrlError;
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use symphonia::core::{
@@ -27,6 +28,7 @@ use thiserror::Error;
 #[derive(Clone)]
 pub enum TrackSource {
     LocalFilePath(String),
+    Tidal(String),
 }
 
 #[derive(Debug, Error)]
@@ -37,6 +39,8 @@ pub enum TrackSourceError {
     InvalidSource,
     #[error(transparent)]
     Db(#[from] DbError),
+    #[error(transparent)]
+    TidalTrackUrl(#[from] TidalTrackUrlError),
 }
 
 pub async fn get_track_source(track_id: i32, db: Db) -> Result<TrackSource, TrackSourceError> {
@@ -55,19 +59,33 @@ pub async fn get_track_source(track_id: i32, db: Db) -> Result<TrackSource, Trac
 
     let track = track.unwrap();
 
-    match track.file {
-        Some(file) => match env::consts::OS {
-            "windows" => Ok(TrackSource::LocalFilePath(
-                Regex::new(r"/mnt/(\w+)")
-                    .unwrap()
-                    .replace(&file, |caps: &Captures| {
-                        format!("{}:", caps[1].to_uppercase())
-                    })
-                    .replace('/', "\\"),
-            )),
-            _ => Ok(TrackSource::LocalFilePath(file)),
+    match track.source {
+        moosicbox_core::sqlite::models::TrackSource::Local => match track.file {
+            Some(file) => match env::consts::OS {
+                "windows" => Ok(TrackSource::LocalFilePath(
+                    Regex::new(r"/mnt/(\w+)")
+                        .unwrap()
+                        .replace(&file, |caps: &Captures| {
+                            format!("{}:", caps[1].to_uppercase())
+                        })
+                        .replace('/', "\\"),
+                )),
+                _ => Ok(TrackSource::LocalFilePath(file)),
+            },
+            None => Err(TrackSourceError::InvalidSource),
         },
-        None => Err(TrackSourceError::InvalidSource),
+        moosicbox_core::sqlite::models::TrackSource::Tidal => Ok(TrackSource::Tidal(
+            moosicbox_tidal::track_url(
+                &db,
+                moosicbox_tidal::TidalAudioQuality::High,
+                272404271,
+                None,
+            )
+            .await?
+            .first()
+            .unwrap()
+            .to_string(),
+        )),
     }
 }
 
@@ -245,6 +263,7 @@ pub fn get_or_init_track_visualization(
 
             Ok(ret_viz)
         }
+        TrackSource::Tidal(_tidal_track_url) => unimplemented!(),
     }
 }
 
@@ -292,6 +311,7 @@ pub fn get_or_init_track_size(
             }
             AudioFormat::Source => File::open(path).unwrap().metadata().unwrap().len(),
         },
+        TrackSource::Tidal(_) => unimplemented!(),
     };
 
     set_track_size(
