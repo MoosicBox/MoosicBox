@@ -196,16 +196,10 @@ pub async fn track_url_endpoint(
     query: web::Query<TidalTrackUrlQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<Value>> {
-    Ok(Json(
-        track_url(
+    Ok(Json(serde_json::json!({
+        "urls": track_url(
             #[cfg(feature = "db")]
-            data.db
-                .clone()
-                .expect("Db not set")
-                .library
-                .lock()
-                .as_ref()
-                .unwrap(),
+            data.db.as_ref().unwrap(),
             query.audio_quality,
             query.track_id,
             req.headers()
@@ -213,7 +207,7 @@ pub async fn track_url_endpoint(
                 .map(|x| x.to_str().unwrap().to_string()),
         )
         .await?,
-    ))
+    })))
 }
 
 impl From<TidalFavoriteArtistsError> for actix_web::Error {

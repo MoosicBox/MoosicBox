@@ -413,14 +413,15 @@ pub enum TidalTrackUrlError {
 }
 
 pub async fn track_url(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::DbConnection,
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     audio_quality: TidalAudioQuality,
     track_id: u32,
     access_token: Option<String>,
-) -> Result<Value, TidalTrackUrlError> {
+) -> Result<Vec<String>, TidalTrackUrlError> {
     #[cfg(feature = "db")]
     let access_token = access_token.unwrap_or(
-        db::get_tidal_access_token(&db.inner)?.ok_or(TidalTrackUrlError::NoAccessTokenAvailable)?,
+        db::get_tidal_access_token(&db.library.lock().as_ref().unwrap().inner)?
+            .ok_or(TidalTrackUrlError::NoAccessTokenAvailable)?,
     );
 
     #[cfg(not(feature = "db"))]
@@ -456,9 +457,7 @@ pub async fn track_url(
         .map(|v| v.as_str().unwrap().to_string())
         .collect::<Vec<_>>();
 
-    Ok(serde_json::json!({
-        "urls": urls,
-    }))
+    Ok(urls)
 }
 
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
