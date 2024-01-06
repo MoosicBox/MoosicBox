@@ -60,6 +60,7 @@ futures-util = { version = "0.3.17", default-features = false, features = [
     "std",
 ] }
 hex = "0.4.3"
+home = "0.5.9"
 image = "0.24.7"
 io-streams = "0.15.0"
 kanal = "0.1.0-pre8"

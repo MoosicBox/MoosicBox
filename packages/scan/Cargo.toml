@@ -12,6 +12,7 @@ actix-web = { workspace = true, optional = true }
 
 # Tidal Dependencies
 moosicbox_tidal = { path = "../tidal", optional = true }
+reqwest         = { workspace = true, optional = true }
 
 # Local Dependencies
 audiotags    = { workspace = true, optional = true }
@@ -19,6 +20,7 @@ lofty        = { workspace = true, optional = true }
 mp3-duration = { workspace = true, optional = true }
 
 futures      = { workspace = true }
+home         = { workspace = true }
 log          = { workspace = true }
 once_cell    = { workspace = true }
 regex        = { workspace = true }
@@ -38,4 +40,4 @@ fail-on-warnings = []
 
 api   = ["dep:actix-web"]
 local = ["dep:audiotags", "dep:lofty", "dep:mp3-duration"]
-tidal = ["dep:moosicbox_tidal"]
+tidal = ["dep:moosicbox_tidal", "dep:reqwest"]

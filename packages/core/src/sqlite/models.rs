@@ -272,6 +272,7 @@ pub struct AlbumVersionQuality {
     pub bit_depth: Option<u8>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
+    pub source: TrackSource,
 }
 
 impl ToApi<ApiAlbumVersionQuality> for AlbumVersionQuality {
@@ -297,6 +298,8 @@ impl AsModel<AlbumVersionQuality> for Row<'_> {
             bit_depth: self.get("bit_depth").unwrap_or_default(),
             sample_rate: self.get("sample_rate").unwrap(),
             channels: self.get("channels").unwrap(),
+            source: TrackSource::from_str(&self.get::<_, String>("source").unwrap())
+                .expect("Invalid source"),
         }
     }
 }

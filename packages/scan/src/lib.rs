@@ -66,7 +66,7 @@ pub async fn scan(db: &Db, origins: Option<Vec<ScanOrigin>>) -> Result<(), ScanE
     for origin in search_origins {
         match origin {
             #[cfg(feature = "local")]
-            ScanOrigin::Local => scan_local(db)?,
+            ScanOrigin::Local => scan_local(db).await?,
             #[cfg(feature = "tidal")]
             ScanOrigin::Tidal => scan_tidal(db).await?,
         }
@@ -76,7 +76,7 @@ pub async fn scan(db: &Db, origins: Option<Vec<ScanOrigin>>) -> Result<(), ScanE
 }
 
 #[cfg(feature = "local")]
-pub fn scan_local(db: &Db) -> Result<(), local::ScanError> {
+pub async fn scan_local(db: &Db) -> Result<(), local::ScanError> {
     use db::get_scan_locations_for_origin;
 
     let locations =
@@ -92,7 +92,7 @@ pub fn scan_local(db: &Db) -> Result<(), local::ScanError> {
         .collect::<Vec<_>>();
 
     for path in paths {
-        local::scan(path, db, CANCELLATION_TOKEN.clone())?;
+        local::scan(path, db, CANCELLATION_TOKEN.clone()).await?;
     }
 
     Ok(())

@@ -643,7 +643,8 @@ pub fn get_albums(db: &Connection) -> Result<Vec<Album>, DbError> {
                 track_sizes.sample_rate,
                 track_sizes.channels,
                 artists.title as artist,
-                tracks.format
+                tracks.format,
+                tracks.source
             FROM albums
             JOIN tracks ON tracks.album_id=albums.id
             JOIN track_sizes ON track_sizes.track_id=tracks.id
@@ -672,7 +673,8 @@ pub fn get_all_album_version_qualities(
                 track_sizes.bit_depth,
                 track_sizes.sample_rate,
                 track_sizes.channels,
-                tracks.format
+                tracks.format,
+                tracks.source
             FROM albums
             JOIN tracks ON tracks.album_id=albums.id
             JOIN track_sizes ON track_sizes.track_id=tracks.id
@@ -715,7 +717,8 @@ pub fn get_album_version_qualities(
                 track_sizes.bit_depth,
                 track_sizes.sample_rate,
                 track_sizes.channels,
-                tracks.format
+                tracks.format,
+                tracks.source
             FROM albums
             JOIN tracks ON tracks.album_id=albums.id
             JOIN track_sizes ON track_sizes.track_id=tracks.id
@@ -804,7 +807,8 @@ pub fn get_artist_albums(db: &Connection, artist_id: i32) -> Result<Vec<Album>, 
                 track_sizes.sample_rate,
                 track_sizes.channels,
                 artists.title as artist,
-                tracks.format
+                tracks.format,
+                tracks.source
             FROM albums
             JOIN tracks ON tracks.album_id=albums.id
             JOIN track_sizes ON track_sizes.track_id=tracks.id
@@ -1590,26 +1594,35 @@ pub fn add_album_maps_and_get_albums(
 pub struct InsertTrack {
     pub track: Track,
     pub album_id: i32,
-    pub file: String,
+    pub file: Option<String>,
 }
 
 pub fn add_tracks(db: &Connection, tracks: Vec<InsertTrack>) -> Result<Vec<Track>, DbError> {
     let values = tracks
         .iter()
         .map(|insert| {
-            vec![
+            let mut values = vec![
                 ("number", SqliteValue::Number(insert.track.number as i64)),
                 ("duration", SqliteValue::Real(insert.track.duration)),
                 ("album_id", SqliteValue::Number(insert.album_id as i64)),
                 ("title", SqliteValue::String(insert.track.title.clone())),
-                ("file", SqliteValue::String(insert.file.clone())),
                 (
                     "format",
                     SqliteValue::String(
                         insert.track.format.unwrap_or_default().as_ref().to_string(),
                     ),
                 ),
-            ]
+                (
+                    "source",
+                    SqliteValue::String(insert.track.source.as_ref().to_string()),
+                ),
+            ];
+
+            if let Some(file) = &insert.file {
+                values.push(("file", SqliteValue::String(file.clone())));
+            }
+
+            values
         })
         .collect::<Vec<_>>();
 

@@ -66,6 +66,7 @@ pub async fn run_scan_path_endpoint(
         data.db.as_ref().unwrap(),
         CANCELLATION_TOKEN.clone(),
     )
+    .await
     .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
 
     Ok(Json(serde_json::json!({"success": true})))

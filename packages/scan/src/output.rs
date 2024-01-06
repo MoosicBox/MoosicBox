@@ -1,8 +1,11 @@
 use std::{
     collections::HashMap,
-    sync::{atomic::AtomicU32, Arc, RwLock},
+    io::Write,
+    path::{Path, PathBuf},
+    sync::{atomic::AtomicU32, Arc},
 };
 
+use futures::future::join_all;
 use moosicbox_core::{
     app::Db,
     sqlite::{
@@ -14,11 +17,79 @@ use moosicbox_core::{
     },
     types::{AudioFormat, PlaybackQuality},
 };
+use once_cell::sync::Lazy;
 use thiserror::Error;
+use tokio::sync::RwLock;
+
+static IMAGE_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
+
+static CONFIG_DIR: Lazy<PathBuf> = Lazy::new(|| {
+    let home_dir = home::home_dir().expect("Could not get user's home directory");
+    home_dir.join(".local").join("moosicbox").join("cache")
+});
+
+pub fn sanitize_filename(string: &str) -> String {
+    string
+        .replace(|c: char| !c.is_ascii(), "_")
+        .replace([':', '.', '&', ' ', '\t', '\n', '\r', '/', '\\'], "_")
+}
+
+fn save_bytes_to_file(bytes: &[u8], path: &PathBuf) {
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(path)
+        .unwrap();
+
+    let _ = file.write_all(bytes);
+}
+
+#[derive(Debug, Error)]
+pub enum FetchInternetImgError {
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+}
+
+async fn fetch_internet_img(
+    client: &reqwest::Client,
+    path: &Path,
+    name: &str,
+    url: &str,
+) -> Result<PathBuf, FetchInternetImgError> {
+    let bytes = client.get(url).send().await?.bytes().await?;
+    let cover_file_path = path.join(name);
+    save_bytes_to_file(&bytes, &cover_file_path);
+    Ok(cover_file_path)
+}
+
+async fn search_for_cover(
+    client: &reqwest::Client,
+    path: &Path,
+    name: &str,
+    url: &str,
+) -> Result<Option<PathBuf>, FetchInternetImgError> {
+    std::fs::create_dir_all(path)
+        .unwrap_or_else(|_| panic!("Failed to create config directory at {path:?}"));
+
+    log::debug!("Searching for existing cover in {path:?}...");
+
+    if let Some(cover_file) = std::fs::read_dir(path)
+        .unwrap()
+        .filter_map(|p| p.ok())
+        .find(|p| p.file_name().to_str().unwrap() == name)
+        .map(|dir| dir.path())
+    {
+        log::debug!("Found existing cover in {path:?}: '{cover_file:?}'");
+        Ok(Some(cover_file))
+    } else {
+        log::debug!("No existing cover in {path:?}, searching internet");
+        Ok(Some(fetch_internet_img(client, path, name, url).await?))
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ScanTrack {
-    pub path: String,
+    pub path: Option<String>,
     pub number: u32,
     pub name: String,
     pub duration: f64,
@@ -35,7 +106,7 @@ pub struct ScanTrack {
 impl ScanTrack {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        path: &str,
+        path: &Option<&str>,
         number: u32,
         name: &str,
         duration: f64,
@@ -49,7 +120,7 @@ impl ScanTrack {
         source: TrackSource,
     ) -> Self {
         Self {
-            path: path.to_string(),
+            path: path.map(|p| p.to_string()),
             number,
             name: name.to_string(),
             duration,
@@ -67,6 +138,7 @@ impl ScanTrack {
 
 #[derive(Debug, Clone)]
 pub struct ScanAlbum {
+    artist: ScanArtist,
     pub name: String,
     pub cover: Option<String>,
     pub searched_cover: bool,
@@ -76,8 +148,14 @@ pub struct ScanAlbum {
 }
 
 impl ScanAlbum {
-    pub fn new(name: &str, date_released: &Option<String>, directory: &str) -> Self {
+    pub fn new(
+        artist: ScanArtist,
+        name: &str,
+        date_released: &Option<String>,
+        directory: &str,
+    ) -> Self {
         Self {
+            artist,
             name: name.to_string(),
             cover: None,
             searched_cover: false,
@@ -88,11 +166,11 @@ impl ScanAlbum {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn add_track(
+    pub async fn add_track(
         &mut self,
-        path: &str,
+        path: &Option<&str>,
         number: u32,
-        title: &str,
+        name: &str,
         duration: f64,
         bytes: u64,
         format: AudioFormat,
@@ -104,21 +182,30 @@ impl ScanAlbum {
         source: TrackSource,
     ) -> Arc<RwLock<ScanTrack>> {
         if let Some(track) = {
-            let tracks = self.tracks.read().unwrap_or_else(|e| e.into_inner());
-            tracks
-                .iter()
-                .find(|entry| {
-                    let t = entry.read().unwrap_or_else(|e| e.into_inner());
-                    t.path == path
-                })
-                .cloned()
+            let tracks = self.tracks.read().await;
+            let mut maybe_track = None;
+            for entry in tracks.iter() {
+                let t = entry.read().await;
+                let is_match = if t.path.is_none() && path.is_none() {
+                    t.number == number && t.name == name && t.source == source
+                } else {
+                    t.path
+                        .as_ref()
+                        .is_some_and(|p| path.is_some_and(|new_p| p == new_p))
+                };
+                if is_match {
+                    maybe_track.replace(entry.clone());
+                    break;
+                }
+            }
+            maybe_track
         } {
             track
         } else {
             let track = Arc::new(RwLock::new(ScanTrack::new(
                 path,
                 number,
-                title,
+                name,
                 duration,
                 bytes,
                 format,
@@ -129,10 +216,31 @@ impl ScanAlbum {
                 channels,
                 source,
             )));
-            self.tracks.write().unwrap().push(track.clone());
+            self.tracks.write().await.push(track.clone());
 
             track
         }
+    }
+
+    pub async fn search_cover(
+        &mut self,
+        url: String,
+    ) -> Result<Option<String>, FetchInternetImgError> {
+        if self.cover.is_none() && !self.searched_cover {
+            let path = CONFIG_DIR
+                .join(sanitize_filename(&self.artist.name))
+                .join(sanitize_filename(&self.name));
+
+            let cover = search_for_cover(&IMAGE_CLIENT, &path, "album.jpg", &url).await?;
+
+            self.searched_cover = true;
+
+            if let Some(cover) = cover {
+                self.cover = Some(cover.to_str().unwrap().to_string());
+            }
+        }
+
+        Ok(self.cover.clone())
     }
 }
 
@@ -154,32 +262,54 @@ impl ScanArtist {
         }
     }
 
-    pub fn add_album(
+    pub async fn add_album(
         &mut self,
         name: &str,
         date_released: &Option<String>,
         directory: &str,
     ) -> Arc<RwLock<ScanAlbum>> {
         if let Some(album) = {
-            let albums = self.albums.read().unwrap_or_else(|e| e.into_inner());
-            albums
-                .iter()
-                .find(|entry| {
-                    let a = entry.read().unwrap_or_else(|e| e.into_inner());
-                    a.name == name
-                })
-                .cloned()
+            let albums = self.albums.read().await;
+            let mut maybe_entry = None;
+            for entry in albums.iter() {
+                let a = entry.read().await;
+                if a.name == name {
+                    maybe_entry.replace(entry.clone());
+                    break;
+                }
+            }
+            maybe_entry
         } {
             album
         } else {
-            let album = Arc::new(RwLock::new(ScanAlbum::new(name, date_released, directory)));
-            self.albums
-                .write()
-                .unwrap_or_else(|e| e.into_inner())
-                .push(album.clone());
+            let album = Arc::new(RwLock::new(ScanAlbum::new(
+                self.clone(),
+                name,
+                date_released,
+                directory,
+            )));
+            self.albums.write().await.push(album.clone());
 
             album
         }
+    }
+
+    pub async fn search_cover(
+        &mut self,
+        url: String,
+    ) -> Result<Option<String>, FetchInternetImgError> {
+        if self.cover.is_none() && !self.searched_cover {
+            self.searched_cover = true;
+
+            let path = CONFIG_DIR.join(sanitize_filename(&self.name));
+            let cover = search_for_cover(&IMAGE_CLIENT, &path, "artist.jpg", &url).await?;
+
+            if let Some(cover) = cover {
+                self.cover = Some(cover.to_str().unwrap().to_string());
+            }
+        }
+
+        Ok(self.cover.clone())
     }
 }
 
@@ -205,72 +335,83 @@ impl ScanOutput {
         }
     }
 
-    pub fn add_artist(&mut self, name: &str) -> Arc<RwLock<ScanArtist>> {
+    pub async fn add_artist(&mut self, name: &str) -> Arc<RwLock<ScanArtist>> {
         if let Some(artist) = {
-            let artists = self.artists.read().unwrap_or_else(|e| e.into_inner());
-            artists
-                .iter()
-                .find(|entry| {
-                    let a = entry.read().unwrap_or_else(|e| e.into_inner());
-                    a.name == name
-                })
-                .cloned()
+            let artists = self.artists.read().await;
+            let mut maybe_entry = None;
+            for entry in artists.iter() {
+                let a = entry.read().await;
+                if a.name == name {
+                    maybe_entry.replace(entry.clone());
+                    break;
+                }
+            }
+            maybe_entry
         } {
             artist
         } else {
             let artist = Arc::new(RwLock::new(ScanArtist::new(name)));
-            self.artists
-                .write()
-                .unwrap_or_else(|e| e.into_inner())
-                .push(artist.clone());
+            self.artists.write().await.push(artist.clone());
 
             artist
         }
     }
 
-    pub fn update_database(&self, db: &Db) -> Result<(), UpdateDatabaseError> {
-        let artists = self
-            .artists
-            .read()
-            .unwrap()
-            .iter()
-            .map(|artist| artist.read().unwrap().clone())
-            .collect::<Vec<_>>();
+    pub async fn update_database(&self, db: &Db) -> Result<(), UpdateDatabaseError> {
+        let artists = join_all(
+            self.artists
+                .read()
+                .await
+                .iter()
+                .map(|artist| async { artist.read().await.clone() })
+                .collect::<Vec<_>>(),
+        )
+        .await;
         let artist_count = artists.len();
-        let albums = artists
-            .iter()
-            .flat_map(|artist| {
-                let artist = artist.albums.read().unwrap();
-                let x = artist
+        let albums = join_all(artists.iter().map(|artist| async {
+            let artist = artist.albums.read().await;
+            join_all(
+                artist
                     .iter()
-                    .map(|a| a.read().unwrap().clone())
-                    .collect::<Vec<_>>();
-                x
-            })
-            .collect::<Vec<_>>();
+                    .map(|a| async { a.read().await.clone() })
+                    .collect::<Vec<_>>(),
+            )
+            .await
+        }))
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+
         let album_count = albums.len();
-        let tracks = albums
-            .iter()
-            .flat_map(|album| {
-                let album = album.tracks.read().unwrap();
-                let x = album
+        let tracks = join_all(albums.iter().map(|album| async {
+            let tracks = album.tracks.read().await;
+            join_all(
+                tracks
                     .iter()
-                    .map(|a| a.read().unwrap().clone())
-                    .collect::<Vec<_>>();
-                x
-            })
-            .collect::<Vec<_>>();
+                    .map(|a| async { a.read().await.clone() })
+                    .collect::<Vec<_>>(),
+            )
+            .await
+        }))
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+
         let track_count = tracks.len();
 
         log::info!("Scanned {artist_count} artists, {album_count} albums, {track_count} tracks");
 
         let db_start = std::time::SystemTime::now();
 
-        let library = db.library.lock().unwrap_or_else(|e| e.into_inner());
-
         let db_artists_start = std::time::SystemTime::now();
         let db_artists = add_artist_maps_and_get_artists(
-            &library.inner,
+            &db.library
+                .as_ref()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .inner,
             artists
                 .iter()
                 .map(|artist| {
@@ -301,36 +442,41 @@ impl ScanOutput {
         }
 
         let db_albums_start = std::time::SystemTime::now();
-        let album_maps = artists
-            .iter()
-            .zip(db_artists.iter())
-            .flat_map(|(artist, db)| {
-                artist
-                    .albums
-                    .read()
-                    .unwrap()
-                    .iter()
-                    .map(|album| {
-                        let album = album.read().unwrap();
-                        HashMap::from([
-                            ("artist_id", SqliteValue::Number(db.id as i64)),
-                            ("title", SqliteValue::String(album.name.clone())),
-                            (
-                                "date_released",
-                                SqliteValue::StringOpt(album.date_released.clone()),
-                            ),
-                            ("artwork", SqliteValue::StringOpt(album.cover.clone())),
-                            (
-                                "directory",
-                                SqliteValue::StringOpt(Some(album.directory.clone())),
-                            ),
-                        ])
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
+        let album_maps = join_all(artists.iter().zip(db_artists.iter()).map(
+            |(artist, db)| async {
+                join_all(artist.albums.read().await.iter().map(|album| async {
+                    let album = album.read().await;
+                    HashMap::from([
+                        ("artist_id", SqliteValue::Number(db.id as i64)),
+                        ("title", SqliteValue::String(album.name.clone())),
+                        (
+                            "date_released",
+                            SqliteValue::StringOpt(album.date_released.clone()),
+                        ),
+                        ("artwork", SqliteValue::StringOpt(album.cover.clone())),
+                        (
+                            "directory",
+                            SqliteValue::StringOpt(Some(album.directory.clone())),
+                        ),
+                    ])
+                }))
+                .await
+            },
+        ))
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
 
-        let db_albums = add_album_maps_and_get_albums(&library.inner, album_maps).unwrap();
+        let db_albums = add_album_maps_and_get_albums(
+            &db.library
+                .as_ref()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .inner,
+            album_maps,
+        )
+        .unwrap();
 
         let db_albums_end = std::time::SystemTime::now();
         log::info!(
@@ -350,35 +496,40 @@ impl ScanOutput {
         }
 
         let db_tracks_start = std::time::SystemTime::now();
-        let insert_tracks = albums
-            .iter()
-            .zip(db_albums.iter())
-            .flat_map(|(album, db)| {
-                album
-                    .tracks
-                    .read()
-                    .unwrap()
-                    .iter()
-                    .map(|track| {
-                        let track = track.read().unwrap();
-                        InsertTrack {
-                            album_id: db.id,
-                            file: track.path.clone(),
-                            track: Track {
-                                number: track.number as i32,
-                                title: track.name.clone(),
-                                duration: track.duration,
-                                format: Some(track.format),
-                                source: track.source,
-                                ..Default::default()
-                            },
-                        }
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
+        let insert_tracks = join_all(albums.iter().zip(db_albums.iter()).map(
+            |(album, db)| async {
+                join_all(album.tracks.read().await.iter().map(|track| async {
+                    let track = track.read().await;
+                    InsertTrack {
+                        album_id: db.id,
+                        file: track.path.clone(),
+                        track: Track {
+                            number: track.number as i32,
+                            title: track.name.clone(),
+                            duration: track.duration,
+                            format: Some(track.format),
+                            source: track.source,
+                            ..Default::default()
+                        },
+                    }
+                }))
+                .await
+            },
+        ))
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
 
-        let db_tracks = add_tracks(&library.inner, insert_tracks).unwrap();
+        let db_tracks = add_tracks(
+            &db.library
+                .as_ref()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .inner,
+            insert_tracks,
+        )
+        .unwrap();
 
         let db_tracks_end = std::time::SystemTime::now();
         log::info!(
@@ -415,7 +566,15 @@ impl ScanOutput {
             })
             .collect::<Vec<_>>();
 
-        set_track_sizes(&library.inner, &track_sizes).unwrap();
+        set_track_sizes(
+            &db.library
+                .as_ref()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .inner,
+            &track_sizes,
+        )
+        .unwrap();
 
         let db_track_sizes_end = std::time::SystemTime::now();
         log::info!(
