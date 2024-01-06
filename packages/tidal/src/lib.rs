@@ -876,6 +876,8 @@ pub enum TidalAlbumTracksError {
     Db(#[from] moosicbox_core::sqlite::db::DbError),
     #[error("No access token available")]
     NoAccessTokenAvailable,
+    #[error("Request failed: {0:?}")]
+    RequestFailed(String),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -929,14 +931,17 @@ pub async fn album_tracks(
         .json()
         .await?;
 
-    let items = value
-        .get("items")
-        .unwrap()
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|item| item.as_model())
-        .collect::<Vec<_>>();
+    let items = match value.get("items") {
+        Some(items) => items
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item.as_model())
+            .collect::<Vec<_>>(),
+        None => {
+            return Err(TidalAlbumTracksError::RequestFailed(format!("{value:?}")));
+        }
+    };
 
     let count = value.get("totalNumberOfItems").unwrap().as_u64().unwrap() as u32;
 
@@ -1013,6 +1018,8 @@ pub enum TidalArtistError {
     Db(#[from] moosicbox_core::sqlite::db::DbError),
     #[error("No access token available")]
     NoAccessTokenAvailable,
+    #[error("Request failed: {0:?}")]
+    RequestFailed(String),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1062,7 +1069,11 @@ pub async fn artist(
         .json()
         .await?;
 
-    Ok(value.as_model())
+    if value.get("id").is_some_and(|id| id.is_number()) {
+        Ok(value.as_model())
+    } else {
+        Err(TidalArtistError::RequestFailed(format!("{value:?}")))
+    }
 }
 
 #[derive(Debug, Error)]
