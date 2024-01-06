@@ -14,7 +14,7 @@ use moosicbox_core::{
     app::Db,
     sqlite::{
         db::{get_album_tracks, get_track},
-        models::{ToApi, Track, UpdateSession},
+        models::{ToApi, Track, TrackSource, UpdateSession},
     },
     types::{AudioFormat, PlaybackQuality},
 };
@@ -488,8 +488,20 @@ impl Player {
                 "Playing track with Symphonia: {} {abort:?} {track_or_id:?}",
                 track_id
             );
+
+            let playback_type = match track_or_id {
+                TrackOrId::Track(ref track) => {
+                    if track.source != TrackSource::Local {
+                        PlaybackType::Stream
+                    } else {
+                        self.playback_type
+                    }
+                }
+                TrackOrId::Id(_) => self.playback_type,
+            };
+
             let playable_track = self
-                .track_or_id_to_playable(self.playback_type, &track_or_id, &quality)
+                .track_or_id_to_playable(playback_type, &track_or_id, &quality)
                 .await?;
             let mss = MediaSourceStream::new(playable_track.source, Default::default());
 
@@ -907,79 +919,83 @@ impl Player {
     ) -> PlayableTrack {
         let hint = Hint::new();
 
-        match &self.source {
+        let (host, query, headers) = match &self.source {
             PlayerSource::Remote {
                 host,
                 query,
                 headers,
-            } => {
-                let query_string = if let Some(query) = query {
-                    let mut serializer = form_urlencoded::Serializer::new(String::new());
-                    for (key, value) in query {
-                        serializer.append_pair(key, value);
-                    }
-                    serializer.finish()
-                } else {
-                    "".to_string()
-                };
-
-                let query_string = if query_string.is_empty() {
-                    query_string
-                } else {
-                    format!("{query_string}&")
-                };
-
-                let query_string = format!("?{query_string}trackId={track_id}");
-
-                let query_string = match quality.format {
-                    AudioFormat::Aac => query_string + "&format=AAC",
-                    AudioFormat::Flac => query_string + "&format=FLAC",
-                    AudioFormat::Mp3 => query_string + "&format=MP3",
-                    AudioFormat::Opus => query_string + "&format=OPUS",
-                    AudioFormat::Source => query_string,
-                };
-
-                let url = format!("{host}/track{query_string}");
-                let mut client = reqwest::Client::new().head(&url);
-
-                if let Some(headers) = headers {
-                    for (key, value) in headers {
-                        client = client.header(key, value);
-                    }
-                }
-
-                let res = client.send().await.unwrap();
-                let size = res
-                    .headers()
-                    .get("content-length")
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .parse::<u64>()
-                    .unwrap();
-                let url = format!("{host}/track{query_string}");
-
-                let source = Box::new(RemoteByteStream::new(
-                    url,
-                    Some(size),
-                    true,
-                    self.active_playback
+            } => (host.to_string(), query, headers),
+            PlayerSource::Local => (
+                format!(
+                    "http://127.0.0.1:{}",
+                    SERVICE_PORT
                         .read()
                         .unwrap()
-                        .as_ref()
-                        .map(|p| p.abort.clone())
-                        .unwrap_or_default(),
-                ));
+                        .expect("Missing SERVICE_PORT value")
+                ),
+                &None,
+                &None,
+            ),
+        };
 
-                PlayableTrack {
-                    track_id,
-                    source,
-                    hint,
-                }
+        let query_string = if let Some(query) = query {
+            let mut serializer = form_urlencoded::Serializer::new(String::new());
+            for (key, value) in query {
+                serializer.append_pair(key, value);
             }
-            PlayerSource::Local => {
-                unreachable!();
+            serializer.finish()
+        } else {
+            "".to_string()
+        };
+
+        let query_string = if query_string.is_empty() {
+            query_string
+        } else {
+            format!("{query_string}&")
+        };
+
+        let query_string = format!("?{query_string}trackId={track_id}");
+
+        let query_string = match quality.format {
+            AudioFormat::Aac => query_string + "&format=AAC",
+            AudioFormat::Flac => query_string + "&format=FLAC",
+            AudioFormat::Mp3 => query_string + "&format=MP3",
+            AudioFormat::Opus => query_string + "&format=OPUS",
+            AudioFormat::Source => query_string,
+        };
+
+        let url = format!("{host}/track{query_string}");
+        let mut client = reqwest::Client::new().head(&url);
+
+        if let Some(headers) = headers {
+            for (key, value) in headers {
+                client = client.header(key, value);
             }
+        }
+
+        let res = client.send().await.unwrap();
+        let size = res
+            .headers()
+            .get("content-length")
+            .map(|length| length.to_str().unwrap().parse::<u64>().unwrap());
+        let url = format!("{host}/track{query_string}");
+
+        let source = Box::new(RemoteByteStream::new(
+            url,
+            size,
+            true,
+            self.active_playback
+                .read()
+                .unwrap()
+                .as_ref()
+                .map(|p| p.abort.clone())
+                .unwrap_or_default(),
+        ));
+
+        PlayableTrack {
+            track_id,
+            source,
+            hint,
         }
     }
 
@@ -1025,6 +1041,12 @@ impl Player {
             Err(PlayerError::NoPlayersPlaying)
         }
     }
+}
+
+static SERVICE_PORT: Lazy<RwLock<Option<u16>>> = Lazy::new(|| RwLock::new(None));
+
+pub fn set_service_port(service_port: u16) {
+    SERVICE_PORT.write().unwrap().replace(service_port);
 }
 
 type PlaybackEventCallback = fn(&UpdateSession, &Playback);

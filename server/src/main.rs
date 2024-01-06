@@ -48,6 +48,7 @@ fn main() -> std::io::Result<()> {
             .expect("Invalid PORT environment variable")
     };
 
+    moosicbox_player::player::set_service_port(service_port);
     moosicbox_player::player::on_playback_event(crate::playback_session::on_playback_event);
 
     actix_web::rt::System::with_tokio_rt(|| {
