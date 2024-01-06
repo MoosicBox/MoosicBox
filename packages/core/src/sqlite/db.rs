@@ -1613,5 +1613,18 @@ pub fn add_tracks(db: &Connection, tracks: Vec<InsertTrack>) -> Result<Vec<Track
         })
         .collect::<Vec<_>>();
 
-    upsert_muli(db, "tracks", &["file"], values.as_slice())
+    upsert_muli(
+        db,
+        "tracks",
+        &[
+            "ifnull(`file`, '')",
+            "`album_id`",
+            "`title`",
+            "`duration`",
+            "`number`",
+            "ifnull(`format`, '')",
+            "`source`",
+        ],
+        values.as_slice(),
+    )
 }
