@@ -4,7 +4,9 @@ use moosicbox_core::{
     app::AppState,
     sqlite::{
         db::{get_albums, DbError},
-        models::{Album, AlbumSort, AlbumSource, ApiTrack, ToApi, Track},
+        models::{
+            track_source_to_u8, Album, AlbumSort, AlbumSource, ApiTrack, ToApi, Track, TrackSource,
+        },
     },
     types::AudioFormat,
 };
@@ -162,6 +164,7 @@ pub struct AlbumVersion {
     pub bit_depth: Option<u8>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
+    pub source: TrackSource,
 }
 
 impl ToApi<ApiAlbumVersion> for AlbumVersion {
@@ -172,6 +175,7 @@ impl ToApi<ApiAlbumVersion> for AlbumVersion {
             bit_depth: self.bit_depth,
             sample_rate: self.sample_rate,
             channels: self.channels,
+            source: self.source,
         }
     }
 }
@@ -187,6 +191,7 @@ pub fn sort_album_versions(versions: &mut [AlbumVersion]) {
             .unwrap_or_default()
             .cmp(&a.bit_depth.unwrap_or_default())
     });
+    versions.sort_by(|a, b| track_source_to_u8(a.source).cmp(&track_source_to_u8(b.source)));
 }
 
 #[derive(Clone, Serialize)]
@@ -197,6 +202,7 @@ pub struct ApiAlbumVersion {
     pub bit_depth: Option<u8>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
+    pub source: TrackSource,
 }
 
 #[derive(Debug, Error)]
@@ -221,6 +227,7 @@ pub fn get_album_versions(
                 bit_depth: track.bit_depth,
                 sample_rate: track.sample_rate,
                 channels: track.channels,
+                source: track.source,
             });
             continue;
         }
@@ -229,6 +236,7 @@ pub fn get_album_versions(
             v.sample_rate == track.sample_rate
                 && v.bit_depth == track.bit_depth
                 && v.tracks[0].directory() == track.directory()
+                && v.source == track.source
         }) {
             existing_version.tracks.push(track);
         } else {
@@ -238,6 +246,7 @@ pub fn get_album_versions(
                 bit_depth: track.bit_depth,
                 sample_rate: track.sample_rate,
                 channels: track.channels,
+                source: track.source,
             });
             continue;
         }

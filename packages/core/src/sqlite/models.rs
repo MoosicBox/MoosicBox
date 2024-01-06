@@ -286,6 +286,7 @@ impl ToApi<ApiAlbumVersionQuality> for AlbumVersionQuality {
             bit_depth: self.bit_depth,
             sample_rate: self.sample_rate,
             channels: self.channels,
+            source: self.source,
         }
     }
 }
@@ -343,6 +344,13 @@ impl AsModel<Album> for Row<'_> {
     }
 }
 
+pub fn track_source_to_u8(source: TrackSource) -> u8 {
+    match source {
+        TrackSource::Local => 1,
+        TrackSource::Tidal => 2,
+    }
+}
+
 pub fn sort_album_versions(versions: &mut [AlbumVersionQuality]) {
     versions.sort_by(|a, b| {
         b.sample_rate
@@ -354,6 +362,7 @@ pub fn sort_album_versions(versions: &mut [AlbumVersionQuality]) {
             .unwrap_or_default()
             .cmp(&a.bit_depth.unwrap_or_default())
     });
+    versions.sort_by(|a, b| track_source_to_u8(a.source).cmp(&track_source_to_u8(b.source)));
 }
 
 impl AsModelResultMut<Vec<Album>, DbError> for Rows<'_> {
@@ -419,6 +428,7 @@ pub struct ApiAlbumVersionQuality {
     pub bit_depth: Option<u8>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
+    pub source: TrackSource,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
