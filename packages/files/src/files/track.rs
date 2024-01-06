@@ -25,7 +25,7 @@ use symphonia::core::{
 };
 use thiserror::Error;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum TrackSource {
     LocalFilePath(String),
     Tidal(String),
@@ -95,6 +95,8 @@ pub async fn get_track_source(track_id: i32, db: Db) -> Result<TrackSource, Trac
 pub enum TrackInfoError {
     #[error("Format not supported: {0:?}")]
     UnsupportedFormat(AudioFormat),
+    #[error("Source not supported: {0:?}")]
+    UnsupportedSource(TrackSource),
     #[error("Track not found: {0}")]
     NotFound(i32),
     #[error(transparent)]
@@ -313,7 +315,7 @@ pub fn get_or_init_track_size(
             }
             AudioFormat::Source => File::open(path).unwrap().metadata().unwrap().len(),
         },
-        TrackSource::Tidal(_) => unimplemented!(),
+        TrackSource::Tidal(_) => return Err(TrackInfoError::UnsupportedSource(source.clone())),
     };
 
     set_track_size(
