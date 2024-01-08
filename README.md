@@ -17,11 +17,12 @@ Implemented:
 - Hi-Fi audio player
 - Automatic image optimization for requested size on demand
 - Tunnel server reverse proxy - allows access to local server from internet without any firewall configuration
+- Tidal integration
 
 To-do (in no particular order):
 
 - Music streaming service integrations
-  - Tidal, Spotify, Qobuz
+  - Spotify, Qobuz
 - Shareable playlists via an authenticated link
 - Audio encoding cache
 - Image optimization cache
