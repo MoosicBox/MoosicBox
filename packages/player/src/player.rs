@@ -362,7 +362,11 @@ impl Player {
 
         self.receiver.write().unwrap().replace(rx);
 
+        let old = playback.clone();
+
         playback.playing = true;
+
+        trigger_playback_event(&playback, &old);
 
         self.active_playback
             .write()
@@ -394,13 +398,13 @@ impl Player {
 
                 if let Err(err) = player.start_playback(seek, retry_options).await {
                     log::error!("Playback error occurred: {err:?}");
-                    player
-                        .active_playback
-                        .write()
-                        .unwrap()
-                        .as_mut()
-                        .unwrap()
-                        .playing = false;
+
+                    let mut binding = player.active_playback.write().unwrap();
+                    let active = binding.as_mut().unwrap();
+                    let old = active.clone();
+                    active.playing = false;
+                    trigger_playback_event(active, &old);
+
                     tx.send(())?;
                     return Err(err);
                 }
@@ -434,13 +438,20 @@ impl Player {
                 playback.tracks.len()
             );
 
-            player
-                .active_playback
-                .write()
-                .unwrap()
-                .as_mut()
-                .unwrap()
-                .playing = false;
+            let mut binding = player.active_playback.write().unwrap();
+            let active = binding.as_mut().unwrap();
+            let old = active.clone();
+            active.playing = false;
+
+            if !abort.is_cancelled() {
+                if let Some(TrackOrId::Track(track)) = active.tracks.get(active.position as usize) {
+                    if (active.progress as u64) == (track.duration as u64) - 1 {
+                        active.progress = track.duration;
+                    }
+                }
+
+                trigger_playback_event(active, &old);
+            }
 
             tx.send(())?;
 
