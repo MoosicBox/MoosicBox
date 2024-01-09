@@ -18,6 +18,7 @@ Implemented:
 - Automatic image optimization for requested size on demand
 - Tunnel server reverse proxy - allows access to local server from internet without any firewall configuration
 - Tidal integration
+- No internet connection required, ever.
 
 To-do (in no particular order):
 
