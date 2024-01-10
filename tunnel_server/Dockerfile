@@ -9,6 +9,10 @@ ADD packages/auth/.cargo packages/auth/.cargo
 RUN mkdir -p packages/auth/src && echo "fn main() {}" > packages/auth/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_auth\"\nversion = \"0.1.0\"" > packages/auth/Cargo.toml
 
+ADD packages/config/.cargo packages/config/.cargo
+RUN mkdir -p packages/config/src && echo "fn main() {}" > packages/config/src/main.rs
+RUN echo "[package]\nname = \"moosicbox_config\"\nversion = \"0.1.0\"" > packages/config/Cargo.toml
+
 ADD packages/converter/.cargo packages/converter/.cargo
 RUN mkdir -p packages/converter/src && echo "fn main() {}" > packages/converter/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_converter\"\nversion = \"0.1.0\"" > packages/converter/Cargo.toml
@@ -45,9 +49,17 @@ ADD tunnel_server/.cargo tunnel_server/.cargo
 RUN mkdir -p tunnel_server/src && echo "fn main() {}" > tunnel_server/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_tunnel_server\"\nversion = \"0.1.0\"" > tunnel_server/Cargo.toml
 
+ADD packages/scan/.cargo packages/scan/.cargo
+RUN mkdir -p packages/scan/src && echo "fn main() {}" > packages/scan/src/main.rs
+RUN echo "[package]\nname = \"moosicbox_scan\"\nversion = \"0.1.0\"" > packages/scan/Cargo.toml
+
 ADD packages/stream_utils/.cargo packages/stream_utils/.cargo
 RUN mkdir -p packages/stream_utils/src && echo "fn main() {}" > packages/stream_utils/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_stream_utils\"\nversion = \"0.1.0\"" > packages/stream_utils/Cargo.toml
+
+ADD packages/tidal/.cargo packages/tidal/.cargo
+RUN mkdir -p packages/tidal/src && echo "fn main() {}" > packages/tidal/src/main.rs
+RUN echo "[package]\nname = \"moosicbox_tidal\"\nversion = \"0.1.0\"" > packages/tidal/Cargo.toml
 
 ADD packages/ws/.cargo packages/ws/.cargo
 RUN mkdir -p packages/ws/src && echo "fn main() {}" > packages/ws/src/main.rs
