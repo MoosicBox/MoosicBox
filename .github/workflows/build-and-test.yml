@@ -56,6 +56,10 @@ jobs:
                       cargo: --no-default-features
                       features: opus
 
+                    - name: config
+                      path: packages/config
+                      os: ubuntu-latest
+
                     - name: core
                       path: packages/core
                       os: ubuntu-latest

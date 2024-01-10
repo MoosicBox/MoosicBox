@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use moosicbox_core::{
     app::Db,
@@ -12,8 +12,11 @@ use thiserror::Error;
 use tokio::{select, sync::RwLock};
 use tokio_util::sync::CancellationToken;
 
-use crate::output::{
-    sanitize_filename, FetchInternetImgError, ScanAlbum, ScanOutput, UpdateDatabaseError,
+use crate::{
+    output::{
+        sanitize_filename, FetchInternetImgError, ScanAlbum, ScanOutput, UpdateDatabaseError,
+    },
+    CACHE_DIR,
 };
 
 #[derive(Debug, Error)]
@@ -36,9 +39,6 @@ pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
     let total_start = std::time::SystemTime::now();
     let start = std::time::SystemTime::now();
     let output = Arc::new(RwLock::new(ScanOutput::new()));
-
-    let home_dir = home::home_dir().expect("Could not get user's home directory");
-    let config_dir = home_dir.join(".local").join("moosicbox").join("cache");
 
     let limit = 100;
     let mut offset = 0;
@@ -67,7 +67,7 @@ pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
 
                         log::debug!("Fetched Tidal albums offset={offset} limit={limit}: page_count={page_count}, total_count={count}");
 
-                        scan_albums(tidal_albums, count, db, &config_dir, output.clone(), token.clone()).await?;
+                        scan_albums(tidal_albums, count, db, output.clone(), token.clone()).await?;
 
                         if page_count < (limit as usize) {
                             break;
@@ -109,7 +109,6 @@ async fn scan_albums(
     albums: Vec<TidalAlbum>,
     total: u32,
     db: &Db,
-    config_dir: &Path,
     output: Arc<RwLock<ScanOutput>>,
     token: CancellationToken,
 ) -> Result<(), ScanError> {
@@ -142,7 +141,7 @@ async fn scan_albums(
                 .add_album(
                     &album.title,
                     &Some(album.release_date.clone()),
-                    config_dir
+                    CACHE_DIR
                         .join(&sanitize_filename(&album.artist))
                         .join(&sanitize_filename(&album.title))
                         .to_str()

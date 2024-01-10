@@ -21,12 +21,9 @@ use once_cell::sync::Lazy;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
-static IMAGE_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
+use crate::CACHE_DIR;
 
-static CONFIG_DIR: Lazy<PathBuf> = Lazy::new(|| {
-    let home_dir = home::home_dir().expect("Could not get user's home directory");
-    home_dir.join(".local").join("moosicbox").join("cache")
-});
+static IMAGE_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
 
 static NON_ALPHA_NUMERIC_REGEX: Lazy<regex::Regex> =
     Lazy::new(|| regex::Regex::new(r"[^A-Za-z0-9_]").expect("Invalid Regex"));
@@ -237,7 +234,7 @@ impl ScanAlbum {
         url: String,
     ) -> Result<Option<String>, FetchInternetImgError> {
         if self.cover.is_none() && !self.searched_cover {
-            let path = CONFIG_DIR
+            let path = CACHE_DIR
                 .join(sanitize_filename(&self.artist.name))
                 .join(sanitize_filename(&self.name));
 
@@ -316,7 +313,7 @@ impl ScanArtist {
         if self.cover.is_none() && !self.searched_cover {
             self.searched_cover = true;
 
-            let path = CONFIG_DIR.join(sanitize_filename(&self.name));
+            let path = CACHE_DIR.join(sanitize_filename(&self.name));
             let cover = search_for_cover(&IMAGE_CLIENT, &path, "artist.jpg", &url).await?;
 
             if let Some(cover) = cover {

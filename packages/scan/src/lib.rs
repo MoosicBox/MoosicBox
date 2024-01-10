@@ -1,6 +1,9 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
+use std::path::PathBuf;
+
 use db::get_enabled_scan_origins;
+use moosicbox_config::get_cache_dir_path;
 use moosicbox_core::{
     app::{Db, DbConnection},
     sqlite::db::DbError,
@@ -20,6 +23,9 @@ pub mod tidal;
 
 pub mod db;
 mod output;
+
+static CACHE_DIR: Lazy<PathBuf> =
+    Lazy::new(|| get_cache_dir_path().expect("Could not get cache directory"));
 
 static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
 

@@ -5,7 +5,8 @@ name    = "moosicbox_scan"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_core = { path = "../core" }
+moosicbox_config = { path = "../config" }
+moosicbox_core   = { path = "../core" }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -19,7 +20,6 @@ lofty        = { workspace = true, optional = true }
 mp3-duration = { workspace = true, optional = true }
 
 futures      = { workspace = true }
-home         = { workspace = true }
 log          = { workspace = true }
 once_cell    = { workspace = true }
 regex        = { workspace = true }

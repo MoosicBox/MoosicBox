@@ -2768,6 +2768,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_config"
+version = "0.1.0"
+dependencies = [
+ "home",
+ "log",
+ "thiserror",
+]
+
+[[package]]
 name = "moosicbox_converter"
 version = "0.1.0"
 dependencies = [
@@ -2898,9 +2907,9 @@ dependencies = [
  "actix-web",
  "audiotags",
  "futures",
- "home",
  "lofty",
  "log",
+ "moosicbox_config",
  "moosicbox_core",
  "moosicbox_tidal",
  "mp3-duration",
