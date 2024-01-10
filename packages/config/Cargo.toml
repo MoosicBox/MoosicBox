@@ -5,9 +5,16 @@ name    = "moosicbox_config"
 version = "0.1.0"
 
 [dependencies]
+# Test dependencies
+rand = { workspace = true, optional = true }
+
 home      = { workspace = true }
 log       = { workspace = true }
 thiserror = { workspace = true }
 
 [features]
+default = []
+
 fail-on-warnings = []
+
+test = ["dep:rand"]
