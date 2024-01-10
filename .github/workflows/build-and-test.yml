@@ -100,6 +100,10 @@ jobs:
                       cargo: --no-default-features
                       features: cpal
 
+                    - name: search
+                      path: packages/search
+                      os: ubuntu-latest
+
                     - name: ws
                       path: packages/ws
                       os: ubuntu-latest

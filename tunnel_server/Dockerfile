@@ -41,6 +41,10 @@ ADD packages/player/.cargo packages/player/.cargo
 RUN mkdir -p packages/player/src && echo "fn main() {}" > packages/player/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_player\"\nversion = \"0.1.0\"" > packages/player/Cargo.toml
 
+ADD packages/search/.cargo packages/search/.cargo
+RUN mkdir -p packages/search/src && echo "fn main() {}" > packages/search/src/main.rs
+RUN echo "[package]\nname = \"moosicbox_search\"\nversion = \"0.1.0\"" > packages/search/Cargo.toml
+
 ADD packages/tunnel/.cargo packages/tunnel/.cargo
 RUN mkdir -p packages/tunnel/src && echo "fn main() {}" > packages/tunnel/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_tunnel\"\nversion = \"0.1.0\"" > packages/tunnel/Cargo.toml

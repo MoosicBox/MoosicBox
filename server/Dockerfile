@@ -53,6 +53,10 @@ ADD packages/scan/.cargo packages/scan/.cargo
 RUN mkdir -p packages/scan/src && echo "fn main() {}" > packages/scan/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_scan\"\nversion = \"0.1.0\"" > packages/scan/Cargo.toml
 
+ADD packages/search/.cargo packages/search/.cargo
+RUN mkdir -p packages/search/src && echo "fn main() {}" > packages/search/src/main.rs
+RUN echo "[package]\nname = \"moosicbox_search\"\nversion = \"0.1.0\"" > packages/search/Cargo.toml
+
 ADD packages/tidal/.cargo packages/tidal/.cargo
 RUN mkdir -p packages/tidal/src && echo "fn main() {}" > packages/tidal/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_tidal\"\nversion = \"0.1.0\"" > packages/tidal/Cargo.toml

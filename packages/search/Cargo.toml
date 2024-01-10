@@ -1,0 +1,25 @@
+[package]
+authors = ["Braden Steffaniak"]
+edition = "2021"
+name    = "moosicbox_search"
+version = "0.1.0"
+
+[dependencies]
+moosicbox_config = { path = "../config" }
+moosicbox_core   = { path = "../core" }
+
+log       = { workspace = true }
+once_cell = { workspace = true }
+tantivy   = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+moosicbox_config = { path = "../config", features = ["test"] }
+
+pretty_assertions = { workspace = true }
+serial_test       = { workspace = true }
+static_init       = { workspace = true }
+test-log          = { workspace = true }
+
+[features]
+fail-on-warnings = []
