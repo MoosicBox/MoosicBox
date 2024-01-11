@@ -145,7 +145,7 @@ pub async fn get_tracks_info(
 
     let tracks = {
         let library = db.library.lock().unwrap();
-        get_tracks(&library.inner, &track_ids)?
+        get_tracks(&library.inner, Some(&track_ids))?
     };
 
     trace!("Got tracks {tracks:?}");

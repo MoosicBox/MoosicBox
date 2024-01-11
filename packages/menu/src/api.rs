@@ -185,7 +185,7 @@ pub async fn get_tracks_endpoint(
                 .lock()
                 .unwrap()
                 .inner,
-            &ids,
+            Some(&ids),
         )
         .map_err(|_e| ErrorInternalServerError("Failed to fetch tracks"))?
         .into_iter()

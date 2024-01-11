@@ -255,7 +255,7 @@ pub fn get_sessions(db: &Connection) -> Result<Vec<Session>, DbError> {
 }
 
 pub fn create_session(db: &Connection, session: &CreateSession) -> Result<Session, DbError> {
-    let tracks = get_tracks(db, &session.playlist.tracks)?;
+    let tracks = get_tracks(db, Some(&session.playlist.tracks))?;
     let playlist: SessionPlaylist = insert_and_get_row(
         db,
         "session_playlists",
@@ -340,7 +340,7 @@ pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<Sessio
         .playlist
         .as_ref()
         .map(|p| {
-            let tracks = get_tracks(db, &p.tracks)?;
+            let tracks = get_tracks(db, Some(&p.tracks))?;
 
             let tracks = p
                 .tracks
@@ -923,14 +923,13 @@ pub fn get_track_size(
 }
 
 pub fn get_track(db: &Connection, id: i32) -> Result<Option<Track>, DbError> {
-    Ok(get_tracks(db, &vec![id])?.into_iter().next())
+    Ok(get_tracks(db, Some(&vec![id]))?.into_iter().next())
 }
 
-pub fn get_tracks(db: &Connection, ids: &Vec<i32>) -> Result<Vec<Track>, DbError> {
-    if ids.is_empty() {
+pub fn get_tracks(db: &Connection, ids: Option<&Vec<i32>>) -> Result<Vec<Track>, DbError> {
+    if ids.is_some_and(|ids| ids.is_empty()) {
         return Ok(vec![]);
     }
-    let ids_param = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
     let mut query = db.prepare_cached(&format!(
         "
             SELECT tracks.*,
@@ -951,13 +950,20 @@ pub fn get_tracks(db: &Connection, ids: &Vec<i32>) -> Result<Vec<Track>, DbError
             JOIN albums ON albums.id=tracks.album_id
             JOIN artists ON artists.id=albums.artist_id
             JOIN track_sizes ON tracks.id=track_sizes.track_id AND track_sizes.format=tracks.format
-            WHERE tracks.id IN ({ids_param})"
+            {}",
+        ids.map(|ids| {
+            let ids_param = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+            format!("WHERE tracks.id IN ({ids_param})")
+        })
+        .unwrap_or_default()
     ))?;
 
-    let mut index = 1;
-    for id in ids {
-        query.raw_bind_parameter(index, *id)?;
-        index += 1;
+    if let Some(ids) = ids {
+        let mut index = 1;
+        for id in ids {
+            query.raw_bind_parameter(index, *id)?;
+            index += 1;
+        }
     }
 
     Ok(query
