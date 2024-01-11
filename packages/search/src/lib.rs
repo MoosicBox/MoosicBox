@@ -667,10 +667,6 @@ mod tests {
             match &field.1 {
                 DataValue::String(value) => {
                     map.insert(field.0.to_string(), vec![Value::Str(value.to_string())]);
-                    map.insert(
-                        format!("{}_string", field.0),
-                        vec![Value::Str(value.to_string())],
-                    );
                 }
                 DataValue::Bool(value) => {
                     map.insert(field.0.to_string(), vec![Value::Bool(*value)]);
@@ -701,6 +697,7 @@ mod tests {
                         .iter()
                         .map(|value| match value {
                             Value::Str(str) => str.to_string(),
+                            Value::Bool(bool) => bool.to_string(),
                             Value::U64(num) => num.to_string(),
                             _ => unimplemented!(),
                         })
