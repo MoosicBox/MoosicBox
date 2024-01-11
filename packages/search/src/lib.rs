@@ -82,17 +82,47 @@ fn create_global_search_index(recreate_if_exists: bool) -> Result<Index, CreateI
     // in a compressed, row-oriented key-value store.
     // This store is useful for reconstructing the
     // documents that were selected during the search phase.
-    schema_builder.add_text_field("artist_title", TEXT | STORED);
-    schema_builder.add_text_field("artist_title_string", STRING);
-    schema_builder.add_u64_field("artist_id", STORED);
-    schema_builder.add_text_field("album_title", TEXT | STORED);
-    schema_builder.add_text_field("album_title_string", STRING);
-    schema_builder.add_u64_field("album_id", STORED);
-    schema_builder.add_text_field("track_title", TEXT | STORED);
-    schema_builder.add_text_field("track_title_string", STRING);
-    schema_builder.add_u64_field("track_id", STORED);
+
     schema_builder.add_text_field("document_type", TEXT | STORED);
     schema_builder.add_text_field("document_type_string", STRING);
+
+    schema_builder.add_text_field("artist_title", TEXT | STORED);
+    schema_builder.add_text_field("artist_title_string", STRING);
+
+    schema_builder.add_u64_field("artist_id", STORED);
+
+    schema_builder.add_text_field("album_title", TEXT | STORED);
+    schema_builder.add_text_field("album_title_string", STRING);
+
+    schema_builder.add_u64_field("album_id", STORED);
+
+    schema_builder.add_text_field("track_title", TEXT | STORED);
+    schema_builder.add_text_field("track_title_string", STRING);
+
+    schema_builder.add_u64_field("track_id", STORED);
+
+    schema_builder.add_text_field("cover", TEXT | STORED);
+    schema_builder.add_text_field("cover_string", STRING);
+
+    schema_builder.add_bool_field("blur", STORED);
+
+    schema_builder.add_text_field("date_released", TEXT | STORED);
+    schema_builder.add_text_field("date_released_string", STRING);
+
+    schema_builder.add_text_field("date_added", TEXT | STORED);
+    schema_builder.add_text_field("date_added_string", STRING);
+
+    schema_builder.add_text_field("version_formats", TEXT | STORED);
+    schema_builder.add_text_field("version_formats_string", STRING);
+
+    schema_builder.add_u64_field("version_bit_depths", STORED);
+
+    schema_builder.add_u64_field("version_sample_rates", STORED);
+
+    schema_builder.add_u64_field("version_channels", STORED);
+
+    schema_builder.add_text_field("version_sources", TEXT | STORED);
+    schema_builder.add_text_field("version_sources_string", STRING);
 
     let schema = schema_builder.build();
 
@@ -164,6 +194,7 @@ pub enum PopulateIndexError {
 #[derive(Debug, Clone)]
 pub enum DataValue {
     String(String),
+    Bool(bool),
     Number(u64),
 }
 
@@ -199,6 +230,9 @@ pub fn populate_global_search_index(
                     doc.add_text(field, value.clone());
                     let string_field = schema.get_field(&format!("{key}_string"))?;
                     doc.add_text(string_field, value);
+                }
+                DataValue::Bool(value) => {
+                    doc.add_bool(field, value);
                 }
                 DataValue::Number(value) => {
                     doc.add_u64(field, value);
@@ -637,6 +671,9 @@ mod tests {
                         format!("{}_string", field.0),
                         vec![Value::Str(value.to_string())],
                     );
+                }
+                DataValue::Bool(value) => {
+                    map.insert(field.0.to_string(), vec![Value::Bool(*value)]);
                 }
                 DataValue::Number(value) => {
                     map.insert(field.0.to_string(), vec![Value::U64(*value)]);

@@ -1,10 +1,16 @@
+use std::str::FromStr;
+
 use actix_web::{
     error::ErrorInternalServerError,
     get, post,
     web::{self, Json},
     Result,
 };
-use moosicbox_core::{app::AppState, sqlite::models::ToApi};
+use moosicbox_core::{
+    app::AppState,
+    sqlite::models::{ApiAlbumVersionQuality, ToApi, TrackSource},
+    types::AudioFormat,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tantivy::schema::NamedFieldDocument;
@@ -72,6 +78,22 @@ impl ToApi<ApiGlobalSearchResult> for NamedFieldDocument {
                     .as_text()
                     .unwrap()
                     .to_string(),
+                contains_cover: self
+                    .0
+                    .get("cover")
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .as_text()
+                    .is_some_and(|cover| !cover.is_empty()),
+                blur: self
+                    .0
+                    .get("blur")
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .as_bool()
+                    .unwrap(),
             }),
             "albums" => ApiGlobalSearchResult::Album(ApiGlobalAlbumSearchResult {
                 artist_id: self
@@ -108,80 +130,257 @@ impl ToApi<ApiGlobalSearchResult> for NamedFieldDocument {
                     .as_text()
                     .unwrap()
                     .to_string(),
+                contains_cover: self
+                    .0
+                    .get("cover")
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .as_text()
+                    .is_some_and(|cover| !cover.is_empty()),
+                blur: self
+                    .0
+                    .get("blur")
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .as_bool()
+                    .unwrap(),
+                date_released: self
+                    .0
+                    .get("date_released")
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .as_text()
+                    .map(|s| s.to_string()),
+                date_added: self
+                    .0
+                    .get("date_added")
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .as_text()
+                    .map(|s| s.to_string()),
+                versions: self
+                    .0
+                    .get("version_formats")
+                    .unwrap()
+                    .iter()
+                    .enumerate()
+                    .map(|(i, format)| {
+                        let source = self
+                            .0
+                            .get("version_sources")
+                            .unwrap()
+                            .iter()
+                            .nth(i)
+                            .unwrap()
+                            .as_text()
+                            .unwrap();
+
+                        ApiAlbumVersionQuality {
+                            format: format.as_text().map(|format| {
+                                AudioFormat::from_str(format)
+                                    .unwrap_or_else(|_| panic!("Invalid AudioFormat: {format}"))
+                            }),
+                            bit_depth: self
+                                .0
+                                .get("version_bit_depths")
+                                .unwrap()
+                                .iter()
+                                .nth(i)
+                                .unwrap()
+                                .as_u64()
+                                .map(|depth| depth as u8),
+                            sample_rate: self
+                                .0
+                                .get("version_sample_rates")
+                                .unwrap()
+                                .iter()
+                                .nth(i)
+                                .unwrap()
+                                .as_u64()
+                                .map(|rate| rate as u32),
+                            channels: self
+                                .0
+                                .get("version_channels")
+                                .unwrap()
+                                .iter()
+                                .nth(i)
+                                .unwrap()
+                                .as_u64()
+                                .map(|channels| channels as u8),
+                            source: TrackSource::from_str(source)
+                                .unwrap_or_else(|_| panic!("Invalid TrackSource: {source}")),
+                        }
+                    })
+                    .collect::<Vec<_>>(),
             }),
-            "tracks" => ApiGlobalSearchResult::Track(ApiGlobalTrackSearchResult {
-                artist_id: self
+            "tracks" => {
+                let format = self
                     .0
-                    .get("artist_id")
+                    .get("version_formats")
                     .unwrap()
                     .first()
                     .unwrap()
-                    .as_u64()
-                    .unwrap(),
-                artist: self
+                    .as_text();
+
+                let source = self
                     .0
-                    .get("artist_title")
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .as_text()
-                    .unwrap()
-                    .to_string(),
-                album_id: self
-                    .0
-                    .get("album_id")
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .as_u64()
-                    .unwrap(),
-                album: self
-                    .0
-                    .get("album_title")
+                    .get("version_sources")
                     .unwrap()
                     .first()
                     .unwrap()
                     .as_text()
-                    .unwrap()
-                    .to_string(),
-                track_id: self
-                    .0
-                    .get("track_id")
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .as_u64()
-                    .unwrap(),
-                title: self
-                    .0
-                    .get("track_title")
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .as_text()
-                    .unwrap()
-                    .to_string(),
-            }),
+                    .unwrap();
+
+                ApiGlobalSearchResult::Track(ApiGlobalTrackSearchResult {
+                    artist_id: self
+                        .0
+                        .get("artist_id")
+                        .unwrap()
+                        .first()
+                        .unwrap()
+                        .as_u64()
+                        .unwrap(),
+                    artist: self
+                        .0
+                        .get("artist_title")
+                        .unwrap()
+                        .first()
+                        .unwrap()
+                        .as_text()
+                        .unwrap()
+                        .to_string(),
+                    album_id: self
+                        .0
+                        .get("album_id")
+                        .unwrap()
+                        .first()
+                        .unwrap()
+                        .as_u64()
+                        .unwrap(),
+                    album: self
+                        .0
+                        .get("album_title")
+                        .unwrap()
+                        .first()
+                        .unwrap()
+                        .as_text()
+                        .unwrap()
+                        .to_string(),
+                    track_id: self
+                        .0
+                        .get("track_id")
+                        .unwrap()
+                        .first()
+                        .unwrap()
+                        .as_u64()
+                        .unwrap(),
+                    title: self
+                        .0
+                        .get("track_title")
+                        .unwrap()
+                        .first()
+                        .unwrap()
+                        .as_text()
+                        .unwrap()
+                        .to_string(),
+                    contains_cover: self
+                        .0
+                        .get("cover")
+                        .unwrap()
+                        .first()
+                        .unwrap()
+                        .as_text()
+                        .is_some_and(|cover| !cover.is_empty()),
+                    blur: self
+                        .0
+                        .get("blur")
+                        .unwrap()
+                        .first()
+                        .unwrap()
+                        .as_bool()
+                        .unwrap(),
+                    date_released: self
+                        .0
+                        .get("date_released")
+                        .unwrap()
+                        .first()
+                        .unwrap()
+                        .as_text()
+                        .map(|s| s.to_string()),
+                    date_added: self
+                        .0
+                        .get("date_added")
+                        .unwrap()
+                        .first()
+                        .unwrap()
+                        .as_text()
+                        .map(|s| s.to_string()),
+                    format: format.map(|format| {
+                        AudioFormat::from_str(format)
+                            .unwrap_or_else(|_| panic!("Invalid AudioFormat: {format}"))
+                    }),
+                    bit_depth: self
+                        .0
+                        .get("version_bit_depths")
+                        .unwrap()
+                        .first()
+                        .unwrap()
+                        .as_u64()
+                        .map(|depth| depth as u8),
+                    sample_rate: self
+                        .0
+                        .get("version_sample_rates")
+                        .unwrap()
+                        .first()
+                        .unwrap()
+                        .as_u64()
+                        .map(|rate| rate as u32),
+                    channels: self
+                        .0
+                        .get("version_channels")
+                        .unwrap()
+                        .first()
+                        .unwrap()
+                        .as_u64()
+                        .map(|channels| channels as u8),
+                    source: TrackSource::from_str(source)
+                        .unwrap_or_else(|_| panic!("Invalid TrackSource: {source}")),
+                })
+            }
             _ => unreachable!(),
         }
     }
 }
 
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct ApiGlobalArtistSearchResult {
     pub artist_id: u64,
     pub title: String,
+    pub contains_cover: bool,
+    pub blur: bool,
 }
 
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct ApiGlobalAlbumSearchResult {
     pub artist_id: u64,
     pub artist: String,
     pub album_id: u64,
     pub title: String,
+    pub contains_cover: bool,
+    pub blur: bool,
+    pub date_released: Option<String>,
+    pub date_added: Option<String>,
+    pub versions: Vec<ApiAlbumVersionQuality>,
 }
 
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct ApiGlobalTrackSearchResult {
     pub artist_id: u64,
     pub artist: String,
@@ -189,6 +388,15 @@ pub struct ApiGlobalTrackSearchResult {
     pub album: String,
     pub track_id: u64,
     pub title: String,
+    pub contains_cover: bool,
+    pub blur: bool,
+    pub date_released: Option<String>,
+    pub date_added: Option<String>,
+    pub format: Option<AudioFormat>,
+    pub bit_depth: Option<u8>,
+    pub sample_rate: Option<u32>,
+    pub channels: Option<u8>,
+    pub source: TrackSource,
 }
 
 #[get("/search/global-search")]
