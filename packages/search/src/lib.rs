@@ -537,7 +537,7 @@ mod tests {
     use static_init::dynamic;
     use tantivy::schema::Value;
 
-    use crate::{DataValue, TESTS_DIR_PATH};
+    use crate::{recreate_global_search_index, DataValue, TESTS_DIR_PATH};
 
     #[derive(Debug)]
     struct TestSetup;
@@ -555,6 +555,10 @@ mod tests {
             std::fs::remove_dir_all(TESTS_DIR_PATH.as_path())
                 .expect("Failed to clean up temp directory");
         }
+    }
+
+    fn before_each() {
+        recreate_global_search_index().expect("Failed to recreate_global_search_index");
     }
 
     #[dynamic(drop)]
@@ -720,6 +724,8 @@ mod tests {
     #[test_log::test]
     #[serial]
     fn test_global_search() {
+        before_each();
+
         crate::populate_global_search_index(TEST_DATA.clone(), true).unwrap();
         let results = crate::search_global_search_index("in procession", 0, 10).unwrap();
 
@@ -737,6 +743,8 @@ mod tests {
     #[test_log::test]
     #[serial]
     fn test_global_search_with_offset() {
+        before_each();
+
         crate::populate_global_search_index(TEST_DATA.clone(), true).unwrap();
         let results = crate::search_global_search_index("in procession", 1, 10).unwrap();
 
@@ -750,6 +758,8 @@ mod tests {
     #[test_log::test]
     #[serial]
     fn test_global_search_with_limit() {
+        before_each();
+
         crate::populate_global_search_index(TEST_DATA.clone(), true).unwrap();
         let results = crate::search_global_search_index("in procession", 0, 2).unwrap();
 
@@ -763,6 +773,8 @@ mod tests {
     #[test_log::test]
     #[serial]
     fn test_global_search_with_limit_and_offset() {
+        before_each();
+
         crate::populate_global_search_index(TEST_DATA.clone(), true).unwrap();
         let results = crate::search_global_search_index("in procession", 1, 1).unwrap();
 
@@ -776,6 +788,8 @@ mod tests {
     #[test_log::test]
     #[serial]
     fn test_global_search_reindex() {
+        before_each();
+
         crate::populate_global_search_index(TEST_DATA.clone(), true).unwrap();
         assert_eq!(
             crate::search_global_search_index("in procession", 0, 10)
