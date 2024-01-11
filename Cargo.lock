@@ -3095,6 +3095,7 @@ dependencies = [
  "log",
  "moosicbox_config",
  "moosicbox_core",
+ "moosicbox_search",
  "moosicbox_tidal",
  "mp3-duration",
  "once_cell",
@@ -3114,11 +3115,15 @@ dependencies = [
 name = "moosicbox_search"
 version = "0.1.0"
 dependencies = [
+ "actix-web",
  "log",
  "moosicbox_config",
  "moosicbox_core",
  "once_cell",
  "pretty_assertions",
+ "regex",
+ "serde",
+ "serde_json",
  "serial_test",
  "static_init",
  "tantivy",
@@ -3149,6 +3154,7 @@ dependencies = [
  "moosicbox_menu",
  "moosicbox_player",
  "moosicbox_scan",
+ "moosicbox_search",
  "moosicbox_tidal",
  "moosicbox_tunnel",
  "moosicbox_ws",

@@ -6,10 +6,16 @@ use std::sync::RwLock;
 use once_cell::sync::Lazy;
 use tantivy::collector::TopDocs;
 use tantivy::directory::MmapDirectory;
-use tantivy::query::QueryParser;
+use tantivy::query::{BooleanQuery, BoostQuery, FuzzyTermQuery, TermQuery};
+use tantivy::query_grammar::Occur;
 use tantivy::{schema::*, Directory};
 use tantivy::{Index, IndexReader, IndexWriter, ReloadPolicy};
 use thiserror::Error;
+
+#[cfg(feature = "api")]
+pub mod api;
+#[cfg(feature = "db")]
+pub mod data;
 
 #[cfg(test)]
 static TESTS_DIR_PATH: Lazy<PathBuf> = Lazy::new(moosicbox_config::get_tests_dir_path);
@@ -77,11 +83,16 @@ fn create_global_search_index(recreate_if_exists: bool) -> Result<Index, CreateI
     // This store is useful for reconstructing the
     // documents that were selected during the search phase.
     schema_builder.add_text_field("artist_title", TEXT | STORED);
+    schema_builder.add_text_field("artist_title_string", STRING | STORED);
     schema_builder.add_u64_field("artist_id", STORED);
     schema_builder.add_text_field("album_title", TEXT | STORED);
+    schema_builder.add_text_field("album_title_string", STRING | STORED);
     schema_builder.add_u64_field("album_id", STORED);
     schema_builder.add_text_field("track_title", TEXT | STORED);
+    schema_builder.add_text_field("track_title_string", STRING | STORED);
     schema_builder.add_u64_field("track_id", STORED);
+    schema_builder.add_text_field("document_type", TEXT);
+    schema_builder.add_text_field("document_type_string", STRING);
 
     let schema = schema_builder.build();
 
@@ -158,6 +169,7 @@ pub enum DataValue {
 
 pub fn populate_global_search_index(
     data: Vec<Vec<(&str, DataValue)>>,
+    delete: bool,
 ) -> Result<(), PopulateIndexError> {
     log::debug!("Populating global search index...");
     let index: &Index = &GLOBAL_SEARCH_INDEX.read().unwrap();
@@ -172,7 +184,9 @@ pub fn populate_global_search_index(
     // throughput, but 50 MB is already plenty.
     let mut index_writer: IndexWriter = index.writer(50_000_000)?;
 
-    index_writer.delete_all_documents()?;
+    if delete {
+        index_writer.delete_all_documents()?;
+    }
 
     for entry in data {
         let mut doc = Document::default();
@@ -182,7 +196,9 @@ pub fn populate_global_search_index(
 
             match value {
                 DataValue::String(value) => {
-                    doc.add_text(field, value);
+                    doc.add_text(field, value.clone());
+                    let string_field = schema.get_field(&format!("{key}_string"))?;
+                    doc.add_text(string_field, value);
                 }
                 DataValue::Number(value) => {
                     doc.add_u64(field, value);
@@ -230,7 +246,7 @@ pub enum ReindexError {
 
 pub fn reindex_global_search_index(data: Vec<Vec<(&str, DataValue)>>) -> Result<(), ReindexError> {
     recreate_global_search_index()?;
-    populate_global_search_index(data)?;
+    populate_global_search_index(data, false)?;
 
     Ok(())
 }
@@ -243,18 +259,34 @@ pub enum SearchIndexError {
     QueryParser(#[from] tantivy::query::QueryParserError),
 }
 
+static NON_ALPHA_NUMERIC_REGEX: Lazy<regex::Regex> =
+    Lazy::new(|| regex::Regex::new(r"[^A-Za-z0-9 ]").expect("Invalid Regex"));
+
+fn sanitize_query(query: &str) -> String {
+    NON_ALPHA_NUMERIC_REGEX
+        .replace_all(query, " ")
+        .to_string()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 pub fn search_global_search_index(
     query: &str,
     offset: usize,
     limit: usize,
 ) -> Result<Vec<NamedFieldDocument>, SearchIndexError> {
     log::debug!("Searching global_search_index...");
+    let query = sanitize_query(query);
     let index: &Index = &GLOBAL_SEARCH_INDEX.read().unwrap();
     let schema = index.schema();
 
     let artist_title = schema.get_field("artist_title").unwrap();
     let album_title = schema.get_field("album_title").unwrap();
+    let album_title_string = schema.get_field("album_title_string").unwrap();
     let track_title = schema.get_field("track_title").unwrap();
+    let track_title_string = schema.get_field("track_title_string").unwrap();
+    let document_type = schema.get_field("document_type").unwrap();
 
     // # Searching
     //
@@ -288,8 +320,143 @@ pub fn search_global_search_index(
     let searcher = reader.searcher();
 
     // ### Query
-    let query_parser = QueryParser::for_index(index, vec![artist_title, album_title, track_title]);
-    let query = query_parser.parse_query(query)?;
+    let mut outer_parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
+
+    {
+        let fields = [
+            (artist_title, 5.0f32),
+            (album_title, 3.0f32),
+            (track_title, 1.0f32),
+            (document_type, 10.0f32),
+        ];
+        let mut parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
+        for (field, boost) in fields {
+            let mut word_parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
+            for word in query.split_whitespace() {
+                let term = Term::from_field_text(field, word);
+                let fuzzy = Box::new(FuzzyTermQuery::new(term, 1, true));
+                let boost = Box::new(BoostQuery::new(fuzzy, boost));
+
+                word_parts.push((Occur::Should, boost));
+            }
+
+            parts.push((
+                Occur::Should,
+                Box::new(BoostQuery::new(
+                    Box::new(BooleanQuery::from(word_parts)),
+                    1.0,
+                )),
+            ));
+
+            let mut word_parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
+            for word in query.split_whitespace() {
+                let term = Term::from_field_text(field, word);
+                let term_query = Box::new(TermQuery::new(term, IndexRecordOption::Basic));
+                let boost = Box::new(BoostQuery::new(term_query, boost * 5.0));
+
+                word_parts.push((Occur::Should, boost));
+            }
+
+            parts.push((
+                Occur::Should,
+                Box::new(BoostQuery::new(
+                    Box::new(BooleanQuery::from(word_parts)),
+                    6.0,
+                )),
+            ));
+        }
+
+        outer_parts.push((
+            Occur::Should,
+            Box::new(BoostQuery::new(Box::new(BooleanQuery::from(parts)), 1.0)),
+        ));
+    }
+
+    {
+        let fields = [(album_title, 3.0f32)];
+        let mut parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
+        let mut inner_parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
+        for (field, boost) in fields {
+            for word in query.split_whitespace() {
+                let term = Term::from_field_text(field, word);
+                let fuzzy = Box::new(FuzzyTermQuery::new(term, 1, true));
+                let boost = Box::new(BoostQuery::new(fuzzy, boost));
+
+                inner_parts.push((Occur::Should, boost))
+            }
+        }
+        parts.push((
+            Occur::Must,
+            Box::new(BoostQuery::new(
+                Box::new(BooleanQuery::from(inner_parts)),
+                1.0,
+            )),
+        ));
+        let mut inner_parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
+        let term = Term::from_field_text(track_title_string, "");
+        let term_query = Box::new(TermQuery::new(term, IndexRecordOption::Basic));
+        inner_parts.push((Occur::Must, term_query));
+
+        parts.push((
+            Occur::Must,
+            Box::new(BoostQuery::new(
+                Box::new(BooleanQuery::from(inner_parts)),
+                1.0,
+            )),
+        ));
+
+        outer_parts.push((
+            Occur::Should,
+            Box::new(BoostQuery::new(Box::new(BooleanQuery::from(parts)), 30.0)),
+        ));
+    }
+
+    {
+        let fields = [(artist_title, 5.0f32)];
+        let mut parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
+        let mut inner_parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
+        for (field, boost) in fields {
+            for word in query.split_whitespace() {
+                let term = Term::from_field_text(field, word);
+                let fuzzy = Box::new(FuzzyTermQuery::new(term, 1, true));
+                let boost = Box::new(BoostQuery::new(fuzzy, boost));
+
+                inner_parts.push((Occur::Should, boost))
+            }
+        }
+        parts.push((
+            Occur::Must,
+            Box::new(BoostQuery::new(
+                Box::new(BooleanQuery::from(inner_parts)),
+                1.0,
+            )),
+        ));
+
+        let mut inner_parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
+        let term = Term::from_field_text(album_title_string, "");
+        let term_query = Box::new(TermQuery::new(term, IndexRecordOption::Basic));
+        let boost = Box::new(BoostQuery::new(term_query, 30.0));
+        inner_parts.push((Occur::Should, boost));
+
+        let term = Term::from_field_text(track_title_string, "");
+        let term_query = Box::new(TermQuery::new(term, IndexRecordOption::Basic));
+        let boost = Box::new(BoostQuery::new(term_query, 5.0));
+        inner_parts.push((Occur::Should, boost));
+        parts.push((
+            Occur::Must,
+            Box::new(BoostQuery::new(
+                Box::new(BooleanQuery::from(inner_parts)),
+                1.0,
+            )),
+        ));
+
+        outer_parts.push((
+            Occur::Should,
+            Box::new(BoostQuery::new(Box::new(BooleanQuery::from(parts)), 500.0)),
+        ));
+    }
+
+    let query = BooleanQuery::from(outer_parts);
 
     // A query defines a set of documents, as
     // well as the way they should be scored.
@@ -463,13 +630,18 @@ mod tests {
     fn to_btree(data: Vec<(&'static str, DataValue)>) -> BTreeMap<String, Vec<Value>> {
         let mut map = BTreeMap::new();
         for field in data {
-            map.insert(
-                field.0.to_string(),
-                vec![match &field.1 {
-                    DataValue::String(value) => Value::Str(value.to_string()),
-                    DataValue::Number(value) => Value::U64(*value),
-                }],
-            );
+            match &field.1 {
+                DataValue::String(value) => {
+                    map.insert(field.0.to_string(), vec![Value::Str(value.to_string())]);
+                    map.insert(
+                        format!("{}_string", field.0),
+                        vec![Value::Str(value.to_string())],
+                    );
+                }
+                DataValue::Number(value) => {
+                    map.insert(field.0.to_string(), vec![Value::U64(*value)]);
+                }
+            }
         }
         map
     }
@@ -503,6 +675,7 @@ mod tests {
             .join("|")
     }
 
+    #[allow(unused)]
     fn sort_entries(
         a: &BTreeMap<String, Vec<Value>>,
         b: &BTreeMap<String, Vec<Value>>,
@@ -513,7 +686,7 @@ mod tests {
     #[test_log::test]
     #[serial]
     fn test_global_search() {
-        crate::populate_global_search_index(TEST_DATA.clone()).unwrap();
+        crate::populate_global_search_index(TEST_DATA.clone(), true).unwrap();
         let results = crate::search_global_search_index("in procession", 0, 10).unwrap();
 
         assert_eq!(results.len(), 3);
@@ -529,40 +702,8 @@ mod tests {
 
     #[test_log::test]
     #[serial]
-    fn test_global_search_with_weight() {
-        crate::populate_global_search_index(TEST_DATA.clone()).unwrap();
-        let results =
-            crate::search_global_search_index("(omens) || track_title:(omens)^10", 0, 10).unwrap();
-
-        assert_eq!(results.len(), 8);
-        assert_eq!(
-            results.first().map(|r| r.0.clone()).unwrap(),
-            to_btree(OMENS_TRACK_1.clone(),)
-        );
-        assert_eq!(
-            results
-                .iter()
-                .map(|r| r.0.clone())
-                .collect::<Vec<_>>()
-                .sort_by(sort_entries),
-            to_btree_vec(vec![
-                OMENS_ALBUM.clone(),
-                OMENS_TRACK_1.clone(),
-                OMENS_TRACK_2.clone(),
-                OMENS_TRACK_3.clone(),
-                OMENS_TRACK_4.clone(),
-                OMENS_TRACK_5.clone(),
-                OMENS_TRACK_6.clone(),
-                OMENS_TRACK_7.clone(),
-            ])
-            .sort_by(sort_entries)
-        );
-    }
-
-    #[test_log::test]
-    #[serial]
     fn test_global_search_with_offset() {
-        crate::populate_global_search_index(TEST_DATA.clone()).unwrap();
+        crate::populate_global_search_index(TEST_DATA.clone(), true).unwrap();
         let results = crate::search_global_search_index("in procession", 1, 10).unwrap();
 
         assert_eq!(results.len(), 2);
@@ -575,7 +716,7 @@ mod tests {
     #[test_log::test]
     #[serial]
     fn test_global_search_with_limit() {
-        crate::populate_global_search_index(TEST_DATA.clone()).unwrap();
+        crate::populate_global_search_index(TEST_DATA.clone(), true).unwrap();
         let results = crate::search_global_search_index("in procession", 0, 2).unwrap();
 
         assert_eq!(results.len(), 2);
@@ -588,7 +729,7 @@ mod tests {
     #[test_log::test]
     #[serial]
     fn test_global_search_with_limit_and_offset() {
-        crate::populate_global_search_index(TEST_DATA.clone()).unwrap();
+        crate::populate_global_search_index(TEST_DATA.clone(), true).unwrap();
         let results = crate::search_global_search_index("in procession", 1, 1).unwrap();
 
         assert_eq!(results.len(), 1);
@@ -601,7 +742,7 @@ mod tests {
     #[test_log::test]
     #[serial]
     fn test_global_search_reindex() {
-        crate::populate_global_search_index(TEST_DATA.clone()).unwrap();
+        crate::populate_global_search_index(TEST_DATA.clone(), true).unwrap();
         assert_eq!(
             crate::search_global_search_index("in procession", 0, 10)
                 .unwrap()
@@ -617,7 +758,7 @@ mod tests {
             0
         );
 
-        crate::populate_global_search_index(TEST_DATA.clone()).unwrap();
+        crate::populate_global_search_index(TEST_DATA.clone(), true).unwrap();
         assert_eq!(
             crate::search_global_search_index("in procession", 0, 10)
                 .unwrap()

@@ -104,6 +104,23 @@ jobs:
                       path: packages/search
                       os: ubuntu-latest
 
+                    - name: search-no-default-features
+                      path: packages/search
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+
+                    - name: search-api
+                      path: packages/search
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: api
+
+                    - name: search-db
+                      path: packages/search
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: db
+
                     - name: ws
                       path: packages/ws
                       os: ubuntu-latest

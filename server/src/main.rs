@@ -247,6 +247,8 @@ fn main() -> std::io::Result<()> {
                 .service(moosicbox_player::api::stop_track_endpoint)
                 .service(moosicbox_player::api::seek_track_endpoint)
                 .service(moosicbox_player::api::player_status_endpoint)
+                .service(moosicbox_search::api::reindex_endpoint)
+                .service(moosicbox_search::api::search_global_search_endpoint)
                 .service(moosicbox_tidal::api::device_authorization_endpoint)
                 .service(moosicbox_tidal::api::device_authorization_token_endpoint)
                 .service(moosicbox_tidal::api::track_url_endpoint)

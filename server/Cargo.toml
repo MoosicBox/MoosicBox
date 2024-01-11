@@ -12,6 +12,7 @@ moosicbox_files = { path = "../packages/files" }
 moosicbox_menu = { path = "../packages/menu" }
 moosicbox_player = { path = "../packages/player", default-features = false }
 moosicbox_scan = { path = "../packages/scan" }
+moosicbox_search = { path = "../packages/search" }
 moosicbox_tidal = { path = "../packages/tidal" }
 moosicbox_tunnel = { path = "../packages/tunnel", default-features = false, features = [
     "sender",

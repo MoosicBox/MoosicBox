@@ -6,10 +6,18 @@ version = "0.1.0"
 
 [dependencies]
 moosicbox_config = { path = "../config" }
-moosicbox_core   = { path = "../core" }
+
+# API Dependencies
+actix-web  = { workspace = true, optional = true }
+serde      = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+
+# DB Dependencies
+moosicbox_core = { path = "../core", optional = true }
 
 log       = { workspace = true }
 once_cell = { workspace = true }
+regex     = { workspace = true }
 tantivy   = { workspace = true }
 thiserror = { workspace = true }
 
@@ -22,4 +30,9 @@ static_init       = { workspace = true }
 test-log          = { workspace = true }
 
 [features]
+default = ["api", "db"]
+
 fail-on-warnings = []
+
+api = ["db", "dep:actix-web", "dep:serde", "dep:serde_json"]
+db  = ["dep:moosicbox_core"]
