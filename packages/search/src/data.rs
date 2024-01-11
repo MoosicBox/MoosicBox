@@ -1,7 +1,9 @@
+use std::path::Path;
+
 use moosicbox_core::{app::DbConnection, sqlite::db::DbError};
 use thiserror::Error;
 
-use crate::{DataValue, PopulateIndexError, RecreateIndexError};
+use crate::{DataValue, PopulateIndexError, RecreateIndexError, GLOBAL_SEARCH_INDEX_PATH};
 
 #[derive(Debug, Error)]
 pub enum ReindexFromDbError {
@@ -16,7 +18,8 @@ pub enum ReindexFromDbError {
 pub fn reindex_global_search_index_from_db(
     connection: &DbConnection,
 ) -> Result<(), ReindexFromDbError> {
-    crate::recreate_global_search_index()?;
+    let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
+    crate::recreate_global_search_index(path)?;
 
     let artists = moosicbox_core::sqlite::db::get_artists(&connection.inner)?
         .iter()

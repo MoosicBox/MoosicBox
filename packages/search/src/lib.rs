@@ -32,7 +32,10 @@ static GLOBAL_SEARCH_INDEX_PATH: Lazy<PathBuf> = Lazy::new(|| {
 });
 
 static GLOBAL_SEARCH_INDEX: Lazy<RwLock<Index>> = Lazy::new(|| {
-    RwLock::new(create_global_search_index(false).expect("Failed to create GLOBAL_SEARCH_INDEX"))
+    let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
+    RwLock::new(
+        create_global_search_index(path, false).expect("Failed to create GLOBAL_SEARCH_INDEX"),
+    )
 });
 
 static GLOBAL_SEARCH_READER: Lazy<RwLock<IndexReader>> = Lazy::new(|| {
@@ -53,8 +56,10 @@ pub enum CreateIndexError {
     IO(#[from] std::io::Error),
 }
 
-fn create_global_search_index(recreate_if_exists: bool) -> Result<Index, CreateIndexError> {
-    let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
+fn create_global_search_index(
+    path: &Path,
+    recreate_if_exists: bool,
+) -> Result<Index, CreateIndexError> {
     std::fs::create_dir_all(path)
         .unwrap_or_else(|_| panic!("Failed to create global search index directory at {path:?}"));
 
@@ -160,8 +165,8 @@ pub enum RecreateIndexError {
     GetIndexReader(#[from] GetIndexReaderError),
 }
 
-fn recreate_global_search_index() -> Result<(), RecreateIndexError> {
-    let index = create_global_search_index(true)?;
+fn recreate_global_search_index(path: &Path) -> Result<(), RecreateIndexError> {
+    let index = create_global_search_index(path, true)?;
     let reader = get_index_reader(&index)?;
 
     log::trace!("Resetting GLOBAL_SEARCH_INDEX value");
@@ -279,7 +284,8 @@ pub enum ReindexError {
 }
 
 pub fn reindex_global_search_index(data: Vec<Vec<(&str, DataValue)>>) -> Result<(), ReindexError> {
-    recreate_global_search_index()?;
+    let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
+    recreate_global_search_index(path)?;
     populate_global_search_index(data, false)?;
 
     Ok(())
@@ -529,7 +535,7 @@ pub fn search_global_search_index(
 
 #[cfg(test)]
 mod tests {
-    use std::{cmp::Ordering, collections::BTreeMap};
+    use std::{cmp::Ordering, collections::BTreeMap, path::PathBuf, sync::RwLock};
 
     use once_cell::sync::Lazy;
     use pretty_assertions::assert_eq;
@@ -538,6 +544,8 @@ mod tests {
     use tantivy::schema::Value;
 
     use crate::{recreate_global_search_index, DataValue, TESTS_DIR_PATH};
+
+    static TEMP_DIRS: Lazy<RwLock<Vec<PathBuf>>> = Lazy::new(|| RwLock::new(vec![]));
 
     #[derive(Debug)]
     struct TestSetup;
@@ -551,14 +559,29 @@ mod tests {
 
     impl Drop for TestSetup {
         fn drop(&mut self) {
+            for path in TEMP_DIRS.read().unwrap().iter() {
+                log::debug!("Cleaning up temp directory {:?}", path.as_path());
+                std::fs::remove_dir_all(path.as_path()).expect("Failed to clean up temp directory");
+            }
             log::debug!("Cleaning up temp directory {:?}", TESTS_DIR_PATH.as_path());
             std::fs::remove_dir_all(TESTS_DIR_PATH.as_path())
                 .expect("Failed to clean up temp directory");
         }
     }
 
+    fn temp_index_path() -> PathBuf {
+        let path = moosicbox_config::get_tests_dir_path()
+            .join("search_indices")
+            .join("global_search_index");
+
+        TEMP_DIRS.write().unwrap().push(path.clone());
+
+        path
+    }
+
     fn before_each() {
-        recreate_global_search_index().expect("Failed to recreate_global_search_index");
+        recreate_global_search_index(&temp_index_path())
+            .expect("Failed to recreate_global_search_index");
     }
 
     #[dynamic(drop)]
@@ -798,7 +821,8 @@ mod tests {
             3
         );
 
-        crate::recreate_global_search_index().expect("Failed to recreate_global_search_index");
+        crate::recreate_global_search_index(&temp_index_path())
+            .expect("Failed to recreate_global_search_index");
         assert_eq!(
             crate::search_global_search_index("in procession", 0, 10)
                 .unwrap()
