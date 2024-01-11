@@ -4,8 +4,8 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
-use moosicbox_core::app::AppState;
-use serde::Deserialize;
+use moosicbox_core::{app::AppState, sqlite::models::ToApi};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tantivy::schema::NamedFieldDocument;
 
@@ -34,10 +34,110 @@ pub struct SearchGlobalSearchQuery {
     limit: Option<usize>,
 }
 
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
+pub enum ApiGlobalSearchResult {
+    Artist(ApiGlobalArtistSearchResult),
+    Album(ApiGlobalAlbumSearchResult),
+    Track(ApiGlobalTrackSearchResult),
+}
+
+impl ToApi<ApiGlobalSearchResult> for NamedFieldDocument {
+    fn to_api(&self) -> ApiGlobalSearchResult {
+        match self
+            .0
+            .get("document_type")
+            .unwrap()
+            .first()
+            .unwrap()
+            .as_text()
+            .unwrap()
+        {
+            "artists" => ApiGlobalSearchResult::Artist(ApiGlobalArtistSearchResult {
+                artist_id: self
+                    .0
+                    .get("artist_id")
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .as_u64()
+                    .unwrap(),
+                title: self
+                    .0
+                    .get("artist_title")
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .as_text()
+                    .unwrap()
+                    .to_string(),
+            }),
+            "albums" => ApiGlobalSearchResult::Album(ApiGlobalAlbumSearchResult {
+                album_id: self
+                    .0
+                    .get("album_id")
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .as_u64()
+                    .unwrap(),
+                title: self
+                    .0
+                    .get("album_title")
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .as_text()
+                    .unwrap()
+                    .to_string(),
+            }),
+            "tracks" => ApiGlobalSearchResult::Track(ApiGlobalTrackSearchResult {
+                track_id: self
+                    .0
+                    .get("track_id")
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .as_u64()
+                    .unwrap(),
+                title: self
+                    .0
+                    .get("track_title")
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .as_text()
+                    .unwrap()
+                    .to_string(),
+            }),
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[derive(Serialize, Clone)]
+pub struct ApiGlobalArtistSearchResult {
+    pub artist_id: u64,
+    pub title: String,
+}
+
+#[derive(Serialize, Clone)]
+pub struct ApiGlobalAlbumSearchResult {
+    pub album_id: u64,
+    pub title: String,
+}
+
+#[derive(Serialize, Clone)]
+pub struct ApiGlobalTrackSearchResult {
+    pub track_id: u64,
+    pub title: String,
+}
+
 #[get("/search/global-search")]
 pub async fn search_global_search_endpoint(
     query: web::Query<SearchGlobalSearchQuery>,
-) -> Result<Json<Vec<NamedFieldDocument>>> {
+) -> Result<Json<Vec<ApiGlobalSearchResult>>> {
     let results = search_global_search_index(
         &query.query,
         query.offset.unwrap_or(0),
@@ -47,5 +147,7 @@ pub async fn search_global_search_endpoint(
         ErrorInternalServerError(format!("Failed to search global search index: {e:?}"))
     })?;
 
-    Ok(Json(results))
+    let api_results = results.iter().map(|doc| doc.to_api()).collect::<Vec<_>>();
+
+    Ok(Json(api_results))
 }

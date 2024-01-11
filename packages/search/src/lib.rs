@@ -83,15 +83,15 @@ fn create_global_search_index(recreate_if_exists: bool) -> Result<Index, CreateI
     // This store is useful for reconstructing the
     // documents that were selected during the search phase.
     schema_builder.add_text_field("artist_title", TEXT | STORED);
-    schema_builder.add_text_field("artist_title_string", STRING | STORED);
+    schema_builder.add_text_field("artist_title_string", STRING);
     schema_builder.add_u64_field("artist_id", STORED);
     schema_builder.add_text_field("album_title", TEXT | STORED);
-    schema_builder.add_text_field("album_title_string", STRING | STORED);
+    schema_builder.add_text_field("album_title_string", STRING);
     schema_builder.add_u64_field("album_id", STORED);
     schema_builder.add_text_field("track_title", TEXT | STORED);
-    schema_builder.add_text_field("track_title_string", STRING | STORED);
+    schema_builder.add_text_field("track_title_string", STRING);
     schema_builder.add_u64_field("track_id", STORED);
-    schema_builder.add_text_field("document_type", TEXT);
+    schema_builder.add_text_field("document_type", TEXT | STORED);
     schema_builder.add_text_field("document_type_string", STRING);
 
     let schema = schema_builder.build();
