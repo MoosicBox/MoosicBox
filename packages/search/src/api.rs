@@ -74,6 +74,23 @@ impl ToApi<ApiGlobalSearchResult> for NamedFieldDocument {
                     .to_string(),
             }),
             "albums" => ApiGlobalSearchResult::Album(ApiGlobalAlbumSearchResult {
+                artist_id: self
+                    .0
+                    .get("artist_id")
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .as_u64()
+                    .unwrap(),
+                artist: self
+                    .0
+                    .get("artist_title")
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .as_text()
+                    .unwrap()
+                    .to_string(),
                 album_id: self
                     .0
                     .get("album_id")
@@ -93,6 +110,40 @@ impl ToApi<ApiGlobalSearchResult> for NamedFieldDocument {
                     .to_string(),
             }),
             "tracks" => ApiGlobalSearchResult::Track(ApiGlobalTrackSearchResult {
+                artist_id: self
+                    .0
+                    .get("artist_id")
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .as_u64()
+                    .unwrap(),
+                artist: self
+                    .0
+                    .get("artist_title")
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .as_text()
+                    .unwrap()
+                    .to_string(),
+                album_id: self
+                    .0
+                    .get("album_id")
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .as_u64()
+                    .unwrap(),
+                album: self
+                    .0
+                    .get("album_title")
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .as_text()
+                    .unwrap()
+                    .to_string(),
                 track_id: self
                     .0
                     .get("track_id")
@@ -124,12 +175,18 @@ pub struct ApiGlobalArtistSearchResult {
 
 #[derive(Serialize, Clone)]
 pub struct ApiGlobalAlbumSearchResult {
+    pub artist_id: u64,
+    pub artist: String,
     pub album_id: u64,
     pub title: String,
 }
 
 #[derive(Serialize, Clone)]
 pub struct ApiGlobalTrackSearchResult {
+    pub artist_id: u64,
+    pub artist: String,
+    pub album_id: u64,
+    pub album: String,
     pub track_id: u64,
     pub title: String,
 }
