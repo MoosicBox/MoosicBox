@@ -100,6 +100,27 @@ jobs:
                       cargo: --no-default-features
                       features: cpal
 
+                    - name: qobuz
+                      path: packages/qobuz
+                      os: ubuntu-latest
+
+                    - name: qobuz-no-default-features
+                      path: packages/qobuz
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+
+                    - name: qobuz-api
+                      path: packages/qobuz
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: api
+
+                    - name: qobuz-db
+                      path: packages/qobuz
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: db
+
                     - name: search
                       path: packages/search
                       os: ubuntu-latest

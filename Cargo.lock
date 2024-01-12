@@ -3085,6 +3085,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_qobuz"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "base64",
+ "log",
+ "moosicbox_core",
+ "once_cell",
+ "open",
+ "regex",
+ "reqwest",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "strum",
+ "strum_macros",
+ "thiserror",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "moosicbox_scan"
 version = "0.1.0"
 dependencies = [
