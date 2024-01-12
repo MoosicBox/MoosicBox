@@ -432,32 +432,48 @@ static INFO_AND_EXTRAS_REGEX: Lazy<regex::Regex> = Lazy::new(|| {
 });
 
 #[derive(Debug, Error)]
-pub enum QobuzFetchBundleError {
+pub enum QobuzFetchLoginSourceError {
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
     Db(#[from] moosicbox_core::sqlite::db::DbError),
-    #[error("No bundle file found in output")]
-    NoBundleFile,
 }
 
-async fn fetch_bundle_version() -> Result<String, QobuzFetchBundleError> {
+#[allow(unused)]
+async fn fetch_login_source() -> Result<String, QobuzFetchLoginSourceError> {
     let url = qobuz_api_endpoint!(Login);
 
-    let value = reqwest::Client::new().get(url).send().await?.text().await?;
+    Ok(reqwest::Client::new().get(url).send().await?.text().await?)
+}
 
-    if let Some(caps) = BUNDLE_ID_REGEX.captures(&value) {
+#[allow(unused)]
+async fn search_bundle_version(login_source: &str) -> Option<String> {
+    if let Some(caps) = BUNDLE_ID_REGEX.captures(login_source) {
         if let Some(version) = caps.get(1) {
             let version = version.as_str();
             log::debug!("Found version={version}");
-            Ok(version.to_string())
-        } else {
-            Err(QobuzFetchBundleError::NoBundleFile)
+            return Some(version.to_string());
         }
-    } else {
-        Err(QobuzFetchBundleError::NoBundleFile)
     }
+
+    None
+}
+
+#[derive(Debug, Error)]
+pub enum QobuzFetchBundleSourceError {
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    Db(#[from] moosicbox_core::sqlite::db::DbError),
+}
+
+#[allow(unused)]
+async fn fetch_bundle_source(bundle_version: &str) -> Result<String, QobuzFetchBundleSourceError> {
+    let url = qobuz_api_endpoint!(Bundle, &[(":bundleVersion", bundle_version)]);
+
+    Ok(reqwest::Client::new().get(url).send().await?.text().await?)
 }
 
 #[derive(Debug, Error)]
@@ -478,8 +494,6 @@ pub enum QobuzFetchAppSecretsError {
     #[error("No matching info for timezone")]
     NoMatchingInfoForTimezone,
     #[error(transparent)]
-    QobuzFetchBundleError(#[from] QobuzFetchBundleError),
-    #[error(transparent)]
     Utf8(#[from] Utf8Error),
 }
 
@@ -489,16 +503,17 @@ fn capitalize(value: &str) -> String {
     v.into_iter().collect()
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AppConfig {
+    pub(crate) app_id: String,
+    pub(crate) secrets: HashMap<String, String>,
+}
+
 #[allow(unused)]
-pub(crate) async fn fetch_app_secrets(
-) -> Result<(String, HashMap<String, String>), QobuzFetchAppSecretsError> {
-    let version = fetch_bundle_version().await?;
-
-    let url = qobuz_api_endpoint!(Bundle, &[(":bundleVersion", &version)]);
-
-    let value = reqwest::Client::new().get(url).send().await?.text().await?;
-
-    let app_id = if let Some(caps) = APP_ID_REGEX.captures(&value) {
+pub(crate) async fn search_app_config(
+    bundle: &str,
+) -> Result<AppConfig, QobuzFetchAppSecretsError> {
+    let app_id = if let Some(caps) = APP_ID_REGEX.captures(bundle) {
         if let Some(app_id) = caps.get(1) {
             let app_id = app_id.as_str();
             log::debug!("Found app_id={app_id}");
@@ -512,7 +527,7 @@ pub(crate) async fn fetch_app_secrets(
 
     let mut seed_timezones = vec![];
 
-    for caps in SEED_AND_TIMEZONE_REGEX.captures_iter(&value) {
+    for caps in SEED_AND_TIMEZONE_REGEX.captures_iter(bundle) {
         let seed = if let Some(seed) = caps.get(1) {
             let seed = seed.as_str();
             log::debug!("Found seed={seed}");
@@ -537,7 +552,7 @@ pub(crate) async fn fetch_app_secrets(
 
     let mut name_info_extras = vec![];
 
-    for caps in INFO_AND_EXTRAS_REGEX.captures_iter(&value) {
+    for caps in INFO_AND_EXTRAS_REGEX.captures_iter(bundle) {
         let name = if let Some(name) = caps.get(1) {
             let name = name.as_str();
             log::debug!("Found name={name}");
@@ -586,18 +601,23 @@ pub(crate) async fn fetch_app_secrets(
         secrets.insert(timezone, secret);
     }
 
-    Ok((app_id, secrets))
+    Ok(AppConfig { app_id, secrets })
 }
 
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
 
-    use crate::{fetch_app_secrets, fetch_bundle_version};
+    use crate::*;
+
+    static TEST_LOGIN_SOURCE: &str = r#"</script>
+        <script src="/resources/7.1.3-b011/bundle.js"></script>
+        </body>"#;
+    static TEST_BUNDLE_SOURCE: &str = r#"s,extra:o},production:{api:{appId:"123456789",appSecret{var e=window.__ENVIRONMENT__;return"recette"===e?d.initialSeed("YjBiMGIwYmQzYWRiMzNmY2Q2YTc0MD",window.utimezone.london):"integration"===e?d.initialSeed("MjBiMGIwYmQzYWRiMzNmY2Q2YTc0MD",window.utimezone.algier):d.initialSeed("MzBiMGIwYmQzYWRiMzNmY2Q2YTc0MD",window.utimezone.berlin)},d.string{offset:"GMT",name:"Europe/Dublin",info:"XXXXX",extras:"XXXXX"},{offset:"GMT",name:"Europe/Lisbon"},{offset:"GMT",name:"Europe/London",info:"VmMjU1NTU1NTU=YjBiMGIwYmQzMzMz",extras:"MzMzMzMzMzMzMDVmMjU4OTA1NTU="},{offset:"UTC",name:"UTC"},{offset:"GMT+01:00",name:"Africa/Algiers",info:"VmMjU1NTU1NTI=YjBiMGIwYmQzMzMz",extras:"MzMzMzMzMzMzMDVmMjU4OTA1NTU="},{offset:"GMT+01:00",name:"Africa/Windhoek"},{offset:"GMT+01:00",name:"Atlantic/Azores"},{offset:"GMT+01:00",name:"Atlantic/Stanley"},{offset:"GMT+01:00",name:"Europe/Amsterdam"},{offset:"GMT+01:00",name:"Europe/Paris",info:"XXXXX",extras:"XXXXX"},{offset:"GMT+01:00",name:"Europe/Belgrade"},{offset:"GMT+01:00",name:"Europe/Brussels"},{offset:"GMT+02:00",name:"Africa/Cairo"},{offset:"GMT+02:00",name:"Africa/Blantyre"},{offset:"GMT+02:00",name:"Asia/Beirut"},{offset:"GMT+02:00",name:"Asia/Damascus"},{offset:"GMT+02:00",name:"Asia/Gaza"},{offset:"GMT+02:00",name:"Asia/Jerusalem"},{offset:"GMT+02:00",name:"Europe/Berlin",info:"VmMjU1NTU1NTM=YjBiMGIwYmQzMzMz",extras:"MzMzMzMzMzMzMDVmMjU4OTA1NTU="},{offset:"GMT+03:00",name:"Africa/Addis_Ababa"},{offset:"GMT+03:00",name:"Asia/Riyadh89"},{offset:"GMT+03:00",name:"Europe/Minsk"},{offset:"GMT+03:30""#;
 
     #[tokio::test]
-    async fn test_fetch_bundle() {
-        let version = fetch_bundle_version()
+    async fn test_search_bundle_version() {
+        let version = search_bundle_version(TEST_LOGIN_SOURCE)
             .await
             .expect("Failed to fetch bundle");
 
@@ -605,28 +625,30 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fetch_app_secrets_bundle() {
-        let secrets = fetch_app_secrets().await.expect("Failed to fetch bundle");
+    async fn test_search_app_secrets_bundle() {
+        let secrets = search_app_config(TEST_BUNDLE_SOURCE)
+            .await
+            .expect("Failed to fetch bundle");
 
         assert_eq!(
             secrets,
-            (
-                "950096963".to_string(),
-                HashMap::from([
+            AppConfig {
+                app_id: "123456789".to_string(),
+                secrets: HashMap::from([
                     (
                         "london".to_string(),
-                        "10b251c286cfbf64d6b7105f253d9a2e".to_string()
+                        "b0b0b0bd3adb33fcd6a7405f25555555".to_string()
                     ),
                     (
                         "algier".to_string(),
-                        "2ab7131d383623cf403cf3d4676c56b6".to_string()
+                        "20b0b0bd3adb33fcd6a7405f25555552".to_string()
                     ),
                     (
                         "berlin".to_string(),
-                        "979549437fcc4a3faad4867b5cd25dcb".to_string()
+                        "30b0b0bd3adb33fcd6a7405f25555553".to_string()
                     )
                 ])
-            )
+            }
         );
     }
 }
