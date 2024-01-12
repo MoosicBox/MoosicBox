@@ -587,14 +587,14 @@ pub(crate) async fn search_app_config(
     log::trace!("seed_timezones={:?}", &seed_timezones);
     for (seed, timezone) in seed_timezones {
         log::trace!("name_info_extras={:?}", &name_info_extras);
-        let (_, info, extras) = name_info_extras
+        let (_, info, _) = name_info_extras
             .iter()
             .find(|(name, _, _)| name.starts_with(&capitalize(&timezone)))
             .ok_or(QobuzFetchAppSecretsError::NoMatchingInfoForTimezone)
             .expect("No matching name for timezone");
 
-        let secret_base64 = format!("{}{}{}", seed, info, extras);
-        let secret_base64 = &secret_base64[..secret_base64.len() - 44];
+        let secret_base64 = format!("{seed}{info}");
+        let secret_base64 = &secret_base64[..44];
         let secret = general_purpose::STANDARD.decode(secret_base64)?;
         let secret = std::str::from_utf8(&secret)?.to_string();
 
