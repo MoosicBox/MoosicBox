@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     io::Write,
     path::{Path, PathBuf},
     sync::{atomic::AtomicU32, Arc},
@@ -10,14 +10,14 @@ use moosicbox_core::{
     app::Db,
     sqlite::{
         db::{
-            add_album_maps_and_get_albums, add_artist_maps_and_get_artists, add_tracks, select,
+            add_album_maps_and_get_albums, add_artist_maps_and_get_artists, add_tracks,
             set_track_sizes, DbError, InsertTrack, SetTrackSize, SqliteValue,
         },
-        models::{NumberId, Track, TrackSource},
+        models::{Track, TrackSource},
     },
     types::{AudioFormat, PlaybackQuality},
 };
-use moosicbox_search::{DataValue, PopulateIndexError};
+use moosicbox_search::data::ReindexFromDbError;
 use once_cell::sync::Lazy;
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -333,7 +333,7 @@ pub enum UpdateDatabaseError {
     #[error("Invalid data: {0}")]
     InvalidData(String),
     #[error(transparent)]
-    PopulateIndex(#[from] PopulateIndexError),
+    ReindexFromDb(#[from] ReindexFromDbError),
 }
 
 #[derive(Clone)]
@@ -426,20 +426,6 @@ impl ScanOutput {
 
         let db_artists_start = std::time::SystemTime::now();
 
-        let existing_artist_ids = select::<NumberId>(
-            &db.library
-                .as_ref()
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .inner,
-            "artists",
-            &vec![],
-            &["id"],
-        )?
-        .iter()
-        .map(|id| id.id)
-        .collect::<HashSet<_>>();
-
         let db_artists = add_artist_maps_and_get_artists(
             &db.library
                 .as_ref()
@@ -471,20 +457,6 @@ impl ScanOutput {
                 .as_millis()
         );
 
-        moosicbox_search::populate_global_search_index(
-            db_artists
-                .iter()
-                .filter(|artist| !existing_artist_ids.contains(&artist.id))
-                .map(|artist| {
-                    vec![
-                        ("artist_title", DataValue::String(artist.title.clone())),
-                        ("artist_id", DataValue::Number(artist.id as u64)),
-                    ]
-                })
-                .collect::<Vec<_>>(),
-            false,
-        )?;
-
         if artist_count != db_artists.len() {
             return Err(UpdateDatabaseError::InvalidData(format!(
                 "Expected {} artists, but received {}",
@@ -494,20 +466,6 @@ impl ScanOutput {
         }
 
         let db_albums_start = std::time::SystemTime::now();
-
-        let existing_album_ids = select::<NumberId>(
-            &db.library
-                .as_ref()
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .inner,
-            "albums",
-            &vec![],
-            &["id"],
-        )?
-        .iter()
-        .map(|id| id.id)
-        .collect::<HashSet<_>>();
 
         let album_maps = join_all(artists.iter().zip(db_artists.iter()).map(
             |(artist, db)| async {
@@ -549,22 +507,6 @@ impl ScanOutput {
         )
         .unwrap();
 
-        moosicbox_search::populate_global_search_index(
-            db_albums
-                .iter()
-                .filter(|album| !existing_album_ids.contains(&album.id))
-                .map(|album| {
-                    vec![
-                        ("artist_title", DataValue::String(album.artist.clone())),
-                        ("artist_id", DataValue::Number(album.artist_id as u64)),
-                        ("album_title", DataValue::String(album.title.clone())),
-                        ("album_id", DataValue::Number(album.id as u64)),
-                    ]
-                })
-                .collect::<Vec<_>>(),
-            false,
-        )?;
-
         let db_albums_end = std::time::SystemTime::now();
         log::info!(
             "Finished db albums update for scan in {}ms",
@@ -583,20 +525,6 @@ impl ScanOutput {
         }
 
         let db_tracks_start = std::time::SystemTime::now();
-
-        let existing_track_ids = select::<NumberId>(
-            &db.library
-                .as_ref()
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .inner,
-            "tracks",
-            &vec![],
-            &["id"],
-        )?
-        .iter()
-        .map(|id| id.id)
-        .collect::<HashSet<_>>();
 
         let insert_tracks = join_all(albums.iter().zip(db_albums.iter()).map(
             |(album, db)| async {
@@ -633,24 +561,6 @@ impl ScanOutput {
             insert_tracks,
         )
         .unwrap();
-
-        moosicbox_search::populate_global_search_index(
-            db_tracks
-                .iter()
-                .filter(|track| !existing_track_ids.contains(&track.id))
-                .map(|track| {
-                    vec![
-                        ("artist_title", DataValue::String(track.artist.clone())),
-                        ("artist_id", DataValue::Number(track.artist_id as u64)),
-                        ("album_title", DataValue::String(track.album.clone())),
-                        ("album_id", DataValue::Number(track.album_id as u64)),
-                        ("track_title", DataValue::String(track.title.clone())),
-                        ("track_id", DataValue::Number(track.id as u64)),
-                    ]
-                })
-                .collect::<Vec<_>>(),
-            false,
-        )?;
 
         let db_tracks_end = std::time::SystemTime::now();
         log::info!(
@@ -702,6 +612,24 @@ impl ScanOutput {
             "Finished db track_sizes update for scan in {}ms",
             db_track_sizes_end
                 .duration_since(db_track_sizes_start)
+                .unwrap()
+                .as_millis()
+        );
+
+        let reindex_start = std::time::SystemTime::now();
+
+        moosicbox_search::data::reindex_global_search_index_from_db(
+            &db.library
+                .as_ref()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()),
+        )?;
+
+        let reindex_end = std::time::SystemTime::now();
+        log::info!(
+            "Finished search reindex update for scan in {}ms",
+            reindex_end
+                .duration_since(reindex_start)
                 .unwrap()
                 .as_millis()
         );
