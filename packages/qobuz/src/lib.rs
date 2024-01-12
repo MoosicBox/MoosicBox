@@ -621,16 +621,16 @@ mod tests {
     async fn test_search_bundle_version() {
         let version = search_bundle_version(TEST_LOGIN_SOURCE)
             .await
-            .expect("Failed to fetch bundle");
+            .expect("Failed to search_bundle_version");
 
         assert_eq!(version, "7.1.3-b011");
     }
 
     #[tokio::test]
-    async fn test_search_app_secrets_bundle() {
+    async fn test_search_app_config() {
         let secrets = search_app_config(TEST_BUNDLE_SOURCE)
             .await
-            .expect("Failed to fetch bundle");
+            .expect("Failed to search_app_config");
 
         assert_eq!(
             secrets,
