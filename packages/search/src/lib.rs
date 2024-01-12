@@ -9,7 +9,7 @@ use tantivy::directory::MmapDirectory;
 use tantivy::query::{BooleanQuery, BoostQuery, FuzzyTermQuery, TermQuery};
 use tantivy::query_grammar::Occur;
 use tantivy::{schema::*, Directory};
-use tantivy::{Index, IndexReader, IndexWriter, ReloadPolicy};
+use tantivy::{Index, IndexReader, ReloadPolicy};
 use thiserror::Error;
 
 #[cfg(feature = "api")]
@@ -30,6 +30,12 @@ static GLOBAL_SEARCH_INDEX_PATH: Lazy<PathBuf> = Lazy::new(|| {
 
     base_path.join("search_indices").join("global_search_index")
 });
+
+static GLOBAL_SEARCH_INDEX_WRITER_MEMORY_BUDGET: Lazy<RwLock<usize>> =
+    Lazy::new(|| RwLock::new(50_000_000));
+
+static GLOBAL_SEARCH_INDEX_WRITER_NUM_THREADS: Lazy<RwLock<Option<usize>>> =
+    Lazy::new(|| RwLock::new(None));
 
 static GLOBAL_SEARCH_INDEX: Lazy<RwLock<Index>> = Lazy::new(|| {
     let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
@@ -218,7 +224,14 @@ pub fn populate_global_search_index(
     // Here we give tantivy a budget of `50MB`.
     // Using a bigger memory_arena for the indexer may increase
     // throughput, but 50 MB is already plenty.
-    let mut index_writer: IndexWriter = index.writer(50_000_000)?;
+    let memory_budget = *GLOBAL_SEARCH_INDEX_WRITER_MEMORY_BUDGET.read().unwrap();
+
+    let mut index_writer =
+        if let Some(threads) = *GLOBAL_SEARCH_INDEX_WRITER_NUM_THREADS.read().unwrap() {
+            index.writer_with_num_threads(threads, memory_budget)?
+        } else {
+            index.writer(memory_budget)?
+        };
 
     if delete {
         index_writer.delete_all_documents()?;
@@ -543,7 +556,7 @@ mod tests {
     use static_init::dynamic;
     use tantivy::schema::Value;
 
-    use crate::{recreate_global_search_index, DataValue, TESTS_DIR_PATH};
+    use crate::*;
 
     static TEMP_DIRS: Lazy<RwLock<Vec<PathBuf>>> = Lazy::new(|| RwLock::new(vec![]));
 
@@ -553,6 +566,10 @@ mod tests {
     impl TestSetup {
         pub fn new() -> Self {
             log::debug!("Initializing tests...");
+            GLOBAL_SEARCH_INDEX_WRITER_NUM_THREADS
+                .write()
+                .unwrap()
+                .replace(1);
             Self
         }
     }
