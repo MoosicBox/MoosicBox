@@ -415,22 +415,6 @@ pub async fn album_tracks(
     Ok((items, count))
 }
 
-static BUNDLE_ID_REGEX: Lazy<regex::Regex> = Lazy::new(|| {
-    regex::Regex::new(r#"<script src="/resources/(\d+\.\d+\.\d+-[a-z]\d{3})/bundle\.js"></script>"#)
-        .unwrap()
-});
-
-static APP_ID_REGEX: Lazy<regex::Regex> =
-    Lazy::new(|| regex::Regex::new(r#"production:\{api:\{appId:"([^"]+)""#).unwrap());
-
-static SEED_AND_TIMEZONE_REGEX: Lazy<regex::Regex> = Lazy::new(|| {
-    regex::Regex::new(r#"[a-z]\.initialSeed\("([\w=]+)",window\.utimezone\.(.+?)\)"#).unwrap()
-});
-
-static INFO_AND_EXTRAS_REGEX: Lazy<regex::Regex> = Lazy::new(|| {
-    regex::Regex::new(r#"name:"\w+/([^"]+)",info:"([\w=]+)",extras:"([\w=]+)""#).unwrap()
-});
-
 #[derive(Debug, Error)]
 pub enum QobuzFetchLoginSourceError {
     #[error(transparent)]
@@ -449,6 +433,13 @@ async fn fetch_login_source() -> Result<String, QobuzFetchLoginSourceError> {
 
 #[allow(unused)]
 async fn search_bundle_version(login_source: &str) -> Option<String> {
+    static BUNDLE_ID_REGEX: Lazy<regex::Regex> = Lazy::new(|| {
+        regex::Regex::new(
+            r#"<script src="/resources/(\d+\.\d+\.\d+-[a-z]\d{3})/bundle\.js"></script>"#,
+        )
+        .unwrap()
+    });
+
     if let Some(caps) = BUNDLE_ID_REGEX.captures(login_source) {
         if let Some(version) = caps.get(1) {
             let version = version.as_str();
@@ -513,6 +504,9 @@ pub(crate) struct AppConfig {
 pub(crate) async fn search_app_config(
     bundle: &str,
 ) -> Result<AppConfig, QobuzFetchAppSecretsError> {
+    static APP_ID_REGEX: Lazy<regex::Regex> =
+        Lazy::new(|| regex::Regex::new(r#"production:\{api:\{appId:"([^"]+)""#).unwrap());
+
     let app_id = if let Some(caps) = APP_ID_REGEX.captures(bundle) {
         if let Some(app_id) = caps.get(1) {
             let app_id = app_id.as_str();
@@ -526,6 +520,10 @@ pub(crate) async fn search_app_config(
     };
 
     let mut seed_timezones = vec![];
+
+    static SEED_AND_TIMEZONE_REGEX: Lazy<regex::Regex> = Lazy::new(|| {
+        regex::Regex::new(r#"[a-z]\.initialSeed\("([\w=]+)",window\.utimezone\.(.+?)\)"#).unwrap()
+    });
 
     for caps in SEED_AND_TIMEZONE_REGEX.captures_iter(bundle) {
         let seed = if let Some(seed) = caps.get(1) {
@@ -551,6 +549,10 @@ pub(crate) async fn search_app_config(
     };
 
     let mut name_info_extras = vec![];
+
+    static INFO_AND_EXTRAS_REGEX: Lazy<regex::Regex> = Lazy::new(|| {
+        regex::Regex::new(r#"name:"\w+/([^"]+)",info:"([\w=]+)",extras:"([\w=]+)""#).unwrap()
+    });
 
     for caps in INFO_AND_EXTRAS_REGEX.captures_iter(bundle) {
         let name = if let Some(name) = caps.get(1) {
