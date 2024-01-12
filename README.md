@@ -40,6 +40,7 @@ To-do (in no particular order):
 - Current playback screen
 - Listen-only connections
 - Support MPEG-DASH encoding
+- Support gapless playback
 
 ## Local Server
 
