@@ -9,7 +9,7 @@ use std::{collections::HashMap, str::Utf8Error};
 
 use base64::{engine::general_purpose, Engine as _};
 use moosicbox_core::sqlite::models::AsModelResult;
-use moosicbox_json_utils::{ParseError, ToNestedValue, ToValue};
+use moosicbox_json_utils::{ParseError, ToNestedValue, ToValue, ToValueType};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -34,6 +34,16 @@ pub struct QobuzImage {
     pub large: String,
 }
 
+impl ToValueType<QobuzImage> for &Value {
+    fn to_value_type(self) -> Result<QobuzImage, ParseError> {
+        self.as_model()
+    }
+
+    fn missing_value(self, error: ParseError) -> Result<QobuzImage, ParseError> {
+        Err(error)
+    }
+}
+
 impl AsModelResult<QobuzImage, ParseError> for Value {
     fn as_model(&self) -> Result<QobuzImage, ParseError> {
         Ok(QobuzImage {
@@ -50,6 +60,16 @@ pub struct QobuzGenre {
     pub id: u64,
     pub name: String,
     pub slug: String,
+}
+
+impl ToValueType<QobuzGenre> for &Value {
+    fn to_value_type(self) -> Result<QobuzGenre, ParseError> {
+        self.as_model()
+    }
+
+    fn missing_value(self, error: ParseError) -> Result<QobuzGenre, ParseError> {
+        Err(error)
+    }
 }
 
 impl AsModelResult<QobuzGenre, ParseError> for Value {
@@ -89,6 +109,16 @@ impl QobuzAlbum {
     }
 }
 
+impl ToValueType<QobuzAlbum> for &Value {
+    fn to_value_type(self) -> Result<QobuzAlbum, ParseError> {
+        self.as_model()
+    }
+
+    fn missing_value(self, error: ParseError) -> Result<QobuzAlbum, ParseError> {
+        Err(error)
+    }
+}
+
 impl AsModelResult<QobuzAlbum, ParseError> for Value {
     fn as_model(&self) -> Result<QobuzAlbum, ParseError> {
         Ok(QobuzAlbum {
@@ -96,7 +126,7 @@ impl AsModelResult<QobuzAlbum, ParseError> for Value {
             artist: self.to_nested_value(&["artist", "name"])?,
             artist_id: self.to_nested_value(&["artist", "id"])?,
             maximum_bit_depth: self.to_value("maximum_bit_depth")?,
-            image: self.to_value::<&Value>("image")?.as_model()?,
+            image: self.to_value("image")?,
             title: self.to_value("title")?,
             qobuz_id: self.to_value("qobuz_id")?,
             released_at: self.to_value("released_at")?,
@@ -104,7 +134,7 @@ impl AsModelResult<QobuzAlbum, ParseError> for Value {
             parental_warning: self.to_value("parental_warning")?,
             popularity: self.to_value("popularity")?,
             tracks_count: self.to_value("tracks_count")?,
-            genre: self.to_value::<&Value>("genre")?.as_model()?,
+            genre: self.to_value("genre")?,
             maximum_channel_count: self.to_value("maximum_channel_count")?,
             maximum_sampling_rate: self.to_value("maximum_sampling_rate")?,
         })
@@ -125,6 +155,16 @@ pub struct QobuzTrack {
     pub isrc: String,
     pub popularity: u32,
     pub title: String,
+}
+
+impl ToValueType<QobuzTrack> for &Value {
+    fn to_value_type(self) -> Result<QobuzTrack, ParseError> {
+        self.as_model()
+    }
+
+    fn missing_value(self, error: ParseError) -> Result<QobuzTrack, ParseError> {
+        Err(error)
+    }
 }
 
 impl AsModelResult<QobuzTrack, ParseError> for Value {
@@ -163,16 +203,22 @@ impl QobuzArtist {
     }
 }
 
+impl ToValueType<QobuzArtist> for &Value {
+    fn to_value_type(self) -> Result<QobuzArtist, ParseError> {
+        self.as_model()
+    }
+
+    fn missing_value(self, error: ParseError) -> Result<QobuzArtist, ParseError> {
+        Err(error)
+    }
+}
+
 impl AsModelResult<QobuzArtist, ParseError> for Value {
     fn as_model(&self) -> Result<QobuzArtist, ParseError> {
         Ok(QobuzArtist {
-            id: self.get("id").unwrap().as_u64().unwrap(),
-            picture: self
-                .get("picture")
-                .unwrap()
-                .as_str()
-                .map(|pic| pic.to_string()),
-            popularity: self.get("popularity").unwrap().as_u64().unwrap() as u32,
+            id: self.to_value("id")?,
+            picture: self.to_value("picture")?,
+            popularity: self.to_value("popularity")?,
             name: self.to_value("name")?,
         })
     }
@@ -191,6 +237,18 @@ enum QobuzApiEndpoint {
 
 static QOBUZ_PLAY_API_BASE_URL: &str = "https://play.qobuz.com";
 static QOBUZ_API_BASE_URL: &str = "https://www.qobuz.com/api.json/0.2";
+
+static CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
+
+async fn authenticated_request(url: &str, access_token: &str) -> Result<Value, reqwest::Error> {
+    CLIENT
+        .get(url)
+        .header(AUTH_HEADER_NAME, format!("Bearer {}", access_token))
+        .send()
+        .await?
+        .json()
+        .await
+}
 
 impl ToUrl for QobuzApiEndpoint {
     fn to_url(&self) -> String {
@@ -302,26 +360,10 @@ pub async fn favorite_albums(
         ]
     );
 
-    let value: Value = reqwest::Client::new()
-        .get(url)
-        .header(AUTH_HEADER_NAME, format!("Bearer {}", access_token))
-        .send()
-        .await?
-        .json()
-        .await?;
+    let value = authenticated_request(&url, &access_token).await?;
 
-    let items = value
-        .get("albums")
-        .unwrap()
-        .get("items")
-        .unwrap()
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|item| item.as_model())
-        .collect::<Result<Vec<_>, _>>()?;
-
-    let count = value.get("totalNumberOfItems").unwrap().as_u64().unwrap() as u32;
+    let items = value.to_nested_value(&["albums", "items"])?;
+    let count = value.to_value("totalNumberOfItems")?;
 
     Ok((items, count))
 }
@@ -335,8 +377,6 @@ pub enum QobuzAlbumTracksError {
     Db(#[from] moosicbox_core::sqlite::db::DbError),
     #[error("No access token available")]
     NoAccessTokenAvailable,
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
@@ -372,27 +412,10 @@ pub async fn album_tracks(
         ]
     );
 
-    let value: Value = reqwest::Client::new()
-        .get(url)
-        .header(AUTH_HEADER_NAME, format!("Bearer {}", access_token))
-        .send()
-        .await?
-        .json()
-        .await?;
+    let value = authenticated_request(&url, &access_token).await?;
 
-    let items = match value.get("tracks").unwrap().get("items") {
-        Some(items) => items
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|item| item.as_model())
-            .collect::<Result<Vec<_>, _>>()?,
-        None => {
-            return Err(QobuzAlbumTracksError::RequestFailed(format!("{value:?}")));
-        }
-    };
-
-    let count = value.get("totalNumberOfItems").unwrap().as_u64().unwrap() as u32;
+    let items = value.to_nested_value(&["tracks", "items"])?;
+    let count = value.to_value("totalNumberOfItems")?;
 
     Ok((items, count))
 }
@@ -410,7 +433,7 @@ pub enum QobuzFetchLoginSourceError {
 async fn fetch_login_source() -> Result<String, QobuzFetchLoginSourceError> {
     let url = qobuz_api_endpoint!(Login);
 
-    Ok(reqwest::Client::new().get(url).send().await?.text().await?)
+    Ok(CLIENT.get(url).send().await?.text().await?)
 }
 
 #[allow(unused)]
@@ -446,7 +469,7 @@ pub enum QobuzFetchBundleSourceError {
 async fn fetch_bundle_source(bundle_version: &str) -> Result<String, QobuzFetchBundleSourceError> {
     let url = qobuz_api_endpoint!(Bundle, &[(":bundleVersion", bundle_version)]);
 
-    Ok(reqwest::Client::new().get(url).send().await?.text().await?)
+    Ok(CLIENT.get(url).send().await?.text().await?)
 }
 
 #[derive(Debug, Error)]
