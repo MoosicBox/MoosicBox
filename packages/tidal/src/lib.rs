@@ -5,7 +5,8 @@ pub mod api;
 #[cfg(feature = "db")]
 pub mod db;
 
-use moosicbox_core::sqlite::models::AsModel;
+use moosicbox_core::sqlite::models::AsModelResult;
+use moosicbox_json_utils::{ParseError, ToNestedValue, ToValue, ToValueType};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
@@ -44,57 +45,33 @@ impl TidalAlbum {
     }
 }
 
-impl AsModel<TidalAlbum> for Value {
-    fn as_model(&self) -> TidalAlbum {
-        TidalAlbum {
-            id: self.get("id").unwrap().as_u64().unwrap(),
-            artist: self
-                .get("artist")
-                .unwrap()
-                .get("name")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .to_string(),
-            artist_id: self
-                .get("artist")
-                .unwrap()
-                .get("id")
-                .unwrap()
-                .as_u64()
-                .unwrap(),
-            audio_quality: self
-                .get("audioQuality")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .to_string(),
-            copyright: self
-                .get("copyright")
-                .and_then(|c| c.as_str().map(|c| c.to_string())),
-            cover: self.get("cover").unwrap().as_str().unwrap().to_string(),
-            duration: self.get("duration").unwrap().as_u64().unwrap() as u32,
-            explicit: self.get("explicit").unwrap().as_bool().unwrap(),
-            number_of_tracks: self.get("numberOfTracks").unwrap().as_u64().unwrap() as u32,
-            popularity: self.get("popularity").unwrap().as_u64().unwrap() as u32,
-            release_date: self
-                .get("releaseDate")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .to_string(),
-            title: self.get("title").unwrap().as_str().unwrap().to_string(),
-            media_metadata_tags: self
-                .get("mediaMetadata")
-                .unwrap()
-                .get("tags")
-                .unwrap()
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|v| v.as_str().unwrap().to_string())
-                .collect::<Vec<_>>(),
-        }
+impl ToValueType<TidalAlbum> for &Value {
+    fn to_value_type(self) -> Result<TidalAlbum, ParseError> {
+        self.as_model()
+    }
+
+    fn missing_value(self, error: ParseError) -> Result<TidalAlbum, ParseError> {
+        Err(error)
+    }
+}
+
+impl AsModelResult<TidalAlbum, ParseError> for Value {
+    fn as_model(&self) -> Result<TidalAlbum, ParseError> {
+        Ok(TidalAlbum {
+            id: self.to_value("id")?,
+            artist: self.to_value("artist")?,
+            artist_id: self.to_nested_value(&["artist", "id"])?,
+            audio_quality: self.to_value("audioQuality")?,
+            copyright: self.to_value("copyright")?,
+            cover: self.to_value("cover")?,
+            duration: self.to_value("duration")?,
+            explicit: self.to_value("explicit")?,
+            number_of_tracks: self.to_value("numberOfTracks")?,
+            popularity: self.to_value("popularity")?,
+            release_date: self.to_value("release_date")?,
+            title: self.to_value("title")?,
+            media_metadata_tags: self.to_nested_value(&["mediaMetadata", "tags"])?,
+        })
     }
 }
 
@@ -103,8 +80,10 @@ impl AsModel<TidalAlbum> for Value {
 pub struct TidalTrack {
     pub id: u64,
     pub track_number: u32,
-    pub album_id: u64,
     pub artist_id: u64,
+    pub artist: String,
+    pub album_id: u64,
+    pub album: String,
     pub audio_quality: String,
     pub copyright: Option<String>,
     pub duration: u32,
@@ -115,50 +94,34 @@ pub struct TidalTrack {
     pub media_metadata_tags: Vec<String>,
 }
 
-impl AsModel<TidalTrack> for Value {
-    fn as_model(&self) -> TidalTrack {
-        TidalTrack {
-            id: self.get("id").unwrap().as_u64().unwrap(),
-            track_number: self.get("trackNumber").unwrap().as_u64().unwrap() as u32,
-            album_id: self
-                .get("album")
-                .unwrap()
-                .get("id")
-                .unwrap()
-                .as_u64()
-                .unwrap(),
-            artist_id: self
-                .get("artist")
-                .unwrap()
-                .get("id")
-                .unwrap()
-                .as_u64()
-                .unwrap(),
-            audio_quality: self
-                .get("audioQuality")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .to_string(),
-            copyright: self
-                .get("copyright")
-                .and_then(|c| c.as_str().map(|c| c.to_string())),
-            duration: self.get("duration").unwrap().as_u64().unwrap() as u32,
-            explicit: self.get("explicit").unwrap().as_bool().unwrap(),
-            isrc: self.get("isrc").unwrap().as_str().unwrap().to_string(),
-            popularity: self.get("popularity").unwrap().as_u64().unwrap() as u32,
-            title: self.get("title").unwrap().as_str().unwrap().to_string(),
-            media_metadata_tags: self
-                .get("mediaMetadata")
-                .unwrap()
-                .get("tags")
-                .unwrap()
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|v| v.as_str().unwrap().to_string())
-                .collect::<Vec<_>>(),
-        }
+impl ToValueType<TidalTrack> for &Value {
+    fn to_value_type(self) -> Result<TidalTrack, ParseError> {
+        self.as_model()
+    }
+
+    fn missing_value(self, error: ParseError) -> Result<TidalTrack, ParseError> {
+        Err(error)
+    }
+}
+
+impl AsModelResult<TidalTrack, ParseError> for Value {
+    fn as_model(&self) -> Result<TidalTrack, ParseError> {
+        Ok(TidalTrack {
+            id: self.to_value("id")?,
+            track_number: self.to_value("trackNumber")?,
+            artist_id: self.to_nested_value(&["artist", "id"])?,
+            artist: self.to_value("artist")?,
+            album_id: self.to_nested_value(&["album", "id"])?,
+            album: self.to_value("album")?,
+            audio_quality: self.to_value("audioQuality")?,
+            copyright: self.to_value("copyright")?,
+            duration: self.to_value("duration")?,
+            explicit: self.to_value("explicit")?,
+            isrc: self.to_value("isrc")?,
+            popularity: self.to_value("popularity")?,
+            title: self.to_value("title")?,
+            media_metadata_tags: self.to_nested_value(&["mediaMetadata", "tags"])?,
+        })
     }
 }
 
@@ -180,18 +143,24 @@ impl TidalArtist {
     }
 }
 
-impl AsModel<TidalArtist> for Value {
-    fn as_model(&self) -> TidalArtist {
-        TidalArtist {
-            id: self.get("id").unwrap().as_u64().unwrap(),
-            picture: self
-                .get("picture")
-                .unwrap()
-                .as_str()
-                .map(|pic| pic.to_string()),
-            popularity: self.get("popularity").unwrap().as_u64().unwrap() as u32,
-            name: self.get("name").unwrap().as_str().unwrap().to_string(),
-        }
+impl ToValueType<TidalArtist> for &Value {
+    fn to_value_type(self) -> Result<TidalArtist, ParseError> {
+        self.as_model()
+    }
+
+    fn missing_value(self, error: ParseError) -> Result<TidalArtist, ParseError> {
+        Err(error)
+    }
+}
+
+impl AsModelResult<TidalArtist, ParseError> for Value {
+    fn as_model(&self) -> Result<TidalArtist, ParseError> {
+        Ok(TidalArtist {
+            id: self.to_value("id")?,
+            picture: self.to_value("picture")?,
+            popularity: self.to_value("popularity")?,
+            name: self.to_value("name")?,
+        })
     }
 }
 
@@ -277,6 +246,8 @@ macro_rules! tidal_api_endpoint {
 pub enum TidalDeviceAuthorizationError {
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
+    #[error(transparent)]
+    Parse(#[from] ParseError),
 }
 
 pub async fn device_authorization(
@@ -298,13 +269,9 @@ pub async fn device_authorization(
         .json()
         .await?;
 
-    let verification_uri_complete = value
-        .get("verificationUriComplete")
-        .unwrap()
-        .as_str()
-        .unwrap();
+    let verification_uri_complete = value.to_value::<&str>("verificationUriComplete")?;
+    let device_code = value.to_value::<&str>("deviceCode")?;
 
-    let device_code = value.get("deviceCode").unwrap().as_str().unwrap();
     let url = format!("https://{verification_uri_complete}");
 
     if open {
@@ -331,6 +298,8 @@ pub enum TidalDeviceAuthorizationTokenError {
     #[cfg(feature = "db")]
     #[error(transparent)]
     Db(#[from] moosicbox_core::sqlite::db::DbError),
+    #[error(transparent)]
+    Parse(#[from] ParseError),
 }
 
 pub async fn device_authorization_token(
@@ -361,17 +330,17 @@ pub async fn device_authorization_token(
         .json()
         .await?;
 
-    let access_token = value.get("access_token").unwrap().as_str().unwrap();
-    let refresh_token = value.get("refresh_token").unwrap().as_str().unwrap();
+    let access_token = value.to_value::<&str>("access_token")?;
+    let refresh_token = value.to_value::<&str>("refresh_token")?;
 
     #[cfg(feature = "db")]
     if persist.unwrap_or(false) {
-        let client_name = value.get("clientName").unwrap().as_str().unwrap();
-        let expires_in = value.get("expires_in").unwrap().as_u64().unwrap() as u32;
-        let scope = value.get("scope").unwrap().as_str().unwrap();
-        let token_type = value.get("token_type").unwrap().as_str().unwrap();
-        let user = serde_json::to_string(value.get("user").unwrap()).unwrap();
-        let user_id = value.get("user_id").unwrap().as_u64().unwrap() as u32;
+        let client_name = value.to_value("clientName")?;
+        let expires_in = value.to_value("expires_in")?;
+        let scope = value.to_value("scope")?;
+        let token_type = value.to_value("token_type")?;
+        let user = serde_json::to_string(value.to_value::<&Value>("user")?).unwrap();
+        let user_id = value.to_value("user_id")?;
 
         db::create_tidal_config(
             &db.inner,
@@ -410,6 +379,8 @@ pub enum TidalTrackUrlError {
     Db(#[from] moosicbox_core::sqlite::db::DbError),
     #[error("No access token available")]
     NoAccessTokenAvailable,
+    #[error(transparent)]
+    Parse(#[from] ParseError),
 }
 
 pub async fn track_url(
@@ -437,7 +408,7 @@ pub async fn track_url(
         ]
     );
 
-    let value: Value = reqwest::Client::new()
+    let urls = reqwest::Client::new()
         .get(url)
         .header(
             reqwest::header::AUTHORIZATION,
@@ -445,17 +416,9 @@ pub async fn track_url(
         )
         .send()
         .await?
-        .json()
-        .await?;
-
-    let urls = value
-        .get("urls")
-        .unwrap()
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_str().unwrap().to_string())
-        .collect::<Vec<_>>();
+        .json::<Value>()
+        .await?
+        .to_value("urls")?;
 
     Ok(urls)
 }
@@ -486,6 +449,8 @@ pub enum TidalFavoriteArtistsError {
     NoAccessTokenAvailable,
     #[error("No user ID available")]
     NoUserIdAvailable,
+    #[error(transparent)]
+    Parse(#[from] ParseError),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -555,17 +520,8 @@ pub async fn favorite_artists(
         .json()
         .await?;
 
-    let items = value
-        .get("items")
-        .unwrap()
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|item| item.get("item").unwrap())
-        .map(|item| item.as_model())
-        .collect::<Vec<_>>();
-
-    let count = value.get("totalNumberOfItems").unwrap().as_u64().unwrap() as u32;
+    let items = value.to_nested_value(&["items", "item"])?;
+    let count = value.to_value("totalNumberOfItems")?;
 
     Ok((items, count))
 }
@@ -596,6 +552,8 @@ pub enum TidalFavoriteAlbumsError {
     NoAccessTokenAvailable,
     #[error("No user ID available")]
     NoUserIdAvailable,
+    #[error(transparent)]
+    Parse(#[from] ParseError),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -665,17 +623,8 @@ pub async fn favorite_albums(
         .json()
         .await?;
 
-    let items = value
-        .get("items")
-        .unwrap()
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|item| item.get("item").unwrap())
-        .map(|item| item.as_model())
-        .collect::<Vec<_>>();
-
-    let count = value.get("totalNumberOfItems").unwrap().as_u64().unwrap() as u32;
+    let items = value.to_nested_value(&["items", "item"])?;
+    let count = value.to_value("totalNumberOfItems")?;
 
     Ok((items, count))
 }
@@ -706,6 +655,8 @@ pub enum TidalFavoriteTracksError {
     NoAccessTokenAvailable,
     #[error("No user ID available")]
     NoUserIdAvailable,
+    #[error(transparent)]
+    Parse(#[from] ParseError),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -775,17 +726,8 @@ pub async fn favorite_tracks(
         .json()
         .await?;
 
-    let items = value
-        .get("items")
-        .unwrap()
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|item| item.get("item").unwrap())
-        .map(|item| item.as_model())
-        .collect::<Vec<_>>();
-
-    let count = value.get("totalNumberOfItems").unwrap().as_u64().unwrap() as u32;
+    let items = value.to_nested_value(&["items", "item"])?;
+    let count = value.to_value("totalNumberOfItems")?;
 
     Ok((items, count))
 }
@@ -799,6 +741,8 @@ pub enum TidalArtistAlbumsError {
     Db(#[from] moosicbox_core::sqlite::db::DbError),
     #[error("No access token available")]
     NoAccessTokenAvailable,
+    #[error(transparent)]
+    Parse(#[from] ParseError),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -852,16 +796,8 @@ pub async fn artist_albums(
         .json()
         .await?;
 
-    let items = value
-        .get("items")
-        .unwrap()
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|item| item.as_model())
-        .collect::<Vec<_>>();
-
-    let count = value.get("totalNumberOfItems").unwrap().as_u64().unwrap() as u32;
+    let items = value.to_nested_value(&["items", "item"])?;
+    let count = value.to_value("totalNumberOfItems")?;
 
     Ok((items, count))
 }
@@ -877,6 +813,8 @@ pub enum TidalAlbumTracksError {
     NoAccessTokenAvailable,
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
+    #[error(transparent)]
+    Parse(#[from] ParseError),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -930,19 +868,11 @@ pub async fn album_tracks(
         .json()
         .await?;
 
-    let items = match value.get("items") {
-        Some(items) => items
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|item| item.as_model())
-            .collect::<Vec<_>>(),
-        None => {
-            return Err(TidalAlbumTracksError::RequestFailed(format!("{value:?}")));
-        }
-    };
+    let items = value
+        .to_nested_value::<Option<_>>(&["items", "item"])?
+        .ok_or_else(|| TidalAlbumTracksError::RequestFailed(format!("{value:?}")))?;
 
-    let count = value.get("totalNumberOfItems").unwrap().as_u64().unwrap() as u32;
+    let count = value.to_value("totalNumberOfItems")?;
 
     Ok((items, count))
 }
@@ -956,6 +886,8 @@ pub enum TidalAlbumError {
     Db(#[from] moosicbox_core::sqlite::db::DbError),
     #[error("No access token available")]
     NoAccessTokenAvailable,
+    #[error(transparent)]
+    Parse(#[from] ParseError),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1005,7 +937,7 @@ pub async fn album(
         .json()
         .await?;
 
-    Ok(value.as_model())
+    Ok(value.as_model()?)
 }
 
 #[derive(Debug, Error)]
@@ -1019,6 +951,8 @@ pub enum TidalArtistError {
     NoAccessTokenAvailable,
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
+    #[error(transparent)]
+    Parse(#[from] ParseError),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1057,7 +991,7 @@ pub async fn artist(
         ]
     );
 
-    let value: Value = reqwest::Client::new()
+    let value = reqwest::Client::new()
         .get(url)
         .header(
             reqwest::header::AUTHORIZATION,
@@ -1065,14 +999,11 @@ pub async fn artist(
         )
         .send()
         .await?
-        .json()
-        .await?;
+        .json::<Value>()
+        .await?
+        .as_model()?;
 
-    if value.get("id").is_some_and(|id| id.is_number()) {
-        Ok(value.as_model())
-    } else {
-        Err(TidalArtistError::RequestFailed(format!("{value:?}")))
-    }
+    Ok(value)
 }
 
 #[derive(Debug, Error)]
@@ -1084,6 +1015,8 @@ pub enum TidalTrackError {
     Db(#[from] moosicbox_core::sqlite::db::DbError),
     #[error("No access token available")]
     NoAccessTokenAvailable,
+    #[error(transparent)]
+    Parse(#[from] ParseError),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1122,7 +1055,7 @@ pub async fn track(
         ]
     );
 
-    let value: Value = reqwest::Client::new()
+    let value = reqwest::Client::new()
         .get(url)
         .header(
             reqwest::header::AUTHORIZATION,
@@ -1130,8 +1063,9 @@ pub async fn track(
         )
         .send()
         .await?
-        .json()
-        .await?;
+        .json::<Value>()
+        .await?
+        .as_model()?;
 
-    Ok(value.as_model())
+    Ok(value)
 }

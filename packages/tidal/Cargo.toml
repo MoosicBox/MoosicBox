@@ -5,7 +5,8 @@ name    = "moosicbox_tidal"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_core = { path = "../core" }
+moosicbox_core       = { path = "../core" }
+moosicbox_json_utils = { path = "../json_utils" }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }

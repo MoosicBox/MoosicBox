@@ -3251,6 +3251,7 @@ dependencies = [
  "actix-web",
  "log",
  "moosicbox_core",
+ "moosicbox_json_utils",
  "open",
  "reqwest",
  "rusqlite",
