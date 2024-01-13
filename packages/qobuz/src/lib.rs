@@ -8,7 +8,8 @@ pub mod db;
 use std::{collections::HashMap, str::Utf8Error};
 
 use base64::{engine::general_purpose, Engine as _};
-use moosicbox_core::sqlite::models::AsModel;
+use moosicbox_core::sqlite::models::AsModelResult;
+use moosicbox_json_utils::{ParseError, ToNestedValue, ToValue};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -27,80 +28,86 @@ pub enum QobuzDeviceType {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
+pub struct QobuzImage {
+    pub small: String,
+    pub thumbnail: String,
+    pub large: String,
+}
+
+impl AsModelResult<QobuzImage, ParseError> for Value {
+    fn as_model(&self) -> Result<QobuzImage, ParseError> {
+        Ok(QobuzImage {
+            small: self.to_value("small")?,
+            thumbnail: self.to_value("thumbnail")?,
+            large: self.to_value("large")?,
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct QobuzGenre {
+    pub id: u64,
+    pub name: String,
+    pub slug: String,
+}
+
+impl AsModelResult<QobuzGenre, ParseError> for Value {
+    fn as_model(&self) -> Result<QobuzGenre, ParseError> {
+        Ok(QobuzGenre {
+            id: self.to_value("id")?,
+            name: self.to_value("name")?,
+            slug: self.to_value("slug")?,
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct QobuzAlbum {
     pub id: u64,
     pub artist: String,
     pub artist_id: u64,
-    pub audio_quality: String,
-    pub copyright: Option<String>,
-    pub cover: String,
-    pub duration: u32,
-    pub explicit: bool,
-    pub number_of_tracks: u32,
-    pub popularity: u32,
-    pub release_date: String,
+    pub maximum_bit_depth: u16,
+    pub image: QobuzImage,
     pub title: String,
-    pub media_metadata_tags: Vec<String>,
+    pub qobuz_id: u64,
+    pub released_at: u64,
+    pub duration: u32,
+    pub parental_warning: bool,
+    pub popularity: u32,
+    pub tracks_count: u32,
+    pub genre: QobuzGenre,
+    pub maximum_channel_count: u16,
+    pub maximum_sampling_rate: f32,
 }
 
 impl QobuzAlbum {
     pub fn cover_url(&self, size: u16) -> String {
-        let cover_path = self.cover.replace('-', "/");
+        let cover_path = self.image.large.replace('-', "/");
         format!("https://resources.qobuz.com/images/{cover_path}/{size}x{size}.jpg")
     }
 }
 
-impl AsModel<QobuzAlbum> for Value {
-    fn as_model(&self) -> QobuzAlbum {
-        QobuzAlbum {
-            id: self.get("id").unwrap().as_u64().unwrap(),
-            artist: self
-                .get("artist")
-                .unwrap()
-                .get("name")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .to_string(),
-            artist_id: self
-                .get("artist")
-                .unwrap()
-                .get("id")
-                .unwrap()
-                .as_u64()
-                .unwrap(),
-            audio_quality: self
-                .get("audioQuality")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .to_string(),
-            copyright: self
-                .get("copyright")
-                .and_then(|c| c.as_str().map(|c| c.to_string())),
-            cover: self.get("cover").unwrap().as_str().unwrap().to_string(),
-            duration: self.get("duration").unwrap().as_u64().unwrap() as u32,
-            explicit: self.get("explicit").unwrap().as_bool().unwrap(),
-            number_of_tracks: self.get("numberOfTracks").unwrap().as_u64().unwrap() as u32,
-            popularity: self.get("popularity").unwrap().as_u64().unwrap() as u32,
-            release_date: self
-                .get("releaseDate")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .to_string(),
-            title: self.get("title").unwrap().as_str().unwrap().to_string(),
-            media_metadata_tags: self
-                .get("mediaMetadata")
-                .unwrap()
-                .get("tags")
-                .unwrap()
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|v| v.as_str().unwrap().to_string())
-                .collect::<Vec<_>>(),
-        }
+impl AsModelResult<QobuzAlbum, ParseError> for Value {
+    fn as_model(&self) -> Result<QobuzAlbum, ParseError> {
+        Ok(QobuzAlbum {
+            id: self.to_value("id")?,
+            artist: self.to_nested_value(&["artist", "name"])?,
+            artist_id: self.to_nested_value(&["artist", "id"])?,
+            maximum_bit_depth: self.to_value("maximum_bit_depth")?,
+            image: self.to_value::<&Value>("image")?.as_model()?,
+            title: self.to_value("title")?,
+            qobuz_id: self.to_value("qobuz_id")?,
+            released_at: self.to_value("released_at")?,
+            duration: self.to_value("duration")?,
+            parental_warning: self.to_value("parental_warning")?,
+            popularity: self.to_value("popularity")?,
+            tracks_count: self.to_value("tracks_count")?,
+            genre: self.to_value::<&Value>("genre")?.as_model()?,
+            maximum_channel_count: self.to_value("maximum_channel_count")?,
+            maximum_sampling_rate: self.to_value("maximum_sampling_rate")?,
+        })
     }
 }
 
@@ -114,57 +121,27 @@ pub struct QobuzTrack {
     pub audio_quality: String,
     pub copyright: Option<String>,
     pub duration: u32,
-    pub explicit: bool,
+    pub parental_warning: bool,
     pub isrc: String,
     pub popularity: u32,
     pub title: String,
-    pub media_metadata_tags: Vec<String>,
 }
 
-impl AsModel<QobuzTrack> for Value {
-    fn as_model(&self) -> QobuzTrack {
-        QobuzTrack {
-            id: self.get("id").unwrap().as_u64().unwrap(),
-            track_number: self.get("trackNumber").unwrap().as_u64().unwrap() as u32,
-            album_id: self
-                .get("album")
-                .unwrap()
-                .get("id")
-                .unwrap()
-                .as_u64()
-                .unwrap(),
-            artist_id: self
-                .get("artist")
-                .unwrap()
-                .get("id")
-                .unwrap()
-                .as_u64()
-                .unwrap(),
-            audio_quality: self
-                .get("audioQuality")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .to_string(),
-            copyright: self
-                .get("copyright")
-                .and_then(|c| c.as_str().map(|c| c.to_string())),
-            duration: self.get("duration").unwrap().as_u64().unwrap() as u32,
-            explicit: self.get("explicit").unwrap().as_bool().unwrap(),
-            isrc: self.get("isrc").unwrap().as_str().unwrap().to_string(),
-            popularity: self.get("popularity").unwrap().as_u64().unwrap() as u32,
-            title: self.get("title").unwrap().as_str().unwrap().to_string(),
-            media_metadata_tags: self
-                .get("mediaMetadata")
-                .unwrap()
-                .get("tags")
-                .unwrap()
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|v| v.as_str().unwrap().to_string())
-                .collect::<Vec<_>>(),
-        }
+impl AsModelResult<QobuzTrack, ParseError> for Value {
+    fn as_model(&self) -> Result<QobuzTrack, ParseError> {
+        Ok(QobuzTrack {
+            id: self.to_value("id")?,
+            track_number: self.to_value("track_number")?,
+            album_id: self.to_nested_value(&["album", "id"])?,
+            artist_id: self.to_nested_value(&["artist", "id"])?,
+            audio_quality: self.to_value("audio_quality")?,
+            copyright: self.to_value("copyright")?,
+            duration: self.to_value("duration")?,
+            parental_warning: self.to_value("parental_warning")?,
+            isrc: self.to_value("isrc")?,
+            popularity: self.to_value("popularity")?,
+            title: self.to_value("title")?,
+        })
     }
 }
 
@@ -186,9 +163,9 @@ impl QobuzArtist {
     }
 }
 
-impl AsModel<QobuzArtist> for Value {
-    fn as_model(&self) -> QobuzArtist {
-        QobuzArtist {
+impl AsModelResult<QobuzArtist, ParseError> for Value {
+    fn as_model(&self) -> Result<QobuzArtist, ParseError> {
+        Ok(QobuzArtist {
             id: self.get("id").unwrap().as_u64().unwrap(),
             picture: self
                 .get("picture")
@@ -196,8 +173,8 @@ impl AsModel<QobuzArtist> for Value {
                 .as_str()
                 .map(|pic| pic.to_string()),
             popularity: self.get("popularity").unwrap().as_u64().unwrap() as u32,
-            name: self.get("name").unwrap().as_str().unwrap().to_string(),
-        }
+            name: self.to_value("name")?,
+        })
     }
 }
 
@@ -289,6 +266,8 @@ pub enum QobuzFavoriteAlbumsError {
     NoAccessTokenAvailable,
     #[error("No user ID available")]
     NoUserIdAvailable,
+    #[error(transparent)]
+    Parse(#[from] ParseError),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -332,14 +311,15 @@ pub async fn favorite_albums(
         .await?;
 
     let items = value
+        .get("albums")
+        .unwrap()
         .get("items")
         .unwrap()
         .as_array()
         .unwrap()
         .iter()
-        .map(|item| item.get("item").unwrap())
         .map(|item| item.as_model())
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, _>>()?;
 
     let count = value.get("totalNumberOfItems").unwrap().as_u64().unwrap() as u32;
 
@@ -357,6 +337,8 @@ pub enum QobuzAlbumTracksError {
     NoAccessTokenAvailable,
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
+    #[error(transparent)]
+    Parse(#[from] ParseError),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -404,7 +386,7 @@ pub async fn album_tracks(
             .unwrap()
             .iter()
             .map(|item| item.as_model())
-            .collect::<Vec<_>>(),
+            .collect::<Result<Vec<_>, _>>()?,
         None => {
             return Err(QobuzAlbumTracksError::RequestFailed(format!("{value:?}")));
         }

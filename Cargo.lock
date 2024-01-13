@@ -3101,6 +3101,7 @@ dependencies = [
  "base64",
  "log",
  "moosicbox_core",
+ "moosicbox_json_utils",
  "once_cell",
  "open",
  "regex",

@@ -19,16 +19,13 @@ impl ToApi<ApiQobuzAlbum> for QobuzAlbum {
             id: self.id,
             artist: self.artist.clone(),
             artist_id: self.artist_id,
-            audio_quality: self.audio_quality.clone(),
-            copyright: self.copyright.clone(),
             cover: self.cover_url(1280),
             duration: self.duration,
-            explicit: self.explicit,
-            number_of_tracks: self.number_of_tracks,
             popularity: self.popularity,
-            release_date: self.release_date.clone(),
             title: self.title.clone(),
-            media_metadata_tags: self.media_metadata_tags.clone(),
+            parental_warning: self.parental_warning,
+            track_count: self.tracks_count,
+            release_date: self.released_at.to_string(),
         }
     }
 }
@@ -39,16 +36,13 @@ pub struct ApiQobuzAlbum {
     pub id: u64,
     pub artist: String,
     pub artist_id: u64,
-    pub audio_quality: String,
-    pub copyright: Option<String>,
     pub cover: String,
     pub duration: u32,
-    pub explicit: bool,
-    pub number_of_tracks: u32,
+    pub parental_warning: bool,
+    pub track_count: u32,
     pub popularity: u32,
     pub release_date: String,
     pub title: String,
-    pub media_metadata_tags: Vec<String>,
 }
 
 impl ToApi<ApiQobuzTrack> for QobuzTrack {
@@ -58,14 +52,11 @@ impl ToApi<ApiQobuzTrack> for QobuzTrack {
             track_number: self.track_number,
             album_id: self.album_id,
             artist_id: self.artist_id,
-            audio_quality: self.audio_quality.clone(),
-            copyright: self.copyright.clone(),
             duration: self.duration,
-            explicit: self.explicit,
+            parental_warning: self.parental_warning,
             isrc: self.isrc.clone(),
             popularity: self.popularity,
             title: self.title.clone(),
-            media_metadata_tags: self.media_metadata_tags.clone(),
         }
     }
 }
@@ -77,14 +68,11 @@ pub struct ApiQobuzTrack {
     pub track_number: u32,
     pub album_id: u64,
     pub artist_id: u64,
-    pub audio_quality: String,
-    pub copyright: Option<String>,
     pub duration: u32,
-    pub explicit: bool,
+    pub parental_warning: bool,
     pub isrc: String,
     pub popularity: u32,
     pub title: String,
-    pub media_metadata_tags: Vec<String>,
 }
 
 impl ToApi<ApiQobuzArtist> for QobuzArtist {
@@ -107,7 +95,7 @@ pub struct ApiQobuzArtist {
     pub name: String,
 }
 
-static TIDAL_ACCESS_TOKEN_HEADER: &str = "x-qobuz-access-token";
+static QOBUZ_ACCESS_TOKEN_HEADER: &str = "x-qobuz-access-token";
 
 impl From<QobuzFavoriteAlbumsError> for actix_web::Error {
     fn from(err: QobuzFavoriteAlbumsError) -> Self {
@@ -134,7 +122,7 @@ pub async fn favorite_albums_endpoint(
         query.offset,
         query.limit,
         req.headers()
-            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .get(QOBUZ_ACCESS_TOKEN_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
     )
     .await?;
@@ -172,7 +160,7 @@ pub async fn album_tracks_endpoint(
         query.offset,
         query.limit,
         req.headers()
-            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .get(QOBUZ_ACCESS_TOKEN_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
     )
     .await?;
