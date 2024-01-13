@@ -89,6 +89,10 @@ jobs:
                       cargo: --no-default-features
                       features: image
 
+                    - name: json_utils
+                      path: packages/json_utils
+                      os: ubuntu-latest
+
                     - name: menu
                       path: packages/menu
                       os: ubuntu-latest

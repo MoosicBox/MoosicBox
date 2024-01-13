@@ -3040,6 +3040,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_json_utils"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "moosicbox_menu"
 version = "0.1.0"
 dependencies = [

@@ -9,6 +9,7 @@ members = [
     "packages/env_utils",
     "packages/files",
     "packages/image",
+    "packages/json_utils",
     "packages/menu",
     "packages/player",
     "packages/qobuz",
