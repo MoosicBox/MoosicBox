@@ -3185,6 +3185,7 @@ dependencies = [
  "moosicbox_files",
  "moosicbox_menu",
  "moosicbox_player",
+ "moosicbox_qobuz",
  "moosicbox_scan",
  "moosicbox_search",
  "moosicbox_tidal",
