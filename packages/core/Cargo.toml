@@ -5,6 +5,8 @@ name    = "moosicbox_core"
 version = "0.1.0"
 
 [dependencies]
+moosicbox_json_utils = { path = "../json_utils" }
+
 actix-cors    = { workspace = true }
 actix-web     = { workspace = true }
 awc           = { workspace = true }

@@ -5,9 +5,20 @@ name    = "moosicbox_json_utils"
 version = "0.1.0"
 
 [dependencies]
+# rusqlite dependencies
+rusqlite = { workspace = true, optional = true }
+
+# tantivy dependencies
+tantivy = { workspace = true, optional = true }
+
 serde      = { workspace = true }
 serde_json = { workspace = true }
 thiserror  = { workspace = true }
 
 [features]
+default = ["rusqlite", "tantivy"]
+
 fail-on-warnings = []
+
+rusqlite = ["dep:rusqlite"]
+tantivy  = ["dep:tantivy"]

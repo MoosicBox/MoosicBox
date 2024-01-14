@@ -5,7 +5,8 @@ name    = "moosicbox_search"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_config = { path = "../config" }
+moosicbox_config     = { path = "../config" }
+moosicbox_json_utils = { path = "../json_utils" }
 
 # API Dependencies
 actix-web  = { workspace = true, optional = true }

@@ -5,7 +5,8 @@ name    = "moosicbox_auth"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_core = { path = "../core" }
+moosicbox_core       = { path = "../core" }
+moosicbox_json_utils = { path = "../json_utils" }
 
 actix      = { workspace = true }
 actix-web  = { workspace = true }

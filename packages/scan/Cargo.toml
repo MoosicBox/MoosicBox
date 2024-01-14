@@ -5,9 +5,10 @@ name    = "moosicbox_scan"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_config = { path = "../config" }
-moosicbox_core   = { path = "../core" }
-moosicbox_search = { path = "../search" }
+moosicbox_config     = { path = "../config" }
+moosicbox_core       = { path = "../core" }
+moosicbox_json_utils = { path = "../json_utils" }
+moosicbox_search     = { path = "../search" }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }

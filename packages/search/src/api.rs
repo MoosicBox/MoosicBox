@@ -8,8 +8,12 @@ use actix_web::{
 };
 use moosicbox_core::{
     app::AppState,
-    sqlite::models::{ApiAlbumVersionQuality, ToApi, TrackSource},
+    sqlite::models::{ApiAlbumVersionQuality, TrackSource},
     types::AudioFormat,
+};
+use moosicbox_json_utils::{
+    tantivy::{ToValue, ToValueType},
+    ParseError,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -49,310 +53,91 @@ pub enum ApiGlobalSearchResult {
     Track(ApiGlobalTrackSearchResult),
 }
 
-impl ToApi<ApiGlobalSearchResult> for NamedFieldDocument {
-    fn to_api(&self) -> ApiGlobalSearchResult {
-        match self
-            .0
-            .get("document_type")
-            .unwrap()
-            .first()
-            .unwrap()
-            .as_text()
-            .unwrap()
-        {
+impl ToValueType<ApiGlobalSearchResult> for &NamedFieldDocument {
+    fn to_value_type(self) -> std::result::Result<ApiGlobalSearchResult, ParseError> {
+        Ok(match self.to_value("document_type")? {
             "artists" => ApiGlobalSearchResult::Artist(ApiGlobalArtistSearchResult {
-                artist_id: self
-                    .0
-                    .get("artist_id")
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .as_u64()
-                    .unwrap(),
-                title: self
-                    .0
-                    .get("artist_title")
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .as_text()
-                    .unwrap()
-                    .to_string(),
+                artist_id: self.to_value("artist_id")?,
+                title: self.to_value("artist_title")?,
                 contains_cover: self
-                    .0
-                    .get("cover")
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .as_text()
+                    .to_value::<Option<&str>>("cover")?
                     .is_some_and(|cover| !cover.is_empty()),
-                blur: self
-                    .0
-                    .get("blur")
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .as_bool()
-                    .unwrap(),
+                blur: self.to_value("blur")?,
             }),
             "albums" => ApiGlobalSearchResult::Album(ApiGlobalAlbumSearchResult {
-                artist_id: self
-                    .0
-                    .get("artist_id")
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .as_u64()
-                    .unwrap(),
-                artist: self
-                    .0
-                    .get("artist_title")
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .as_text()
-                    .unwrap()
-                    .to_string(),
-                album_id: self
-                    .0
-                    .get("album_id")
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .as_u64()
-                    .unwrap(),
-                title: self
-                    .0
-                    .get("album_title")
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .as_text()
-                    .unwrap()
-                    .to_string(),
+                artist_id: self.to_value("artist_id")?,
+                artist: self.to_value("artist_title")?,
+                album_id: self.to_value("album_id")?,
+                title: self.to_value("album_title")?,
                 contains_cover: self
-                    .0
-                    .get("cover")
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .as_text()
+                    .to_value::<Option<&str>>("cover")?
                     .is_some_and(|cover| !cover.is_empty()),
-                blur: self
-                    .0
-                    .get("blur")
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .as_bool()
-                    .unwrap(),
-                date_released: self
-                    .0
-                    .get("date_released")
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .as_text()
-                    .map(|s| s.to_string()),
-                date_added: self
-                    .0
-                    .get("date_added")
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .as_text()
-                    .map(|s| s.to_string()),
+                blur: self.to_value("blur")?,
+                date_released: self.to_value("date_released")?,
+                date_added: self.to_value("date_added")?,
                 versions: self
                     .0
                     .get("version_formats")
                     .unwrap()
                     .iter()
-                    .enumerate()
-                    .map(|(i, format)| {
-                        let source = self
-                            .0
-                            .get("version_sources")
-                            .unwrap()
-                            .iter()
-                            .nth(i)
-                            .unwrap()
-                            .as_text()
-                            .unwrap();
+                    .zip(self.0.get("version_sources").unwrap().iter())
+                    .zip(self.0.get("version_bit_depths").unwrap().iter())
+                    .zip(self.0.get("version_sample_rates").unwrap().iter())
+                    .zip(self.0.get("version_channels").unwrap().iter())
+                    .map(|((((format, source), bit_depth), sample_rate), channels)| {
+                        let source = source.as_text().unwrap();
 
-                        ApiAlbumVersionQuality {
+                        Ok(ApiAlbumVersionQuality {
                             format: format.as_text().map(|format| {
                                 AudioFormat::from_str(format)
                                     .unwrap_or_else(|_| panic!("Invalid AudioFormat: {format}"))
                             }),
-                            bit_depth: self
-                                .0
-                                .get("version_bit_depths")
-                                .unwrap()
-                                .iter()
-                                .nth(i)
-                                .unwrap()
-                                .as_u64()
-                                .map(|depth| depth as u8),
-                            sample_rate: self
-                                .0
-                                .get("version_sample_rates")
-                                .unwrap()
-                                .iter()
-                                .nth(i)
-                                .unwrap()
-                                .as_u64()
-                                .map(|rate| rate as u32),
-                            channels: self
-                                .0
-                                .get("version_channels")
-                                .unwrap()
-                                .iter()
-                                .nth(i)
-                                .unwrap()
-                                .as_u64()
-                                .map(|channels| channels as u8),
+                            bit_depth: bit_depth.as_u64().map(|bit_depth| bit_depth as u8),
+                            sample_rate: sample_rate.as_u64().map(|sample_rate| sample_rate as u32),
+                            channels: channels.as_u64().map(|channels| channels as u8),
                             source: TrackSource::from_str(source)
                                 .unwrap_or_else(|_| panic!("Invalid TrackSource: {source}")),
-                        }
+                        })
                     })
-                    .collect::<Vec<_>>(),
+                    .collect::<Result<Vec<_>, _>>()?,
             }),
             "tracks" => {
-                let format = self
-                    .0
-                    .get("version_formats")
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .as_text();
-
-                let source = self
-                    .0
-                    .get("version_sources")
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .as_text()
-                    .unwrap();
+                let format: Option<&str> = self.to_value("version_formats")?;
+                let source: &str = self.to_value("version_sources")?;
 
                 ApiGlobalSearchResult::Track(ApiGlobalTrackSearchResult {
-                    artist_id: self
-                        .0
-                        .get("artist_id")
-                        .unwrap()
-                        .first()
-                        .unwrap()
-                        .as_u64()
-                        .unwrap(),
-                    artist: self
-                        .0
-                        .get("artist_title")
-                        .unwrap()
-                        .first()
-                        .unwrap()
-                        .as_text()
-                        .unwrap()
-                        .to_string(),
-                    album_id: self
-                        .0
-                        .get("album_id")
-                        .unwrap()
-                        .first()
-                        .unwrap()
-                        .as_u64()
-                        .unwrap(),
-                    album: self
-                        .0
-                        .get("album_title")
-                        .unwrap()
-                        .first()
-                        .unwrap()
-                        .as_text()
-                        .unwrap()
-                        .to_string(),
-                    track_id: self
-                        .0
-                        .get("track_id")
-                        .unwrap()
-                        .first()
-                        .unwrap()
-                        .as_u64()
-                        .unwrap(),
-                    title: self
-                        .0
-                        .get("track_title")
-                        .unwrap()
-                        .first()
-                        .unwrap()
-                        .as_text()
-                        .unwrap()
-                        .to_string(),
+                    artist_id: self.to_value("artist_id")?,
+                    artist: self.to_value("artist_title")?,
+                    album_id: self.to_value("album_id")?,
+                    album: self.to_value("album_title")?,
+                    track_id: self.to_value("track_id")?,
+                    title: self.to_value("track_title")?,
                     contains_cover: self
-                        .0
-                        .get("cover")
-                        .unwrap()
-                        .first()
-                        .unwrap()
-                        .as_text()
+                        .to_value::<Option<&str>>("cover")?
                         .is_some_and(|cover| !cover.is_empty()),
-                    blur: self
-                        .0
-                        .get("blur")
-                        .unwrap()
-                        .first()
-                        .unwrap()
-                        .as_bool()
-                        .unwrap(),
-                    date_released: self
-                        .0
-                        .get("date_released")
-                        .unwrap()
-                        .first()
-                        .unwrap()
-                        .as_text()
-                        .map(|s| s.to_string()),
-                    date_added: self
-                        .0
-                        .get("date_added")
-                        .unwrap()
-                        .first()
-                        .unwrap()
-                        .as_text()
-                        .map(|s| s.to_string()),
+                    blur: self.to_value("blur")?,
+                    date_released: self.to_value("date_released")?,
+                    date_added: self.to_value("date_added")?,
                     format: format.map(|format| {
                         AudioFormat::from_str(format)
                             .unwrap_or_else(|_| panic!("Invalid AudioFormat: {format}"))
                     }),
-                    bit_depth: self
-                        .0
-                        .get("version_bit_depths")
-                        .unwrap()
-                        .first()
-                        .unwrap()
-                        .as_u64()
-                        .map(|depth| depth as u8),
-                    sample_rate: self
-                        .0
-                        .get("version_sample_rates")
-                        .unwrap()
-                        .first()
-                        .unwrap()
-                        .as_u64()
-                        .map(|rate| rate as u32),
-                    channels: self
-                        .0
-                        .get("version_channels")
-                        .unwrap()
-                        .first()
-                        .unwrap()
-                        .as_u64()
-                        .map(|channels| channels as u8),
+                    bit_depth: self.to_value("version_bit_depths")?,
+                    sample_rate: self.to_value("version_sample_rates")?,
+                    channels: self.to_value("version_channels")?,
                     source: TrackSource::from_str(source)
                         .unwrap_or_else(|_| panic!("Invalid TrackSource: {source}")),
                 })
             }
             _ => unreachable!(),
-        }
+        })
+    }
+
+    fn missing_value(
+        self,
+        error: moosicbox_json_utils::ParseError,
+    ) -> std::result::Result<ApiGlobalSearchResult, moosicbox_json_utils::ParseError> {
+        Err(error)
     }
 }
 
@@ -412,7 +197,13 @@ pub async fn search_global_search_endpoint(
         ErrorInternalServerError(format!("Failed to search global search index: {e:?}"))
     })?;
 
-    let api_results = results.iter().map(|doc| doc.to_api()).collect::<Vec<_>>();
+    let api_results = results
+        .iter()
+        .map(|doc| doc.to_value_type())
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| {
+            ErrorInternalServerError(format!("Failed to search global search index: {e:?}"))
+        })?;
 
     Ok(Json(api_results))
 }

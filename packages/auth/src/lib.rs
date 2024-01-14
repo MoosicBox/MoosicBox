@@ -6,7 +6,9 @@ pub mod api;
 use actix::fut::{err, ok, Ready};
 use actix_web::{dev::Payload, error::ErrorUnauthorized, http, FromRequest, HttpRequest};
 use moosicbox_core::app::DbConnection;
+use moosicbox_json_utils::{ParseError, ToValue};
 use serde_json::Value;
+use thiserror::Error;
 use uuid::Uuid;
 
 use moosicbox_core::sqlite::db::{create_client_access_token, get_client_access_token, DbError};
@@ -107,9 +109,21 @@ pub async fn get_client_id_and_access_token(
     }
 }
 
-async fn register_client(host: &str, client_id: &str) -> Result<Option<String>, reqwest::Error> {
+#[derive(Debug, Error)]
+pub enum RegisterClientError {
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+}
+
+async fn register_client(
+    host: &str,
+    client_id: &str,
+) -> Result<Option<String>, RegisterClientError> {
     let url = format!("{host}/auth/register-client?clientId={client_id}");
-    let value: Value = reqwest::Client::new()
+
+    Ok(reqwest::Client::new()
         .post(url)
         .header(
             reqwest::header::AUTHORIZATION,
@@ -118,14 +132,9 @@ async fn register_client(host: &str, client_id: &str) -> Result<Option<String>, 
         .send()
         .await
         .unwrap()
-        .json()
-        .await?;
-
-    if let Some(token) = value.get("token") {
-        Ok(token.as_str().map(|s| Some(s.to_string())).unwrap_or(None))
-    } else {
-        Ok(None)
-    }
+        .json::<Value>()
+        .await?
+        .to_value("token")?)
 }
 
 pub struct NonTunnelRequestAuthorized;
@@ -157,23 +166,28 @@ fn is_authorized(req: &HttpRequest) -> bool {
     true
 }
 
+#[derive(Debug, Error)]
+pub enum FetchSignatureError {
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+}
+
 pub async fn fetch_signature_token(
     host: &str,
     client_id: &str,
     access_token: &str,
-) -> Result<Option<String>, reqwest::Error> {
+) -> Result<Option<String>, FetchSignatureError> {
     let url = format!("{host}/auth/signature-token?clientId={client_id}");
-    let value: Value = reqwest::Client::new()
+
+    Ok(reqwest::Client::new()
         .post(url)
         .header(reqwest::header::AUTHORIZATION, access_token)
         .send()
+        .await
+        .unwrap()
+        .json::<Value>()
         .await?
-        .json()
-        .await?;
-
-    if let Some(token) = value.get("token") {
-        Ok(token.as_str().map(|s| Some(s.to_string())).unwrap_or(None))
-    } else {
-        Ok(None)
-    }
+        .to_value("token")?)
 }

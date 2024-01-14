@@ -1,5 +1,6 @@
 use std::{path::PathBuf, str::FromStr};
 
+use moosicbox_json_utils::{rusqlite::ToValue, ParseError, ToValueType};
 use rusqlite::{types::FromSql, Row, Rows};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
@@ -381,12 +382,12 @@ impl AsModelResultMut<Vec<Album>, DbError> for Rows<'_> {
                 if let Some(ref mut album) = results.last_mut() {
                     sort_album_versions(&mut album.versions);
                 }
-                results.push(row.as_model());
+                results.push(AsModel::as_model(row));
                 last_album_id = album_id;
             }
 
             if let Some(ref mut album) = results.last_mut() {
-                album.versions.push(row.as_model());
+                album.versions.push(AsModel::as_model(row));
             }
         }
 
@@ -924,15 +925,34 @@ pub struct ActivePlayer {
     pub updated: String,
 }
 
+impl ToValueType<ActivePlayer> for &Row<'_> {
+    fn to_value_type(self) -> Result<ActivePlayer, ParseError> {
+        Ok(ActivePlayer {
+            id: self.to_value("id")?,
+            session_id: self.to_value("session_id")?,
+            player_id: self.to_value("player_id")?,
+            created: self.to_value("created")?,
+            updated: self.to_value("updated")?,
+        })
+    }
+
+    fn missing_value(
+        self,
+        error: moosicbox_json_utils::ParseError,
+    ) -> Result<ActivePlayer, ParseError> {
+        Err(error)
+    }
+}
+
+impl AsModelResult<ActivePlayer, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<ActivePlayer, ParseError> {
+        self.to_value_type()
+    }
+}
+
 impl AsModel<ActivePlayer> for Row<'_> {
     fn as_model(&self) -> ActivePlayer {
-        ActivePlayer {
-            id: self.get("id").unwrap(),
-            session_id: self.get("session_id").unwrap(),
-            player_id: self.get("player_id").unwrap(),
-            created: self.get("created").unwrap(),
-            updated: self.get("updated").unwrap(),
-        }
+        self.to_value_type().unwrap()
     }
 }
 

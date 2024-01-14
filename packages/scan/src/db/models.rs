@@ -2,9 +2,10 @@ use std::str::FromStr;
 
 use moosicbox_core::sqlite::{
     db::SqliteValue,
-    models::{AsId, AsModel},
+    models::{AsId, AsModel, AsModelResult},
 };
-use rusqlite::Row;
+use moosicbox_json_utils::{rusqlite::ToValue, ParseError, ToValueType};
+use rusqlite::{types::Value, Row};
 use serde::{Deserialize, Serialize};
 
 use crate::ScanOrigin;
@@ -19,16 +20,44 @@ pub struct ScanLocation {
     pub updated: String,
 }
 
+impl ToValueType<ScanOrigin> for Value {
+    fn to_value_type(self) -> Result<ScanOrigin, ParseError> {
+        match self {
+            Value::Text(str) => Ok(ScanOrigin::from_str(&str).expect("Invalid ScanOrigin")),
+            _ => Err(ParseError::ConvertType("String".into())),
+        }
+    }
+
+    fn missing_value(self, error: ParseError) -> Result<ScanOrigin, ParseError> {
+        Err(error)
+    }
+}
+
+impl ToValueType<ScanLocation> for &Row<'_> {
+    fn to_value_type(self) -> Result<ScanLocation, ParseError> {
+        Ok(ScanLocation {
+            id: self.to_value("id")?,
+            origin: self.to_value("origin")?,
+            path: self.to_value("path")?,
+            created: self.to_value("created")?,
+            updated: self.to_value("updated")?,
+        })
+    }
+
+    fn missing_value(self, error: ParseError) -> Result<ScanLocation, ParseError> {
+        Err(error)
+    }
+}
+
+impl AsModelResult<ScanLocation, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<ScanLocation, ParseError> {
+        self.to_value_type()
+    }
+}
+
 impl AsModel<ScanLocation> for Row<'_> {
     fn as_model(&self) -> ScanLocation {
-        ScanLocation {
-            id: self.get("id").unwrap(),
-            origin: ScanOrigin::from_str(&self.get::<_, String>("origin").unwrap())
-                .expect("Invalid ScanOrigin"),
-            path: self.get("path").unwrap(),
-            created: self.get("created").unwrap(),
-            updated: self.get("updated").unwrap(),
-        }
+        AsModelResult::as_model(self).unwrap()
     }
 }
 
@@ -38,9 +67,15 @@ impl AsId for ScanLocation {
     }
 }
 
+impl AsModelResult<ScanOrigin, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<ScanOrigin, ParseError> {
+        self.to_value("origin")
+    }
+}
+
 impl AsModel<ScanOrigin> for Row<'_> {
     fn as_model(&self) -> ScanOrigin {
-        ScanOrigin::from_str(&self.get::<_, String>("origin").unwrap()).expect("Invalid ScanOrigin")
+        AsModelResult::as_model(self).unwrap()
     }
 }
 

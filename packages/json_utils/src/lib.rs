@@ -1,5 +1,11 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
+#[cfg(feature = "rusqlite")]
+pub mod rusqlite;
+
+#[cfg(feature = "tantivy")]
+pub mod tantivy;
+
 use serde_json::Value;
 use thiserror::Error;
 
