@@ -378,7 +378,7 @@ pub async fn favorite_albums(
     let value = authenticated_request(&url, &access_token, &app_id).await?;
 
     let items = value.to_nested_value(&["albums", "items"])?;
-    let count = value.to_value("totalNumberOfItems")?;
+    let count = value.to_nested_value(&["albums", "total"])?;
 
     Ok((items, count))
 }
@@ -440,7 +440,7 @@ pub async fn album_tracks(
     let value = authenticated_request(&url, &access_token, &app_id).await?;
 
     let items = value.to_nested_value(&["tracks", "items"])?;
-    let count = value.to_value("totalNumberOfItems")?;
+    let count = value.to_nested_value(&["tracks", "total"])?;
 
     Ok((items, count))
 }
