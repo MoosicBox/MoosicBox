@@ -86,7 +86,7 @@ impl AsModelResult<QobuzGenre, ParseError> for Value {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzAlbum {
-    pub id: u64,
+    pub id: String,
     pub artist: String,
     pub artist_id: u64,
     pub maximum_bit_depth: u16,

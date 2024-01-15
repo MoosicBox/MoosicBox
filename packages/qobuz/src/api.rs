@@ -16,7 +16,7 @@ use crate::{
 impl ToApi<ApiQobuzAlbum> for QobuzAlbum {
     fn to_api(&self) -> ApiQobuzAlbum {
         ApiQobuzAlbum {
-            id: self.id,
+            id: self.id.clone(),
             artist: self.artist.clone(),
             artist_id: self.artist_id,
             cover: self.cover_url(1280),
@@ -33,7 +33,7 @@ impl ToApi<ApiQobuzAlbum> for QobuzAlbum {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiQobuzAlbum {
-    pub id: u64,
+    pub id: String,
     pub artist: String,
     pub artist_id: u64,
     pub cover: String,
