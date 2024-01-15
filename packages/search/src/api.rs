@@ -101,15 +101,17 @@ impl ToValueType<ApiGlobalAlbumSearchResult> for &NamedFieldDocument {
                 .zip(self.to_value::<Vec<Option<u8>>>("version_channels")?.iter())
                 .map(|((((format, source), bit_depth), sample_rate), channels)| {
                     Ok(ApiAlbumVersionQuality {
-                        format: format.map(|format| {
-                            AudioFormat::from_str(format)
-                                .unwrap_or_else(|_| panic!("Invalid AudioFormat: {format}"))
-                        }),
+                        format: format
+                            .map(|format| {
+                                AudioFormat::from_str(format)
+                                    .map_err(|_| ParseError::ConvertType("AudioFormat".into()))
+                            })
+                            .transpose()?,
                         bit_depth: *bit_depth,
                         sample_rate: *sample_rate,
                         channels: *channels,
                         source: TrackSource::from_str(source)
-                            .unwrap_or_else(|_| panic!("Invalid TrackSource: {source}")),
+                            .map_err(|_| ParseError::ConvertType("TrackSource".into()))?,
                     })
                 })
                 .collect::<Result<Vec<_>, _>>()?,
@@ -143,8 +145,9 @@ impl ToValueType<ApiGlobalTrackSearchResult> for &NamedFieldDocument {
                 .to_value::<Option<&str>>("version_formats")?
                 .map(|format| {
                     AudioFormat::from_str(format)
-                        .unwrap_or_else(|_| panic!("Invalid AudioFormat: {format}"))
-                }),
+                        .map_err(|_| ParseError::ConvertType("AudioFormat".into()))
+                })
+                .transpose()?,
             bit_depth: self.to_value("version_bit_depths")?,
             sample_rate: self.to_value("version_sample_rates")?,
             channels: self.to_value("version_channels")?,
