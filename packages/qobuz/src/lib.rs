@@ -18,6 +18,7 @@ use thiserror::Error;
 use url::form_urlencoded;
 
 static AUTH_HEADER_NAME: &str = "x-user-auth-token";
+static APP_ID_HEADER_NAME: &str = "x-app-id";
 
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -240,10 +241,15 @@ static QOBUZ_API_BASE_URL: &str = "https://www.qobuz.com/api.json/0.2";
 
 static CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
 
-async fn authenticated_request(url: &str, access_token: &str) -> Result<Value, reqwest::Error> {
+async fn authenticated_request(
+    url: &str,
+    access_token: &str,
+    app_id: &str,
+) -> Result<Value, reqwest::Error> {
     CLIENT
         .get(url)
-        .header(AUTH_HEADER_NAME, format!("Bearer {}", access_token))
+        .header(AUTH_HEADER_NAME, access_token)
+        .header(APP_ID_HEADER_NAME, app_id)
         .send()
         .await?
         .json()
@@ -322,6 +328,8 @@ pub enum QobuzFavoriteAlbumsError {
     Db(#[from] moosicbox_core::sqlite::db::DbError),
     #[error("No access token available")]
     NoAccessTokenAvailable,
+    #[error("No app id available")]
+    NoAppIdAvailable,
     #[error("No user ID available")]
     NoUserIdAvailable,
     #[error(transparent)]
@@ -334,21 +342,28 @@ pub async fn favorite_albums(
     offset: Option<u32>,
     limit: Option<u32>,
     access_token: Option<String>,
+    app_id: Option<String>,
 ) -> Result<(Vec<QobuzAlbum>, u32), QobuzFavoriteAlbumsError> {
     #[cfg(feature = "db")]
-    let access_token = {
-        match access_token.clone() {
-            Some(access_token) => access_token,
+    let (access_token, app_id) = {
+        match (access_token.clone(), app_id.clone()) {
+            (Some(access_token), Some(app_id)) => (access_token, app_id),
             _ => {
-                let config = db::get_qobuz_config(&db.library.lock().unwrap().inner)?
+                let config = db::get_qobuz_config(&db.library.lock().as_ref().unwrap().inner)?
                     .ok_or(QobuzFavoriteAlbumsError::NoAccessTokenAvailable)?;
-                access_token.unwrap_or(config.access_token)
+                (
+                    access_token.unwrap_or(config.access_token),
+                    app_id.unwrap_or(config.app_id),
+                )
             }
         }
     };
 
     #[cfg(not(feature = "db"))]
-    let access_token = access_token.ok_or(QobuzFavoriteAlbumsError::NoAccessTokenAvailable)?;
+    let (access_token, app_id) = (
+        access_token.ok_or(QobuzFavoriteAlbumsError::NoAccessTokenAvailable)?,
+        app_id.ok_or(QobuzFavoriteAlbumsError::NoAppIdAvailable)?,
+    );
 
     let url = qobuz_api_endpoint!(
         FavoriteAlbums,
@@ -360,7 +375,7 @@ pub async fn favorite_albums(
         ]
     );
 
-    let value = authenticated_request(&url, &access_token).await?;
+    let value = authenticated_request(&url, &access_token, &app_id).await?;
 
     let items = value.to_nested_value(&["albums", "items"])?;
     let count = value.to_value("totalNumberOfItems")?;
@@ -377,6 +392,8 @@ pub enum QobuzAlbumTracksError {
     Db(#[from] moosicbox_core::sqlite::db::DbError),
     #[error("No access token available")]
     NoAccessTokenAvailable,
+    #[error("No app id available")]
+    NoAppIdAvailable,
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
@@ -388,20 +405,28 @@ pub async fn album_tracks(
     offset: Option<u32>,
     limit: Option<u32>,
     access_token: Option<String>,
+    app_id: Option<String>,
 ) -> Result<(Vec<QobuzTrack>, u32), QobuzAlbumTracksError> {
     #[cfg(feature = "db")]
-    let access_token = match access_token {
-        Some(access_token) => access_token,
-        _ => {
-            let config = db::get_qobuz_config(&db.library.lock().as_ref().unwrap().inner)?
-                .ok_or(QobuzAlbumTracksError::NoAccessTokenAvailable)?;
-
-            access_token.unwrap_or(config.access_token)
+    let (access_token, app_id) = {
+        match (access_token.clone(), app_id.clone()) {
+            (Some(access_token), Some(app_id)) => (access_token, app_id),
+            _ => {
+                let config = db::get_qobuz_config(&db.library.lock().as_ref().unwrap().inner)?
+                    .ok_or(QobuzAlbumTracksError::NoAccessTokenAvailable)?;
+                (
+                    access_token.unwrap_or(config.access_token),
+                    app_id.unwrap_or(config.app_id),
+                )
+            }
         }
     };
 
     #[cfg(not(feature = "db"))]
-    let access_token = access_token.ok_or(QobuzAlbumTracksError::NoAccessTokenAvailable)?;
+    let (access_token, app_id) = (
+        access_token.ok_or(QobuzAlbumTracksError::NoAccessTokenAvailable)?,
+        app_id.ok_or(QobuzAlbumTracksError::NoAppIdAvailable)?,
+    );
 
     let url = qobuz_api_endpoint!(
         AlbumTracks,
@@ -412,7 +437,7 @@ pub async fn album_tracks(
         ]
     );
 
-    let value = authenticated_request(&url, &access_token).await?;
+    let value = authenticated_request(&url, &access_token, &app_id).await?;
 
     let items = value.to_nested_value(&["tracks", "items"])?;
     let count = value.to_value("totalNumberOfItems")?;

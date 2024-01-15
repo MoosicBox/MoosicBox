@@ -96,6 +96,7 @@ pub struct ApiQobuzArtist {
 }
 
 static QOBUZ_ACCESS_TOKEN_HEADER: &str = "x-qobuz-access-token";
+static QOBUZ_APP_ID_HEADER: &str = "x-qobuz-app-id";
 
 impl From<QobuzFavoriteAlbumsError> for actix_web::Error {
     fn from(err: QobuzFavoriteAlbumsError) -> Self {
@@ -123,6 +124,9 @@ pub async fn favorite_albums_endpoint(
         query.limit,
         req.headers()
             .get(QOBUZ_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+        req.headers()
+            .get(QOBUZ_APP_ID_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
     )
     .await?;
@@ -161,6 +165,9 @@ pub async fn album_tracks_endpoint(
         query.limit,
         req.headers()
             .get(QOBUZ_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+        req.headers()
+            .get(QOBUZ_APP_ID_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
     )
     .await?;
