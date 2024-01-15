@@ -25,7 +25,7 @@ impl ToApi<ApiQobuzAlbum> for QobuzAlbum {
             title: self.title.clone(),
             parental_warning: self.parental_warning,
             track_count: self.tracks_count,
-            release_date: self.released_at.to_string(),
+            release_date: self.release_date_original.clone(),
         }
     }
 }
