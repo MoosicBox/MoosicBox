@@ -1,7 +1,8 @@
 use moosicbox_core::sqlite::{
     db::SqliteValue,
-    models::{AsId, AsModel},
+    models::{AsId, AsModel, AsModelResult},
 };
+use moosicbox_json_utils::{rusqlite::ToValue, ParseError};
 use rusqlite::Row;
 use serde::{Deserialize, Serialize};
 
@@ -18,26 +19,34 @@ pub struct QobuzConfig {
     pub token_type: String,
     pub user: String,
     pub user_id: u64,
+    pub app_id: String,
     pub created: String,
     pub updated: String,
 }
 
 impl AsModel<QobuzConfig> for Row<'_> {
     fn as_model(&self) -> QobuzConfig {
-        QobuzConfig {
-            id: self.get("id").unwrap(),
-            access_token: self.get("access_token").unwrap(),
-            refresh_token: self.get("refresh_token").unwrap(),
-            client_name: self.get("client_name").unwrap(),
-            expires_in: self.get("expires_in").unwrap(),
-            issued_at: self.get("issued_at").unwrap(),
-            scope: self.get("scope").unwrap(),
-            token_type: self.get("token_type").unwrap(),
-            user: self.get("user").unwrap(),
-            user_id: self.get("user_id").unwrap(),
-            created: self.get("created").unwrap(),
-            updated: self.get("updated").unwrap(),
-        }
+        AsModelResult::as_model(self).unwrap_or_else(|e| panic!("Failed to get QobuzConfig: {e:?}"))
+    }
+}
+
+impl AsModelResult<QobuzConfig, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<QobuzConfig, ParseError> {
+        Ok(QobuzConfig {
+            id: self.to_value("id")?,
+            access_token: self.to_value("access_token")?,
+            refresh_token: self.to_value("refresh_token")?,
+            client_name: self.to_value("client_name")?,
+            expires_in: self.to_value("expires_in")?,
+            issued_at: self.to_value("issued_at")?,
+            scope: self.to_value("scope")?,
+            token_type: self.to_value("token_type")?,
+            user: self.to_value("user")?,
+            user_id: self.to_value("user_id")?,
+            app_id: self.to_value("user_id")?,
+            created: self.to_value("created")?,
+            updated: self.to_value("updated")?,
+        })
     }
 }
 
