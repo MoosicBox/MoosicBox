@@ -258,7 +258,14 @@ where
     Value: ToValueType<T>,
 {
     if let Ok(inner) = row.get::<_, Value>(index) {
-        return inner.to_value_type();
+        return match inner.to_value_type() {
+            Ok(inner) => Ok(inner),
+            Err(ParseError::ConvertType(r#type)) => Err(ParseError::ConvertType(format!(
+                "Path '{}' failed to convert value to type: '{}'",
+                index, r#type,
+            ))),
+            Err(err) => Err(err),
+        };
     }
 
     Err(ParseError::Parse(format!("Missing value: '{}'", index)))

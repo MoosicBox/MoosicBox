@@ -265,9 +265,15 @@ where
         return value.missing_value(ParseError::Parse(message));
     }
 
-    let inner = value.to_value_type()?;
-
-    Ok(inner)
+    match value.to_value_type() {
+        Ok(inner) => Ok(inner),
+        Err(ParseError::ConvertType(r#type)) => Err(ParseError::ConvertType(format!(
+            "Path '{}' failed to convert value to type: '{}'",
+            path.join(" -> "),
+            r#type,
+        ))),
+        Err(err) => Err(err),
+    }
 }
 
 #[cfg(test)]
@@ -315,7 +321,9 @@ mod tests {
         assert_eq!(
             json.to_nested_value::<Option<u64>>(&["outer", "inner_str"])
                 .err(),
-            Some(ParseError::ConvertType("u64".into())),
+            Some(ParseError::ConvertType(
+                "Path 'outer -> inner_str' failed to convert value to type: 'u64'".into()
+            )),
         );
     }
 
