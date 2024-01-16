@@ -30,7 +30,10 @@ where
     &'a Value: ToValueType<T>,
 {
     fn to_value_type(self) -> Result<Option<T>, ParseError> {
-        self.to_value_type().map(|inner| Some(inner))
+        match self {
+            Value::Null => Ok(None),
+            _ => self.to_value_type().map(|inner| Some(inner)),
+        }
     }
 
     fn missing_value(self, _error: ParseError) -> Result<Option<T>, ParseError> {
@@ -276,7 +279,10 @@ where
     Value: ToValueType<T>,
 {
     fn to_value_type(self) -> Result<Option<T>, ParseError> {
-        self.to_value_type().map(|inner| Some(inner))
+        match self {
+            Value::Null => Ok(None),
+            _ => self.to_value_type().map(|inner| Some(inner)),
+        }
     }
 
     fn missing_value(self, _error: ParseError) -> Result<Option<T>, ParseError> {
@@ -463,5 +469,38 @@ impl ToValueType<usize> for Value {
 
     fn missing_value(self, error: ParseError) -> Result<usize, ParseError> {
         Err(error)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_to_value_type_u64() {
+        let value = &Value::Integer(123);
+
+        assert_eq!(ToValueType::<u64>::to_value_type(value).unwrap(), 123_u64);
+    }
+
+    #[test]
+    fn test_to_value_type_option_u64() {
+        let value = &Value::Integer(123);
+        assert_eq!(
+            ToValueType::<Option<u64>>::to_value_type(value).unwrap(),
+            Some(123_u64)
+        );
+
+        let value = &Value::Null;
+        assert_eq!(
+            ToValueType::<Option<u64>>::to_value_type(value).unwrap(),
+            None
+        );
+
+        let value = &Value::Text("testttt".into());
+        assert_eq!(
+            ToValueType::<Option<u64>>::to_value_type(value).err(),
+            Some(ParseError::ConvertType("&str".into())),
+        );
     }
 }
