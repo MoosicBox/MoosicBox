@@ -445,6 +445,11 @@ impl Player {
 
             if !abort.is_cancelled() {
                 if let Some(TrackOrId::Track(track)) = active.tracks.get(active.position as usize) {
+                    log::debug!(
+                        "active_progress={} track_duration={}",
+                        active.progress as u64,
+                        track.duration as u64
+                    );
                     if (active.progress as u64) == (track.duration as u64) - 1 {
                         active.progress = track.duration;
                     }
