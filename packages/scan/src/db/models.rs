@@ -24,7 +24,7 @@ impl ToValueType<ScanOrigin> for Value {
     fn to_value_type(self) -> Result<ScanOrigin, ParseError> {
         match self {
             Value::Text(str) => Ok(ScanOrigin::from_str(&str).expect("Invalid ScanOrigin")),
-            _ => Err(ParseError::ConvertType("String".into())),
+            _ => Err(ParseError::ConvertType("ScanOrigin".into())),
         }
     }
 
