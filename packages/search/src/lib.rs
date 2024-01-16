@@ -116,7 +116,7 @@ fn create_global_search_index(
 
     schema_builder.add_u64_field("track_id", STORED);
 
-    schema_builder.add_text_field("cover", TEXT | STORED);
+    schema_builder.add_text_field("cover", STORED);
     schema_builder.add_text_field("cover_string", STRING);
 
     schema_builder.add_bool_field("blur", STORED);
