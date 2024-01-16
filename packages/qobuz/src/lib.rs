@@ -137,9 +137,13 @@ impl AsModelResult<QobuzAlbum, ParseError> for Value {
     fn as_model(&self) -> Result<QobuzAlbum, ParseError> {
         Ok(QobuzAlbum {
             id: self.to_value("id")?,
-            artist: self.to_nested_value(&["artist", "name"])?,
+            artist: self
+                .to_nested_value::<String>(&["artist", "name"])
+                .or_else(|_| self.to_nested_value(&["artist", "name", "display"]))?,
             artist_id: self.to_nested_value(&["artist", "id"])?,
-            maximum_bit_depth: self.to_value("maximum_bit_depth")?,
+            maximum_bit_depth: self
+                .to_value("maximum_bit_depth")
+                .or_else(|_| self.to_nested_value(&["audio_info", "maximum_bit_depth"]))?,
             image: self.to_value("image")?,
             title: self.to_value("title")?,
             qobuz_id: self.to_value("qobuz_id")?,
@@ -150,19 +154,88 @@ impl AsModelResult<QobuzAlbum, ParseError> for Value {
             popularity: self.to_value("popularity")?,
             tracks_count: self.to_value("tracks_count")?,
             genre: self.to_value("genre")?,
-            maximum_channel_count: self.to_value("maximum_channel_count")?,
-            maximum_sampling_rate: self.to_value("maximum_sampling_rate")?,
+            maximum_channel_count: self
+                .to_value("maximum_channel_count")
+                .or_else(|_| self.to_nested_value(&["audio_info", "maximum_channel_count"]))?,
+            maximum_sampling_rate: self
+                .to_value("maximum_sampling_rate")
+                .or_else(|_| self.to_nested_value(&["audio_info", "maximum_sampling_rate"]))?,
         })
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
+pub struct QobuzRelease {
+    pub id: String,
+    pub artist: String,
+    pub artist_id: u64,
+    pub maximum_bit_depth: u16,
+    pub image: QobuzImage,
+    pub title: String,
+    pub release_date_original: String,
+    pub duration: u32,
+    pub parental_warning: bool,
+    pub tracks_count: u32,
+    pub genre: String,
+    pub maximum_channel_count: u16,
+    pub maximum_sampling_rate: f32,
+}
+
+impl QobuzRelease {
+    pub fn cover_url(&self) -> Option<String> {
+        self.image
+            .mega
+            .clone()
+            .or(self.image.extralarge.clone())
+            .or(self.image.large.clone())
+            .or(self.image.medium.clone())
+            .or(self.image.small.clone())
+            .or(self.image.thumbnail.clone())
+    }
+}
+
+impl ToValueType<QobuzRelease> for &Value {
+    fn to_value_type(self) -> Result<QobuzRelease, ParseError> {
+        self.as_model()
+    }
+
+    fn missing_value(self, error: ParseError) -> Result<QobuzRelease, ParseError> {
+        Err(error)
+    }
+}
+
+impl AsModelResult<QobuzRelease, ParseError> for Value {
+    fn as_model(&self) -> Result<QobuzRelease, ParseError> {
+        Ok(QobuzRelease {
+            id: self.to_value("id")?,
+            artist: self.to_nested_value(&["artist", "name", "display"])?,
+            artist_id: self.to_nested_value(&["artist", "id"])?,
+            maximum_bit_depth: self.to_nested_value(&["audio_info", "maximum_bit_depth"])?,
+            image: self.to_value("image")?,
+            title: self.to_value("title")?,
+            release_date_original: self.to_nested_value(&["dates", "original"])?,
+            duration: self.to_value("duration")?,
+            parental_warning: self.to_value("parental_warning")?,
+            tracks_count: self.to_value("tracks_count")?,
+            genre: self.to_nested_value(&["genre", "name"])?,
+            maximum_channel_count: self
+                .to_nested_value(&["audio_info", "maximum_channel_count"])?,
+            maximum_sampling_rate: self
+                .to_nested_value(&["audio_info", "maximum_sampling_rate"])?,
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "snake_case")]
 pub struct QobuzTrack {
     pub id: u64,
     pub track_number: u32,
-    pub album_id: String,
+    pub artist: String,
     pub artist_id: u64,
+    pub album: String,
+    pub album_id: String,
     pub copyright: Option<String>,
     pub duration: u32,
     pub parental_warning: bool,
@@ -181,12 +254,20 @@ impl ToValueType<QobuzTrack> for &Value {
 }
 
 impl QobuzTrack {
-    fn from_value(value: &Value, artist_id: u64, album_id: &str) -> Result<QobuzTrack, ParseError> {
+    fn from_value(
+        value: &Value,
+        artist: &str,
+        artist_id: u64,
+        album: &str,
+        album_id: &str,
+    ) -> Result<QobuzTrack, ParseError> {
         Ok(QobuzTrack {
             id: value.to_value("id")?,
             track_number: value.to_value("track_number")?,
-            album_id: album_id.to_string(),
+            artist: artist.to_string(),
             artist_id,
+            album: album.to_string(),
+            album_id: album_id.to_string(),
             copyright: value.to_value("copyright")?,
             duration: value.to_value("duration")?,
             parental_warning: value.to_value("parental_warning")?,
@@ -201,8 +282,10 @@ impl AsModelResult<QobuzTrack, ParseError> for Value {
         Ok(QobuzTrack {
             id: self.to_value("id")?,
             track_number: self.to_value("track_number")?,
+            album: self.to_nested_value(&["album", "title"])?,
             album_id: self.to_nested_value(&["album", "id"])?,
-            artist_id: self.to_nested_value(&["artist", "id"])?,
+            artist: self.to_nested_value(&["album", "artist", "name"])?,
+            artist_id: self.to_nested_value(&["album", "artist", "id"])?,
             copyright: self.to_value("copyright")?,
             duration: self.to_value("duration")?,
             parental_warning: self.to_value("parental_warning")?,
@@ -283,6 +366,7 @@ enum QobuzApiEndpoint {
     Bundle,
     UserLogin,
     Artist,
+    ArtistAlbums,
     Album,
     Track,
     TrackFileUrl,
@@ -298,6 +382,7 @@ impl ToUrl for QobuzApiEndpoint {
             Self::Bundle => format!("{QOBUZ_PLAY_API_BASE_URL}/resources/:bundleVersion/bundle.js"),
             Self::UserLogin => format!("{QOBUZ_API_BASE_URL}/user/login"),
             Self::Artist => format!("{QOBUZ_API_BASE_URL}/artist/get"),
+            Self::ArtistAlbums => format!("{QOBUZ_API_BASE_URL}/artist/getReleasesList"),
             Self::Album => format!("{QOBUZ_API_BASE_URL}/album/get"),
             Self::Track => format!("{QOBUZ_API_BASE_URL}/track/get"),
             Self::TrackFileUrl => format!("{QOBUZ_API_BASE_URL}/track/getFileUrl"),
@@ -341,18 +426,36 @@ macro_rules! qobuz_api_endpoint {
     };
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
-pub enum QobuzAlbumOrder {
-    Date,
+#[derive(Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[serde(rename_all = "camelCase")]
+#[strum(serialize_all = "camelCase")]
+pub enum QobuzAlbumReleaseType {
+    #[default]
+    All,
+    Album,
+    Live,
+    Compilation,
+    EpSingle,
+    Other,
+    Download,
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
-pub enum QobuzAlbumOrderDirection {
+#[derive(Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum QobuzAlbumSort {
+    ReleaseDate,
+    Relevant,
+    #[default]
+    ReleaseDateByPriority,
+}
+
+#[derive(Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[serde(rename_all = "camelCase")]
+#[strum(serialize_all = "camelCase")]
+pub enum QobuzAlbumOrder {
     Asc,
+    #[default]
     Desc,
 }
 
@@ -634,9 +737,13 @@ pub async fn artist_albums(
     artist_id: &str,
     offset: Option<u32>,
     limit: Option<u32>,
+    release_type: Option<QobuzAlbumReleaseType>,
+    sort: Option<QobuzAlbumSort>,
+    order: Option<QobuzAlbumOrder>,
+    track_size: Option<u8>,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<(Vec<QobuzTrack>, u32), QobuzArtistAlbumsError> {
+) -> Result<(Vec<QobuzRelease>, bool), QobuzArtistAlbumsError> {
     #[cfg(feature = "db")]
     let (access_token, app_id) = {
         match (access_token.clone(), app_id.clone()) {
@@ -662,21 +769,25 @@ pub async fn artist_albums(
     );
 
     let url = qobuz_api_endpoint!(
-        Album,
+        ArtistAlbums,
         &[],
         &[
             ("artist_id", artist_id),
             ("offset", &offset.unwrap_or(0).to_string()),
             ("limit", &limit.unwrap_or(100).to_string()),
+            ("release_type", release_type.unwrap_or_default().as_ref()),
+            ("sort", sort.unwrap_or_default().as_ref()),
+            ("order", order.unwrap_or_default().as_ref()),
+            ("track_size", &track_size.unwrap_or(1).to_string()),
         ]
     );
 
     let value = authenticated_request(&url, &access_token, &app_id).await?;
 
-    let items = value.to_nested_value(&["tracks", "items"])?;
-    let count = value.to_nested_value(&["tracks", "total"])?;
+    let items = value.to_value("items")?;
+    let has_more = value.to_value("has_more")?;
 
-    Ok((items, count))
+    Ok((items, has_more))
 }
 
 #[derive(Debug, Error)]
@@ -725,7 +836,7 @@ pub async fn album(
         app_id.ok_or(QobuzAlbumError::NoAppIdAvailable)?,
     );
 
-    let url = qobuz_api_endpoint!(Artist, &[], &[("album_id", album_id), ("limit", "0")]);
+    let url = qobuz_api_endpoint!(Album, &[], &[("album_id", album_id), ("limit", "0")]);
 
     let value = authenticated_request(&url, &access_token, &app_id).await?;
 
@@ -861,11 +972,13 @@ pub async fn album_tracks(
 
     let value = authenticated_request(&url, &access_token, &app_id).await?;
 
+    let artist = value.to_nested_value(&["artist", "name"])?;
     let artist_id = value.to_nested_value(&["artist", "id"])?;
+    let album = value.to_value("title")?;
     let items = value
         .to_nested_value::<Vec<&Value>>(&["tracks", "items"])?
         .iter()
-        .map(|value| QobuzTrack::from_value(value, artist_id, album_id))
+        .map(|value| QobuzTrack::from_value(value, artist, artist_id, album, album_id))
         .collect::<Result<Vec<_>, _>>()?;
     let count = value.to_nested_value(&["tracks", "total"])?;
 
