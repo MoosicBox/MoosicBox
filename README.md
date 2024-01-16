@@ -19,6 +19,7 @@ Implemented:
 - Tunnel server reverse proxy - allows access to local server from internet without any firewall configuration
 - Tidal and Qobuz integration
 - No internet connection required, ever.
+- Global search functionality
 
 To-do (in no particular order):
 
@@ -34,7 +35,6 @@ To-do (in no particular order):
 - Enable switching between different bitrates within encodings
 - Enable on the fly switching audio quality during playback
 - Pre-load next playback track
-- Global search functionality
 - Shuffle playback
 - Current playback screen
 - Listen-only connections
