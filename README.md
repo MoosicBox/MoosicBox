@@ -24,6 +24,7 @@ Implemented:
 To-do (in no particular order):
 
 - Spotify integration
+- Playlists
 - Shareable playlists via an authenticated link
 - Audio encoding cache
 - Image optimization cache
