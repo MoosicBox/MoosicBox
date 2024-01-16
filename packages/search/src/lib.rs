@@ -680,13 +680,11 @@ mod tests {
     }
 
     fn temp_index_path() -> PathBuf {
-        let path = moosicbox_config::get_tests_dir_path()
-            .join("search_indices")
-            .join("global_search_index");
+        let path = moosicbox_config::get_tests_dir_path();
 
         TEMP_DIRS.write().unwrap().push(path.clone());
 
-        path
+        path.join("search_indices").join("global_search_index")
     }
 
     fn before_each() {
