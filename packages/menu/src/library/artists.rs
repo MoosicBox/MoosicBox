@@ -49,13 +49,12 @@ pub fn sort_artists(mut artists: Vec<Artist>, request: &ArtistsRequest) -> Vec<A
         _ => (),
     }
     match request.sort {
-        Some(ArtistSort::NameAsc) => {
+        Some(ArtistSort::NameAsc) | None => {
             artists.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
         }
         Some(ArtistSort::NameDesc) => {
             artists.sort_by(|a, b| b.title.to_lowercase().cmp(&a.title.to_lowercase()))
         }
-        None => (),
     }
 
     artists
