@@ -381,7 +381,10 @@ fn construct_query_for_fields(
             query_parser.set_field_boost(*field, *boost);
         }
         let exact_query = query_parser.parse_query(&format!("\"{search}\"")).unwrap();
-        let boost_query = Box::new(BoostQuery::new(Box::new(exact_query), 4.0));
+        let boost_query = Box::new(BoostQuery::new(
+            Box::new(exact_query),
+            4.0 * (search.len() as f32 / 3.0) * (search.len() as f32 / 3.0),
+        ));
 
         parts.push(boost_query);
     }
