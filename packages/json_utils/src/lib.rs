@@ -278,10 +278,10 @@ where
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn test_to_nested_type_u64() {
-        use crate::*;
-
         let json = &serde_json::json!({
             "outer": {
                 "inner_u64": 123,
@@ -297,8 +297,6 @@ mod tests {
 
     #[test]
     fn test_to_nested_type_option_u64() {
-        use crate::*;
-
         let json = &serde_json::json!({
             "outer": {
                 "inner_u64": 123,
@@ -329,8 +327,6 @@ mod tests {
 
     #[test]
     fn test_to_nested_type_vec_u64() {
-        use crate::*;
-
         let json = &serde_json::json!({
             "outer": {
                 "inner_u64_array": [123, 124, 125],
