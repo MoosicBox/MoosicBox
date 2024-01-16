@@ -6,7 +6,7 @@ use std::sync::RwLock;
 use once_cell::sync::Lazy;
 use tantivy::collector::TopDocs;
 use tantivy::directory::MmapDirectory;
-use tantivy::query::{BooleanQuery, BoostQuery, FuzzyTermQuery, TermQuery};
+use tantivy::query::{BooleanQuery, BoostQuery, DisjunctionMaxQuery, QueryParser, TermQuery};
 use tantivy::query_grammar::Occur;
 use tantivy::{schema::*, Directory};
 use tantivy::{Index, IndexReader, ReloadPolicy};
@@ -324,22 +324,244 @@ fn sanitize_query(query: &str) -> String {
         .join(" ")
 }
 
-pub fn search_global_search_index(
-    query: &str,
-    offset: usize,
-    limit: usize,
-) -> Result<Vec<NamedFieldDocument>, SearchIndexError> {
-    log::debug!("Searching global_search_index...");
-    let query = sanitize_query(query);
-    let index: &Index = &GLOBAL_SEARCH_INDEX.read().unwrap();
-    let schema = index.schema();
+fn construct_query_for_fields(
+    search: &str,
+    fields: &[(Field, f32)],
+    index: &Index,
+) -> DisjunctionMaxQuery {
+    let mut parts: Vec<Box<dyn tantivy::query::Query>> = Vec::new();
 
+    // exact match
+    {
+        let mut query_parser =
+            QueryParser::for_index(index, fields.iter().map(|x| x.0).collect::<Vec<_>>());
+        for (field, boost) in fields {
+            query_parser.set_field_boost(*field, *boost);
+        }
+        let exact_query = query_parser.parse_query(&format!("\"{search}\"")).unwrap();
+        let boost_query = Box::new(BoostQuery::new(Box::new(exact_query), 4.0));
+
+        parts.push(boost_query);
+    }
+
+    // prefix match
+    {
+        let mut query_parser =
+            QueryParser::for_index(index, fields.iter().map(|x| x.0).collect::<Vec<_>>());
+        for (field, boost) in fields {
+            query_parser.set_field_fuzzy(*field, true, 1, true);
+            query_parser.set_field_boost(*field, *boost);
+        }
+        let prefix_query = query_parser.parse_query(search).unwrap();
+        let boost_query = Box::new(BoostQuery::new(Box::new(prefix_query), 2.0));
+
+        parts.push(boost_query);
+    }
+
+    // fuzzy match
+    {
+        let mut query_parser =
+            QueryParser::for_index(index, fields.iter().map(|x| x.0).collect::<Vec<_>>());
+        for (field, boost) in fields {
+            query_parser.set_field_fuzzy(*field, false, 1, true);
+            query_parser.set_field_boost(*field, *boost);
+        }
+        let fuzzy_query = query_parser.parse_query(search).unwrap();
+        let boost_query = Box::new(BoostQuery::new(Box::new(fuzzy_query), 1.0));
+
+        parts.push(boost_query);
+    }
+
+    DisjunctionMaxQuery::new(parts)
+}
+
+fn construct_global_search_query(
+    search: &str,
+    index: &Index,
+    schema: &Schema,
+) -> DisjunctionMaxQuery {
     let artist_title = schema.get_field("artist_title").unwrap();
     let album_title = schema.get_field("album_title").unwrap();
     let album_title_string = schema.get_field("album_title_string").unwrap();
     let track_title = schema.get_field("track_title").unwrap();
     let track_title_string = schema.get_field("track_title_string").unwrap();
     let document_type = schema.get_field("document_type").unwrap();
+
+    let mut queries: Vec<Box<dyn tantivy::query::Query>> = Vec::new();
+
+    // all fields
+    {
+        let max_query = Box::new(construct_query_for_fields(
+            search,
+            &[
+                (artist_title, 1.0f32),
+                (album_title, 1.0f32),
+                (track_title, 1.0f32),
+            ],
+            index,
+        ));
+
+        queries.push(max_query);
+    }
+
+    // track specifically
+    {
+        let max_query = Box::new(construct_query_for_fields(
+            search,
+            &[
+                (artist_title, 3.0f32),
+                (album_title, 2.0f32),
+                (track_title, 1.0f32),
+            ],
+            index,
+        ));
+
+        let track_type = Term::from_field_text(document_type, "tracks");
+        let track_type_query = Box::new(TermQuery::new(track_type, IndexRecordOption::Basic));
+
+        let mut query_parser = QueryParser::for_index(index, vec![document_type]);
+        query_parser.set_field_fuzzy(document_type, false, 1, true);
+        let fuzzy_query = query_parser.parse_query(search).unwrap();
+
+        let boolean_queries: Vec<(Occur, Box<dyn tantivy::query::Query>)> = vec![
+            (Occur::Must, max_query),
+            (Occur::Must, track_type_query),
+            (Occur::Must, fuzzy_query),
+        ];
+        let boolean_query = Box::new(BooleanQuery::from(boolean_queries));
+        let boost_query = Box::new(BoostQuery::new(boolean_query, 5.0));
+
+        queries.push(boost_query);
+    }
+
+    // album title
+    {
+        let max_query = Box::new(construct_query_for_fields(
+            search,
+            &[(album_title, 1.0f32)],
+            index,
+        ));
+
+        let track_title = Term::from_field_text(track_title_string, "");
+        let track_title_query = Box::new(TermQuery::new(track_title, IndexRecordOption::Basic));
+
+        let boolean_queries: Vec<(Occur, Box<dyn tantivy::query::Query>)> =
+            vec![(Occur::Must, max_query), (Occur::Must, track_title_query)];
+        let boolean_query = Box::new(BooleanQuery::from(boolean_queries));
+        let boost_query = Box::new(BoostQuery::new(boolean_query, 2.0));
+
+        queries.push(boost_query);
+    }
+
+    // album specifically
+    {
+        let max_query = Box::new(construct_query_for_fields(
+            search,
+            &[
+                (artist_title, 3.0f32),
+                (album_title, 2.0f32),
+                (track_title, 1.0f32),
+            ],
+            index,
+        ));
+
+        let track_title = Term::from_field_text(track_title_string, "");
+        let track_title_query = Box::new(TermQuery::new(track_title, IndexRecordOption::Basic));
+
+        let album_type = Term::from_field_text(document_type, "albums");
+        let album_type_query = Box::new(TermQuery::new(album_type, IndexRecordOption::Basic));
+
+        let mut query_parser = QueryParser::for_index(index, vec![document_type]);
+        query_parser.set_field_fuzzy(document_type, false, 1, true);
+        let fuzzy_query = query_parser.parse_query(search).unwrap();
+
+        let boolean_queries: Vec<(Occur, Box<dyn tantivy::query::Query>)> = vec![
+            (Occur::Must, max_query),
+            (Occur::Must, track_title_query),
+            (Occur::Must, album_type_query),
+            (Occur::Must, fuzzy_query),
+        ];
+        let boolean_query = Box::new(BooleanQuery::from(boolean_queries));
+        let boost_query = Box::new(BoostQuery::new(boolean_query, 7.5));
+
+        queries.push(boost_query);
+    }
+
+    // artist title
+    {
+        let max_query = Box::new(construct_query_for_fields(
+            search,
+            &[(artist_title, 1.0f32)],
+            index,
+        ));
+
+        let track_title = Term::from_field_text(track_title_string, "");
+        let track_title_query = Box::new(TermQuery::new(track_title, IndexRecordOption::Basic));
+
+        let album_title = Term::from_field_text(album_title_string, "");
+        let album_title_query = Box::new(TermQuery::new(album_title, IndexRecordOption::Basic));
+
+        let boolean_queries: Vec<(Occur, Box<dyn tantivy::query::Query>)> = vec![
+            (Occur::Must, max_query),
+            (Occur::Must, track_title_query),
+            (Occur::Must, album_title_query),
+        ];
+        let boolean_query = Box::new(BooleanQuery::from(boolean_queries));
+        let boost_query = Box::new(BoostQuery::new(boolean_query, 3.0));
+
+        queries.push(boost_query);
+    }
+
+    // artist specifically
+    {
+        let max_query = Box::new(construct_query_for_fields(
+            search,
+            &[
+                (artist_title, 3.0f32),
+                (album_title, 2.0f32),
+                (track_title, 1.0f32),
+            ],
+            index,
+        ));
+
+        let track_title = Term::from_field_text(track_title_string, "");
+        let track_title_query = Box::new(TermQuery::new(track_title, IndexRecordOption::Basic));
+
+        let album_title = Term::from_field_text(album_title_string, "");
+        let album_title_query = Box::new(TermQuery::new(album_title, IndexRecordOption::Basic));
+
+        let artist_type = Term::from_field_text(document_type, "artists");
+        let artist_type_query = Box::new(TermQuery::new(artist_type, IndexRecordOption::Basic));
+
+        let mut query_parser = QueryParser::for_index(index, vec![document_type]);
+        query_parser.set_field_fuzzy(document_type, false, 1, true);
+        let fuzzy_query = query_parser.parse_query(search).unwrap();
+
+        let boolean_queries: Vec<(Occur, Box<dyn tantivy::query::Query>)> = vec![
+            (Occur::Must, max_query),
+            (Occur::Must, track_title_query),
+            (Occur::Must, album_title_query),
+            (Occur::Must, artist_type_query),
+            (Occur::Must, fuzzy_query),
+        ];
+        let boolean_query = Box::new(BooleanQuery::from(boolean_queries));
+        let boost_query = Box::new(BoostQuery::new(boolean_query, 10.0));
+
+        queries.push(boost_query);
+    }
+
+    DisjunctionMaxQuery::new(queries)
+}
+
+pub fn search_global_search_index(
+    search: &str,
+    offset: usize,
+    limit: usize,
+) -> Result<Vec<NamedFieldDocument>, SearchIndexError> {
+    log::debug!("Searching global_search_index...");
+    let query = sanitize_query(search);
+    let index: &Index = &GLOBAL_SEARCH_INDEX.read().unwrap();
+    let schema = index.schema();
 
     // # Searching
     //
@@ -372,145 +594,6 @@ pub fn search_global_search_index(
     // and release it right after your query is finished.
     let searcher = reader.searcher();
 
-    // ### Query
-    let mut outer_parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
-
-    {
-        let fields = [
-            (artist_title, 5.0f32),
-            (album_title, 3.0f32),
-            (track_title, 1.0f32),
-            (document_type, 10.0f32),
-        ];
-        let mut parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
-        for (field, boost) in fields {
-            let mut word_parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
-            for word in query.split_whitespace() {
-                let term = Term::from_field_text(field, word);
-                let fuzzy = Box::new(FuzzyTermQuery::new(term, 1, true));
-                let boost = Box::new(BoostQuery::new(fuzzy, boost));
-
-                word_parts.push((Occur::Should, boost));
-            }
-
-            parts.push((
-                Occur::Should,
-                Box::new(BoostQuery::new(
-                    Box::new(BooleanQuery::from(word_parts)),
-                    1.0,
-                )),
-            ));
-
-            let mut word_parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
-            for word in query.split_whitespace() {
-                let term = Term::from_field_text(field, word);
-                let term_query = Box::new(TermQuery::new(term, IndexRecordOption::Basic));
-                let boost = Box::new(BoostQuery::new(term_query, boost * 5.0));
-
-                word_parts.push((Occur::Should, boost));
-            }
-
-            parts.push((
-                Occur::Should,
-                Box::new(BoostQuery::new(
-                    Box::new(BooleanQuery::from(word_parts)),
-                    6.0,
-                )),
-            ));
-        }
-
-        outer_parts.push((
-            Occur::Should,
-            Box::new(BoostQuery::new(Box::new(BooleanQuery::from(parts)), 1.0)),
-        ));
-    }
-
-    {
-        let fields = [(album_title, 3.0f32)];
-        let mut parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
-        let mut inner_parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
-        for (field, boost) in fields {
-            for word in query.split_whitespace() {
-                let term = Term::from_field_text(field, word);
-                let fuzzy = Box::new(FuzzyTermQuery::new(term, 1, true));
-                let boost = Box::new(BoostQuery::new(fuzzy, boost));
-
-                inner_parts.push((Occur::Should, boost))
-            }
-        }
-        parts.push((
-            Occur::Must,
-            Box::new(BoostQuery::new(
-                Box::new(BooleanQuery::from(inner_parts)),
-                1.0,
-            )),
-        ));
-        let mut inner_parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
-        let term = Term::from_field_text(track_title_string, "");
-        let term_query = Box::new(TermQuery::new(term, IndexRecordOption::Basic));
-        inner_parts.push((Occur::Must, term_query));
-
-        parts.push((
-            Occur::Must,
-            Box::new(BoostQuery::new(
-                Box::new(BooleanQuery::from(inner_parts)),
-                1.0,
-            )),
-        ));
-
-        outer_parts.push((
-            Occur::Should,
-            Box::new(BoostQuery::new(Box::new(BooleanQuery::from(parts)), 30.0)),
-        ));
-    }
-
-    {
-        let fields = [(artist_title, 5.0f32)];
-        let mut parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
-        let mut inner_parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
-        for (field, boost) in fields {
-            for word in query.split_whitespace() {
-                let term = Term::from_field_text(field, word);
-                let fuzzy = Box::new(FuzzyTermQuery::new(term, 1, true));
-                let boost = Box::new(BoostQuery::new(fuzzy, boost));
-
-                inner_parts.push((Occur::Should, boost))
-            }
-        }
-        parts.push((
-            Occur::Must,
-            Box::new(BoostQuery::new(
-                Box::new(BooleanQuery::from(inner_parts)),
-                1.0,
-            )),
-        ));
-
-        let mut inner_parts: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
-        let term = Term::from_field_text(album_title_string, "");
-        let term_query = Box::new(TermQuery::new(term, IndexRecordOption::Basic));
-        let boost = Box::new(BoostQuery::new(term_query, 30.0));
-        inner_parts.push((Occur::Should, boost));
-
-        let term = Term::from_field_text(track_title_string, "");
-        let term_query = Box::new(TermQuery::new(term, IndexRecordOption::Basic));
-        let boost = Box::new(BoostQuery::new(term_query, 5.0));
-        inner_parts.push((Occur::Should, boost));
-        parts.push((
-            Occur::Must,
-            Box::new(BoostQuery::new(
-                Box::new(BooleanQuery::from(inner_parts)),
-                1.0,
-            )),
-        ));
-
-        outer_parts.push((
-            Occur::Should,
-            Box::new(BoostQuery::new(Box::new(BooleanQuery::from(parts)), 500.0)),
-        ));
-    }
-
-    let query = BooleanQuery::from(outer_parts);
-
     // A query defines a set of documents, as
     // well as the way they should be scored.
     //
@@ -524,8 +607,13 @@ pub fn search_global_search_index(
     // only in the top 10. Keeping track of our top 10 best documents
     // is the role of the `TopDocs` collector.
 
+    let global_search_query = construct_global_search_query(&query, index, &schema);
+
     // We can now perform our query.
-    let top_docs = searcher.search(&query, &TopDocs::with_limit(limit).and_offset(offset))?;
+    let top_docs = searcher.search(
+        &global_search_query,
+        &TopDocs::with_limit(limit).and_offset(offset),
+    )?;
 
     // The actual documents still need to be
     // retrieved from Tantivy's store.
