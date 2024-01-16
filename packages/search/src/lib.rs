@@ -860,13 +860,14 @@ mod tests {
         crate::populate_global_search_index(TEST_DATA.clone(), true).unwrap();
         let results = crate::search_global_search_index("in procession", 0, 10).unwrap();
 
-        assert_eq!(results.len(), 3);
+        assert_eq!(results.len(), 4);
         assert_eq!(
             results.iter().map(|r| r.0.clone()).collect::<Vec<_>>(),
             to_btree_vec(vec![
                 OMENS_TRACK_2.clone(),
                 OMENS_TRACK_3.clone(),
                 OMENS_TRACK_4.clone(),
+                OMENS_TRACK_7.clone(),
             ])
         );
     }
@@ -879,10 +880,14 @@ mod tests {
         crate::populate_global_search_index(TEST_DATA.clone(), true).unwrap();
         let results = crate::search_global_search_index("in procession", 1, 10).unwrap();
 
-        assert_eq!(results.len(), 2);
+        assert_eq!(results.len(), 3);
         assert_eq!(
             results.iter().map(|r| r.0.clone()).collect::<Vec<_>>(),
-            to_btree_vec(vec![OMENS_TRACK_3.clone(), OMENS_TRACK_4.clone(),])
+            to_btree_vec(vec![
+                OMENS_TRACK_3.clone(),
+                OMENS_TRACK_4.clone(),
+                OMENS_TRACK_7.clone(),
+            ])
         );
     }
 
@@ -926,7 +931,7 @@ mod tests {
             crate::search_global_search_index("in procession", 0, 10)
                 .unwrap()
                 .len(),
-            3
+            4
         );
 
         crate::recreate_global_search_index(&temp_index_path())
@@ -943,7 +948,7 @@ mod tests {
             crate::search_global_search_index("in procession", 0, 10)
                 .unwrap()
                 .len(),
-            3
+            4
         );
 
         crate::reindex_global_search_index(TEST_DATA.clone())
@@ -952,7 +957,7 @@ mod tests {
             crate::search_global_search_index("in procession", 0, 10)
                 .unwrap()
                 .len(),
-            3
+            4
         );
     }
 }
