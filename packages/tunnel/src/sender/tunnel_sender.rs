@@ -1074,7 +1074,7 @@ impl TunnelSender {
                                 }
                             }
                         }
-                        Ok(TrackSource::Tidal(tidal_path)) => {
+                        Ok(TrackSource::Tidal(path)) | Ok(TrackSource::Qobuz(path)) => {
                             let writer = ByteWriter::default();
                             let stream = writer.stream();
 
@@ -1128,7 +1128,7 @@ impl TunnelSender {
                                 }
 
                                 let source = Box::new(RemoteByteStream::new(
-                                    tidal_path,
+                                    path,
                                     None,
                                     true,
                                     CancellationToken::new(),

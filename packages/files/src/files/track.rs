@@ -13,6 +13,7 @@ use moosicbox_core::{
     },
     types::{AudioFormat, PlaybackQuality},
 };
+use moosicbox_qobuz::QobuzTrackFileUrlError;
 use moosicbox_stream_utils::ByteWriter;
 use moosicbox_symphonia_player::{output::AudioOutputHandler, play_file_path_str, PlaybackError};
 use moosicbox_tidal::TidalTrackUrlError;
@@ -29,6 +30,7 @@ use thiserror::Error;
 pub enum TrackSource {
     LocalFilePath(String),
     Tidal(String),
+    Qobuz(String),
 }
 
 #[derive(Debug, Error)]
@@ -41,6 +43,8 @@ pub enum TrackSourceError {
     Db(#[from] DbError),
     #[error(transparent)]
     TidalTrackUrl(#[from] TidalTrackUrlError),
+    #[error(transparent)]
+    QobuzTrackUrl(#[from] QobuzTrackFileUrlError),
 }
 
 pub async fn get_track_source(track_id: i32, db: Db) -> Result<TrackSource, TrackSourceError> {
@@ -87,6 +91,19 @@ pub async fn get_track_source(track_id: i32, db: Db) -> Result<TrackSource, Trac
             .first()
             .unwrap()
             .to_string(),
+        )),
+        moosicbox_core::sqlite::models::TrackSource::Qobuz => Ok(TrackSource::Qobuz(
+            moosicbox_qobuz::track_file_url(
+                &db,
+                track
+                    .qobuz_id
+                    .unwrap_or_else(|| panic!("Track {track_id} is missing qobuz_id")),
+                moosicbox_qobuz::QobuzAudioQuality::Low,
+                None,
+                None,
+                None,
+            )
+            .await?,
         )),
     }
 }
@@ -267,7 +284,7 @@ pub fn get_or_init_track_visualization(
 
             Ok(ret_viz)
         }
-        TrackSource::Tidal(_tidal_track_url) => unimplemented!(),
+        TrackSource::Tidal(_url) | TrackSource::Qobuz(_url) => unimplemented!(),
     }
 }
 
@@ -315,7 +332,9 @@ pub fn get_or_init_track_size(
             }
             AudioFormat::Source => File::open(path).unwrap().metadata().unwrap().len(),
         },
-        TrackSource::Tidal(_) => return Err(TrackInfoError::UnsupportedSource(source.clone())),
+        TrackSource::Tidal(_) | TrackSource::Qobuz(_) => {
+            return Err(TrackInfoError::UnsupportedSource(source.clone()))
+        }
     };
 
     set_track_size(

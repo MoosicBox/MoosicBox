@@ -179,9 +179,9 @@ pub async fn track_endpoint(
                             log::error!("Failed to encode to aac: {err:?}");
                         }
                     }
-                    TrackSource::Tidal(tidal_track_url) => {
+                    TrackSource::Tidal(url) | TrackSource::Qobuz(url) => {
                         let source = Box::new(RemoteByteStream::new(
-                            tidal_track_url,
+                            url,
                             Some(size),
                             true,
                             CancellationToken::new(),
@@ -249,14 +249,9 @@ pub async fn track_endpoint(
             .await?
             .into_response(&req)),
         },
-        TrackSource::Tidal(tidal_track_url) => {
+        TrackSource::Tidal(url) | TrackSource::Qobuz(url) => {
             let client = reqwest::Client::new();
-            let bytes = client
-                .get(tidal_track_url)
-                .send()
-                .await
-                .unwrap()
-                .bytes_stream();
+            let bytes = client.get(url).send().await.unwrap().bytes_stream();
             Ok(HttpResponse::Ok().streaming(bytes))
         }
     }

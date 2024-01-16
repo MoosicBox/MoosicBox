@@ -260,8 +260,16 @@ fn main() -> std::io::Result<()> {
                 .service(moosicbox_tidal::api::album_endpoint)
                 .service(moosicbox_tidal::api::artist_endpoint)
                 .service(moosicbox_tidal::api::track_endpoint)
+                .service(moosicbox_qobuz::api::user_login_endpoint)
+                .service(moosicbox_qobuz::api::track_file_url_endpoint)
+                .service(moosicbox_qobuz::api::favorite_artists_endpoint)
                 .service(moosicbox_qobuz::api::favorite_albums_endpoint)
+                .service(moosicbox_qobuz::api::favorite_tracks_endpoint)
+                .service(moosicbox_qobuz::api::artist_albums_endpoint)
                 .service(moosicbox_qobuz::api::album_tracks_endpoint)
+                .service(moosicbox_qobuz::api::album_endpoint)
+                .service(moosicbox_qobuz::api::artist_endpoint)
+                .service(moosicbox_qobuz::api::track_endpoint)
         };
 
         let mut http_server = actix_web::HttpServer::new(app);

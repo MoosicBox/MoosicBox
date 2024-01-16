@@ -100,6 +100,7 @@ pub struct ScanTrack {
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
     pub source: TrackSource,
+    pub qobuz_id: Option<u64>,
     pub tidal_id: Option<u64>,
 }
 
@@ -118,6 +119,7 @@ impl ScanTrack {
         sample_rate: &Option<u32>,
         channels: &Option<u8>,
         source: TrackSource,
+        qobuz_id: &Option<u64>,
         tidal_id: &Option<u64>,
     ) -> Self {
         Self {
@@ -133,6 +135,7 @@ impl ScanTrack {
             sample_rate: *sample_rate,
             channels: *channels,
             source,
+            qobuz_id: *qobuz_id,
             tidal_id: *tidal_id,
         }
     }
@@ -147,6 +150,7 @@ pub struct ScanAlbum {
     pub date_released: Option<String>,
     pub directory: String,
     pub tracks: Arc<RwLock<Vec<Arc<RwLock<ScanTrack>>>>>,
+    pub qobuz_id: Option<String>,
     pub tidal_id: Option<u64>,
 }
 
@@ -156,6 +160,7 @@ impl ScanAlbum {
         name: &str,
         date_released: &Option<String>,
         directory: &str,
+        qobuz_id: &Option<String>,
         tidal_id: &Option<u64>,
     ) -> Self {
         Self {
@@ -166,6 +171,7 @@ impl ScanAlbum {
             date_released: date_released.clone(),
             directory: directory.to_string(),
             tracks: Arc::new(RwLock::new(Vec::new())),
+            qobuz_id: qobuz_id.clone(),
             tidal_id: *tidal_id,
         }
     }
@@ -185,6 +191,7 @@ impl ScanAlbum {
         sample_rate: &Option<u32>,
         channels: &Option<u8>,
         source: TrackSource,
+        qobuz_id: &Option<u64>,
         tidal_id: &Option<u64>,
     ) -> Arc<RwLock<ScanTrack>> {
         if let Some(track) = {
@@ -221,6 +228,7 @@ impl ScanAlbum {
                 sample_rate,
                 channels,
                 source,
+                qobuz_id,
                 tidal_id,
             )));
             self.tracks.write().await.push(track.clone());
@@ -258,16 +266,18 @@ pub struct ScanArtist {
     pub cover: Option<String>,
     pub searched_cover: bool,
     pub albums: Arc<RwLock<Vec<Arc<RwLock<ScanAlbum>>>>>,
+    pub qobuz_id: Option<u64>,
     pub tidal_id: Option<u64>,
 }
 
 impl ScanArtist {
-    pub fn new(name: &str, tidal_id: &Option<u64>) -> Self {
+    pub fn new(name: &str, qobuz_id: &Option<u64>, tidal_id: &Option<u64>) -> Self {
         Self {
             name: name.to_string(),
             cover: None,
             searched_cover: false,
             albums: Arc::new(RwLock::new(Vec::new())),
+            qobuz_id: *qobuz_id,
             tidal_id: *tidal_id,
         }
     }
@@ -277,6 +287,7 @@ impl ScanArtist {
         name: &str,
         date_released: &Option<String>,
         directory: &str,
+        qobuz_id: &Option<String>,
         tidal_id: &Option<u64>,
     ) -> Arc<RwLock<ScanAlbum>> {
         if let Some(album) = {
@@ -298,6 +309,7 @@ impl ScanArtist {
                 name,
                 date_released,
                 directory,
+                qobuz_id,
                 tidal_id,
             )));
             self.albums.write().await.push(album.clone());
@@ -353,6 +365,7 @@ impl ScanOutput {
     pub async fn add_artist(
         &mut self,
         name: &str,
+        qobuz_id: &Option<u64>,
         tidal_id: &Option<u64>,
     ) -> Arc<RwLock<ScanArtist>> {
         if let Some(artist) = {
@@ -369,7 +382,7 @@ impl ScanOutput {
         } {
             artist
         } else {
-            let artist = Arc::new(RwLock::new(ScanArtist::new(name, tidal_id)));
+            let artist = Arc::new(RwLock::new(ScanArtist::new(name, qobuz_id, tidal_id)));
             self.artists.write().await.push(artist.clone());
 
             artist
@@ -439,6 +452,9 @@ impl ScanOutput {
                         ("title", SqliteValue::String(artist.name.clone())),
                         ("cover", SqliteValue::StringOpt(artist.cover.clone())),
                     ]);
+                    if let Some(qobuz_id) = artist.qobuz_id {
+                        values.insert("qobuz_id", SqliteValue::Number(qobuz_id as i64));
+                    }
                     if let Some(tidal_id) = artist.tidal_id {
                         values.insert("tidal_id", SqliteValue::Number(tidal_id as i64));
                     }
@@ -484,6 +500,9 @@ impl ScanOutput {
                             SqliteValue::StringOpt(Some(album.directory.clone())),
                         ),
                     ]);
+                    if let Some(qobuz_id) = album.qobuz_id.clone() {
+                        values.insert("qobuz_id", SqliteValue::String(qobuz_id));
+                    }
                     if let Some(tidal_id) = album.tidal_id {
                         values.insert("tidal_id", SqliteValue::Number(tidal_id as i64));
                     }
@@ -533,6 +552,7 @@ impl ScanOutput {
                     InsertTrack {
                         album_id: db.id,
                         file: track.path.clone(),
+                        qobuz_id: track.qobuz_id,
                         tidal_id: track.tidal_id,
                         track: Track {
                             number: track.number as i32,

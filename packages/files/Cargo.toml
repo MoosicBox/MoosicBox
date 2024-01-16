@@ -7,6 +7,7 @@ version = "0.1.0"
 [dependencies]
 moosicbox_core             = { path = "../core" }
 moosicbox_image            = { path = "../image", default-features = false }
+moosicbox_qobuz            = { path = "../qobuz" }
 moosicbox_stream_utils     = { path = "../stream_utils" }
 moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false }
 moosicbox_tidal            = { path = "../tidal" }

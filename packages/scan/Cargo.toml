@@ -13,6 +13,9 @@ moosicbox_search     = { path = "../search" }
 # API Dependencies
 actix-web = { workspace = true, optional = true }
 
+# Qobuz Dependencies
+moosicbox_qobuz = { path = "../qobuz", optional = true }
+
 # Tidal Dependencies
 moosicbox_tidal = { path = "../tidal", optional = true }
 
@@ -36,10 +39,11 @@ tokio        = { workspace = true, features = ["macros"] }
 tokio-util   = { workspace = true }
 
 [features]
-default = ["api", "local", "tidal"]
+default = ["api", "local", "qobuz", "tidal"]
 
 fail-on-warnings = []
 
 api   = ["dep:actix-web"]
 local = ["dep:audiotags", "dep:lofty", "dep:mp3-duration"]
+qobuz = ["dep:moosicbox_qobuz"]
 tidal = ["dep:moosicbox_tidal"]

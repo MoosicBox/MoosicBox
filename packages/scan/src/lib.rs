@@ -18,6 +18,8 @@ use tokio_util::sync::CancellationToken;
 pub mod api;
 #[cfg(feature = "local")]
 pub mod local;
+#[cfg(feature = "qobuz")]
+pub mod qobuz;
 #[cfg(feature = "tidal")]
 pub mod tidal;
 
@@ -42,6 +44,8 @@ pub enum ScanOrigin {
     Local,
     #[cfg(feature = "tidal")]
     Tidal,
+    #[cfg(feature = "qobuz")]
+    Qobuz,
 }
 
 #[derive(Debug, Error)]
@@ -54,6 +58,9 @@ pub enum ScanError {
     #[cfg(feature = "tidal")]
     #[error(transparent)]
     Tidal(#[from] tidal::ScanError),
+    #[cfg(feature = "qobuz")]
+    #[error(transparent)]
+    Qobuz(#[from] qobuz::ScanError),
 }
 
 pub async fn scan(db: &Db, origins: Option<Vec<ScanOrigin>>) -> Result<(), ScanError> {
@@ -75,6 +82,8 @@ pub async fn scan(db: &Db, origins: Option<Vec<ScanOrigin>>) -> Result<(), ScanE
             ScanOrigin::Local => scan_local(db).await?,
             #[cfg(feature = "tidal")]
             ScanOrigin::Tidal => scan_tidal(db).await?,
+            #[cfg(feature = "qobuz")]
+            ScanOrigin::Qobuz => scan_qobuz(db).await?,
         }
     }
 
@@ -116,6 +125,22 @@ pub async fn scan_tidal(db: &Db) -> Result<(), tidal::ScanError> {
     }
 
     tidal::scan(db, CANCELLATION_TOKEN.clone()).await?;
+
+    Ok(())
+}
+
+#[cfg(feature = "qobuz")]
+pub async fn scan_qobuz(db: &Db) -> Result<(), qobuz::ScanError> {
+    let enabled_origins = get_enabled_scan_origins(&db.library.lock().unwrap())?;
+    let enabled = enabled_origins
+        .into_iter()
+        .any(|origin| origin == ScanOrigin::Qobuz);
+
+    if !enabled {
+        return Ok(());
+    }
+
+    qobuz::scan(db, CANCELLATION_TOKEN.clone()).await?;
 
     Ok(())
 }

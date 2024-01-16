@@ -5,8 +5,8 @@ use moosicbox_core::{
     sqlite::{db::DbError, models::TrackSource},
     types::AudioFormat,
 };
-use moosicbox_tidal::{
-    TidalAlbum, TidalAlbumTracksError, TidalArtistError, TidalFavoriteAlbumsError, TidalTrack,
+use moosicbox_qobuz::{
+    QobuzAlbum, QobuzAlbumTracksError, QobuzArtistError, QobuzFavoriteAlbumsError, QobuzTrack,
 };
 use thiserror::Error;
 use tokio::{select, sync::RwLock};
@@ -24,11 +24,11 @@ pub enum ScanError {
     #[error(transparent)]
     Db(#[from] DbError),
     #[error(transparent)]
-    TidalFavoriteAlbums(#[from] TidalFavoriteAlbumsError),
+    QobuzFavoriteAlbums(#[from] QobuzFavoriteAlbumsError),
     #[error(transparent)]
-    TidalAlbumTracks(#[from] TidalAlbumTracksError),
+    QobuzAlbumTracks(#[from] QobuzAlbumTracksError),
     #[error(transparent)]
-    TidalArtist(#[from] TidalArtistError),
+    QobuzArtist(#[from] QobuzArtistError),
     #[error(transparent)]
     UpdateDatabase(#[from] UpdateDatabaseError),
     #[error(transparent)]
@@ -44,30 +44,20 @@ pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
     let mut offset = 0;
 
     while !token.is_cancelled() {
-        log::debug!("Fetching Tidal albums offset={offset} limit={limit}");
+        log::debug!("Fetching Qobuz albums offset={offset} limit={limit}");
 
-        let albums_resp = moosicbox_tidal::favorite_albums(
-            db,
-            Some(offset),
-            Some(limit),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        );
+        let albums_resp =
+            moosicbox_qobuz::favorite_albums(db, Some(offset), Some(limit), None, None);
 
         select! {
             resp = albums_resp => {
                 match resp {
-                    Ok((tidal_albums, count)) => {
-                        let page_count = tidal_albums.len();
+                    Ok((qobuz_albums, count)) => {
+                        let page_count = qobuz_albums.len();
 
-                        log::debug!("Fetched Tidal albums offset={offset} limit={limit}: page_count={page_count}, total_count={count}");
+                        log::debug!("Fetched Qobuz albums offset={offset} limit={limit}: page_count={page_count}, total_count={count}");
 
-                        scan_albums(tidal_albums, count, db, output.clone(), token.clone()).await?;
+                        scan_albums(qobuz_albums, count, db, output.clone(), token.clone()).await?;
 
                         if page_count < (limit as usize) {
                             break;
@@ -76,13 +66,13 @@ pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
                         offset += page_count as u32;
                     }
                     Err(err) =>  {
-                        log::warn!("Tidal scan error: {err:?}");
-                        return Err(ScanError::TidalFavoriteAlbums(err));
+                        log::warn!("Qobuz scan error: {err:?}");
+                        return Err(ScanError::QobuzFavoriteAlbums(err));
                     }
                 }
             },
             _ = token.cancelled() => {
-                log::debug!("Cancelling Tidal scan");
+                log::debug!("Cancelling Qobuz scan");
                 return Ok(());
             }
         };
@@ -106,13 +96,13 @@ pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
 }
 
 async fn scan_albums(
-    albums: Vec<TidalAlbum>,
+    albums: Vec<QobuzAlbum>,
     total: u32,
     db: &Db,
     output: Arc<RwLock<ScanOutput>>,
     token: CancellationToken,
 ) -> Result<(), ScanError> {
-    log::debug!("Processing Tidal albums count={}", albums.len());
+    log::debug!("Processing Qobuz albums count={}", albums.len());
 
     for album in albums {
         let count = {
@@ -130,7 +120,7 @@ async fn scan_albums(
             output
                 .write()
                 .await
-                .add_artist(&album.artist, &None, &Some(album.artist_id))
+                .add_artist(&album.artist, &Some(album.artist_id), &None)
                 .await
         };
 
@@ -140,14 +130,14 @@ async fn scan_albums(
                 .await
                 .add_album(
                     &album.title,
-                    &Some(album.release_date.clone()),
+                    &Some(album.release_date_original.clone()),
                     CACHE_DIR
                         .join(&sanitize_filename(&album.artist))
                         .join(&sanitize_filename(&album.title))
                         .to_str()
                         .unwrap(),
+                    &Some(album.id.clone()),
                     &None,
-                    &Some(album.id),
                 )
                 .await
         };
@@ -158,10 +148,9 @@ async fn scan_albums(
                 let read_artist = { scan_artist.read().await.clone() };
 
                 if read_artist.cover.is_none() && !read_artist.searched_cover {
-                    match moosicbox_tidal::artist(db, album.artist_id, None, None, None, None).await
-                    {
+                    match moosicbox_qobuz::artist(db, album.artist_id, None, None).await {
                         Ok(artist) => {
-                            if let Some(url) = artist.picture_url(750) {
+                            if let Some(url) = artist.cover_url() {
                                 scan_artist.write().await.search_cover(url).await?;
                             }
                         }
@@ -173,11 +162,9 @@ async fn scan_albums(
             }
 
             if read_album.cover.is_none() && !read_album.searched_cover {
-                scan_album
-                    .write()
-                    .await
-                    .search_cover(album.cover_url(1280))
-                    .await?;
+                if let Some(url) = album.cover_url() {
+                    scan_album.write().await.search_cover(url).await?;
+                }
             }
         }
 
@@ -186,30 +173,22 @@ async fn scan_albums(
 
         while !token.is_cancelled() {
             log::debug!(
-                "Fetching Tidal tracks for album album_id={} offset={offset} limit={limit}",
+                "Fetching Qobuz tracks for album album_id={} offset={offset} limit={limit}",
                 album.id
             );
 
-            let tracks_resp = moosicbox_tidal::album_tracks(
-                db,
-                album.id,
-                Some(offset),
-                Some(limit),
-                None,
-                None,
-                None,
-                None,
-            );
+            let tracks_resp =
+                moosicbox_qobuz::album_tracks(db, &album.id, Some(offset), Some(limit), None, None);
 
             select! {
                 resp = tracks_resp => {
                     match resp {
-                        Ok((tidal_tracks, count)) => {
-                            let page_count = tidal_tracks.len();
+                        Ok((qobuz_tracks, count)) => {
+                            let page_count = qobuz_tracks.len();
 
-                            log::debug!("Fetched Tidal tracks offset={offset} limit={limit}: page_count={page_count}, total_count={count}");
+                            log::debug!("Fetched Qobuz tracks offset={offset} limit={limit}: page_count={page_count}, total_count={count}");
 
-                            scan_tracks(tidal_tracks, scan_album.clone()).await?;
+                            scan_tracks(qobuz_tracks, scan_album.clone()).await?;
 
                             if page_count < (limit as usize) {
                                 break;
@@ -218,13 +197,13 @@ async fn scan_albums(
                             offset += page_count as u32;
                         }
                         Err(err) =>  {
-                            log::error!("Tidal scan error: {err:?}");
+                            log::error!("Qobuz scan error: {err:?}");
                             break;
                         }
                     }
                 },
                 _ = token.cancelled() => {
-                    log::debug!("Cancelling Tidal scan");
+                    log::debug!("Cancelling Qobuz scan");
                     return Ok(());
                 }
             };
@@ -235,10 +214,10 @@ async fn scan_albums(
 }
 
 async fn scan_tracks(
-    tracks: Vec<TidalTrack>,
+    tracks: Vec<QobuzTrack>,
     scan_album: Arc<RwLock<ScanAlbum>>,
 ) -> Result<(), ScanError> {
-    log::debug!("Processing Tidal tracks count={}", tracks.len());
+    log::debug!("Processing Qobuz tracks count={}", tracks.len());
 
     for track in tracks {
         let _ = scan_album
@@ -256,9 +235,9 @@ async fn scan_tracks(
                 &None,
                 &None,
                 &None,
-                TrackSource::Tidal,
-                &None,
+                TrackSource::Qobuz,
                 &Some(track.id),
+                &None,
             )
             .await;
     }

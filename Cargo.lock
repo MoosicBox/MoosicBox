@@ -2846,6 +2846,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "md5"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "490cc448043f947bae3cbee9c203358d62dbee0db12107a74be5c30ccfd09771"
+
+[[package]]
 name = "measure_time"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3013,6 +3019,7 @@ dependencies = [
  "log",
  "moosicbox_core",
  "moosicbox_image",
+ "moosicbox_qobuz",
  "moosicbox_stream_utils",
  "moosicbox_symphonia_player",
  "moosicbox_tidal",
@@ -3104,6 +3111,7 @@ dependencies = [
  "actix-web",
  "base64",
  "log",
+ "md5",
  "moosicbox_core",
  "moosicbox_json_utils",
  "once_cell",
@@ -3132,6 +3140,7 @@ dependencies = [
  "moosicbox_config",
  "moosicbox_core",
  "moosicbox_json_utils",
+ "moosicbox_qobuz",
  "moosicbox_search",
  "moosicbox_tidal",
  "mp3-duration",

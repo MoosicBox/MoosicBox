@@ -83,6 +83,7 @@ pub enum TrackSource {
     #[default]
     Local,
     Tidal,
+    Qobuz,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
@@ -109,6 +110,7 @@ pub struct Track {
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
     pub source: TrackSource,
+    pub qobuz_id: Option<u64>,
     pub tidal_id: Option<u64>,
 }
 
@@ -151,6 +153,7 @@ impl AsModel<Track> for Row<'_> {
             channels: self.get("channels").unwrap_or_default(),
             source: TrackSource::from_str(&self.get::<_, String>("source").unwrap())
                 .expect("Missing source"),
+            qobuz_id: self.get("qobuz_id").unwrap(),
             tidal_id: self.get("tidal_id").unwrap(),
         }
     }
@@ -353,6 +356,7 @@ pub fn track_source_to_u8(source: TrackSource) -> u8 {
     match source {
         TrackSource::Local => 1,
         TrackSource::Tidal => 2,
+        TrackSource::Qobuz => 3,
     }
 }
 
