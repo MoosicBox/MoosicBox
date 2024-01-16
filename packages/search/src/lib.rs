@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
+use itertools::Itertools;
 use once_cell::sync::Lazy;
 use tantivy::collector::TopDocs;
 use tantivy::directory::MmapDirectory;
@@ -97,17 +98,20 @@ fn create_global_search_index(
     schema_builder.add_text_field("document_type", TEXT | STORED);
     schema_builder.add_text_field("document_type_string", STRING);
 
-    schema_builder.add_text_field("artist_title", TEXT | STORED);
+    schema_builder.add_text_field("artist_title", STORED);
+    schema_builder.add_text_field("artist_title_search", TEXT);
     schema_builder.add_text_field("artist_title_string", STRING);
 
     schema_builder.add_u64_field("artist_id", STORED);
 
-    schema_builder.add_text_field("album_title", TEXT | STORED);
+    schema_builder.add_text_field("album_title", STORED);
+    schema_builder.add_text_field("album_title_search", TEXT);
     schema_builder.add_text_field("album_title_string", STRING);
 
     schema_builder.add_u64_field("album_id", STORED);
 
-    schema_builder.add_text_field("track_title", TEXT | STORED);
+    schema_builder.add_text_field("track_title", STORED);
+    schema_builder.add_text_field("track_title_search", TEXT);
     schema_builder.add_text_field("track_title_string", STRING);
 
     schema_builder.add_u64_field("track_id", STORED);
@@ -246,8 +250,46 @@ pub fn populate_global_search_index(
             match value {
                 DataValue::String(value) => {
                     doc.add_text(field, value.clone());
-                    let string_field = schema.get_field(&format!("{key}_string"))?;
-                    doc.add_text(string_field, value);
+                    if let Ok(string_field) = schema.get_field(&format!("{key}_string")) {
+                        doc.add_text(string_field, value.clone());
+                    }
+                    if let Ok(search_field) = schema.get_field(&format!("{key}_search")) {
+                        doc.add_text(search_field, value.clone());
+
+                        let words = value.split_whitespace().collect::<Vec<_>>();
+
+                        let special_words = words
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, word)| word.chars().any(|c| c == '\''))
+                            .map(|(i, word)| (i, word.replace('\'', "")))
+                            .collect::<Vec<_>>();
+
+                        for i in 1..=special_words.len() {
+                            let permutations = special_words.iter().combinations(i).unique();
+
+                            for permutation in permutations {
+                                let search = words
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(i, word)| {
+                                        if let Some(escaped) = permutation
+                                            .iter()
+                                            .find(|(x, _)| *x == i)
+                                            .map(|(_, word)| word)
+                                        {
+                                            escaped.to_string()
+                                        } else {
+                                            word.to_string()
+                                        }
+                                    })
+                                    .collect::<Vec<_>>()
+                                    .join(" ");
+
+                                doc.add_text(search_field, search);
+                            }
+                        }
+                    }
                 }
                 DataValue::Bool(value) => {
                     doc.add_bool(field, value);
@@ -380,10 +422,10 @@ fn construct_global_search_query(
     index: &Index,
     schema: &Schema,
 ) -> DisjunctionMaxQuery {
-    let artist_title = schema.get_field("artist_title").unwrap();
-    let album_title = schema.get_field("album_title").unwrap();
+    let artist_title = schema.get_field("artist_title_search").unwrap();
+    let album_title = schema.get_field("album_title_search").unwrap();
     let album_title_string = schema.get_field("album_title_string").unwrap();
-    let track_title = schema.get_field("track_title").unwrap();
+    let track_title = schema.get_field("track_title_search").unwrap();
     let track_title_string = schema.get_field("track_title_string").unwrap();
     let document_type = schema.get_field("document_type").unwrap();
 

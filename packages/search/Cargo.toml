@@ -16,6 +16,7 @@ serde_json = { workspace = true, optional = true }
 # DB Dependencies
 moosicbox_core = { path = "../core", optional = true }
 
+itertools = { workspace = true }
 log       = { workspace = true }
 once_cell = { workspace = true }
 regex     = { workspace = true }
