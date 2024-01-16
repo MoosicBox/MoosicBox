@@ -207,6 +207,11 @@ jobs:
                       path: packages/scan
                       os: ubuntu-latest
 
+                    - name: scan-no-default-features
+                      path: packages/scan
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+
                     - name: scan-local
                       path: packages/scan
                       os: ubuntu-latest
