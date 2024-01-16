@@ -30,13 +30,13 @@ edition = "2021"
 [workspace.dependencies]
 actix = "0.13.1"
 actix-cors = "0.6.5"
-actix-files = "0.6.2"
+actix-files = "0.6.5"
 actix-rt = "2.9.0"
 actix-web = "4.4.1"
 actix-ws = "0.2.5"
-arrayvec = "0.7.1"
+arrayvec = "0.7.4"
 async-once-cell = "0.5.3"
-async-trait = "0.1.74"
+async-trait = "0.1.77"
 atomic_float = "0.1.0"
 audiopus = "0.2.0"
 audiotags = { git = "https://github.com/BSteffaniak/audiotags.git", branch = "master" }
@@ -44,28 +44,28 @@ awc = "3.3.0"
 aws-config = "0.101.0"
 aws-sdk-apigatewaymanagement = "0.38.0"
 aws-sdk-ssm = "0.38.0"
-base64 = "0.21.5"
+base64 = "0.21.7"
 bytes = "1.5.0"
-chrono = { version = "0.4.20", default-features = false, features = [
+chrono = { version = "0.4.31", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = "3.1.0"
+clap = "3.2.25"
 cpal = "0.15.2"
-crossbeam-channel = "0.5.8"
-derive_more = "0.99.7"
+crossbeam-channel = "0.5.11"
+derive_more = "0.99.17"
 dotenv = "0.15"
 enum-as-inner = "0.6.0"
 env_logger = "0.10"
 fdk-aac = "0.5.0"
 futures = "0.3"
-futures-channel = "0.3.29"
-futures-util = { version = "0.3.17", default-features = false, features = [
+futures-channel = "0.3.30"
+futures-util = { version = "0.3.30", default-features = false, features = [
     "std",
 ] }
 hex = "0.4.3"
 home = "0.5.9"
-image = "0.24.7"
+image = "0.24.8"
 io-streams = "0.15.0"
 kanal = "0.1.0-pre8"
 lazy_static = "1.4.0"
@@ -82,38 +82,38 @@ mysql = { version = "24.0.0", features = [
     "rustls-tls",
 ], default-features = false }
 mysql_common = { version = "0.30", default-features = false }
-ogg = "0.9.0"
-once_cell = { version = "1.18.0" }
+ogg = "0.9.1"
+once_cell = { version = "1.19.0" }
 open = "5.0.1"
-openssl = { version = "0.10.55", features = ["v110"] }
+openssl = { version = "0.10.62", features = ["v110"] }
 opus = "0.3.0"
 pretty_assertions = "1.4.0"
 pretty_env_logger = "0.4"
 qstring = "0.7.2"
 rand = "0.8"
-rangemap = "1.3.0"
+rangemap = "1.4.0"
 rb = "0.4.1"
-regex = "1.9.5"
-reqwest = { version = "0.11.20", features = ["blocking", "stream"] }
+regex = "1.10.2"
+reqwest = { version = "0.11.23", features = ["blocking", "stream"] }
 rubato = "0.12.0"
 rusqlite = { version = "0.29.0", features = ["bundled"] }
 rustls = "0.21"
 serde = { version = "1", features = ["derive"] }
-serde-aux = "4.2.0"
-serde_json = "1.0.107"
+serde-aux = "4.4.0"
+serde_json = "1.0.111"
 serial_test = "3.0.0"
 sha2 = "0.10.8"
 static_init = "1.0.3"
 strum = "0.25.0"
 strum_macros = "0.25.3"
-symphonia = { version = "0.5.2", features = ["all"] }
+symphonia = { version = "0.5.3", features = ["all"] }
 tantivy = "0.21.1"
 test-log = "0.2.14"
-thiserror = "1.0.48"
-tokio = { version = "1.24.2", features = ["sync", "io-util"] }
+thiserror = "1.0.56"
+tokio = { version = "1.35.1", features = ["sync", "io-util"] }
 tokio-stream = "0.1.14"
 tokio-tungstenite = { version = "0.20.1", features = ["native-tls-vendored"] }
-tokio-util = "0.7.4"
+tokio-util = "0.7.10"
 url = "2.5.0"
 uuid = { version = "1.6.1", features = ["v4"] }
 webp = "0.2.6"
