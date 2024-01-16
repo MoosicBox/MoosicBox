@@ -106,6 +106,7 @@ pub struct ScanTrack {
 
 impl ScanTrack {
     #[allow(clippy::too_many_arguments)]
+    #[allow(unused)]
     pub fn new(
         path: &Option<&str>,
         number: u32,
@@ -155,6 +156,7 @@ pub struct ScanAlbum {
 }
 
 impl ScanAlbum {
+    #[allow(unused)]
     pub fn new(
         artist: ScanArtist,
         name: &str,
@@ -177,6 +179,7 @@ impl ScanAlbum {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[allow(unused)]
     pub async fn add_track(
         &mut self,
         path: &Option<&str>,
@@ -271,6 +274,7 @@ pub struct ScanArtist {
 }
 
 impl ScanArtist {
+    #[allow(unused)]
     pub fn new(name: &str, qobuz_id: &Option<u64>, tidal_id: &Option<u64>) -> Self {
         Self {
             name: name.to_string(),
@@ -282,6 +286,7 @@ impl ScanArtist {
         }
     }
 
+    #[allow(unused)]
     pub async fn add_album(
         &mut self,
         name: &str,
@@ -355,6 +360,7 @@ pub struct ScanOutput {
 }
 
 impl ScanOutput {
+    #[allow(unused)]
     pub fn new() -> Self {
         Self {
             artists: Arc::new(RwLock::new(Vec::new())),
@@ -362,6 +368,7 @@ impl ScanOutput {
         }
     }
 
+    #[allow(unused)]
     pub async fn add_artist(
         &mut self,
         name: &str,
@@ -389,6 +396,7 @@ impl ScanOutput {
         }
     }
 
+    #[allow(unused)]
     pub async fn update_database(&self, db: &Db) -> Result<(), UpdateDatabaseError> {
         let artists = join_all(
             self.artists
