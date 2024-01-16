@@ -536,6 +536,11 @@ pub fn search_global_search_index(
     let results = top_docs
         .into_iter()
         .map(|(_score, doc_address)| {
+            // #[cfg(debug_assertions)]
+            // {
+            //     let explanation = global_search_query.explain(&searcher, doc_address)?;
+            //     log::debug!("{}", explanation.to_pretty_json());
+            // }
             let retrieved_doc: Document = searcher.doc(doc_address)?;
             Ok(schema.to_named_doc(&retrieved_doc))
         })
