@@ -260,22 +260,19 @@ pub async fn search_global_search_endpoint(
             break;
         }
 
-        let unique_values = values
-            .into_iter()
-            .map(|doc| doc.to_value_type())
-            .collect::<Result<Vec<ApiGlobalSearchResult>, _>>()
-            .map_err(|e| {
+        for value in values {
+            position += 1;
+
+            let value: ApiGlobalSearchResult = value.to_value_type().map_err(|e| {
                 ErrorInternalServerError(format!("Failed to search global search index: {e:?}"))
             })?;
 
-        for value in unique_values {
-            position += 1;
-
             if !results.iter().any(|r| r.to_key() == value.to_key()) {
                 results.push(value);
-            }
-            if results.len() >= limit {
-                break;
+
+                if results.len() >= limit {
+                    break;
+                }
             }
         }
     }
