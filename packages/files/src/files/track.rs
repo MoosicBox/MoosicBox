@@ -16,7 +16,7 @@ use moosicbox_core::{
 use moosicbox_qobuz::QobuzTrackFileUrlError;
 use moosicbox_stream_utils::ByteWriter;
 use moosicbox_symphonia_player::{output::AudioOutputHandler, play_file_path_str, PlaybackError};
-use moosicbox_tidal::TidalTrackUrlError;
+use moosicbox_tidal::TidalTrackFileUrlError;
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use symphonia::core::{
@@ -42,7 +42,7 @@ pub enum TrackSourceError {
     #[error(transparent)]
     Db(#[from] DbError),
     #[error(transparent)]
-    TidalTrackUrl(#[from] TidalTrackUrlError),
+    TidalTrackUrl(#[from] TidalTrackFileUrlError),
     #[error(transparent)]
     QobuzTrackUrl(#[from] QobuzTrackFileUrlError),
 }
@@ -79,7 +79,7 @@ pub async fn get_track_source(track_id: i32, db: Db) -> Result<TrackSource, Trac
             None => Err(TrackSourceError::InvalidSource),
         },
         moosicbox_core::sqlite::models::TrackSource::Tidal => Ok(TrackSource::Tidal(
-            moosicbox_tidal::track_url(
+            moosicbox_tidal::track_file_url(
                 &db,
                 moosicbox_tidal::TidalAudioQuality::High,
                 track

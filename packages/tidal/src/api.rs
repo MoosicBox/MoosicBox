@@ -10,12 +10,12 @@ use serde_json::Value;
 
 use crate::{
     album, album_tracks, artist, artist_albums, device_authorization, device_authorization_token,
-    favorite_albums, favorite_artists, favorite_tracks, track, track_url, TidalAlbum,
+    favorite_albums, favorite_artists, favorite_tracks, track, track_file_url, TidalAlbum,
     TidalAlbumError, TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError, TidalArtist,
     TidalArtistAlbumsError, TidalArtistError, TidalArtistOrder, TidalArtistOrderDirection,
     TidalAudioQuality, TidalDeviceAuthorizationError, TidalDeviceAuthorizationTokenError,
     TidalDeviceType, TidalFavoriteAlbumsError, TidalFavoriteArtistsError, TidalFavoriteTracksError,
-    TidalTrack, TidalTrackError, TidalTrackOrder, TidalTrackOrderDirection, TidalTrackUrlError,
+    TidalTrack, TidalTrackError, TidalTrackFileUrlError, TidalTrackOrder, TidalTrackOrderDirection,
 };
 
 impl ToApi<ApiTidalAlbum> for TidalAlbum {
@@ -160,13 +160,7 @@ pub async fn device_authorization_token_endpoint(
     Ok(Json(
         device_authorization_token(
             #[cfg(feature = "db")]
-            data.db
-                .clone()
-                .expect("Db not set")
-                .library
-                .lock()
-                .as_ref()
-                .unwrap(),
+            data.db.as_ref().unwrap(),
             query.client_id.clone(),
             query.client_secret.clone(),
             query.device_code.clone(),
@@ -177,27 +171,27 @@ pub async fn device_authorization_token_endpoint(
     ))
 }
 
-impl From<TidalTrackUrlError> for actix_web::Error {
-    fn from(err: TidalTrackUrlError) -> Self {
+impl From<TidalTrackFileUrlError> for actix_web::Error {
+    fn from(err: TidalTrackFileUrlError) -> Self {
         ErrorInternalServerError(err.to_string())
     }
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TidalTrackUrlQuery {
+pub struct TidalTrackFileUrlQuery {
     audio_quality: TidalAudioQuality,
     track_id: u64,
 }
 
 #[route("/tidal/track/url", method = "GET")]
-pub async fn track_url_endpoint(
+pub async fn track_file_url_endpoint(
     req: HttpRequest,
-    query: web::Query<TidalTrackUrlQuery>,
+    query: web::Query<TidalTrackFileUrlQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<Value>> {
     Ok(Json(serde_json::json!({
-        "urls": track_url(
+        "urls": track_file_url(
             #[cfg(feature = "db")]
             data.db.as_ref().unwrap(),
             query.audio_quality,
@@ -237,13 +231,7 @@ pub async fn favorite_artists_endpoint(
 ) -> Result<Json<Value>> {
     let (items, count) = favorite_artists(
         #[cfg(feature = "db")]
-        data.db
-            .clone()
-            .expect("Db not set")
-            .library
-            .lock()
-            .as_ref()
-            .unwrap(),
+        data.db.as_ref().unwrap(),
         query.offset,
         query.limit,
         query.order,
@@ -339,13 +327,7 @@ pub async fn favorite_tracks_endpoint(
 ) -> Result<Json<Value>> {
     let (items, count) = favorite_tracks(
         #[cfg(feature = "db")]
-        data.db
-            .clone()
-            .expect("Db not set")
-            .library
-            .lock()
-            .as_ref()
-            .unwrap(),
+        data.db.as_ref().unwrap(),
         query.offset,
         query.limit,
         query.order,
@@ -391,13 +373,7 @@ pub async fn artist_albums_endpoint(
 ) -> Result<Json<Value>> {
     let (items, count) = artist_albums(
         #[cfg(feature = "db")]
-        data.db
-            .clone()
-            .expect("Db not set")
-            .library
-            .lock()
-            .as_ref()
-            .unwrap(),
+        data.db.as_ref().unwrap(),
         query.artist_id,
         query.offset,
         query.limit,
@@ -483,13 +459,7 @@ pub async fn album_endpoint(
 ) -> Result<Json<ApiTidalAlbum>> {
     let album = album(
         #[cfg(feature = "db")]
-        data.db
-            .clone()
-            .expect("Db not set")
-            .library
-            .lock()
-            .as_ref()
-            .unwrap(),
+        data.db.as_ref().unwrap(),
         query.album_id,
         query.country_code.clone(),
         query.locale.clone(),
@@ -563,13 +533,7 @@ pub async fn track_endpoint(
 ) -> Result<Json<ApiTidalTrack>> {
     let track = track(
         #[cfg(feature = "db")]
-        data.db
-            .clone()
-            .expect("Db not set")
-            .library
-            .lock()
-            .as_ref()
-            .unwrap(),
+        data.db.as_ref().unwrap(),
         query.track_id,
         query.country_code.clone(),
         query.locale.clone(),

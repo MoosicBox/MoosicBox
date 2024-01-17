@@ -251,7 +251,7 @@ fn main() -> std::io::Result<()> {
                 .service(moosicbox_search::api::search_global_search_endpoint)
                 .service(moosicbox_tidal::api::device_authorization_endpoint)
                 .service(moosicbox_tidal::api::device_authorization_token_endpoint)
-                .service(moosicbox_tidal::api::track_url_endpoint)
+                .service(moosicbox_tidal::api::track_file_url_endpoint)
                 .service(moosicbox_tidal::api::favorite_artists_endpoint)
                 .service(moosicbox_tidal::api::favorite_albums_endpoint)
                 .service(moosicbox_tidal::api::favorite_tracks_endpoint)

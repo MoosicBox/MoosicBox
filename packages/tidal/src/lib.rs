@@ -5,6 +5,7 @@ pub mod api;
 #[cfg(feature = "db")]
 pub mod db;
 
+use async_recursion::async_recursion;
 use moosicbox_core::sqlite::models::AsModelResult;
 use moosicbox_json_utils::{ParseError, ToNestedValue, ToValue, ToValueType};
 use serde::{Deserialize, Serialize};
@@ -170,7 +171,7 @@ trait ToUrl {
 
 enum TidalApiEndpoint {
     DeviceAuthorization,
-    DeviceAuthorizationToken,
+    AuthorizationToken,
     Artist,
     FavoriteArtists,
     Album,
@@ -191,7 +192,7 @@ impl ToUrl for TidalApiEndpoint {
             Self::DeviceAuthorization => {
                 format!("{TIDAL_AUTH_API_BASE_URL}/oauth2/device_authorization")
             }
-            Self::DeviceAuthorizationToken => format!("{TIDAL_AUTH_API_BASE_URL}/oauth2/token"),
+            Self::AuthorizationToken => format!("{TIDAL_AUTH_API_BASE_URL}/oauth2/token"),
             Self::Artist => format!("{TIDAL_API_BASE_URL}/artists/:artistId"),
             Self::FavoriteArtists => {
                 format!("{TIDAL_API_BASE_URL}/users/:userId/favorites/artists")
@@ -303,13 +304,13 @@ pub enum TidalDeviceAuthorizationTokenError {
 }
 
 pub async fn device_authorization_token(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::DbConnection,
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     client_id: String,
     client_secret: String,
     device_code: String,
     #[cfg(feature = "db")] persist: Option<bool>,
 ) -> Result<Value, TidalDeviceAuthorizationTokenError> {
-    let url = tidal_api_endpoint!(DeviceAuthorizationToken);
+    let url = tidal_api_endpoint!(AuthorizationToken);
 
     let params = [
         ("client_id", client_id.clone()),
@@ -343,7 +344,8 @@ pub async fn device_authorization_token(
         let user_id = value.to_value("user_id")?;
 
         db::create_tidal_config(
-            &db.inner,
+            &db.library.lock().as_ref().unwrap().inner,
+            &client_id,
             access_token,
             refresh_token,
             client_name,
@@ -361,66 +363,208 @@ pub async fn device_authorization_token(
     }))
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
-pub enum TidalAudioQuality {
-    High,
-    Lossless,
-    HiResLossless,
+struct TidalCredentials {
+    access_token: String,
+    client_id: Option<String>,
+    refresh_token: Option<String>,
+    #[cfg(feature = "db")]
+    persist: bool,
 }
 
 #[derive(Debug, Error)]
-pub enum TidalTrackUrlError {
-    #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+pub enum FetchCredentialsError {
     #[cfg(feature = "db")]
     #[error(transparent)]
     Db(#[from] moosicbox_core::sqlite::db::DbError),
     #[error("No access token available")]
     NoAccessTokenAvailable,
+}
+
+fn fetch_credentials(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    access_token: Option<String>,
+) -> Result<TidalCredentials, FetchCredentialsError> {
+    #[cfg(feature = "db")]
+    {
+        access_token
+            .map(|token| TidalCredentials {
+                access_token: token,
+                client_id: None,
+                refresh_token: None,
+                persist: false,
+            })
+            .or_else(
+                || match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
+                    Ok(Some(config)) => Some(TidalCredentials {
+                        access_token: config.access_token,
+                        client_id: Some(config.client_id),
+                        refresh_token: Some(config.refresh_token),
+                        persist: true,
+                    }),
+                    _ => None,
+                },
+            )
+            .ok_or(FetchCredentialsError::NoAccessTokenAvailable)
+    }
+
+    #[cfg(not(feature = "db"))]
+    {
+        Ok(TidalCredentials {
+            access_token: access_token.ok_or(FetchCredentialsError::NoAccessTokenAvailable)?,
+            client_id: None,
+            refresh_token: None,
+        })
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum AuthenticatedRequestError {
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[error(transparent)]
+    FetchCredentials(#[from] FetchCredentialsError),
+    #[error(transparent)]
+    RefetchAccessToken(#[from] RefetchAccessTokenError),
+    #[error("Unauthorized")]
+    Unauthorized,
+    #[error("MaxFailedAttempts")]
+    MaxFailedAttempts,
+}
+
+async fn authenticated_request(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    url: &str,
+    access_token: Option<String>,
+) -> Result<Value, AuthenticatedRequestError> {
+    authenticated_request_inner(
+        #[cfg(feature = "db")]
+        db,
+        url,
+        access_token,
+        1,
+    )
+    .await
+}
+
+#[async_recursion]
+async fn authenticated_request_inner(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    url: &str,
+    access_token: Option<String>,
+    attempt: u8,
+) -> Result<Value, AuthenticatedRequestError> {
+    if attempt > 3 {
+        log::error!("Max failed attempts for reauthentication reached");
+        return Err(AuthenticatedRequestError::MaxFailedAttempts);
+    }
+
+    let credentials = fetch_credentials(
+        #[cfg(feature = "db")]
+        db,
+        access_token,
+    )?;
+
+    let response = reqwest::Client::new()
+        .get(url)
+        .header(
+            reqwest::header::AUTHORIZATION,
+            format!("Bearer {}", credentials.access_token),
+        )
+        .send()
+        .await?;
+
+    if response.status() == 401 {
+        log::debug!("Received unauthorized response");
+        if let (Some(ref client_id), Some(ref refresh_token)) =
+            (credentials.client_id, credentials.refresh_token)
+        {
+            return authenticated_request_inner(
+                #[cfg(feature = "db")]
+                db,
+                url,
+                Some(
+                    refetch_access_token(
+                        #[cfg(feature = "db")]
+                        db,
+                        client_id,
+                        refresh_token,
+                        #[cfg(feature = "db")]
+                        credentials.persist,
+                    )
+                    .await?,
+                ),
+                attempt + 1,
+            )
+            .await;
+        } else {
+            return Err(AuthenticatedRequestError::Unauthorized);
+        }
+    }
+
+    Ok(response.json::<Value>().await?)
+}
+
+#[derive(Debug, Error)]
+pub enum RefetchAccessTokenError {
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    Db(#[from] moosicbox_core::sqlite::db::DbError),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
 
-pub async fn track_url(
+async fn refetch_access_token(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    audio_quality: TidalAudioQuality,
-    track_id: u64,
-    access_token: Option<String>,
-) -> Result<Vec<String>, TidalTrackUrlError> {
-    #[cfg(feature = "db")]
-    let access_token = access_token.unwrap_or(
-        db::get_tidal_access_token(&db.library.lock().as_ref().unwrap().inner)?
-            .ok_or(TidalTrackUrlError::NoAccessTokenAvailable)?,
-    );
+    client_id: &str,
+    refresh_token: &str,
+    #[cfg(feature = "db")] persist: bool,
+) -> Result<String, RefetchAccessTokenError> {
+    log::debug!("Refetching access token");
+    let url = tidal_api_endpoint!(AuthorizationToken);
 
-    #[cfg(not(feature = "db"))]
-    let access_token = access_token.ok_or(TidalTrackUrlError::NoAccessTokenAvailable)?;
+    let params = [
+        ("client_id", client_id.to_string()),
+        ("refresh_token", refresh_token.to_string()),
+        ("grant_type", "refresh_token".to_string()),
+        ("scope", "r_usr w_usr w_sub".to_string()),
+    ];
 
-    let url = tidal_api_endpoint!(
-        TrackUrl,
-        &[(":trackId", &track_id.to_string())],
-        &[
-            ("audioquality", audio_quality.as_ref()),
-            ("urlusagemode", "STREAM"),
-            ("assetpresentation", "FULL")
-        ]
-    );
-
-    let urls = reqwest::Client::new()
-        .get(url)
-        .header(
-            reqwest::header::AUTHORIZATION,
-            format!("Bearer {}", access_token),
-        )
+    let value: Value = reqwest::Client::new()
+        .post(url)
+        .form(&params)
         .send()
         .await?
-        .json::<Value>()
-        .await?
-        .to_value("urls")?;
+        .json()
+        .await?;
 
-    Ok(urls)
+    let access_token = value.to_value::<&str>("access_token")?;
+
+    #[cfg(feature = "db")]
+    if persist {
+        let client_name = value.to_value("clientName")?;
+        let expires_in = value.to_value("expires_in")?;
+        let scope = value.to_value("scope")?;
+        let token_type = value.to_value("token_type")?;
+        let user = serde_json::to_string(value.to_value::<&Value>("user")?).unwrap();
+        let user_id = value.to_value("user_id")?;
+
+        db::create_tidal_config(
+            &db.library.lock().as_ref().unwrap().inner,
+            client_id,
+            access_token,
+            refresh_token,
+            client_name,
+            expires_in,
+            scope,
+            token_type,
+            &user,
+            user_id,
+        )?;
+    }
+
+    Ok(access_token.to_string())
 }
 
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
@@ -441,12 +585,7 @@ pub enum TidalArtistOrderDirection {
 #[derive(Debug, Error)]
 pub enum TidalFavoriteArtistsError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
-    #[error("No access token available")]
-    NoAccessTokenAvailable,
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
     #[error("No user ID available")]
     NoUserIdAvailable,
     #[error(transparent)]
@@ -455,7 +594,7 @@ pub enum TidalFavoriteArtistsError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn favorite_artists(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::DbConnection,
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     offset: Option<u32>,
     limit: Option<u32>,
     order: Option<TidalArtistOrder>,
@@ -467,25 +606,14 @@ pub async fn favorite_artists(
     user_id: Option<u64>,
 ) -> Result<(Vec<TidalArtist>, u32), TidalFavoriteArtistsError> {
     #[cfg(feature = "db")]
-    let (access_token, user_id) = {
-        match (access_token.clone(), user_id) {
-            (Some(access_token), Some(user_id)) => (access_token, user_id),
-            _ => {
-                let config = db::get_tidal_config(&db.inner)?
-                    .ok_or(TidalFavoriteArtistsError::NoAccessTokenAvailable)?;
-                (
-                    access_token.unwrap_or(config.access_token),
-                    user_id.unwrap_or(config.user_id),
-                )
-            }
+    let user_id = user_id.or_else(|| {
+        match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
+            Ok(Some(config)) => Some(config.user_id),
+            _ => None,
         }
-    };
+    });
 
-    #[cfg(not(feature = "db"))]
-    let (access_token, user_id) = (
-        access_token.ok_or(TidalFavoriteArtistsError::NoAccessTokenAvailable)?,
-        user_id.ok_or(TidalFavoriteArtistsError::NoUserIdAvailable)?,
-    );
+    let user_id = user_id.ok_or(TidalFavoriteArtistsError::NoUserIdAvailable)?;
 
     let url = tidal_api_endpoint!(
         FavoriteArtists,
@@ -509,16 +637,13 @@ pub async fn favorite_artists(
         ]
     );
 
-    let value: Value = reqwest::Client::new()
-        .get(url)
-        .header(
-            reqwest::header::AUTHORIZATION,
-            format!("Bearer {}", access_token),
-        )
-        .send()
-        .await?
-        .json()
-        .await?;
+    let value = authenticated_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        access_token,
+    )
+    .await?;
 
     let items = value.to_nested_value(&["items", "item"])?;
     let count = value.to_value("totalNumberOfItems")?;
@@ -544,12 +669,7 @@ pub enum TidalAlbumOrderDirection {
 #[derive(Debug, Error)]
 pub enum TidalFavoriteAlbumsError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
-    #[error("No access token available")]
-    NoAccessTokenAvailable,
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
     #[error("No user ID available")]
     NoUserIdAvailable,
     #[error(transparent)]
@@ -570,25 +690,14 @@ pub async fn favorite_albums(
     user_id: Option<u64>,
 ) -> Result<(Vec<TidalAlbum>, u32), TidalFavoriteAlbumsError> {
     #[cfg(feature = "db")]
-    let (access_token, user_id) = {
-        match (access_token.clone(), user_id) {
-            (Some(access_token), Some(user_id)) => (access_token, user_id),
-            _ => {
-                let config = db::get_tidal_config(&db.library.lock().unwrap().inner)?
-                    .ok_or(TidalFavoriteAlbumsError::NoAccessTokenAvailable)?;
-                (
-                    access_token.unwrap_or(config.access_token),
-                    user_id.unwrap_or(config.user_id),
-                )
-            }
+    let user_id = user_id.or_else(|| {
+        match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
+            Ok(Some(config)) => Some(config.user_id),
+            _ => None,
         }
-    };
+    });
 
-    #[cfg(not(feature = "db"))]
-    let (access_token, user_id) = (
-        access_token.ok_or(TidalFavoriteAlbumsError::NoAccessTokenAvailable)?,
-        user_id.ok_or(TidalFavoriteAlbumsError::NoUserIdAvailable)?,
-    );
+    let user_id = user_id.ok_or(TidalFavoriteAlbumsError::NoUserIdAvailable)?;
 
     let url = tidal_api_endpoint!(
         FavoriteAlbums,
@@ -612,16 +721,13 @@ pub async fn favorite_albums(
         ]
     );
 
-    let value: Value = reqwest::Client::new()
-        .get(url)
-        .header(
-            reqwest::header::AUTHORIZATION,
-            format!("Bearer {}", access_token),
-        )
-        .send()
-        .await?
-        .json()
-        .await?;
+    let value = authenticated_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        access_token,
+    )
+    .await?;
 
     let items = value.to_nested_value(&["items", "item"])?;
     let count = value.to_value("totalNumberOfItems")?;
@@ -647,12 +753,7 @@ pub enum TidalTrackOrderDirection {
 #[derive(Debug, Error)]
 pub enum TidalFavoriteTracksError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
-    #[error("No access token available")]
-    NoAccessTokenAvailable,
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
     #[error("No user ID available")]
     NoUserIdAvailable,
     #[error(transparent)]
@@ -661,7 +762,7 @@ pub enum TidalFavoriteTracksError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn favorite_tracks(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::DbConnection,
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     offset: Option<u32>,
     limit: Option<u32>,
     order: Option<TidalTrackOrder>,
@@ -673,25 +774,14 @@ pub async fn favorite_tracks(
     user_id: Option<u64>,
 ) -> Result<(Vec<TidalTrack>, u32), TidalFavoriteTracksError> {
     #[cfg(feature = "db")]
-    let (access_token, user_id) = {
-        match (access_token.clone(), user_id) {
-            (Some(access_token), Some(user_id)) => (access_token, user_id),
-            _ => {
-                let config = db::get_tidal_config(&db.inner)?
-                    .ok_or(TidalFavoriteTracksError::NoAccessTokenAvailable)?;
-                (
-                    access_token.unwrap_or(config.access_token),
-                    user_id.unwrap_or(config.user_id),
-                )
-            }
+    let user_id = user_id.or_else(|| {
+        match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
+            Ok(Some(config)) => Some(config.user_id),
+            _ => None,
         }
-    };
+    });
 
-    #[cfg(not(feature = "db"))]
-    let (access_token, user_id) = (
-        access_token.ok_or(TidalFavoriteTracksError::NoAccessTokenAvailable)?,
-        user_id.ok_or(TidalFavoriteTracksError::NoUserIdAvailable)?,
-    );
+    let user_id = user_id.ok_or(TidalFavoriteTracksError::NoUserIdAvailable)?;
 
     let url = tidal_api_endpoint!(
         FavoriteTracks,
@@ -715,16 +805,13 @@ pub async fn favorite_tracks(
         ]
     );
 
-    let value: Value = reqwest::Client::new()
-        .get(url)
-        .header(
-            reqwest::header::AUTHORIZATION,
-            format!("Bearer {}", access_token),
-        )
-        .send()
-        .await?
-        .json()
-        .await?;
+    let value = authenticated_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        access_token,
+    )
+    .await?;
 
     let items = value.to_nested_value(&["items", "item"])?;
     let count = value.to_value("totalNumberOfItems")?;
@@ -735,19 +822,14 @@ pub async fn favorite_tracks(
 #[derive(Debug, Error)]
 pub enum TidalArtistAlbumsError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
-    #[error("No access token available")]
-    NoAccessTokenAvailable,
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
 
 #[allow(clippy::too_many_arguments)]
 pub async fn artist_albums(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::DbConnection,
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     artist_id: u64,
     offset: Option<u32>,
     limit: Option<u32>,
@@ -756,20 +838,6 @@ pub async fn artist_albums(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
 ) -> Result<(Vec<TidalAlbum>, u32), TidalArtistAlbumsError> {
-    #[cfg(feature = "db")]
-    let access_token = match access_token {
-        Some(access_token) => access_token,
-        _ => {
-            let config = db::get_tidal_config(&db.inner)?
-                .ok_or(TidalArtistAlbumsError::NoAccessTokenAvailable)?;
-
-            access_token.unwrap_or(config.access_token)
-        }
-    };
-
-    #[cfg(not(feature = "db"))]
-    let access_token = access_token.ok_or(TidalArtistAlbumsError::NoAccessTokenAvailable)?;
-
     let url = tidal_api_endpoint!(
         ArtistAlbums,
         &[(":artistId", &artist_id.to_string())],
@@ -785,16 +853,13 @@ pub async fn artist_albums(
         ]
     );
 
-    let value: Value = reqwest::Client::new()
-        .get(url)
-        .header(
-            reqwest::header::AUTHORIZATION,
-            format!("Bearer {}", access_token),
-        )
-        .send()
-        .await?
-        .json()
-        .await?;
+    let value = authenticated_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        access_token,
+    )
+    .await?;
 
     let items = value.to_nested_value(&["items", "item"])?;
     let count = value.to_value("totalNumberOfItems")?;
@@ -805,12 +870,7 @@ pub async fn artist_albums(
 #[derive(Debug, Error)]
 pub enum TidalAlbumTracksError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
-    #[error("No access token available")]
-    NoAccessTokenAvailable,
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
     #[error(transparent)]
@@ -828,20 +888,6 @@ pub async fn album_tracks(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
 ) -> Result<(Vec<TidalTrack>, u32), TidalAlbumTracksError> {
-    #[cfg(feature = "db")]
-    let access_token = match access_token {
-        Some(access_token) => access_token,
-        _ => {
-            let config = db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner)?
-                .ok_or(TidalAlbumTracksError::NoAccessTokenAvailable)?;
-
-            access_token.unwrap_or(config.access_token)
-        }
-    };
-
-    #[cfg(not(feature = "db"))]
-    let access_token = access_token.ok_or(TidalAlbumTracksError::NoAccessTokenAvailable)?;
-
     let url = tidal_api_endpoint!(
         AlbumTracks,
         &[(":albumId", &album_id.to_string())],
@@ -857,16 +903,13 @@ pub async fn album_tracks(
         ]
     );
 
-    let value: Value = reqwest::Client::new()
-        .get(url)
-        .header(
-            reqwest::header::AUTHORIZATION,
-            format!("Bearer {}", access_token),
-        )
-        .send()
-        .await?
-        .json()
-        .await?;
+    let value = authenticated_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        access_token,
+    )
+    .await?;
 
     let items = value
         .to_nested_value::<Option<_>>(&["items", "item"])?
@@ -880,39 +923,20 @@ pub async fn album_tracks(
 #[derive(Debug, Error)]
 pub enum TidalAlbumError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
-    #[error("No access token available")]
-    NoAccessTokenAvailable,
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
 
 #[allow(clippy::too_many_arguments)]
 pub async fn album(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::DbConnection,
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     album_id: u64,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
 ) -> Result<TidalAlbum, TidalAlbumError> {
-    #[cfg(feature = "db")]
-    let access_token = match access_token {
-        Some(access_token) => access_token,
-        _ => {
-            let config =
-                db::get_tidal_config(&db.inner)?.ok_or(TidalAlbumError::NoAccessTokenAvailable)?;
-
-            access_token.unwrap_or(config.access_token)
-        }
-    };
-
-    #[cfg(not(feature = "db"))]
-    let access_token = access_token.ok_or(TidalAlbumError::NoAccessTokenAvailable)?;
-
     let url = tidal_api_endpoint!(
         Album,
         &[(":albumId", &album_id.to_string())],
@@ -926,16 +950,13 @@ pub async fn album(
         ]
     );
 
-    let value: Value = reqwest::Client::new()
-        .get(url)
-        .header(
-            reqwest::header::AUTHORIZATION,
-            format!("Bearer {}", access_token),
-        )
-        .send()
-        .await?
-        .json()
-        .await?;
+    let value = authenticated_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        access_token,
+    )
+    .await?;
 
     Ok(value.as_model()?)
 }
@@ -943,12 +964,7 @@ pub async fn album(
 #[derive(Debug, Error)]
 pub enum TidalArtistError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
-    #[error("No access token available")]
-    NoAccessTokenAvailable,
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
     #[error(transparent)]
@@ -964,20 +980,6 @@ pub async fn artist(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
 ) -> Result<TidalArtist, TidalArtistError> {
-    #[cfg(feature = "db")]
-    let access_token = match access_token {
-        Some(access_token) => access_token,
-        _ => {
-            let config = db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner)?
-                .ok_or(TidalArtistError::NoAccessTokenAvailable)?;
-
-            access_token.unwrap_or(config.access_token)
-        }
-    };
-
-    #[cfg(not(feature = "db"))]
-    let access_token = access_token.ok_or(TidalArtistError::NoAccessTokenAvailable)?;
-
     let url = tidal_api_endpoint!(
         Artist,
         &[(":artistId", &artist_id.to_string())],
@@ -991,17 +993,14 @@ pub async fn artist(
         ]
     );
 
-    let value = reqwest::Client::new()
-        .get(url)
-        .header(
-            reqwest::header::AUTHORIZATION,
-            format!("Bearer {}", access_token),
-        )
-        .send()
-        .await?
-        .json::<Value>()
-        .await?
-        .as_model()?;
+    let value = authenticated_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        access_token,
+    )
+    .await?
+    .as_model()?;
 
     Ok(value)
 }
@@ -1009,39 +1008,20 @@ pub async fn artist(
 #[derive(Debug, Error)]
 pub enum TidalTrackError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
-    #[error("No access token available")]
-    NoAccessTokenAvailable,
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
 
 #[allow(clippy::too_many_arguments)]
 pub async fn track(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::DbConnection,
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     track_id: u64,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
 ) -> Result<TidalTrack, TidalTrackError> {
-    #[cfg(feature = "db")]
-    let access_token = match access_token {
-        Some(access_token) => access_token,
-        _ => {
-            let config =
-                db::get_tidal_config(&db.inner)?.ok_or(TidalTrackError::NoAccessTokenAvailable)?;
-
-            access_token.unwrap_or(config.access_token)
-        }
-    };
-
-    #[cfg(not(feature = "db"))]
-    let access_token = access_token.ok_or(TidalTrackError::NoAccessTokenAvailable)?;
-
     let url = tidal_api_endpoint!(
         Track,
         &[(":trackId", &track_id.to_string())],
@@ -1055,17 +1035,57 @@ pub async fn track(
         ]
     );
 
-    let value = reqwest::Client::new()
-        .get(url)
-        .header(
-            reqwest::header::AUTHORIZATION,
-            format!("Bearer {}", access_token),
-        )
-        .send()
-        .await?
-        .json::<Value>()
-        .await?
-        .as_model()?;
+    let value = authenticated_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        access_token,
+    )
+    .await?
+    .as_model()?;
 
     Ok(value)
+}
+
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum TidalAudioQuality {
+    High,
+    Lossless,
+    HiResLossless,
+}
+
+#[derive(Debug, Error)]
+pub enum TidalTrackFileUrlError {
+    #[error(transparent)]
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+}
+
+pub async fn track_file_url(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    audio_quality: TidalAudioQuality,
+    track_id: u64,
+    access_token: Option<String>,
+) -> Result<Vec<String>, TidalTrackFileUrlError> {
+    let url = tidal_api_endpoint!(
+        TrackUrl,
+        &[(":trackId", &track_id.to_string())],
+        &[
+            ("audioquality", audio_quality.as_ref()),
+            ("urlusagemode", "STREAM"),
+            ("assetpresentation", "FULL")
+        ]
+    );
+
+    Ok(authenticated_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        access_token,
+    )
+    .await?
+    .to_value("urls")?)
 }

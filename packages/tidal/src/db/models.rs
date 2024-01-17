@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct TidalConfig {
     pub id: u32,
+    pub client_id: String,
     pub access_token: String,
     pub refresh_token: String,
     pub client_name: String,
@@ -27,6 +28,7 @@ impl ToValueType<TidalConfig> for &Row<'_> {
     fn to_value_type(self) -> Result<TidalConfig, ParseError> {
         Ok(TidalConfig {
             id: self.to_value("id")?,
+            client_id: self.to_value("client_id")?,
             access_token: self.to_value("access_token")?,
             refresh_token: self.to_value("refresh_token")?,
             client_name: self.to_value("client_name")?,

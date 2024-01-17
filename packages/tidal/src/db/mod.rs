@@ -1,4 +1,4 @@
-use moosicbox_core::sqlite::db::{select, upsert, DbError, SqliteValue};
+use moosicbox_core::sqlite::db::{delete, select, upsert, DbError, SqliteValue};
 use rusqlite::Connection;
 
 pub mod models;
@@ -8,6 +8,7 @@ use crate::db::models::TidalConfig;
 #[allow(clippy::too_many_arguments)]
 pub fn create_tidal_config(
     db: &Connection,
+    client_id: &str,
     access_token: &str,
     refresh_token: &str,
     client_name: &str,
@@ -25,6 +26,7 @@ pub fn create_tidal_config(
             SqliteValue::String(refresh_token.to_string()),
         )],
         vec![
+            ("client_id", SqliteValue::String(client_id.to_string())),
             (
                 "access_token",
                 SqliteValue::String(access_token.to_string()),
@@ -45,6 +47,19 @@ pub fn create_tidal_config(
     Ok(())
 }
 
+pub fn delete_tidal_config(db: &Connection, refresh_token: &str) -> Result<(), DbError> {
+    delete::<TidalConfig>(
+        db,
+        "tidal_config",
+        &vec![(
+            "refresh_token",
+            SqliteValue::String(refresh_token.to_string()),
+        )],
+    )?;
+
+    Ok(())
+}
+
 pub fn get_tidal_config(db: &Connection) -> Result<Option<TidalConfig>, DbError> {
     let mut configs = select::<TidalConfig>(db, "tidal_config", &vec![], &["*"])?
         .into_iter()
@@ -59,6 +74,10 @@ pub fn get_tidal_config(db: &Connection) -> Result<Option<TidalConfig>, DbError>
     Ok(configs.first().cloned())
 }
 
+pub fn get_tidal_access_tokens(db: &Connection) -> Result<Option<(String, String)>, DbError> {
+    Ok(get_tidal_config(db)?.map(|c| (c.access_token.clone(), c.refresh_token.clone())))
+}
+
 pub fn get_tidal_access_token(db: &Connection) -> Result<Option<String>, DbError> {
-    Ok(get_tidal_config(db)?.map(|c| c.access_token.clone()))
+    Ok(get_tidal_access_tokens(db)?.map(|c| c.0))
 }
