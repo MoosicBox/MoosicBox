@@ -53,6 +53,20 @@ pub enum ApiGlobalSearchResult {
     Track(ApiGlobalTrackSearchResult),
 }
 
+impl ApiGlobalSearchResult {
+    fn to_key(&self) -> String {
+        match self {
+            ApiGlobalSearchResult::Artist(artist) => format!("artist|{}", artist.title),
+            ApiGlobalSearchResult::Album(album) => {
+                format!("album|{}|{}", album.title, album.artist)
+            }
+            ApiGlobalSearchResult::Track(track) => {
+                format!("track|{}|{}|{}", track.title, track.album, track.artist)
+            }
+        }
+    }
+}
+
 impl ToValueType<ApiGlobalArtistSearchResult> for &NamedFieldDocument {
     fn to_value_type(self) -> std::result::Result<ApiGlobalArtistSearchResult, ParseError> {
         Ok(ApiGlobalArtistSearchResult {
@@ -230,23 +244,44 @@ pub struct ApiGlobalTrackSearchResult {
 #[get("/search/global-search")]
 pub async fn search_global_search_endpoint(
     query: web::Query<SearchGlobalSearchQuery>,
-) -> Result<Json<Vec<ApiGlobalSearchResult>>> {
-    let results = search_global_search_index(
-        &query.query,
-        query.offset.unwrap_or(0),
-        query.limit.unwrap_or(10),
-    )
-    .map_err(|e| {
-        ErrorInternalServerError(format!("Failed to search global search index: {e:?}"))
-    })?;
+) -> Result<Json<Value>> {
+    let limit = query.limit.unwrap_or(10);
+    let offset = query.offset.unwrap_or(0);
 
-    let api_results = results
-        .iter()
-        .map(|doc| doc.to_value_type())
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| {
+    let mut position = offset;
+    let mut results: Vec<ApiGlobalSearchResult> = vec![];
+
+    while results.len() < limit {
+        let values = search_global_search_index(&query.query, position, limit).map_err(|e| {
             ErrorInternalServerError(format!("Failed to search global search index: {e:?}"))
         })?;
 
-    Ok(Json(api_results))
+        if values.is_empty() {
+            break;
+        }
+
+        let unique_values = values
+            .into_iter()
+            .map(|doc| doc.to_value_type())
+            .collect::<Result<Vec<ApiGlobalSearchResult>, _>>()
+            .map_err(|e| {
+                ErrorInternalServerError(format!("Failed to search global search index: {e:?}"))
+            })?;
+
+        for value in unique_values {
+            position += 1;
+
+            if !results.iter().any(|r| r.to_key() == value.to_key()) {
+                results.push(value);
+            }
+            if results.len() >= limit {
+                break;
+            }
+        }
+    }
+
+    Ok(Json(serde_json::json!({
+        "position": position,
+        "results": results,
+    })))
 }
