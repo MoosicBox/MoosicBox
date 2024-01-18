@@ -8,8 +8,6 @@ use crate::EncodeInfo;
 #[derive(Debug, Error)]
 pub enum EncoderError {
     #[error("Encoder error")]
-    Encoder(fdk_aac::enc::EncoderError),
-    #[error("Encoder error")]
     AudiopusEncoder(#[from] audiopus::Error),
     #[error("Encoder error")]
     OpusEncoder(::opus::Error),
