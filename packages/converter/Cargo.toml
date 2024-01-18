@@ -5,19 +5,25 @@ name    = "moosicbox_converter"
 version = "0.1.0"
 
 [dependencies]
-audiopus        = { workspace = true }
-fdk-aac         = { workspace = true }
-log             = { workspace = true }
-mp3lame-encoder = { workspace = true }
-ogg             = { workspace = true }
-opus            = { workspace = true }
-thiserror       = { workspace = true }
+# Aac dependencies
+fdk-aac = { workspace = true, optional = true }
+
+# Opus dependencies
+audiopus = { workspace = true, optional = true }
+ogg      = { workspace = true, optional = true }
+opus     = { workspace = true, optional = true }
+
+# Mp3 dependencies
+mp3lame-encoder = { workspace = true, optional = true }
+
+log       = { workspace = true }
+thiserror = { workspace = true }
 
 [features]
 default = ["aac", "mp3", "opus"]
 
 fail-on-warnings = []
 
-aac  = []
-mp3  = []
-opus = []
+aac  = ["dep:fdk-aac"]
+mp3  = ["dep:mp3lame-encoder"]
+opus = ["dep:audiopus", "dep:ogg", "dep:opus"]
