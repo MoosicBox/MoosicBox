@@ -171,7 +171,7 @@ pub fn disable_scan_origin(db: &DbConnection, origin: ScanOrigin) -> Result<(), 
 
 #[cfg(feature = "local")]
 pub fn get_scan_paths(db: &DbConnection) -> Result<Vec<String>, DbError> {
-    let locations = db::get_scan_locations(db)?;
+    let locations = db::get_scan_locations_for_origin(db, ScanOrigin::Local)?;
 
     Ok(locations
         .iter()
