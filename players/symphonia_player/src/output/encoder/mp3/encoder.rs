@@ -3,7 +3,6 @@ use std::fs::File;
 
 use crate::output::{AudioOutput, AudioOutputError, AudioOutputHandler};
 use crate::play_file_path_str;
-use crate::resampler::Resampler;
 
 use bytes::Bytes;
 use futures::Stream;
@@ -30,7 +29,6 @@ pub struct Mp3Encoder<W>
 where
     W: std::io::Write,
 {
-    resampler: RefCell<Option<Resampler<i16>>>,
     senders: RefCell<Vec<UnboundedSender<Bytes>>>,
     on_bytes: RefCell<Option<W>>,
     encoder: mp3lame_encoder::Encoder,
@@ -42,22 +40,16 @@ where
 {
     pub fn new(writer: W) -> Self {
         Self {
-            resampler: RefCell::new(None),
             senders: RefCell::new(vec![]),
             on_bytes: RefCell::new(Some(writer)),
             encoder: encoder_mp3().unwrap(),
         }
     }
 
-    pub fn open(&mut self, spec: SignalSpec, duration: Duration) {
-        self.resampler
-            .borrow_mut()
-            .replace(Resampler::<i16>::new(spec, 48000_usize, duration));
-    }
+    pub fn open(&mut self, _spec: SignalSpec, _duration: Duration) {}
 
-    pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Self, AudioOutputError> {
+    pub fn try_open(_spec: SignalSpec, _duration: Duration) -> Result<Self, AudioOutputError> {
         Ok(Self {
-            resampler: RefCell::new(Some(Resampler::<i16>::new(spec, 48000_usize, duration))),
             senders: RefCell::new(vec![]),
             on_bytes: RefCell::new(None),
             encoder: encoder_mp3().unwrap(),

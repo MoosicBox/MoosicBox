@@ -48,5 +48,5 @@ pulseaudio-standard = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
 resampler           = ["dep:arrayvec", "dep:rb", "dep:rubato"]
 
 aac  = ["resampler", "moosicbox_converter/aac"]
-mp3  = ["resampler", "moosicbox_converter/mp3"]
+mp3  = ["moosicbox_converter/mp3"]
 opus = ["resampler", "moosicbox_converter/opus"]
