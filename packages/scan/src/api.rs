@@ -55,12 +55,12 @@ pub struct ScanPathQuery {
     path: String,
 }
 
+#[cfg(feature = "local")]
 #[post("/run-scan-path")]
 pub async fn run_scan_path_endpoint(
     query: web::Query<ScanPathQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<Value>> {
-    #[cfg(feature = "local")]
     crate::local::scan(
         &query.path,
         data.db.as_ref().unwrap(),

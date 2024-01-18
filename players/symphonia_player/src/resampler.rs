@@ -99,6 +99,7 @@ where
     }
 
     /// Resample any remaining samples in the resample buffer.
+    #[allow(unused)]
     pub fn flush(&mut self) -> Option<&[T]> {
         let len = self.input[0].len();
 

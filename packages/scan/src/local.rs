@@ -139,9 +139,13 @@ fn scan_track(
             .to_uppercase();
 
         let format = match extension.as_str() {
+            #[cfg(feature = "aac")]
             "M4A" => AudioFormat::Aac,
+            #[cfg(feature = "flac")]
             "FLAC" => AudioFormat::Flac,
+            #[cfg(feature = "mp3")]
             "MP3" => AudioFormat::Mp3,
+            #[cfg(feature = "opus")]
             "OPUS" => AudioFormat::Opus,
             _ => AudioFormat::Source,
         };

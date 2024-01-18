@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use actix_web::{
     body::SizedStream,
-    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
-    http::header::{CacheControl, CacheDirective, ContentType},
+    error::{ErrorBadRequest, ErrorInternalServerError},
+    http::header::{CacheControl, CacheDirective},
     route,
     web::{self, Json},
     HttpRequest, HttpResponse, Result,
@@ -11,7 +11,6 @@ use actix_web::{
 use lazy_static::lazy_static;
 use moosicbox_core::{
     app::AppState,
-    sqlite::db::get_track,
     track_range::{parse_track_id_ranges, ParseTrackIdsError},
     types::{AudioFormat, PlaybackQuality},
 };
@@ -211,7 +210,7 @@ pub async fn track_endpoint(
                 .body(SizedStream::new(size, stream))),
             #[cfg(feature = "flac")]
             AudioFormat::Flac => {
-                let track = get_track(
+                let track = moosicbox_core::sqlite::db::get_track(
                     &data
                         .db
                         .as_ref()
@@ -223,7 +222,10 @@ pub async fn track_endpoint(
                     query.track_id,
                 )
                 .map_err(|e| ErrorInternalServerError(format!("DbError: {}", e)))?
-                .ok_or(ErrorNotFound(format!("Missing track {}", query.track_id)))?;
+                .ok_or(actix_web::error::ErrorNotFound(format!(
+                    "Missing track {}",
+                    query.track_id
+                )))?;
 
                 if track.format != Some(AudioFormat::Flac) {
                     return Err(ErrorBadRequest("Unsupported format FLAC"));
@@ -423,35 +425,43 @@ pub async fn album_artwork_endpoint(
         AlbumCoverSource::LocalFilePath(path) => {
             let mut response = HttpResponse::Ok();
 
+            response.insert_header(CacheControl(vec![CacheDirective::MaxAge(86400u32 * 14)]));
+
             #[cfg(feature = "libvips")]
             let resized = {
                 use log::error;
                 use moosicbox_image::libvips::{get_error, resize_local_file};
-                response.content_type(ContentType::jpeg());
-                resize_local_file(width, height, &path).map_err(|e| {
+                response.content_type(actix_web::http::header::ContentType::jpeg());
+                let resized = resize_local_file(width, height, &path).map_err(|e| {
                     error!("{}", get_error());
                     AlbumCoverError::File(path, e.to_string())
-                })?
+                })?;
+
+                return Ok(response.body(resized));
             };
             #[cfg(feature = "image")]
-            let resized = {
+            {
                 use moosicbox_image::{image::try_resize_local_file, Encoding};
-                if let Some(resized) =
+                let resized = if let Some(resized) =
                     try_resize_local_file(width, height, &path, Encoding::Webp, 80)
                         .map_err(|e| AlbumCoverError::File(path.clone(), e.to_string()))?
                 {
                     response.content_type("image/webp");
                     resized
                 } else {
-                    response.content_type(ContentType::jpeg());
+                    response.content_type(actix_web::http::header::ContentType::jpeg());
                     try_resize_local_file(width, height, &path, Encoding::Jpeg, 80)
                         .map_err(|e| AlbumCoverError::File(path, e.to_string()))?
                         .expect("Failed to resize to jpeg image")
-                }
-            };
+                };
 
-            response.insert_header(CacheControl(vec![CacheDirective::MaxAge(86400u32 * 14)]));
-            Ok(response.body(resized))
+                return Ok(response.body(resized));
+            }
+
+            #[allow(unreachable_code)]
+            Err(ErrorInternalServerError(format!(
+                "No image resizing features enabled for image '{path}' with size {width}x{height}"
+            )))
         }
     }
 }

@@ -973,9 +973,13 @@ impl Player {
         let query_string = format!("?{query_string}trackId={track_id}");
 
         let query_string = match quality.format {
+            #[cfg(feature = "aac")]
             AudioFormat::Aac => query_string + "&format=AAC",
+            #[cfg(feature = "flac")]
             AudioFormat::Flac => query_string + "&format=FLAC",
+            #[cfg(feature = "mp3")]
             AudioFormat::Mp3 => query_string + "&format=MP3",
+            #[cfg(feature = "opus")]
             AudioFormat::Opus => query_string + "&format=OPUS",
             AudioFormat::Source => query_string,
         };

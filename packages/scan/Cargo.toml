@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 moosicbox_config     = { path = "../config" }
-moosicbox_core       = { path = "../core" }
+moosicbox_core       = { path = "../core", default-features = false }
 moosicbox_json_utils = { path = "../json_utils" }
 moosicbox_search     = { path = "../search" }
 
@@ -39,7 +39,7 @@ tokio        = { workspace = true, features = ["macros"] }
 tokio-util   = { workspace = true }
 
 [features]
-default = ["api", "local", "qobuz", "tidal"]
+default = ["api", "local", "qobuz", "tidal", "aac", "flac", "mp3", "opus"]
 
 fail-on-warnings = []
 
@@ -47,3 +47,8 @@ api   = ["dep:actix-web"]
 local = ["dep:audiotags", "dep:lofty", "dep:mp3-duration"]
 qobuz = ["dep:moosicbox_qobuz"]
 tidal = ["dep:moosicbox_tidal"]
+
+aac  = ["moosicbox_core/aac"]
+flac = ["moosicbox_core/flac"]
+mp3  = ["moosicbox_core/mp3"]
+opus = ["moosicbox_core/opus"]

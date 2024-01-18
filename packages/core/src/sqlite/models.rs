@@ -125,37 +125,57 @@ impl Track {
 
 impl AsModel<Track> for Row<'_> {
     fn as_model(&self) -> Track {
-        Track {
-            id: self.get("id").unwrap(),
-            number: self.get("number").unwrap(),
-            title: self.get("title").unwrap(),
-            duration: self.get("duration").unwrap(),
-            album: self.get("album").unwrap_or_default(),
-            album_id: self.get("album_id").unwrap(),
-            date_released: self.get("date_released").unwrap_or_default(),
-            date_added: self.get("date_added").unwrap_or_default(),
-            artist: self.get("artist").unwrap_or_default(),
-            artist_id: self.get("artist_id").unwrap_or_default(),
-            file: self.get("file").unwrap(),
-            artwork: self.get("artwork").unwrap_or_default(),
-            blur: self.get::<_, u16>("blur").unwrap_or_default() == 1,
-            bytes: self.get("bytes").unwrap_or_default(),
+        AsModel::as_model(&self)
+    }
+}
+
+impl AsModel<Track> for &Row<'_> {
+    fn as_model(&self) -> Track {
+        AsModelResult::as_model(self).unwrap()
+    }
+}
+
+impl AsModelResult<Track, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<Track, ParseError> {
+        AsModelResult::as_model(&self)
+    }
+}
+
+impl AsModelResult<Track, ParseError> for &Row<'_> {
+    fn as_model(&self) -> Result<Track, ParseError> {
+        Ok(Track {
+            id: self.to_value("id")?,
+            number: self.to_value("number")?,
+            title: self.to_value("title")?,
+            duration: self.to_value("duration")?,
+            album: self.to_value("album").unwrap_or_default(),
+            album_id: self.to_value("album_id")?,
+            date_released: self.to_value("date_released").unwrap_or_default(),
+            date_added: self.to_value("date_added").unwrap_or_default(),
+            artist: self.to_value("artist").unwrap_or_default(),
+            artist_id: self.to_value("artist_id").unwrap_or_default(),
+            file: self.to_value("file")?,
+            artwork: self.to_value("artwork").unwrap_or_default(),
+            blur: self.to_value::<u16>("blur").unwrap_or_default() == 1,
+            bytes: self.to_value("bytes").unwrap_or_default(),
             format: self
-                .get::<_, Option<String>>("format")
+                .to_value::<Option<String>>("format")
                 .unwrap_or(None)
                 .map(|s| {
-                    AudioFormat::from_str(&s).unwrap_or_else(|_e| panic!("Invalid format: {s}"))
-                }),
-            bit_depth: self.get("bit_depth").unwrap_or_default(),
-            audio_bitrate: self.get("audio_bitrate").unwrap_or_default(),
-            overall_bitrate: self.get("overall_bitrate").unwrap_or_default(),
-            sample_rate: self.get("sample_rate").unwrap_or_default(),
-            channels: self.get("channels").unwrap_or_default(),
-            source: TrackSource::from_str(&self.get::<_, String>("source").unwrap())
+                    AudioFormat::from_str(&s)
+                        .map_err(|_e| ParseError::ConvertType(format!("Invalid format: {s}")))
+                })
+                .transpose()?,
+            bit_depth: self.to_value("bit_depth").unwrap_or_default(),
+            audio_bitrate: self.to_value("audio_bitrate").unwrap_or_default(),
+            overall_bitrate: self.to_value("overall_bitrate").unwrap_or_default(),
+            sample_rate: self.to_value("sample_rate").unwrap_or_default(),
+            channels: self.to_value("channels").unwrap_or_default(),
+            source: TrackSource::from_str(&self.to_value::<String>("source")?)
                 .expect("Missing source"),
-            qobuz_id: self.get("qobuz_id").unwrap(),
-            tidal_id: self.get("tidal_id").unwrap(),
-        }
+            qobuz_id: self.to_value("qobuz_id")?,
+            tidal_id: self.to_value("tidal_id")?,
+        })
     }
 }
 
@@ -301,19 +321,27 @@ impl ToApi<ApiAlbumVersionQuality> for AlbumVersionQuality {
 
 impl AsModel<AlbumVersionQuality> for Row<'_> {
     fn as_model(&self) -> AlbumVersionQuality {
-        AlbumVersionQuality {
+        AsModelResult::as_model(self).unwrap()
+    }
+}
+
+impl AsModelResult<AlbumVersionQuality, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<AlbumVersionQuality, ParseError> {
+        Ok(AlbumVersionQuality {
             format: self
-                .get::<_, Option<String>>("format")
+                .to_value::<Option<String>>("format")
                 .unwrap_or(None)
                 .map(|s| {
-                    AudioFormat::from_str(&s).unwrap_or_else(|_e| panic!("Invalid format: {s}"))
-                }),
-            bit_depth: self.get("bit_depth").unwrap_or_default(),
-            sample_rate: self.get("sample_rate").unwrap(),
-            channels: self.get("channels").unwrap(),
-            source: TrackSource::from_str(&self.get::<_, String>("source").unwrap())
-                .expect("Invalid source"),
-        }
+                    AudioFormat::from_str(&s)
+                        .map_err(|_e| ParseError::ConvertType(format!("Invalid format: {s}")))
+                })
+                .transpose()?,
+            bit_depth: self.to_value("bit_depth").unwrap_or_default(),
+            sample_rate: self.to_value("sample_rate").unwrap(),
+            channels: self.to_value("channels").unwrap(),
+            source: TrackSource::from_str(&self.to_value::<String>("source").unwrap())
+                .map_err(|e| ParseError::ConvertType(format!("Invalid source: {e:?}")))?,
+        })
     }
 }
 
@@ -335,20 +363,26 @@ pub struct Album {
 
 impl AsModel<Album> for Row<'_> {
     fn as_model(&self) -> Album {
-        Album {
-            id: self.get("id").unwrap(),
-            artist: self.get("artist").unwrap_or_default(),
-            artist_id: self.get("artist_id").unwrap(),
-            title: self.get("title").unwrap(),
-            date_released: self.get("date_released").unwrap(),
-            date_added: self.get("date_added").unwrap(),
-            artwork: self.get("artwork").unwrap(),
-            directory: self.get("directory").unwrap(),
+        AsModelResult::as_model(self).unwrap()
+    }
+}
+
+impl AsModelResult<Album, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<Album, ParseError> {
+        Ok(Album {
+            id: self.to_value("id")?,
+            artist: self.to_value("artist").unwrap_or_default(),
+            artist_id: self.to_value("artist_id")?,
+            title: self.to_value("title")?,
+            date_released: self.to_value("date_released")?,
+            date_added: self.to_value("date_added")?,
+            artwork: self.to_value("artwork")?,
+            directory: self.to_value("directory")?,
             source: AlbumSource::Local,
-            blur: self.get::<_, u16>("blur").unwrap() == 1,
+            blur: self.to_value::<u16>("blur")? == 1,
             versions: vec![],
-            tidal_id: self.get("tidal_id").unwrap(),
-        }
+            tidal_id: self.to_value("tidal_id")?,
+        })
     }
 }
 
@@ -386,12 +420,16 @@ impl AsModelResultMut<Vec<Album>, DbError> for Rows<'_> {
                 if let Some(ref mut album) = results.last_mut() {
                     sort_album_versions(&mut album.versions);
                 }
-                results.push(AsModel::as_model(row));
+                if let Ok(row) = AsModelResult::as_model(row) {
+                    results.push(row);
+                }
                 last_album_id = album_id;
             }
 
             if let Some(ref mut album) = results.last_mut() {
-                album.versions.push(AsModel::as_model(row));
+                if let Ok(row) = AsModelResult::as_model(row) {
+                    album.versions.push(row);
+                }
             }
         }
 

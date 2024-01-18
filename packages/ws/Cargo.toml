@@ -5,7 +5,7 @@ name    = "moosicbox_ws"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_core = { path = "../core" }
+moosicbox_core = { path = "../core", default-features = false }
 
 actix-cors                   = { workspace = true }
 actix-files                  = { workspace = true }

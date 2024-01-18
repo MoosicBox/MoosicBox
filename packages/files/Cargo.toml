@@ -5,7 +5,7 @@ name    = "moosicbox_files"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_core             = { path = "../core" }
+moosicbox_core             = { path = "../core", default-features = false }
 moosicbox_image            = { path = "../image", default-features = false }
 moosicbox_qobuz            = { path = "../qobuz" }
 moosicbox_stream_utils     = { path = "../stream_utils" }
@@ -39,7 +39,7 @@ fail-on-warnings = []
 image   = ["moosicbox_image/image"]
 libvips = ["moosicbox_image/libvips"]
 
-aac  = ["moosicbox_symphonia_player/aac"]
-flac = []
-mp3  = ["moosicbox_symphonia_player/mp3"]
-opus = ["moosicbox_symphonia_player/opus"]
+aac  = ["moosicbox_symphonia_player/aac", "moosicbox_core/aac"]
+flac = ["moosicbox_core/flac"]
+mp3  = ["moosicbox_symphonia_player/mp3", "moosicbox_core/mp3"]
+opus = ["moosicbox_symphonia_player/opus", "moosicbox_core/opus"]

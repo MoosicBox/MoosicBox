@@ -6,9 +6,9 @@ version = "0.1.0"
 
 [dependencies]
 moosicbox_auth = { path = "../auth", optional = true }
-moosicbox_core = { path = "../core", optional = true }
+moosicbox_core = { path = "../core", optional = true, default-features = false }
 moosicbox_env_utils = { path = "../env_utils", optional = true }
-moosicbox_files = { path = "../files", optional = true }
+moosicbox_files = { path = "../files", default-features = false, optional = true }
 moosicbox_image = { path = "../image", default-features = false, features = [
     "image",
 ], optional = true }
@@ -39,7 +39,7 @@ tokio-tungstenite = { workspace = true, optional = true }
 tokio-util        = { workspace = true }
 
 [features]
-default = ["sender", "base64", "aac", "mp3", "opus"]
+default = ["sender", "base64", "aac", "flac", "mp3", "opus"]
 
 fail-on-warnings = []
 
@@ -61,6 +61,19 @@ sender = [
     "dep:tokio-tungstenite",
 ]
 
-aac  = ["moosicbox_symphonia_player/aac"]
-mp3  = ["moosicbox_symphonia_player/mp3"]
-opus = ["moosicbox_symphonia_player/opus"]
+aac = [
+    "moosicbox_symphonia_player/aac",
+    "moosicbox_files/aac",
+    "moosicbox_core/aac",
+]
+flac = ["moosicbox_core/flac"]
+mp3 = [
+    "moosicbox_symphonia_player/mp3",
+    "moosicbox_files/mp3",
+    "moosicbox_core/mp3",
+]
+opus = [
+    "moosicbox_symphonia_player/opus",
+    "moosicbox_files/opus",
+    "moosicbox_core/opus",
+]

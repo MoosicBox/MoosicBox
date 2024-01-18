@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 moosicbox_converter        = { path = "../converter", default-features = false }
-moosicbox_core             = { path = "../core" }
+moosicbox_core             = { path = "../core", default-features = false }
 moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false }
 
 actix-cors        = { workspace = true }
@@ -32,7 +32,7 @@ tokio-util        = { workspace = true }
 url               = { workspace = true }
 
 [features]
-default = ["cpal", "aac", "mp3", "opus", "pulseaudio"]
+default = ["cpal", "aac", "flac", "mp3", "opus", "pulseaudio"]
 
 fail-on-warnings = []
 
@@ -45,6 +45,19 @@ pulseaudio-simple   = ["moosicbox_symphonia_player/pulseaudio-simple"]
 pulseaudio-standard = ["moosicbox_symphonia_player/pulseaudio-standard"]
 resampler           = ["moosicbox_symphonia_player/resampler"]
 
-aac  = ["moosicbox_symphonia_player/aac", "moosicbox_converter/aac"]
-mp3  = ["moosicbox_symphonia_player/mp3", "moosicbox_converter/mp3"]
-opus = ["moosicbox_symphonia_player/opus", "moosicbox_converter/opus"]
+aac = [
+    "moosicbox_symphonia_player/aac",
+    "moosicbox_converter/aac",
+    "moosicbox_core/aac",
+]
+flac = ["moosicbox_core/flac"]
+mp3 = [
+    "moosicbox_symphonia_player/mp3",
+    "moosicbox_converter/mp3",
+    "moosicbox_core/mp3",
+]
+opus = [
+    "moosicbox_symphonia_player/opus",
+    "moosicbox_converter/opus",
+    "moosicbox_core/opus",
+]

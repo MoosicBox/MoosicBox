@@ -6,13 +6,20 @@ version = "0.1.0"
 
 [dependencies]
 moosicbox_auth = { path = "../packages/auth" }
-moosicbox_core = { path = "../packages/core" }
+moosicbox_core = { path = "../packages/core", default-features = false }
 moosicbox_env_utils = { path = "../packages/env_utils" }
-moosicbox_files = { path = "../packages/files" }
+moosicbox_files = { path = "../packages/files", default-features = false, features = [
+    "image",
+] }
 moosicbox_menu = { path = "../packages/menu" }
 moosicbox_player = { path = "../packages/player", default-features = false }
 moosicbox_qobuz = { path = "../packages/qobuz" }
-moosicbox_scan = { path = "../packages/scan" }
+moosicbox_scan = { path = "../packages/scan", default-features = false, features = [
+    "api",
+    "local",
+    "tidal",
+    "qobuz",
+] }
 moosicbox_search = { path = "../packages/search" }
 moosicbox_tidal = { path = "../packages/tidal" }
 moosicbox_tunnel = { path = "../packages/tunnel", default-features = false, features = [
@@ -50,6 +57,7 @@ default = [
     "static-token-auth",
     "base64",
     "aac",
+    "flac",
     "mp3",
     "opus",
 ]
@@ -69,6 +77,25 @@ resampler           = ["moosicbox_player/resampler"]
 
 static-token-auth = []
 
-aac  = ["moosicbox_tunnel/aac", "moosicbox_player/aac"]
-mp3  = ["moosicbox_tunnel/mp3", "moosicbox_player/mp3"]
-opus = ["moosicbox_tunnel/opus", "moosicbox_player/opus"]
+aac = [
+    "moosicbox_tunnel/aac",
+    "moosicbox_player/aac",
+    "moosicbox_files/aac",
+    "moosicbox_core/aac",
+    "moosicbox_scan/aac",
+]
+flac = ["moosicbox_core/flac", "moosicbox_scan/flac"]
+mp3 = [
+    "moosicbox_tunnel/mp3",
+    "moosicbox_player/mp3",
+    "moosicbox_files/mp3",
+    "moosicbox_core/mp3",
+    "moosicbox_scan/mp3",
+]
+opus = [
+    "moosicbox_tunnel/opus",
+    "moosicbox_player/opus",
+    "moosicbox_files/opus",
+    "moosicbox_core/opus",
+    "moosicbox_scan/opus",
+]
