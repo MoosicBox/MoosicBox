@@ -3105,6 +3105,7 @@ name = "moosicbox_qobuz"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "async-recursion",
  "base64",
  "log",
  "md5",
