@@ -5,7 +5,7 @@ name    = "moosicbox_player"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_converter        = { path = "../converter" }
+moosicbox_converter        = { path = "../converter", default-features = false }
 moosicbox_core             = { path = "../core" }
 moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false }
 
@@ -45,6 +45,6 @@ pulseaudio-simple   = ["moosicbox_symphonia_player/pulseaudio-simple"]
 pulseaudio-standard = ["moosicbox_symphonia_player/pulseaudio-standard"]
 resampler           = ["moosicbox_symphonia_player/resampler"]
 
-aac  = ["moosicbox_symphonia_player/aac"]
-mp3  = ["moosicbox_symphonia_player/mp3"]
-opus = ["moosicbox_symphonia_player/opus"]
+aac  = ["moosicbox_symphonia_player/aac", "moosicbox_converter/aac"]
+mp3  = ["moosicbox_symphonia_player/mp3", "moosicbox_converter/aac"]
+opus = ["moosicbox_symphonia_player/opus", "moosicbox_converter/aac"]
