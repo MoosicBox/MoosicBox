@@ -8,6 +8,7 @@ pub mod db;
 use async_recursion::async_recursion;
 use moosicbox_core::sqlite::models::AsModelResult;
 use moosicbox_json_utils::{ParseError, ToNestedValue, ToValue, ToValueType};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
@@ -183,6 +184,8 @@ enum TidalApiEndpoint {
     TrackUrl,
 }
 
+static CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
+
 static TIDAL_AUTH_API_BASE_URL: &str = "https://auth.tidal.com/v1";
 static TIDAL_API_BASE_URL: &str = "https://api.tidal.com/v1";
 
@@ -262,13 +265,7 @@ pub async fn device_authorization(
         ("scope", "r_usr w_usr w_sub".to_string()),
     ];
 
-    let value: Value = reqwest::Client::new()
-        .post(url)
-        .form(&params)
-        .send()
-        .await?
-        .json()
-        .await?;
+    let value: Value = CLIENT.post(url).form(&params).send().await?.json().await?;
 
     let verification_uri_complete = value.to_value::<&str>("verificationUriComplete")?;
     let device_code = value.to_value::<&str>("deviceCode")?;
@@ -323,13 +320,7 @@ pub async fn device_authorization_token(
         ("scope", "r_usr w_usr w_sub".to_string()),
     ];
 
-    let value: Value = reqwest::Client::new()
-        .post(url)
-        .form(&params)
-        .send()
-        .await?
-        .json()
-        .await?;
+    let value: Value = CLIENT.post(url).form(&params).send().await?.json().await?;
 
     let access_token = value.to_value::<&str>("access_token")?;
     let refresh_token = value.to_value::<&str>("refresh_token")?;
@@ -464,7 +455,7 @@ async fn authenticated_request_inner(
         access_token,
     )?;
 
-    let response = reqwest::Client::new()
+    let response = CLIENT
         .get(url)
         .header(
             reqwest::header::AUTHORIZATION,
@@ -531,13 +522,7 @@ async fn refetch_access_token(
         ("scope", "r_usr w_usr w_sub".to_string()),
     ];
 
-    let value: Value = reqwest::Client::new()
-        .post(url)
-        .form(&params)
-        .send()
-        .await?
-        .json()
-        .await?;
+    let value: Value = CLIENT.post(url).form(&params).send().await?.json().await?;
 
     let access_token = value.to_value::<&str>("access_token")?;
 

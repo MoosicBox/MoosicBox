@@ -16,6 +16,7 @@ rusqlite = { workspace = true, optional = true }
 
 async-recursion = { workspace = true }
 log             = { workspace = true }
+once_cell       = { workspace = true }
 open            = { workspace = true }
 reqwest         = { workspace = true, features = ["json"] }
 serde           = { workspace = true, features = ["derive"] }
