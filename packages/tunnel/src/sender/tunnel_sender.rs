@@ -1092,6 +1092,7 @@ impl TunnelSender {
                                     None | Some(AudioFormat::Source) => panic!("Audio format is unsupported for Tidal"),
                                     #[cfg(feature = "flac")]
                                     Some(AudioFormat::Flac) => panic!("FLAC audio format is unsupported for Tidal"),
+                                    #[allow(unreachable_patterns)]
                                     _ => query.format.unwrap()
                                 };
 

@@ -203,6 +203,35 @@ jobs:
                       cargo: --no-default-features
                       features: cpal
 
+                    - name: server-no-default-features
+                      path: server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+
+                    - name: server-aac
+                      path: server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: aac
+
+                    - name: server-flac
+                      path: server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: flac
+
+                    - name: server-mp3
+                      path: server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: mp3
+
+                    - name: server-opus
+                      path: server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: opus
+
                     - name: scan
                       path: packages/scan
                       os: ubuntu-latest

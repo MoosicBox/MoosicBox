@@ -14,7 +14,6 @@ use moosicbox_core::{
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_qobuz::QobuzTrackFileUrlError;
-use moosicbox_stream_utils::ByteWriter;
 use moosicbox_symphonia_player::{output::AudioOutputHandler, play_file_path_str, PlaybackError};
 use moosicbox_tidal::TidalTrackFileUrlError;
 use regex::{Captures, Regex};
@@ -300,12 +299,11 @@ pub fn get_or_init_track_size(
         return Ok(size);
     }
 
-    let writer = ByteWriter::default();
-
     let bytes = match source {
         TrackSource::LocalFilePath(ref path) => match quality.format {
             #[cfg(feature = "aac")]
             AudioFormat::Aac => {
+                let writer = moosicbox_stream_utils::ByteWriter::default();
                 moosicbox_symphonia_player::output::encoder::aac::encoder::encode_aac(
                     path.to_string(),
                     writer.clone(),
@@ -316,6 +314,7 @@ pub fn get_or_init_track_size(
             AudioFormat::Flac => return Err(TrackInfoError::UnsupportedFormat(quality.format)),
             #[cfg(feature = "mp3")]
             AudioFormat::Mp3 => {
+                let writer = moosicbox_stream_utils::ByteWriter::default();
                 moosicbox_symphonia_player::output::encoder::mp3::encoder::encode_mp3(
                     path.to_string(),
                     writer.clone(),
@@ -324,6 +323,7 @@ pub fn get_or_init_track_size(
             }
             #[cfg(feature = "opus")]
             AudioFormat::Opus => {
+                let writer = moosicbox_stream_utils::ByteWriter::default();
                 moosicbox_symphonia_player::output::encoder::opus::encoder::encode_opus(
                     path.to_string(),
                     writer.clone(),

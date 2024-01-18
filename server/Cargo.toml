@@ -84,7 +84,13 @@ aac = [
     "moosicbox_core/aac",
     "moosicbox_scan/aac",
 ]
-flac = ["moosicbox_core/flac", "moosicbox_scan/flac"]
+flac = [
+    "moosicbox_tunnel/flac",
+    "moosicbox_player/flac",
+    "moosicbox_files/flac",
+    "moosicbox_core/flac",
+    "moosicbox_scan/flac",
+]
 mp3 = [
     "moosicbox_tunnel/mp3",
     "moosicbox_player/mp3",

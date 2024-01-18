@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use actix_web::{
-    body::SizedStream,
     error::{ErrorBadRequest, ErrorInternalServerError},
     http::header::{CacheControl, CacheDirective},
     route,
@@ -16,8 +15,7 @@ use moosicbox_core::{
 };
 use moosicbox_stream_utils::ByteWriter;
 use moosicbox_symphonia_player::{
-    media_sources::remote_bytestream::RemoteByteStream, output::AudioOutputHandler,
-    play_file_path_str, play_media_source,
+    media_sources::remote_bytestream::RemoteByteStream, play_file_path_str, play_media_source,
 };
 use serde::Deserialize;
 use symphonia::core::{io::MediaSourceStream, probe::Hint};
@@ -117,6 +115,7 @@ pub async fn track_endpoint(
     )?;
 
     let writer = ByteWriter::default();
+    #[allow(unused)]
     let stream = writer.stream();
 
     {
@@ -126,7 +125,8 @@ pub async fn track_endpoint(
                 #[cfg(feature = "aac")]
                 AudioFormat::Aac => {
                     use moosicbox_symphonia_player::output::encoder::aac::encoder::AacEncoder;
-                    let mut audio_output_handler = AudioOutputHandler::new();
+                    let mut audio_output_handler =
+                        moosicbox_symphonia_player::output::AudioOutputHandler::new();
                     audio_output_handler.with_output(Box::new(move |spec, duration| {
                         let mut encoder = AacEncoder::new(writer.clone());
                         encoder.open(spec, duration);
@@ -140,7 +140,8 @@ pub async fn track_endpoint(
                 AudioFormat::Mp3 => {
                     use moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder;
                     let encoder_writer = writer.clone();
-                    let mut audio_output_handler = AudioOutputHandler::new();
+                    let mut audio_output_handler =
+                        moosicbox_symphonia_player::output::AudioOutputHandler::new();
                     audio_output_handler.with_output(Box::new(move |spec, duration| {
                         let mut encoder = Mp3Encoder::new(encoder_writer.clone());
                         encoder.open(spec, duration);
@@ -152,7 +153,8 @@ pub async fn track_endpoint(
                 AudioFormat::Opus => {
                     use moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder;
                     let encoder_writer = writer.clone();
-                    let mut audio_output_handler = AudioOutputHandler::new();
+                    let mut audio_output_handler =
+                        moosicbox_symphonia_player::output::AudioOutputHandler::new();
                     audio_output_handler.with_output(Box::new(move |spec, duration| {
                         let mut encoder: OpusEncoder<i16, ByteWriter> =
                             OpusEncoder::new(encoder_writer.clone());
@@ -207,7 +209,7 @@ pub async fn track_endpoint(
             #[cfg(feature = "aac")]
             AudioFormat::Aac => Ok(HttpResponse::Ok()
                 .insert_header((actix_web::http::header::CONTENT_TYPE, "audio/mp4"))
-                .body(SizedStream::new(size, stream))),
+                .body(actix_web::body::SizedStream::new(size, stream))),
             #[cfg(feature = "flac")]
             AudioFormat::Flac => {
                 let track = moosicbox_core::sqlite::db::get_track(
@@ -240,11 +242,11 @@ pub async fn track_endpoint(
             #[cfg(feature = "mp3")]
             AudioFormat::Mp3 => Ok(HttpResponse::Ok()
                 .insert_header((actix_web::http::header::CONTENT_TYPE, "audio/mp3"))
-                .body(SizedStream::new(size, stream))),
+                .body(actix_web::body::SizedStream::new(size, stream))),
             #[cfg(feature = "opus")]
             AudioFormat::Opus => Ok(HttpResponse::Ok()
                 .insert_header((actix_web::http::header::CONTENT_TYPE, "audio/opus"))
-                .body(SizedStream::new(size, stream))),
+                .body(actix_web::body::SizedStream::new(size, stream))),
             AudioFormat::Source => Ok(actix_files::NamedFile::open_async(
                 PathBuf::from(path).as_path(),
             )
