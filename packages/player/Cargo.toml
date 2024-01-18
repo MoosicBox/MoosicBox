@@ -46,5 +46,5 @@ pulseaudio-standard = ["moosicbox_symphonia_player/pulseaudio-standard"]
 resampler           = ["moosicbox_symphonia_player/resampler"]
 
 aac  = ["moosicbox_symphonia_player/aac", "moosicbox_converter/aac"]
-mp3  = ["moosicbox_symphonia_player/mp3", "moosicbox_converter/aac"]
-opus = ["moosicbox_symphonia_player/opus", "moosicbox_converter/aac"]
+mp3  = ["moosicbox_symphonia_player/mp3", "moosicbox_converter/mp3"]
+opus = ["moosicbox_symphonia_player/opus", "moosicbox_converter/opus"]
