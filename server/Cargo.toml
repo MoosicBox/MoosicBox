@@ -69,6 +69,6 @@ resampler           = ["moosicbox_player/resampler"]
 
 static-token-auth = []
 
-aac  = ["moosicbox_tunnel/aac"]
-mp3  = ["moosicbox_tunnel/mp3"]
-opus = ["moosicbox_tunnel/opus"]
+aac  = ["moosicbox_tunnel/aac", "moosicbox_player/aac"]
+mp3  = ["moosicbox_tunnel/mp3", "moosicbox_player/mp3"]
+opus = ["moosicbox_tunnel/opus", "moosicbox_player/opus"]

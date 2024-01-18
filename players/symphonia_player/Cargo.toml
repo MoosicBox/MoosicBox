@@ -5,7 +5,7 @@ name    = "moosicbox_symphonia_player"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_converter    = { path = "../../packages/converter" }
+moosicbox_converter    = { path = "../../packages/converter", default-features = false }
 moosicbox_stream_utils = { path = "../../packages/stream_utils" }
 
 arrayvec                = { workspace = true, optional = true }
@@ -47,6 +47,6 @@ pulseaudio-simple   = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
 pulseaudio-standard = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
 resampler           = ["dep:arrayvec", "dep:rb", "dep:rubato"]
 
-aac  = ["resampler"]
-mp3  = ["resampler"]
-opus = ["resampler"]
+aac  = ["resampler", "moosicbox_converter/aac"]
+mp3  = ["resampler", "moosicbox_converter/mp3"]
+opus = ["resampler", "moosicbox_converter/opus"]
