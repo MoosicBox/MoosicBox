@@ -1,4 +1,5 @@
 use log::debug;
+use moosicbox_json_utils::ParseError;
 use rusqlite::{params, Connection, Row, Statement};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -32,6 +33,8 @@ pub enum DbError {
     SqliteError(#[from] rusqlite::Error),
     #[error("Unknown DbError")]
     Unknown,
+    #[error(transparent)]
+    Parse(#[from] ParseError),
 }
 
 pub fn get_session_playlist_tracks(
