@@ -247,12 +247,18 @@ pub struct Artist {
 
 impl AsModel<Artist> for Row<'_> {
     fn as_model(&self) -> Artist {
-        Artist {
-            id: self.get("id").unwrap(),
-            title: self.get("title").unwrap(),
-            cover: self.get("cover").unwrap(),
-            tidal_id: self.get("tidal_id").unwrap(),
-        }
+        AsModelResult::as_model(self).unwrap()
+    }
+}
+
+impl AsModelResult<Artist, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<Artist, ParseError> {
+        Ok(Artist {
+            id: self.to_value("id")?,
+            title: self.to_value("title")?,
+            cover: self.to_value("cover")?,
+            tidal_id: self.to_value("tidal_id")?,
+        })
     }
 }
 
@@ -443,21 +449,23 @@ impl AsModelResultMut<Vec<Album>, DbError> for Rows<'_> {
 
 impl AsModelQuery<Album> for Row<'_> {
     fn as_model_query(&self, db: &rusqlite::Connection) -> Result<Album, DbError> {
-        let id = self.get("id").unwrap();
+        let id = self.to_value("id")?;
 
         Ok(Album {
             id,
-            artist: self.get("artist").unwrap_or_default(),
-            artist_id: self.get("artist_id").unwrap(),
-            title: self.get("title").unwrap(),
-            date_released: self.get("date_released").unwrap(),
-            date_added: self.get("date_added").unwrap(),
-            artwork: self.get("artwork").unwrap(),
-            directory: self.get("directory").unwrap(),
+            artist: self
+                .to_value::<Option<String>>("artist")?
+                .unwrap_or_default(),
+            artist_id: self.to_value("artist_id")?,
+            title: self.to_value("title")?,
+            date_released: self.to_value("date_released")?,
+            date_added: self.to_value("date_added")?,
+            artwork: self.to_value("artwork")?,
+            directory: self.to_value("directory")?,
             source: AlbumSource::Local,
-            blur: self.get::<_, u16>("blur").unwrap() == 1,
+            blur: self.to_value::<u16>("blur")? == 1,
             versions: get_album_version_qualities(db, id)?,
-            tidal_id: self.get("tidal_id").unwrap(),
+            tidal_id: self.to_value("tidal_id")?,
         })
     }
 }
