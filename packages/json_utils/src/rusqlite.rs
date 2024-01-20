@@ -45,7 +45,7 @@ impl ToValueType<String> for &Value {
     fn to_value_type(self) -> Result<String, ParseError> {
         match self {
             Value::Text(ref str) => Ok(str.to_string()),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("String".into())),
         }
     }
 
@@ -58,7 +58,7 @@ impl ToValueType<bool> for &Value {
     fn to_value_type(self) -> Result<bool, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num == 1),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("bool".into())),
         }
     }
 
@@ -71,7 +71,7 @@ impl ToValueType<f32> for &Value {
     fn to_value_type(self) -> Result<f32, ParseError> {
         match self {
             Value::Real(num) => Ok(*num as f32),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("f32".into())),
         }
     }
 
@@ -84,7 +84,7 @@ impl ToValueType<f64> for &Value {
     fn to_value_type(self) -> Result<f64, ParseError> {
         match self {
             Value::Real(num) => Ok(*num),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("f64".into())),
         }
     }
 
@@ -97,7 +97,7 @@ impl ToValueType<i8> for &Value {
     fn to_value_type(self) -> Result<i8, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num as i8),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("i8".into())),
         }
     }
 
@@ -110,7 +110,7 @@ impl ToValueType<i16> for &Value {
     fn to_value_type(self) -> Result<i16, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num as i16),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("i16".into())),
         }
     }
 
@@ -123,7 +123,7 @@ impl ToValueType<i32> for &Value {
     fn to_value_type(self) -> Result<i32, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num as i32),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("i32".into())),
         }
     }
 
@@ -136,7 +136,7 @@ impl ToValueType<i64> for &Value {
     fn to_value_type(self) -> Result<i64, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("i64".into())),
         }
     }
 
@@ -149,7 +149,7 @@ impl ToValueType<isize> for &Value {
     fn to_value_type(self) -> Result<isize, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num as isize),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("isize".into())),
         }
     }
 
@@ -162,7 +162,7 @@ impl ToValueType<u8> for &Value {
     fn to_value_type(self) -> Result<u8, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num as u8),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("u8".into())),
         }
     }
 
@@ -175,7 +175,7 @@ impl ToValueType<u16> for &Value {
     fn to_value_type(self) -> Result<u16, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num as u16),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("u16".into())),
         }
     }
 
@@ -188,7 +188,7 @@ impl ToValueType<u32> for &Value {
     fn to_value_type(self) -> Result<u32, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num as u32),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("u32".into())),
         }
     }
 
@@ -201,7 +201,7 @@ impl ToValueType<u64> for &Value {
     fn to_value_type(self) -> Result<u64, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num as u64),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("u64".into())),
         }
     }
 
@@ -214,7 +214,7 @@ impl ToValueType<usize> for &Value {
     fn to_value_type(self) -> Result<usize, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num as usize),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("usize".into())),
         }
     }
 
@@ -294,7 +294,7 @@ impl ToValueType<String> for Value {
     fn to_value_type(self) -> Result<String, ParseError> {
         match self {
             Value::Text(ref str) => Ok(str.to_string()),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("String".into())),
         }
     }
 
@@ -307,7 +307,7 @@ impl ToValueType<bool> for Value {
     fn to_value_type(self) -> Result<bool, ParseError> {
         match self {
             Value::Integer(num) => Ok(num == 1),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("bool".into())),
         }
     }
 
@@ -320,7 +320,7 @@ impl ToValueType<f32> for Value {
     fn to_value_type(self) -> Result<f32, ParseError> {
         match self {
             Value::Real(num) => Ok(num as f32),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("u32".into())),
         }
     }
 
@@ -333,7 +333,7 @@ impl ToValueType<f64> for Value {
     fn to_value_type(self) -> Result<f64, ParseError> {
         match self {
             Value::Real(num) => Ok(num),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("f64".into())),
         }
     }
 
@@ -346,7 +346,7 @@ impl ToValueType<i8> for Value {
     fn to_value_type(self) -> Result<i8, ParseError> {
         match self {
             Value::Integer(num) => Ok(num as i8),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("i8".into())),
         }
     }
 
@@ -359,7 +359,7 @@ impl ToValueType<i16> for Value {
     fn to_value_type(self) -> Result<i16, ParseError> {
         match self {
             Value::Integer(num) => Ok(num as i16),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("i16".into())),
         }
     }
 
@@ -372,7 +372,7 @@ impl ToValueType<i32> for Value {
     fn to_value_type(self) -> Result<i32, ParseError> {
         match self {
             Value::Integer(num) => Ok(num as i32),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("i32".into())),
         }
     }
 
@@ -385,7 +385,7 @@ impl ToValueType<i64> for Value {
     fn to_value_type(self) -> Result<i64, ParseError> {
         match self {
             Value::Integer(num) => Ok(num),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("i64".into())),
         }
     }
 
@@ -398,7 +398,7 @@ impl ToValueType<isize> for Value {
     fn to_value_type(self) -> Result<isize, ParseError> {
         match self {
             Value::Integer(num) => Ok(num as isize),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("isize".into())),
         }
     }
 
@@ -411,7 +411,7 @@ impl ToValueType<u8> for Value {
     fn to_value_type(self) -> Result<u8, ParseError> {
         match self {
             Value::Integer(num) => Ok(num as u8),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("u8".into())),
         }
     }
 
@@ -424,7 +424,7 @@ impl ToValueType<u16> for Value {
     fn to_value_type(self) -> Result<u16, ParseError> {
         match self {
             Value::Integer(num) => Ok(num as u16),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("u16".into())),
         }
     }
 
@@ -437,7 +437,7 @@ impl ToValueType<u32> for Value {
     fn to_value_type(self) -> Result<u32, ParseError> {
         match self {
             Value::Integer(num) => Ok(num as u32),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("u32".into())),
         }
     }
 
@@ -450,7 +450,7 @@ impl ToValueType<u64> for Value {
     fn to_value_type(self) -> Result<u64, ParseError> {
         match self {
             Value::Integer(num) => Ok(num as u64),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("u64".into())),
         }
     }
 
@@ -463,7 +463,7 @@ impl ToValueType<usize> for Value {
     fn to_value_type(self) -> Result<usize, ParseError> {
         match self {
             Value::Integer(num) => Ok(num as usize),
-            _ => Err(ParseError::ConvertType("&str".into())),
+            _ => Err(ParseError::ConvertType("usize".into())),
         }
     }
 
