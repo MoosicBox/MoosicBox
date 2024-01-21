@@ -11,14 +11,17 @@ rusqlite = { workspace = true, optional = true }
 # tantivy dependencies
 tantivy = { workspace = true, optional = true }
 
-serde      = { workspace = true }
-serde_json = { workspace = true }
-thiserror  = { workspace = true }
+# serde_json dependencies
+serde      = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+
+thiserror = { workspace = true }
 
 [features]
-default = ["rusqlite", "tantivy"]
+default = ["rusqlite", "serde_json", "tantivy"]
 
 fail-on-warnings = []
 
-rusqlite = ["dep:rusqlite"]
-tantivy  = ["dep:tantivy"]
+rusqlite   = ["dep:rusqlite"]
+serde_json = ["dep:serde", "dep:serde_json"]
+tantivy    = ["dep:tantivy"]

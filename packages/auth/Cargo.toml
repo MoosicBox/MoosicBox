@@ -6,7 +6,9 @@ version = "0.1.0"
 
 [dependencies]
 moosicbox_core       = { path = "../core", default-features = false }
-moosicbox_json_utils = { path = "../json_utils" }
+moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
+    "serde_json",
+] }
 
 actix      = { workspace = true }
 actix-web  = { workspace = true }

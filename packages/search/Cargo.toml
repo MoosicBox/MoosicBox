@@ -5,8 +5,10 @@ name    = "moosicbox_search"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_config     = { path = "../config" }
-moosicbox_json_utils = { path = "../json_utils" }
+moosicbox_config = { path = "../config" }
+moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
+    "tantivy",
+] }
 
 # API Dependencies
 actix-web  = { workspace = true, optional = true }

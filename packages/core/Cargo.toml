@@ -5,7 +5,10 @@ name    = "moosicbox_core"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_json_utils = { path = "../json_utils" }
+moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
+    "rusqlite",
+    "serde_json",
+] }
 
 actix-cors    = { workspace = true }
 actix-web     = { workspace = true }

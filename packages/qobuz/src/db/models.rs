@@ -3,7 +3,9 @@ use moosicbox_core::sqlite::{
     models::{AsId, AsModel, AsModelResult},
 };
 use moosicbox_json_utils::{
-    rusqlite::ToValue as RusqliteToValue, ParseError, ToNestedValue, ToValue, ToValueType,
+    rusqlite::ToValue as RusqliteToValue,
+    serde_json::{ToNestedValue, ToValue},
+    ParseError, ToValueType,
 };
 use rusqlite::Row;
 use serde::{Deserialize, Serialize};
