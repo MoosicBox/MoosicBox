@@ -1024,7 +1024,7 @@ pub fn select_distinct<T>(
     columns: &[&str],
 ) -> Result<Vec<T>, DbError>
 where
-    for<'b> Row<'b>: AsModel<T>,
+    for<'b> Row<'b>: AsModelResult<T, ParseError>,
 {
     let mut statement = connection.prepare_cached(&format!(
         "SELECT DISTINCT {} FROM {table_name} {}",
@@ -1036,7 +1036,7 @@ where
 
     Ok(statement
         .raw_query()
-        .mapped(|row| Ok(AsModel::as_model(row)))
+        .mapped(|row| AsModelResult::as_model(row).map_err(|_| rusqlite::Error::InvalidQuery))
         .filter_map(|row| row.ok())
         .collect::<Vec<_>>())
 }
@@ -1048,7 +1048,7 @@ pub fn select<T>(
     columns: &[&str],
 ) -> Result<Vec<T>, DbError>
 where
-    for<'b> Row<'b>: AsModel<T>,
+    for<'b> Row<'b>: AsModelResult<T, ParseError>,
 {
     let mut statement = connection.prepare_cached(&format!(
         "SELECT {} FROM {table_name} {}",
@@ -1060,7 +1060,7 @@ where
 
     Ok(statement
         .raw_query()
-        .mapped(|row| Ok(AsModel::as_model(row)))
+        .mapped(|row| AsModelResult::as_model(row).map_err(|_| rusqlite::Error::InvalidQuery))
         .filter_map(|row| row.ok())
         .collect::<Vec<_>>())
 }
@@ -1071,7 +1071,7 @@ pub fn delete<T>(
     filters: &Vec<(&str, SqliteValue)>,
 ) -> Result<Vec<T>, DbError>
 where
-    for<'b> Row<'b>: AsModel<T>,
+    for<'b> Row<'b>: AsModelResult<T, ParseError>,
 {
     let mut statement = connection.prepare_cached(&format!(
         "DELETE FROM {table_name} {} RETURNING *",
@@ -1082,7 +1082,7 @@ where
 
     Ok(statement
         .raw_query()
-        .mapped(|row| Ok(AsModel::as_model(row)))
+        .mapped(|row| AsModelResult::as_model(row).map_err(|_| rusqlite::Error::InvalidQuery))
         .filter_map(|row| row.ok())
         .collect::<Vec<_>>())
 }
@@ -1093,7 +1093,7 @@ fn find_row<'a, T>(
     filters: &Vec<(&'a str, SqliteValue)>,
 ) -> Result<Option<T>, DbError>
 where
-    for<'b> Row<'b>: AsModel<T>,
+    for<'b> Row<'b>: AsModelResult<T, ParseError>,
 {
     Ok(select(connection, table_name, filters, &["*"])?
         .into_iter()
@@ -1255,7 +1255,7 @@ fn insert_and_get_row<'a, T>(
     values: Vec<(&'a str, SqliteValue)>,
 ) -> Result<T, DbError>
 where
-    for<'b> Row<'b>: AsModel<T>,
+    for<'b> Row<'b>: AsModelResult<T, ParseError>,
 {
     let column_names = values
         .clone()
@@ -1275,7 +1275,7 @@ where
 
     let value = query.next().transpose().ok_or(DbError::Unknown)??;
 
-    Ok(AsModel::as_model(value))
+    Ok(AsModelResult::as_model(value)?)
 }
 
 fn update_and_get_row<'a, T>(
@@ -1285,7 +1285,7 @@ fn update_and_get_row<'a, T>(
     values: &[(&'a str, SqliteValue)],
 ) -> Result<Option<T>, DbError>
 where
-    for<'b> Row<'b>: AsModel<T>,
+    for<'b> Row<'b>: AsModelResult<T, ParseError>,
 {
     let variable_count: i32 = values
         .iter()
@@ -1306,7 +1306,10 @@ where
     bind_values(&mut statement, &[values, &[("id", id)]].concat(), false)?;
     let mut query = statement.raw_query();
 
-    Ok(query.next()?.map(|row| AsModel::as_model(row)))
+    Ok(query
+        .next()?
+        .map(|row| AsModelResult::as_model(row))
+        .transpose()?)
 }
 
 pub fn upsert_muli<'a, T>(
@@ -1435,7 +1438,7 @@ pub fn upsert<'a, T>(
     values: Vec<(&'a str, SqliteValue)>,
 ) -> Result<T, DbError>
 where
-    for<'b> Row<'b>: AsModel<T>,
+    for<'b> Row<'b>: AsModelResult<T, ParseError>,
     T: AsId,
 {
     match find_row(connection, table_name, &filters)? {
@@ -1451,7 +1454,7 @@ pub fn upsert_and_get_row<'a, T>(
     values: Vec<(&'a str, SqliteValue)>,
 ) -> Result<T, DbError>
 where
-    for<'b> Row<'b>: AsModel<T>,
+    for<'b> Row<'b>: AsModelResult<T, ParseError>,
     T: AsId,
     T: Debug,
 {
