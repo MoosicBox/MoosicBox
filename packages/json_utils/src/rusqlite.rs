@@ -500,7 +500,7 @@ mod tests {
         let value = &Value::Text("testttt".into());
         assert_eq!(
             ToValueType::<Option<u64>>::to_value_type(value).err(),
-            Some(ParseError::ConvertType("&str".into())),
+            Some(ParseError::ConvertType("u64".into())),
         );
     }
 }
