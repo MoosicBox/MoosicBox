@@ -1,7 +1,10 @@
 use std::{path::PathBuf, str::FromStr};
 
 use moosicbox_json_utils::{rusqlite::ToValue, ParseError, ToValueType};
-use rusqlite::{types::FromSql, Row, Rows};
+use rusqlite::{
+    types::{FromSql, Value},
+    Row, Rows,
+};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 
@@ -44,9 +47,15 @@ pub struct NumberId {
 
 impl AsModel<NumberId> for Row<'_> {
     fn as_model(&self) -> NumberId {
-        NumberId {
-            id: self.get("id").unwrap(),
-        }
+        AsModelResult::as_model(self).unwrap()
+    }
+}
+
+impl AsModelResult<NumberId, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<NumberId, ParseError> {
+        Ok(NumberId {
+            id: self.to_value("id")?,
+        })
     }
 }
 
@@ -64,9 +73,15 @@ pub struct StringId {
 
 impl AsModel<StringId> for Row<'_> {
     fn as_model(&self) -> StringId {
-        StringId {
-            id: self.get("id").unwrap(),
-        }
+        AsModelResult::as_model(self).unwrap()
+    }
+}
+
+impl AsModelResult<StringId, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<StringId, ParseError> {
+        Ok(StringId {
+            id: self.to_value("id")?,
+        })
     }
 }
 
@@ -156,7 +171,7 @@ impl AsModelResult<Track, ParseError> for &Row<'_> {
             artist_id: self.to_value("artist_id").unwrap_or_default(),
             file: self.to_value("file")?,
             artwork: self.to_value("artwork").unwrap_or_default(),
-            blur: self.to_value::<u16>("blur").unwrap_or_default() == 1,
+            blur: self.to_value("blur").unwrap_or_default(),
             bytes: self.to_value("bytes").unwrap_or_default(),
             format: self
                 .to_value::<Option<String>>("format")
@@ -343,9 +358,9 @@ impl AsModelResult<AlbumVersionQuality, ParseError> for Row<'_> {
                 })
                 .transpose()?,
             bit_depth: self.to_value("bit_depth").unwrap_or_default(),
-            sample_rate: self.to_value("sample_rate").unwrap(),
-            channels: self.to_value("channels").unwrap(),
-            source: TrackSource::from_str(&self.to_value::<String>("source").unwrap())
+            sample_rate: self.to_value("sample_rate")?,
+            channels: self.to_value("channels")?,
+            source: TrackSource::from_str(&self.to_value::<String>("source")?)
                 .map_err(|e| ParseError::ConvertType(format!("Invalid source: {e:?}")))?,
         })
     }
@@ -385,7 +400,7 @@ impl AsModelResult<Album, ParseError> for Row<'_> {
             artwork: self.to_value("artwork")?,
             directory: self.to_value("directory")?,
             source: AlbumSource::Local,
-            blur: self.to_value::<u16>("blur")? == 1,
+            blur: self.to_value("blur")?,
             versions: vec![],
             tidal_id: self.to_value("tidal_id")?,
         })
@@ -420,7 +435,7 @@ impl AsModelResultMut<Vec<Album>, DbError> for Rows<'_> {
         let mut last_album_id = 0;
 
         while let Some(row) = self.next()? {
-            let album_id: i32 = row.get("album_id").unwrap();
+            let album_id: i32 = row.get("album_id")?;
 
             if album_id != last_album_id {
                 if let Some(ref mut album) = results.last_mut() {
@@ -463,7 +478,7 @@ impl AsModelQuery<Album> for Row<'_> {
             artwork: self.to_value("artwork")?,
             directory: self.to_value("directory")?,
             source: AlbumSource::Local,
-            blur: self.to_value::<u16>("blur")? == 1,
+            blur: self.to_value("blur")?,
             versions: get_album_version_qualities(db, id)?,
             tidal_id: self.to_value("tidal_id")?,
         })
@@ -725,31 +740,37 @@ pub struct Session {
 
 impl AsModel<Session> for Row<'_> {
     fn as_model(&self) -> Session {
-        Session {
-            id: self.get("id").unwrap(),
-            name: self.get("name").unwrap(),
-            active: self.get::<_, u16>("active").unwrap() == 1,
-            playing: self.get::<_, u16>("playing").unwrap() == 1,
-            position: self.get("position").unwrap(),
-            seek: self.get("seek").unwrap(),
-            volume: self.get("volume").unwrap(),
+        AsModelResult::as_model(self).unwrap()
+    }
+}
+
+impl AsModelResult<Session, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<Session, ParseError> {
+        Ok(Session {
+            id: self.to_value("id")?,
+            name: self.to_value("name")?,
+            active: self.to_value("active")?,
+            playing: self.to_value("playing")?,
+            position: self.to_value("position")?,
+            seek: self.to_value("seek")?,
+            volume: self.to_value("volume")?,
             ..Default::default()
-        }
+        })
     }
 }
 
 impl AsModelQuery<Session> for Row<'_> {
     fn as_model_query(&self, db: &rusqlite::Connection) -> Result<Session, DbError> {
-        let id = self.get("id").unwrap();
+        let id = self.to_value("id")?;
         match get_session_playlist(db, id)? {
             Some(playlist) => Ok(Session {
                 id,
-                name: self.get("name").unwrap(),
-                active: self.get::<_, u16>("active").unwrap() == 1,
-                playing: self.get::<_, u16>("playing").unwrap() == 1,
-                position: self.get("position").unwrap(),
-                seek: self.get("seek").unwrap(),
-                volume: self.get("volume").unwrap(),
+                name: self.to_value("name")?,
+                active: self.to_value("active")?,
+                playing: self.to_value("playing")?,
+                position: self.to_value("position")?,
+                seek: self.to_value("seek")?,
+                volume: self.to_value("volume")?,
                 active_players: get_session_active_players(db, id)?,
                 playlist,
             }),
@@ -803,16 +824,22 @@ pub struct SessionPlaylist {
 
 impl AsModel<SessionPlaylist> for Row<'_> {
     fn as_model(&self) -> SessionPlaylist {
-        SessionPlaylist {
-            id: self.get("id").unwrap(),
+        AsModelResult::as_model(self).unwrap()
+    }
+}
+
+impl AsModelResult<SessionPlaylist, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<SessionPlaylist, ParseError> {
+        Ok(SessionPlaylist {
+            id: self.to_value("id")?,
             ..Default::default()
-        }
+        })
     }
 }
 
 impl AsModelQuery<SessionPlaylist> for Row<'_> {
     fn as_model_query(&self, db: &rusqlite::Connection) -> Result<SessionPlaylist, DbError> {
-        let id = self.get("id").unwrap();
+        let id = self.to_value("id")?;
         Ok(SessionPlaylist {
             id,
             tracks: get_session_playlist_tracks(db, id)?,
@@ -862,25 +889,31 @@ pub struct Connection {
 
 impl AsModel<Connection> for Row<'_> {
     fn as_model(&self) -> Connection {
-        Connection {
-            id: self.get::<_, String>("id").unwrap(),
-            name: self.get("name").unwrap(),
-            created: self.get("created").unwrap(),
-            updated: self.get("updated").unwrap(),
+        AsModelResult::as_model(self).unwrap()
+    }
+}
+
+impl AsModelResult<Connection, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<Connection, ParseError> {
+        Ok(Connection {
+            id: self.to_value("id")?,
+            name: self.to_value("name")?,
+            created: self.to_value("created")?,
+            updated: self.to_value("updated")?,
             ..Default::default()
-        }
+        })
     }
 }
 
 impl AsModelQuery<Connection> for Row<'_> {
     fn as_model_query(&self, db: &rusqlite::Connection) -> Result<Connection, DbError> {
-        let id = self.get::<_, String>("id").unwrap();
+        let id = self.to_value::<String>("id")?;
         let players = get_players(db, &id)?;
         Ok(Connection {
             id,
-            name: self.get("name").unwrap(),
-            created: self.get("created").unwrap(),
-            updated: self.get("updated").unwrap(),
+            name: self.to_value("name")?,
+            created: self.to_value("created")?,
+            updated: self.to_value("updated")?,
             players,
         })
     }
@@ -929,6 +962,19 @@ pub enum PlayerType {
     Unknown,
 }
 
+impl ToValueType<PlayerType> for Value {
+    fn to_value_type(self) -> Result<PlayerType, ParseError> {
+        match self {
+            Value::Text(str) => Ok(PlayerType::from_str(&str).unwrap_or(PlayerType::Unknown)),
+            _ => Err(ParseError::ConvertType("PlayerType".into())),
+        }
+    }
+
+    fn missing_value(self, error: ParseError) -> Result<PlayerType, ParseError> {
+        Err(error)
+    }
+}
+
 impl FromSql for PlayerType {
     fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
         Ok(PlayerType::from_str(value.as_str()?).unwrap_or(PlayerType::Unknown))
@@ -948,14 +994,20 @@ pub struct Player {
 
 impl AsModel<Player> for Row<'_> {
     fn as_model(&self) -> Player {
-        Player {
-            id: self.get("id").unwrap(),
-            name: self.get("name").unwrap(),
-            r#type: self.get("type").unwrap(),
-            playing: self.get::<_, u16>("playing").unwrap() == 1,
-            created: self.get("created").unwrap(),
-            updated: self.get("updated").unwrap(),
-        }
+        AsModelResult::as_model(self).unwrap()
+    }
+}
+
+impl AsModelResult<Player, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<Player, ParseError> {
+        Ok(Player {
+            id: self.to_value("id")?,
+            name: self.to_value("name")?,
+            r#type: self.to_value("type")?,
+            playing: self.to_value("playing")?,
+            created: self.to_value("created")?,
+            updated: self.to_value("updated")?,
+        })
     }
 }
 
@@ -1050,12 +1102,18 @@ pub struct ClientAccessToken {
 
 impl AsModel<ClientAccessToken> for Row<'_> {
     fn as_model(&self) -> ClientAccessToken {
-        ClientAccessToken {
-            token: self.get("token").unwrap(),
-            client_id: self.get("client_id").unwrap(),
-            created: self.get("created").unwrap(),
-            updated: self.get("updated").unwrap(),
-        }
+        AsModelResult::as_model(self).unwrap()
+    }
+}
+
+impl AsModelResult<ClientAccessToken, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<ClientAccessToken, ParseError> {
+        Ok(ClientAccessToken {
+            token: self.to_value("token")?,
+            client_id: self.to_value("client_id")?,
+            created: self.to_value("created")?,
+            updated: self.to_value("updated")?,
+        })
     }
 }
 
@@ -1077,13 +1135,19 @@ pub struct MagicToken {
 
 impl AsModel<MagicToken> for Row<'_> {
     fn as_model(&self) -> MagicToken {
-        MagicToken {
-            magic_token: self.get("magic_token").unwrap(),
-            client_id: self.get("client_id").unwrap(),
-            access_token: self.get("access_token").unwrap(),
-            created: self.get("created").unwrap(),
-            updated: self.get("updated").unwrap(),
-        }
+        AsModelResult::as_model(self).unwrap()
+    }
+}
+
+impl AsModelResult<MagicToken, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<MagicToken, ParseError> {
+        Ok(MagicToken {
+            magic_token: self.to_value("magic_token")?,
+            client_id: self.to_value("client_id")?,
+            access_token: self.to_value("access_token")?,
+            created: self.to_value("created")?,
+            updated: self.to_value("updated")?,
+        })
     }
 }
 
@@ -1103,12 +1167,18 @@ pub struct TrackSize {
 
 impl AsModel<TrackSize> for Row<'_> {
     fn as_model(&self) -> TrackSize {
-        TrackSize {
-            id: self.get("id").unwrap(),
-            track_id: self.get("track_id").unwrap(),
-            bytes: self.get("bytes").unwrap(),
-            format: self.get("format").unwrap(),
-        }
+        AsModelResult::as_model(self).unwrap()
+    }
+}
+
+impl AsModelResult<TrackSize, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<TrackSize, ParseError> {
+        Ok(TrackSize {
+            id: self.to_value("id")?,
+            track_id: self.to_value("track_id")?,
+            bytes: self.to_value("bytes")?,
+            format: self.to_value("format")?,
+        })
     }
 }
 
