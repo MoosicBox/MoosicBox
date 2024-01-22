@@ -64,7 +64,7 @@ impl AsModelResult<TidalAlbum, ParseError> for Value {
     fn as_model(&self) -> Result<TidalAlbum, ParseError> {
         Ok(TidalAlbum {
             id: self.to_value("id")?,
-            artist: self.to_value("artist")?,
+            artist: self.to_nested_value(&["artist", "name"])?,
             artist_id: self.to_nested_value(&["artist", "id"])?,
             audio_quality: self.to_value("audioQuality")?,
             copyright: self.to_value("copyright")?,
@@ -73,7 +73,7 @@ impl AsModelResult<TidalAlbum, ParseError> for Value {
             explicit: self.to_value("explicit")?,
             number_of_tracks: self.to_value("numberOfTracks")?,
             popularity: self.to_value("popularity")?,
-            release_date: self.to_value("release_date")?,
+            release_date: self.to_value("releaseDate")?,
             title: self.to_value("title")?,
             media_metadata_tags: self.to_nested_value(&["mediaMetadata", "tags"])?,
         })
@@ -868,7 +868,9 @@ pub async fn artist_albums(
     )
     .await?;
 
-    let items = value.to_nested_value(&["items", "item"])?;
+    log::trace!("Got artist_albums response: {value:?}");
+
+    let items = value.to_value("items")?;
     let count = value.to_value("totalNumberOfItems")?;
 
     Ok((items, count))
