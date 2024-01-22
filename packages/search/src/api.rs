@@ -117,8 +117,9 @@ impl ToValueType<ApiGlobalAlbumSearchResult> for &NamedFieldDocument {
                     Ok(ApiAlbumVersionQuality {
                         format: format
                             .map(|format| {
-                                AudioFormat::from_str(format)
-                                    .map_err(|_| ParseError::ConvertType("AudioFormat".into()))
+                                AudioFormat::from_str(format).map_err(|_| {
+                                    ParseError::ConvertType(format!("AudioFormat '{format}'"))
+                                })
                             })
                             .transpose()?,
                         bit_depth: *bit_depth,
@@ -159,7 +160,7 @@ impl ToValueType<ApiGlobalTrackSearchResult> for &NamedFieldDocument {
                 .to_value::<Option<&str>>("version_formats")?
                 .map(|format| {
                     AudioFormat::from_str(format)
-                        .map_err(|_| ParseError::ConvertType("AudioFormat".into()))
+                        .map_err(|_| ParseError::ConvertType(format!("AudioFormat '{format}'")))
                 })
                 .transpose()?,
             bit_depth: self.to_value("version_bit_depths")?,
