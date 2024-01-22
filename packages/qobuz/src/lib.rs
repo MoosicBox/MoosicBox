@@ -387,11 +387,13 @@ fn fetch_credentials(
             .or_else(|| {
                 log::debug!("Fetching db Qobuz config");
 
-                match db::get_qobuz_config(&db.library.lock().as_ref().unwrap().inner) {
+                let db = &db.library.lock().unwrap().inner;
+
+                match db::get_qobuz_config(db) {
                     Ok(Some(config)) => {
                         log::debug!("Using db Qobuz config");
                         log::debug!("Fetching db Qobuz app config");
-                        match db::get_qobuz_app_config(&db.library.lock().as_ref().unwrap().inner) {
+                        match db::get_qobuz_app_config(db) {
                             Ok(Some(app_config)) => Some(Ok(QobuzCredentials {
                                 access_token: config.access_token,
                                 app_id: app_id.or(Some(app_config.app_id)),
