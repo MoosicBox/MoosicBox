@@ -115,9 +115,9 @@ impl AsModelResult<TidalTrack, ParseError> for Value {
             id: self.to_value("id")?,
             track_number: self.to_value("trackNumber")?,
             artist_id: self.to_nested_value(&["artist", "id"])?,
-            artist: self.to_value("artist")?,
+            artist: self.to_nested_value(&["artist", "name"])?,
             album_id: self.to_nested_value(&["album", "id"])?,
-            album: self.to_value("album")?,
+            album: self.to_nested_value(&["album", "title"])?,
             audio_quality: self.to_value("audioQuality")?,
             copyright: self.to_value("copyright")?,
             duration: self.to_value("duration")?,
@@ -1048,10 +1048,11 @@ pub async fn track(
         &url,
         access_token,
     )
-    .await?
-    .as_model()?;
+    .await?;
 
-    Ok(value)
+    log::trace!("Received track response: {value:?}");
+
+    Ok(value.as_model()?)
 }
 
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
