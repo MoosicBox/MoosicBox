@@ -380,33 +380,40 @@ fn fetch_credentials(
 ) -> Result<TidalCredentials, FetchCredentialsError> {
     #[cfg(feature = "db")]
     {
-        let config = db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner)?;
-
         access_token
             .map(|token| {
                 log::debug!("Using passed access_token");
-                TidalCredentials {
+                Ok(TidalCredentials {
                     access_token: token.to_string(),
                     client_id: None,
                     refresh_token: None,
                     persist: false,
+                })
+            })
+            .or_else(|| {
+                log::debug!("Fetching db Tidal config");
+
+                match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
+                    Ok(Some(config)) => {
+                        log::debug!("Using db Tidal config");
+                        Some(Ok(TidalCredentials {
+                            access_token: config.access_token,
+                            client_id: Some(config.client_id),
+                            refresh_token: Some(config.refresh_token),
+                            persist: true,
+                        }))
+                    }
+                    Ok(None) => {
+                        log::debug!("No Tidal config available");
+                        None
+                    }
+                    Err(err) => {
+                        log::error!("Failed to get Tidal config: {err:?}");
+                        Some(Err(err))
+                    }
                 }
             })
-            .or_else(|| match config {
-                Some(config) => {
-                    log::debug!("Using db Tidal config");
-                    Some(TidalCredentials {
-                        access_token: config.access_token,
-                        client_id: Some(config.client_id),
-                        refresh_token: Some(config.refresh_token),
-                        persist: true,
-                    })
-                }
-                None => {
-                    log::debug!("No Tidal config available");
-                    None
-                }
-            })
+            .transpose()?
             .ok_or(FetchCredentialsError::NoAccessTokenAvailable)
     }
 
