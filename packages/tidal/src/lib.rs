@@ -380,24 +380,33 @@ fn fetch_credentials(
 ) -> Result<TidalCredentials, FetchCredentialsError> {
     #[cfg(feature = "db")]
     {
+        let config = db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner)?;
+
         access_token
-            .map(|token| TidalCredentials {
-                access_token: token,
-                client_id: None,
-                refresh_token: None,
-                persist: false,
+            .map(|token| {
+                log::debug!("Using passed access_token");
+                TidalCredentials {
+                    access_token: token.to_string(),
+                    client_id: None,
+                    refresh_token: None,
+                    persist: false,
+                }
             })
-            .or_else(
-                || match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
-                    Ok(Some(config)) => Some(TidalCredentials {
+            .or_else(|| match config {
+                Some(config) => {
+                    log::debug!("Using db Tidal config");
+                    Some(TidalCredentials {
                         access_token: config.access_token,
                         client_id: Some(config.client_id),
                         refresh_token: Some(config.refresh_token),
                         persist: true,
-                    }),
-                    _ => None,
-                },
-            )
+                    })
+                }
+                None => {
+                    log::debug!("No Tidal config available");
+                    None
+                }
+            })
             .ok_or(FetchCredentialsError::NoAccessTokenAvailable)
     }
 
@@ -452,6 +461,8 @@ async fn authenticated_request_inner(
         return Err(AuthenticatedRequestError::MaxFailedAttempts);
     }
 
+    log::debug!("Making authenticated request to {url}");
+
     let credentials = fetch_credentials(
         #[cfg(feature = "db")]
         db,
@@ -491,6 +502,7 @@ async fn authenticated_request_inner(
             )
             .await;
         } else {
+            log::debug!("No client_id or refresh_token available. Unauthorized");
             return Err(AuthenticatedRequestError::Unauthorized);
         }
     }
@@ -1068,12 +1080,15 @@ pub async fn track_file_url(
         ]
     );
 
-    Ok(authenticated_request(
+    let value = authenticated_request(
         #[cfg(feature = "db")]
         db,
         &url,
         access_token,
     )
-    .await?
-    .to_value("urls")?)
+    .await?;
+
+    log::trace!("Received track file url response: {value:?}");
+
+    Ok(value.to_value("urls")?)
 }
