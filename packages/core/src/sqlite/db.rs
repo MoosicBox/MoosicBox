@@ -13,8 +13,8 @@ use crate::types::PlaybackQuality;
 
 use super::models::{
     ActivePlayer, Album, AlbumVersionQuality, Artist, AsId, AsModel, AsModelQuery, AsModelResult,
-    AsModelResultMut, ClientAccessToken, CreateSession, MagicToken, NumberId, Player, Session,
-    SessionPlaylist, Track, TrackSize, UpdateSession,
+    AsModelResultGroupedMut, AsModelResultMut, ClientAccessToken, CreateSession, MagicToken,
+    NumberId, Player, Session, SessionPlaylist, Track, TrackSize, UpdateSession,
 };
 
 impl<T> From<PoisonError<T>> for DbError {
@@ -41,9 +41,10 @@ pub fn get_session_playlist_tracks(
     db: &Connection,
     session_playlist_id: i32,
 ) -> Result<Vec<Track>, DbError> {
-    Ok(db
-        .prepare_cached(
-            "
+    AsModelResultMut::<Track, DbError>::as_model_mut(
+        &mut db
+            .prepare_cached(
+                "
             SELECT tracks.*,
                 albums.title as album,
                 albums.blur as blur,
@@ -67,12 +68,9 @@ pub fn get_session_playlist_tracks(
             WHERE session_playlist_tracks.session_playlist_id=?1
             ORDER BY session_playlist_tracks.id ASC
             ",
-        )?
-        .query_map(params![session_playlist_id], |row| {
-            AsModelResult::as_model(row).map_err(|_e| rusqlite::Error::InvalidQuery)
-        })?
-        .filter_map(|t| t.ok())
-        .collect())
+            )?
+            .query(params![session_playlist_id])?,
+    )
 }
 
 pub fn get_client_id(db: &Connection) -> Result<Option<String>, DbError> {
@@ -659,7 +657,7 @@ pub fn get_albums(db: &Connection) -> Result<Vec<Album>, DbError> {
         ",
     )?
     .query([])?
-    .as_model_mut()
+    .as_model_grouped_mut()
 }
 
 pub fn get_all_album_version_qualities(
@@ -716,9 +714,10 @@ pub fn get_album_version_qualities(
     db: &Connection,
     album_id: i32,
 ) -> Result<Vec<AlbumVersionQuality>, DbError> {
-    let mut versions = db
-        .prepare_cached(
-            "
+    let mut versions = AsModelResultMut::<AlbumVersionQuality, DbError>::as_model_mut(
+        &mut db
+            .prepare_cached(
+                "
             SELECT DISTINCT 
                 track_sizes.bit_depth,
                 track_sizes.sample_rate,
@@ -729,12 +728,9 @@ pub fn get_album_version_qualities(
             JOIN tracks ON tracks.album_id=albums.id
             JOIN track_sizes ON track_sizes.track_id=tracks.id
             WHERE albums.id=?1",
-        )?
-        .query_map(params![album_id], |row| {
-            AsModelResult::as_model(row).map_err(|_e| rusqlite::Error::InvalidQuery)
-        })?
-        .filter_map(|c| c.ok())
-        .collect::<Vec<_>>();
+            )?
+            .query(params![album_id])?,
+    )?;
 
     versions.sort_by(|a: &AlbumVersionQuality, b: &AlbumVersionQuality| {
         b.sample_rate
@@ -776,9 +772,8 @@ pub fn get_album(db: &Connection, id: i32) -> Result<Option<Album>, DbError> {
 }
 
 pub fn get_album_tracks(db: &Connection, album_id: i32) -> Result<Vec<Track>, DbError> {
-    Ok(db
-        .prepare_cached(
-            "
+    db.prepare_cached(
+        "
             SELECT tracks.*,
                 albums.title as album,
                 albums.blur as blur,
@@ -800,12 +795,9 @@ pub fn get_album_tracks(db: &Connection, album_id: i32) -> Result<Vec<Track>, Db
             JOIN track_sizes ON tracks.id=track_sizes.track_id AND track_sizes.format=tracks.format
             WHERE tracks.album_id=?1
             ORDER BY number ASC",
-        )?
-        .query_map(params![album_id], |row| {
-            AsModelResult::as_model(row).map_err(|_e| rusqlite::Error::InvalidQuery)
-        })?
-        .filter_map(|row| row.ok())
-        .collect())
+    )?
+    .query(params![album_id])?
+    .as_model_mut()
 }
 
 pub fn get_artist_albums(db: &Connection, artist_id: i32) -> Result<Vec<Album>, DbError> {
@@ -829,7 +821,7 @@ pub fn get_artist_albums(db: &Connection, artist_id: i32) -> Result<Vec<Album>, 
         ",
     )?
     .query(params![artist_id])?
-    .as_model_mut()
+    .as_model_grouped_mut()
 }
 
 #[derive(Debug, Clone)]
@@ -1034,11 +1026,9 @@ where
 
     bind_values(&mut statement, filters, false)?;
 
-    Ok(statement
-        .raw_query()
-        .mapped(|row| AsModelResult::as_model(row).map_err(|_| rusqlite::Error::InvalidQuery))
-        .filter_map(|row| row.ok())
-        .collect::<Vec<_>>())
+    let values = AsModelResultMut::<T, DbError>::as_model_mut(&mut statement.raw_query())?;
+
+    Ok(values)
 }
 
 pub fn select<T>(
@@ -1058,11 +1048,9 @@ where
 
     bind_values(&mut statement, filters, false)?;
 
-    Ok(statement
-        .raw_query()
-        .mapped(|row| AsModelResult::as_model(row).map_err(|_| rusqlite::Error::InvalidQuery))
-        .filter_map(|row| row.ok())
-        .collect::<Vec<_>>())
+    let values = AsModelResultMut::<T, DbError>::as_model_mut(&mut statement.raw_query())?;
+
+    Ok(values)
 }
 
 pub fn delete<T>(
@@ -1080,11 +1068,9 @@ where
 
     bind_values(&mut statement, filters, false)?;
 
-    Ok(statement
-        .raw_query()
-        .mapped(|row| AsModelResult::as_model(row).map_err(|_| rusqlite::Error::InvalidQuery))
-        .filter_map(|row| row.ok())
-        .collect::<Vec<_>>())
+    let values = AsModelResultMut::<T, DbError>::as_model_mut(&mut statement.raw_query())?;
+
+    Ok(values)
 }
 
 fn find_row<'a, T>(

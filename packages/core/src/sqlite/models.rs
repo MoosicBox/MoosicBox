@@ -23,8 +23,37 @@ pub trait AsModelResult<T, E> {
     fn as_model(&self) -> Result<T, E>;
 }
 
+pub trait AsModelResultGroupedMut<T, E> {
+    fn as_model_grouped_mut<'a>(&'a mut self) -> Result<Vec<T>, E>
+    where
+        Row<'a>: AsModelResult<T, ParseError>;
+}
+
 pub trait AsModelResultMut<T, E> {
-    fn as_model_mut(&mut self) -> Result<T, E>;
+    fn as_model_mut<'a>(&'a mut self) -> Result<Vec<T>, E>
+    where
+        Row<'a>: AsModelResult<T, ParseError>;
+}
+
+impl<T, E> AsModelResultMut<T, E> for Rows<'_>
+where
+    E: From<DbError>,
+{
+    fn as_model_mut<'a>(&'a mut self) -> Result<Vec<T>, E>
+    where
+        Row<'a>: AsModelResult<T, ParseError>,
+    {
+        let mut values = vec![];
+
+        while let Some(row) = self.next().map_err(|e| e.into())? {
+            match AsModelResult::as_model(row) {
+                Ok(value) => values.push(value),
+                Err(err) => log::error!("Row error: {err:?}"),
+            }
+        }
+
+        Ok(values)
+    }
 }
 
 pub trait AsId {
@@ -429,8 +458,11 @@ pub fn sort_album_versions(versions: &mut [AlbumVersionQuality]) {
     versions.sort_by(|a, b| track_source_to_u8(a.source).cmp(&track_source_to_u8(b.source)));
 }
 
-impl AsModelResultMut<Vec<Album>, DbError> for Rows<'_> {
-    fn as_model_mut(&mut self) -> Result<Vec<Album>, DbError> {
+impl AsModelResultGroupedMut<Album, DbError> for Rows<'_> {
+    fn as_model_grouped_mut<'a>(&'a mut self) -> Result<Vec<Album>, DbError>
+    where
+        Row<'a>: AsModelResult<Album, ParseError>,
+    {
         let mut results: Vec<Album> = vec![];
         let mut last_album_id = 0;
 
@@ -447,9 +479,10 @@ impl AsModelResultMut<Vec<Album>, DbError> for Rows<'_> {
                 last_album_id = album_id;
             }
 
-            if let Some(ref mut album) = results.last_mut() {
-                if let Ok(row) = AsModelResult::as_model(row) {
-                    album.versions.push(row);
+            if let Some(album) = results.last_mut() {
+                if let Ok(version) = AsModelResult::<AlbumVersionQuality, ParseError>::as_model(row)
+                {
+                    album.versions.push(version);
                 }
             }
         }
