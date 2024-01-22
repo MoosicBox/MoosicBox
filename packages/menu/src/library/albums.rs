@@ -216,11 +216,13 @@ pub fn get_album_versions(
     data: &AppState,
 ) -> Result<Vec<AlbumVersion>, GetAlbumVersionsError> {
     let tracks = get_album_tracks(album_id, data)?;
+    log::trace!("Got {} album tracks", tracks.len());
 
     let mut versions = vec![];
 
     for track in tracks {
         if versions.is_empty() {
+            log::trace!("No versions exist yet. Creating first version");
             versions.push(AlbumVersion {
                 tracks: vec![track.clone()],
                 format: track.format,
@@ -238,8 +240,10 @@ pub fn get_album_versions(
                 && v.tracks[0].directory() == track.directory()
                 && v.source == track.source
         }) {
+            log::trace!("Adding track to existing version");
             existing_version.tracks.push(track);
         } else {
+            log::trace!("Adding track to new version");
             versions.push(AlbumVersion {
                 tracks: vec![track.clone()],
                 format: track.format,
