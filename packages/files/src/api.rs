@@ -47,12 +47,14 @@ pub struct GetTrackQuery {
 
 impl From<TrackSourceError> for actix_web::Error {
     fn from(err: TrackSourceError) -> Self {
+        log::error!("{err:?}");
         ErrorInternalServerError(err.to_string())
     }
 }
 
 impl From<TrackInfoError> for actix_web::Error {
     fn from(err: TrackInfoError) -> Self {
+        log::error!("{err:?}");
         ErrorInternalServerError(err.to_string())
     }
 }
