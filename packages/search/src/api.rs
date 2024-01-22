@@ -264,9 +264,13 @@ pub async fn search_global_search_endpoint(
         for value in values {
             position += 1;
 
-            let value: ApiGlobalSearchResult = value.to_value_type().map_err(|e| {
-                ErrorInternalServerError(format!("Failed to search global search index: {e:?}"))
-            })?;
+            let value: ApiGlobalSearchResult = match value.to_value_type() {
+                Ok(value) => value,
+                Err(err) => {
+                    log::trace!("Failed to parse search result: {err:?}");
+                    continue;
+                }
+            };
 
             if !results.iter().any(|r| r.to_key() == value.to_key()) {
                 results.push(value);
