@@ -375,34 +375,50 @@ fn fetch_credentials(
     #[cfg(feature = "db")]
     {
         access_token
-            .map(|token| QobuzCredentials {
-                access_token: token,
-                app_id: None,
-                username: None,
-                persist: false,
+            .map(|token| {
+                log::debug!("Using passed access_token");
+                Ok(QobuzCredentials {
+                    access_token: token,
+                    app_id: None,
+                    username: None,
+                    persist: false,
+                })
             })
             .or_else(|| {
-                let config = {
-                    db::get_qobuz_config(&db.library.lock().as_ref().unwrap().inner)
-                        .unwrap_or(None)
-                        .clone()
-                };
+                log::debug!("Fetching db Qobuz config");
 
-                match config {
-                    Some(config) => {
+                match db::get_qobuz_config(&db.library.lock().as_ref().unwrap().inner) {
+                    Ok(Some(config)) => {
+                        log::debug!("Using db Qobuz config");
+                        log::debug!("Fetching db Qobuz app config");
                         match db::get_qobuz_app_config(&db.library.lock().as_ref().unwrap().inner) {
-                            Ok(Some(app_config)) => Some(QobuzCredentials {
+                            Ok(Some(app_config)) => Some(Ok(QobuzCredentials {
                                 access_token: config.access_token,
                                 app_id: app_id.or(Some(app_config.app_id)),
                                 username: Some(config.user_email),
                                 persist: true,
-                            }),
-                            _ => None,
+                            })),
+                            Ok(None) => {
+                                log::debug!("No Qobuz app config available");
+                                None
+                            }
+                            Err(err) => {
+                                log::error!("Failed to get Qobuz app config: {err:?}");
+                                Some(Err(err))
+                            }
                         }
                     }
-                    None => None,
+                    Ok(None) => {
+                        log::debug!("No Qobuz config available");
+                        None
+                    }
+                    Err(err) => {
+                        log::error!("Failed to get Qobuz app config: {err:?}");
+                        Some(Err(err))
+                    }
                 }
             })
+            .transpose()?
             .ok_or(FetchCredentialsError::NoAccessTokenAvailable)
     }
 
