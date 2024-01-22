@@ -460,6 +460,8 @@ async fn authenticated_request_inner(
         return Err(AuthenticatedRequestError::MaxFailedAttempts);
     }
 
+    log::debug!("Making authenticated request to {url}");
+
     let credentials = fetch_credentials(
         #[cfg(feature = "db")]
         db,
@@ -470,6 +472,7 @@ async fn authenticated_request_inner(
     let app_id = if let Some(ref app_id) = credentials.app_id {
         app_id
     } else {
+        log::debug!("No app_id available");
         return Err(AuthenticatedRequestError::Unauthorized);
     };
 
@@ -1212,6 +1215,8 @@ pub async fn track_file_url(
         access_token,
     )
     .await?;
+
+    log::trace!("Received track file url response: {value:?}");
 
     let url = value.to_value("url")?;
 
