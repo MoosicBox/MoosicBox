@@ -1,5 +1,6 @@
 use moosicbox_core::sqlite::db::{delete, select, upsert, DbError, SqliteValue};
 use rusqlite::Connection;
+use thiserror::Error;
 
 pub mod models;
 
@@ -60,13 +61,21 @@ pub fn delete_tidal_config(db: &Connection, refresh_token: &str) -> Result<(), D
     Ok(())
 }
 
-pub fn get_tidal_config(db: &Connection) -> Result<Option<TidalConfig>, DbError> {
+#[derive(Debug, Error)]
+pub enum TidalConfigError {
+    #[error(transparent)]
+    Db(#[from] DbError),
+    #[error("No configs available")]
+    NoConfigsAvailable,
+}
+
+pub fn get_tidal_config(db: &Connection) -> Result<Option<TidalConfig>, TidalConfigError> {
     let mut configs = select::<TidalConfig>(db, "tidal_config", &vec![], &["*"])?
         .into_iter()
         .collect::<Vec<_>>();
 
     if configs.is_empty() {
-        return Err(DbError::Unknown);
+        return Err(TidalConfigError::NoConfigsAvailable);
     }
 
     configs.sort_by(|a, b| a.issued_at.cmp(&b.issued_at));
@@ -74,10 +83,12 @@ pub fn get_tidal_config(db: &Connection) -> Result<Option<TidalConfig>, DbError>
     Ok(configs.first().cloned())
 }
 
-pub fn get_tidal_access_tokens(db: &Connection) -> Result<Option<(String, String)>, DbError> {
+pub fn get_tidal_access_tokens(
+    db: &Connection,
+) -> Result<Option<(String, String)>, TidalConfigError> {
     Ok(get_tidal_config(db)?.map(|c| (c.access_token.clone(), c.refresh_token.clone())))
 }
 
-pub fn get_tidal_access_token(db: &Connection) -> Result<Option<String>, DbError> {
+pub fn get_tidal_access_token(db: &Connection) -> Result<Option<String>, TidalConfigError> {
     Ok(get_tidal_access_tokens(db)?.map(|c| c.0))
 }

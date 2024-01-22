@@ -369,7 +369,7 @@ struct TidalCredentials {
 pub enum FetchCredentialsError {
     #[cfg(feature = "db")]
     #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    TidalConfig(#[from] db::TidalConfigError),
     #[error("No access token available")]
     NoAccessTokenAvailable,
 }
