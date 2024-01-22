@@ -287,6 +287,7 @@ pub struct Artist {
     pub title: String,
     pub cover: Option<String>,
     pub tidal_id: Option<u64>,
+    pub qobuz_id: Option<u64>,
 }
 
 impl AsModel<Artist> for Row<'_> {
@@ -302,6 +303,7 @@ impl AsModelResult<Artist, ParseError> for Row<'_> {
             title: self.to_value("title")?,
             cover: self.to_value("cover")?,
             tidal_id: self.to_value("tidal_id")?,
+            qobuz_id: self.to_value("qobuz_id")?,
         })
     }
 }
@@ -336,6 +338,8 @@ pub struct ApiArtist {
     pub artist_id: i32,
     pub title: String,
     pub contains_cover: bool,
+    pub tidal_id: Option<u64>,
+    pub qobuz_id: Option<u64>,
 }
 
 impl ToApi<ApiArtist> for Artist {
@@ -344,6 +348,8 @@ impl ToApi<ApiArtist> for Artist {
             artist_id: self.id,
             title: self.title.clone(),
             contains_cover: self.cover.is_some(),
+            tidal_id: self.tidal_id,
+            qobuz_id: self.qobuz_id,
         }
     }
 }
@@ -409,6 +415,7 @@ pub struct Album {
     pub blur: bool,
     pub versions: Vec<AlbumVersionQuality>,
     pub tidal_id: Option<u64>,
+    pub qobuz_id: Option<u64>,
 }
 
 impl AsModel<Album> for Row<'_> {
@@ -432,6 +439,7 @@ impl AsModelResult<Album, ParseError> for Row<'_> {
             blur: self.to_value("blur")?,
             versions: vec![],
             tidal_id: self.to_value("tidal_id")?,
+            qobuz_id: self.to_value("qobuz_id")?,
         })
     }
 }
@@ -514,6 +522,7 @@ impl AsModelQuery<Album> for Row<'_> {
             blur: self.to_value("blur")?,
             versions: get_album_version_qualities(db, id)?,
             tidal_id: self.to_value("tidal_id")?,
+            qobuz_id: self.to_value("qobuz_id")?,
         })
     }
 }
@@ -547,6 +556,8 @@ pub struct ApiAlbum {
     pub source: AlbumSource,
     pub blur: bool,
     pub versions: Vec<ApiAlbumVersionQuality>,
+    pub tidal_id: Option<u64>,
+    pub qobuz_id: Option<u64>,
 }
 
 impl ToApi<ApiAlbum> for Album {
@@ -562,6 +573,8 @@ impl ToApi<ApiAlbum> for Album {
             source: self.source.clone(),
             blur: self.blur,
             versions: self.versions.iter().map(|v| v.to_api()).collect(),
+            tidal_id: self.tidal_id,
+            qobuz_id: self.qobuz_id,
         }
     }
 }
