@@ -31,6 +31,7 @@ pub struct TidalAlbum {
     pub id: u64,
     pub artist: String,
     pub artist_id: u64,
+    pub contains_cover: bool,
     pub audio_quality: String,
     pub copyright: Option<String>,
     pub cover: String,
@@ -66,6 +67,7 @@ impl AsModelResult<TidalAlbum, ParseError> for Value {
             id: self.to_value("id")?,
             artist: self.to_nested_value(&["artist", "name"])?,
             artist_id: self.to_nested_value(&["artist", "id"])?,
+            contains_cover: true,
             audio_quality: self.to_value("audioQuality")?,
             copyright: self.to_value("copyright")?,
             cover: self.to_value("cover")?,
@@ -87,8 +89,10 @@ pub struct TidalTrack {
     pub track_number: u32,
     pub artist_id: u64,
     pub artist: String,
+    pub artist_cover: Option<String>,
     pub album_id: u64,
     pub album: String,
+    pub album_cover: Option<String>,
     pub audio_quality: String,
     pub copyright: Option<String>,
     pub duration: u32,
@@ -116,8 +120,10 @@ impl AsModelResult<TidalTrack, ParseError> for Value {
             track_number: self.to_value("trackNumber")?,
             artist_id: self.to_nested_value(&["artist", "id"])?,
             artist: self.to_nested_value(&["artist", "name"])?,
+            artist_cover: self.to_nested_value(&["artist", "picture"])?,
             album_id: self.to_nested_value(&["album", "id"])?,
             album: self.to_nested_value(&["album", "title"])?,
+            album_cover: self.to_nested_value(&["album", "cover"])?,
             audio_quality: self.to_value("audioQuality")?,
             copyright: self.to_value("copyright")?,
             duration: self.to_value("duration")?,
@@ -135,6 +141,7 @@ impl AsModelResult<TidalTrack, ParseError> for Value {
 pub struct TidalArtist {
     pub id: u64,
     pub picture: Option<String>,
+    pub contains_cover: bool,
     pub popularity: u32,
     pub name: String,
 }
@@ -160,9 +167,12 @@ impl ToValueType<TidalArtist> for &Value {
 
 impl AsModelResult<TidalArtist, ParseError> for Value {
     fn as_model(&self) -> Result<TidalArtist, ParseError> {
+        let picture: Option<String> = self.to_value("picture")?;
+
         Ok(TidalArtist {
             id: self.to_value("id")?,
-            picture: self.to_value("picture")?,
+            contains_cover: picture.is_some(),
+            picture,
             popularity: self.to_value("popularity")?,
             name: self.to_value("name")?,
         })
@@ -595,6 +605,8 @@ pub enum TidalFavoriteArtistsError {
     AuthenticatedRequest(#[from] AuthenticatedRequestError),
     #[error("No user ID available")]
     NoUserIdAvailable,
+    #[error("Request failed: {0:?}")]
+    RequestFailed(String),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
@@ -652,7 +664,16 @@ pub async fn favorite_artists(
     )
     .await?;
 
-    let items = value.to_nested_value(&["items", "item"])?;
+    log::trace!("Received favorite artists response: {value:?}");
+
+    let items = value
+        .to_value::<Option<Vec<&Value>>>("items")?
+        .ok_or_else(|| TidalFavoriteArtistsError::RequestFailed(format!("{value:?}")))?
+        .into_iter()
+        .map(|value| value.to_value("item"))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| TidalFavoriteArtistsError::RequestFailed(format!("{e:?}: {value:?}")))?;
+
     let count = value.to_value("totalNumberOfItems")?;
 
     Ok((items, count))
@@ -679,6 +700,8 @@ pub enum TidalFavoriteAlbumsError {
     AuthenticatedRequest(#[from] AuthenticatedRequestError),
     #[error("No user ID available")]
     NoUserIdAvailable,
+    #[error("Request failed: {0:?}")]
+    RequestFailed(String),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
@@ -736,7 +759,16 @@ pub async fn favorite_albums(
     )
     .await?;
 
-    let items = value.to_nested_value(&["items", "item"])?;
+    log::trace!("Received favorite albums response: {value:?}");
+
+    let items = value
+        .to_value::<Option<Vec<&Value>>>("items")?
+        .ok_or_else(|| TidalFavoriteAlbumsError::RequestFailed(format!("{value:?}")))?
+        .into_iter()
+        .map(|value| value.to_value("item"))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| TidalFavoriteAlbumsError::RequestFailed(format!("{e:?}: {value:?}")))?;
+
     let count = value.to_value("totalNumberOfItems")?;
 
     Ok((items, count))
@@ -763,6 +795,8 @@ pub enum TidalFavoriteTracksError {
     AuthenticatedRequest(#[from] AuthenticatedRequestError),
     #[error("No user ID available")]
     NoUserIdAvailable,
+    #[error("Request failed: {0:?}")]
+    RequestFailed(String),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
@@ -820,7 +854,16 @@ pub async fn favorite_tracks(
     )
     .await?;
 
-    let items = value.to_nested_value(&["items", "item"])?;
+    log::trace!("Received favorite tracks response: {value:?}");
+
+    let items = value
+        .to_value::<Option<Vec<&Value>>>("items")?
+        .ok_or_else(|| TidalFavoriteTracksError::RequestFailed(format!("{value:?}")))?
+        .into_iter()
+        .map(|value| value.to_value("item"))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| TidalFavoriteTracksError::RequestFailed(format!("{e:?}: {value:?}")))?;
+
     let count = value.to_value("totalNumberOfItems")?;
 
     Ok((items, count))
@@ -830,6 +873,8 @@ pub async fn favorite_tracks(
 pub enum TidalArtistAlbumsError {
     #[error(transparent)]
     AuthenticatedRequest(#[from] AuthenticatedRequestError),
+    #[error("Request failed: {0:?}")]
+    RequestFailed(String),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
@@ -868,9 +913,10 @@ pub async fn artist_albums(
     )
     .await?;
 
-    log::trace!("Got artist_albums response: {value:?}");
+    let items = value
+        .to_value::<Option<_>>("items")?
+        .ok_or_else(|| TidalArtistAlbumsError::RequestFailed(format!("{value:?}")))?;
 
-    let items = value.to_value("items")?;
     let count = value.to_value("totalNumberOfItems")?;
 
     Ok((items, count))
@@ -921,7 +967,7 @@ pub async fn album_tracks(
     .await?;
 
     let items = value
-        .to_nested_value::<Option<_>>(&["items", "item"])?
+        .to_value::<Option<_>>("items")?
         .ok_or_else(|| TidalAlbumTracksError::RequestFailed(format!("{value:?}")))?;
 
     let count = value.to_value("totalNumberOfItems")?;
@@ -1008,10 +1054,11 @@ pub async fn artist(
         &url,
         access_token,
     )
-    .await?
-    .as_model()?;
+    .await?;
 
-    Ok(value)
+    log::trace!("Received artist response: {value:?}");
+
+    Ok(value.as_model()?)
 }
 
 #[derive(Debug, Error)]

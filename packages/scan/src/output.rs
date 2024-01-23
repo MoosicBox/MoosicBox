@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    io::Write,
     path::{Path, PathBuf},
     sync::{atomic::AtomicU32, Arc},
 };
@@ -17,6 +16,7 @@ use moosicbox_core::{
     },
     types::{AudioFormat, PlaybackQuality},
 };
+use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
 use moosicbox_search::data::ReindexFromDbError;
 use once_cell::sync::Lazy;
 use thiserror::Error;
@@ -26,47 +26,12 @@ use crate::CACHE_DIR;
 
 static IMAGE_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
 
-static NON_ALPHA_NUMERIC_REGEX: Lazy<regex::Regex> =
-    Lazy::new(|| regex::Regex::new(r"[^A-Za-z0-9_]").expect("Invalid Regex"));
-
-pub fn sanitize_filename(string: &str) -> String {
-    NON_ALPHA_NUMERIC_REGEX.replace_all(string, "_").to_string()
-}
-
-fn save_bytes_to_file(bytes: &[u8], path: &PathBuf) {
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .open(path)
-        .unwrap();
-
-    let _ = file.write_all(bytes);
-}
-
-#[derive(Debug, Error)]
-pub enum FetchInternetImgError {
-    #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
-}
-
-async fn fetch_internet_img(
-    client: &reqwest::Client,
-    path: &Path,
-    name: &str,
-    url: &str,
-) -> Result<PathBuf, FetchInternetImgError> {
-    let bytes = client.get(url).send().await?.bytes().await?;
-    let cover_file_path = path.join(name);
-    save_bytes_to_file(&bytes, &cover_file_path);
-    Ok(cover_file_path)
-}
-
 async fn search_for_cover(
     client: &reqwest::Client,
     path: &Path,
     name: &str,
     url: &str,
-) -> Result<Option<PathBuf>, FetchInternetImgError> {
+) -> Result<Option<PathBuf>, FetchAndSaveBytesFromRemoteUrlError> {
     std::fs::create_dir_all(path)
         .unwrap_or_else(|_| panic!("Failed to create config directory at {path:?}"));
 
@@ -82,7 +47,10 @@ async fn search_for_cover(
         Ok(Some(cover_file))
     } else {
         log::debug!("No existing cover in {path:?}, searching internet");
-        Ok(Some(fetch_internet_img(client, path, name, url).await?))
+        Ok(Some(
+            moosicbox_files::fetch_and_save_bytes_from_remote_url(client, &path.join(name), url)
+                .await?,
+        ))
     }
 }
 
@@ -244,11 +212,11 @@ impl ScanAlbum {
     pub async fn search_cover(
         &mut self,
         url: String,
-    ) -> Result<Option<String>, FetchInternetImgError> {
+    ) -> Result<Option<String>, FetchAndSaveBytesFromRemoteUrlError> {
         if self.cover.is_none() && !self.searched_cover {
             let path = CACHE_DIR
-                .join(sanitize_filename(&self.artist.name))
-                .join(sanitize_filename(&self.name));
+                .join(moosicbox_files::sanitize_filename(&self.artist.name))
+                .join(moosicbox_files::sanitize_filename(&self.name));
 
             let cover = search_for_cover(&IMAGE_CLIENT, &path, "album.jpg", &url).await?;
 
@@ -327,11 +295,11 @@ impl ScanArtist {
     pub async fn search_cover(
         &mut self,
         url: String,
-    ) -> Result<Option<String>, FetchInternetImgError> {
+    ) -> Result<Option<String>, FetchAndSaveBytesFromRemoteUrlError> {
         if self.cover.is_none() && !self.searched_cover {
             self.searched_cover = true;
 
-            let path = CACHE_DIR.join(sanitize_filename(&self.name));
+            let path = CACHE_DIR.join(moosicbox_files::sanitize_filename(&self.name));
             let cover = search_for_cover(&IMAGE_CLIENT, &path, "artist.jpg", &url).await?;
 
             if let Some(cover) = cover {

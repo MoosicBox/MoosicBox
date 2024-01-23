@@ -258,7 +258,12 @@ pub async fn get_artist_albums_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetArtistQuery {
-    artist_id: i32,
+    artist_id: Option<u64>,
+    tidal_artist_id: Option<u64>,
+    qobuz_artist_id: Option<u64>,
+    album_id: Option<u64>,
+    tidal_album_id: Option<u64>,
+    qobuz_album_id: Option<u64>,
 }
 
 #[get("/artist")]
@@ -267,17 +272,27 @@ pub async fn get_artist_endpoint(
     data: web::Data<AppState>,
 ) -> Result<Json<ApiArtist>> {
     Ok(Json(
-        get_artist(query.artist_id, &data)
-            .await
-            .map_err(|_e| ErrorInternalServerError("Failed to fetch artist"))?
-            .to_api(),
+        get_artist(
+            query.artist_id,
+            query.tidal_artist_id,
+            query.qobuz_artist_id,
+            query.album_id,
+            query.tidal_album_id,
+            query.qobuz_album_id,
+            &data,
+        )
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to fetch artist: {e:?}")))?
+        .to_api(),
     ))
 }
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetAlbumQuery {
-    album_id: i32,
+    album_id: Option<u64>,
+    tidal_album_id: Option<u64>,
+    qobuz_album_id: Option<u64>,
 }
 
 #[get("/album")]
@@ -286,9 +301,14 @@ pub async fn get_album_endpoint(
     data: web::Data<AppState>,
 ) -> Result<Json<ApiAlbum>> {
     Ok(Json(
-        get_album(query.album_id, &data)
-            .await
-            .map_err(|_e| ErrorInternalServerError("Failed to fetch album"))?
-            .to_api(),
+        get_album(
+            query.album_id,
+            query.tidal_album_id,
+            query.qobuz_album_id,
+            &data,
+        )
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to fetch album: {e:?}")))?
+        .to_api(),
     ))
 }

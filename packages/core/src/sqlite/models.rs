@@ -12,7 +12,7 @@ use crate::types::AudioFormat;
 
 use super::db::{
     get_album_version_qualities, get_players, get_session_active_players, get_session_playlist,
-    get_session_playlist_tracks, DbError, SqliteValue,
+    get_session_playlist_tracks, get_tracks, DbError, SqliteValue,
 };
 
 pub trait AsModel<T> {
@@ -23,10 +23,14 @@ pub trait AsModelResult<T, E> {
     fn as_model(&self) -> Result<T, E>;
 }
 
-pub trait AsModelResultGroupedMut<T, E> {
-    fn as_model_grouped_mut<'a>(&'a mut self) -> Result<Vec<T>, E>
+pub trait AsModelResultMappedMut<T, E> {
+    fn as_model_mapped_mut<'a>(&'a mut self) -> Result<Vec<T>, E>
     where
         Row<'a>: AsModelResult<T, ParseError>;
+}
+
+pub trait AsModelResultMappedQuery<T, E> {
+    fn as_model_mapped_query(&self, db: &rusqlite::Connection) -> Result<Vec<T>, E>;
 }
 
 pub trait AsModelResultMut<T, E> {
@@ -229,9 +233,18 @@ impl AsId for Track {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
+pub enum ApiTrack {
+    Library(ApiLibraryTrack),
+    Tidal(serde_json::Value),
+    Qobuz(serde_json::Value),
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct ApiTrack {
+pub struct ApiLibraryTrack {
     pub track_id: i32,
     pub number: i32,
     pub title: String,
@@ -256,7 +269,7 @@ pub struct ApiTrack {
 
 impl ToApi<ApiTrack> for Track {
     fn to_api(&self) -> ApiTrack {
-        ApiTrack {
+        ApiTrack::Library(ApiLibraryTrack {
             track_id: self.id,
             number: self.number,
             title: self.title.clone(),
@@ -277,8 +290,17 @@ impl ToApi<ApiTrack> for Track {
             sample_rate: self.sample_rate,
             channels: self.channels,
             source: self.source,
-        }
+        })
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
+pub enum ArtistId {
+    Library(i32),
+    Tidal(u64),
+    Qobuz(u64),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
@@ -332,9 +354,9 @@ impl FromStr for ArtistSort {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct ApiArtist {
+pub struct ApiLibraryArtist {
     pub artist_id: i32,
     pub title: String,
     pub contains_cover: bool,
@@ -342,15 +364,22 @@ pub struct ApiArtist {
     pub qobuz_id: Option<u64>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
+pub enum ApiArtist {
+    Library(ApiLibraryArtist),
+}
+
 impl ToApi<ApiArtist> for Artist {
     fn to_api(&self) -> ApiArtist {
-        ApiArtist {
+        ApiArtist::Library(ApiLibraryArtist {
             artist_id: self.id,
             title: self.title.clone(),
             contains_cover: self.cover.is_some(),
             tidal_id: self.tidal_id,
             qobuz_id: self.qobuz_id,
-        }
+        })
     }
 }
 
@@ -399,6 +428,15 @@ impl AsModelResult<AlbumVersionQuality, ParseError> for Row<'_> {
                 .map_err(|e| ParseError::ConvertType(format!("Invalid source: {e:?}")))?,
         })
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
+pub enum AlbumId {
+    Library(i32),
+    Tidal(u64),
+    Qobuz(String),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
@@ -466,8 +504,8 @@ pub fn sort_album_versions(versions: &mut [AlbumVersionQuality]) {
     versions.sort_by(|a, b| track_source_to_u8(a.source).cmp(&track_source_to_u8(b.source)));
 }
 
-impl AsModelResultGroupedMut<Album, DbError> for Rows<'_> {
-    fn as_model_grouped_mut<'a>(&'a mut self) -> Result<Vec<Album>, DbError>
+impl AsModelResultMappedMut<Album, DbError> for Rows<'_> {
+    fn as_model_mapped_mut<'a>(&'a mut self) -> Result<Vec<Album>, DbError>
     where
         Row<'a>: AsModelResult<Album, ParseError>,
     {
@@ -533,6 +571,13 @@ impl AsId for Album {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
+pub enum ApiAlbum {
+    Library(ApiLibraryAlbum),
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiAlbumVersionQuality {
@@ -543,9 +588,9 @@ pub struct ApiAlbumVersionQuality {
     pub source: TrackSource,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct ApiAlbum {
+pub struct ApiLibraryAlbum {
     pub album_id: i32,
     pub title: String,
     pub artist: String,
@@ -562,7 +607,7 @@ pub struct ApiAlbum {
 
 impl ToApi<ApiAlbum> for Album {
     fn to_api(&self) -> ApiAlbum {
-        ApiAlbum {
+        ApiAlbum::Library(ApiLibraryAlbum {
             album_id: self.id,
             title: self.title.clone(),
             artist: self.artist.clone(),
@@ -575,7 +620,7 @@ impl ToApi<ApiAlbum> for Album {
             versions: self.versions.iter().map(|v| v.to_api()).collect(),
             tidal_id: self.tidal_id,
             qobuz_id: self.qobuz_id,
-        }
+        })
     }
 }
 
@@ -692,11 +737,131 @@ impl ToApi<ApiUpdateSession> for UpdateSession {
     }
 }
 
+#[derive(Copy, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum ApiSource {
+    Library,
+    Tidal,
+    Qobuz,
+}
+
+impl ToValueType<ApiSource> for Value {
+    fn to_value_type(self) -> Result<ApiSource, ParseError> {
+        match self {
+            Value::Text(str) => ApiSource::from_str(&str)
+                .map_err(|_| ParseError::ConvertType(format!("ApiSource: {str}"))),
+            _ => Err(ParseError::ConvertType(format!("ApiSource: {self:?}"))),
+        }
+    }
+
+    fn missing_value(self, error: ParseError) -> Result<ApiSource, ParseError> {
+        Err(error)
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSessionPlaylist {
     pub session_playlist_id: i32,
-    pub tracks: Vec<i32>,
+    pub tracks: Vec<UpdateSessionPlaylistTrack>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateSessionPlaylistTrack {
+    pub id: u64,
+    pub r#type: ApiSource,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<String>,
+}
+
+impl AsModelResultMappedQuery<ApiTrack, DbError> for Vec<UpdateSessionPlaylistTrack> {
+    fn as_model_mapped_query(&self, db: &rusqlite::Connection) -> Result<Vec<ApiTrack>, DbError> {
+        let tracks = self;
+
+        let library_track_ids = tracks
+            .iter()
+            .filter(|t| t.r#type == ApiSource::Library)
+            .map(|t| t.id as i32)
+            .collect::<Vec<_>>();
+
+        let library_tracks = get_tracks(db, Some(&library_track_ids))?;
+
+        Ok(tracks
+            .iter()
+            .map(|t| From::<UpdateSessionPlaylistTrack>::from(t.clone()))
+            .map(|t: SessionPlaylistTrack| match t.r#type {
+                ApiSource::Library => library_tracks
+                    .iter()
+                    .find(|lib| (lib.id as u64) == t.id)
+                    .expect("Missing Library track")
+                    .to_api(),
+                ApiSource::Tidal => t.to_api(),
+                ApiSource::Qobuz => t.to_api(),
+            })
+            .collect::<Vec<_>>())
+    }
+}
+
+impl From<UpdateSessionPlaylistTrack> for SessionPlaylistTrack {
+    fn from(value: UpdateSessionPlaylistTrack) -> Self {
+        SessionPlaylistTrack {
+            id: value.id,
+            r#type: value.r#type,
+            data: value.data,
+        }
+    }
+}
+
+impl ToApi<ApiTrack> for SessionPlaylistTrack {
+    fn to_api(&self) -> ApiTrack {
+        match self.r#type {
+            ApiSource::Library => ApiTrack::Library(ApiLibraryTrack {
+                track_id: self.id as i32,
+                ..Default::default()
+            }),
+            ApiSource::Tidal => match &self.data {
+                Some(data) => ApiTrack::Tidal(
+                    serde_json::from_str(data)
+                        .expect("Failed to parse UpdateSessionPlaylistTrack data"),
+                ),
+                None => ApiTrack::Tidal(serde_json::json!({
+                    "id": self.id,
+                    "type": self.r#type,
+                })),
+            },
+            ApiSource::Qobuz => match &self.data {
+                Some(data) => ApiTrack::Qobuz(
+                    serde_json::from_str(data)
+                        .expect("Failed to parse UpdateSessionPlaylistTrack data"),
+                ),
+                None => ApiTrack::Qobuz(serde_json::json!({
+                    "id": self.id,
+                    "type": self.r#type,
+                })),
+            },
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiUpdateSessionPlaylistTrack {
+    pub id: u64,
+    pub r#type: ApiSource,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<String>,
+}
+
+impl ToApi<ApiUpdateSessionPlaylistTrack> for UpdateSessionPlaylistTrack {
+    fn to_api(&self) -> ApiUpdateSessionPlaylistTrack {
+        ApiUpdateSessionPlaylistTrack {
+            id: self.id,
+            r#type: self.r#type,
+            data: self.data.clone(),
+        }
+    }
 }
 
 impl ToApi<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
@@ -706,28 +871,8 @@ impl ToApi<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
             tracks: self
                 .tracks
                 .iter()
-                .map(|id| ApiTrack {
-                    track_id: *id,
-                    number: 0,
-                    title: "".into(),
-                    duration: 0.0,
-                    artist: "".into(),
-                    artist_id: 0,
-                    date_released: None,
-                    date_added: None,
-                    album: "".into(),
-                    album_id: 0,
-                    contains_cover: false,
-                    blur: false,
-                    bytes: 0,
-                    format: None,
-                    bit_depth: None,
-                    audio_bitrate: None,
-                    overall_bitrate: None,
-                    sample_rate: None,
-                    channels: None,
-                    source: TrackSource::default(),
-                })
+                .map(|t| From::<UpdateSessionPlaylistTrack>::from(t.clone()))
+                .map(|track: SessionPlaylistTrack| track.to_api())
                 .collect(),
         }
     }
@@ -865,7 +1010,7 @@ impl ToApi<ApiSession> for Session {
 #[serde(rename_all = "camelCase")]
 pub struct SessionPlaylist {
     pub id: i32,
-    pub tracks: Vec<Track>,
+    pub tracks: Vec<ApiTrack>,
 }
 
 impl AsModel<SessionPlaylist> for Row<'_> {
@@ -883,13 +1028,39 @@ impl AsModelResult<SessionPlaylist, ParseError> for Row<'_> {
     }
 }
 
+impl AsModelResultMappedQuery<ApiTrack, DbError> for Vec<SessionPlaylistTrack> {
+    fn as_model_mapped_query(&self, db: &rusqlite::Connection) -> Result<Vec<ApiTrack>, DbError> {
+        let tracks = self;
+
+        let library_track_ids = tracks
+            .iter()
+            .filter(|t| t.r#type == ApiSource::Library)
+            .map(|t| t.id as i32)
+            .collect::<Vec<_>>();
+
+        let library_tracks = get_tracks(db, Some(&library_track_ids))?;
+
+        Ok(tracks
+            .iter()
+            .map(|t| match t.r#type {
+                ApiSource::Library => library_tracks
+                    .iter()
+                    .find(|lib| (lib.id as u64) == t.id)
+                    .expect("Missing Library track")
+                    .to_api(),
+                ApiSource::Tidal => t.to_api(),
+                ApiSource::Qobuz => t.to_api(),
+            })
+            .collect::<Vec<_>>())
+    }
+}
+
 impl AsModelQuery<SessionPlaylist> for Row<'_> {
     fn as_model_query(&self, db: &rusqlite::Connection) -> Result<SessionPlaylist, DbError> {
         let id = self.to_value("id")?;
-        Ok(SessionPlaylist {
-            id,
-            tracks: get_session_playlist_tracks(db, id)?,
-        })
+        let tracks = get_session_playlist_tracks(db, id)?.as_model_mapped_query(db)?;
+
+        Ok(SessionPlaylist { id, tracks })
     }
 }
 
@@ -899,7 +1070,45 @@ impl AsId for SessionPlaylist {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionPlaylistTrack {
+    pub id: u64,
+    pub r#type: ApiSource,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<String>,
+}
+
+impl AsModelResult<SessionPlaylistTrack, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<SessionPlaylistTrack, ParseError> {
+        Ok(SessionPlaylistTrack {
+            id: self.to_value("id")?,
+            r#type: self.to_value("type")?,
+            data: self.to_value("data")?,
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiSessionPlaylistTrack {
+    pub id: u64,
+    pub r#type: ApiSource,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<String>,
+}
+
+impl ToApi<ApiSessionPlaylistTrack> for SessionPlaylistTrack {
+    fn to_api(&self) -> ApiSessionPlaylistTrack {
+        ApiSessionPlaylistTrack {
+            id: self.id,
+            r#type: self.r#type,
+            data: self.data.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiSessionPlaylist {
     pub session_playlist_id: i32,
@@ -910,7 +1119,7 @@ impl ToApi<ApiSessionPlaylist> for SessionPlaylist {
     fn to_api(&self) -> ApiSessionPlaylist {
         ApiSessionPlaylist {
             session_playlist_id: self.id,
-            tracks: self.tracks.iter().map(|t| t.to_api()).collect(),
+            tracks: self.tracks.clone(),
         }
     }
 }

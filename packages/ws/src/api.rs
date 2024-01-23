@@ -527,7 +527,7 @@ pub fn update_session(
         volume: payload.volume,
         playlist: payload.playlist.clone().map(|p| ApiUpdateSessionPlaylist {
             session_playlist_id: p.session_playlist_id,
-            tracks: session.playlist.tracks.iter().map(|t| t.to_api()).collect(),
+            tracks: session.playlist.tracks,
         }),
     };
 

@@ -12,8 +12,10 @@ use super::{
 
 #[derive(Debug, Error)]
 pub enum GetArtistError {
-    #[error("Album not found with ID {artist_id:?}")]
-    ArtistNotFound { artist_id: i32 },
+    #[error("Artist not found with ID {0}")]
+    ArtistNotFound(u64),
+    #[error("Artist not found with album ID {0}")]
+    AlbumArtistNotFound(u64),
     #[error("Unknown source: {artist_source:?}")]
     UnknownSource { artist_source: String },
     #[error("Poison error")]
@@ -24,6 +26,8 @@ pub enum GetArtistError {
     DbError(#[from] db::DbError),
     #[error("No DB set")]
     NoDb,
+    #[error("Invalid request")]
+    InvalidRequest,
 }
 
 impl<T> From<PoisonError<T>> for GetArtistError {
@@ -32,9 +36,17 @@ impl<T> From<PoisonError<T>> for GetArtistError {
     }
 }
 
-pub async fn get_artist(artist_id: i32, data: &AppState) -> Result<Artist, GetArtistError> {
+pub async fn get_artist(
+    artist_id: Option<u64>,
+    tidal_artist_id: Option<u64>,
+    qobuz_artist_id: Option<u64>,
+    album_id: Option<u64>,
+    tidal_album_id: Option<u64>,
+    qobuz_album_id: Option<u64>,
+    data: &AppState,
+) -> Result<Artist, GetArtistError> {
     let request = CacheRequest {
-        key: format!("artist|{artist_id}"),
+        key: format!("artist|{artist_id:?}|{tidal_artist_id:?}|{qobuz_artist_id:?}|{album_id:?}|{tidal_album_id:?}|{qobuz_album_id:?}"),
         expiration: Duration::from_secs(5 * 60),
     };
 
@@ -46,17 +58,86 @@ pub async fn get_artist(artist_id: i32, data: &AppState) -> Result<Artist, GetAr
             .library
             .lock()?;
 
-        match db::get_artist(&library.inner, artist_id) {
-            Ok(artist) => {
-                if artist.is_none() {
-                    return Err(GetArtistError::ArtistNotFound { artist_id });
+        if let Some(artist_id) = artist_id {
+            match db::get_artist(&library.inner, artist_id as i32) {
+                Ok(artist) => {
+                    if artist.is_none() {
+                        return Err(GetArtistError::ArtistNotFound(artist_id));
+                    }
+
+                    let artist = artist.unwrap();
+
+                    Ok(CacheItemType::Artist(artist))
                 }
-
-                let artist = artist.unwrap();
-
-                Ok(CacheItemType::Artist(artist))
+                Err(err) => Err(GetArtistError::DbError(err)),
             }
-            Err(err) => Err(GetArtistError::DbError(err)),
+        } else if let Some(tidal_artist_id) = tidal_artist_id {
+            match db::get_tidal_artist(&library.inner, tidal_artist_id as i32) {
+                Ok(artist) => {
+                    if artist.is_none() {
+                        return Err(GetArtistError::ArtistNotFound(tidal_artist_id));
+                    }
+
+                    let artist = artist.unwrap();
+
+                    Ok(CacheItemType::Artist(artist))
+                }
+                Err(err) => Err(GetArtistError::DbError(err)),
+            }
+        } else if let Some(qobuz_artist_id) = qobuz_artist_id {
+            match db::get_qobuz_artist(&library.inner, qobuz_artist_id as i32) {
+                Ok(artist) => {
+                    if artist.is_none() {
+                        return Err(GetArtistError::ArtistNotFound(qobuz_artist_id));
+                    }
+
+                    let artist = artist.unwrap();
+
+                    Ok(CacheItemType::Artist(artist))
+                }
+                Err(err) => Err(GetArtistError::DbError(err)),
+            }
+        } else if let Some(album_id) = album_id {
+            match db::get_album_artist(&library.inner, album_id as i32) {
+                Ok(artist) => {
+                    if artist.is_none() {
+                        return Err(GetArtistError::AlbumArtistNotFound(album_id));
+                    }
+
+                    let artist = artist.unwrap();
+
+                    Ok(CacheItemType::Artist(artist))
+                }
+                Err(err) => Err(GetArtistError::DbError(err)),
+            }
+        } else if let Some(tidal_album_id) = tidal_album_id {
+            match db::get_tidal_album_artist(&library.inner, tidal_album_id as i32) {
+                Ok(artist) => {
+                    if artist.is_none() {
+                        return Err(GetArtistError::AlbumArtistNotFound(tidal_album_id));
+                    }
+
+                    let artist = artist.unwrap();
+
+                    Ok(CacheItemType::Artist(artist))
+                }
+                Err(err) => Err(GetArtistError::DbError(err)),
+            }
+        } else if let Some(qobuz_album_id) = qobuz_album_id {
+            match db::get_qobuz_album_artist(&library.inner, qobuz_album_id as i32) {
+                Ok(artist) => {
+                    if artist.is_none() {
+                        return Err(GetArtistError::AlbumArtistNotFound(qobuz_album_id));
+                    }
+
+                    let artist = artist.unwrap();
+
+                    Ok(CacheItemType::Artist(artist))
+                }
+                Err(err) => Err(GetArtistError::DbError(err)),
+            }
+        } else {
+            Err(GetArtistError::InvalidRequest)
         }
     })
     .await?
@@ -80,6 +161,8 @@ pub enum GetAlbumError {
     DbError(#[from] db::DbError),
     #[error("No DB set")]
     NoDb,
+    #[error("Invalid request")]
+    InvalidRequest,
 }
 
 impl<T> From<PoisonError<T>> for GetAlbumError {
@@ -88,9 +171,14 @@ impl<T> From<PoisonError<T>> for GetAlbumError {
     }
 }
 
-pub async fn get_album(album_id: i32, data: &AppState) -> Result<Album, GetAlbumError> {
+pub async fn get_album(
+    album_id: Option<u64>,
+    tidal_album_id: Option<u64>,
+    qobuz_album_id: Option<u64>,
+    data: &AppState,
+) -> Result<Album, GetAlbumError> {
     let request = CacheRequest {
-        key: format!("album|{album_id}"),
+        key: format!("album|{album_id:?}|{tidal_album_id:?}|{qobuz_album_id:?}"),
         expiration: Duration::from_secs(5 * 60),
     };
 
@@ -102,17 +190,53 @@ pub async fn get_album(album_id: i32, data: &AppState) -> Result<Album, GetAlbum
             .library
             .lock()?;
 
-        match db::get_album(&library.inner, album_id) {
-            Ok(album) => {
-                if album.is_none() {
-                    return Err(GetAlbumError::AlbumNotFound { album_id });
+        if let Some(album_id) = album_id {
+            match db::get_album(&library.inner, album_id as i32) {
+                Ok(album) => {
+                    if album.is_none() {
+                        return Err(GetAlbumError::AlbumNotFound {
+                            album_id: album_id as i32,
+                        });
+                    }
+
+                    let album = album.unwrap();
+
+                    Ok(CacheItemType::Album(album))
                 }
-
-                let album = album.unwrap();
-
-                Ok(CacheItemType::Album(album))
+                Err(err) => Err(GetAlbumError::DbError(err)),
             }
-            Err(err) => Err(GetAlbumError::DbError(err)),
+        } else if let Some(tidal_album_id) = tidal_album_id {
+            match db::get_tidal_album(&library.inner, tidal_album_id as i32) {
+                Ok(album) => {
+                    if album.is_none() {
+                        return Err(GetAlbumError::AlbumNotFound {
+                            album_id: tidal_album_id as i32,
+                        });
+                    }
+
+                    let album = album.unwrap();
+
+                    Ok(CacheItemType::Album(album))
+                }
+                Err(err) => Err(GetAlbumError::DbError(err)),
+            }
+        } else if let Some(qobuz_album_id) = qobuz_album_id {
+            match db::get_qobuz_album(&library.inner, qobuz_album_id as i32) {
+                Ok(album) => {
+                    if album.is_none() {
+                        return Err(GetAlbumError::AlbumNotFound {
+                            album_id: qobuz_album_id as i32,
+                        });
+                    }
+
+                    let album = album.unwrap();
+
+                    Ok(CacheItemType::Album(album))
+                }
+                Err(err) => Err(GetAlbumError::DbError(err)),
+            }
+        } else {
+            Err(GetAlbumError::InvalidRequest)
         }
     })
     .await?

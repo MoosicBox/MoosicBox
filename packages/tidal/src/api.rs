@@ -18,23 +18,30 @@ use crate::{
     TidalTrack, TidalTrackError, TidalTrackFileUrlError, TidalTrackOrder, TidalTrackOrderDirection,
 };
 
-impl ToApi<ApiTidalAlbum> for TidalAlbum {
-    fn to_api(&self) -> ApiTidalAlbum {
-        ApiTidalAlbum {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
+pub enum ApiAlbum {
+    Tidal(ApiTidalAlbum),
+}
+
+impl ToApi<ApiAlbum> for TidalAlbum {
+    fn to_api(&self) -> ApiAlbum {
+        ApiAlbum::Tidal(ApiTidalAlbum {
             id: self.id,
             artist: self.artist.clone(),
             artist_id: self.artist_id,
+            contains_cover: self.contains_cover,
             audio_quality: self.audio_quality.clone(),
             copyright: self.copyright.clone(),
-            cover: self.cover_url(1280),
             duration: self.duration,
             explicit: self.explicit,
             number_of_tracks: self.number_of_tracks,
             popularity: self.popularity,
-            release_date: self.release_date.clone(),
+            date_released: self.release_date.clone(),
             title: self.title.clone(),
             media_metadata_tags: self.media_metadata_tags.clone(),
-        }
+        })
     }
 }
 
@@ -44,25 +51,35 @@ pub struct ApiTidalAlbum {
     pub id: u64,
     pub artist: String,
     pub artist_id: u64,
+    pub contains_cover: bool,
     pub audio_quality: String,
     pub copyright: Option<String>,
-    pub cover: String,
     pub duration: u32,
     pub explicit: bool,
     pub number_of_tracks: u32,
     pub popularity: u32,
-    pub release_date: String,
+    pub date_released: String,
     pub title: String,
     pub media_metadata_tags: Vec<String>,
 }
 
-impl ToApi<ApiTidalTrack> for TidalTrack {
-    fn to_api(&self) -> ApiTidalTrack {
-        ApiTidalTrack {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
+pub enum ApiTrack {
+    Tidal(ApiTidalTrack),
+}
+
+impl ToApi<ApiTrack> for TidalTrack {
+    fn to_api(&self) -> ApiTrack {
+        ApiTrack::Tidal(ApiTidalTrack {
             id: self.id,
-            track_number: self.track_number,
+            number: self.track_number,
+            album: self.album.clone(),
             album_id: self.album_id,
+            artist: self.artist.clone(),
             artist_id: self.artist_id,
+            contains_cover: self.album_cover.is_some(),
             audio_quality: self.audio_quality.clone(),
             copyright: self.copyright.clone(),
             duration: self.duration,
@@ -71,7 +88,7 @@ impl ToApi<ApiTidalTrack> for TidalTrack {
             popularity: self.popularity,
             title: self.title.clone(),
             media_metadata_tags: self.media_metadata_tags.clone(),
-        }
+        })
     }
 }
 
@@ -79,9 +96,12 @@ impl ToApi<ApiTidalTrack> for TidalTrack {
 #[serde(rename_all = "camelCase")]
 pub struct ApiTidalTrack {
     pub id: u64,
-    pub track_number: u32,
+    pub number: u32,
+    pub album: String,
     pub album_id: u64,
+    pub artist: String,
     pub artist_id: u64,
+    pub contains_cover: bool,
     pub audio_quality: String,
     pub copyright: Option<String>,
     pub duration: u32,
@@ -92,14 +112,21 @@ pub struct ApiTidalTrack {
     pub media_metadata_tags: Vec<String>,
 }
 
-impl ToApi<ApiTidalArtist> for TidalArtist {
-    fn to_api(&self) -> ApiTidalArtist {
-        ApiTidalArtist {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
+pub enum ApiArtist {
+    Tidal(ApiTidalArtist),
+}
+
+impl ToApi<ApiArtist> for TidalArtist {
+    fn to_api(&self) -> ApiArtist {
+        ApiArtist::Tidal(ApiTidalArtist {
             id: self.id,
-            picture: self.picture_url(750),
+            contains_cover: self.contains_cover,
             popularity: self.popularity,
-            name: self.name.clone(),
-        }
+            title: self.name.clone(),
+        })
     }
 }
 
@@ -107,9 +134,9 @@ impl ToApi<ApiTidalArtist> for TidalArtist {
 #[serde(rename_all = "camelCase")]
 pub struct ApiTidalArtist {
     pub id: u64,
-    pub picture: Option<String>,
+    pub contains_cover: bool,
     pub popularity: u32,
-    pub name: String,
+    pub title: String,
 }
 
 static TIDAL_ACCESS_TOKEN_HEADER: &str = "x-tidal-access-token";
@@ -456,7 +483,7 @@ pub async fn album_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAlbumQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<ApiTidalAlbum>> {
+) -> Result<Json<ApiAlbum>> {
     let album = album(
         #[cfg(feature = "db")]
         data.db.as_ref().unwrap(),
@@ -493,7 +520,7 @@ pub async fn artist_endpoint(
     req: HttpRequest,
     query: web::Query<TidalArtistQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<ApiTidalArtist>> {
+) -> Result<Json<ApiArtist>> {
     let artist = artist(
         #[cfg(feature = "db")]
         data.db.as_ref().expect("Db not set"),
@@ -530,7 +557,7 @@ pub async fn track_endpoint(
     req: HttpRequest,
     query: web::Query<TidalTrackQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<ApiTidalTrack>> {
+) -> Result<Json<ApiTrack>> {
     let track = track(
         #[cfg(feature = "db")]
         data.db.as_ref().unwrap(),

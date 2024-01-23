@@ -13,8 +13,9 @@ use crate::types::PlaybackQuality;
 
 use super::models::{
     ActivePlayer, Album, AlbumVersionQuality, Artist, AsId, AsModel, AsModelQuery, AsModelResult,
-    AsModelResultGroupedMut, AsModelResultMut, ClientAccessToken, CreateSession, MagicToken,
-    NumberId, Player, Session, SessionPlaylist, Track, TrackSize, UpdateSession,
+    AsModelResultMappedMut, AsModelResultMappedQuery, AsModelResultMut, ClientAccessToken,
+    CreateSession, MagicToken, NumberId, Player, Session, SessionPlaylist, SessionPlaylistTrack,
+    Track, TrackSize, UpdateSession,
 };
 
 impl<T> From<PoisonError<T>> for DbError {
@@ -40,33 +41,15 @@ pub enum DbError {
 pub fn get_session_playlist_tracks(
     db: &Connection,
     session_playlist_id: i32,
-) -> Result<Vec<Track>, DbError> {
-    AsModelResultMut::<Track, DbError>::as_model_mut(
+) -> Result<Vec<SessionPlaylistTrack>, DbError> {
+    AsModelResultMut::as_model_mut(
         &mut db
             .prepare_cached(
                 "
-            SELECT tracks.*,
-                albums.title as album,
-                albums.blur as blur,
-                albums.date_released as date_released,
-                albums.date_added as date_added,
-                artists.title as artist,
-                artists.id as artist_id,
-                albums.artwork,
-                track_sizes.format,
-                track_sizes.bytes,
-                track_sizes.bit_depth,
-                track_sizes.audio_bitrate,
-                track_sizes.overall_bitrate,
-                track_sizes.sample_rate,
-                track_sizes.channels
-            FROM session_playlist_tracks
-            JOIN tracks ON tracks.id=session_playlist_tracks.track_id
-            JOIN albums ON albums.id=tracks.album_id
-            JOIN artists ON artists.id=albums.artist_id
-            JOIN track_sizes ON tracks.id=track_sizes.track_id AND track_sizes.format=tracks.format
-            WHERE session_playlist_tracks.session_playlist_id=?1
-            ORDER BY session_playlist_tracks.id ASC
+                SELECT session_playlist_tracks.*
+                FROM session_playlist_tracks
+                WHERE session_playlist_tracks.session_playlist_id=?1
+                ORDER BY session_playlist_tracks.id ASC
             ",
             )?
             .query(params![session_playlist_id])?,
@@ -340,37 +323,26 @@ pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<Sessio
         .as_ref()
         .map(|p| p.session_playlist_id as i64);
 
-    let tracks: Option<Vec<Track>> = session
-        .playlist
-        .as_ref()
-        .map(|p| {
-            let tracks = get_tracks(db, Some(&p.tracks))?;
-
-            let tracks = p
-                .tracks
-                .iter()
-                .map(|id| tracks.iter().find(|t| t.id == *id).unwrap().clone())
-                .collect::<Vec<_>>();
-
-            p.tracks
-                .iter()
-                .map(|id| {
-                    insert_and_get_row::<NumberId>(
-                        db,
-                        "session_playlist_tracks",
-                        vec![
-                            (
-                                "session_playlist_id",
-                                SqliteValue::Number(playlist_id.unwrap()),
-                            ),
-                            ("track_id", SqliteValue::Number(*id as i64)),
-                        ],
-                    )
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            Ok::<Vec<_>, DbError>(tracks)
-        })
-        .transpose()?;
+    if let Some(tracks) = session.playlist.as_ref().map(|p| &p.tracks) {
+        for track in tracks {
+            insert_and_get_row::<NumberId>(
+                db,
+                "session_playlist_tracks",
+                vec![
+                    (
+                        "session_playlist_id",
+                        SqliteValue::Number(playlist_id.unwrap()),
+                    ),
+                    ("track_id", SqliteValue::Number(track.id as i64)),
+                    (
+                        "type",
+                        SqliteValue::String(track.r#type.as_ref().to_string()),
+                    ),
+                    ("data", SqliteValue::StringOpt(track.data.clone())),
+                ],
+            )?;
+        }
+    }
 
     let mut values = Vec::new();
 
@@ -413,10 +385,10 @@ pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<Sessio
         .expect("Session failed to update")
     };
 
-    let playlist = if session.playlist.is_some() {
+    let playlist = if let Some(playlist) = &session.playlist {
         SessionPlaylist {
             id: playlist_id.unwrap() as i32,
-            tracks: tracks.unwrap(),
+            tracks: playlist.tracks.as_model_mapped_query(db)?,
         }
     } else if let Some(playlist) = get_session_playlist(db, session.session_id)? {
         playlist
@@ -657,7 +629,7 @@ pub fn get_albums(db: &Connection) -> Result<Vec<Album>, DbError> {
         ",
     )?
     .query([])?
-    .as_model_grouped_mut()
+    .as_model_mapped_mut()
 }
 
 pub fn get_all_album_version_qualities(
@@ -758,6 +730,75 @@ pub fn get_artist(db: &Connection, id: i32) -> Result<Option<Artist>, DbError> {
         .find_map(|row| row.ok()))
 }
 
+pub fn get_tidal_artist(db: &Connection, tidal_id: i32) -> Result<Option<Artist>, DbError> {
+    Ok(db
+        .prepare_cached(
+            "
+            SELECT *
+            FROM artists
+            WHERE artists.tidal_id=?1",
+        )?
+        .query_map(params![tidal_id], |row| Ok(AsModel::as_model(row)))?
+        .find_map(|row| row.ok()))
+}
+
+pub fn get_qobuz_artist(db: &Connection, qobuz_id: i32) -> Result<Option<Artist>, DbError> {
+    Ok(db
+        .prepare_cached(
+            "
+            SELECT *
+            FROM artists
+            WHERE artists.qobuz_id=?1",
+        )?
+        .query_map(params![qobuz_id], |row| Ok(AsModel::as_model(row)))?
+        .find_map(|row| row.ok()))
+}
+
+pub fn get_album_artist(db: &Connection, album_id: i32) -> Result<Option<Artist>, DbError> {
+    Ok(db
+        .prepare_cached(
+            "
+            SELECT artists.*
+            FROM artists
+            JOIN albums on albums.artist_id=artists.id
+            WHERE albums.id=?1",
+        )?
+        .query_map(params![album_id], |row| Ok(AsModel::as_model(row)))?
+        .find_map(|row| row.ok()))
+}
+
+pub fn get_tidal_album_artist(
+    db: &Connection,
+    tidal_album_id: i32,
+) -> Result<Option<Artist>, DbError> {
+    Ok(db
+        .prepare_cached(
+            "
+            SELECT artists.*
+            FROM artists
+            JOIN albums on albums.artist_id=artists.id
+            WHERE albums.tidal_id=?1",
+        )?
+        .query_map(params![tidal_album_id], |row| Ok(AsModel::as_model(row)))?
+        .find_map(|row| row.ok()))
+}
+
+pub fn get_qobuz_album_artist(
+    db: &Connection,
+    qobuz_album_id: i32,
+) -> Result<Option<Artist>, DbError> {
+    Ok(db
+        .prepare_cached(
+            "
+            SELECT artists.*
+            FROM artists
+            JOIN albums on albums.artist_id=artists.id
+            WHERE albums.qobuz_id=?1",
+        )?
+        .query_map(params![qobuz_album_id], |row| Ok(AsModel::as_model(row)))?
+        .find_map(|row| row.ok()))
+}
+
 pub fn get_album(db: &Connection, id: i32) -> Result<Option<Album>, DbError> {
     db.prepare_cached(
         "
@@ -767,6 +808,32 @@ pub fn get_album(db: &Connection, id: i32) -> Result<Option<Album>, DbError> {
             WHERE albums.id=?1",
     )?
     .query_map(params![id], |row| Ok(row.as_model_query(db)))?
+    .find_map(|row| row.ok())
+    .transpose()
+}
+
+pub fn get_tidal_album(db: &Connection, tidal_id: i32) -> Result<Option<Album>, DbError> {
+    db.prepare_cached(
+        "
+            SELECT albums.*, artists.title as artist
+            FROM albums
+            JOIN artists ON artists.id=albums.artist_id
+            WHERE albums.tidal_id=?1",
+    )?
+    .query_map(params![tidal_id], |row| Ok(row.as_model_query(db)))?
+    .find_map(|row| row.ok())
+    .transpose()
+}
+
+pub fn get_qobuz_album(db: &Connection, qobuz_id: i32) -> Result<Option<Album>, DbError> {
+    db.prepare_cached(
+        "
+            SELECT albums.*, artists.title as artist
+            FROM albums
+            JOIN artists ON artists.id=albums.artist_id
+            WHERE albums.qobuz_id=?1",
+    )?
+    .query_map(params![qobuz_id], |row| Ok(row.as_model_query(db)))?
     .find_map(|row| row.ok())
     .transpose()
 }
@@ -821,7 +888,7 @@ pub fn get_artist_albums(db: &Connection, artist_id: i32) -> Result<Vec<Album>, 
         ",
     )?
     .query(params![artist_id])?
-    .as_model_grouped_mut()
+    .as_model_mapped_mut()
 }
 
 #[derive(Debug, Clone)]

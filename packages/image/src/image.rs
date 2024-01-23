@@ -21,7 +21,7 @@ pub fn try_resize_local_file(
         }
         Encoding::Webp => {
             if let Ok(encoder) = webp::Encoder::from_image(&resized) {
-                let memory = encoder.encode(quality.try_into().unwrap());
+                let memory = encoder.encode(quality.into());
                 let bytes = memory.to_vec();
                 Ok(Some(bytes.into()))
             } else {

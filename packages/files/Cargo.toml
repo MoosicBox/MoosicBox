@@ -5,6 +5,7 @@ name    = "moosicbox_files"
 version = "0.1.0"
 
 [dependencies]
+moosicbox_config           = { path = "../config" }
 moosicbox_core             = { path = "../core", default-features = false }
 moosicbox_image            = { path = "../image", default-features = false }
 moosicbox_qobuz            = { path = "../qobuz" }
@@ -19,6 +20,7 @@ awc          = { workspace = true }
 bytes        = { workspace = true }
 lazy_static  = { workspace = true }
 log          = { workspace = true }
+once_cell    = { workspace = true }
 regex        = { workspace = true }
 reqwest      = { workspace = true }
 serde        = { workspace = true, features = ["derive"] }
@@ -32,12 +34,16 @@ tokio-stream = { workspace = true }
 tokio-util   = { workspace = true }
 
 [features]
-default = ["image", "aac", "flac", "mp3", "opus"]
+default = ["api", "files", "range", "image", "aac", "flac", "mp3", "opus"]
 
 fail-on-warnings = []
 
 image   = ["moosicbox_image/image"]
 libvips = ["moosicbox_image/libvips"]
+
+api = []
+files = []
+range = []
 
 aac  = ["moosicbox_symphonia_player/aac", "moosicbox_core/aac"]
 flac = ["moosicbox_core/flac"]

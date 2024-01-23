@@ -14,7 +14,7 @@ use moosicbox_core::{
     app::Db,
     sqlite::{
         db::{get_album_tracks, get_track},
-        models::{ToApi, Track, TrackSource, UpdateSession},
+        models::{ApiSource, ToApi, Track, TrackSource, UpdateSession, UpdateSessionPlaylistTrack},
     },
     types::{AudioFormat, PlaybackQuality},
 };
@@ -1110,12 +1110,29 @@ fn trigger_playback_event(current: &Playback, previous: &Playback) {
     } else {
         None
     };
-    let track_ids = current.tracks.iter().map(|t| t.id()).collect::<Vec<_>>();
-    let playlist = if track_ids != previous.tracks.iter().map(|t| t.id()).collect::<Vec<_>>() {
+    let tracks = current
+        .tracks
+        .iter()
+        .map(|t| UpdateSessionPlaylistTrack {
+            id: t.id() as u64,
+            r#type: ApiSource::Library,
+            data: None,
+        })
+        .collect::<Vec<_>>();
+    let prev_tracks = previous
+        .tracks
+        .iter()
+        .map(|t| UpdateSessionPlaylistTrack {
+            id: t.id() as u64,
+            r#type: ApiSource::Library,
+            data: None,
+        })
+        .collect::<Vec<_>>();
+    let playlist = if tracks != prev_tracks {
         has_change = true;
         Some(moosicbox_core::sqlite::models::UpdateSessionPlaylist {
             session_playlist_id: -1,
-            tracks: track_ids,
+            tracks,
         })
     } else {
         None

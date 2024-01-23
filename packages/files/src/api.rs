@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use actix_web::{
     error::{ErrorBadRequest, ErrorInternalServerError},
-    http::header::{CacheControl, CacheDirective},
     route,
     web::{self, Json},
     HttpRequest, HttpResponse, Result,
@@ -10,6 +9,7 @@ use actix_web::{
 use lazy_static::lazy_static;
 use moosicbox_core::{
     app::AppState,
+    sqlite::models::{AlbumId, ApiSource, ArtistId},
     track_range::{parse_track_id_ranges, ParseTrackIdsError},
     types::{AudioFormat, PlaybackQuality},
 };
@@ -24,6 +24,7 @@ use tokio_util::sync::CancellationToken;
 use crate::files::{
     album::{get_album_cover, AlbumCoverError, AlbumCoverSource},
     artist::{get_artist_cover, ArtistCoverError, ArtistCoverSource},
+    resize_image_path,
     track::{
         get_or_init_track_size, get_or_init_track_visualization, get_track_info, get_track_source,
         get_tracks_info, TrackInfo, TrackInfoError, TrackSource, TrackSourceError,
@@ -325,17 +326,28 @@ impl From<ArtistCoverError> for actix_web::Error {
     }
 }
 
-#[route("/artists/{artist_id}/{size}", method = "GET", method = "HEAD")]
-pub async fn artist_cover_endpoint(
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistCoverQuery {
+    pub source: Option<ApiSource>,
+}
+
+#[route("/artists/{artist_id}/source", method = "GET", method = "HEAD")]
+pub async fn artist_source_artwork_endpoint(
     req: HttpRequest,
-    path: web::Path<(String, String)>,
+    path: web::Path<String>,
+    query: web::Query<ArtistCoverQuery>,
     data: web::Data<AppState>,
 ) -> Result<HttpResponse> {
     let paths = path.into_inner();
-    let artist_id = paths
-        .0
-        .parse::<i32>()
-        .map_err(|_e| ErrorInternalServerError("Invalid artist_id"))?;
+
+    let artist_id_string = paths;
+    let artist_id = match query.source.unwrap_or(ApiSource::Library) {
+        ApiSource::Library => artist_id_string.parse::<i32>().map(ArtistId::Library),
+        ApiSource::Tidal => artist_id_string.parse::<u64>().map(ArtistId::Tidal),
+        ApiSource::Qobuz => artist_id_string.parse::<u64>().map(ArtistId::Qobuz),
+    }
+    .map_err(|_e| ErrorBadRequest("Invalid artist_id"))?;
 
     match get_artist_cover(
         artist_id,
@@ -347,12 +359,58 @@ pub async fn artist_cover_endpoint(
     {
         ArtistCoverSource::LocalFilePath(path) => {
             let path_buf = std::path::PathBuf::from(path);
+            let file_path = path_buf.as_path();
 
-            Ok(actix_files::NamedFile::open_async(path_buf.as_path())
-                .await?
-                .into_response(&req))
+            let file = actix_files::NamedFile::open_async(file_path)
+                .await
+                .map_err(|e| {
+                    ArtistCoverError::File(file_path.to_str().unwrap().into(), format!("{e:?}"))
+                })
+                .map_err(|e| ErrorInternalServerError(e.to_string()))?;
+
+            Ok(file.into_response(&req))
         }
     }
+}
+
+#[route("/artists/{artist_id}/{size}", method = "GET", method = "HEAD")]
+pub async fn artist_cover_endpoint(
+    path: web::Path<(String, String)>,
+    query: web::Query<ArtistCoverQuery>,
+    data: web::Data<AppState>,
+) -> Result<HttpResponse> {
+    let paths = path.into_inner();
+
+    let artist_id_string = paths.0;
+    let artist_id = match query.source.unwrap_or(ApiSource::Library) {
+        ApiSource::Library => artist_id_string.parse::<i32>().map(ArtistId::Library),
+        ApiSource::Tidal => artist_id_string.parse::<u64>().map(ArtistId::Tidal),
+        ApiSource::Qobuz => artist_id_string.parse::<u64>().map(ArtistId::Qobuz),
+    }
+    .map_err(|_e| ErrorBadRequest("Invalid artist_id"))?;
+
+    let dimensions = paths
+        .1
+        .split('x')
+        .take(2)
+        .map(|dimension| {
+            dimension
+                .parse::<u32>()
+                .map_err(|_e| ErrorBadRequest("Invalid dimension"))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let (width, height) = (dimensions[0], dimensions[1]);
+
+    let ArtistCoverSource::LocalFilePath(path) = get_artist_cover(
+        artist_id,
+        data.db
+            .clone()
+            .ok_or(ErrorInternalServerError("No DB set"))?,
+    )
+    .await?;
+
+    resize_image_path(&path, width, height)
+        .map_err(|e| ErrorInternalServerError(format!("Failed to resize image: {e:?}")))
 }
 
 impl From<AlbumCoverError> for actix_web::Error {
@@ -361,16 +419,28 @@ impl From<AlbumCoverError> for actix_web::Error {
     }
 }
 
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AlbumCoverQuery {
+    pub source: Option<ApiSource>,
+}
+
 #[route("/albums/{album_id}/source", method = "GET", method = "HEAD")]
 pub async fn album_source_artwork_endpoint(
     req: HttpRequest,
     path: web::Path<String>,
+    query: web::Query<AlbumCoverQuery>,
     data: web::Data<AppState>,
 ) -> Result<HttpResponse> {
     let paths = path.into_inner();
-    let album_id = paths
-        .parse::<i32>()
-        .map_err(|_e| ErrorBadRequest("Invalid album_id"))?;
+
+    let album_id_string = paths;
+    let album_id = match query.source.unwrap_or(ApiSource::Library) {
+        ApiSource::Library => album_id_string.parse::<i32>().map(AlbumId::Library),
+        ApiSource::Tidal => album_id_string.parse::<u64>().map(AlbumId::Tidal),
+        ApiSource::Qobuz => Ok(AlbumId::Qobuz(album_id_string)),
+    }
+    .map_err(|_e| ErrorBadRequest("Invalid album_id"))?;
 
     match get_album_cover(
         album_id,
@@ -399,13 +469,19 @@ pub async fn album_source_artwork_endpoint(
 #[route("/albums/{album_id}/{size}", method = "GET", method = "HEAD")]
 pub async fn album_artwork_endpoint(
     path: web::Path<(String, String)>,
+    query: web::Query<AlbumCoverQuery>,
     data: web::Data<AppState>,
 ) -> Result<HttpResponse> {
     let paths = path.into_inner();
-    let album_id = paths
-        .0
-        .parse::<i32>()
-        .map_err(|_e| ErrorBadRequest("Invalid album_id"))?;
+
+    let album_id_string = paths.0;
+    let album_id = match query.source.unwrap_or(ApiSource::Library) {
+        ApiSource::Library => album_id_string.parse::<i32>().map(AlbumId::Library),
+        ApiSource::Tidal => album_id_string.parse::<u64>().map(AlbumId::Tidal),
+        ApiSource::Qobuz => Ok(AlbumId::Qobuz(album_id_string)),
+    }
+    .map_err(|_e| ErrorBadRequest("Invalid album_id"))?;
+
     let dimensions = paths
         .1
         .split('x')
@@ -418,54 +494,14 @@ pub async fn album_artwork_endpoint(
         .collect::<Result<Vec<_>>>()?;
     let (width, height) = (dimensions[0], dimensions[1]);
 
-    match get_album_cover(
+    let AlbumCoverSource::LocalFilePath(path) = get_album_cover(
         album_id,
         data.db
             .clone()
             .ok_or(ErrorInternalServerError("No DB set"))?,
     )
-    .await?
-    {
-        AlbumCoverSource::LocalFilePath(path) => {
-            let mut response = HttpResponse::Ok();
+    .await?;
 
-            response.insert_header(CacheControl(vec![CacheDirective::MaxAge(86400u32 * 14)]));
-
-            #[cfg(feature = "libvips")]
-            let resized = {
-                use log::error;
-                use moosicbox_image::libvips::{get_error, resize_local_file};
-                response.content_type(actix_web::http::header::ContentType::jpeg());
-                let resized = resize_local_file(width, height, &path).map_err(|e| {
-                    error!("{}", get_error());
-                    AlbumCoverError::File(path, e.to_string())
-                })?;
-
-                return Ok(response.body(resized));
-            };
-            #[cfg(feature = "image")]
-            {
-                use moosicbox_image::{image::try_resize_local_file, Encoding};
-                let resized = if let Some(resized) =
-                    try_resize_local_file(width, height, &path, Encoding::Webp, 80)
-                        .map_err(|e| AlbumCoverError::File(path.clone(), e.to_string()))?
-                {
-                    response.content_type("image/webp");
-                    resized
-                } else {
-                    response.content_type(actix_web::http::header::ContentType::jpeg());
-                    try_resize_local_file(width, height, &path, Encoding::Jpeg, 80)
-                        .map_err(|e| AlbumCoverError::File(path, e.to_string()))?
-                        .expect("Failed to resize to jpeg image")
-                };
-
-                return Ok(response.body(resized));
-            }
-
-            #[allow(unreachable_code)]
-            Err(ErrorInternalServerError(format!(
-                "No image resizing features enabled for image '{path}' with size {width}x{height}"
-            )))
-        }
-    }
+    resize_image_path(&path, width, height)
+        .map_err(|e| ErrorInternalServerError(format!("Failed to resize image: {e:?}")))
 }

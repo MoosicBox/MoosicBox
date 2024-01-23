@@ -5,6 +5,7 @@ use moosicbox_core::{
     sqlite::{db::DbError, models::TrackSource},
     types::AudioFormat,
 };
+use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
 use moosicbox_tidal::{
     TidalAlbum, TidalAlbumTracksError, TidalArtistError, TidalFavoriteAlbumsError, TidalTrack,
 };
@@ -13,9 +14,7 @@ use tokio::{select, sync::RwLock};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    output::{
-        sanitize_filename, FetchInternetImgError, ScanAlbum, ScanOutput, UpdateDatabaseError,
-    },
+    output::{ScanAlbum, ScanOutput, UpdateDatabaseError},
     CACHE_DIR,
 };
 
@@ -32,7 +31,7 @@ pub enum ScanError {
     #[error(transparent)]
     UpdateDatabase(#[from] UpdateDatabaseError),
     #[error(transparent)]
-    FetchInternetImg(#[from] FetchInternetImgError),
+    FetchAndSaveBytesFromRemoteUrl(#[from] FetchAndSaveBytesFromRemoteUrlError),
 }
 
 pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
@@ -142,8 +141,8 @@ async fn scan_albums(
                     &album.title,
                     &Some(album.release_date.clone()),
                     CACHE_DIR
-                        .join(&sanitize_filename(&album.artist))
-                        .join(&sanitize_filename(&album.title))
+                        .join(&moosicbox_files::sanitize_filename(&album.artist))
+                        .join(&moosicbox_files::sanitize_filename(&album.title))
                         .to_str()
                         .unwrap(),
                     &None,

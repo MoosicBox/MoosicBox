@@ -12,6 +12,7 @@ use futures_util::future::ready;
 use futures_util::{future, pin_mut, Future, Stream, StreamExt};
 use lazy_static::lazy_static;
 use moosicbox_core::app::Db;
+use moosicbox_core::sqlite::models::AlbumId;
 use moosicbox_core::types::AudioFormat;
 use moosicbox_env_utils::default_env_usize;
 use moosicbox_files::files::album::{get_album_cover, AlbumCoverError, AlbumCoverSource};
@@ -1193,6 +1194,7 @@ impl TunnelSender {
                             let album_id = caps.get(1).unwrap().as_str().parse::<i32>().unwrap();
                             let width = caps.get(2).unwrap().as_str().parse::<u32>().unwrap();
                             let height = caps.get(3).unwrap().as_str().parse::<u32>().unwrap();
+                            let album_id = AlbumId::Library(album_id);
                             match get_album_cover(album_id, db.clone()).await.unwrap() {
                                 AlbumCoverSource::LocalFilePath(path) => {
                                     let mut headers = HashMap::new();

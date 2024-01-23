@@ -9,6 +9,9 @@ moosicbox_auth = { path = "../packages/auth" }
 moosicbox_core = { path = "../packages/core", default-features = false }
 moosicbox_env_utils = { path = "../packages/env_utils" }
 moosicbox_files = { path = "../packages/files", default-features = false, features = [
+    "api",
+    "files",
+    "range",
     "image",
 ] }
 moosicbox_menu = { path = "../packages/menu" }
