@@ -243,6 +243,10 @@ where
         return value.missing_value(ParseError::Parse(message));
     }
 
+    if value.is_null() {
+        return value.missing_value(ParseError::ConvertType("null".to_string()));
+    }
+
     match value.to_value_type() {
         Ok(inner) => Ok(inner),
         Err(ParseError::ConvertType(r#type)) => Err(ParseError::ConvertType(format!(
@@ -259,7 +263,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_to_nested_type_u64() {
+    fn test_to_nested_value_u64() {
         let json = &serde_json::json!({
             "outer": {
                 "inner_u64": 123,
@@ -274,7 +278,44 @@ mod tests {
     }
 
     #[test]
-    fn test_to_nested_type_option_u64() {
+    fn test_to_value_option_null_string() {
+        let json = &serde_json::json!({
+            "str": serde_json::Value::Null,
+        });
+
+        assert_eq!(json.to_value::<Option<String>>("str").unwrap(), None);
+    }
+
+    #[test]
+    fn test_to_value_option_string() {
+        let json = &serde_json::json!({
+            "str": "hey there",
+            "u64": 123u64,
+        });
+
+        assert_eq!(
+            json.to_value::<Option<String>>("str").unwrap(),
+            Some("hey there".to_string())
+        );
+
+        assert_eq!(json.to_value::<Option<String>>("str2").unwrap(), None);
+
+        assert_eq!(
+            json.to_value::<Option<String>>("u64").err(),
+            Some(ParseError::ConvertType(
+                "Path 'u64' failed to convert value to type: 'String'".into()
+            )),
+        );
+
+        let result: Option<String> = json.to_value("str").unwrap();
+        assert_eq!(result, Some("hey there".to_string()));
+
+        let result: Option<String> = json.to_value("str2").unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_to_nested_value_option_u64() {
         let json = &serde_json::json!({
             "outer": {
                 "inner_u64": 123,
@@ -304,7 +345,7 @@ mod tests {
     }
 
     #[test]
-    fn test_to_nested_type_vec_u64() {
+    fn test_to_nested_value_vec_u64() {
         let json = &serde_json::json!({
             "outer": {
                 "inner_u64_array": [123, 124, 125],
@@ -316,5 +357,24 @@ mod tests {
                 .unwrap(),
             vec![123_u64, 124_u64, 125_u64]
         );
+    }
+
+    #[test]
+    fn test_to_value_nested_vec_u64() {
+        let json = &serde_json::json!({
+            "items": [
+                {"item": 123},
+                {"item": 124},
+                {"item": 125},
+            ],
+        });
+
+        let values = json.to_value::<Vec<&Value>>("items").unwrap();
+        let numbers = values
+            .into_iter()
+            .map(|value| value.to_value::<u64>("item").unwrap())
+            .collect::<Vec<_>>();
+
+        assert_eq!(numbers, vec![123_u64, 124_u64, 125_u64]);
     }
 }
