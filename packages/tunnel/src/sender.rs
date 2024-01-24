@@ -27,6 +27,8 @@ pub enum TunnelRequestError {
     BadRequest(String),
     #[error("Invalid Query: {0}")]
     InvalidQuery(String),
+    #[error("Request error: {0}")]
+    Request(String),
     #[error("Unsupported Method")]
     UnsupportedMethod,
     #[error("Unsupported Route")]

@@ -3088,6 +3088,7 @@ dependencies = [
  "log",
  "moosicbox_converter",
  "moosicbox_core",
+ "moosicbox_json_utils",
  "moosicbox_symphonia_player",
  "ogg",
  "once_cell",

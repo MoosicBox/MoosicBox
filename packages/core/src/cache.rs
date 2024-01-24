@@ -1,4 +1,4 @@
-use crate::sqlite::models::{Album, Artist, Track};
+use crate::sqlite::models::{Album, Artist, LibraryTrack};
 use enum_as_inner::EnumAsInner;
 use futures::Future;
 use serde::{Deserialize, Serialize};
@@ -17,7 +17,7 @@ struct CacheItem {
 #[serde(untagged)]
 pub enum CacheItemType {
     Albums(Vec<Album>),
-    AlbumTracks(Vec<Track>),
+    AlbumTracks(Vec<LibraryTrack>),
     ArtistAlbums(Vec<Album>),
     Artist(Artist),
     Album(Album),

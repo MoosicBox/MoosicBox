@@ -5,8 +5,11 @@ name    = "moosicbox_player"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_converter        = { path = "../converter", default-features = false }
-moosicbox_core             = { path = "../core", default-features = false }
+moosicbox_converter = { path = "../converter", default-features = false }
+moosicbox_core = { path = "../core", default-features = false }
+moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
+    "serde_json",
+] }
 moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false }
 
 actix-cors        = { workspace = true }

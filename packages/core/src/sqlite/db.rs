@@ -14,8 +14,8 @@ use crate::types::PlaybackQuality;
 use super::models::{
     ActivePlayer, Album, AlbumVersionQuality, Artist, AsId, AsModel, AsModelQuery, AsModelResult,
     AsModelResultMappedMut, AsModelResultMappedQuery, AsModelResultMut, ClientAccessToken,
-    CreateSession, MagicToken, NumberId, Player, Session, SessionPlaylist, SessionPlaylistTrack,
-    Track, TrackSize, UpdateSession,
+    CreateSession, LibraryTrack, MagicToken, NumberId, Player, Session, SessionPlaylist,
+    SessionPlaylistTrack, TrackSize, UpdateSession,
 };
 
 impl<T> From<PoisonError<T>> for DbError {
@@ -843,7 +843,7 @@ pub fn get_qobuz_album(db: &Connection, qobuz_id: i32) -> Result<Option<Album>, 
     .transpose()
 }
 
-pub fn get_album_tracks(db: &Connection, album_id: i32) -> Result<Vec<Track>, DbError> {
+pub fn get_album_tracks(db: &Connection, album_id: i32) -> Result<Vec<LibraryTrack>, DbError> {
     db.prepare_cached(
         "
             SELECT tracks.*,
@@ -997,11 +997,11 @@ pub fn get_track_size(
         .find_map(|row| row.ok()))
 }
 
-pub fn get_track(db: &Connection, id: i32) -> Result<Option<Track>, DbError> {
+pub fn get_track(db: &Connection, id: i32) -> Result<Option<LibraryTrack>, DbError> {
     Ok(get_tracks(db, Some(&vec![id]))?.into_iter().next())
 }
 
-pub fn get_tracks(db: &Connection, ids: Option<&Vec<i32>>) -> Result<Vec<Track>, DbError> {
+pub fn get_tracks(db: &Connection, ids: Option<&Vec<i32>>) -> Result<Vec<LibraryTrack>, DbError> {
     if ids.is_some_and(|ids| ids.is_empty()) {
         return Ok(vec![]);
     }
@@ -1671,14 +1671,14 @@ pub fn add_album_maps_and_get_albums(
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct InsertTrack {
-    pub track: Track,
+    pub track: LibraryTrack,
     pub album_id: i32,
     pub file: Option<String>,
     pub qobuz_id: Option<u64>,
     pub tidal_id: Option<u64>,
 }
 
-pub fn add_tracks(db: &Connection, tracks: Vec<InsertTrack>) -> Result<Vec<Track>, DbError> {
+pub fn add_tracks(db: &Connection, tracks: Vec<InsertTrack>) -> Result<Vec<LibraryTrack>, DbError> {
     let values = tracks
         .iter()
         .map(|insert| {

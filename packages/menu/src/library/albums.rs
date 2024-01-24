@@ -5,7 +5,8 @@ use moosicbox_core::{
     sqlite::{
         db::{get_albums, DbError},
         models::{
-            track_source_to_u8, Album, AlbumSort, AlbumSource, ApiTrack, ToApi, Track, TrackSource,
+            track_source_to_u8, Album, AlbumSort, AlbumSource, ApiTrack, LibraryTrack, ToApi,
+            TrackSource,
         },
     },
     types::AudioFormat,
@@ -143,7 +144,10 @@ impl<T> From<PoisonError<T>> for GetAlbumTracksError {
     }
 }
 
-pub fn get_album_tracks(album_id: i32, data: &AppState) -> Result<Vec<Track>, GetAlbumTracksError> {
+pub fn get_album_tracks(
+    album_id: i32,
+    data: &AppState,
+) -> Result<Vec<LibraryTrack>, GetAlbumTracksError> {
     let library = data
         .db
         .as_ref()
@@ -159,7 +163,7 @@ pub fn get_album_tracks(album_id: i32, data: &AppState) -> Result<Vec<Track>, Ge
 
 #[derive(Clone)]
 pub struct AlbumVersion {
-    pub tracks: Vec<Track>,
+    pub tracks: Vec<LibraryTrack>,
     pub format: Option<AudioFormat>,
     pub bit_depth: Option<u8>,
     pub sample_rate: Option<u32>,

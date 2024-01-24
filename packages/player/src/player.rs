@@ -13,11 +13,15 @@ use log::{debug, error, info, trace, warn};
 use moosicbox_core::{
     app::Db,
     sqlite::{
-        db::{get_album_tracks, get_track},
-        models::{ApiSource, ToApi, Track, TrackSource, UpdateSession, UpdateSessionPlaylistTrack},
+        db::{get_album_tracks, get_session_playlist, get_tracks, DbError},
+        models::{
+            ApiSource, LibraryTrack, QobuzTrack, TidalTrack, ToApi, Track, TrackSource,
+            UpdateSession, UpdateSessionPlaylistTrack,
+        },
     },
     types::{AudioFormat, PlaybackQuality},
 };
+use moosicbox_json_utils::{serde_json::ToValue, ParseError};
 use moosicbox_symphonia_player::{
     media_sources::remote_bytestream::RemoteByteStream,
     output::{AudioOutputError, AudioOutputHandler},
@@ -27,6 +31,7 @@ use moosicbox_symphonia_player::{
 use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng as _};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use symphonia::core::{
     io::{MediaSource, MediaSourceStream},
     probe::Hint,
@@ -47,10 +52,18 @@ lazy_static! {
         .unwrap();
 }
 
+static CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
+
 #[derive(Debug, Error)]
 pub enum PlayerError {
     #[error(transparent)]
     Send(#[from] SendError<()>),
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+    #[error(transparent)]
+    Db(#[from] DbError),
     #[error(transparent)]
     PlaybackError(#[from] moosicbox_symphonia_player::PlaybackError),
     #[error("Track fetch failed: {0}")]
@@ -86,6 +99,7 @@ impl std::fmt::Debug for PlayableTrack {
 pub struct Playback {
     pub id: usize,
     pub session_id: Option<usize>,
+    pub session_playlist_id: Option<usize>,
     pub tracks: Vec<TrackOrId>,
     pub playing: bool,
     pub position: u16,
@@ -102,10 +116,12 @@ impl Playback {
         volume: AtomicF64,
         quality: PlaybackQuality,
         session_id: Option<usize>,
+        session_playlist_id: Option<usize>,
     ) -> Playback {
         Playback {
             id: thread_rng().gen::<usize>(),
             session_id,
+            session_playlist_id,
             tracks,
             playing: false,
             position: position.unwrap_or_default(),
@@ -129,14 +145,7 @@ pub struct ApiPlayback {
 impl ToApi<ApiPlayback> for Playback {
     fn to_api(&self) -> ApiPlayback {
         ApiPlayback {
-            track_ids: self
-                .tracks
-                .iter()
-                .map(|t| match t {
-                    TrackOrId::Track(track) => track.id,
-                    TrackOrId::Id(id) => *id,
-                })
-                .collect(),
+            track_ids: self.tracks.iter().map(|t| t.id()).collect(),
             playing: self.playing,
             position: self.position,
             seek: self.progress,
@@ -160,23 +169,94 @@ pub struct PlaybackStatus {
 #[derive(Debug, Clone)]
 pub enum TrackOrId {
     Track(Box<Track>),
-    Id(i32),
+    Id(i32, ApiSource),
 }
 
 impl TrackOrId {
+    pub fn api_source(&self) -> ApiSource {
+        match self {
+            TrackOrId::Track(track) => match track.as_ref() {
+                Track::Library(_) => ApiSource::Library,
+                Track::Tidal(_) => ApiSource::Tidal,
+                Track::Qobuz(_) => ApiSource::Qobuz,
+            },
+            TrackOrId::Id(_id, source) => *source,
+        }
+    }
+
+    pub fn track_source(&self) -> TrackSource {
+        match self {
+            TrackOrId::Track(track) => match track.as_ref() {
+                Track::Library(track) => track.source,
+                Track::Tidal(_) => TrackSource::Tidal,
+                Track::Qobuz(_) => TrackSource::Qobuz,
+            },
+            TrackOrId::Id(_id, source) => match source {
+                ApiSource::Library => TrackSource::Local,
+                ApiSource::Tidal => TrackSource::Tidal,
+                ApiSource::Qobuz => TrackSource::Qobuz,
+            },
+        }
+    }
+
     pub fn track(&self) -> Option<&Track> {
         match self {
             TrackOrId::Track(track) => Some(track),
-            TrackOrId::Id(_id) => None,
+            TrackOrId::Id(_id, _) => None,
         }
     }
 
     pub fn id(&self) -> i32 {
         match self {
-            TrackOrId::Track(track) => track.id,
-            TrackOrId::Id(id) => *id,
+            TrackOrId::Track(track) => match track.as_ref() {
+                Track::Library(track) => track.id,
+                Track::Tidal(track) => track.id as i32,
+                Track::Qobuz(track) => track.id as i32,
+            },
+            TrackOrId::Id(id, _) => *id,
         }
     }
+
+    pub fn to_id(&self) -> TrackOrId {
+        match self {
+            TrackOrId::Track(track) => match track.as_ref() {
+                Track::Library(track) => TrackOrId::Id(track.id, ApiSource::Library),
+                Track::Tidal(track) => TrackOrId::Id(track.id as i32, ApiSource::Library),
+                Track::Qobuz(track) => TrackOrId::Id(track.id as i32, ApiSource::Library),
+            },
+            TrackOrId::Id(_, _) => self.clone(),
+        }
+    }
+}
+
+impl From<TrackOrId> for UpdateSessionPlaylistTrack {
+    fn from(value: TrackOrId) -> Self {
+        UpdateSessionPlaylistTrack {
+            id: value.id() as u64,
+            r#type: value.api_source(),
+            data: value
+                .track()
+                .map(|t| serde_json::to_string(t).expect("Failed to stringify track")),
+        }
+    }
+}
+
+pub fn get_session_playlist_id_from_session_id(
+    db: Db,
+    session_id: Option<usize>,
+) -> Result<Option<usize>, PlayerError> {
+    Ok(if let Some(session_id) = session_id {
+        Some(
+            get_session_playlist(
+                &db.library.lock().as_ref().unwrap().inner,
+                session_id as i32,
+            )?
+            .ok_or(PlayerError::Db(DbError::InvalidRequest))?
+            .id as usize,
+        )
+    } else {
+        None
+    })
 }
 
 pub struct PlayableTrack {
@@ -231,7 +311,7 @@ impl Player {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn play_album(
+    pub async fn play_album(
         &self,
         db: Db,
         session_id: Option<usize>,
@@ -244,30 +324,33 @@ impl Player {
     ) -> Result<PlaybackStatus, PlayerError> {
         let tracks = {
             let library = db.library.lock().unwrap();
-            get_album_tracks(&library.inner, album_id).map_err(|e| {
-                error!("Failed to fetch album tracks: {e:?}");
-                PlayerError::AlbumFetchFailed(album_id)
-            })?
+            get_album_tracks(&library.inner, album_id)
+                .map_err(|e| {
+                    error!("Failed to fetch album tracks: {e:?}");
+                    PlayerError::AlbumFetchFailed(album_id)
+                })?
+                .into_iter()
+                .map(|t| Track::Library(t))
+                .map(Box::new)
+                .map(TrackOrId::Track)
+                .collect()
         };
 
         self.play_tracks(
             Some(db),
             session_id,
-            tracks
-                .into_iter()
-                .map(Box::new)
-                .map(TrackOrId::Track)
-                .collect(),
+            tracks,
             position,
             seek,
             volume,
             quality,
             retry_options,
         )
+        .await
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn play_track(
+    pub async fn play_track(
         &self,
         db: Option<Db>,
         session_id: Option<usize>,
@@ -287,10 +370,11 @@ impl Player {
             quality,
             retry_options,
         )
+        .await
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn play_tracks(
+    pub async fn play_tracks(
         &self,
         db: Option<Db>,
         session_id: Option<usize>,
@@ -306,33 +390,54 @@ impl Player {
             self.stop()?;
         }
 
+        let db = db.expect("No DB set");
+
         let tracks = {
-            let db = db.clone().expect("No DB set");
-            let library = db.library.lock().unwrap();
+            let library_tracks = {
+                get_tracks(
+                    &db.library.lock().as_ref().unwrap().inner,
+                    Some(
+                        &tracks
+                            .iter()
+                            .filter(|t| t.api_source() == ApiSource::Library)
+                            .map(|t| t.id())
+                            .collect::<Vec<_>>(),
+                    ),
+                )?
+            };
+
             tracks
                 .iter()
                 .map(|track| match track {
-                    TrackOrId::Id(track_id) => {
-                        debug!("Fetching track {track_id}",);
-                        let track = get_track(&library.inner, *track_id)
-                            .map_err(|e| {
-                                error!("Failed to fetch track: {e:?}");
-                                PlayerError::TrackFetchFailed(*track_id)
-                            })
-                            .expect("Failed to fetch track");
-                        debug!("Got track {track:?}");
-                        TrackOrId::Track(Box::new(track.expect("Track doesn't exist")))
-                    }
+                    TrackOrId::Id(track_id, source) => match *source {
+                        ApiSource::Library => {
+                            debug!("Fetching track {track_id}",);
+                            let track = library_tracks
+                                .iter()
+                                .find(|t| t.id == *track_id)
+                                .expect("Track doesn't exist");
+                            debug!("Got track {track:?}");
+                            TrackOrId::Track(Box::new(Track::Library(track.clone())))
+                        }
+                        ApiSource::Tidal => TrackOrId::Track(Box::new(Track::Tidal(TidalTrack {
+                            id: *track_id as u64,
+                        }))),
+                        ApiSource::Qobuz => TrackOrId::Track(Box::new(Track::Qobuz(QobuzTrack {
+                            id: *track_id as u64,
+                        }))),
+                    },
                     TrackOrId::Track(track) => TrackOrId::Track(track.clone()),
                 })
                 .collect()
         };
+
         let playback = Playback::new(
             tracks,
             position,
             AtomicF64::new(volume.unwrap_or(1.0)),
             quality,
             session_id,
+            get_session_playlist_id_from_session_id(db, session_id)?,
         );
 
         self.play_playback(playback, seek, retry_options)
@@ -378,7 +483,11 @@ impl Player {
         log::debug!(
             "Playing playback: position={} tracks={:?}",
             playback.position,
-            playback.tracks.iter().map(|t| t.id()).collect::<Vec<_>>()
+            playback
+                .tracks
+                .iter()
+                .map(|t| t.to_id())
+                .collect::<Vec<_>>()
         );
         let playback_id = playback.id;
 
@@ -444,17 +553,6 @@ impl Player {
             active.playing = false;
 
             if !abort.is_cancelled() {
-                if let Some(TrackOrId::Track(track)) = active.tracks.get(active.position as usize) {
-                    log::debug!(
-                        "active_progress={} track_duration={}",
-                        active.progress as u64,
-                        track.duration as u64
-                    );
-                    if (active.progress as u64) == (track.duration as u64) - 1 {
-                        active.progress = track.duration;
-                    }
-                }
-
                 trigger_playback_event(active, &old);
             }
 
@@ -474,6 +572,7 @@ impl Player {
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
+        log::debug!("start_playback: seek={seek:?}");
         let mut current_seek = seek;
         let mut retry_count = 0;
         let abort = self
@@ -505,15 +604,9 @@ impl Player {
                 track_id
             );
 
-            let playback_type = match track_or_id {
-                TrackOrId::Track(ref track) => {
-                    if track.source != TrackSource::Local {
-                        PlaybackType::Stream
-                    } else {
-                        self.playback_type
-                    }
-                }
-                TrackOrId::Id(_) => self.playback_type,
+            let playback_type = match track_or_id.track_source() {
+                TrackSource::Local => self.playback_type,
+                _ => PlaybackType::Stream,
             };
 
             let playable_track = self
@@ -681,6 +774,7 @@ impl Player {
             None,
             None,
             None,
+            None,
             retry_options,
         )
     }
@@ -707,6 +801,7 @@ impl Player {
             None,
             None,
             None,
+            None,
             retry_options,
         )
     }
@@ -723,6 +818,7 @@ impl Player {
         tracks: Option<Vec<TrackOrId>>,
         quality: Option<PlaybackQuality>,
         session_id: Option<usize>,
+        session_playlist_id: Option<usize>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
         log::debug!(
@@ -770,6 +866,7 @@ impl Player {
                 AtomicF64::new(volume.unwrap_or(1.0)),
                 quality.unwrap_or_default(),
                 session_id,
+                session_playlist_id,
             )
         };
 
@@ -780,6 +877,7 @@ impl Player {
         let playback = Playback {
             id: playback.id,
             session_id: playback.session_id,
+            session_playlist_id: playback.session_playlist_id,
             tracks: tracks.unwrap_or_else(|| playback.tracks.clone()),
             playing: playing.unwrap_or(playback.playing),
             quality: quality.unwrap_or(playback.quality),
@@ -887,7 +985,7 @@ impl Player {
         self.play_playback(playback, seek, retry_options)
     }
 
-    pub fn track_to_playable_file(&self, track: &Track) -> PlayableTrack {
+    pub fn track_to_playable_file(&self, track: &LibraryTrack) -> PlayableTrack {
         let mut hint = Hint::new();
 
         let file = track.file.clone().unwrap();
@@ -913,9 +1011,12 @@ impl Player {
         &self,
         track_or_id: &TrackOrId,
         quality: &PlaybackQuality,
-    ) -> PlayableTrack {
+    ) -> Result<PlayableTrack, PlayerError> {
         match track_or_id {
-            TrackOrId::Id(id) => self.track_id_to_playable_stream(*id, quality).await,
+            TrackOrId::Id(id, source) => {
+                self.track_id_to_playable_stream(*id, *source, quality)
+                    .await
+            }
             TrackOrId::Track(track) => self.track_to_playable_stream(track, quality).await,
         }
     }
@@ -924,15 +1025,29 @@ impl Player {
         &self,
         track: &Track,
         quality: &PlaybackQuality,
-    ) -> PlayableTrack {
-        self.track_id_to_playable_stream(track.id, quality).await
+    ) -> Result<PlayableTrack, PlayerError> {
+        self.track_id_to_playable_stream(
+            match track {
+                Track::Library(track) => track.id,
+                Track::Tidal(track) => track.id as i32,
+                Track::Qobuz(track) => track.id as i32,
+            },
+            match track {
+                Track::Library(_) => ApiSource::Library,
+                Track::Tidal(_) => ApiSource::Tidal,
+                Track::Qobuz(_) => ApiSource::Qobuz,
+            },
+            quality,
+        )
+        .await
     }
 
     pub async fn track_id_to_playable_stream(
         &self,
         track_id: i32,
+        source: ApiSource,
         quality: &PlaybackQuality,
-    ) -> PlayableTrack {
+    ) -> Result<PlayableTrack, PlayerError> {
         let hint = Hint::new();
 
         let (host, query, headers) = match &self.source {
@@ -954,37 +1069,83 @@ impl Player {
             ),
         };
 
-        let query_string = if let Some(query) = query {
+        let query_params = {
             let mut serializer = form_urlencoded::Serializer::new(String::new());
-            for (key, value) in query {
-                serializer.append_pair(key, value);
+
+            if let Some(query) = query {
+                for (key, value) in query {
+                    serializer.append_pair(key, value);
+                }
             }
+
+            serializer.append_pair("trackId", &track_id.to_string());
+
+            match source {
+                ApiSource::Library => match quality.format {
+                    #[cfg(feature = "aac")]
+                    AudioFormat::Aac => {
+                        serializer.append_pair("format", "AAC");
+                    }
+                    #[cfg(feature = "flac")]
+                    AudioFormat::Flac => {
+                        serializer.append_pair("format", "FLAC");
+                    }
+                    #[cfg(feature = "mp3")]
+                    AudioFormat::Mp3 => {
+                        serializer.append_pair("format", "MP3");
+                    }
+                    #[cfg(feature = "opus")]
+                    AudioFormat::Opus => {
+                        serializer.append_pair("format", "OPUS");
+                    }
+                    AudioFormat::Source => {}
+                },
+                ApiSource::Tidal => {
+                    serializer.append_pair("audioQuality", "HIGH");
+                }
+                ApiSource::Qobuz => {
+                    serializer.append_pair("audioQuality", "LOW");
+                }
+            }
+
             serializer.finish()
-        } else {
-            "".to_string()
         };
 
-        let query_string = if query_string.is_empty() {
-            query_string
-        } else {
-            format!("{query_string}&")
-        };
+        let query_string = format!("?{}", query_params);
 
-        let query_string = format!("?{query_string}trackId={track_id}");
+        let url = match source {
+            ApiSource::Library => Ok(format!("{host}/track{query_string}")),
+            ApiSource::Tidal => {
+                let url = format!("{host}/tidal/track/url{query_string}");
+                log::debug!("Fetching track file url from {url}");
 
-        let query_string = match quality.format {
-            #[cfg(feature = "aac")]
-            AudioFormat::Aac => query_string + "&format=AAC",
-            #[cfg(feature = "flac")]
-            AudioFormat::Flac => query_string + "&format=FLAC",
-            #[cfg(feature = "mp3")]
-            AudioFormat::Mp3 => query_string + "&format=MP3",
-            #[cfg(feature = "opus")]
-            AudioFormat::Opus => query_string + "&format=OPUS",
-            AudioFormat::Source => query_string,
-        };
+                CLIENT
+                    .get(url)
+                    .send()
+                    .await?
+                    .json::<Value>()
+                    .await?
+                    .to_value::<Vec<String>>("urls")?
+                    .first()
+                    .cloned()
+                    .ok_or(PlayerError::TrackFetchFailed(track_id))
+            }
+            ApiSource::Qobuz => {
+                let url = format!("{host}/qobuz/track/url{query_string}");
+                log::debug!("Fetching track file url from {url}");
 
-        let url = format!("{host}/track{query_string}");
+                Ok(CLIENT
+                    .get(url)
+                    .send()
+                    .await?
+                    .json::<Value>()
+                    .await?
+                    .to_value::<String>("url")?)
+            }
+        }?;
+
+        log::debug!("Fetching track bytes from url: {url}");
+
         let mut client = reqwest::Client::new().head(&url);
 
         if let Some(headers) = headers {
@@ -998,7 +1159,6 @@ impl Player {
             .headers()
             .get("content-length")
             .map(|length| length.to_str().unwrap().parse::<u64>().unwrap());
-        let url = format!("{host}/track{query_string}");
 
         let source = Box::new(RemoteByteStream::new(
             url,
@@ -1012,11 +1172,11 @@ impl Player {
                 .unwrap_or_default(),
         ));
 
-        PlayableTrack {
+        Ok(PlayableTrack {
             track_id,
             source,
             hint,
-        }
+        })
     }
 
     async fn track_or_id_to_playable(
@@ -1026,17 +1186,40 @@ impl Player {
         quality: &PlaybackQuality,
     ) -> Result<PlayableTrack, PlayerError> {
         Ok(match playback_type {
-            PlaybackType::File => match track_or_id {
-                TrackOrId::Id(_id) => return Err(PlayerError::InvalidPlaybackType),
-                TrackOrId::Track(track) => self.track_to_playable_file(track),
+            PlaybackType::File => match track_or_id.clone() {
+                TrackOrId::Id(_id, _) => return Err(PlayerError::InvalidPlaybackType),
+                TrackOrId::Track(track) => match *track {
+                    Track::Library(track) => self.track_to_playable_file(&track),
+                    Track::Tidal(track) => {
+                        self.track_to_playable_stream(&Track::Tidal(track), quality)
+                            .await?
+                    }
+                    Track::Qobuz(track) => {
+                        self.track_to_playable_stream(&Track::Qobuz(track), quality)
+                            .await?
+                    }
+                },
             },
             PlaybackType::Stream => {
                 self.track_or_id_to_playable_stream(track_or_id, quality)
-                    .await
+                    .await?
             }
-            PlaybackType::Default => match track_or_id {
-                TrackOrId::Id(id) => self.track_id_to_playable_stream(*id, quality).await,
-                TrackOrId::Track(track) => self.track_to_playable_file(track),
+            PlaybackType::Default => match track_or_id.clone() {
+                TrackOrId::Id(id, source) => {
+                    self.track_id_to_playable_stream(id, source, quality)
+                        .await?
+                }
+                TrackOrId::Track(track) => match *track {
+                    Track::Library(track) => self.track_to_playable_file(&track),
+                    Track::Tidal(track) => {
+                        self.track_to_playable_stream(&Track::Tidal(track), quality)
+                            .await?
+                    }
+                    Track::Qobuz(track) => {
+                        self.track_to_playable_stream(&Track::Qobuz(track), quality)
+                            .await?
+                    }
+                },
             },
         })
     }
@@ -1113,25 +1296,22 @@ fn trigger_playback_event(current: &Playback, previous: &Playback) {
     let tracks = current
         .tracks
         .iter()
-        .map(|t| UpdateSessionPlaylistTrack {
-            id: t.id() as u64,
-            r#type: ApiSource::Library,
-            data: None,
-        })
+        .cloned()
+        .map(|t| t.into())
         .collect::<Vec<_>>();
     let prev_tracks = previous
         .tracks
         .iter()
-        .map(|t| UpdateSessionPlaylistTrack {
-            id: t.id() as u64,
-            r#type: ApiSource::Library,
-            data: None,
-        })
+        .cloned()
+        .map(|t| t.into())
         .collect::<Vec<_>>();
     let playlist = if tracks != prev_tracks {
         has_change = true;
         Some(moosicbox_core::sqlite::models::UpdateSessionPlaylist {
-            session_playlist_id: -1,
+            session_playlist_id: current
+                .session_playlist_id
+                .map(|id| id as i32)
+                .unwrap_or(-1),
             tracks,
         })
     } else {

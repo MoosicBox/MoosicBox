@@ -134,9 +134,29 @@ pub enum TrackSource {
     Qobuz,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum Track {
+    Library(LibraryTrack),
+    Tidal(TidalTrack),
+    Qobuz(QobuzTrack),
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct Track {
+pub struct TidalTrack {
+    pub id: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct QobuzTrack {
+    pub id: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryTrack {
     pub id: i32,
     pub number: i32,
     pub title: String,
@@ -162,7 +182,7 @@ pub struct Track {
     pub tidal_id: Option<u64>,
 }
 
-impl Track {
+impl LibraryTrack {
     pub fn directory(&self) -> Option<String> {
         self.file
             .as_ref()
@@ -171,27 +191,27 @@ impl Track {
     }
 }
 
-impl AsModel<Track> for Row<'_> {
-    fn as_model(&self) -> Track {
+impl AsModel<LibraryTrack> for Row<'_> {
+    fn as_model(&self) -> LibraryTrack {
         AsModel::as_model(&self)
     }
 }
 
-impl AsModel<Track> for &Row<'_> {
-    fn as_model(&self) -> Track {
+impl AsModel<LibraryTrack> for &Row<'_> {
+    fn as_model(&self) -> LibraryTrack {
         AsModelResult::as_model(self).unwrap()
     }
 }
 
-impl AsModelResult<Track, ParseError> for Row<'_> {
-    fn as_model(&self) -> Result<Track, ParseError> {
+impl AsModelResult<LibraryTrack, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<LibraryTrack, ParseError> {
         AsModelResult::as_model(&self)
     }
 }
 
-impl AsModelResult<Track, ParseError> for &Row<'_> {
-    fn as_model(&self) -> Result<Track, ParseError> {
-        Ok(Track {
+impl AsModelResult<LibraryTrack, ParseError> for &Row<'_> {
+    fn as_model(&self) -> Result<LibraryTrack, ParseError> {
+        Ok(LibraryTrack {
             id: self.to_value("id")?,
             number: self.to_value("number")?,
             title: self.to_value("title")?,
@@ -227,7 +247,7 @@ impl AsModelResult<Track, ParseError> for &Row<'_> {
     }
 }
 
-impl AsId for Track {
+impl AsId for LibraryTrack {
     fn as_id(&self) -> SqliteValue {
         SqliteValue::Number(self.id as i64)
     }
@@ -267,7 +287,7 @@ pub struct ApiLibraryTrack {
     pub source: TrackSource,
 }
 
-impl ToApi<ApiTrack> for Track {
+impl ToApi<ApiTrack> for LibraryTrack {
     fn to_api(&self) -> ApiTrack {
         ApiTrack::Library(ApiLibraryTrack {
             track_id: self.id,

@@ -9,7 +9,7 @@ use moosicbox_core::{
     app::{Db, DbConnection},
     sqlite::{
         db::{get_track, get_track_size, get_tracks, set_track_size, DbError, SetTrackSize},
-        models::Track,
+        models::LibraryTrack,
     },
     types::{AudioFormat, PlaybackQuality},
 };
@@ -136,8 +136,8 @@ pub struct TrackInfo {
     pub blur: bool,
 }
 
-impl From<Track> for TrackInfo {
-    fn from(value: Track) -> Self {
+impl From<LibraryTrack> for TrackInfo {
+    fn from(value: LibraryTrack) -> Self {
         TrackInfo {
             id: value.id,
             number: value.number,

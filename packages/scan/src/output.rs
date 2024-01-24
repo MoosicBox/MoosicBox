@@ -12,7 +12,7 @@ use moosicbox_core::{
             add_album_maps_and_get_albums, add_artist_maps_and_get_artists, add_tracks,
             set_track_sizes, DbError, InsertTrack, SetTrackSize, SqliteValue,
         },
-        models::{Track, TrackSource},
+        models::{LibraryTrack, TrackSource},
     },
     types::{AudioFormat, PlaybackQuality},
 };
@@ -530,7 +530,7 @@ impl ScanOutput {
                         file: track.path.clone(),
                         qobuz_id: track.qobuz_id,
                         tidal_id: track.tidal_id,
-                        track: Track {
+                        track: LibraryTrack {
                             number: track.number as i32,
                             title: track.name.clone(),
                             duration: track.duration,

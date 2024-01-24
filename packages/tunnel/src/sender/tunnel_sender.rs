@@ -12,9 +12,10 @@ use futures_util::future::ready;
 use futures_util::{future, pin_mut, Future, Stream, StreamExt};
 use lazy_static::lazy_static;
 use moosicbox_core::app::Db;
-use moosicbox_core::sqlite::models::AlbumId;
+use moosicbox_core::sqlite::models::{AlbumId, ApiSource};
 use moosicbox_core::types::AudioFormat;
 use moosicbox_env_utils::default_env_usize;
+use moosicbox_files::api::AlbumCoverQuery;
 use moosicbox_files::files::album::{get_album_cover, AlbumCoverError, AlbumCoverSource};
 use moosicbox_files::files::track::{get_track_info, get_track_source, TrackSource};
 use moosicbox_files::range::{parse_ranges, Range};
@@ -1191,11 +1192,40 @@ impl TunnelSender {
                 if let Some(caps) = re.captures(&path) {
                     match method {
                         Method::Get => {
-                            let album_id = caps.get(1).unwrap().as_str().parse::<i32>().unwrap();
-                            let width = caps.get(2).unwrap().as_str().parse::<u32>().unwrap();
-                            let height = caps.get(3).unwrap().as_str().parse::<u32>().unwrap();
-                            let album_id = AlbumId::Library(album_id);
-                            match get_album_cover(album_id, db.clone()).await.unwrap() {
+                            let query = serde_json::from_value::<AlbumCoverQuery>(query)
+                                .map_err(|e| TunnelRequestError::InvalidQuery(e.to_string()))?;
+
+                            let album_id_string = caps
+                                .get(1)
+                                .ok_or(TunnelRequestError::BadRequest("Invalid album_id".into()))?
+                                .as_str();
+
+                            let album_id = match query.source.unwrap_or(ApiSource::Library) {
+                                ApiSource::Library => {
+                                    album_id_string.parse::<i32>().map(AlbumId::Library)
+                                }
+                                ApiSource::Tidal => {
+                                    album_id_string.parse::<u64>().map(AlbumId::Tidal)
+                                }
+                                ApiSource::Qobuz => Ok(AlbumId::Qobuz(album_id_string.to_string())),
+                            }
+                            .map_err(|_| {
+                                TunnelRequestError::BadRequest("Invalid album_id".into())
+                            })?;
+
+                            let width =
+                                caps.get(2).unwrap().as_str().parse::<u32>().map_err(|_| {
+                                    TunnelRequestError::BadRequest("Bad width".into())
+                                })?;
+                            let height =
+                                caps.get(3).unwrap().as_str().parse::<u32>().map_err(|_| {
+                                    TunnelRequestError::BadRequest("Bad height".into())
+                                })?;
+
+                            match get_album_cover(album_id, db.clone())
+                                .await
+                                .map_err(|e| TunnelRequestError::Request(e.to_string()))?
+                            {
                                 AlbumCoverSource::LocalFilePath(path) => {
                                     let mut headers = HashMap::new();
                                     let resized = {

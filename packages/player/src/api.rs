@@ -11,6 +11,7 @@ use actix_web::{
 };
 use moosicbox_core::{
     app::AppState,
+    sqlite::models::ApiSource,
     track_range::{parse_track_id_ranges, ParseTrackIdsError},
     types::{AudioFormat, PlaybackQuality},
 };
@@ -18,8 +19,8 @@ use once_cell::sync::Lazy;
 use serde::Deserialize;
 
 use crate::player::{
-    ApiPlaybackStatus, PlaybackRetryOptions, PlaybackStatus, Player, PlayerError, PlayerSource,
-    TrackOrId,
+    get_session_playlist_id_from_session_id, ApiPlaybackStatus, PlaybackRetryOptions,
+    PlaybackStatus, Player, PlayerError, PlayerSource, TrackOrId,
 };
 
 impl From<PlayerError> for actix_web::Error {
@@ -28,6 +29,9 @@ impl From<PlayerError> for actix_web::Error {
             PlayerError::TrackNotFound(track_id) => {
                 ErrorNotFound(format!("Track not found: {track_id}"))
             }
+            PlayerError::Db(err) => ErrorInternalServerError(format!("DB error: {err:?}")),
+            PlayerError::Reqwest(err) => ErrorInternalServerError(format!("Reqwest: {err:?}")),
+            PlayerError::Parse(err) => ErrorInternalServerError(format!("Parse: {err:?}")),
             PlayerError::TrackNotLocal(track_id) => {
                 ErrorBadRequest(format!("Track not stored locally: {track_id}"))
             }
@@ -104,18 +108,22 @@ pub async fn play_album_endpoint(
     query: web::Query<PlayAlbumQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(get_player(query.host.clone()).play_album(
-        data.db.clone().expect("No DB bound on AppState"),
-        query.session_id,
-        query.album_id,
-        query.position,
-        query.seek,
-        query.volume,
-        PlaybackQuality {
-            format: query.format.unwrap_or_default(),
-        },
-        Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
-    )?))
+    Ok(Json(
+        get_player(query.host.clone())
+            .play_album(
+                data.db.clone().expect("No DB bound on AppState"),
+                query.session_id,
+                query.album_id,
+                query.position,
+                query.seek,
+                query.volume,
+                PlaybackQuality {
+                    format: query.format.unwrap_or_default(),
+                },
+                Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
+            )
+            .await?,
+    ))
 }
 
 #[derive(Deserialize, Clone)]
@@ -127,6 +135,7 @@ pub struct PlayTrackQuery {
     pub volume: Option<f64>,
     pub host: Option<String>,
     pub format: Option<AudioFormat>,
+    pub source: Option<ApiSource>,
 }
 
 #[post("/player/play/track")]
@@ -134,17 +143,21 @@ pub async fn play_track_endpoint(
     query: web::Query<PlayTrackQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(get_player(query.host.clone()).play_track(
-        Some(data.db.clone().expect("No DB bound on AppState")),
-        query.session_id,
-        TrackOrId::Id(query.track_id),
-        query.seek,
-        query.volume,
-        PlaybackQuality {
-            format: query.format.unwrap_or_default(),
-        },
-        Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
-    )?))
+    Ok(Json(
+        get_player(query.host.clone())
+            .play_track(
+                Some(data.db.clone().expect("No DB bound on AppState")),
+                query.session_id,
+                TrackOrId::Id(query.track_id, query.source.unwrap_or(ApiSource::Library)),
+                query.seek,
+                query.volume,
+                PlaybackQuality {
+                    format: query.format.unwrap_or_default(),
+                },
+                Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
+            )
+            .await?,
+    ))
 }
 
 #[derive(Deserialize, Clone)]
@@ -157,6 +170,7 @@ pub struct PlayTracksQuery {
     pub volume: Option<f64>,
     pub host: Option<String>,
     pub format: Option<AudioFormat>,
+    pub source: Option<ApiSource>,
 }
 
 #[post("/player/play/tracks")]
@@ -165,32 +179,34 @@ pub async fn play_tracks_endpoint(
     data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(
-        get_player(query.host.clone()).play_tracks(
-            Some(data.db.clone().expect("No DB bound on AppState")),
-            query.session_id,
-            parse_track_id_ranges(&query.track_ids)
-                .map_err(|e| match e {
-                    ParseTrackIdsError::ParseId(id) => {
-                        ErrorBadRequest(format!("Could not parse trackId '{id}'"))
-                    }
-                    ParseTrackIdsError::UnmatchedRange(range) => {
-                        ErrorBadRequest(format!("Unmatched range '{range}'"))
-                    }
-                    ParseTrackIdsError::RangeTooLarge(range) => {
-                        ErrorBadRequest(format!("Range too large '{range}'"))
-                    }
-                })?
-                .iter()
-                .map(|id| TrackOrId::Id(*id))
-                .collect(),
-            query.position,
-            query.seek,
-            query.volume,
-            PlaybackQuality {
-                format: query.format.unwrap_or_default(),
-            },
-            Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
-        )?,
+        get_player(query.host.clone())
+            .play_tracks(
+                Some(data.db.clone().expect("No DB bound on AppState")),
+                query.session_id,
+                parse_track_id_ranges(&query.track_ids)
+                    .map_err(|e| match e {
+                        ParseTrackIdsError::ParseId(id) => {
+                            ErrorBadRequest(format!("Could not parse trackId '{id}'"))
+                        }
+                        ParseTrackIdsError::UnmatchedRange(range) => {
+                            ErrorBadRequest(format!("Unmatched range '{range}'"))
+                        }
+                        ParseTrackIdsError::RangeTooLarge(range) => {
+                            ErrorBadRequest(format!("Range too large '{range}'"))
+                        }
+                    })?
+                    .iter()
+                    .map(|id| TrackOrId::Id(*id, query.source.unwrap_or(ApiSource::Library)))
+                    .collect(),
+                query.position,
+                query.seek,
+                query.volume,
+                PlaybackQuality {
+                    format: query.format.unwrap_or_default(),
+                },
+                Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
+            )
+            .await?,
     ))
 }
 
@@ -239,12 +255,13 @@ pub struct UpdatePlaybackQuery {
     pub track_ids: Option<String>,
     pub quality: Option<PlaybackQuality>,
     pub session_id: Option<usize>,
+    pub source: Option<ApiSource>,
 }
 
 #[post("/player/update-playback")]
 pub async fn update_playback_endpoint(
     query: web::Query<UpdatePlaybackQuery>,
-    _data: web::Data<AppState>,
+    data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(
         get_player(query.host.clone()).update_playback(
@@ -260,7 +277,7 @@ pub async fn update_playback_endpoint(
                 .map(|track_ids| {
                     Ok(parse_track_id_ranges(&track_ids)?
                         .iter()
-                        .map(|id| TrackOrId::Id(*id))
+                        .map(|id| TrackOrId::Id(*id, query.source.unwrap_or(ApiSource::Library)))
                         .collect())
                 })
                 .transpose()
@@ -277,6 +294,10 @@ pub async fn update_playback_endpoint(
                 })?,
             query.quality,
             query.session_id,
+            get_session_playlist_id_from_session_id(
+                data.db.clone().expect("No DB set"),
+                query.session_id,
+            )?,
             Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
         )?,
     ))
