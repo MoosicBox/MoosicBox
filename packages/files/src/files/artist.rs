@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{collections::HashMap, path::Path, sync::RwLock};
 
 use moosicbox_core::{
     app::Db,
@@ -7,6 +7,8 @@ use moosicbox_core::{
         models::ArtistId,
     },
 };
+use moosicbox_qobuz::QobuzArtist;
+use moosicbox_tidal::TidalArtist;
 use once_cell::sync::Lazy;
 use thiserror::Error;
 
@@ -78,31 +80,61 @@ pub async fn get_artist_cover(
     db: Db,
 ) -> Result<ArtistCoverSource, ArtistCoverError> {
     let path = match &artist_id {
-        ArtistId::Library(library_artist_id) => {
-            let artist = get_artist(
-                &db.library.lock().as_ref().unwrap().inner,
-                *library_artist_id,
-            )?
-            .ok_or(ArtistCoverError::NotFound(artist_id.clone()))?;
-            let cover = artist
-                .cover
-                .ok_or(ArtistCoverError::NotFound(artist_id.clone()))?;
-
-            cover
-        }
+        ArtistId::Library(library_artist_id) => get_artist(
+            &db.library.lock().as_ref().unwrap().inner,
+            *library_artist_id,
+        )?
+        .and_then(|artist| artist.cover)
+        .ok_or(ArtistCoverError::NotFound(artist_id.clone()))?,
         ArtistId::Tidal(tidal_artist_id) => {
-            let artist =
-                moosicbox_tidal::artist(&db, *tidal_artist_id, None, None, None, None).await?;
+            static ARTIST_CACHE: Lazy<RwLock<HashMap<u64, TidalArtist>>> =
+                Lazy::new(|| RwLock::new(HashMap::new()));
+
+            let artist = if let Some(artist) = {
+                let binding = ARTIST_CACHE.read().unwrap();
+                binding.get(tidal_artist_id).cloned()
+            } {
+                artist
+            } else {
+                let artist =
+                    moosicbox_tidal::artist(&db, *tidal_artist_id, None, None, None, None).await?;
+                ARTIST_CACHE
+                    .write()
+                    .as_mut()
+                    .unwrap()
+                    .insert(*tidal_artist_id, artist.clone());
+                artist
+            };
+
             let cover = artist
                 .picture_url(750)
                 .ok_or(ArtistCoverError::NotFound(artist_id.clone()))?;
+
             get_or_fetch_artist_cover_from_remote_url(&cover, &artist.name).await?
         }
         ArtistId::Qobuz(qobuz_artist_id) => {
-            let artist = moosicbox_qobuz::artist(&db, *qobuz_artist_id, None, None).await?;
+            static ARTIST_CACHE: Lazy<RwLock<HashMap<u64, QobuzArtist>>> =
+                Lazy::new(|| RwLock::new(HashMap::new()));
+
+            let artist = if let Some(artist) = {
+                let binding = ARTIST_CACHE.read().unwrap();
+                binding.get(qobuz_artist_id).cloned()
+            } {
+                artist
+            } else {
+                let artist = moosicbox_qobuz::artist(&db, *qobuz_artist_id, None, None).await?;
+                ARTIST_CACHE
+                    .write()
+                    .as_mut()
+                    .unwrap()
+                    .insert(*qobuz_artist_id, artist.clone());
+                artist
+            };
+
             let cover = artist
                 .cover_url()
                 .ok_or(ArtistCoverError::NotFound(artist_id.clone()))?;
+
             get_or_fetch_artist_cover_from_remote_url(&cover, &artist.name).await?
         }
     };
