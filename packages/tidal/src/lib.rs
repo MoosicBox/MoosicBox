@@ -879,30 +879,57 @@ pub enum TidalArtistAlbumsError {
     Parse(#[from] ParseError),
 }
 
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Copy, Clone)]
+#[serde(rename_all = "UPPERCASE")]
+#[strum(serialize_all = "UPPERCASE")]
+pub enum TidalAlbumType {
+    Lp,
+    EpsAndSingles,
+    Compilations,
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn artist_albums(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     artist_id: u64,
     offset: Option<u32>,
     limit: Option<u32>,
+    album_type: Option<TidalAlbumType>,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
 ) -> Result<(Vec<TidalAlbum>, u32), TidalArtistAlbumsError> {
+    let mut query: Vec<(&str, String)> = vec![
+        ("offset", offset.unwrap_or(0).to_string()),
+        ("limit", limit.unwrap_or(100).to_string()),
+        ("countryCode", country_code.clone().unwrap_or("US".into())),
+        ("locale", locale.clone().unwrap_or("en_US".into())),
+        (
+            "deviceType",
+            device_type
+                .unwrap_or(TidalDeviceType::Browser)
+                .as_ref()
+                .to_string(),
+        ),
+    ];
+
+    if let Some(album_type) = album_type {
+        match album_type {
+            TidalAlbumType::Lp => {}
+            _ => {
+                query.push(("filter", album_type.as_ref().to_string()));
+            }
+        }
+    }
+
     let url = tidal_api_endpoint!(
         ArtistAlbums,
         &[(":artistId", &artist_id.to_string())],
-        &[
-            ("offset", &offset.unwrap_or(0).to_string()),
-            ("limit", &limit.unwrap_or(100).to_string()),
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
-            (
-                "deviceType",
-                device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
-            ),
-        ]
+        &query
+            .iter()
+            .map(|q| (q.0, q.1.as_str()))
+            .collect::<Vec<_>>()
     );
 
     let value = authenticated_request(
@@ -912,6 +939,8 @@ pub async fn artist_albums(
         access_token,
     )
     .await?;
+
+    log::trace!("Received artist albums response: {value:?}");
 
     let items = value
         .to_value::<Option<_>>("items")?

@@ -7,15 +7,17 @@ use actix_web::{
 use moosicbox_core::sqlite::models::ToApi;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
     album, album_tracks, artist, artist_albums, device_authorization, device_authorization_token,
     favorite_albums, favorite_artists, favorite_tracks, track, track_file_url, TidalAlbum,
-    TidalAlbumError, TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError, TidalArtist,
-    TidalArtistAlbumsError, TidalArtistError, TidalArtistOrder, TidalArtistOrderDirection,
-    TidalAudioQuality, TidalDeviceAuthorizationError, TidalDeviceAuthorizationTokenError,
-    TidalDeviceType, TidalFavoriteAlbumsError, TidalFavoriteArtistsError, TidalFavoriteTracksError,
-    TidalTrack, TidalTrackError, TidalTrackFileUrlError, TidalTrackOrder, TidalTrackOrderDirection,
+    TidalAlbumError, TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError,
+    TidalAlbumType, TidalArtist, TidalArtistAlbumsError, TidalArtistError, TidalArtistOrder,
+    TidalArtistOrderDirection, TidalAudioQuality, TidalDeviceAuthorizationError,
+    TidalDeviceAuthorizationTokenError, TidalDeviceType, TidalFavoriteAlbumsError,
+    TidalFavoriteArtistsError, TidalFavoriteTracksError, TidalTrack, TidalTrackError,
+    TidalTrackFileUrlError, TidalTrackOrder, TidalTrackOrderDirection,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -387,9 +389,29 @@ pub struct TidalArtistAlbumsQuery {
     artist_id: u64,
     offset: Option<u32>,
     limit: Option<u32>,
+    album_type: Option<AlbumType>,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
+}
+
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Copy, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum AlbumType {
+    Lp,
+    EpsAndSingles,
+    Compilations,
+}
+
+impl From<AlbumType> for TidalAlbumType {
+    fn from(value: AlbumType) -> Self {
+        match value {
+            AlbumType::Lp => TidalAlbumType::Lp,
+            AlbumType::EpsAndSingles => TidalAlbumType::EpsAndSingles,
+            AlbumType::Compilations => TidalAlbumType::Compilations,
+        }
+    }
 }
 
 #[route("/tidal/artists/albums", method = "GET")]
@@ -404,6 +426,7 @@ pub async fn artist_albums_endpoint(
         query.artist_id,
         query.offset,
         query.limit,
+        query.album_type.map(|t| t.into()),
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,
