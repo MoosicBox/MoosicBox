@@ -145,6 +145,7 @@ static TIDAL_ACCESS_TOKEN_HEADER: &str = "x-tidal-access-token";
 
 impl From<TidalDeviceAuthorizationError> for actix_web::Error {
     fn from(err: TidalDeviceAuthorizationError) -> Self {
+        log::error!("{err:?}");
         ErrorInternalServerError(err.to_string())
     }
 }
@@ -167,6 +168,7 @@ pub async fn device_authorization_endpoint(
 
 impl From<TidalDeviceAuthorizationTokenError> for actix_web::Error {
     fn from(err: TidalDeviceAuthorizationTokenError) -> Self {
+        log::error!("{err:?}");
         ErrorInternalServerError(err.to_string())
     }
 }
@@ -202,6 +204,7 @@ pub async fn device_authorization_token_endpoint(
 
 impl From<TidalTrackFileUrlError> for actix_web::Error {
     fn from(err: TidalTrackFileUrlError) -> Self {
+        log::error!("{err:?}");
         ErrorInternalServerError(err.to_string())
     }
 }
@@ -235,6 +238,7 @@ pub async fn track_file_url_endpoint(
 
 impl From<TidalFavoriteArtistsError> for actix_web::Error {
     fn from(err: TidalFavoriteArtistsError) -> Self {
+        log::error!("{err:?}");
         ErrorInternalServerError(err.to_string())
     }
 }
@@ -283,6 +287,7 @@ pub async fn favorite_artists_endpoint(
 
 impl From<TidalFavoriteAlbumsError> for actix_web::Error {
     fn from(err: TidalFavoriteAlbumsError) -> Self {
+        log::error!("{err:?}");
         ErrorInternalServerError(err.to_string())
     }
 }
@@ -331,6 +336,7 @@ pub async fn favorite_albums_endpoint(
 
 impl From<TidalFavoriteTracksError> for actix_web::Error {
     fn from(err: TidalFavoriteTracksError) -> Self {
+        log::error!("{err:?}");
         ErrorInternalServerError(err.to_string())
     }
 }
@@ -379,6 +385,7 @@ pub async fn favorite_tracks_endpoint(
 
 impl From<TidalArtistAlbumsError> for actix_web::Error {
     fn from(err: TidalArtistAlbumsError) -> Self {
+        log::error!("{err:?}");
         ErrorInternalServerError(err.to_string())
     }
 }
@@ -444,6 +451,7 @@ pub async fn artist_albums_endpoint(
 
 impl From<TidalAlbumTracksError> for actix_web::Error {
     fn from(err: TidalAlbumTracksError) -> Self {
+        log::error!("{err:?}");
         ErrorInternalServerError(err.to_string())
     }
 }
@@ -488,6 +496,7 @@ pub async fn album_tracks_endpoint(
 
 impl From<TidalAlbumError> for actix_web::Error {
     fn from(err: TidalAlbumError) -> Self {
+        log::error!("{err:?}");
         ErrorInternalServerError(err.to_string())
     }
 }
@@ -525,6 +534,7 @@ pub async fn album_endpoint(
 
 impl From<TidalArtistError> for actix_web::Error {
     fn from(err: TidalArtistError) -> Self {
+        log::error!("{err:?}");
         ErrorInternalServerError(err.to_string())
     }
 }
@@ -562,6 +572,7 @@ pub async fn artist_endpoint(
 
 impl From<TidalTrackError> for actix_web::Error {
     fn from(err: TidalTrackError) -> Self {
+        log::error!("{err:?}");
         ErrorInternalServerError(err.to_string())
     }
 }
