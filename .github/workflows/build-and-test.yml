@@ -341,18 +341,18 @@ jobs:
 
         steps:
             - name: Checkout audiotags
-              uses: actions/checkout@master
+              uses: actions/checkout@v4
               with:
                   repository: BSteffaniak/audiotags
                   ref: feat/add-full-date-capabilities
                   path: audiotags
 
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
               with:
                   path: MoosicBoxServer
 
             - name: ⚡ Cache cargo
-              uses: actions/cache@v3
+              uses: actions/cache@v4
               with:
                   path: |
                       ~/.cargo/registry
