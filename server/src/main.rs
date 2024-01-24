@@ -253,6 +253,8 @@ fn main() -> std::io::Result<()> {
                 .service(moosicbox_tidal::api::device_authorization_token_endpoint)
                 .service(moosicbox_tidal::api::track_file_url_endpoint)
                 .service(moosicbox_tidal::api::favorite_artists_endpoint)
+                .service(moosicbox_tidal::api::add_favorite_artist_endpoint)
+                .service(moosicbox_tidal::api::remove_favorite_artist_endpoint)
                 .service(moosicbox_tidal::api::favorite_albums_endpoint)
                 .service(moosicbox_tidal::api::favorite_tracks_endpoint)
                 .service(moosicbox_tidal::api::artist_albums_endpoint)

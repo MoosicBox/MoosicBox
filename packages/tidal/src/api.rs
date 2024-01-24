@@ -10,14 +10,15 @@ use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
-    album, album_tracks, artist, artist_albums, device_authorization, device_authorization_token,
-    favorite_albums, favorite_artists, favorite_tracks, track, track_file_url, TidalAlbum,
+    add_favorite_artist, album, album_tracks, artist, artist_albums, device_authorization,
+    device_authorization_token, favorite_albums, favorite_artists, favorite_tracks,
+    remove_favorite_artist, track, track_file_url, TidalAddFavoriteArtistError, TidalAlbum,
     TidalAlbumError, TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError,
     TidalAlbumType, TidalArtist, TidalArtistAlbumsError, TidalArtistError, TidalArtistOrder,
     TidalArtistOrderDirection, TidalAudioQuality, TidalDeviceAuthorizationError,
     TidalDeviceAuthorizationTokenError, TidalDeviceType, TidalFavoriteAlbumsError,
-    TidalFavoriteArtistsError, TidalFavoriteTracksError, TidalTrack, TidalTrackError,
-    TidalTrackFileUrlError, TidalTrackOrder, TidalTrackOrderDirection,
+    TidalFavoriteArtistsError, TidalFavoriteTracksError, TidalRemoveFavoriteArtistError,
+    TidalTrack, TidalTrackError, TidalTrackFileUrlError, TidalTrackOrder, TidalTrackOrderDirection,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -282,6 +283,90 @@ pub async fn favorite_artists_endpoint(
     Ok(Json(serde_json::json!({
         "count": count,
         "items": items.iter().map(|item| item.to_api()).collect::<Vec<_>>(),
+    })))
+}
+
+impl From<TidalAddFavoriteArtistError> for actix_web::Error {
+    fn from(err: TidalAddFavoriteArtistError) -> Self {
+        log::error!("{err:?}");
+        ErrorInternalServerError(err.to_string())
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalAddFavoriteArtistsQuery {
+    artist_id: u64,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+    user_id: Option<u64>,
+}
+
+#[route("/tidal/favorites/artists", method = "POST")]
+pub async fn add_favorite_artist_endpoint(
+    req: HttpRequest,
+    query: web::Query<TidalAddFavoriteArtistsQuery>,
+    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<Value>> {
+    add_favorite_artist(
+        #[cfg(feature = "db")]
+        data.db.as_ref().unwrap(),
+        query.artist_id,
+        query.country_code.clone(),
+        query.locale.clone(),
+        query.device_type,
+        req.headers()
+            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+        query.user_id,
+    )
+    .await?;
+
+    Ok(Json(serde_json::json!({
+        "success": true
+    })))
+}
+
+impl From<TidalRemoveFavoriteArtistError> for actix_web::Error {
+    fn from(err: TidalRemoveFavoriteArtistError) -> Self {
+        log::error!("{err:?}");
+        ErrorInternalServerError(err.to_string())
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalRemoveFavoriteArtistsQuery {
+    artist_id: u64,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+    user_id: Option<u64>,
+}
+
+#[route("/tidal/favorites/artists", method = "DELETE")]
+pub async fn remove_favorite_artist_endpoint(
+    req: HttpRequest,
+    query: web::Query<TidalRemoveFavoriteArtistsQuery>,
+    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<Value>> {
+    remove_favorite_artist(
+        #[cfg(feature = "db")]
+        data.db.as_ref().unwrap(),
+        query.artist_id,
+        query.country_code.clone(),
+        query.locale.clone(),
+        query.device_type,
+        req.headers()
+            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+        query.user_id,
+    )
+    .await?;
+
+    Ok(Json(serde_json::json!({
+        "success": true
     })))
 }
 
