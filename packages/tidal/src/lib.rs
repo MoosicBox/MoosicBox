@@ -447,6 +447,8 @@ pub enum AuthenticatedRequestError {
     RefetchAccessToken(#[from] RefetchAccessTokenError),
     #[error("Unauthorized")]
     Unauthorized,
+    #[error("Request failed (error {0})")]
+    RequestFailed(u16, String),
     #[error("MaxFailedAttempts")]
     MaxFailedAttempts,
 }
@@ -455,24 +457,80 @@ async fn authenticated_request(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     url: &str,
     access_token: Option<String>,
-) -> Result<Value, AuthenticatedRequestError> {
+) -> Result<Option<Value>, AuthenticatedRequestError> {
     authenticated_request_inner(
         #[cfg(feature = "db")]
         db,
+        Method::Get,
         url,
         access_token,
+        None,
+        None,
         1,
     )
     .await
 }
 
-#[async_recursion]
-async fn authenticated_request_inner(
+async fn authenticated_post_request(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     url: &str,
     access_token: Option<String>,
+    body: Option<Value>,
+    form: Option<Vec<(&str, &str)>>,
+) -> Result<Option<Value>, AuthenticatedRequestError> {
+    authenticated_request_inner(
+        #[cfg(feature = "db")]
+        db,
+        Method::Post,
+        url,
+        access_token,
+        body,
+        form.map(|values| {
+            values
+                .iter()
+                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .collect::<Vec<_>>()
+        }),
+        1,
+    )
+    .await
+}
+
+async fn authenticated_delete_request(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    url: &str,
+    access_token: Option<String>,
+) -> Result<Option<Value>, AuthenticatedRequestError> {
+    authenticated_request_inner(
+        #[cfg(feature = "db")]
+        db,
+        Method::Delete,
+        url,
+        access_token,
+        None,
+        None,
+        1,
+    )
+    .await
+}
+
+#[derive(Clone, Copy)]
+enum Method {
+    Get,
+    Post,
+    Delete,
+}
+
+#[async_recursion]
+async fn authenticated_request_inner(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    method: Method,
+    url: &str,
+    access_token: Option<String>,
+    body: Option<Value>,
+    form: Option<Vec<(String, String)>>,
     attempt: u8,
-) -> Result<Value, AuthenticatedRequestError> {
+) -> Result<Option<Value>, AuthenticatedRequestError> {
     if attempt > 3 {
         log::error!("Max failed attempts for reauthentication reached");
         return Err(AuthenticatedRequestError::MaxFailedAttempts);
@@ -486,45 +544,76 @@ async fn authenticated_request_inner(
         access_token,
     )?;
 
-    let response = CLIENT
-        .get(url)
-        .header(
-            reqwest::header::AUTHORIZATION,
-            format!("Bearer {}", credentials.access_token),
-        )
-        .send()
-        .await?;
+    let mut request = match method {
+        Method::Get => CLIENT.get(url),
+        Method::Post => CLIENT.post(url),
+        Method::Delete => CLIENT.delete(url),
+    }
+    .header(
+        reqwest::header::AUTHORIZATION,
+        format!("Bearer {}", credentials.access_token),
+    );
 
-    if response.status() == 401 {
-        log::debug!("Received unauthorized response");
-        if let (Some(ref client_id), Some(ref refresh_token)) =
-            (credentials.client_id, credentials.refresh_token)
-        {
-            return authenticated_request_inner(
-                #[cfg(feature = "db")]
-                db,
-                url,
-                Some(
-                    refetch_access_token(
-                        #[cfg(feature = "db")]
-                        db,
-                        client_id,
-                        refresh_token,
-                        #[cfg(feature = "db")]
-                        credentials.persist,
-                    )
-                    .await?,
-                ),
-                attempt + 1,
-            )
-            .await;
-        } else {
-            log::debug!("No client_id or refresh_token available. Unauthorized");
-            return Err(AuthenticatedRequestError::Unauthorized);
-        }
+    if let Some(form) = &form {
+        request = request.form(form);
+    }
+    if let Some(body) = &body {
+        request = request.json(body);
     }
 
-    Ok(response.json::<Value>().await?)
+    let response = request.send().await?;
+
+    let status: u16 = response.status().into();
+
+    log::debug!("Received authenticated request response status: {status}");
+
+    match status {
+        401 => {
+            log::debug!("Received unauthorized response");
+            if let (Some(ref client_id), Some(ref refresh_token)) =
+                (credentials.client_id, credentials.refresh_token)
+            {
+                return authenticated_request_inner(
+                    #[cfg(feature = "db")]
+                    db,
+                    method,
+                    url,
+                    Some(
+                        refetch_access_token(
+                            #[cfg(feature = "db")]
+                            db,
+                            client_id,
+                            refresh_token,
+                            #[cfg(feature = "db")]
+                            credentials.persist,
+                        )
+                        .await?,
+                    ),
+                    body,
+                    form,
+                    attempt + 1,
+                )
+                .await;
+            } else {
+                log::debug!("No client_id or refresh_token available. Unauthorized");
+                Err(AuthenticatedRequestError::Unauthorized)
+            }
+        }
+        400..=599 => Err(AuthenticatedRequestError::RequestFailed(
+            status,
+            response.text().await.unwrap_or("".to_string()),
+        )),
+        _ => match response.json::<Value>().await {
+            Ok(value) => Ok(Some(value)),
+            Err(err) => {
+                if err.is_decode() {
+                    Ok(None)
+                } else {
+                    Err(AuthenticatedRequestError::Reqwest(err))
+                }
+            }
+        },
+    }
 }
 
 #[derive(Debug, Error)]
@@ -662,7 +751,8 @@ pub async fn favorite_artists(
         &url,
         access_token,
     )
-    .await?;
+    .await?
+    .ok_or_else(|| TidalFavoriteArtistsError::RequestFailed("No response".into()))?;
 
     log::trace!("Received favorite artists response: {value:?}");
 
@@ -757,7 +847,8 @@ pub async fn favorite_albums(
         &url,
         access_token,
     )
-    .await?;
+    .await?
+    .ok_or_else(|| TidalFavoriteAlbumsError::RequestFailed("No response".into()))?;
 
     log::trace!("Received favorite albums response: {value:?}");
 
@@ -852,7 +943,8 @@ pub async fn favorite_tracks(
         &url,
         access_token,
     )
-    .await?;
+    .await?
+    .ok_or_else(|| TidalFavoriteTracksError::RequestFailed("No response".into()))?;
 
     log::trace!("Received favorite tracks response: {value:?}");
 
@@ -938,7 +1030,8 @@ pub async fn artist_albums(
         &url,
         access_token,
     )
-    .await?;
+    .await?
+    .ok_or_else(|| TidalArtistAlbumsError::RequestFailed("No response".into()))?;
 
     log::trace!("Received artist albums response: {value:?}");
 
@@ -993,7 +1086,8 @@ pub async fn album_tracks(
         &url,
         access_token,
     )
-    .await?;
+    .await?
+    .ok_or_else(|| TidalAlbumTracksError::RequestFailed("No response".into()))?;
 
     let items = value
         .to_value::<Option<_>>("items")?
@@ -1008,6 +1102,8 @@ pub async fn album_tracks(
 pub enum TidalAlbumError {
     #[error(transparent)]
     AuthenticatedRequest(#[from] AuthenticatedRequestError),
+    #[error("Request failed: {0:?}")]
+    RequestFailed(String),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
@@ -1040,7 +1136,8 @@ pub async fn album(
         &url,
         access_token,
     )
-    .await?;
+    .await?
+    .ok_or_else(|| TidalAlbumError::RequestFailed("No response".into()))?;
 
     Ok(value.as_model()?)
 }
@@ -1083,7 +1180,8 @@ pub async fn artist(
         &url,
         access_token,
     )
-    .await?;
+    .await?
+    .ok_or_else(|| TidalArtistError::RequestFailed("No response".into()))?;
 
     log::trace!("Received artist response: {value:?}");
 
@@ -1094,6 +1192,8 @@ pub async fn artist(
 pub enum TidalTrackError {
     #[error(transparent)]
     AuthenticatedRequest(#[from] AuthenticatedRequestError),
+    #[error("Request failed: {0:?}")]
+    RequestFailed(String),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
@@ -1126,7 +1226,8 @@ pub async fn track(
         &url,
         access_token,
     )
-    .await?;
+    .await?
+    .ok_or_else(|| TidalTrackError::RequestFailed("No response".into()))?;
 
     log::trace!("Received track response: {value:?}");
 
@@ -1146,6 +1247,8 @@ pub enum TidalAudioQuality {
 pub enum TidalTrackFileUrlError {
     #[error(transparent)]
     AuthenticatedRequest(#[from] AuthenticatedRequestError),
+    #[error("Request failed: {0:?}")]
+    RequestFailed(String),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
@@ -1172,7 +1275,8 @@ pub async fn track_file_url(
         &url,
         access_token,
     )
-    .await?;
+    .await?
+    .ok_or_else(|| TidalTrackFileUrlError::RequestFailed("No response".into()))?;
 
     log::trace!("Received track file url response: {value:?}");
 
