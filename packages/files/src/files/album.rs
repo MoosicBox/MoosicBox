@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{collections::HashMap, path::Path, sync::RwLock};
 
 use moosicbox_core::{
     app::Db,
@@ -7,6 +7,8 @@ use moosicbox_core::{
         models::AlbumId,
     },
 };
+use moosicbox_qobuz::QobuzAlbum;
+use moosicbox_tidal::TidalAlbum;
 use once_cell::sync::Lazy;
 use thiserror::Error;
 
@@ -98,8 +100,25 @@ pub async fn get_album_cover(
                 .to_string()
         }
         AlbumId::Tidal(tidal_album_id) => {
-            let album =
-                moosicbox_tidal::album(&db, *tidal_album_id, None, None, None, None).await?;
+            static ALBUM_CACHE: Lazy<RwLock<HashMap<u64, TidalAlbum>>> =
+                Lazy::new(|| RwLock::new(HashMap::new()));
+
+            let album = if let Some(album) = {
+                let binding = ALBUM_CACHE.read().unwrap();
+                binding.get(tidal_album_id).cloned()
+            } {
+                album
+            } else {
+                let album =
+                    moosicbox_tidal::album(&db, *tidal_album_id, None, None, None, None).await?;
+                ALBUM_CACHE
+                    .write()
+                    .as_mut()
+                    .unwrap()
+                    .insert(*tidal_album_id, album.clone());
+                album
+            };
+
             get_or_fetch_album_cover_from_remote_url(
                 &album.cover_url(1280),
                 &album.artist,
@@ -108,7 +127,24 @@ pub async fn get_album_cover(
             .await?
         }
         AlbumId::Qobuz(qobuz_album_id) => {
-            let album = moosicbox_qobuz::album(&db, qobuz_album_id, None, None).await?;
+            static ALBUM_CACHE: Lazy<RwLock<HashMap<String, QobuzAlbum>>> =
+                Lazy::new(|| RwLock::new(HashMap::new()));
+
+            let album = if let Some(album) = {
+                let binding = ALBUM_CACHE.read().unwrap();
+                binding.get(qobuz_album_id).cloned()
+            } {
+                album
+            } else {
+                let album = moosicbox_qobuz::album(&db, qobuz_album_id, None, None).await?;
+                ALBUM_CACHE
+                    .write()
+                    .as_mut()
+                    .unwrap()
+                    .insert(qobuz_album_id.to_string(), album.clone());
+                album
+            };
+
             let cover = album
                 .cover_url()
                 .ok_or(AlbumCoverError::NotFound(album_id.clone()))?;
