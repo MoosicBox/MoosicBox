@@ -56,7 +56,11 @@ pub async fn scan(directory: &str, db: &Db, token: CancellationToken) -> Result<
         end.duration_since(start).unwrap().as_millis()
     );
 
-    output.read().await.update_database(db).await?;
+    {
+        let output = output.read().await;
+        output.update_database(db).await?;
+        output.reindex_global_search_index(db)?;
+    }
 
     let end = std::time::SystemTime::now();
     log::info!(

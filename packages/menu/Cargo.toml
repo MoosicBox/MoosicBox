@@ -5,7 +5,11 @@ name    = "moosicbox_menu"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_core = { path = "../core", default-features = false }
+moosicbox_core   = { path = "../core", default-features = false }
+moosicbox_qobuz  = { path = "../qobuz", default-features = false }
+moosicbox_scan   = { path = "../scan", default-features = false }
+moosicbox_search = { path = "../search", default-features = false }
+moosicbox_tidal  = { path = "../tidal", default-features = false }
 
 actix-cors  = { workspace = true }
 actix-files = { workspace = true }
@@ -15,6 +19,12 @@ log         = { workspace = true }
 serde       = { workspace = true, features = ["derive"] }
 serde_json  = { workspace = true }
 thiserror   = { workspace = true }
+tokio       = { workspace = true }
 
 [features]
+default = ["qobuz", "tidal"]
+
 fail-on-warnings = []
+
+qobuz = ["moosicbox_scan/qobuz"]
+tidal = ["moosicbox_scan/tidal"]

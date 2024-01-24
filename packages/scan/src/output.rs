@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{atomic::AtomicU32, Arc},
 };
@@ -9,10 +9,10 @@ use moosicbox_core::{
     app::Db,
     sqlite::{
         db::{
-            add_album_maps_and_get_albums, add_artist_maps_and_get_artists, add_tracks,
+            add_album_maps_and_get_albums, add_artist_maps_and_get_artists, add_tracks, select,
             set_track_sizes, DbError, InsertTrack, SetTrackSize, SqliteValue,
         },
-        models::{LibraryTrack, TrackSource},
+        models::{Album, Artist, LibraryTrack, NumberId, TrackSource},
     },
     types::{AudioFormat, PlaybackQuality},
 };
@@ -229,6 +229,23 @@ impl ScanAlbum {
 
         Ok(self.cover.clone())
     }
+
+    pub fn to_sqlite_values<'a>(self, artist_id: u64) -> HashMap<&'a str, SqliteValue> {
+        let mut values = HashMap::from([
+            ("artist_id", SqliteValue::Number(artist_id as i64)),
+            ("title", SqliteValue::String(self.name)),
+            ("date_released", SqliteValue::StringOpt(self.date_released)),
+            ("artwork", SqliteValue::StringOpt(self.cover)),
+            ("directory", SqliteValue::StringOpt(Some(self.directory))),
+        ]);
+        if let Some(qobuz_id) = self.qobuz_id {
+            values.insert("qobuz_id", SqliteValue::String(qobuz_id));
+        }
+        if let Some(tidal_id) = self.tidal_id {
+            values.insert("tidal_id", SqliteValue::Number(tidal_id as i64));
+        }
+        values
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -309,6 +326,26 @@ impl ScanArtist {
 
         Ok(self.cover.clone())
     }
+
+    pub fn to_sqlite_values<'a>(self) -> HashMap<&'a str, SqliteValue> {
+        let mut values = HashMap::from([
+            ("title", SqliteValue::String(self.name.clone())),
+            ("cover", SqliteValue::StringOpt(self.cover.clone())),
+        ]);
+        if let Some(qobuz_id) = self.qobuz_id {
+            values.insert("qobuz_id", SqliteValue::Number(qobuz_id as i64));
+        }
+        if let Some(tidal_id) = self.tidal_id {
+            values.insert("tidal_id", SqliteValue::Number(tidal_id as i64));
+        }
+        values
+    }
+}
+
+pub struct UpdateDatabaseResults {
+    pub artists: Vec<Artist>,
+    pub albums: Vec<Album>,
+    pub tracks: Vec<LibraryTrack>,
 }
 
 #[derive(Debug, Error)]
@@ -365,7 +402,10 @@ impl ScanOutput {
     }
 
     #[allow(unused)]
-    pub async fn update_database(&self, db: &Db) -> Result<(), UpdateDatabaseError> {
+    pub async fn update_database(
+        &self,
+        db: &Db,
+    ) -> Result<UpdateDatabaseResults, UpdateDatabaseError> {
         let artists = join_all(
             self.artists
                 .read()
@@ -415,6 +455,20 @@ impl ScanOutput {
 
         let db_artists_start = std::time::SystemTime::now();
 
+        let existing_artist_ids = select::<NumberId>(
+            &db.library
+                .as_ref()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .inner,
+            "artists",
+            &vec![],
+            &["id"],
+        )?
+        .iter()
+        .map(|id| id.id)
+        .collect::<HashSet<_>>();
+
         let db_artists = add_artist_maps_and_get_artists(
             &db.library
                 .as_ref()
@@ -423,19 +477,7 @@ impl ScanOutput {
                 .inner,
             artists
                 .iter()
-                .map(|artist| {
-                    let mut values = HashMap::from([
-                        ("title", SqliteValue::String(artist.name.clone())),
-                        ("cover", SqliteValue::StringOpt(artist.cover.clone())),
-                    ]);
-                    if let Some(qobuz_id) = artist.qobuz_id {
-                        values.insert("qobuz_id", SqliteValue::Number(qobuz_id as i64));
-                    }
-                    if let Some(tidal_id) = artist.tidal_id {
-                        values.insert("tidal_id", SqliteValue::Number(tidal_id as i64));
-                    }
-                    values
-                })
+                .map(|artist| artist.clone().to_sqlite_values())
                 .collect(),
         )
         .unwrap();
@@ -459,30 +501,25 @@ impl ScanOutput {
 
         let db_albums_start = std::time::SystemTime::now();
 
+        let existing_album_ids = select::<NumberId>(
+            &db.library
+                .as_ref()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .inner,
+            "albums",
+            &vec![],
+            &["id"],
+        )?
+        .iter()
+        .map(|id| id.id)
+        .collect::<HashSet<_>>();
+
         let album_maps = join_all(artists.iter().zip(db_artists.iter()).map(
             |(artist, db)| async {
                 join_all(artist.albums.read().await.iter().map(|album| async {
                     let album = album.read().await;
-                    let mut values = HashMap::from([
-                        ("artist_id", SqliteValue::Number(db.id as i64)),
-                        ("title", SqliteValue::String(album.name.clone())),
-                        (
-                            "date_released",
-                            SqliteValue::StringOpt(album.date_released.clone()),
-                        ),
-                        ("artwork", SqliteValue::StringOpt(album.cover.clone())),
-                        (
-                            "directory",
-                            SqliteValue::StringOpt(Some(album.directory.clone())),
-                        ),
-                    ]);
-                    if let Some(qobuz_id) = album.qobuz_id.clone() {
-                        values.insert("qobuz_id", SqliteValue::String(qobuz_id));
-                    }
-                    if let Some(tidal_id) = album.tidal_id {
-                        values.insert("tidal_id", SqliteValue::Number(tidal_id as i64));
-                    }
-                    values
+                    album.clone().to_sqlite_values(db.id as u64)
                 }))
                 .await
             },
@@ -520,6 +557,20 @@ impl ScanOutput {
         }
 
         let db_tracks_start = std::time::SystemTime::now();
+
+        let existing_track_ids = select::<NumberId>(
+            &db.library
+                .as_ref()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .inner,
+            "tracks",
+            &vec![],
+            &["id"],
+        )?
+        .iter()
+        .map(|id| id.id)
+        .collect::<HashSet<_>>();
 
         let insert_tracks = join_all(albums.iter().zip(db_albums.iter()).map(
             |(album, db)| async {
@@ -612,6 +663,29 @@ impl ScanOutput {
                 .as_millis()
         );
 
+        let end = std::time::SystemTime::now();
+        log::info!(
+            "Finished db update for scan in {}ms",
+            end.duration_since(db_start).unwrap().as_millis(),
+        );
+
+        Ok(UpdateDatabaseResults {
+            artists: db_artists
+                .into_iter()
+                .filter(|artist| !existing_artist_ids.contains(&artist.id))
+                .collect::<Vec<_>>(),
+            albums: db_albums
+                .into_iter()
+                .filter(|album| !existing_album_ids.contains(&album.id))
+                .collect::<Vec<_>>(),
+            tracks: db_tracks
+                .into_iter()
+                .filter(|track| !existing_track_ids.contains(&track.id))
+                .collect::<Vec<_>>(),
+        })
+    }
+
+    pub fn reindex_global_search_index(&self, db: &Db) -> Result<(), UpdateDatabaseError> {
         let reindex_start = std::time::SystemTime::now();
 
         moosicbox_search::data::reindex_global_search_index_from_db(
@@ -630,12 +704,12 @@ impl ScanOutput {
                 .as_millis()
         );
 
-        let end = std::time::SystemTime::now();
-        log::info!(
-            "Finished db update for scan in {}ms",
-            end.duration_since(db_start).unwrap().as_millis(),
-        );
-
         Ok(())
+    }
+}
+
+impl Default for ScanOutput {
+    fn default() -> Self {
+        Self::new()
     }
 }

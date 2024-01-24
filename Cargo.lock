@@ -3067,9 +3067,14 @@ dependencies = [
  "awc",
  "log",
  "moosicbox_core",
+ "moosicbox_qobuz",
+ "moosicbox_scan",
+ "moosicbox_search",
+ "moosicbox_tidal",
  "serde",
  "serde_json",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

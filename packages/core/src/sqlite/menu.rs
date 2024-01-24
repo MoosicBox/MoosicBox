@@ -1,5 +1,5 @@
 use crate::{
-    app::AppState,
+    app::{AppState, Db},
     cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
 };
 use std::{sync::PoisonError, time::Duration};
@@ -175,7 +175,7 @@ pub async fn get_album(
     album_id: Option<u64>,
     tidal_album_id: Option<u64>,
     qobuz_album_id: Option<u64>,
-    data: &AppState,
+    db: &Db,
 ) -> Result<Album, GetAlbumError> {
     let request = CacheRequest {
         key: format!("album|{album_id:?}|{tidal_album_id:?}|{qobuz_album_id:?}"),
@@ -183,12 +183,7 @@ pub async fn get_album(
     };
 
     Ok(get_or_set_to_cache(request, || async {
-        let library = data
-            .db
-            .as_ref()
-            .ok_or(GetAlbumError::NoDb)?
-            .library
-            .lock()?;
+        let library = db.library.lock()?;
 
         if let Some(album_id) = album_id {
             match db::get_album(&library.inner, album_id as i32) {

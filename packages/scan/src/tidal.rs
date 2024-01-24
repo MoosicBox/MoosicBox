@@ -66,7 +66,7 @@ pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
 
                         log::debug!("Fetched Tidal albums offset={offset} limit={limit}: page_count={page_count}, total_count={count}");
 
-                        scan_albums(tidal_albums, count, db, output.clone(), token.clone()).await?;
+                        scan_albums(tidal_albums, count, db, output.clone(), Some(token.clone())).await?;
 
                         if page_count < (limit as usize) {
                             break;
@@ -93,7 +93,11 @@ pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
         end.duration_since(start).unwrap().as_millis()
     );
 
-    output.read().await.update_database(db).await?;
+    {
+        let output = output.read().await;
+        output.update_database(db).await?;
+        output.reindex_global_search_index(db)?;
+    }
 
     let end = std::time::SystemTime::now();
     log::info!(
@@ -104,14 +108,16 @@ pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
     Ok(())
 }
 
-async fn scan_albums(
+pub async fn scan_albums(
     albums: Vec<TidalAlbum>,
     total: u32,
     db: &Db,
     output: Arc<RwLock<ScanOutput>>,
-    token: CancellationToken,
+    token: Option<CancellationToken>,
 ) -> Result<(), ScanError> {
     log::debug!("Processing Tidal albums count={}", albums.len());
+
+    let token = token.unwrap_or_default();
 
     for album in albums {
         let count = {
@@ -233,7 +239,7 @@ async fn scan_albums(
     Ok(())
 }
 
-async fn scan_tracks(
+pub async fn scan_tracks(
     tracks: Vec<TidalTrack>,
     scan_album: Arc<RwLock<ScanAlbum>>,
 ) -> Result<(), ScanError> {

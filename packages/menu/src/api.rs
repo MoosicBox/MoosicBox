@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use actix_web::{
     error::{ErrorBadRequest, ErrorInternalServerError},
-    get,
+    get, post,
     web::{self, Json},
     Result,
 };
@@ -22,8 +22,8 @@ use thiserror::Error;
 
 use crate::library::{
     albums::{
-        get_album_tracks, get_album_versions, get_all_albums, AlbumFilters, AlbumsRequest,
-        ApiAlbumVersion,
+        add_album, get_album_tracks, get_album_versions, get_all_albums, AlbumFilters,
+        AlbumsRequest, ApiAlbumVersion,
     },
     artists::{get_all_artists, ArtistFilters, ArtistsRequest},
 };
@@ -305,10 +305,33 @@ pub async fn get_album_endpoint(
             query.album_id,
             query.tidal_album_id,
             query.qobuz_album_id,
-            &data,
+            data.db.as_ref().expect("No DB set"),
         )
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to fetch album: {e:?}")))?
         .to_api(),
     ))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AddAlbumQuery {
+    tidal_album_id: Option<u64>,
+    qobuz_album_id: Option<u64>,
+}
+
+#[post("/album")]
+pub async fn add_album_endpoint(
+    query: web::Query<AddAlbumQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<Value>> {
+    add_album(
+        data.db.as_ref().expect("No DB set"),
+        query.tidal_album_id,
+        query.qobuz_album_id,
+    )
+    .await
+    .map_err(|e| ErrorInternalServerError(format!("Failed to add album: {e:?}")))?;
+
+    Ok(Json(serde_json::json!({"success": true})))
 }

@@ -1,9 +1,10 @@
-use std::sync::PoisonError;
+use std::sync::{Arc, PoisonError};
 
 use moosicbox_core::{
-    app::AppState,
+    app::{AppState, Db},
     sqlite::{
         db::{get_albums, DbError},
+        menu::{get_album, GetAlbumError},
         models::{
             track_source_to_u8, Album, AlbumSort, AlbumSource, ApiTrack, LibraryTrack, ToApi,
             TrackSource,
@@ -11,8 +12,12 @@ use moosicbox_core::{
     },
     types::AudioFormat,
 };
+use moosicbox_scan::output::ScanOutput;
+use moosicbox_search::{data::ToDataValues, PopulateIndexError};
+use moosicbox_tidal::{TidalAddFavoriteAlbumError, TidalAlbumError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::sync::RwLock;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -263,6 +268,90 @@ pub fn get_album_versions(
     sort_album_versions(&mut versions);
 
     Ok(versions)
+}
+
+#[derive(Debug, Error)]
+pub enum AddAlbumError {
+    #[error(transparent)]
+    Db(#[from] DbError),
+    #[error(transparent)]
+    GetAlbum(#[from] GetAlbumError),
+    #[error(transparent)]
+    TidalAddFavoriteAlbum(#[from] TidalAddFavoriteAlbumError),
+    #[error(transparent)]
+    TidalAlbum(#[from] TidalAlbumError),
+    #[error(transparent)]
+    TidalScan(#[from] moosicbox_scan::tidal::ScanError),
+    #[error(transparent)]
+    UpdateDatabase(#[from] moosicbox_scan::output::UpdateDatabaseError),
+    #[error(transparent)]
+    PopulateIndex(#[from] PopulateIndexError),
+}
+
+pub async fn add_album(
+    db: &Db,
+    tidal_album_id: Option<u64>,
+    qobuz_album_id: Option<u64>,
+) -> Result<(), AddAlbumError> {
+    match get_album(None, tidal_album_id, qobuz_album_id, db).await {
+        Ok(album) => {
+            log::debug!("Album tidal_album_id={tidal_album_id:?} qobuz_album_id={qobuz_album_id:?} already added: album={album:?}");
+            return Ok(());
+        }
+        Err(GetAlbumError::AlbumNotFound { .. }) => {}
+        Err(err) => {
+            return Err(AddAlbumError::GetAlbum(err));
+        }
+    }
+
+    let output = Arc::new(RwLock::new(ScanOutput::new()));
+
+    if let Some(album_id) = tidal_album_id {
+        let album = moosicbox_tidal::album(db, album_id, None, None, None, None).await?;
+        moosicbox_tidal::add_favorite_album(db, album_id, None, None, None, None, None).await?;
+        moosicbox_scan::tidal::scan_albums(vec![album], 1, db, output.clone(), None).await?;
+    }
+    if let Some(_album_id) = qobuz_album_id {
+        unimplemented!("Qobuz favorites is not implemented yet");
+    }
+
+    let output = output.read().await;
+    let results = output.update_database(db).await?;
+
+    moosicbox_search::populate_global_search_index(
+        results
+            .artists
+            .into_iter()
+            .map(|artist| artist.to_data_values())
+            .collect::<Vec<_>>(),
+        false,
+    )?;
+
+    let albums = moosicbox_core::sqlite::db::get_album(
+        &db.library.lock().as_ref().unwrap().inner,
+        results.albums[0].id,
+    )?;
+    moosicbox_search::populate_global_search_index(
+        albums
+            .into_iter()
+            .map(|album| album.to_data_values())
+            .collect::<Vec<_>>(),
+        false,
+    )?;
+
+    let tracks = moosicbox_core::sqlite::db::get_tracks(
+        &db.library.lock().as_ref().unwrap().inner,
+        Some(&results.tracks.iter().map(|t| t.id).collect::<Vec<_>>()),
+    )?;
+    moosicbox_search::populate_global_search_index(
+        tracks
+            .into_iter()
+            .map(|track| track.to_data_values())
+            .collect::<Vec<_>>(),
+        false,
+    )?;
+
+    Ok(())
 }
 
 #[cfg(test)]

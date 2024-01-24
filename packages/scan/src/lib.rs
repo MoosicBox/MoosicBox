@@ -24,7 +24,7 @@ pub mod qobuz;
 pub mod tidal;
 
 pub mod db;
-mod output;
+pub mod output;
 
 static CACHE_DIR: Lazy<PathBuf> =
     Lazy::new(|| get_cache_dir_path().expect("Could not get cache directory"));

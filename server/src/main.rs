@@ -224,6 +224,7 @@ fn main() -> std::io::Result<()> {
                 .service(moosicbox_menu::api::get_artists_endpoint)
                 .service(moosicbox_menu::api::get_artist_endpoint)
                 .service(moosicbox_menu::api::get_album_endpoint)
+                .service(moosicbox_menu::api::add_album_endpoint)
                 .service(moosicbox_menu::api::get_albums_endpoint)
                 .service(moosicbox_menu::api::get_tracks_endpoint)
                 .service(moosicbox_menu::api::get_album_tracks_endpoint)
