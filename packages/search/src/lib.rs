@@ -218,6 +218,12 @@ pub fn populate_global_search_index(
     delete: bool,
 ) -> Result<(), PopulateIndexError> {
     log::debug!("Populating global search index...");
+
+    if data.is_empty() {
+        log::debug!("No data to populate.");
+        return Ok(());
+    }
+
     let index: &Index = &GLOBAL_SEARCH_INDEX.read().unwrap();
     let schema = index.schema();
     // To insert a document we will need an index writer.
