@@ -776,34 +776,6 @@ pub struct UpdateSessionPlaylistTrack {
     pub data: Option<String>,
 }
 
-impl AsModelResultMappedQuery<ApiTrack, DbError> for Vec<UpdateSessionPlaylistTrack> {
-    fn as_model_mapped_query(&self, db: &rusqlite::Connection) -> Result<Vec<ApiTrack>, DbError> {
-        let tracks = self;
-
-        let library_track_ids = tracks
-            .iter()
-            .filter(|t| t.r#type == ApiSource::Library)
-            .map(|t| t.id as i32)
-            .collect::<Vec<_>>();
-
-        let library_tracks = get_tracks(db, Some(&library_track_ids))?;
-
-        Ok(tracks
-            .iter()
-            .map(|t| From::<UpdateSessionPlaylistTrack>::from(t.clone()))
-            .map(|t: SessionPlaylistTrack| match t.r#type {
-                ApiSource::Library => library_tracks
-                    .iter()
-                    .find(|lib| (lib.id as u64) == t.id)
-                    .expect("Missing Library track")
-                    .to_api(),
-                ApiSource::Tidal => t.to_api(),
-                ApiSource::Qobuz => t.to_api(),
-            })
-            .collect::<Vec<_>>())
-    }
-}
-
 impl From<UpdateSessionPlaylistTrack> for SessionPlaylistTrack {
     fn from(value: UpdateSessionPlaylistTrack) -> Self {
         SessionPlaylistTrack {
@@ -1031,6 +1003,7 @@ impl AsModelResult<SessionPlaylist, ParseError> for Row<'_> {
 impl AsModelResultMappedQuery<ApiTrack, DbError> for Vec<SessionPlaylistTrack> {
     fn as_model_mapped_query(&self, db: &rusqlite::Connection) -> Result<Vec<ApiTrack>, DbError> {
         let tracks = self;
+        log::trace!("Mapping tracks to ApiTracks: {tracks:?}");
 
         let library_track_ids = tracks
             .iter()
@@ -1038,6 +1011,7 @@ impl AsModelResultMappedQuery<ApiTrack, DbError> for Vec<SessionPlaylistTrack> {
             .map(|t| t.id as i32)
             .collect::<Vec<_>>();
 
+        log::trace!("Fetching tracks by ids: {library_track_ids:?}");
         let library_tracks = get_tracks(db, Some(&library_track_ids))?;
 
         Ok(tracks
@@ -1059,6 +1033,7 @@ impl AsModelQuery<SessionPlaylist> for Row<'_> {
     fn as_model_query(&self, db: &rusqlite::Connection) -> Result<SessionPlaylist, DbError> {
         let id = self.to_value("id")?;
         let tracks = get_session_playlist_tracks(db, id)?.as_model_mapped_query(db)?;
+        log::trace!("Got SessionPlaylistTracks for session_playlist {id}: {tracks:?}");
 
         Ok(SessionPlaylist { id, tracks })
     }
@@ -1082,7 +1057,7 @@ pub struct SessionPlaylistTrack {
 impl AsModelResult<SessionPlaylistTrack, ParseError> for Row<'_> {
     fn as_model(&self) -> Result<SessionPlaylistTrack, ParseError> {
         Ok(SessionPlaylistTrack {
-            id: self.to_value("id")?,
+            id: self.to_value("track_id")?,
             r#type: self.to_value("type")?,
             data: self.to_value("data")?,
         })

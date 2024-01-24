@@ -388,7 +388,12 @@ pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<Sessio
     let playlist = if let Some(playlist) = &session.playlist {
         SessionPlaylist {
             id: playlist_id.unwrap() as i32,
-            tracks: playlist.tracks.as_model_mapped_query(db)?,
+            tracks: playlist
+                .tracks
+                .iter()
+                .map(|track| track.clone().into())
+                .collect::<Vec<_>>()
+                .as_model_mapped_query(db)?,
         }
     } else if let Some(playlist) = get_session_playlist(db, session.session_id)? {
         playlist
