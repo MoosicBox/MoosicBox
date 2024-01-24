@@ -259,6 +259,8 @@ fn main() -> std::io::Result<()> {
                 .service(moosicbox_tidal::api::add_favorite_album_endpoint)
                 .service(moosicbox_tidal::api::remove_favorite_album_endpoint)
                 .service(moosicbox_tidal::api::favorite_tracks_endpoint)
+                .service(moosicbox_tidal::api::add_favorite_track_endpoint)
+                .service(moosicbox_tidal::api::remove_favorite_track_endpoint)
                 .service(moosicbox_tidal::api::artist_albums_endpoint)
                 .service(moosicbox_tidal::api::album_tracks_endpoint)
                 .service(moosicbox_tidal::api::album_endpoint)

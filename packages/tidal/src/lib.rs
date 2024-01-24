@@ -197,6 +197,8 @@ enum TidalApiEndpoint {
     ArtistAlbums,
     Track,
     FavoriteTracks,
+    AddFavoriteTrack,
+    RemoveFavoriteTrack,
     AlbumTracks,
     TrackUrl,
 }
@@ -234,6 +236,12 @@ impl ToUrl for TidalApiEndpoint {
             Self::ArtistAlbums => format!("{TIDAL_API_BASE_URL}/artists/:artistId/albums"),
             Self::Track => format!("{TIDAL_API_BASE_URL}/tracks/:trackId"),
             Self::FavoriteTracks => format!("{TIDAL_API_BASE_URL}/users/:userId/favorites/tracks"),
+            Self::AddFavoriteTrack => {
+                format!("{TIDAL_API_BASE_URL}/users/:userId/favorites/tracks")
+            }
+            Self::RemoveFavoriteTrack => {
+                format!("{TIDAL_API_BASE_URL}/users/:userId/favorites/tracks/:trackId")
+            }
             Self::AlbumTracks => format!("{TIDAL_API_BASE_URL}/albums/:albumId/tracks"),
             Self::TrackUrl => format!("{TIDAL_API_BASE_URL}/tracks/:trackId/urlpostpaywall"),
         }
@@ -1217,6 +1225,127 @@ pub async fn favorite_tracks(
     let count = value.to_value("totalNumberOfItems")?;
 
     Ok((items, count))
+}
+
+#[derive(Debug, Error)]
+pub enum TidalAddFavoriteTrackError {
+    #[error(transparent)]
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
+    #[error("No user ID available")]
+    NoUserIdAvailable,
+    #[error("Request failed: {0:?}")]
+    RequestFailed(String),
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn add_favorite_track(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    track_id: u64,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+    access_token: Option<String>,
+    user_id: Option<u64>,
+) -> Result<(), TidalAddFavoriteTrackError> {
+    #[cfg(feature = "db")]
+    let user_id = user_id.or_else(|| {
+        match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
+            Ok(Some(config)) => Some(config.user_id),
+            _ => None,
+        }
+    });
+
+    let user_id = user_id.ok_or(TidalAddFavoriteTrackError::NoUserIdAvailable)?;
+
+    let url = tidal_api_endpoint!(
+        AddFavoriteTrack,
+        &[(":userId", &user_id.to_string())],
+        &[
+            ("countryCode", &country_code.clone().unwrap_or("US".into())),
+            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "deviceType",
+                device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
+            ),
+        ]
+    );
+
+    let value = authenticated_post_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        access_token,
+        None,
+        Some(vec![("trackId", &track_id.to_string())]),
+    )
+    .await?;
+
+    log::trace!("Received add favorite track response: {value:?}");
+
+    Ok(())
+}
+
+#[derive(Debug, Error)]
+pub enum TidalRemoveFavoriteTrackError {
+    #[error(transparent)]
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
+    #[error("No user ID available")]
+    NoUserIdAvailable,
+    #[error("Request failed: {0:?}")]
+    RequestFailed(String),
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn remove_favorite_track(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    track_id: u64,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+    access_token: Option<String>,
+    user_id: Option<u64>,
+) -> Result<(), TidalRemoveFavoriteTrackError> {
+    #[cfg(feature = "db")]
+    let user_id = user_id.or_else(|| {
+        match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
+            Ok(Some(config)) => Some(config.user_id),
+            _ => None,
+        }
+    });
+
+    let user_id = user_id.ok_or(TidalRemoveFavoriteTrackError::NoUserIdAvailable)?;
+
+    let url = tidal_api_endpoint!(
+        RemoveFavoriteTrack,
+        &[
+            (":userId", &user_id.to_string()),
+            (":trackId", &track_id.to_string())
+        ],
+        &[
+            ("countryCode", &country_code.clone().unwrap_or("US".into())),
+            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "deviceType",
+                device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
+            ),
+        ]
+    );
+
+    let value = authenticated_delete_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        access_token,
+    )
+    .await?;
+
+    log::trace!("Received remove favorite track response: {value:?}");
+
+    Ok(())
 }
 
 #[derive(Debug, Error)]

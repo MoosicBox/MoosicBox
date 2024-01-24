@@ -10,16 +10,17 @@ use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
-    add_favorite_album, add_favorite_artist, album, album_tracks, artist, artist_albums,
-    device_authorization, device_authorization_token, favorite_albums, favorite_artists,
-    favorite_tracks, remove_favorite_album, remove_favorite_artist, track, track_file_url,
-    TidalAddFavoriteAlbumError, TidalAddFavoriteArtistError, TidalAlbum, TidalAlbumError,
+    add_favorite_album, add_favorite_artist, add_favorite_track, album, album_tracks, artist,
+    artist_albums, device_authorization, device_authorization_token, favorite_albums,
+    favorite_artists, favorite_tracks, remove_favorite_album, remove_favorite_artist,
+    remove_favorite_track, track, track_file_url, TidalAddFavoriteAlbumError,
+    TidalAddFavoriteArtistError, TidalAddFavoriteTrackError, TidalAlbum, TidalAlbumError,
     TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError, TidalAlbumType, TidalArtist,
     TidalArtistAlbumsError, TidalArtistError, TidalArtistOrder, TidalArtistOrderDirection,
     TidalAudioQuality, TidalDeviceAuthorizationError, TidalDeviceAuthorizationTokenError,
     TidalDeviceType, TidalFavoriteAlbumsError, TidalFavoriteArtistsError, TidalFavoriteTracksError,
-    TidalRemoveFavoriteAlbumError, TidalRemoveFavoriteArtistError, TidalTrack, TidalTrackError,
-    TidalTrackFileUrlError, TidalTrackOrder, TidalTrackOrderDirection,
+    TidalRemoveFavoriteAlbumError, TidalRemoveFavoriteArtistError, TidalRemoveFavoriteTrackError,
+    TidalTrack, TidalTrackError, TidalTrackFileUrlError, TidalTrackOrder, TidalTrackOrderDirection,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -489,6 +490,90 @@ pub async fn remove_favorite_album_endpoint(
         #[cfg(feature = "db")]
         data.db.as_ref().unwrap(),
         query.album_id,
+        query.country_code.clone(),
+        query.locale.clone(),
+        query.device_type,
+        req.headers()
+            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+        query.user_id,
+    )
+    .await?;
+
+    Ok(Json(serde_json::json!({
+        "success": true
+    })))
+}
+
+impl From<TidalAddFavoriteTrackError> for actix_web::Error {
+    fn from(err: TidalAddFavoriteTrackError) -> Self {
+        log::error!("{err:?}");
+        ErrorInternalServerError(err.to_string())
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalAddFavoriteTracksQuery {
+    track_id: u64,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+    user_id: Option<u64>,
+}
+
+#[route("/tidal/favorites/tracks", method = "POST")]
+pub async fn add_favorite_track_endpoint(
+    req: HttpRequest,
+    query: web::Query<TidalAddFavoriteTracksQuery>,
+    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<Value>> {
+    add_favorite_track(
+        #[cfg(feature = "db")]
+        data.db.as_ref().unwrap(),
+        query.track_id,
+        query.country_code.clone(),
+        query.locale.clone(),
+        query.device_type,
+        req.headers()
+            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+        query.user_id,
+    )
+    .await?;
+
+    Ok(Json(serde_json::json!({
+        "success": true
+    })))
+}
+
+impl From<TidalRemoveFavoriteTrackError> for actix_web::Error {
+    fn from(err: TidalRemoveFavoriteTrackError) -> Self {
+        log::error!("{err:?}");
+        ErrorInternalServerError(err.to_string())
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalRemoveFavoriteTracksQuery {
+    track_id: u64,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+    user_id: Option<u64>,
+}
+
+#[route("/tidal/favorites/tracks", method = "DELETE")]
+pub async fn remove_favorite_track_endpoint(
+    req: HttpRequest,
+    query: web::Query<TidalRemoveFavoriteTracksQuery>,
+    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<Value>> {
+    remove_favorite_track(
+        #[cfg(feature = "db")]
+        data.db.as_ref().unwrap(),
+        query.track_id,
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,
