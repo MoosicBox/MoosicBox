@@ -10,15 +10,16 @@ use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
-    add_favorite_artist, album, album_tracks, artist, artist_albums, device_authorization,
-    device_authorization_token, favorite_albums, favorite_artists, favorite_tracks,
-    remove_favorite_artist, track, track_file_url, TidalAddFavoriteArtistError, TidalAlbum,
-    TidalAlbumError, TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError,
-    TidalAlbumType, TidalArtist, TidalArtistAlbumsError, TidalArtistError, TidalArtistOrder,
-    TidalArtistOrderDirection, TidalAudioQuality, TidalDeviceAuthorizationError,
-    TidalDeviceAuthorizationTokenError, TidalDeviceType, TidalFavoriteAlbumsError,
-    TidalFavoriteArtistsError, TidalFavoriteTracksError, TidalRemoveFavoriteArtistError,
-    TidalTrack, TidalTrackError, TidalTrackFileUrlError, TidalTrackOrder, TidalTrackOrderDirection,
+    add_favorite_album, add_favorite_artist, album, album_tracks, artist, artist_albums,
+    device_authorization, device_authorization_token, favorite_albums, favorite_artists,
+    favorite_tracks, remove_favorite_album, remove_favorite_artist, track, track_file_url,
+    TidalAddFavoriteAlbumError, TidalAddFavoriteArtistError, TidalAlbum, TidalAlbumError,
+    TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError, TidalAlbumType, TidalArtist,
+    TidalArtistAlbumsError, TidalArtistError, TidalArtistOrder, TidalArtistOrderDirection,
+    TidalAudioQuality, TidalDeviceAuthorizationError, TidalDeviceAuthorizationTokenError,
+    TidalDeviceType, TidalFavoriteAlbumsError, TidalFavoriteArtistsError, TidalFavoriteTracksError,
+    TidalRemoveFavoriteAlbumError, TidalRemoveFavoriteArtistError, TidalTrack, TidalTrackError,
+    TidalTrackFileUrlError, TidalTrackOrder, TidalTrackOrderDirection,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -416,6 +417,90 @@ pub async fn favorite_albums_endpoint(
     Ok(Json(serde_json::json!({
         "count": count,
         "items": items.iter().map(|item| item.to_api()).collect::<Vec<_>>(),
+    })))
+}
+
+impl From<TidalAddFavoriteAlbumError> for actix_web::Error {
+    fn from(err: TidalAddFavoriteAlbumError) -> Self {
+        log::error!("{err:?}");
+        ErrorInternalServerError(err.to_string())
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalAddFavoriteAlbumsQuery {
+    album_id: u64,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+    user_id: Option<u64>,
+}
+
+#[route("/tidal/favorites/albums", method = "POST")]
+pub async fn add_favorite_album_endpoint(
+    req: HttpRequest,
+    query: web::Query<TidalAddFavoriteAlbumsQuery>,
+    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<Value>> {
+    add_favorite_album(
+        #[cfg(feature = "db")]
+        data.db.as_ref().unwrap(),
+        query.album_id,
+        query.country_code.clone(),
+        query.locale.clone(),
+        query.device_type,
+        req.headers()
+            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+        query.user_id,
+    )
+    .await?;
+
+    Ok(Json(serde_json::json!({
+        "success": true
+    })))
+}
+
+impl From<TidalRemoveFavoriteAlbumError> for actix_web::Error {
+    fn from(err: TidalRemoveFavoriteAlbumError) -> Self {
+        log::error!("{err:?}");
+        ErrorInternalServerError(err.to_string())
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalRemoveFavoriteAlbumsQuery {
+    album_id: u64,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+    user_id: Option<u64>,
+}
+
+#[route("/tidal/favorites/albums", method = "DELETE")]
+pub async fn remove_favorite_album_endpoint(
+    req: HttpRequest,
+    query: web::Query<TidalRemoveFavoriteAlbumsQuery>,
+    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<Value>> {
+    remove_favorite_album(
+        #[cfg(feature = "db")]
+        data.db.as_ref().unwrap(),
+        query.album_id,
+        query.country_code.clone(),
+        query.locale.clone(),
+        query.device_type,
+        req.headers()
+            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+        query.user_id,
+    )
+    .await?;
+
+    Ok(Json(serde_json::json!({
+        "success": true
     })))
 }
 

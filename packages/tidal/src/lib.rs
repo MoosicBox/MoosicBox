@@ -192,6 +192,8 @@ enum TidalApiEndpoint {
     RemoveFavoriteArtist,
     Album,
     FavoriteAlbums,
+    AddFavoriteAlbum,
+    RemoveFavoriteAlbum,
     ArtistAlbums,
     Track,
     FavoriteTracks,
@@ -223,6 +225,12 @@ impl ToUrl for TidalApiEndpoint {
             }
             Self::Album => format!("{TIDAL_API_BASE_URL}/albums/:albumId"),
             Self::FavoriteAlbums => format!("{TIDAL_API_BASE_URL}/users/:userId/favorites/albums"),
+            Self::AddFavoriteAlbum => {
+                format!("{TIDAL_API_BASE_URL}/users/:userId/favorites/albums")
+            }
+            Self::RemoveFavoriteAlbum => {
+                format!("{TIDAL_API_BASE_URL}/users/:userId/favorites/albums/:albumId")
+            }
             Self::ArtistAlbums => format!("{TIDAL_API_BASE_URL}/artists/:artistId/albums"),
             Self::Track => format!("{TIDAL_API_BASE_URL}/tracks/:trackId"),
             Self::FavoriteTracks => format!("{TIDAL_API_BASE_URL}/users/:userId/favorites/tracks"),
@@ -992,6 +1000,127 @@ pub async fn favorite_albums(
     let count = value.to_value("totalNumberOfItems")?;
 
     Ok((items, count))
+}
+
+#[derive(Debug, Error)]
+pub enum TidalAddFavoriteAlbumError {
+    #[error(transparent)]
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
+    #[error("No user ID available")]
+    NoUserIdAvailable,
+    #[error("Request failed: {0:?}")]
+    RequestFailed(String),
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn add_favorite_album(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    album_id: u64,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+    access_token: Option<String>,
+    user_id: Option<u64>,
+) -> Result<(), TidalAddFavoriteAlbumError> {
+    #[cfg(feature = "db")]
+    let user_id = user_id.or_else(|| {
+        match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
+            Ok(Some(config)) => Some(config.user_id),
+            _ => None,
+        }
+    });
+
+    let user_id = user_id.ok_or(TidalAddFavoriteAlbumError::NoUserIdAvailable)?;
+
+    let url = tidal_api_endpoint!(
+        AddFavoriteAlbum,
+        &[(":userId", &user_id.to_string())],
+        &[
+            ("countryCode", &country_code.clone().unwrap_or("US".into())),
+            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "deviceType",
+                device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
+            ),
+        ]
+    );
+
+    let value = authenticated_post_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        access_token,
+        None,
+        Some(vec![("albumId", &album_id.to_string())]),
+    )
+    .await?;
+
+    log::trace!("Received add favorite album response: {value:?}");
+
+    Ok(())
+}
+
+#[derive(Debug, Error)]
+pub enum TidalRemoveFavoriteAlbumError {
+    #[error(transparent)]
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
+    #[error("No user ID available")]
+    NoUserIdAvailable,
+    #[error("Request failed: {0:?}")]
+    RequestFailed(String),
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn remove_favorite_album(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    album_id: u64,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+    access_token: Option<String>,
+    user_id: Option<u64>,
+) -> Result<(), TidalRemoveFavoriteAlbumError> {
+    #[cfg(feature = "db")]
+    let user_id = user_id.or_else(|| {
+        match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
+            Ok(Some(config)) => Some(config.user_id),
+            _ => None,
+        }
+    });
+
+    let user_id = user_id.ok_or(TidalRemoveFavoriteAlbumError::NoUserIdAvailable)?;
+
+    let url = tidal_api_endpoint!(
+        RemoveFavoriteAlbum,
+        &[
+            (":userId", &user_id.to_string()),
+            (":albumId", &album_id.to_string())
+        ],
+        &[
+            ("countryCode", &country_code.clone().unwrap_or("US".into())),
+            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "deviceType",
+                device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
+            ),
+        ]
+    );
+
+    let value = authenticated_delete_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        access_token,
+    )
+    .await?;
+
+    log::trace!("Received remove favorite album response: {value:?}");
+
+    Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
