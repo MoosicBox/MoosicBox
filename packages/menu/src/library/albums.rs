@@ -3,7 +3,10 @@ use std::sync::{Arc, PoisonError};
 use moosicbox_core::{
     app::{AppState, Db},
     sqlite::{
-        db::{get_albums, DbError},
+        db::{
+            delete, delete_session_playlist_tracks_by_track_id, delete_track_sizes_by_track_id,
+            delete_tracks, get_albums, DbError, SqliteValue,
+        },
         menu::{get_album, GetAlbumError},
         models::{
             track_source_to_u8, Album, AlbumSort, AlbumSource, ApiTrack, LibraryTrack, ToApi,
@@ -13,8 +16,11 @@ use moosicbox_core::{
     types::AudioFormat,
 };
 use moosicbox_scan::output::ScanOutput;
-use moosicbox_search::{data::ToDataValues, PopulateIndexError};
-use moosicbox_tidal::{TidalAddFavoriteAlbumError, TidalAlbumError};
+use moosicbox_search::{
+    data::{ToDataValues, ToDeleteTerm},
+    PopulateIndexError,
+};
+use moosicbox_tidal::{TidalAddFavoriteAlbumError, TidalAlbumError, TidalRemoveFavoriteAlbumError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -357,6 +363,84 @@ pub async fn add_album(
             .map(|track| track.to_data_values())
             .collect::<Vec<_>>(),
         false,
+    )?;
+
+    Ok(())
+}
+
+#[derive(Debug, Error)]
+pub enum RemoveAlbumError {
+    #[error(transparent)]
+    Db(#[from] DbError),
+    #[error(transparent)]
+    GetAlbum(#[from] GetAlbumError),
+    #[error(transparent)]
+    TidalRemoveFavoriteAlbum(#[from] TidalRemoveFavoriteAlbumError),
+    #[error(transparent)]
+    TidalAlbum(#[from] TidalAlbumError),
+    #[error(transparent)]
+    TidalScan(#[from] moosicbox_scan::tidal::ScanError),
+    #[error(transparent)]
+    UpdateDatabase(#[from] moosicbox_scan::output::UpdateDatabaseError),
+    #[error(transparent)]
+    PopulateIndex(#[from] PopulateIndexError),
+}
+
+pub async fn remove_album(
+    db: &Db,
+    tidal_album_id: Option<u64>,
+    qobuz_album_id: Option<u64>,
+) -> Result<(), RemoveAlbumError> {
+    log::debug!("Removing album from library tidal_album_id={tidal_album_id:?} qobuz_album_id={qobuz_album_id:?}");
+
+    let album = match get_album(None, tidal_album_id, qobuz_album_id, db).await {
+        Ok(album) => album,
+        Err(GetAlbumError::AlbumNotFound { .. }) => {
+            log::debug!("Album tidal_album_id={tidal_album_id:?} qobuz_album_id={qobuz_album_id:?} already removed");
+            return Ok(());
+        }
+        Err(err) => {
+            return Err(RemoveAlbumError::GetAlbum(err));
+        }
+    };
+
+    if let Some(album_id) = tidal_album_id {
+        moosicbox_tidal::remove_favorite_album(db, album_id, None, None, None, None, None).await?;
+    }
+    if let Some(_album_id) = qobuz_album_id {
+        unimplemented!("Qobuz favorites is not implemented yet");
+    }
+
+    let tracks = moosicbox_core::sqlite::db::get_album_tracks(
+        &db.library.lock().as_ref().unwrap().inner,
+        album.id,
+    )?;
+
+    let track_ids = tracks.iter().map(|t| t.id).collect::<Vec<_>>();
+
+    log::debug!("Deleting track db items: {track_ids:?}");
+    delete_session_playlist_tracks_by_track_id(
+        &db.library.lock().as_ref().unwrap().inner,
+        Some(&track_ids),
+    )?;
+    delete_track_sizes_by_track_id(&db.library.lock().as_ref().unwrap().inner, Some(&track_ids))?;
+    delete_tracks(&db.library.lock().as_ref().unwrap().inner, Some(&track_ids))?;
+
+    log::debug!("Deleting album db item: {}", album.id);
+    delete::<Album>(
+        &db.library.lock().as_ref().unwrap().inner,
+        "albums",
+        &vec![("id", SqliteValue::Number(album.id as i64))],
+    )?;
+
+    moosicbox_core::cache::clear_cache();
+
+    moosicbox_search::delete_from_global_search_index(vec![album.to_delete_term()])?;
+    moosicbox_search::delete_from_global_search_index(
+        tracks
+            .into_iter()
+            .map(|track| track.to_delete_term())
+            .collect::<Vec<_>>(),
     )?;
 
     Ok(())

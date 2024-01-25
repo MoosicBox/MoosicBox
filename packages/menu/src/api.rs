@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use actix_web::{
+    delete,
     error::{ErrorBadRequest, ErrorInternalServerError},
     get, post,
     web::{self, Json},
@@ -22,8 +23,8 @@ use thiserror::Error;
 
 use crate::library::{
     albums::{
-        add_album, get_album_tracks, get_album_versions, get_all_albums, AlbumFilters,
-        AlbumsRequest, ApiAlbumVersion,
+        add_album, get_album_tracks, get_album_versions, get_all_albums, remove_album,
+        AlbumFilters, AlbumsRequest, ApiAlbumVersion,
     },
     artists::{get_all_artists, ArtistFilters, ArtistsRequest},
 };
@@ -332,6 +333,29 @@ pub async fn add_album_endpoint(
     )
     .await
     .map_err(|e| ErrorInternalServerError(format!("Failed to add album: {e:?}")))?;
+
+    Ok(Json(serde_json::json!({"success": true})))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoveAlbumQuery {
+    tidal_album_id: Option<u64>,
+    qobuz_album_id: Option<u64>,
+}
+
+#[delete("/album")]
+pub async fn remove_album_endpoint(
+    query: web::Query<RemoveAlbumQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<Value>> {
+    remove_album(
+        data.db.as_ref().expect("No DB set"),
+        query.tidal_album_id,
+        query.qobuz_album_id,
+    )
+    .await
+    .map_err(|e| ErrorInternalServerError(format!("Failed to remove album: {e:?}")))?;
 
     Ok(Json(serde_json::json!({"success": true})))
 }
