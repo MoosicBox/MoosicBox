@@ -473,7 +473,7 @@ pub struct Album {
     pub blur: bool,
     pub versions: Vec<AlbumVersionQuality>,
     pub tidal_id: Option<u64>,
-    pub qobuz_id: Option<u64>,
+    pub qobuz_id: Option<String>,
 }
 
 impl AsModel<Album> for Row<'_> {
@@ -622,7 +622,7 @@ pub struct ApiLibraryAlbum {
     pub blur: bool,
     pub versions: Vec<ApiAlbumVersionQuality>,
     pub tidal_id: Option<u64>,
-    pub qobuz_id: Option<u64>,
+    pub qobuz_id: Option<String>,
 }
 
 impl ToApi<ApiAlbum> for Album {
@@ -639,7 +639,7 @@ impl ToApi<ApiAlbum> for Album {
             blur: self.blur,
             versions: self.versions.iter().map(|v| v.to_api()).collect(),
             tidal_id: self.tidal_id,
-            qobuz_id: self.qobuz_id,
+            qobuz_id: self.qobuz_id.clone(),
         })
     }
 }
