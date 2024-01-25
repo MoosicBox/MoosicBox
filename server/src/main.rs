@@ -122,20 +122,24 @@ fn main() -> std::io::Result<()> {
                                 let tunnel = tunnel.clone();
                                 spawn(async move {
                                     match serde_json::from_str(&m).unwrap() {
-                                        TunnelRequest::Http(request) => tunnel
-                                            .tunnel_request(
-                                                db,
-                                                service_port,
-                                                request.request_id,
-                                                request.method,
-                                                request.path,
-                                                request.query,
-                                                request.payload,
-                                                request.headers,
-                                                request.encoding,
-                                            )
-                                            .await
-                                            .unwrap(),
+                                        TunnelRequest::Http(request) => {
+                                            if let Err(err) = tunnel
+                                                .tunnel_request(
+                                                    db,
+                                                    service_port,
+                                                    request.request_id,
+                                                    request.method,
+                                                    request.path,
+                                                    request.query,
+                                                    request.payload,
+                                                    request.headers,
+                                                    request.encoding,
+                                                )
+                                                .await
+                                            {
+                                                log::error!("Tunnel request failed: {err:?}");
+                                            }
+                                        }
                                         TunnelRequest::Ws(request) => {
                                             let sender = CHAT_SERVER_HANDLE
                                                 .read()
