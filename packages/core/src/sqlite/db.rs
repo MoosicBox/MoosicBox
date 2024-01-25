@@ -1049,6 +1049,118 @@ pub fn get_tracks(db: &Connection, ids: Option<&Vec<i32>>) -> Result<Vec<Library
         .collect())
 }
 
+pub fn delete_track(db: &Connection, id: i32) -> Result<Option<LibraryTrack>, DbError> {
+    Ok(delete_tracks(db, Some(&vec![id]))?.into_iter().next())
+}
+
+pub fn delete_tracks(
+    db: &Connection,
+    ids: Option<&Vec<i32>>,
+) -> Result<Vec<LibraryTrack>, DbError> {
+    if ids.is_some_and(|ids| ids.is_empty()) {
+        return Ok(vec![]);
+    }
+    let mut query = db.prepare_cached(&format!(
+        "DELETE FROM tracks {} RETURNING *",
+        ids.map(|ids| {
+            let ids_param = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+            format!("WHERE id IN ({ids_param})")
+        })
+        .unwrap_or_default()
+    ))?;
+
+    if let Some(ids) = ids {
+        let mut index = 1;
+        for id in ids {
+            query.raw_bind_parameter(index, *id)?;
+            index += 1;
+        }
+    }
+
+    let values = AsModelResultMut::<LibraryTrack, DbError>::as_model_mut(&mut query.raw_query())?;
+
+    Ok(values)
+}
+
+pub fn delete_track_size_by_track_id(
+    db: &Connection,
+    id: i32,
+) -> Result<Option<TrackSize>, DbError> {
+    Ok(delete_track_sizes_by_track_id(db, Some(&vec![id]))?
+        .into_iter()
+        .next())
+}
+
+pub fn delete_track_sizes_by_track_id(
+    db: &Connection,
+    ids: Option<&Vec<i32>>,
+) -> Result<Vec<TrackSize>, DbError> {
+    if ids.is_some_and(|ids| ids.is_empty()) {
+        return Ok(vec![]);
+    }
+    let mut query = db.prepare_cached(&format!(
+        "DELETE FROM track_sizes {} RETURNING *",
+        ids.map(|ids| {
+            let ids_param = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+            format!("WHERE track_id IN ({ids_param})")
+        })
+        .unwrap_or_default()
+    ))?;
+
+    if let Some(ids) = ids {
+        let mut index = 1;
+        for id in ids {
+            query.raw_bind_parameter(index, *id)?;
+            index += 1;
+        }
+    }
+
+    let values = AsModelResultMut::<TrackSize, DbError>::as_model_mut(&mut query.raw_query())?;
+
+    Ok(values)
+}
+
+pub fn delete_session_playlist_track_by_track_id(
+    db: &Connection,
+    id: i32,
+) -> Result<Option<SessionPlaylistTrack>, DbError> {
+    Ok(
+        delete_session_playlist_tracks_by_track_id(db, Some(&vec![id]))?
+            .into_iter()
+            .next(),
+    )
+}
+
+pub fn delete_session_playlist_tracks_by_track_id(
+    db: &Connection,
+    ids: Option<&Vec<i32>>,
+) -> Result<Vec<SessionPlaylistTrack>, DbError> {
+    if ids.is_some_and(|ids| ids.is_empty()) {
+        return Ok(vec![]);
+    }
+    let mut query = db.prepare_cached(&format!(
+        "DELETE FROM session_playlist_tracks {} RETURNING *",
+        ids.map(|ids| {
+            let ids_param = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+            format!("WHERE `type` = 'LIBRARY' AND track_id IN ({ids_param})")
+        })
+        .unwrap_or_default()
+    ))?;
+
+    if let Some(ids) = ids {
+        let mut index = 1;
+        for id in ids {
+            query.raw_bind_parameter(index, *id)?;
+            index += 1;
+        }
+    }
+
+    let values =
+        AsModelResultMut::<SessionPlaylistTrack, DbError>::as_model_mut(&mut query.raw_query())?;
+
+    Ok(values)
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum SqliteValue {
     String(String),
