@@ -1,10 +1,11 @@
 use crate::sqlite::models::{Album, Artist, LibraryTrack};
 use enum_as_inner::EnumAsInner;
 use futures::Future;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -35,6 +36,12 @@ pub struct CacheRequest {
     pub key: String,
     pub expiration: Duration,
 }
+static CACHE_MAP: Lazy<Mutex<HashMap<String, CacheItem>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
+pub fn clear_cache() {
+    CACHE_MAP.lock().unwrap().clear();
+}
 
 pub async fn get_or_set_to_cache<Fut, Err>(
     request: CacheRequest,
@@ -44,10 +51,7 @@ where
     Err: Error,
     Fut: Future<Output = Result<CacheItemType, Err>>,
 {
-    static CACHE_MAP: OnceLock<Mutex<HashMap<String, CacheItem>>> = OnceLock::new();
-    let cache = CACHE_MAP.get_or_init(|| Mutex::new(HashMap::new()));
-
-    if let Some(entry) = cache.lock().unwrap().get(&request.key) {
+    if let Some(entry) = CACHE_MAP.lock().unwrap().get(&request.key) {
         if entry.expiration > current_time_nanos() {
             return Ok(entry.data.clone());
         }
@@ -58,7 +62,7 @@ where
         Err(error) => return Err(error),
     };
 
-    cache.lock().unwrap().insert(
+    CACHE_MAP.lock().unwrap().insert(
         request.key,
         CacheItem {
             expiration: current_time_nanos() + request.expiration.as_nanos(),

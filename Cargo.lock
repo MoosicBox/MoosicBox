@@ -2987,6 +2987,7 @@ dependencies = [
  "futures",
  "log",
  "moosicbox_json_utils",
+ "once_cell",
  "rusqlite",
  "serde",
  "serde_json",
