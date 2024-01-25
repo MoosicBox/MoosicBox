@@ -324,6 +324,8 @@ pub async fn add_album(
     let output = output.read().await;
     let results = output.update_database(db).await?;
 
+    moosicbox_core::cache::clear_cache();
+
     moosicbox_search::populate_global_search_index(
         results
             .artists
