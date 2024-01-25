@@ -102,19 +102,19 @@ fn create_global_search_index(
     schema_builder.add_text_field("artist_title_search", TEXT);
     schema_builder.add_text_field("artist_title_string", STRING);
 
-    schema_builder.add_u64_field("artist_id", STORED);
+    schema_builder.add_u64_field("artist_id", INDEXED | STORED);
 
     schema_builder.add_text_field("album_title", STORED);
     schema_builder.add_text_field("album_title_search", TEXT);
     schema_builder.add_text_field("album_title_string", STRING);
 
-    schema_builder.add_u64_field("album_id", STORED);
+    schema_builder.add_u64_field("album_id", INDEXED | STORED);
 
     schema_builder.add_text_field("track_title", STORED);
     schema_builder.add_text_field("track_title_search", TEXT);
     schema_builder.add_text_field("track_title_string", STRING);
 
-    schema_builder.add_u64_field("track_id", STORED);
+    schema_builder.add_u64_field("track_id", INDEXED | STORED);
 
     schema_builder.add_text_field("cover", STORED);
     schema_builder.add_text_field("cover_string", STRING);
@@ -332,6 +332,79 @@ pub fn populate_global_search_index(
     // commit.
 
     log::debug!("Populated global search index");
+
+    Ok(())
+}
+
+#[derive(Debug, Error)]
+pub enum DeleteFromIndexError {
+    #[error(transparent)]
+    Tantivy(#[from] tantivy::error::TantivyError),
+}
+
+pub fn delete_from_global_search_index(
+    data: Vec<(&str, DataValue)>,
+) -> Result<(), PopulateIndexError> {
+    log::debug!("Deleting from global search index...");
+
+    if data.is_empty() {
+        log::debug!("No data to delete.");
+        return Ok(());
+    }
+
+    let index: &Index = &GLOBAL_SEARCH_INDEX.read().unwrap();
+    let schema = index.schema();
+    // To remove a document we will need an index writer.
+    // There must be only one writer at a time.
+    // This single `IndexWriter` is already
+    // multithreaded.
+    //
+    // Here we give tantivy a budget of `50MB`.
+    // Using a bigger memory_arena for the indexer may increase
+    // throughput, but 50 MB is already plenty.
+    let memory_budget = *GLOBAL_SEARCH_INDEX_WRITER_MEMORY_BUDGET.read().unwrap();
+
+    let mut index_writer =
+        if let Some(threads) = *GLOBAL_SEARCH_INDEX_WRITER_NUM_THREADS.read().unwrap() {
+            index.writer_with_num_threads(threads, memory_budget)?
+        } else {
+            index.writer(memory_budget)?
+        };
+
+    for (key, value) in data {
+        let field = schema.get_field(key)?;
+
+        log::trace!("Deleting term ({key:?}, {value:?})");
+
+        let term = match &value {
+            DataValue::String(value) => Term::from_field_text(field, value),
+            DataValue::Bool(value) => Term::from_field_bool(field, *value),
+            DataValue::Number(value) => Term::from_field_u64(field, *value),
+        };
+
+        index_writer.delete_term(term);
+    }
+
+    // ### Committing
+    //
+    // We need to call `.commit()` explicitly to force the
+    // `index_writer` to finish processing the documents in the queue,
+    // flush the current index to the disk, and advertise
+    // the removal of the documents.
+    //
+    // This call is blocking.
+    index_writer.commit()?;
+    GLOBAL_SEARCH_READER.read().unwrap().reload()?;
+
+    // If `.commit()` returns correctly, then all of the
+    // documents that have been removed are guaranteed to be
+    // persistently indexed.
+    //
+    // In the scenario of a crash or a power failure,
+    // tantivy behaves as if it has rolled back to its last
+    // commit.
+
+    log::debug!("Deleted from global search index");
 
     Ok(())
 }

@@ -145,6 +145,28 @@ impl ToDataValues for LibraryTrack {
     }
 }
 
+pub trait ToDeleteTerm {
+    fn to_delete_term<'a>(self) -> (&'a str, DataValue);
+}
+
+impl ToDeleteTerm for Artist {
+    fn to_delete_term<'a>(self) -> (&'a str, DataValue) {
+        ("artist_id", DataValue::Number(self.id as u64))
+    }
+}
+
+impl ToDeleteTerm for Album {
+    fn to_delete_term<'a>(self) -> (&'a str, DataValue) {
+        ("album_id", DataValue::Number(self.id as u64))
+    }
+}
+
+impl ToDeleteTerm for LibraryTrack {
+    fn to_delete_term<'a>(self) -> (&'a str, DataValue) {
+        ("track_id", DataValue::Number(self.id as u64))
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum ReindexFromDbError {
     #[error(transparent)]
