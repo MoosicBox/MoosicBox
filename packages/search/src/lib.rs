@@ -38,18 +38,54 @@ static GLOBAL_SEARCH_INDEX_WRITER_MEMORY_BUDGET: Lazy<RwLock<usize>> =
 static GLOBAL_SEARCH_INDEX_WRITER_NUM_THREADS: Lazy<RwLock<Option<usize>>> =
     Lazy::new(|| RwLock::new(None));
 
-static GLOBAL_SEARCH_INDEX: Lazy<RwLock<Index>> = Lazy::new(|| {
-    let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
-    RwLock::new(
-        create_global_search_index(path, false).expect("Failed to create GLOBAL_SEARCH_INDEX"),
-    )
-});
+#[derive(Debug, Error, Clone)]
+pub enum GetGlobalSearchIndexError {
+    #[error(transparent)]
+    Tantivy(#[from] tantivy::error::TantivyError),
+    #[error("{0}")]
+    FailedToGetIndex(String),
+}
 
-static GLOBAL_SEARCH_READER: Lazy<RwLock<IndexReader>> = Lazy::new(|| {
-    RwLock::new(
-        get_index_reader(&GLOBAL_SEARCH_INDEX.read().unwrap()).expect("Failed to get reader"),
-    )
-});
+static GLOBAL_SEARCH_INDEX: Lazy<RwLock<Result<Index, GetGlobalSearchIndexError>>> =
+    Lazy::new(|| {
+        let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
+        RwLock::new(
+            create_global_search_index(path, false).map_err(|e| match e {
+                CreateIndexError::Tantivy(err) => GetGlobalSearchIndexError::Tantivy(err.clone()),
+                _ => GetGlobalSearchIndexError::FailedToGetIndex(e.to_string()),
+            }),
+        )
+    });
+
+#[derive(Debug, Error, Clone)]
+pub enum GetGlobalSearchReaderError {
+    #[error(transparent)]
+    Tantivy(#[from] tantivy::error::TantivyError),
+    #[error("{0}")]
+    FailedToGetReader(String),
+}
+
+static GLOBAL_SEARCH_READER: Lazy<RwLock<Result<IndexReader, GetGlobalSearchReaderError>>> =
+    Lazy::new(|| {
+        let binding = GLOBAL_SEARCH_INDEX.read().unwrap();
+        let index = match binding.as_ref() {
+            Ok(index) => index,
+            Err(err) => match err {
+                GetGlobalSearchIndexError::Tantivy(err) => {
+                    return RwLock::new(Err(GetGlobalSearchReaderError::Tantivy(err.clone())))
+                }
+                _ => {
+                    return RwLock::new(Err(GetGlobalSearchReaderError::FailedToGetReader(
+                        err.to_string(),
+                    )))
+                }
+            },
+        };
+        RwLock::new(
+            get_index_reader(index)
+                .map_err(|e| GetGlobalSearchReaderError::FailedToGetReader(e.to_string())),
+        )
+    });
 
 #[derive(Debug, Error)]
 pub enum CreateIndexError {
@@ -180,15 +216,17 @@ fn recreate_global_search_index(path: &Path) -> Result<(), RecreateIndexError> {
     let reader = get_index_reader(&index)?;
 
     log::trace!("Resetting GLOBAL_SEARCH_INDEX value");
-    *GLOBAL_SEARCH_INDEX.write().unwrap() = index;
+    *GLOBAL_SEARCH_INDEX.write().unwrap() = Ok(index);
     log::trace!("Resetting GLOBAL_SEARCH_READER value");
-    *GLOBAL_SEARCH_READER.write().unwrap() = reader;
+    *GLOBAL_SEARCH_READER.write().unwrap() = Ok(reader);
 
     Ok(())
 }
 
 #[derive(Debug, Error)]
 pub enum GetIndexReaderError {
+    #[error(transparent)]
+    CreateIndex(#[from] CreateIndexError),
     #[error(transparent)]
     Tantivy(#[from] tantivy::error::TantivyError),
 }
@@ -202,6 +240,10 @@ fn get_index_reader(index: &Index) -> Result<IndexReader, GetIndexReaderError> {
 
 #[derive(Debug, Error)]
 pub enum PopulateIndexError {
+    #[error(transparent)]
+    GetGlobalSearchIndex(#[from] GetGlobalSearchIndexError),
+    #[error(transparent)]
+    GetGlobalSearchReader(#[from] GetGlobalSearchReaderError),
     #[error(transparent)]
     Tantivy(#[from] tantivy::error::TantivyError),
 }
@@ -224,7 +266,8 @@ pub fn populate_global_search_index(
         return Ok(());
     }
 
-    let index: &Index = &GLOBAL_SEARCH_INDEX.read().unwrap();
+    let binding = GLOBAL_SEARCH_INDEX.read().unwrap();
+    let index = binding.as_ref().map_err(|e| e.clone())?;
     let schema = index.schema();
     // To insert a document we will need an index writer.
     // There must be only one writer at a time.
@@ -321,7 +364,12 @@ pub fn populate_global_search_index(
     //
     // This call is blocking.
     index_writer.commit()?;
-    GLOBAL_SEARCH_READER.read().unwrap().reload()?;
+    GLOBAL_SEARCH_READER
+        .read()
+        .unwrap()
+        .as_ref()
+        .map_err(|e| e.clone())?
+        .reload()?;
 
     // If `.commit()` returns correctly, then all of the
     // documents that have been added are guaranteed to be
@@ -339,6 +387,10 @@ pub fn populate_global_search_index(
 #[derive(Debug, Error)]
 pub enum DeleteFromIndexError {
     #[error(transparent)]
+    GetGlobalSearchIndex(#[from] GetGlobalSearchIndexError),
+    #[error(transparent)]
+    GetGlobalSearchReader(#[from] GetGlobalSearchReaderError),
+    #[error(transparent)]
     Tantivy(#[from] tantivy::error::TantivyError),
 }
 
@@ -352,7 +404,8 @@ pub fn delete_from_global_search_index(
         return Ok(());
     }
 
-    let index: &Index = &GLOBAL_SEARCH_INDEX.read().unwrap();
+    let binding = GLOBAL_SEARCH_INDEX.read().unwrap();
+    let index = binding.as_ref().map_err(|e| e.clone())?;
     let schema = index.schema();
     // To remove a document we will need an index writer.
     // There must be only one writer at a time.
@@ -394,7 +447,12 @@ pub fn delete_from_global_search_index(
     //
     // This call is blocking.
     index_writer.commit()?;
-    GLOBAL_SEARCH_READER.read().unwrap().reload()?;
+    GLOBAL_SEARCH_READER
+        .read()
+        .unwrap()
+        .as_ref()
+        .map_err(|e| e.clone())?
+        .reload()?;
 
     // If `.commit()` returns correctly, then all of the
     // documents that have been removed are guaranteed to be
@@ -427,6 +485,10 @@ pub fn reindex_global_search_index(data: Vec<Vec<(&str, DataValue)>>) -> Result<
 
 #[derive(Debug, Error)]
 pub enum SearchIndexError {
+    #[error(transparent)]
+    GetGlobalSearchIndex(#[from] GetGlobalSearchIndexError),
+    #[error(transparent)]
+    GetGlobalSearchReader(#[from] GetGlobalSearchReaderError),
     #[error(transparent)]
     Tantivy(#[from] tantivy::error::TantivyError),
     #[error(transparent)]
@@ -684,7 +746,8 @@ pub fn search_global_search_index(
 ) -> Result<Vec<NamedFieldDocument>, SearchIndexError> {
     log::debug!("Searching global_search_index...");
     let query = sanitize_query(search);
-    let index: &Index = &GLOBAL_SEARCH_INDEX.read().unwrap();
+    let binding = GLOBAL_SEARCH_INDEX.read().unwrap();
+    let index = binding.as_ref().map_err(|e| e.clone())?;
     let schema = index.schema();
 
     // # Searching
@@ -700,7 +763,8 @@ pub fn search_global_search_index(
     //
     // In the code below, we rely on the 'ON_COMMIT' policy: the reader
     // will reload the index automatically after each commit.
-    let reader: &IndexReader = &GLOBAL_SEARCH_READER.read().unwrap();
+    let binding = GLOBAL_SEARCH_READER.read().unwrap();
+    let reader = binding.as_ref().map_err(|e| e.clone())?;
 
     // ### Searcher
     //
@@ -731,7 +795,7 @@ pub fn search_global_search_index(
     // only in the top 10. Keeping track of our top 10 best documents
     // is the role of the `TopDocs` collector.
 
-    let global_search_query = construct_global_search_query(&query, index, &schema);
+    let global_search_query = construct_global_search_query(&query, &index, &schema);
 
     // We can now perform our query.
     let top_docs = searcher.search(
