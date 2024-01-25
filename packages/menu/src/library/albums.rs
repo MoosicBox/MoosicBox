@@ -327,10 +327,18 @@ pub async fn add_album(
         false,
     )?;
 
-    let albums = moosicbox_core::sqlite::db::get_album(
-        &db.library.lock().as_ref().unwrap().inner,
-        results.albums[0].id,
-    )?;
+    let albums = results
+        .albums
+        .iter()
+        .map(|album| {
+            moosicbox_core::sqlite::db::get_album(
+                &db.library.lock().as_ref().unwrap().inner,
+                album.id,
+            )
+        })
+        .filter_map(|album| album.ok())
+        .map(|album| album.unwrap())
+        .collect::<Vec<_>>();
     moosicbox_search::populate_global_search_index(
         albums
             .into_iter()
