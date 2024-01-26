@@ -474,6 +474,8 @@ pub struct Album {
     pub versions: Vec<AlbumVersionQuality>,
     pub tidal_id: Option<u64>,
     pub qobuz_id: Option<String>,
+    pub tidal_artist_id: Option<u64>,
+    pub qobuz_artist_id: Option<u64>,
 }
 
 impl AsModel<Album> for Row<'_> {
@@ -498,6 +500,8 @@ impl AsModelResult<Album, ParseError> for Row<'_> {
             versions: vec![],
             tidal_id: self.to_value("tidal_id")?,
             qobuz_id: self.to_value("qobuz_id")?,
+            tidal_artist_id: self.to_value("tidal_artist_id")?,
+            qobuz_artist_id: self.to_value("qobuz_artist_id")?,
         })
     }
 }
@@ -581,6 +585,8 @@ impl AsModelQuery<Album> for Row<'_> {
             versions: get_album_version_qualities(db, id)?,
             tidal_id: self.to_value("tidal_id")?,
             qobuz_id: self.to_value("qobuz_id")?,
+            tidal_artist_id: self.to_value("tidal_artist_id")?,
+            qobuz_artist_id: self.to_value("qobuz_artist_id")?,
         })
     }
 }

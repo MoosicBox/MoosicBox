@@ -624,6 +624,8 @@ pub fn get_albums(db: &Connection) -> Result<Vec<Album>, DbError> {
                 track_sizes.sample_rate,
                 track_sizes.channels,
                 artists.title as artist,
+                artists.tidal_id as tidal_artist_id,
+                artists.qobuz_id as qobuz_artist_id,
                 tracks.format,
                 tracks.source
             FROM albums
@@ -807,7 +809,7 @@ pub fn get_qobuz_album_artist(
 pub fn get_album(db: &Connection, id: i32) -> Result<Option<Album>, DbError> {
     db.prepare_cached(
         "
-            SELECT albums.*, artists.title as artist
+            SELECT albums.*, artists.title as artist, artists.tidal_id as tidal_artist_id, artists.qobuz_id as qobuz_artist_id
             FROM albums
             JOIN artists ON artists.id=albums.artist_id
             WHERE albums.id=?1",
@@ -820,7 +822,7 @@ pub fn get_album(db: &Connection, id: i32) -> Result<Option<Album>, DbError> {
 pub fn get_tidal_album(db: &Connection, tidal_id: i32) -> Result<Option<Album>, DbError> {
     db.prepare_cached(
         "
-            SELECT albums.*, artists.title as artist
+            SELECT albums.*, artists.title as artist, artists.tidal_id as tidal_artist_id, artists.qobuz_id as qobuz_artist_id
             FROM albums
             JOIN artists ON artists.id=albums.artist_id
             WHERE albums.tidal_id=?1",
@@ -833,7 +835,7 @@ pub fn get_tidal_album(db: &Connection, tidal_id: i32) -> Result<Option<Album>, 
 pub fn get_qobuz_album(db: &Connection, qobuz_id: i32) -> Result<Option<Album>, DbError> {
     db.prepare_cached(
         "
-            SELECT albums.*, artists.title as artist
+            SELECT albums.*, artists.title as artist, artists.tidal_id as tidal_artist_id, artists.qobuz_id as qobuz_artist_id
             FROM albums
             JOIN artists ON artists.id=albums.artist_id
             WHERE albums.qobuz_id=?1",
@@ -852,6 +854,8 @@ pub fn get_album_tracks(db: &Connection, album_id: i32) -> Result<Vec<LibraryTra
                 albums.date_released as date_released,
                 albums.date_added as date_added,
                 artists.title as artist,
+                artists.tidal_id as tidal_artist_id,
+                artists.qobuz_id as qobuz_artist_id,
                 artists.id as artist_id,
                 albums.artwork,
                 track_sizes.format,
@@ -882,6 +886,8 @@ pub fn get_artist_albums(db: &Connection, artist_id: i32) -> Result<Vec<Album>, 
                 track_sizes.sample_rate,
                 track_sizes.channels,
                 artists.title as artist,
+                artists.tidal_id as tidal_artist_id,
+                artists.qobuz_id as qobuz_artist_id,
                 tracks.format,
                 tracks.source
             FROM albums
@@ -1013,6 +1019,8 @@ pub fn get_tracks(db: &Connection, ids: Option<&Vec<i32>>) -> Result<Vec<Library
                 albums.date_released as date_released,
                 albums.date_added as date_added,
                 artists.title as artist,
+                artists.tidal_id as tidal_artist_id,
+                artists.qobuz_id as qobuz_artist_id,
                 artists.id as artist_id,
                 albums.artwork,
                 track_sizes.format,
