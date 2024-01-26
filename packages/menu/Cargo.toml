@@ -22,9 +22,10 @@ thiserror   = { workspace = true }
 tokio       = { workspace = true }
 
 [features]
-default = ["qobuz", "tidal"]
+default = ["local", "qobuz", "tidal"]
 
 fail-on-warnings = []
 
+local = ["moosicbox_scan/local"]
 qobuz = ["moosicbox_scan/qobuz"]
 tidal = ["moosicbox_scan/tidal"]
