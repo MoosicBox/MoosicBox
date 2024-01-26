@@ -112,8 +112,6 @@ fn fetch_local_album_cover(
 pub enum AlbumCoverError {
     #[error("Album cover not found for album: {0:?}")]
     NotFound(AlbumId),
-    #[error("Invalid source")]
-    InvalidSource,
     #[error(transparent)]
     FetchAlbumCover(#[from] FetchAlbumCoverError),
     #[error(transparent)]
