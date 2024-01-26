@@ -376,12 +376,15 @@ fn fetch_credentials(
                         log::debug!("Using db Qobuz config");
                         log::debug!("Fetching db Qobuz app config");
                         match db::get_qobuz_app_config(db) {
-                            Ok(Some(app_config)) => Some(Ok(QobuzCredentials {
-                                access_token: config.access_token,
-                                app_id: app_id.or(Some(app_config.app_id)),
-                                username: Some(config.user_email),
-                                persist: true,
-                            })),
+                            Ok(Some(app_config)) => {
+                                log::debug!("Using db Qobuz app config");
+                                Some(Ok(QobuzCredentials {
+                                    access_token: config.access_token,
+                                    app_id: app_id.or(Some(app_config.app_id)),
+                                    username: Some(config.user_email),
+                                    persist: true,
+                                }))
+                            }
                             Ok(None) => {
                                 log::debug!("No Qobuz app config available");
                                 None
