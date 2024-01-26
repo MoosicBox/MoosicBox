@@ -4,7 +4,7 @@ use moosicbox_core::sqlite::{
     db::SqliteValue,
     models::{AsId, AsModel, AsModelResult},
 };
-use moosicbox_json_utils::{rusqlite::ToValue, ParseError, ToValueType};
+use moosicbox_json_utils::{rusqlite::ToValue, MissingValue, ParseError, ToValueType};
 use rusqlite::{types::Value, Row};
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +20,8 @@ pub struct ScanLocation {
     pub updated: String,
 }
 
+impl MissingValue<ScanOrigin> for &Row<'_> {}
+impl MissingValue<ScanOrigin> for Value {}
 impl ToValueType<ScanOrigin> for Value {
     fn to_value_type(self) -> Result<ScanOrigin, ParseError> {
         match self {
@@ -27,12 +29,9 @@ impl ToValueType<ScanOrigin> for Value {
             _ => Err(ParseError::ConvertType("ScanOrigin".into())),
         }
     }
-
-    fn missing_value(self, error: ParseError) -> Result<ScanOrigin, ParseError> {
-        Err(error)
-    }
 }
 
+impl MissingValue<ScanLocation> for &Row<'_> {}
 impl ToValueType<ScanLocation> for &Row<'_> {
     fn to_value_type(self) -> Result<ScanLocation, ParseError> {
         Ok(ScanLocation {
@@ -42,10 +41,6 @@ impl ToValueType<ScanLocation> for &Row<'_> {
             created: self.to_value("created")?,
             updated: self.to_value("updated")?,
         })
-    }
-
-    fn missing_value(self, error: ParseError) -> Result<ScanLocation, ParseError> {
-        Err(error)
     }
 }
 

@@ -13,7 +13,7 @@ use moosicbox_core::{
 };
 use moosicbox_json_utils::{
     tantivy::{ToValue, ToValueType},
-    ParseError,
+    MissingValue, ParseError,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -67,6 +67,7 @@ impl ApiGlobalSearchResult {
     }
 }
 
+impl MissingValue<ApiGlobalArtistSearchResult> for &NamedFieldDocument {}
 impl ToValueType<ApiGlobalArtistSearchResult> for &NamedFieldDocument {
     fn to_value_type(self) -> std::result::Result<ApiGlobalArtistSearchResult, ParseError> {
         Ok(ApiGlobalArtistSearchResult {
@@ -78,15 +79,9 @@ impl ToValueType<ApiGlobalArtistSearchResult> for &NamedFieldDocument {
             blur: self.to_value("blur")?,
         })
     }
-
-    fn missing_value(
-        self,
-        error: ParseError,
-    ) -> std::result::Result<ApiGlobalArtistSearchResult, ParseError> {
-        Err(error)
-    }
 }
 
+impl MissingValue<ApiGlobalAlbumSearchResult> for &NamedFieldDocument {}
 impl ToValueType<ApiGlobalAlbumSearchResult> for &NamedFieldDocument {
     fn to_value_type(self) -> std::result::Result<ApiGlobalAlbumSearchResult, ParseError> {
         Ok(ApiGlobalAlbumSearchResult {
@@ -132,15 +127,9 @@ impl ToValueType<ApiGlobalAlbumSearchResult> for &NamedFieldDocument {
                 .collect::<Result<Vec<_>, _>>()?,
         })
     }
-
-    fn missing_value(
-        self,
-        error: ParseError,
-    ) -> std::result::Result<ApiGlobalAlbumSearchResult, ParseError> {
-        Err(error)
-    }
 }
 
+impl MissingValue<ApiGlobalTrackSearchResult> for &NamedFieldDocument {}
 impl ToValueType<ApiGlobalTrackSearchResult> for &NamedFieldDocument {
     fn to_value_type(self) -> std::result::Result<ApiGlobalTrackSearchResult, ParseError> {
         Ok(ApiGlobalTrackSearchResult {
@@ -170,15 +159,9 @@ impl ToValueType<ApiGlobalTrackSearchResult> for &NamedFieldDocument {
                 .map_err(|_| ParseError::ConvertType("TrackSource".into()))?,
         })
     }
-
-    fn missing_value(
-        self,
-        error: ParseError,
-    ) -> std::result::Result<ApiGlobalTrackSearchResult, ParseError> {
-        Err(error)
-    }
 }
 
+impl MissingValue<ApiGlobalSearchResult> for &NamedFieldDocument {}
 impl ToValueType<ApiGlobalSearchResult> for &NamedFieldDocument {
     fn to_value_type(self) -> std::result::Result<ApiGlobalSearchResult, ParseError> {
         Ok(match self.to_value("document_type")? {
@@ -189,13 +172,6 @@ impl ToValueType<ApiGlobalSearchResult> for &NamedFieldDocument {
                 return Err(ParseError::ConvertType("document_type".into()));
             }
         })
-    }
-
-    fn missing_value(
-        self,
-        error: ParseError,
-    ) -> std::result::Result<ApiGlobalSearchResult, ParseError> {
-        Err(error)
     }
 }
 

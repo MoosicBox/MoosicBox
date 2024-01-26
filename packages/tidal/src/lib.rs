@@ -9,7 +9,7 @@ use async_recursion::async_recursion;
 use moosicbox_core::sqlite::models::AsModelResult;
 use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
-    ParseError, ToValueType,
+    MissingValue, ParseError, ToValueType,
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -51,13 +51,10 @@ impl TidalAlbum {
     }
 }
 
+impl MissingValue<TidalAlbum> for &Value {}
 impl ToValueType<TidalAlbum> for &Value {
     fn to_value_type(self) -> Result<TidalAlbum, ParseError> {
         self.as_model()
-    }
-
-    fn missing_value(self, error: ParseError) -> Result<TidalAlbum, ParseError> {
-        Err(error)
     }
 }
 
@@ -103,13 +100,10 @@ pub struct TidalTrack {
     pub media_metadata_tags: Vec<String>,
 }
 
+impl MissingValue<TidalTrack> for &Value {}
 impl ToValueType<TidalTrack> for &Value {
     fn to_value_type(self) -> Result<TidalTrack, ParseError> {
         self.as_model()
-    }
-
-    fn missing_value(self, error: ParseError) -> Result<TidalTrack, ParseError> {
-        Err(error)
     }
 }
 
@@ -155,13 +149,10 @@ impl TidalArtist {
     }
 }
 
+impl MissingValue<TidalArtist> for &Value {}
 impl ToValueType<TidalArtist> for &Value {
     fn to_value_type(self) -> Result<TidalArtist, ParseError> {
         self.as_model()
-    }
-
-    fn missing_value(self, error: ParseError) -> Result<TidalArtist, ParseError> {
-        Err(error)
     }
 }
 

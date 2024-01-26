@@ -12,7 +12,7 @@ use base64::{engine::general_purpose, Engine as _};
 use moosicbox_core::sqlite::models::AsModelResult;
 use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
-    ParseError, ToValueType,
+    MissingValue, ParseError, ToValueType,
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -42,13 +42,10 @@ pub struct QobuzImage {
     pub mega: Option<String>,
 }
 
+impl MissingValue<QobuzImage> for &Value {}
 impl ToValueType<QobuzImage> for &Value {
     fn to_value_type(self) -> Result<QobuzImage, ParseError> {
         self.as_model()
-    }
-
-    fn missing_value(self, error: ParseError) -> Result<QobuzImage, ParseError> {
-        Err(error)
     }
 }
 
@@ -73,13 +70,10 @@ pub struct QobuzGenre {
     pub slug: String,
 }
 
+impl MissingValue<QobuzGenre> for &Value {}
 impl ToValueType<QobuzGenre> for &Value {
     fn to_value_type(self) -> Result<QobuzGenre, ParseError> {
         self.as_model()
-    }
-
-    fn missing_value(self, error: ParseError) -> Result<QobuzGenre, ParseError> {
-        Err(error)
     }
 }
 
@@ -127,13 +121,10 @@ impl QobuzAlbum {
     }
 }
 
+impl MissingValue<QobuzAlbum> for &Value {}
 impl ToValueType<QobuzAlbum> for &Value {
     fn to_value_type(self) -> Result<QobuzAlbum, ParseError> {
         self.as_model()
-    }
-
-    fn missing_value(self, error: ParseError) -> Result<QobuzAlbum, ParseError> {
-        Err(error)
     }
 }
 
@@ -199,13 +190,10 @@ impl QobuzRelease {
     }
 }
 
+impl MissingValue<QobuzRelease> for &Value {}
 impl ToValueType<QobuzRelease> for &Value {
     fn to_value_type(self) -> Result<QobuzRelease, ParseError> {
         self.as_model()
-    }
-
-    fn missing_value(self, error: ParseError) -> Result<QobuzRelease, ParseError> {
-        Err(error)
     }
 }
 
@@ -247,13 +235,10 @@ pub struct QobuzTrack {
     pub title: String,
 }
 
+impl MissingValue<QobuzTrack> for &Value {}
 impl ToValueType<QobuzTrack> for &Value {
     fn to_value_type(self) -> Result<QobuzTrack, ParseError> {
         self.as_model()
-    }
-
-    fn missing_value(self, error: ParseError) -> Result<QobuzTrack, ParseError> {
-        Err(error)
     }
 }
 
@@ -320,13 +305,10 @@ impl QobuzArtist {
     }
 }
 
+impl MissingValue<QobuzArtist> for &Value {}
 impl ToValueType<QobuzArtist> for &Value {
     fn to_value_type(self) -> Result<QobuzArtist, ParseError> {
         self.as_model()
-    }
-
-    fn missing_value(self, error: ParseError) -> Result<QobuzArtist, ParseError> {
-        Err(error)
     }
 }
 

@@ -1,6 +1,6 @@
 use std::{path::PathBuf, str::FromStr};
 
-use moosicbox_json_utils::{rusqlite::ToValue, ParseError, ToValueType};
+use moosicbox_json_utils::{rusqlite::ToValue, MissingValue, ParseError, ToValueType};
 use rusqlite::{
     types::{FromSql, Value},
     Row, Rows,
@@ -772,6 +772,8 @@ pub enum ApiSource {
     Qobuz,
 }
 
+impl MissingValue<ApiSource> for &Row<'_> {}
+impl MissingValue<ApiSource> for Value {}
 impl ToValueType<ApiSource> for Value {
     fn to_value_type(self) -> Result<ApiSource, ParseError> {
         match self {
@@ -779,10 +781,6 @@ impl ToValueType<ApiSource> for Value {
                 .map_err(|_| ParseError::ConvertType(format!("ApiSource: {str}"))),
             _ => Err(ParseError::ConvertType(format!("ApiSource: {self:?}"))),
         }
-    }
-
-    fn missing_value(self, error: ParseError) -> Result<ApiSource, ParseError> {
-        Err(error)
     }
 }
 
@@ -1218,16 +1216,14 @@ pub enum PlayerType {
     Unknown,
 }
 
+impl MissingValue<PlayerType> for &Row<'_> {}
+impl MissingValue<PlayerType> for Value {}
 impl ToValueType<PlayerType> for Value {
     fn to_value_type(self) -> Result<PlayerType, ParseError> {
         match self {
             Value::Text(str) => Ok(PlayerType::from_str(&str).unwrap_or(PlayerType::Unknown)),
             _ => Err(ParseError::ConvertType("PlayerType".into())),
         }
-    }
-
-    fn missing_value(self, error: ParseError) -> Result<PlayerType, ParseError> {
-        Err(error)
     }
 }
 
@@ -1283,6 +1279,7 @@ pub struct ActivePlayer {
     pub updated: String,
 }
 
+impl MissingValue<ActivePlayer> for &Row<'_> {}
 impl ToValueType<ActivePlayer> for &Row<'_> {
     fn to_value_type(self) -> Result<ActivePlayer, ParseError> {
         Ok(ActivePlayer {
@@ -1292,13 +1289,6 @@ impl ToValueType<ActivePlayer> for &Row<'_> {
             created: self.to_value("created")?,
             updated: self.to_value("updated")?,
         })
-    }
-
-    fn missing_value(
-        self,
-        error: moosicbox_json_utils::ParseError,
-    ) -> Result<ActivePlayer, ParseError> {
-        Err(error)
     }
 }
 
