@@ -107,6 +107,9 @@ pub struct GetAlbumsQuery {
     name: Option<String>,
     artist: Option<String>,
     search: Option<String>,
+    artist_id: Option<i32>,
+    tidal_artist_id: Option<u64>,
+    qobuz_artist_id: Option<u64>,
 }
 
 #[get("/albums")]
@@ -141,6 +144,9 @@ pub async fn get_albums_endpoint(
             name: query.name.clone().map(|s| s.to_lowercase()),
             artist: query.artist.clone().map(|s| s.to_lowercase()),
             search: query.search.clone().map(|s| s.to_lowercase()),
+            artist_id: query.artist_id,
+            tidal_artist_id: query.tidal_artist_id,
+            qobuz_artist_id: query.qobuz_artist_id,
         },
     };
 

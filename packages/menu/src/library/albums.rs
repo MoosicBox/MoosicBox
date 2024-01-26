@@ -39,11 +39,35 @@ pub struct AlbumFilters {
     pub name: Option<String>,
     pub artist: Option<String>,
     pub search: Option<String>,
+    pub artist_id: Option<i32>,
+    pub tidal_artist_id: Option<u64>,
+    pub qobuz_artist_id: Option<u64>,
 }
 
 pub fn filter_albums(albums: Vec<Album>, request: &AlbumsRequest) -> Vec<Album> {
     albums
         .into_iter()
+        .filter(|album| {
+            !request
+                .filters
+                .artist_id
+                .as_ref()
+                .is_some_and(|id| album.artist_id != *id)
+        })
+        .filter(|album| {
+            !request
+                .filters
+                .tidal_artist_id
+                .as_ref()
+                .is_some_and(|id| !album.tidal_artist_id.is_some_and(|x| x == *id))
+        })
+        .filter(|album| {
+            !request
+                .filters
+                .qobuz_artist_id
+                .as_ref()
+                .is_some_and(|id| !album.qobuz_artist_id.is_some_and(|x| x == *id))
+        })
         .filter(|album| {
             !request
                 .sources
@@ -231,7 +255,7 @@ pub fn get_album_versions(
     data: &AppState,
 ) -> Result<Vec<AlbumVersion>, GetAlbumVersionsError> {
     let tracks = get_album_tracks(album_id, data)?;
-    log::trace!("Got {} album tracks", tracks.len());
+    log::trace!("Got {} album id={album_id} tracks", tracks.len());
 
     let mut versions = vec![];
 
