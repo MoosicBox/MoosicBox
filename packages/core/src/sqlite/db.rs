@@ -1448,7 +1448,7 @@ where
     Ok(AsModelResult::as_model(value)?)
 }
 
-fn update_and_get_row<'a, T>(
+pub fn update_and_get_row<'a, T>(
     connection: &'a Connection,
     table_name: &str,
     id: SqliteValue,
