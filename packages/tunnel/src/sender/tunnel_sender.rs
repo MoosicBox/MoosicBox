@@ -1222,7 +1222,7 @@ impl TunnelSender {
                                     TunnelRequestError::BadRequest("Bad height".into())
                                 })?;
 
-                            match get_album_cover(album_id, db.clone())
+                            match get_album_cover(album_id, db)
                                 .await
                                 .map_err(|e| TunnelRequestError::Request(e.to_string()))?
                             {

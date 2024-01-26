@@ -13,10 +13,7 @@ use thiserror::Error;
 use tokio::{select, sync::RwLock};
 use tokio_util::sync::CancellationToken;
 
-use crate::{
-    output::{ScanAlbum, ScanOutput, UpdateDatabaseError},
-    CACHE_DIR,
-};
+use crate::output::{ScanAlbum, ScanOutput, UpdateDatabaseError};
 
 #[derive(Debug, Error)]
 pub enum ScanError {
@@ -146,11 +143,7 @@ pub async fn scan_albums(
                 .add_album(
                     &album.title,
                     &Some(album.release_date.clone()),
-                    CACHE_DIR
-                        .join(&moosicbox_files::sanitize_filename(&album.artist))
-                        .join(&moosicbox_files::sanitize_filename(&album.title))
-                        .to_str()
-                        .unwrap(),
+                    None,
                     &None,
                     &Some(album.id),
                 )
@@ -167,7 +160,7 @@ pub async fn scan_albums(
                     {
                         Ok(artist) => {
                             if let Some(url) = artist.picture_url(750) {
-                                scan_artist.write().await.search_cover(url).await?;
+                                scan_artist.write().await.search_cover(url, "tidal").await?;
                             }
                         }
                         Err(err) => {
@@ -181,7 +174,7 @@ pub async fn scan_albums(
                 scan_album
                     .write()
                     .await
-                    .search_cover(album.cover_url(1280))
+                    .search_cover(album.cover_url(1280), "tidal")
                     .await?;
             }
         }

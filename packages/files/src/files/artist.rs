@@ -32,13 +32,14 @@ pub enum FetchArtistCoverError {
 
 async fn get_or_fetch_artist_cover_from_remote_url(
     url: &str,
+    source: &str,
     artist_name: &str,
 ) -> Result<String, FetchArtistCoverError> {
     static IMAGE_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
 
-    // This path might overwrite existing library artist.jpg
     let path = moosicbox_config::get_cache_dir_path()
         .expect("Failed to get cache directory")
+        .join(source)
         .join(sanitize_filename(artist_name));
 
     let filename = "artist.jpg";
@@ -110,7 +111,7 @@ pub async fn get_artist_cover(
                 .picture_url(750)
                 .ok_or(ArtistCoverError::NotFound(artist_id.clone()))?;
 
-            get_or_fetch_artist_cover_from_remote_url(&cover, &artist.name).await?
+            get_or_fetch_artist_cover_from_remote_url(&cover, "tidal", &artist.name).await?
         }
         ArtistId::Qobuz(qobuz_artist_id) => {
             static ARTIST_CACHE: Lazy<RwLock<HashMap<u64, QobuzArtist>>> =
@@ -135,7 +136,7 @@ pub async fn get_artist_cover(
                 .cover_url()
                 .ok_or(ArtistCoverError::NotFound(artist_id.clone()))?;
 
-            get_or_fetch_artist_cover_from_remote_url(&cover, &artist.name).await?
+            get_or_fetch_artist_cover_from_remote_url(&cover, "qobuz", &artist.name).await?
         }
     };
 

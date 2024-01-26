@@ -1,4 +1,4 @@
-use audiotags::{AudioTag, Tag};
+use audiotags::Tag;
 use futures::Future;
 use lofty::{AudioFile, ParseOptions};
 use moosicbox_core::{
@@ -6,11 +6,11 @@ use moosicbox_core::{
     sqlite::{db::DbError, models::TrackSource},
     types::AudioFormat,
 };
+use moosicbox_files::{sanitize_filename, search_for_cover};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::{
     fs::{self, DirEntry, Metadata},
-    io::Write,
     num::ParseIntError,
     path::{Path, PathBuf},
     pin::Pin,
@@ -20,7 +20,10 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
-use crate::output::{ScanOutput, UpdateDatabaseError};
+use crate::{
+    output::{ScanOutput, UpdateDatabaseError},
+    CACHE_DIR,
+};
 
 #[derive(Debug, Error)]
 pub enum ScanError {
@@ -69,50 +72,6 @@ pub async fn scan(directory: &str, db: &Db, token: CancellationToken) -> Result<
     );
 
     Ok(())
-}
-
-fn save_bytes_to_file(bytes: &[u8], path: &PathBuf) {
-    let mut file = fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .open(path)
-        .unwrap();
-
-    let _ = file.write_all(bytes);
-}
-
-fn search_for_artwork(
-    path: PathBuf,
-    file_name: &str,
-    tag: Option<Box<dyn AudioTag>>,
-) -> Option<PathBuf> {
-    if let Some(cover_file) = fs::read_dir(path.clone())
-        .unwrap()
-        .filter_map(|p| p.ok())
-        .find(|p| {
-            let name = p.file_name().to_str().unwrap().to_lowercase();
-            name.starts_with(format!("{file_name}.").as_str())
-        })
-        .map(|dir| dir.path())
-    {
-        Some(cover_file)
-    } else if let Some(tag) = tag {
-        if let Some(tag_cover) = tag.album_cover() {
-            let cover_file_path = match tag_cover.mime_type {
-                audiotags::MimeType::Png => path.join(format!("{file_name}.png")),
-                audiotags::MimeType::Jpeg => path.join(format!("{file_name}.jpg")),
-                audiotags::MimeType::Tiff => path.join(format!("{file_name}.tiff")),
-                audiotags::MimeType::Bmp => path.join(format!("{file_name}.bmp")),
-                audiotags::MimeType::Gif => path.join(format!("{file_name}.gif")),
-            };
-            save_bytes_to_file(tag_cover.data, &cover_file_path);
-            Some(cover_file_path)
-        } else {
-            None
-        }
-    } else {
-        None
-    }
 }
 
 fn scan_track(
@@ -228,17 +187,26 @@ fn scan_track(
             .add_album(
                 &album,
                 &date_released,
-                path_album.to_str().unwrap(),
+                Some(path_album.to_str().unwrap()),
                 &None,
                 &None,
             )
             .await;
         let mut album = album.write().await;
+        let save_path = CACHE_DIR
+            .join("local")
+            .join(sanitize_filename(&artist.name))
+            .join(sanitize_filename(&album.name));
 
         if album.cover.is_none() && !album.searched_cover {
             album.searched_cover = true;
-            if let Some(cover) = search_for_artwork(path_album.clone(), "cover", Some(tag)) {
-                let cover = Some(cover.file_name().unwrap().to_str().unwrap().to_string());
+            if let Some(cover) = search_for_cover(
+                path_album.clone(),
+                "cover",
+                Some(save_path.join("album.jpg")),
+                Some(tag),
+            )? {
+                let cover = Some(cover.to_str().unwrap().to_string());
 
                 log::debug!(
                     "Found album artwork for {}: {:?}",
@@ -252,7 +220,12 @@ fn scan_track(
 
         if artist.cover.is_none() && !artist.searched_cover {
             artist.searched_cover = true;
-            if let Some(cover) = search_for_artwork(path_album.clone(), "artist", None) {
+            if let Some(cover) = search_for_cover(
+                path_album.clone(),
+                "artist",
+                Some(save_path.join("artist.jpg")),
+                None,
+            )? {
                 let cover = Some(cover.to_str().unwrap().to_string());
 
                 log::debug!(

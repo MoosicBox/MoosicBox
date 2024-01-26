@@ -117,7 +117,7 @@ pub struct ScanAlbum {
     pub cover: Option<String>,
     pub searched_cover: bool,
     pub date_released: Option<String>,
-    pub directory: String,
+    pub directory: Option<String>,
     pub tracks: Arc<RwLock<Vec<Arc<RwLock<ScanTrack>>>>>,
     pub qobuz_id: Option<String>,
     pub tidal_id: Option<u64>,
@@ -129,7 +129,7 @@ impl ScanAlbum {
         artist: ScanArtist,
         name: &str,
         date_released: &Option<String>,
-        directory: &str,
+        directory: Option<&str>,
         qobuz_id: &Option<String>,
         tidal_id: &Option<u64>,
     ) -> Self {
@@ -139,7 +139,7 @@ impl ScanAlbum {
             cover: None,
             searched_cover: false,
             date_released: date_released.clone(),
-            directory: directory.to_string(),
+            directory: directory.map(|d| d.to_string()),
             tracks: Arc::new(RwLock::new(Vec::new())),
             qobuz_id: qobuz_id.clone(),
             tidal_id: *tidal_id,
@@ -212,13 +212,25 @@ impl ScanAlbum {
     pub async fn search_cover(
         &mut self,
         url: String,
+        source: &str,
     ) -> Result<Option<String>, FetchAndSaveBytesFromRemoteUrlError> {
         if self.cover.is_none() && !self.searched_cover {
             let path = CACHE_DIR
+                .join(source)
                 .join(moosicbox_files::sanitize_filename(&self.artist.name))
                 .join(moosicbox_files::sanitize_filename(&self.name));
 
-            let cover = search_for_cover(&IMAGE_CLIENT, &path, "album.jpg", &url).await?;
+            let filename = if source == "local" {
+                "album.jpg".to_string()
+            } else if let Some(id) = self.tidal_id {
+                format!("album_{}.jpg", id)
+            } else if let Some(id) = &self.qobuz_id {
+                format!("album_{}.jpg", id)
+            } else {
+                "album.jpg".to_string()
+            };
+
+            let cover = search_for_cover(&IMAGE_CLIENT, &path, &filename, &url).await?;
 
             self.searched_cover = true;
 
@@ -236,7 +248,7 @@ impl ScanAlbum {
             ("title", SqliteValue::String(self.name)),
             ("date_released", SqliteValue::StringOpt(self.date_released)),
             ("artwork", SqliteValue::StringOpt(self.cover)),
-            ("directory", SqliteValue::StringOpt(Some(self.directory))),
+            ("directory", SqliteValue::StringOpt(self.directory)),
         ]);
         if let Some(qobuz_id) = self.qobuz_id {
             values.insert("qobuz_id", SqliteValue::String(qobuz_id));
@@ -276,7 +288,7 @@ impl ScanArtist {
         &mut self,
         name: &str,
         date_released: &Option<String>,
-        directory: &str,
+        directory: Option<&str>,
         qobuz_id: &Option<String>,
         tidal_id: &Option<u64>,
     ) -> Arc<RwLock<ScanAlbum>> {
@@ -312,12 +324,26 @@ impl ScanArtist {
     pub async fn search_cover(
         &mut self,
         url: String,
+        source: &str,
     ) -> Result<Option<String>, FetchAndSaveBytesFromRemoteUrlError> {
         if self.cover.is_none() && !self.searched_cover {
             self.searched_cover = true;
 
-            let path = CACHE_DIR.join(moosicbox_files::sanitize_filename(&self.name));
-            let cover = search_for_cover(&IMAGE_CLIENT, &path, "artist.jpg", &url).await?;
+            let path = CACHE_DIR
+                .join(source)
+                .join(moosicbox_files::sanitize_filename(&self.name));
+
+            let filename = if source == "local" {
+                "artist.jpg".to_string()
+            } else if let Some(id) = self.tidal_id {
+                format!("artist_{}.jpg", id)
+            } else if let Some(id) = &self.qobuz_id {
+                format!("artist_{}.jpg", id)
+            } else {
+                "artist.jpg".to_string()
+            };
+
+            let cover = search_for_cover(&IMAGE_CLIENT, &path, &filename, &url).await?;
 
             if let Some(cover) = cover {
                 self.cover = Some(cover.to_str().unwrap().to_string());

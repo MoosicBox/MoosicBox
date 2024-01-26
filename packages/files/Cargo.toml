@@ -13,25 +13,27 @@ moosicbox_stream_utils     = { path = "../stream_utils" }
 moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false }
 moosicbox_tidal            = { path = "../tidal" }
 
-actix-cors   = { workspace = true }
-actix-files  = { workspace = true }
-actix-web    = { workspace = true }
-awc          = { workspace = true }
-bytes        = { workspace = true }
-lazy_static  = { workspace = true }
-log          = { workspace = true }
-once_cell    = { workspace = true }
-regex        = { workspace = true }
-reqwest      = { workspace = true }
-serde        = { workspace = true, features = ["derive"] }
-serde_json   = { workspace = true }
-strum        = { workspace = true }
-strum_macros = { workspace = true }
-symphonia    = { workspace = true }
-thiserror    = { workspace = true }
-tokio        = { workspace = true }
-tokio-stream = { workspace = true }
-tokio-util   = { workspace = true }
+actix-cors      = { workspace = true }
+actix-files     = { workspace = true }
+actix-web       = { workspace = true }
+async-recursion = { workspace = true }
+audiotags       = { workspace = true }
+awc             = { workspace = true }
+bytes           = { workspace = true }
+lazy_static     = { workspace = true }
+log             = { workspace = true }
+once_cell       = { workspace = true }
+regex           = { workspace = true }
+reqwest         = { workspace = true }
+serde           = { workspace = true, features = ["derive"] }
+serde_json      = { workspace = true }
+strum           = { workspace = true }
+strum_macros    = { workspace = true }
+symphonia       = { workspace = true }
+thiserror       = { workspace = true }
+tokio           = { workspace = true }
+tokio-stream    = { workspace = true }
+tokio-util      = { workspace = true }
 
 [features]
 default = ["api", "files", "range", "image", "aac", "flac", "mp3", "opus"]
@@ -41,7 +43,7 @@ fail-on-warnings = []
 image   = ["moosicbox_image/image"]
 libvips = ["moosicbox_image/libvips"]
 
-api = []
+api   = []
 files = []
 range = []
 

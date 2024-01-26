@@ -13,10 +13,7 @@ use thiserror::Error;
 use tokio::{select, sync::RwLock};
 use tokio_util::sync::CancellationToken;
 
-use crate::{
-    output::{ScanAlbum, ScanOutput, UpdateDatabaseError},
-    CACHE_DIR,
-};
+use crate::output::{ScanAlbum, ScanOutput, UpdateDatabaseError};
 
 #[derive(Debug, Error)]
 pub enum ScanError {
@@ -134,11 +131,7 @@ async fn scan_albums(
                 .add_album(
                     &album.title,
                     &Some(album.release_date_original.clone()),
-                    CACHE_DIR
-                        .join(&moosicbox_files::sanitize_filename(&album.artist))
-                        .join(&moosicbox_files::sanitize_filename(&album.title))
-                        .to_str()
-                        .unwrap(),
+                    None,
                     &Some(album.id.clone()),
                     &None,
                 )
@@ -154,7 +147,7 @@ async fn scan_albums(
                     match moosicbox_qobuz::artist(db, album.artist_id, None, None).await {
                         Ok(artist) => {
                             if let Some(url) = artist.cover_url() {
-                                scan_artist.write().await.search_cover(url).await?;
+                                scan_artist.write().await.search_cover(url, "qobuz").await?;
                             }
                         }
                         Err(err) => {
@@ -166,7 +159,7 @@ async fn scan_albums(
 
             if read_album.cover.is_none() && !read_album.searched_cover {
                 if let Some(url) = album.cover_url() {
-                    scan_album.write().await.search_cover(url).await?;
+                    scan_album.write().await.search_cover(url, "qobuz").await?;
                 }
             }
         }

@@ -3010,6 +3010,8 @@ dependencies = [
  "actix-cors",
  "actix-files",
  "actix-web",
+ "async-recursion",
+ "audiotags",
  "awc",
  "bytes",
  "lazy_static",

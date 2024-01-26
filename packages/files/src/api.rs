@@ -444,7 +444,8 @@ pub async fn album_source_artwork_endpoint(
 
     match get_album_cover(
         album_id,
-        data.db
+        &data
+            .db
             .clone()
             .ok_or(ErrorInternalServerError("No DB set"))?,
     )
@@ -496,7 +497,8 @@ pub async fn album_artwork_endpoint(
 
     let AlbumCoverSource::LocalFilePath(path) = get_album_cover(
         album_id,
-        data.db
+        &data
+            .db
             .clone()
             .ok_or(ErrorInternalServerError("No DB set"))?,
     )
