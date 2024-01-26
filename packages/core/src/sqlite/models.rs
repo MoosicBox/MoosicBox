@@ -541,23 +541,82 @@ impl AsModelResultMappedMut<Album, DbError> for Rows<'_> {
 
             if album_id != last_album_id {
                 if let Some(ref mut album) = results.last_mut() {
+                    log::trace!(
+                        "Sorting versions for album id={} count={}",
+                        album.id,
+                        album.versions.len()
+                    );
                     sort_album_versions(&mut album.versions);
                 }
-                if let Ok(row) = AsModelResult::as_model(row) {
-                    results.push(row);
+                match AsModelResult::as_model(row) {
+                    Ok(album) => {
+                        results.push(album);
+                    }
+                    Err(err) => {
+                        log::error!("Failed to parse Album for album id={}: {err:?}", album_id);
+                        continue;
+                    }
                 }
                 last_album_id = album_id;
             }
 
             if let Some(album) = results.last_mut() {
-                if let Ok(version) = AsModelResult::<AlbumVersionQuality, ParseError>::as_model(row)
-                {
-                    album.versions.push(version);
+                if let Some(_source) = row.get::<_, Option<String>>("source")? {
+                    match AsModelResult::<AlbumVersionQuality, ParseError>::as_model(row) {
+                        Ok(version) => {
+                            album.versions.push(version);
+                            log::trace!(
+                                "Added version to album id={} count={}",
+                                album.id,
+                                album.versions.len()
+                            );
+                        }
+                        Err(err) => {
+                            log::error!(
+                                "Failed to parse AlbumVersionQuality for album id={}: {err:?}",
+                                album.id
+                            );
+                        }
+                    }
+                } else {
+                    if album.tidal_id.is_some() {
+                        album.versions.push(AlbumVersionQuality {
+                            format: None,
+                            bit_depth: None,
+                            sample_rate: None,
+                            channels: None,
+                            source: TrackSource::Tidal,
+                        });
+                        log::trace!(
+                            "Added Tidal version to album id={} count={}",
+                            album.id,
+                            album.versions.len()
+                        );
+                    }
+                    if album.qobuz_id.is_some() {
+                        album.versions.push(AlbumVersionQuality {
+                            format: None,
+                            bit_depth: None,
+                            sample_rate: None,
+                            channels: None,
+                            source: TrackSource::Qobuz,
+                        });
+                        log::trace!(
+                            "Added Qobuz version to album id={} count={}",
+                            album.id,
+                            album.versions.len()
+                        );
+                    }
                 }
             }
         }
 
         if let Some(ref mut album) = results.last_mut() {
+            log::trace!(
+                "Sorting versions for last album id={} count={}",
+                album.id,
+                album.versions.len()
+            );
             sort_album_versions(&mut album.versions);
         }
 

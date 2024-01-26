@@ -629,8 +629,8 @@ pub fn get_albums(db: &Connection) -> Result<Vec<Album>, DbError> {
                 tracks.format,
                 tracks.source
             FROM albums
-            JOIN tracks ON tracks.album_id=albums.id
-            JOIN track_sizes ON track_sizes.track_id=tracks.id
+            LEFT JOIN tracks ON tracks.album_id=albums.id
+            LEFT JOIN track_sizes ON track_sizes.track_id=tracks.id
             JOIN artists ON artists.id=albums.artist_id
             ORDER BY albums.id desc
         ",
@@ -659,8 +659,8 @@ pub fn get_all_album_version_qualities(
                 tracks.format,
                 tracks.source
             FROM albums
-            JOIN tracks ON tracks.album_id=albums.id
-            JOIN track_sizes ON track_sizes.track_id=tracks.id
+            LEFT JOIN tracks ON tracks.album_id=albums.id
+            LEFT JOIN track_sizes ON track_sizes.track_id=tracks.id
             WHERE albums.id=({ids_str})
             ORDER BY albums.id desc
             ",
@@ -704,8 +704,8 @@ pub fn get_album_version_qualities(
                 tracks.format,
                 tracks.source
             FROM albums
-            JOIN tracks ON tracks.album_id=albums.id
-            JOIN track_sizes ON track_sizes.track_id=tracks.id
+            LEFT JOIN tracks ON tracks.album_id=albums.id
+            LEFT JOIN track_sizes ON track_sizes.track_id=tracks.id
             WHERE albums.id=?1",
             )?
             .query(params![album_id])?,
@@ -868,7 +868,7 @@ pub fn get_album_tracks(db: &Connection, album_id: i32) -> Result<Vec<LibraryTra
             FROM tracks
             JOIN albums ON albums.id=tracks.album_id
             JOIN artists ON artists.id=albums.artist_id
-            JOIN track_sizes ON tracks.id=track_sizes.track_id AND track_sizes.format=tracks.format
+            LEFT JOIN track_sizes ON tracks.id=track_sizes.track_id AND track_sizes.format=tracks.format
             WHERE tracks.album_id=?1
             ORDER BY number ASC",
     )?
@@ -891,8 +891,8 @@ pub fn get_artist_albums(db: &Connection, artist_id: i32) -> Result<Vec<Album>, 
                 tracks.format,
                 tracks.source
             FROM albums
-            JOIN tracks ON tracks.album_id=albums.id
-            JOIN track_sizes ON track_sizes.track_id=tracks.id
+            LEFT JOIN tracks ON tracks.album_id=albums.id
+            LEFT JOIN track_sizes ON track_sizes.track_id=tracks.id
             JOIN artists ON artists.id=albums.artist_id
             WHERE albums.artist_id=?1
             ORDER BY albums.id desc
@@ -969,7 +969,7 @@ pub fn set_track_sizes(
         })
         .collect::<Vec<_>>();
 
-    upsert_muli(
+    upsert_multi(
         db,
         "track_sizes",
         &[
@@ -1033,7 +1033,7 @@ pub fn get_tracks(db: &Connection, ids: Option<&Vec<i32>>) -> Result<Vec<Library
             FROM tracks
             JOIN albums ON albums.id=tracks.album_id
             JOIN artists ON artists.id=albums.artist_id
-            JOIN track_sizes ON tracks.id=track_sizes.track_id AND track_sizes.format=tracks.format
+            LEFT JOIN track_sizes ON tracks.id=track_sizes.track_id AND track_sizes.format=tracks.format
             {}",
         ids.map(|ids| {
             let ids_param = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
@@ -1490,7 +1490,7 @@ where
         .transpose()?)
 }
 
-pub fn upsert_muli<'a, T>(
+pub fn upsert_multi<'a, T>(
     connection: &'a Connection,
     table_name: &str,
     unique: &[&str],
@@ -1784,7 +1784,14 @@ pub fn add_album_maps_and_get_albums(
 
             Ok::<_, DbError>(row)
         })
-        .filter_map(|album| album.ok())
+        .filter_map(|album| {
+            album
+                .map_err(|e| {
+                    log::error!("Failed to get Album: {e:?}");
+                    e
+                })
+                .ok()
+        })
         .collect())
 }
 
@@ -1835,7 +1842,7 @@ pub fn add_tracks(db: &Connection, tracks: Vec<InsertTrack>) -> Result<Vec<Libra
         })
         .collect::<Vec<_>>();
 
-    upsert_muli(
+    upsert_multi(
         db,
         "tracks",
         &[
