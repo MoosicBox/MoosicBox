@@ -150,6 +150,7 @@ pub fn get_scan_origins(db: &DbConnection) -> Result<Vec<ScanOrigin>, DbError> {
 }
 
 pub fn enable_scan_origin(db: &DbConnection, origin: ScanOrigin) -> Result<(), DbError> {
+    #[cfg(feature = "local")]
     if origin == ScanOrigin::Local {
         return Ok(());
     }
