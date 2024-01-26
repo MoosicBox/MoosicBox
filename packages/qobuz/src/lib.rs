@@ -288,20 +288,21 @@ impl AsModelResult<QobuzTrack, ParseError> for Value {
 #[serde(rename_all = "camelCase")]
 pub struct QobuzArtist {
     pub id: u64,
-    pub image: QobuzImage,
+    pub image: Option<QobuzImage>,
     pub name: String,
 }
 
 impl QobuzArtist {
     pub fn cover_url(&self) -> Option<String> {
-        self.image
-            .mega
-            .clone()
-            .or(self.image.extralarge.clone())
-            .or(self.image.large.clone())
-            .or(self.image.medium.clone())
-            .or(self.image.small.clone())
-            .or(self.image.thumbnail.clone())
+        self.image.clone().and_then(|image| {
+            image
+                .mega
+                .or(image.extralarge)
+                .or(image.large)
+                .or(image.medium)
+                .or(image.small)
+                .or(image.thumbnail)
+        })
     }
 }
 
@@ -833,6 +834,8 @@ pub async fn artist(
     )
     .await?;
 
+    log::trace!("Received artist response: {value:?}");
+
     let artist = value.to_value_type()?;
 
     Ok(artist)
@@ -872,6 +875,8 @@ pub async fn favorite_artists(
         access_token,
     )
     .await?;
+
+    log::trace!("Received favorite artists response: {value:?}");
 
     let items = value.to_nested_value(&["artists", "items"])?;
     let count = value.to_nested_value(&["artists", "total"])?;
@@ -922,6 +927,8 @@ pub async fn artist_albums(
         access_token,
     )
     .await?;
+
+    log::trace!("Received artist albums response: {value:?}");
 
     let items = value.to_value("items")?;
     let has_more = value.to_value("has_more")?;
