@@ -632,8 +632,7 @@ impl ScanOutput {
                 .unwrap_or_else(|e| e.into_inner())
                 .inner,
             insert_tracks,
-        )
-        .unwrap();
+        )?;
 
         let db_tracks_end = std::time::SystemTime::now();
         log::info!(
