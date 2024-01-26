@@ -18,19 +18,26 @@ use crate::{
     QobuzTrackFileUrlError, QobuzUserLoginError,
 };
 
-impl ToApi<ApiQobuzAlbum> for QobuzAlbum {
-    fn to_api(&self) -> ApiQobuzAlbum {
-        ApiQobuzAlbum {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
+pub enum ApiAlbum {
+    Qobuz(ApiQobuzAlbum),
+}
+
+impl ToApi<ApiAlbum> for QobuzAlbum {
+    fn to_api(&self) -> ApiAlbum {
+        ApiAlbum::Qobuz(ApiQobuzAlbum {
             id: self.id.clone(),
             artist: self.artist.clone(),
             artist_id: self.artist_id,
-            cover: self.cover_url(),
+            contains_cover: self.cover_url().is_some(),
             duration: self.duration,
             title: self.title.clone(),
             parental_warning: self.parental_warning,
-            track_count: self.tracks_count,
-            release_date: self.release_date_original.clone(),
-        }
+            number_of_tracks: self.tracks_count,
+            date_released: self.release_date_original.clone(),
+        })
     }
 }
 
@@ -77,11 +84,11 @@ pub struct ApiQobuzAlbum {
     pub id: String,
     pub artist: String,
     pub artist_id: u64,
-    pub cover: Option<String>,
+    pub contains_cover: bool,
     pub duration: u32,
     pub parental_warning: bool,
-    pub track_count: u32,
-    pub release_date: String,
+    pub number_of_tracks: u32,
+    pub date_released: String,
     pub title: String,
 }
 
@@ -91,33 +98,47 @@ pub struct ApiQobuzRelease {
     pub id: String,
     pub artist: String,
     pub artist_id: u64,
-    pub cover: Option<String>,
+    pub contains_cover: bool,
     pub duration: u32,
     pub parental_warning: bool,
-    pub track_count: u32,
-    pub release_date: String,
+    pub number_of_tracks: u32,
+    pub date_released: String,
     pub title: String,
 }
 
-impl ToApi<ApiQobuzRelease> for QobuzRelease {
-    fn to_api(&self) -> ApiQobuzRelease {
-        ApiQobuzRelease {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
+pub enum ApiRelease {
+    Qobuz(ApiQobuzRelease),
+}
+
+impl ToApi<ApiRelease> for QobuzRelease {
+    fn to_api(&self) -> ApiRelease {
+        ApiRelease::Qobuz(ApiQobuzRelease {
             id: self.id.clone(),
             artist: self.artist.clone(),
             artist_id: self.artist_id,
-            cover: self.cover_url(),
+            contains_cover: self.cover_url().is_some(),
             duration: self.duration,
             title: self.title.clone(),
             parental_warning: self.parental_warning,
-            track_count: self.tracks_count,
-            release_date: self.release_date_original.clone(),
-        }
+            number_of_tracks: self.tracks_count,
+            date_released: self.release_date_original.clone(),
+        })
     }
 }
 
-impl ToApi<ApiQobuzTrack> for QobuzTrack {
-    fn to_api(&self) -> ApiQobuzTrack {
-        ApiQobuzTrack {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
+pub enum ApiTrack {
+    Qobuz(ApiQobuzTrack),
+}
+
+impl ToApi<ApiTrack> for QobuzTrack {
+    fn to_api(&self) -> ApiTrack {
+        ApiTrack::Qobuz(ApiQobuzTrack {
             id: self.id,
             track_number: self.track_number,
             artist: self.artist.clone(),
@@ -128,7 +149,7 @@ impl ToApi<ApiQobuzTrack> for QobuzTrack {
             parental_warning: self.parental_warning,
             isrc: self.isrc.clone(),
             title: self.title.clone(),
-        }
+        })
     }
 }
 
@@ -147,13 +168,20 @@ pub struct ApiQobuzTrack {
     pub title: String,
 }
 
-impl ToApi<ApiQobuzArtist> for QobuzArtist {
-    fn to_api(&self) -> ApiQobuzArtist {
-        ApiQobuzArtist {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
+pub enum ApiArtist {
+    Qobuz(ApiQobuzArtist),
+}
+
+impl ToApi<ApiArtist> for QobuzArtist {
+    fn to_api(&self) -> ApiArtist {
+        ApiArtist::Qobuz(ApiQobuzArtist {
             id: self.id,
-            cover: self.cover_url(),
-            name: self.name.clone(),
-        }
+            contains_cover: self.cover_url().is_some(),
+            title: self.name.clone(),
+        })
     }
 }
 
@@ -161,8 +189,8 @@ impl ToApi<ApiQobuzArtist> for QobuzArtist {
 #[serde(rename_all = "camelCase")]
 pub struct ApiQobuzArtist {
     pub id: u64,
-    pub cover: Option<String>,
-    pub name: String,
+    pub contains_cover: bool,
+    pub title: String,
 }
 
 static QOBUZ_ACCESS_TOKEN_HEADER: &str = "x-qobuz-access-token";
@@ -186,7 +214,7 @@ pub async fn artist_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzArtistQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<QobuzArtist>> {
+) -> Result<Json<ApiArtist>> {
     let artist = artist(
         #[cfg(feature = "db")]
         data.db.as_ref().expect("Db not set"),
@@ -200,7 +228,7 @@ pub async fn artist_endpoint(
     )
     .await?;
 
-    Ok(Json(artist))
+    Ok(Json(artist.to_api()))
 }
 
 impl From<QobuzFavoriteArtistsError> for actix_web::Error {
@@ -259,7 +287,7 @@ pub async fn album_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzAlbumQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<QobuzAlbum>> {
+) -> Result<Json<ApiAlbum>> {
     let album = album(
         #[cfg(feature = "db")]
         data.db.as_ref().expect("Db not set"),
@@ -273,7 +301,7 @@ pub async fn album_endpoint(
     )
     .await?;
 
-    Ok(Json(album))
+    Ok(Json(album.to_api()))
 }
 
 impl From<QobuzArtistAlbumsError> for actix_web::Error {
@@ -287,10 +315,10 @@ impl From<QobuzArtistAlbumsError> for actix_web::Error {
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum AlbumReleaseType {
     All,
-    Album,
+    Lp,
     Live,
-    Compilation,
-    EpSingle,
+    Compilations,
+    EpsAndSingles,
     Other,
     Download,
 }
@@ -299,10 +327,10 @@ impl From<AlbumReleaseType> for QobuzAlbumReleaseType {
     fn from(value: AlbumReleaseType) -> Self {
         match value {
             AlbumReleaseType::All => QobuzAlbumReleaseType::All,
-            AlbumReleaseType::Album => QobuzAlbumReleaseType::Album,
+            AlbumReleaseType::Lp => QobuzAlbumReleaseType::Album,
             AlbumReleaseType::Live => QobuzAlbumReleaseType::Live,
-            AlbumReleaseType::Compilation => QobuzAlbumReleaseType::Compilation,
-            AlbumReleaseType::EpSingle => QobuzAlbumReleaseType::EpSingle,
+            AlbumReleaseType::Compilations => QobuzAlbumReleaseType::Compilation,
+            AlbumReleaseType::EpsAndSingles => QobuzAlbumReleaseType::EpSingle,
             AlbumReleaseType::Other => QobuzAlbumReleaseType::Other,
             AlbumReleaseType::Download => QobuzAlbumReleaseType::Download,
         }
