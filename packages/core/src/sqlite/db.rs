@@ -704,8 +704,8 @@ pub fn get_album_version_qualities(
                 tracks.format,
                 tracks.source
             FROM albums
-            LEFT JOIN tracks ON tracks.album_id=albums.id
-            LEFT JOIN track_sizes ON track_sizes.track_id=tracks.id
+            JOIN tracks ON tracks.album_id=albums.id
+            JOIN track_sizes ON track_sizes.track_id=tracks.id
             WHERE albums.id=?1",
             )?
             .query(params![album_id])?,
