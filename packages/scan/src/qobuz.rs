@@ -53,7 +53,7 @@ pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
 
                         log::debug!("Fetched Qobuz albums offset={offset} limit={limit}: page_count={page_count}, total_count={count}");
 
-                        scan_albums(qobuz_albums, count, db, output.clone(), token.clone()).await?;
+                        scan_albums(qobuz_albums, count, db, output.clone(), Some(token.clone())).await?;
 
                         if page_count < (limit as usize) {
                             break;
@@ -95,14 +95,16 @@ pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
     Ok(())
 }
 
-async fn scan_albums(
+pub async fn scan_albums(
     albums: Vec<QobuzAlbum>,
     total: u32,
     db: &Db,
     output: Arc<RwLock<ScanOutput>>,
-    token: CancellationToken,
+    token: Option<CancellationToken>,
 ) -> Result<(), ScanError> {
     log::debug!("Processing Qobuz albums count={}", albums.len());
+
+    let token = token.unwrap_or_default();
 
     for album in albums {
         let count = {

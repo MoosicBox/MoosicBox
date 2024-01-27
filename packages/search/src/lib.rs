@@ -396,7 +396,7 @@ pub enum DeleteFromIndexError {
 
 pub fn delete_from_global_search_index(
     data: Vec<(&str, DataValue)>,
-) -> Result<(), PopulateIndexError> {
+) -> Result<(), DeleteFromIndexError> {
     log::debug!("Deleting from global search index...");
 
     if data.is_empty() {

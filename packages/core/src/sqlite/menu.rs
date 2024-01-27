@@ -147,8 +147,8 @@ pub async fn get_artist(
 
 #[derive(Debug, Error)]
 pub enum GetAlbumError {
-    #[error("Album not found with ID {album_id:?}")]
-    AlbumNotFound { album_id: i32 },
+    #[error("Album not found with ID {0}")]
+    AlbumNotFound(String),
     #[error("Too many albums found with ID {album_id:?}")]
     TooManyAlbumsFound { album_id: i32 },
     #[error("Unknown source: {album_source:?}")]
@@ -174,7 +174,7 @@ impl<T> From<PoisonError<T>> for GetAlbumError {
 pub async fn get_album(
     album_id: Option<u64>,
     tidal_album_id: Option<u64>,
-    qobuz_album_id: Option<u64>,
+    qobuz_album_id: Option<String>,
     db: &Db,
 ) -> Result<Album, GetAlbumError> {
     let request = CacheRequest {
@@ -189,9 +189,7 @@ pub async fn get_album(
             match db::get_album(&library.inner, album_id as i32) {
                 Ok(album) => {
                     if album.is_none() {
-                        return Err(GetAlbumError::AlbumNotFound {
-                            album_id: album_id as i32,
-                        });
+                        return Err(GetAlbumError::AlbumNotFound(album_id.to_string()));
                     }
 
                     let album = album.unwrap();
@@ -204,9 +202,7 @@ pub async fn get_album(
             match db::get_tidal_album(&library.inner, tidal_album_id as i32) {
                 Ok(album) => {
                     if album.is_none() {
-                        return Err(GetAlbumError::AlbumNotFound {
-                            album_id: tidal_album_id as i32,
-                        });
+                        return Err(GetAlbumError::AlbumNotFound(tidal_album_id.to_string()));
                     }
 
                     let album = album.unwrap();
@@ -215,13 +211,11 @@ pub async fn get_album(
                 }
                 Err(err) => Err(GetAlbumError::DbError(err)),
             }
-        } else if let Some(qobuz_album_id) = qobuz_album_id {
-            match db::get_qobuz_album(&library.inner, qobuz_album_id as i32) {
+        } else if let Some(qobuz_album_id) = qobuz_album_id.clone() {
+            match db::get_qobuz_album(&library.inner, &qobuz_album_id) {
                 Ok(album) => {
                     if album.is_none() {
-                        return Err(GetAlbumError::AlbumNotFound {
-                            album_id: qobuz_album_id as i32,
-                        });
+                        return Err(GetAlbumError::AlbumNotFound(qobuz_album_id));
                     }
 
                     let album = album.unwrap();

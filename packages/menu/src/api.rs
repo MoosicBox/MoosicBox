@@ -299,7 +299,7 @@ pub async fn get_artist_endpoint(
 pub struct GetAlbumQuery {
     album_id: Option<u64>,
     tidal_album_id: Option<u64>,
-    qobuz_album_id: Option<u64>,
+    qobuz_album_id: Option<String>,
 }
 
 #[get("/album")]
@@ -311,7 +311,7 @@ pub async fn get_album_endpoint(
         get_album(
             query.album_id,
             query.tidal_album_id,
-            query.qobuz_album_id,
+            query.qobuz_album_id.clone(),
             data.db.as_ref().expect("No DB set"),
         )
         .await
@@ -324,7 +324,7 @@ pub async fn get_album_endpoint(
 #[serde(rename_all = "camelCase")]
 pub struct AddAlbumQuery {
     tidal_album_id: Option<u64>,
-    qobuz_album_id: Option<u64>,
+    qobuz_album_id: Option<String>,
 }
 
 #[post("/album")]
@@ -335,7 +335,7 @@ pub async fn add_album_endpoint(
     add_album(
         data.db.as_ref().expect("No DB set"),
         query.tidal_album_id,
-        query.qobuz_album_id,
+        query.qobuz_album_id.clone(),
     )
     .await
     .map_err(|e| ErrorInternalServerError(format!("Failed to add album: {e:?}")))?;
@@ -347,7 +347,7 @@ pub async fn add_album_endpoint(
 #[serde(rename_all = "camelCase")]
 pub struct RemoveAlbumQuery {
     tidal_album_id: Option<u64>,
-    qobuz_album_id: Option<u64>,
+    qobuz_album_id: Option<String>,
 }
 
 #[delete("/album")]
@@ -358,7 +358,7 @@ pub async fn remove_album_endpoint(
     remove_album(
         data.db.as_ref().expect("No DB set"),
         query.tidal_album_id,
-        query.qobuz_album_id,
+        query.qobuz_album_id.clone(),
     )
     .await
     .map_err(|e| ErrorInternalServerError(format!("Failed to remove album: {e:?}")))?;

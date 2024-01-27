@@ -15,10 +15,11 @@ use moosicbox_core::{
     },
     types::AudioFormat,
 };
+use moosicbox_qobuz::{QobuzAddFavoriteAlbumError, QobuzAlbumError, QobuzRemoveFavoriteAlbumError};
 use moosicbox_scan::output::ScanOutput;
 use moosicbox_search::{
     data::{ToDataValues, ToDeleteTerm},
-    PopulateIndexError,
+    DeleteFromIndexError, PopulateIndexError,
 };
 use moosicbox_tidal::{TidalAddFavoriteAlbumError, TidalAlbumError, TidalRemoveFavoriteAlbumError};
 use serde::{Deserialize, Serialize};
@@ -313,6 +314,12 @@ pub enum AddAlbumError {
     #[error(transparent)]
     TidalScan(#[from] moosicbox_scan::tidal::ScanError),
     #[error(transparent)]
+    QobuzAddFavoriteAlbum(#[from] QobuzAddFavoriteAlbumError),
+    #[error(transparent)]
+    QobuzAlbum(#[from] QobuzAlbumError),
+    #[error(transparent)]
+    QobuzScan(#[from] moosicbox_scan::qobuz::ScanError),
+    #[error(transparent)]
     UpdateDatabase(#[from] moosicbox_scan::output::UpdateDatabaseError),
     #[error(transparent)]
     PopulateIndex(#[from] PopulateIndexError),
@@ -321,9 +328,9 @@ pub enum AddAlbumError {
 pub async fn add_album(
     db: &Db,
     tidal_album_id: Option<u64>,
-    qobuz_album_id: Option<u64>,
+    qobuz_album_id: Option<String>,
 ) -> Result<(), AddAlbumError> {
-    match get_album(None, tidal_album_id, qobuz_album_id, db).await {
+    match get_album(None, tidal_album_id, qobuz_album_id.clone(), db).await {
         Ok(album) => {
             log::debug!("Album tidal_album_id={tidal_album_id:?} qobuz_album_id={qobuz_album_id:?} already added: album={album:?}");
             return Ok(());
@@ -341,8 +348,10 @@ pub async fn add_album(
         moosicbox_tidal::add_favorite_album(db, album_id, None, None, None, None, None).await?;
         moosicbox_scan::tidal::scan_albums(vec![album], 1, db, output.clone(), None).await?;
     }
-    if let Some(_album_id) = qobuz_album_id {
-        unimplemented!("Qobuz favorites is not implemented yet");
+    if let Some(album_id) = &qobuz_album_id {
+        let album = moosicbox_qobuz::album(db, album_id, None, None).await?;
+        moosicbox_qobuz::add_favorite_album(db, album_id, None, None).await?;
+        moosicbox_scan::qobuz::scan_albums(vec![album], 1, db, output.clone(), None).await?;
     }
 
     let output = output.read().await;
@@ -403,23 +412,19 @@ pub enum RemoveAlbumError {
     #[error(transparent)]
     TidalRemoveFavoriteAlbum(#[from] TidalRemoveFavoriteAlbumError),
     #[error(transparent)]
-    TidalAlbum(#[from] TidalAlbumError),
+    QobuzRemoveFavoriteAlbum(#[from] QobuzRemoveFavoriteAlbumError),
     #[error(transparent)]
-    TidalScan(#[from] moosicbox_scan::tidal::ScanError),
-    #[error(transparent)]
-    UpdateDatabase(#[from] moosicbox_scan::output::UpdateDatabaseError),
-    #[error(transparent)]
-    PopulateIndex(#[from] PopulateIndexError),
+    DeleteFromIndex(#[from] DeleteFromIndexError),
 }
 
 pub async fn remove_album(
     db: &Db,
     tidal_album_id: Option<u64>,
-    qobuz_album_id: Option<u64>,
+    qobuz_album_id: Option<String>,
 ) -> Result<(), RemoveAlbumError> {
     log::debug!("Removing album from library tidal_album_id={tidal_album_id:?} qobuz_album_id={qobuz_album_id:?}");
 
-    let album = match get_album(None, tidal_album_id, qobuz_album_id, db).await {
+    let album = match get_album(None, tidal_album_id, qobuz_album_id.clone(), db).await {
         Ok(album) => album,
         Err(GetAlbumError::AlbumNotFound { .. }) => {
             log::debug!("Album tidal_album_id={tidal_album_id:?} qobuz_album_id={qobuz_album_id:?} already removed");
@@ -433,8 +438,8 @@ pub async fn remove_album(
     if let Some(album_id) = tidal_album_id {
         moosicbox_tidal::remove_favorite_album(db, album_id, None, None, None, None, None).await?;
     }
-    if let Some(_album_id) = qobuz_album_id {
-        unimplemented!("Qobuz favorites is not implemented yet");
+    if let Some(album_id) = qobuz_album_id {
+        moosicbox_qobuz::remove_favorite_album(db, &album_id, None, None).await?;
     }
 
     let tracks = moosicbox_core::sqlite::db::get_album_tracks(

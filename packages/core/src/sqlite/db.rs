@@ -832,7 +832,7 @@ pub fn get_tidal_album(db: &Connection, tidal_id: i32) -> Result<Option<Album>, 
     .transpose()
 }
 
-pub fn get_qobuz_album(db: &Connection, qobuz_id: i32) -> Result<Option<Album>, DbError> {
+pub fn get_qobuz_album(db: &Connection, qobuz_id: &str) -> Result<Option<Album>, DbError> {
     db.prepare_cached(
         "
             SELECT albums.*, artists.title as artist, artists.tidal_id as tidal_artist_id, artists.qobuz_id as qobuz_artist_id

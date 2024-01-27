@@ -430,6 +430,10 @@ pub enum AuthenticatedRequestError {
     RefetchAccessToken(#[from] RefetchAccessTokenError),
     #[error("Unauthorized")]
     Unauthorized,
+    #[error("Request failed (error {0})")]
+    RequestFailed(u16, String),
+    #[error("MaxFailedAttempts")]
+    NoResponseBody,
     #[error("MaxFailedAttempts")]
     MaxFailedAttempts,
 }
@@ -443,22 +447,86 @@ async fn authenticated_request(
     authenticated_request_inner(
         #[cfg(feature = "db")]
         db,
+        Method::Get,
         url,
         app_id,
         access_token,
+        None,
+        None,
+        1,
+    )
+    .await?
+    .ok_or_else(|| AuthenticatedRequestError::NoResponseBody)
+}
+
+#[allow(unused)]
+async fn authenticated_post_request(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    url: &str,
+    app_id: Option<String>,
+    access_token: Option<String>,
+    body: Option<Value>,
+    form: Option<Vec<(&str, &str)>>,
+) -> Result<Option<Value>, AuthenticatedRequestError> {
+    authenticated_request_inner(
+        #[cfg(feature = "db")]
+        db,
+        Method::Post,
+        url,
+        app_id,
+        access_token,
+        body,
+        form.map(|values| {
+            values
+                .iter()
+                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .collect::<Vec<_>>()
+        }),
         1,
     )
     .await
 }
 
-#[async_recursion]
-async fn authenticated_request_inner(
+#[allow(unused)]
+async fn authenticated_delete_request(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     url: &str,
     app_id: Option<String>,
     access_token: Option<String>,
+) -> Result<Option<Value>, AuthenticatedRequestError> {
+    authenticated_request_inner(
+        #[cfg(feature = "db")]
+        db,
+        Method::Delete,
+        url,
+        app_id,
+        access_token,
+        None,
+        None,
+        1,
+    )
+    .await
+}
+
+#[derive(Clone, Copy)]
+enum Method {
+    Get,
+    Post,
+    Delete,
+}
+
+#[allow(clippy::too_many_arguments)]
+#[async_recursion]
+async fn authenticated_request_inner(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    method: Method,
+    url: &str,
+    app_id: Option<String>,
+    access_token: Option<String>,
+    body: Option<Value>,
+    form: Option<Vec<(String, String)>>,
     attempt: u8,
-) -> Result<Value, AuthenticatedRequestError> {
+) -> Result<Option<Value>, AuthenticatedRequestError> {
     if attempt > 3 {
         log::error!("Max failed attempts for reauthentication reached");
         return Err(AuthenticatedRequestError::MaxFailedAttempts);
@@ -480,45 +548,76 @@ async fn authenticated_request_inner(
         return Err(AuthenticatedRequestError::Unauthorized);
     };
 
-    let response = CLIENT
-        .get(url)
-        .header(APP_ID_HEADER_NAME, app_id)
-        .header(AUTH_HEADER_NAME, &credentials.access_token)
-        .send()
-        .await?;
+    let mut request = match method {
+        Method::Get => CLIENT.get(url),
+        Method::Post => CLIENT.post(url),
+        Method::Delete => CLIENT.delete(url),
+    }
+    .header(APP_ID_HEADER_NAME, app_id)
+    .header(AUTH_HEADER_NAME, &credentials.access_token);
 
-    if response.status() == 401 {
-        log::debug!("Received unauthorized response");
-
-        let username = if let Some(ref username) = credentials.username {
-            username
-        } else {
-            return Err(AuthenticatedRequestError::Unauthorized);
-        };
-
-        return authenticated_request_inner(
-            #[cfg(feature = "db")]
-            db,
-            url,
-            Some(app_id.to_string()),
-            Some(
-                refetch_access_token(
-                    #[cfg(feature = "db")]
-                    db,
-                    app_id,
-                    username,
-                    &credentials.access_token,
-                    #[cfg(feature = "db")]
-                    credentials.persist,
-                )
-                .await?,
-            ),
-            attempt + 1,
-        )
-        .await;
+    if let Some(form) = &form {
+        request = request.form(form);
+    }
+    if let Some(body) = &body {
+        request = request.json(body);
     }
 
-    Ok(response.json::<Value>().await?)
+    let response = request.send().await?;
+
+    let status: u16 = response.status().into();
+
+    log::debug!("Received authenticated request response status: {status}");
+
+    match status {
+        401 => {
+            log::debug!("Received unauthorized response");
+
+            let username = if let Some(ref username) = credentials.username {
+                username
+            } else {
+                return Err(AuthenticatedRequestError::Unauthorized);
+            };
+
+            return authenticated_request_inner(
+                #[cfg(feature = "db")]
+                db,
+                method,
+                url,
+                Some(app_id.to_string()),
+                Some(
+                    refetch_access_token(
+                        #[cfg(feature = "db")]
+                        db,
+                        app_id,
+                        username,
+                        &credentials.access_token,
+                        #[cfg(feature = "db")]
+                        credentials.persist,
+                    )
+                    .await?,
+                ),
+                body,
+                form,
+                attempt + 1,
+            )
+            .await;
+        }
+        400..=599 => Err(AuthenticatedRequestError::RequestFailed(
+            status,
+            response.text().await.unwrap_or("".to_string()),
+        )),
+        _ => match response.json::<Value>().await {
+            Ok(value) => Ok(Some(value)),
+            Err(err) => {
+                if err.is_decode() {
+                    Ok(None)
+                } else {
+                    Err(AuthenticatedRequestError::Reqwest(err))
+                }
+            }
+        },
+    }
 }
 
 #[derive(Debug, Error)]
@@ -586,6 +685,8 @@ enum QobuzApiEndpoint {
     Track,
     TrackFileUrl,
     Favorites,
+    AddFavorites,
+    RemoveFavorites,
 }
 
 impl ToUrl for QobuzApiEndpoint {
@@ -602,6 +703,8 @@ impl ToUrl for QobuzApiEndpoint {
             Self::Track => format!("{QOBUZ_API_BASE_URL}/track/get"),
             Self::TrackFileUrl => format!("{QOBUZ_API_BASE_URL}/track/getFileUrl"),
             Self::Favorites => format!("{QOBUZ_API_BASE_URL}/favorite/getUserFavorites"),
+            Self::AddFavorites => format!("{QOBUZ_API_BASE_URL}/favorite/create"),
+            Self::RemoveFavorites => format!("{QOBUZ_API_BASE_URL}/favorite/delete"),
         }
     }
 }
@@ -885,6 +988,70 @@ pub async fn favorite_artists(
 }
 
 #[derive(Debug, Error)]
+pub enum QobuzAddFavoriteArtistError {
+    #[error(transparent)]
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
+}
+
+pub async fn add_favorite_artist(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    artist_id: u64,
+    access_token: Option<String>,
+    app_id: Option<String>,
+) -> Result<(), QobuzAddFavoriteArtistError> {
+    let url = qobuz_api_endpoint!(
+        AddFavorites,
+        &[],
+        &[("artist_ids", &artist_id.to_string()),]
+    );
+
+    let value = authenticated_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        app_id,
+        access_token,
+    )
+    .await?;
+
+    log::trace!("Received add favorite artist response: {value:?}");
+
+    Ok(())
+}
+
+#[derive(Debug, Error)]
+pub enum QobuzRemoveFavoriteArtistError {
+    #[error(transparent)]
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
+}
+
+pub async fn remove_favorite_artist(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    artist_id: u64,
+    access_token: Option<String>,
+    app_id: Option<String>,
+) -> Result<(), QobuzRemoveFavoriteArtistError> {
+    let url = qobuz_api_endpoint!(
+        RemoveFavorites,
+        &[],
+        &[("artist_ids", &artist_id.to_string()),]
+    );
+
+    let value = authenticated_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        app_id,
+        access_token,
+    )
+    .await?;
+
+    log::trace!("Received remove favorite artist response: {value:?}");
+
+    Ok(())
+}
+
+#[derive(Debug, Error)]
 pub enum QobuzArtistAlbumsError {
     #[error(transparent)]
     AuthenticatedRequest(#[from] AuthenticatedRequestError),
@@ -944,7 +1111,6 @@ pub enum QobuzAlbumError {
     Parse(#[from] ParseError),
 }
 
-#[allow(clippy::too_many_arguments)]
 pub async fn album(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     album_id: &str,
@@ -975,7 +1141,6 @@ pub enum QobuzFavoriteAlbumsError {
     Parse(#[from] ParseError),
 }
 
-#[allow(clippy::too_many_arguments)]
 pub async fn favorite_albums(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     offset: Option<u32>,
@@ -1006,6 +1171,62 @@ pub async fn favorite_albums(
     let count = value.to_nested_value(&["albums", "total"])?;
 
     Ok((items, count))
+}
+
+#[derive(Debug, Error)]
+pub enum QobuzAddFavoriteAlbumError {
+    #[error(transparent)]
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
+}
+
+pub async fn add_favorite_album(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    album_id: &str,
+    access_token: Option<String>,
+    app_id: Option<String>,
+) -> Result<(), QobuzAddFavoriteAlbumError> {
+    let url = qobuz_api_endpoint!(AddFavorites, &[], &[("album_ids", album_id),]);
+
+    let value = authenticated_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        app_id,
+        access_token,
+    )
+    .await?;
+
+    log::trace!("Received add favorite album response: {value:?}");
+
+    Ok(())
+}
+
+#[derive(Debug, Error)]
+pub enum QobuzRemoveFavoriteAlbumError {
+    #[error(transparent)]
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
+}
+
+pub async fn remove_favorite_album(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    album_id: &str,
+    access_token: Option<String>,
+    app_id: Option<String>,
+) -> Result<(), QobuzRemoveFavoriteAlbumError> {
+    let url = qobuz_api_endpoint!(RemoveFavorites, &[], &[("album_ids", album_id),]);
+
+    let value = authenticated_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        app_id,
+        access_token,
+    )
+    .await?;
+
+    log::trace!("Received remove favorite album response: {value:?}");
+
+    Ok(())
 }
 
 #[derive(Debug, Error)]
@@ -1133,6 +1354,66 @@ pub async fn favorite_tracks(
     Ok((items, count))
 }
 
+#[derive(Debug, Error)]
+pub enum QobuzAddFavoriteTrackError {
+    #[error(transparent)]
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
+}
+
+pub async fn add_favorite_track(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    track_id: u64,
+    access_token: Option<String>,
+    app_id: Option<String>,
+) -> Result<(), QobuzAddFavoriteTrackError> {
+    let url = qobuz_api_endpoint!(AddFavorites, &[], &[("track_ids", &track_id.to_string()),]);
+
+    let value = authenticated_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        app_id,
+        access_token,
+    )
+    .await?;
+
+    log::trace!("Received add favorite track response: {value:?}");
+
+    Ok(())
+}
+
+#[derive(Debug, Error)]
+pub enum QobuzRemoveFavoriteTrackError {
+    #[error(transparent)]
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
+}
+
+pub async fn remove_favorite_track(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    track_id: u64,
+    access_token: Option<String>,
+    app_id: Option<String>,
+) -> Result<(), QobuzRemoveFavoriteTrackError> {
+    let url = qobuz_api_endpoint!(
+        RemoveFavorites,
+        &[],
+        &[("track_ids", &track_id.to_string()),]
+    );
+
+    let value = authenticated_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        app_id,
+        access_token,
+    )
+    .await?;
+
+    log::trace!("Received remove favorite track response: {value:?}");
+
+    Ok(())
+}
+
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -1144,7 +1425,7 @@ pub enum QobuzAudioQuality {
 }
 
 impl QobuzAudioQuality {
-    fn to_format_id(&self) -> u8 {
+    fn as_format_id(&self) -> u8 {
         match self {
             QobuzAudioQuality::Low => 5,
             QobuzAudioQuality::FlacLossless => 6,
@@ -1196,7 +1477,7 @@ pub async fn track_file_url(
     let app_secret = app_secret.ok_or(QobuzTrackFileUrlError::NoAppSecretAvailable)?;
 
     let intent = "stream";
-    let format_id = quality.to_format_id();
+    let format_id = quality.as_format_id();
     let request_ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
