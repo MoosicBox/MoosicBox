@@ -488,6 +488,9 @@ mod test {
                     name: None,
                     artist: None,
                     search: None,
+                    artist_id: None,
+                    tidal_artist_id: None,
+                    qobuz_artist_id: None,
                 },
             },
         );
@@ -530,6 +533,9 @@ mod test {
                     name: None,
                     artist: None,
                     search: None,
+                    artist_id: None,
+                    tidal_artist_id: None,
+                    qobuz_artist_id: None,
                 },
             },
         );
@@ -572,6 +578,9 @@ mod test {
                     name: Some("test".to_string()),
                     artist: None,
                     search: None,
+                    artist_id: None,
+                    tidal_artist_id: None,
+                    qobuz_artist_id: None,
                 },
             },
         );
@@ -614,6 +623,9 @@ mod test {
                     name: Some("test".to_string()),
                     artist: None,
                     search: None,
+                    artist_id: None,
+                    tidal_artist_id: None,
+                    qobuz_artist_id: None,
                 },
             },
         );
@@ -656,6 +668,9 @@ mod test {
                     name: None,
                     artist: Some("test".to_string()),
                     search: None,
+                    artist_id: None,
+                    tidal_artist_id: None,
+                    qobuz_artist_id: None,
                 },
             },
         );
@@ -698,6 +713,9 @@ mod test {
                     name: None,
                     artist: Some("test".to_string()),
                     search: None,
+                    artist_id: None,
+                    tidal_artist_id: None,
+                    qobuz_artist_id: None,
                 },
             },
         );
@@ -740,6 +758,9 @@ mod test {
                     name: None,
                     artist: None,
                     search: Some("test".to_string()),
+                    artist_id: None,
+                    tidal_artist_id: None,
+                    qobuz_artist_id: None,
                 },
             },
         );
@@ -782,6 +803,9 @@ mod test {
                     name: None,
                     artist: None,
                     search: Some("test".to_string()),
+                    artist_id: None,
+                    tidal_artist_id: None,
+                    qobuz_artist_id: None,
                 },
             },
         );
@@ -824,6 +848,9 @@ mod test {
                     name: None,
                     artist: None,
                     search: Some("test".to_string()),
+                    artist_id: None,
+                    tidal_artist_id: None,
+                    qobuz_artist_id: None,
                 },
             },
         );
@@ -866,6 +893,9 @@ mod test {
                     name: None,
                     artist: None,
                     search: Some("test".to_string()),
+                    artist_id: None,
+                    tidal_artist_id: None,
+                    qobuz_artist_id: None,
                 },
             },
         );
@@ -908,6 +938,9 @@ mod test {
                     name: None,
                     artist: None,
                     search: Some("test".to_string()),
+                    artist_id: None,
+                    tidal_artist_id: None,
+                    qobuz_artist_id: None,
                 },
             },
         );
