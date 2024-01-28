@@ -13,9 +13,9 @@ use crate::types::PlaybackQuality;
 
 use super::models::{
     ActivePlayer, Album, AlbumVersionQuality, Artist, AsId, AsModel, AsModelQuery, AsModelResult,
-    AsModelResultMappedMut, AsModelResultMappedQuery, AsModelResultMut, ClientAccessToken,
-    CreateSession, LibraryTrack, MagicToken, NumberId, Player, Session, SessionPlaylist,
-    SessionPlaylistTrack, TrackSize, UpdateSession,
+    AsModelResultMappedMut, AsModelResultMut, ClientAccessToken, CreateSession, LibraryTrack,
+    MagicToken, NumberId, Player, Session, SessionPlaylist, SessionPlaylistTrack, TrackSize,
+    UpdateSession,
 };
 
 impl<T> From<PoisonError<T>> for DbError {
@@ -216,6 +216,20 @@ pub fn get_session_active_players(
         .collect())
 }
 
+pub fn get_session_playing(db: &Connection, id: i32) -> Result<Option<bool>, DbError> {
+    Ok(db
+        .prepare_cached(
+            "
+            SELECT sessions.playing
+            FROM sessions
+            WHERE id=?1
+            ",
+        )?
+        .query_map(params![id], |row| Ok(row.get::<_, bool>("playing")))?
+        .find_map(|row| row.ok())
+        .transpose()?)
+}
+
 pub fn get_session(db: &Connection, id: i32) -> Result<Option<Session>, DbError> {
     db.prepare_cached(
         "
@@ -300,7 +314,7 @@ pub fn create_session(db: &Connection, session: &CreateSession) -> Result<Sessio
     })
 }
 
-pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<Session, DbError> {
+pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<(), DbError> {
     if session.playlist.is_some() {
         db
         .prepare_cached(
@@ -365,53 +379,17 @@ pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<Sessio
         values.push(("volume", SqliteValue::Real(volume)))
     }
 
-    let new_session: Session = if values.is_empty() {
-        select::<Session>(
-            db,
-            "sessions",
-            &vec![("id", SqliteValue::Number(session.session_id as i64))],
-            &["*"],
-        )?
-        .into_iter()
-        .next()
-        .unwrap_or_else(|| panic!("No session exists for id {}", session.session_id))
-    } else {
-        update_and_get_row(
+    if !values.is_empty() {
+        update_and_get_row::<Session>(
             db,
             "sessions",
             SqliteValue::Number(session.session_id as i64),
             &values,
         )?
-        .expect("Session failed to update")
-    };
+        .ok_or(DbError::Unknown)?;
+    }
 
-    let playlist = if let Some(playlist) = &session.playlist {
-        SessionPlaylist {
-            id: playlist_id.unwrap() as i32,
-            tracks: playlist
-                .tracks
-                .iter()
-                .map(|track| track.clone().into())
-                .collect::<Vec<_>>()
-                .as_model_mapped_query(db)?,
-        }
-    } else if let Some(playlist) = get_session_playlist(db, session.session_id)? {
-        playlist
-    } else {
-        return Err(DbError::InvalidRequest);
-    };
-
-    Ok(Session {
-        id: new_session.id,
-        active: new_session.active,
-        playing: new_session.playing,
-        position: new_session.position,
-        seek: new_session.seek,
-        volume: new_session.volume,
-        name: new_session.name,
-        active_players: get_session_active_players(db, new_session.id)?,
-        playlist,
-    })
+    Ok(())
 }
 
 pub fn delete_session(db: &Connection, session_id: i32) -> Result<(), DbError> {
