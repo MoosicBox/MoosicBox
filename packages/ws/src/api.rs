@@ -8,8 +8,8 @@ use moosicbox_core::{
         db::{get_session_playlist, DbError},
         models::{
             ApiUpdateSession, ApiUpdateSessionPlaylist, Connection, CreateSession, DeleteSession,
-            Player, PlayerType, RegisterConnection, RegisterPlayer, SetSeek,
-            SetSessionActivePlayers, ToApi, UpdateSession,
+            RegisterConnection, RegisterPlayer, SetSeek, SetSessionActivePlayers, ToApi,
+            UpdateSession,
         },
     },
 };
@@ -484,31 +484,10 @@ pub fn update_session(
     context: Option<&WebsocketContext>,
     payload: &UpdateSession,
 ) -> Result<(), UpdateSessionError> {
-    let before_session_playing = moosicbox_core::sqlite::db::get_session_playing(
-        &db.library.lock().as_ref().unwrap().inner,
-        payload.session_id,
-    )?
-    .map(Ok)
-    .unwrap_or(Err(UpdateSessionError::NoSessionFound))?;
-
     moosicbox_core::sqlite::db::update_session(
         &db.library.lock().as_ref().unwrap().inner,
         payload,
     )?;
-
-    if let Some(playing) = payload.playing {
-        if playing != before_session_playing {
-            let active_players = moosicbox_core::sqlite::db::get_session_active_players(
-                &db.library.lock().as_ref().unwrap().inner,
-                payload.session_id,
-            )?;
-
-            match playing {
-                true => play_session(&active_players),
-                false => pause_session(&active_players),
-            }
-        }
-    }
 
     let playlist = if payload.playlist.is_some() {
         get_session_playlist(
@@ -554,22 +533,6 @@ pub fn update_session(
     }
 
     Ok(())
-}
-
-fn play_session(active_players: &[Player]) {
-    for player in active_players {
-        if player.r#type == PlayerType::Symphonia {
-            debug!("Playing Symphonia player");
-        }
-    }
-}
-
-fn pause_session(active_players: &[Player]) {
-    for player in active_players {
-        if player.r#type == PlayerType::Symphonia {
-            debug!("Pausing Symphonia player");
-        }
-    }
 }
 
 fn delete_session(
