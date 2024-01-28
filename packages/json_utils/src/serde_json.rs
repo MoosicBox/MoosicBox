@@ -295,7 +295,7 @@ mod tests {
         assert_eq!(
             json.to_value::<Option<String>>("u64").err(),
             Some(ParseError::ConvertType(
-                "Path 'u64' failed to convert value to type: 'String'".into()
+                "Path 'u64' failed to convert value to type: 'ConvertType(\"String\")'".into()
             )),
         );
 
@@ -331,7 +331,8 @@ mod tests {
             json.to_nested_value::<Option<u64>>(&["outer", "inner_str"])
                 .err(),
             Some(ParseError::ConvertType(
-                "Path 'outer -> inner_str' failed to convert value to type: 'u64'".into()
+                "Path 'outer -> inner_str' failed to convert value to type: 'ConvertType(\"u64\")'"
+                    .into()
             )),
         );
     }
