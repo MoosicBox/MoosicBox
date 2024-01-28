@@ -15,6 +15,7 @@ tantivy = { workspace = true, optional = true }
 serde      = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 
+log       = { workspace = true }
 thiserror = { workspace = true }
 
 [features]

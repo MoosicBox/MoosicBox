@@ -250,10 +250,20 @@ where
     match row.get::<_, Value>(index) {
         Ok(inner) => match inner.to_value_type() {
             Ok(inner) => Ok(inner),
-            Err(ParseError::ConvertType(r#type)) => Err(ParseError::ConvertType(format!(
-                "Path '{}' failed to convert value to type: '{}'",
-                index, r#type,
-            ))),
+
+            Err(ParseError::ConvertType(r#type)) => Err(ParseError::ConvertType(
+                if log::log_enabled!(log::Level::Debug) {
+                    format!(
+                        "Path '{}' failed to convert value to type: '{}' ({row:?})",
+                        index, r#type,
+                    )
+                } else {
+                    format!(
+                        "Path '{}' failed to convert value to type: '{}'",
+                        index, r#type,
+                    )
+                },
+            )),
             Err(err) => Err(err),
         },
         Err(err) => row.missing_value(ParseError::Parse(format!(

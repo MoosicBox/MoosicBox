@@ -192,13 +192,15 @@ impl ToNestedValue for &Value {
     }
 }
 
-pub fn get_nested_value_type<'a, T>(mut value: &'a Value, path: &[&str]) -> Result<T, ParseError>
+pub fn get_nested_value_type<'a, T>(value: &'a Value, path: &[&str]) -> Result<T, ParseError>
 where
     &'a Value: ToValueType<T>,
 {
+    let mut inner_value = value;
+
     for (i, x) in path.iter().enumerate() {
-        if let Some(inner) = value.get(x) {
-            value = inner;
+        if let Some(inner) = inner_value.get(x) {
+            inner_value = inner;
             continue;
         }
 
@@ -208,21 +210,43 @@ where
             format!("Missing value: '{}'", x)
         };
 
-        return value.missing_value(ParseError::Parse(message));
+        return inner_value.missing_value(ParseError::Parse(message));
     }
 
-    if value.is_null() {
-        return value.missing_value(ParseError::ConvertType("null".to_string()));
+    if inner_value.is_null() {
+        return match inner_value.to_value_type() {
+            Ok(inner) => Ok(inner),
+            Err(err) => match err {
+                ParseError::ConvertType(r#type) => {
+                    inner_value.missing_value(ParseError::ConvertType(format!(
+                        "{} expected '{}', found null",
+                        path.join(" -> "),
+                        r#type
+                    )))
+                }
+                _ => Err(err),
+            },
+        };
     }
 
-    match value.to_value_type() {
+    match inner_value.to_value_type() {
         Ok(inner) => Ok(inner),
-        Err(ParseError::ConvertType(r#type)) => Err(ParseError::ConvertType(format!(
-            "Path '{}' failed to convert value to type: '{}'",
-            path.join(" -> "),
-            r#type,
-        ))),
-        Err(err) => Err(err),
+        Err(err) => match err {
+            ParseError::ConvertType(_) => Err(ParseError::ConvertType(
+                if log::log_enabled!(log::Level::Debug) {
+                    format!(
+                        "Path '{}' failed to convert value to type: '{err:?}' ({value:?})",
+                        path.join(" -> "),
+                    )
+                } else {
+                    format!(
+                        "Path '{}' failed to convert value to type: '{err:?}'",
+                        path.join(" -> "),
+                    )
+                },
+            )),
+            _ => Err(err),
+        },
     }
 }
 
