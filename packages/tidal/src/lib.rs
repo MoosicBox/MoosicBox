@@ -39,7 +39,7 @@ pub struct TidalAlbum {
     pub explicit: bool,
     pub number_of_tracks: u32,
     pub popularity: u32,
-    pub release_date: String,
+    pub release_date: Option<String>,
     pub title: String,
     pub media_metadata_tags: Vec<String>,
 }

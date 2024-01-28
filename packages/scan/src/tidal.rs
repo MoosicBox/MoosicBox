@@ -142,7 +142,7 @@ pub async fn scan_albums(
                 .await
                 .add_album(
                     &album.title,
-                    &Some(album.release_date.clone()),
+                    &album.release_date.clone(),
                     None,
                     &None,
                     &Some(album.id),
