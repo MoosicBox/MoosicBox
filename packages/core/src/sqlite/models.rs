@@ -52,7 +52,13 @@ where
         while let Some(row) = self.next().map_err(|e| e.into())? {
             match AsModelResult::as_model(row) {
                 Ok(value) => values.push(value),
-                Err(err) => log::error!("Row error: {err:?}"),
+                Err(err) => {
+                    if log::log_enabled!(log::Level::Debug) {
+                        log::error!("Row error: {err:?} ({row:?})");
+                    } else {
+                        log::error!("Row error: {err:?}");
+                    }
+                }
             }
         }
 
