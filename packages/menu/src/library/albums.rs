@@ -1,4 +1,7 @@
-use std::sync::{Arc, PoisonError};
+use std::{
+    cmp::Ordering,
+    sync::{Arc, PoisonError},
+};
 
 use moosicbox_core::{
     app::{AppState, Db},
@@ -118,12 +121,26 @@ pub fn sort_albums(mut albums: Vec<Album>, request: &AlbumsRequest) -> Vec<Album
         Some(AlbumSort::NameDesc) => {
             albums.sort_by(|a, b| b.title.to_lowercase().cmp(&a.title.to_lowercase()))
         }
-        Some(AlbumSort::ReleaseDateAsc) => {
-            albums.sort_by(|a, b| a.clone().date_released.cmp(&b.clone().date_released))
-        }
-        Some(AlbumSort::ReleaseDateDesc) => {
-            albums.sort_by(|b, a| a.clone().date_released.cmp(&b.clone().date_released))
-        }
+        Some(AlbumSort::ReleaseDateAsc) => albums.sort_by(|a, b| {
+            if a.date_released.is_none() {
+                return Ordering::Greater;
+            }
+            if b.date_released.is_none() {
+                return Ordering::Less;
+            }
+
+            a.clone().date_released.cmp(&b.clone().date_released)
+        }),
+        Some(AlbumSort::ReleaseDateDesc) => albums.sort_by(|a, b| {
+            if a.date_released.is_none() {
+                return Ordering::Greater;
+            }
+            if b.date_released.is_none() {
+                return Ordering::Less;
+            }
+
+            b.clone().date_released.cmp(&a.clone().date_released)
+        }),
         Some(AlbumSort::DateAddedAsc) => {
             albums.sort_by(|a, b| a.clone().date_added.cmp(&b.clone().date_added))
         }
