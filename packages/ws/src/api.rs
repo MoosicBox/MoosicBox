@@ -5,11 +5,11 @@ use log::{debug, info, trace};
 use moosicbox_core::{
     app::Db,
     sqlite::{
-        db::DbError,
+        db::{get_session_playlist, DbError},
         models::{
-            ApiUpdateSession, Connection, CreateSession, DeleteSession, Player, PlayerType,
-            RegisterConnection, RegisterPlayer, SetSeek, SetSessionActivePlayers, ToApi,
-            UpdateSession,
+            ApiUpdateSession, ApiUpdateSessionPlaylist, Connection, CreateSession, DeleteSession,
+            Player, PlayerType, RegisterConnection, RegisterPlayer, SetSeek,
+            SetSessionActivePlayers, ToApi, UpdateSession,
         },
     },
 };
@@ -475,7 +475,7 @@ pub enum UpdateSessionError {
     #[error(transparent)]
     WebsocketSend(WebsocketSendError),
     #[error(transparent)]
-    Db(DbError),
+    Db(#[from] DbError),
 }
 
 pub fn update_session(
@@ -487,21 +487,21 @@ pub fn update_session(
     let before_session_playing = moosicbox_core::sqlite::db::get_session_playing(
         &db.library.lock().as_ref().unwrap().inner,
         payload.session_id,
-    )
-    .map_err(UpdateSessionError::Db)?
+    )?
     .map(Ok)
     .unwrap_or(Err(UpdateSessionError::NoSessionFound))?;
 
-    moosicbox_core::sqlite::db::update_session(&db.library.lock().as_ref().unwrap().inner, payload)
-        .map_err(UpdateSessionError::Db)?;
+    moosicbox_core::sqlite::db::update_session(
+        &db.library.lock().as_ref().unwrap().inner,
+        payload,
+    )?;
 
     if let Some(playing) = payload.playing {
         if playing != before_session_playing {
             let active_players = moosicbox_core::sqlite::db::get_session_active_players(
                 &db.library.lock().as_ref().unwrap().inner,
                 payload.session_id,
-            )
-            .map_err(UpdateSessionError::Db)?;
+            )?;
 
             match playing {
                 true => play_session(&active_players),
@@ -509,6 +509,20 @@ pub fn update_session(
             }
         }
     }
+
+    let playlist = if payload.playlist.is_some() {
+        get_session_playlist(
+            &db.library.lock().as_ref().unwrap().inner,
+            payload.session_id,
+        )?
+        .map(|playlist| playlist.to_api())
+        .map(|playlist| ApiUpdateSessionPlaylist {
+            session_playlist_id: playlist.session_playlist_id,
+            tracks: playlist.tracks,
+        })
+    } else {
+        None
+    };
 
     let response = ApiUpdateSession {
         session_id: payload.session_id,
@@ -520,7 +534,7 @@ pub fn update_session(
         position: payload.position,
         seek: payload.seek,
         volume: payload.volume,
-        playlist: payload.playlist.clone().map(|playlist| playlist.to_api()),
+        playlist,
     };
 
     let session_updated = serde_json::json!({
