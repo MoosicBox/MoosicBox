@@ -34,7 +34,7 @@ pub struct TidalAlbum {
     pub contains_cover: bool,
     pub audio_quality: String,
     pub copyright: Option<String>,
-    pub cover: String,
+    pub cover: Option<String>,
     pub duration: u32,
     pub explicit: bool,
     pub number_of_tracks: u32,
@@ -45,9 +45,11 @@ pub struct TidalAlbum {
 }
 
 impl TidalAlbum {
-    pub fn cover_url(&self, size: u16) -> String {
-        let cover_path = self.cover.replace('-', "/");
-        format!("https://resources.tidal.com/images/{cover_path}/{size}x{size}.jpg")
+    pub fn cover_url(&self, size: u16) -> Option<String> {
+        self.cover.as_ref().map(|cover| {
+            let cover_path = cover.replace('-', "/");
+            format!("https://resources.tidal.com/images/{cover_path}/{size}x{size}.jpg")
+        })
     }
 }
 

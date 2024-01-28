@@ -170,12 +170,14 @@ pub async fn scan_albums(
                 }
             }
 
-            if read_album.cover.is_none() && !read_album.searched_cover {
-                scan_album
-                    .write()
-                    .await
-                    .search_cover(album.cover_url(1280), "tidal")
-                    .await?;
+            if let Some(cover_url) = album.cover_url(1280) {
+                if read_album.cover.is_none() && !read_album.searched_cover {
+                    scan_album
+                        .write()
+                        .await
+                        .search_cover(cover_url, "tidal")
+                        .await?;
+                }
             }
         }
 

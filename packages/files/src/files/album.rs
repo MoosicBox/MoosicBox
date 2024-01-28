@@ -203,8 +203,12 @@ pub async fn get_album_cover(
                 album
             };
 
+            let cover = album
+                .cover_url(1280)
+                .ok_or(AlbumCoverError::NotFound(album_id.clone()))?;
+
             get_or_fetch_album_cover_from_remote_url(
-                &album.cover_url(1280),
+                &cover,
                 "tidal",
                 &album.id.to_string(),
                 &album.artist,
