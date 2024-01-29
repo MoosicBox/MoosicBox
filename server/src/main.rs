@@ -199,7 +199,7 @@ fn main() -> std::io::Result<()> {
 
             let cors = Cors::default()
                 .allow_any_origin()
-                .allowed_methods(vec!["GET", "POST", "DELETE", "PUT", "PACTH"])
+                .allowed_methods(vec!["GET", "POST", "OPTIONS", "DELETE", "PUT", "PATCH"])
                 .allowed_headers(vec![http::header::AUTHORIZATION, http::header::ACCEPT])
                 .allowed_header(http::header::CONTENT_TYPE)
                 .supports_credentials()
