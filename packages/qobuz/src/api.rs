@@ -516,7 +516,7 @@ pub async fn track_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzTrackQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<QobuzTrack>> {
+) -> Result<Json<ApiTrack>> {
     let track = track(
         #[cfg(feature = "db")]
         data.db.as_ref().expect("Db not set"),
@@ -530,7 +530,7 @@ pub async fn track_endpoint(
     )
     .await?;
 
-    Ok(Json(track))
+    Ok(Json(track.to_api()))
 }
 
 impl From<QobuzFavoriteTracksError> for actix_web::Error {
