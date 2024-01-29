@@ -468,13 +468,15 @@ pub enum AuthenticatedRequestError {
     RequestFailed(u16, String),
     #[error("MaxFailedAttempts")]
     MaxFailedAttempts,
+    #[error("No response body")]
+    NoResponseBody,
 }
 
 async fn authenticated_request(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     url: &str,
     access_token: Option<String>,
-) -> Result<Option<Value>, AuthenticatedRequestError> {
+) -> Result<Value, AuthenticatedRequestError> {
     authenticated_request_inner(
         #[cfg(feature = "db")]
         db,
@@ -485,7 +487,8 @@ async fn authenticated_request(
         None,
         1,
     )
-    .await
+    .await?
+    .ok_or_else(|| AuthenticatedRequestError::NoResponseBody)
 }
 
 async fn authenticated_post_request(
@@ -768,8 +771,7 @@ pub async fn favorite_artists(
         &url,
         access_token,
     )
-    .await?
-    .ok_or_else(|| TidalFavoriteArtistsError::RequestFailed("No response".into()))?;
+    .await?;
 
     log::trace!("Received favorite artists response: {value:?}");
 
@@ -985,8 +987,7 @@ pub async fn favorite_albums(
         &url,
         access_token,
     )
-    .await?
-    .ok_or_else(|| TidalFavoriteAlbumsError::RequestFailed("No response".into()))?;
+    .await?;
 
     log::trace!("Received favorite albums response: {value:?}");
 
@@ -1202,8 +1203,7 @@ pub async fn favorite_tracks(
         &url,
         access_token,
     )
-    .await?
-    .ok_or_else(|| TidalFavoriteTracksError::RequestFailed("No response".into()))?;
+    .await?;
 
     log::trace!("Received favorite tracks response: {value:?}");
 
@@ -1410,8 +1410,7 @@ pub async fn artist_albums(
         &url,
         access_token,
     )
-    .await?
-    .ok_or_else(|| TidalArtistAlbumsError::RequestFailed("No response".into()))?;
+    .await?;
 
     log::trace!("Received artist albums response: {value:?}");
 
@@ -1466,8 +1465,7 @@ pub async fn album_tracks(
         &url,
         access_token,
     )
-    .await?
-    .ok_or_else(|| TidalAlbumTracksError::RequestFailed("No response".into()))?;
+    .await?;
 
     let items = value
         .to_value::<Option<_>>("items")?
@@ -1516,8 +1514,7 @@ pub async fn album(
         &url,
         access_token,
     )
-    .await?
-    .ok_or_else(|| TidalAlbumError::RequestFailed("No response".into()))?;
+    .await?;
 
     Ok(value.as_model()?)
 }
@@ -1526,8 +1523,6 @@ pub async fn album(
 pub enum TidalArtistError {
     #[error(transparent)]
     AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
@@ -1560,8 +1555,7 @@ pub async fn artist(
         &url,
         access_token,
     )
-    .await?
-    .ok_or_else(|| TidalArtistError::RequestFailed("No response".into()))?;
+    .await?;
 
     log::trace!("Received artist response: {value:?}");
 
@@ -1572,8 +1566,6 @@ pub async fn artist(
 pub enum TidalTrackError {
     #[error(transparent)]
     AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
@@ -1606,8 +1598,7 @@ pub async fn track(
         &url,
         access_token,
     )
-    .await?
-    .ok_or_else(|| TidalTrackError::RequestFailed("No response".into()))?;
+    .await?;
 
     log::trace!("Received track response: {value:?}");
 
@@ -1627,8 +1618,6 @@ pub enum TidalAudioQuality {
 pub enum TidalTrackFileUrlError {
     #[error(transparent)]
     AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
@@ -1655,8 +1644,7 @@ pub async fn track_file_url(
         &url,
         access_token,
     )
-    .await?
-    .ok_or_else(|| TidalTrackFileUrlError::RequestFailed("No response".into()))?;
+    .await?;
 
     log::trace!("Received track file url response: {value:?}");
 
