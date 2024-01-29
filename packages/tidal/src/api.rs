@@ -1,5 +1,5 @@
 use actix_web::{
-    error::ErrorInternalServerError,
+    error::{ErrorInternalServerError, ErrorNotFound},
     route,
     web::{self, Json},
     HttpRequest, Result,
@@ -13,14 +13,15 @@ use crate::{
     add_favorite_album, add_favorite_artist, add_favorite_track, album, album_tracks, artist,
     artist_albums, device_authorization, device_authorization_token, favorite_albums,
     favorite_artists, favorite_tracks, remove_favorite_album, remove_favorite_artist,
-    remove_favorite_track, track, track_file_url, TidalAddFavoriteAlbumError,
-    TidalAddFavoriteArtistError, TidalAddFavoriteTrackError, TidalAlbum, TidalAlbumError,
-    TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError, TidalAlbumType, TidalArtist,
-    TidalArtistAlbumsError, TidalArtistError, TidalArtistOrder, TidalArtistOrderDirection,
-    TidalAudioQuality, TidalDeviceAuthorizationError, TidalDeviceAuthorizationTokenError,
-    TidalDeviceType, TidalFavoriteAlbumsError, TidalFavoriteArtistsError, TidalFavoriteTracksError,
-    TidalRemoveFavoriteAlbumError, TidalRemoveFavoriteArtistError, TidalRemoveFavoriteTrackError,
-    TidalTrack, TidalTrackError, TidalTrackFileUrlError, TidalTrackOrder, TidalTrackOrderDirection,
+    remove_favorite_track, track, track_file_url, AuthenticatedRequestError,
+    TidalAddFavoriteAlbumError, TidalAddFavoriteArtistError, TidalAddFavoriteTrackError,
+    TidalAlbum, TidalAlbumError, TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError,
+    TidalAlbumType, TidalArtist, TidalArtistAlbumsError, TidalArtistError, TidalArtistOrder,
+    TidalArtistOrderDirection, TidalAudioQuality, TidalDeviceAuthorizationError,
+    TidalDeviceAuthorizationTokenError, TidalDeviceType, TidalFavoriteAlbumsError,
+    TidalFavoriteArtistsError, TidalFavoriteTracksError, TidalRemoveFavoriteAlbumError,
+    TidalRemoveFavoriteArtistError, TidalRemoveFavoriteTrackError, TidalTrack, TidalTrackError,
+    TidalTrackFileUrlError, TidalTrackOrder, TidalTrackOrderDirection,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -752,6 +753,16 @@ pub async fn album_tracks_endpoint(
 impl From<TidalAlbumError> for actix_web::Error {
     fn from(err: TidalAlbumError) -> Self {
         log::error!("{err:?}");
+        if let TidalAlbumError::AuthenticatedRequest(AuthenticatedRequestError::RequestFailed(
+            status,
+            _,
+        )) = err
+        {
+            if status == 404 {
+                return ErrorNotFound("Tidal album not found");
+            }
+        }
+
         ErrorInternalServerError(err.to_string())
     }
 }
