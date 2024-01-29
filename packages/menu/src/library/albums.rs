@@ -530,14 +530,16 @@ pub async fn remove_album(
         .iter()
         .any(|track| track.source == TrackSource::Local);
 
-    if has_local_tracks
-        || tidal_album_id.is_none() && album.tidal_id.is_some()
-        || qobuz_album_id.is_none() && album.qobuz_id.is_some()
-    {
-        return Ok(album);
-    }
+    let target_tracks = tracks
+        .into_iter()
+        .filter(|track| match track.source {
+            TrackSource::Tidal => tidal_album_id.is_some(),
+            TrackSource::Qobuz => qobuz_album_id.is_some(),
+            _ => false,
+        })
+        .collect::<Vec<_>>();
 
-    let track_ids = tracks.iter().map(|t| t.id).collect::<Vec<_>>();
+    let track_ids = target_tracks.iter().map(|t| t.id).collect::<Vec<_>>();
 
     log::debug!("Deleting track db items: {track_ids:?}");
     delete_session_playlist_tracks_by_track_id(
@@ -547,6 +549,22 @@ pub async fn remove_album(
     delete_track_sizes_by_track_id(&db.library.lock().as_ref().unwrap().inner, Some(&track_ids))?;
     delete_tracks(&db.library.lock().as_ref().unwrap().inner, Some(&track_ids))?;
 
+    moosicbox_core::cache::clear_cache();
+
+    moosicbox_search::delete_from_global_search_index(
+        target_tracks
+            .iter()
+            .map(|track| track.as_delete_term())
+            .collect::<Vec<_>>(),
+    )?;
+
+    if has_local_tracks
+        || tidal_album_id.is_none() && album.tidal_id.is_some()
+        || qobuz_album_id.is_none() && album.qobuz_id.is_some()
+    {
+        return Ok(album);
+    }
+
     log::debug!("Deleting album db item: {}", album.id);
     delete::<Album>(
         &db.library.lock().as_ref().unwrap().inner,
@@ -554,15 +572,7 @@ pub async fn remove_album(
         &vec![("id", SqliteValue::Number(album.id as i64))],
     )?;
 
-    moosicbox_core::cache::clear_cache();
-
     moosicbox_search::delete_from_global_search_index(vec![album.as_delete_term()])?;
-    moosicbox_search::delete_from_global_search_index(
-        tracks
-            .iter()
-            .map(|track| track.as_delete_term())
-            .collect::<Vec<_>>(),
-    )?;
 
     Ok(album)
 }
