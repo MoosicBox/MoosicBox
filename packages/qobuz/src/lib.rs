@@ -42,6 +42,18 @@ pub struct QobuzImage {
     pub mega: Option<String>,
 }
 
+impl QobuzImage {
+    pub fn cover_url(&self) -> Option<String> {
+        self.mega
+            .clone()
+            .or(self.extralarge.clone())
+            .or(self.large.clone())
+            .or(self.medium.clone())
+            .or(self.small.clone())
+            .or(self.thumbnail.clone())
+    }
+}
+
 impl MissingValue<QobuzImage> for &Value {}
 impl ToValueType<QobuzImage> for &Value {
     fn to_value_type(self) -> Result<QobuzImage, ParseError> {
@@ -94,7 +106,7 @@ pub struct QobuzAlbum {
     pub artist: String,
     pub artist_id: u64,
     pub maximum_bit_depth: u16,
-    pub image: QobuzImage,
+    pub image: Option<QobuzImage>,
     pub title: String,
     pub qobuz_id: u64,
     pub released_at: u64,
@@ -110,14 +122,7 @@ pub struct QobuzAlbum {
 
 impl QobuzAlbum {
     pub fn cover_url(&self) -> Option<String> {
-        self.image
-            .mega
-            .clone()
-            .or(self.image.extralarge.clone())
-            .or(self.image.large.clone())
-            .or(self.image.medium.clone())
-            .or(self.image.small.clone())
-            .or(self.image.thumbnail.clone())
+        self.image.as_ref().and_then(|image| image.cover_url())
     }
 }
 
@@ -166,7 +171,7 @@ pub struct QobuzRelease {
     pub artist: String,
     pub artist_id: u64,
     pub maximum_bit_depth: u16,
-    pub image: QobuzImage,
+    pub image: Option<QobuzImage>,
     pub title: String,
     pub release_date_original: String,
     pub duration: u32,
@@ -179,14 +184,7 @@ pub struct QobuzRelease {
 
 impl QobuzRelease {
     pub fn cover_url(&self) -> Option<String> {
-        self.image
-            .mega
-            .clone()
-            .or(self.image.extralarge.clone())
-            .or(self.image.large.clone())
-            .or(self.image.medium.clone())
-            .or(self.image.small.clone())
-            .or(self.image.thumbnail.clone())
+        self.image.as_ref().and_then(|image| image.cover_url())
     }
 }
 
@@ -228,11 +226,18 @@ pub struct QobuzTrack {
     pub artist_id: u64,
     pub album: String,
     pub album_id: String,
+    pub image: Option<QobuzImage>,
     pub copyright: Option<String>,
     pub duration: u32,
     pub parental_warning: bool,
     pub isrc: String,
     pub title: String,
+}
+
+impl QobuzTrack {
+    pub fn cover_url(&self) -> Option<String> {
+        self.image.as_ref().and_then(|image| image.cover_url())
+    }
 }
 
 impl MissingValue<QobuzTrack> for &Value {}
@@ -249,6 +254,7 @@ impl QobuzTrack {
         artist_id: u64,
         album: &str,
         album_id: &str,
+        image: Option<QobuzImage>,
     ) -> Result<QobuzTrack, ParseError> {
         Ok(QobuzTrack {
             id: value.to_value("id")?,
@@ -257,6 +263,7 @@ impl QobuzTrack {
             artist_id,
             album: album.to_string(),
             album_id: album_id.to_string(),
+            image,
             copyright: value.to_value("copyright")?,
             duration: value.to_value("duration")?,
             parental_warning: value.to_value("parental_warning")?,
@@ -275,6 +282,7 @@ impl AsModelResult<QobuzTrack, ParseError> for Value {
             album_id: self.to_nested_value(&["album", "id"])?,
             artist: self.to_nested_value(&["album", "artist", "name"])?,
             artist_id: self.to_nested_value(&["album", "artist", "id"])?,
+            image: self.to_value("image")?,
             copyright: self.to_value("copyright")?,
             duration: self.to_value("duration")?,
             parental_warning: self.to_value("parental_warning")?,
@@ -1265,13 +1273,18 @@ pub async fn album_tracks(
     )
     .await?;
 
+    log::trace!("Received album tracks response: {value:?}");
+
     let artist = value.to_nested_value(&["artist", "name"])?;
     let artist_id = value.to_nested_value(&["artist", "id"])?;
     let album = value.to_value("title")?;
+    let image: Option<QobuzImage> = value.to_value("image")?;
     let items = value
         .to_nested_value::<Vec<&Value>>(&["tracks", "items"])?
         .iter()
-        .map(|value| QobuzTrack::from_value(value, artist, artist_id, album, album_id))
+        .map(move |value| {
+            QobuzTrack::from_value(value, artist, artist_id, album, album_id, image.clone())
+        })
         .collect::<Result<Vec<_>, _>>()?;
     let count = value.to_nested_value(&["tracks", "total"])?;
 
