@@ -23,8 +23,8 @@ use thiserror::Error;
 
 use crate::library::{
     albums::{
-        add_album, get_album_tracks, get_album_versions, get_all_albums, remove_album,
-        AlbumFilters, AlbumsRequest, ApiAlbumVersion,
+        add_album, get_album_tracks, get_album_versions, get_all_albums, refavorite_album,
+        remove_album, AlbumFilters, AlbumsRequest, ApiAlbumVersion,
     },
     artists::{get_all_artists, ArtistFilters, ArtistsRequest},
 };
@@ -314,8 +314,7 @@ pub async fn get_album_endpoint(
             query.qobuz_album_id.clone(),
             data.db.as_ref().expect("No DB set"),
         )
-        .await
-        .map_err(|e| ErrorInternalServerError(format!("Failed to fetch album: {e:?}")))?
+        .await?
         .to_api(),
     ))
 }
@@ -331,16 +330,17 @@ pub struct AddAlbumQuery {
 pub async fn add_album_endpoint(
     query: web::Query<AddAlbumQuery>,
     data: web::Data<AppState>,
-) -> Result<Json<Value>> {
-    add_album(
-        data.db.as_ref().expect("No DB set"),
-        query.tidal_album_id,
-        query.qobuz_album_id.clone(),
-    )
-    .await
-    .map_err(|e| ErrorInternalServerError(format!("Failed to add album: {e:?}")))?;
-
-    Ok(Json(serde_json::json!({"success": true})))
+) -> Result<Json<ApiAlbum>> {
+    Ok(Json(
+        add_album(
+            data.db.as_ref().expect("No DB set"),
+            query.tidal_album_id,
+            query.qobuz_album_id.clone(),
+        )
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to add album: {e:?}")))?
+        .to_api(),
+    ))
 }
 
 #[derive(Deserialize, Clone)]
@@ -354,14 +354,39 @@ pub struct RemoveAlbumQuery {
 pub async fn remove_album_endpoint(
     query: web::Query<RemoveAlbumQuery>,
     data: web::Data<AppState>,
-) -> Result<Json<Value>> {
-    remove_album(
-        data.db.as_ref().expect("No DB set"),
-        query.tidal_album_id,
-        query.qobuz_album_id.clone(),
-    )
-    .await
-    .map_err(|e| ErrorInternalServerError(format!("Failed to remove album: {e:?}")))?;
+) -> Result<Json<ApiAlbum>> {
+    Ok(Json(
+        remove_album(
+            data.db.as_ref().expect("No DB set"),
+            query.tidal_album_id,
+            query.qobuz_album_id.clone(),
+        )
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to remove album: {e:?}")))?
+        .to_api(),
+    ))
+}
 
-    Ok(Json(serde_json::json!({"success": true})))
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ReFavoriteAlbumQuery {
+    tidal_album_id: Option<u64>,
+    qobuz_album_id: Option<String>,
+}
+
+#[post("/album/re-favorite")]
+pub async fn refavorite_album_endpoint(
+    query: web::Query<ReFavoriteAlbumQuery>,
+    data: web::Data<AppState>,
+) -> Result<Json<ApiAlbum>> {
+    Ok(Json(
+        refavorite_album(
+            data.db.as_ref().expect("No DB set"),
+            query.tidal_album_id,
+            query.qobuz_album_id.clone(),
+        )
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to re-favorite album: {e:?}")))?
+        .to_api(),
+    ))
 }
