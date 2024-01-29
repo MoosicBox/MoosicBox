@@ -438,20 +438,22 @@ impl TunnelSender {
     fn send(
         &self,
         request_id: usize,
+        status: u16,
         headers: HashMap<String, String>,
         reader: impl std::io::Read,
         encoding: TunnelEncoding,
     ) {
         match encoding {
-            TunnelEncoding::Binary => self.send_binary(request_id, headers, reader),
+            TunnelEncoding::Binary => self.send_binary(request_id, status, headers, reader),
             #[cfg(feature = "base64")]
-            TunnelEncoding::Base64 => self.send_base64(request_id, headers, reader),
+            TunnelEncoding::Base64 => self.send_base64(request_id, status, headers, reader),
         }
     }
 
     async fn send_stream<E: std::error::Error + Sized>(
         &self,
         request_id: usize,
+        status: u16,
         headers: HashMap<String, String>,
         ranges: Option<Vec<Range>>,
         stream: impl Stream<Item = Result<Bytes, E>> + std::marker::Unpin,
@@ -459,12 +461,12 @@ impl TunnelSender {
     ) {
         match encoding {
             TunnelEncoding::Binary => {
-                self.send_binary_stream(request_id, headers, ranges, stream)
+                self.send_binary_stream(request_id, status, headers, ranges, stream)
                     .await
             }
             #[cfg(feature = "base64")]
             TunnelEncoding::Base64 => {
-                self.send_base64_stream(request_id, headers, ranges, stream)
+                self.send_base64_stream(request_id, status, headers, ranges, stream)
                     .await
             }
         }
@@ -474,6 +476,7 @@ impl TunnelSender {
         request_id: usize,
         packet_id: u32,
         last: bool,
+        status: u16,
         headers: &HashMap<String, String>,
         buf: &mut [u8],
     ) -> usize {
@@ -501,6 +504,10 @@ impl TunnelSender {
         );
 
         if packet_id == 1 {
+            let status_bytes = status.to_be_bytes();
+            let len = status_bytes.len();
+            buf[offset..(offset + len)].copy_from_slice(&status_bytes);
+            offset += len;
             let headers = serde_json::to_string(&headers).unwrap();
             let headers_bytes = headers.as_bytes();
             let headers_len = headers_bytes.len() as u32;
@@ -519,6 +526,7 @@ impl TunnelSender {
     async fn send_binary_stream<E: std::error::Error + Sized>(
         &self,
         request_id: usize,
+        status: u16,
         headers: HashMap<String, String>,
         ranges: Option<Vec<Range>>,
         mut stream: impl Stream<Item = Result<Bytes, E>> + std::marker::Unpin,
@@ -535,8 +543,9 @@ impl TunnelSender {
                 break;
             }
             let mut buf = vec![0_u8; WS_MAX_PACKET_SIZE];
-            let mut header_offset =
-                Self::init_binary_request_buffer(request_id, packet_id, false, &headers, &mut buf);
+            let mut header_offset = Self::init_binary_request_buffer(
+                request_id, packet_id, false, status, &headers, &mut buf,
+            );
             let mut offset = header_offset;
 
             let mut left_over_size = 0_usize;
@@ -608,7 +617,7 @@ impl TunnelSender {
                 for (i, range) in matching_ranges.iter().enumerate() {
                     if i > 0 {
                         header_offset = Self::init_binary_request_buffer(
-                            request_id, packet_id, false, &headers, &mut buf,
+                            request_id, packet_id, false, status, &headers, &mut buf,
                         );
                     }
                     headers_bytes[0..header_offset].copy_from_slice(&buf[..header_offset]);
@@ -659,6 +668,7 @@ impl TunnelSender {
     fn send_binary(
         &self,
         request_id: usize,
+        status: u16,
         headers: HashMap<String, String>,
         mut reader: impl std::io::Read,
     ) {
@@ -673,8 +683,9 @@ impl TunnelSender {
             }
             packet_id += 1;
             let mut buf = vec![0_u8; WS_MAX_PACKET_SIZE];
-            let offset =
-                Self::init_binary_request_buffer(request_id, packet_id, false, &headers, &mut buf);
+            let offset = Self::init_binary_request_buffer(
+                request_id, packet_id, false, status, &headers, &mut buf,
+            );
 
             let mut read = 0;
 
@@ -707,6 +718,7 @@ impl TunnelSender {
     fn init_base64_request_buffer(
         request_id: usize,
         packet_id: u32,
+        status: u16,
         headers: &HashMap<String, String>,
         buf: &mut String,
         overflow_buf: &mut String,
@@ -719,6 +731,7 @@ impl TunnelSender {
 
         let mut prefix = format!("{request_id}|{packet_id}|");
         if packet_id == 1 {
+            prefix.push_str(&status.to_string());
             let mut headers_base64 =
                 general_purpose::STANDARD.encode(serde_json::to_string(&headers).unwrap().clone());
             headers_base64.insert(0, '{');
@@ -733,6 +746,7 @@ impl TunnelSender {
     fn send_base64(
         &self,
         request_id: usize,
+        status: u16,
         headers: HashMap<String, String>,
         mut reader: impl std::io::Read,
     ) {
@@ -756,10 +770,11 @@ impl TunnelSender {
                     bytes_read += size;
                     log::debug!("Read {} bytes", bytes_read);
                     let bytes = &buf[..size];
-                    let prefix = format!("{request_id}|{packet_id}|");
+                    let mut prefix = format!("{request_id}|{packet_id}|");
                     let mut base64 = general_purpose::STANDARD.encode(bytes);
 
                     if packet_id == 1 {
+                        prefix.push_str(&status.to_string());
                         let mut headers_base64 = general_purpose::STANDARD
                             .encode(serde_json::to_string(&headers).unwrap().clone());
                         headers_base64.insert(0, '{');
@@ -807,6 +822,7 @@ impl TunnelSender {
     async fn send_base64_stream<E: std::error::Error + Sized>(
         &self,
         request_id: usize,
+        status: u16,
         headers: HashMap<String, String>,
         ranges: Option<Vec<Range>>,
         mut stream: impl Stream<Item = Result<Bytes, E>> + std::marker::Unpin,
@@ -835,6 +851,7 @@ impl TunnelSender {
             let prefix = Self::init_base64_request_buffer(
                 request_id,
                 packet_id,
+                status,
                 &headers,
                 &mut buf,
                 &mut overflow_buf,
@@ -938,8 +955,15 @@ impl TunnelSender {
             .map(|(key, value)| (key.to_string(), value.to_str().unwrap().to_string()))
             .collect();
 
-        self.send_stream(request_id, headers, None, response.bytes_stream(), encoding)
-            .await;
+        self.send_stream(
+            request_id,
+            response.status().as_u16(),
+            headers,
+            None,
+            response.bytes_stream(),
+            encoding,
+        )
+        .await;
     }
 
     async fn http_request(
@@ -1035,7 +1059,7 @@ impl TunnelSender {
                                 Some(AudioFormat::Aac) => {
                                     response_headers
                                         .insert(CONTENT_TYPE.to_string(), "audio/mp4".to_string());
-                                    self.send_stream(request_id, response_headers, ranges,
+                                    self.send_stream(request_id, 200, response_headers, ranges,
                                         moosicbox_symphonia_player::output::encoder::aac::encoder::encode_aac_stream(
                                             path,
                                         ),
@@ -1046,7 +1070,7 @@ impl TunnelSender {
                                 Some(AudioFormat::Mp3) => {
                                     response_headers
                                         .insert(CONTENT_TYPE.to_string(), "audio/mp3".to_string());
-                                    self.send_stream(request_id, response_headers, ranges,
+                                    self.send_stream(request_id, 200, response_headers, ranges,
                                         moosicbox_symphonia_player::output::encoder::mp3::encoder::encode_mp3_stream(
                                             path,
                                         ),
@@ -1057,7 +1081,7 @@ impl TunnelSender {
                                 Some(AudioFormat::Opus) => {
                                     response_headers
                                         .insert(CONTENT_TYPE.to_string(), "audio/opus".to_string());
-                                    self.send_stream(request_id, response_headers, ranges,
+                                    self.send_stream(request_id, 200, response_headers, ranges,
                                         moosicbox_symphonia_player::output::encoder::opus::encoder::encode_opus_stream(
                                             path,
                                         ),
@@ -1069,6 +1093,7 @@ impl TunnelSender {
                                         .insert(CONTENT_TYPE.to_string(), "audio/flac".to_string());
                                     self.send(
                                         request_id,
+                                        200,
                                         response_headers,
                                         File::open(path).unwrap(),
                                         encoding,
@@ -1153,6 +1178,7 @@ impl TunnelSender {
 
                             self.send_stream(
                                 request_id,
+                                200,
                                 response_headers,
                                 ranges,
                                 stream,
@@ -1180,7 +1206,7 @@ impl TunnelSender {
                     if let Ok(track_info) = get_track_info(query.track_id, db.clone()).await {
                         let mut bytes: Vec<u8> = Vec::new();
                         serde_json::to_writer(&mut bytes, &track_info).unwrap();
-                        self.send(request_id, headers, Cursor::new(bytes), encoding);
+                        self.send(request_id, 200, headers, Cursor::new(bytes), encoding);
                     }
 
                     Ok(())
@@ -1271,7 +1297,13 @@ impl TunnelSender {
                                         "cache-control".to_string(),
                                         format!("max-age={}", 86400u32 * 14),
                                     );
-                                    self.send(request_id, headers, Cursor::new(resized), encoding);
+                                    self.send(
+                                        request_id,
+                                        200,
+                                        headers,
+                                        Cursor::new(resized),
+                                        encoding,
+                                    );
                                 }
                             }
 

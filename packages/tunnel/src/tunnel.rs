@@ -38,6 +38,7 @@ pub struct TunnelResponse {
     pub packet_id: u32,
     pub last: bool,
     pub bytes: Bytes,
+    pub status: Option<u16>,
     pub headers: Option<HashMap<String, String>>,
 }
 
@@ -107,13 +108,18 @@ impl From<Bytes> for TunnelResponse {
         let request_id = usize::from_be_bytes(bytes[..8].try_into().unwrap());
         let packet_id = u32::from_be_bytes(bytes[8..12].try_into().unwrap());
         let last = u8::from_be_bytes(bytes[12..13].try_into().unwrap()) == 1;
-        let headers = if packet_id == 1 {
+        let (status, headers) = if packet_id == 1 {
+            let status = u16::from_be_bytes(data[..2].try_into().unwrap());
+            data = data.slice(2..);
             let len = u32::from_be_bytes(data[..4].try_into().unwrap()) as usize;
             let headers_bytes = &data.slice(4..(4 + len));
             data = data.slice((4 + len)..);
-            Some(serde_json::from_slice(headers_bytes).unwrap())
+            (
+                Some(status),
+                Some(serde_json::from_slice(headers_bytes).unwrap()),
+            )
         } else {
-            None
+            (None, None)
         };
 
         TunnelResponse {
@@ -121,6 +127,7 @@ impl From<Bytes> for TunnelResponse {
             packet_id,
             last,
             bytes: data,
+            status,
             headers,
         }
     }
@@ -166,23 +173,29 @@ impl TryFrom<&str> for TunnelResponse {
             .parse::<u32>()
             .unwrap();
 
-        let last_pos = packet_id_pos + 2;
+        let last_pos = packet_id_pos + 2; // 1 (delimiter) + 1 (u8 bool byte)
         let last = base64[packet_id_pos + 1..last_pos].parse::<u8>().unwrap() == 1;
 
-        let headers = if packet_id == 1 {
+        let (status, headers) = if packet_id == 1 {
+            let status_pos = last_pos + 3; // 3 digit status code
+            let status = base64[last_pos..status_pos].parse::<u16>().unwrap();
+
             let headers_pos = base64
                 .chars()
-                .skip(last_pos + 2)
+                .skip(status_pos + 2)
                 .position(|c| c == '}')
                 .ok_or(Base64DecodeError::InvalidContent(
                     "Missing headers. Expected '}' delimiter".into(),
                 ))?;
 
-            let headers_str = &base64[last_pos + 1..headers_pos];
+            let headers_str = &base64[status_pos + 1..headers_pos];
 
-            Some(serde_json::from_str(headers_str).unwrap())
+            (
+                Some(status),
+                Some(serde_json::from_str(headers_str).unwrap()),
+            )
         } else {
-            None
+            (None, None)
         };
 
         let bytes = Bytes::from(general_purpose::STANDARD.decode(base64)?);
@@ -192,6 +205,7 @@ impl TryFrom<&str> for TunnelResponse {
             packet_id,
             last,
             bytes,
+            status,
             headers,
         })
     }

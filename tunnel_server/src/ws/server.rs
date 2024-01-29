@@ -48,7 +48,7 @@ enum Command {
     RequestStart {
         request_id: usize,
         sender: UnboundedSender<TunnelResponse>,
-        headers_sender: oneshot::Sender<HashMap<String, String>>,
+        headers_sender: oneshot::Sender<RequestHeaders>,
         abort_request_token: CancellationToken,
     },
 
@@ -83,6 +83,12 @@ enum Command {
     },
 }
 
+#[derive(Debug)]
+pub struct RequestHeaders {
+    pub status: u16,
+    pub headers: HashMap<String, String>,
+}
+
 /// A multi-room chat server.
 ///
 /// Contains the logic of how connections chat with each other plus room management.
@@ -94,7 +100,7 @@ pub struct ChatServer {
     sessions: HashMap<ConnId, mpsc::UnboundedSender<Msg>>,
     clients: HashMap<ConnId, mpsc::UnboundedSender<Msg>>,
     senders: HashMap<usize, UnboundedSender<TunnelResponse>>,
-    headers_senders: HashMap<usize, oneshot::Sender<HashMap<String, String>>>,
+    headers_senders: HashMap<usize, oneshot::Sender<RequestHeaders>>,
     abort_request_tokens: HashMap<usize, CancellationToken>,
 
     /// Tracks total number of historical connections established.
@@ -301,9 +307,15 @@ impl ChatServer {
                 Command::Response { response, conn_id } => {
                     let request_id = response.request_id;
 
-                    if let Some(headers) = &response.headers {
+                    if let (Some(status), Some(headers)) = (response.status, &response.headers) {
                         if let Some(sender) = self.headers_senders.remove(&request_id) {
-                            if sender.send(headers.clone()).is_err() {
+                            if sender
+                                .send(RequestHeaders {
+                                    status,
+                                    headers: headers.clone(),
+                                })
+                                .is_err()
+                            {
                                 warn!("Header sender dropped for request {}", request_id);
                                 self.headers_senders.remove(&request_id);
                                 if let Err(err) = self.abort_request(conn_id, request_id).await {
@@ -520,7 +532,7 @@ impl ChatServerHandle {
         &self,
         request_id: usize,
         sender: UnboundedSender<TunnelResponse>,
-        headers_sender: oneshot::Sender<HashMap<String, String>>,
+        headers_sender: oneshot::Sender<RequestHeaders>,
         abort_request_token: CancellationToken,
     ) {
         self.cmd_tx

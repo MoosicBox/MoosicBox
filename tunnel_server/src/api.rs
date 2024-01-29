@@ -1,5 +1,5 @@
 use actix_web::error::{ErrorBadRequest, ErrorInternalServerError, ErrorUnauthorized};
-use actix_web::http::header;
+use actix_web::http::{header, StatusCode};
 use actix_web::web::{self, Json};
 use actix_web::{route, HttpResponse};
 use actix_web::{HttpRequest, Result};
@@ -26,7 +26,7 @@ use crate::auth::{
 use crate::ws::db::{
     insert_client_access_token, insert_magic_token, insert_signature_token, select_magic_token,
 };
-use crate::ws::server::ConnectionIdError;
+use crate::ws::server::{ConnectionIdError, RequestHeaders};
 use crate::CHAT_SERVER_HANDLE;
 
 #[route("/health", method = "GET")]
@@ -256,7 +256,9 @@ async fn handle_request(
     let headers = headers_rx.await.unwrap();
     let response_type = ResponseType::Stream;
 
-    for (key, value) in &headers {
+    builder.status(StatusCode::from_u16(headers.status).unwrap());
+
+    for (key, value) in &headers.headers {
         builder.insert_header((key.clone(), value.clone()));
     }
 
@@ -296,7 +298,7 @@ async fn request(
     headers: Option<Value>,
     abort_token: CancellationToken,
 ) -> Result<(
-    oneshot::Receiver<HashMap<String, String>>,
+    oneshot::Receiver<RequestHeaders>,
     UnboundedReceiver<TunnelResponse>,
 )> {
     let (headers_tx, headers_rx) = oneshot::channel();
