@@ -140,7 +140,7 @@ impl ToApi<ApiTrack> for QobuzTrack {
     fn to_api(&self) -> ApiTrack {
         ApiTrack::Qobuz(ApiQobuzTrack {
             id: self.id,
-            track_number: self.track_number,
+            number: self.track_number,
             artist: self.artist.clone(),
             artist_id: self.artist_id,
             album: self.album.clone(),
@@ -157,7 +157,7 @@ impl ToApi<ApiTrack> for QobuzTrack {
 #[serde(rename_all = "camelCase")]
 pub struct ApiQobuzTrack {
     pub id: u64,
-    pub track_number: u32,
+    pub number: u32,
     pub artist: String,
     pub artist_id: u64,
     pub album: String,
