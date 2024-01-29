@@ -618,6 +618,7 @@ async fn authenticated_request_inner(
         _ => match response.json::<Value>().await {
             Ok(value) => Ok(Some(value)),
             Err(err) => {
+                log::debug!("JSON response error: {err:?}");
                 if err.is_decode() {
                     Ok(None)
                 } else {
