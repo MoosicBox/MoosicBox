@@ -379,7 +379,7 @@ impl From<AlbumOrder> for QobuzAlbumOrder {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzArtistAlbumsQuery {
-    artist_id: String,
+    artist_id: u64,
     offset: Option<u32>,
     limit: Option<u32>,
     release_type: Option<AlbumReleaseType>,
@@ -397,7 +397,7 @@ pub async fn artist_albums_endpoint(
     let (items, has_more) = artist_albums(
         #[cfg(feature = "db")]
         data.db.as_ref().expect("Db not set"),
-        &query.artist_id,
+        query.artist_id,
         query.offset,
         query.limit,
         query.release_type.map(|x| x.into()),

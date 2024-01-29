@@ -1070,7 +1070,7 @@ pub enum QobuzArtistAlbumsError {
 #[allow(clippy::too_many_arguments)]
 pub async fn artist_albums(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    artist_id: &str,
+    artist_id: u64,
     offset: Option<u32>,
     limit: Option<u32>,
     release_type: Option<QobuzAlbumReleaseType>,
@@ -1084,7 +1084,7 @@ pub async fn artist_albums(
         ArtistAlbums,
         &[],
         &[
-            ("artist_id", artist_id),
+            ("artist_id", &artist_id.to_string()),
             ("offset", &offset.unwrap_or(0).to_string()),
             ("limit", &limit.unwrap_or(100).to_string()),
             ("release_type", release_type.unwrap_or_default().as_ref()),
