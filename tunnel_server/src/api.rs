@@ -163,7 +163,15 @@ pub async fn album_cover_endpoint(
     proxy_request(body, req).await
 }
 
-#[route("/{path:.*}", method = "GET", method = "POST", method = "HEAD")]
+#[route(
+    "/{path:.*}",
+    method = "GET",
+    method = "POST",
+    method = "DELETE",
+    method = "PUT",
+    method = "PATCH",
+    method = "HEAD"
+)]
 pub async fn tunnel_endpoint(
     body: Option<Bytes>,
     req: HttpRequest,
