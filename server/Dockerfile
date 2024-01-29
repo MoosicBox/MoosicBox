@@ -15,11 +15,11 @@ RUN echo "[package]\nname = \"moosicbox_config\"\nversion = \"0.1.0\"" > package
 
 ADD packages/converter/.cargo packages/converter/.cargo
 RUN mkdir -p packages/converter/src && echo "fn main() {}" > packages/converter/src/main.rs
-RUN echo "[package]\nname = \"moosicbox_converter\"\nversion = \"0.1.0\"" > packages/converter/Cargo.toml
+ADD packages/converter/Cargo.toml packages/converter/Cargo.toml
 
 ADD packages/core/.cargo packages/core/.cargo
 RUN mkdir -p packages/core/src && echo "fn main() {}" > packages/core/src/main.rs
-RUN echo "[package]\nname = \"moosicbox_core\"\nversion = \"0.1.0\"" > packages/core/Cargo.toml
+ADD packages/core/Cargo.toml packages/core/Cargo.toml
 
 ADD packages/env_utils/.cargo packages/env_utils/.cargo
 RUN mkdir -p packages/env_utils/src && echo "fn main() {}" > packages/env_utils/src/main.rs
@@ -27,11 +27,15 @@ RUN echo "[package]\nname = \"moosicbox_env_utils\"\nversion = \"0.1.0\"" > pack
 
 ADD packages/files/.cargo packages/files/.cargo
 RUN mkdir -p packages/files/src && echo "fn main() {}" > packages/files/src/main.rs
-RUN echo "[package]\nname = \"moosicbox_files\"\nversion = \"0.1.0\"" > packages/files/Cargo.toml
+ADD packages/files/Cargo.toml packages/files/Cargo.toml
 
 ADD packages/image/.cargo packages/image/.cargo
 RUN mkdir -p packages/image/src && echo "fn main() {}" > packages/image/src/main.rs
-RUN echo "[package]\nname = \"moosicbox_image\"\nversion = \"0.1.0\"" > packages/image/Cargo.toml
+ADD packages/image/Cargo.toml packages/image/Cargo.toml
+
+ADD packages/json_utils/.cargo packages/json_utils/.cargo
+RUN mkdir -p packages/json_utils/src && echo "fn main() {}" > packages/json_utils/src/main.rs
+ADD packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
 
 ADD packages/menu/.cargo packages/menu/.cargo
 RUN mkdir -p packages/menu/src && echo "fn main() {}" > packages/menu/src/main.rs
@@ -40,6 +44,10 @@ RUN echo "[package]\nname = \"moosicbox_menu\"\nversion = \"0.1.0\"" > packages/
 ADD packages/player/.cargo packages/player/.cargo
 RUN mkdir -p packages/player/src && echo "fn main() {}" > packages/player/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_player\"\nversion = \"0.1.0\"" > packages/player/Cargo.toml
+
+ADD packages/qobuz/.cargo packages/qobuz/.cargo
+RUN mkdir -p packages/qobuz/src && echo "fn main() {}" > packages/qobuz/src/main.rs
+RUN echo "[package]\nname = \"moosicbox_qobuz\"\nversion = \"0.1.0\"" > packages/qobuz/Cargo.toml
 
 ADD packages/tunnel/.cargo packages/tunnel/.cargo
 RUN mkdir -p packages/tunnel/src && echo "fn main() {}" > packages/tunnel/src/main.rs
