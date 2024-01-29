@@ -1157,26 +1157,45 @@ pub async fn favorite_albums(
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> Result<(Vec<QobuzAlbum>, u32), QobuzFavoriteAlbumsError> {
-    let url = qobuz_api_endpoint!(
-        Favorites,
-        &[],
-        &[
-            ("offset", &offset.unwrap_or(0).to_string()),
-            ("limit", &limit.unwrap_or(100).to_string()),
-            ("type", "albums"),
-        ]
-    );
+    let original_limit = limit.unwrap_or(100);
+    let mut limit = original_limit;
 
-    let value = authenticated_request(
-        #[cfg(feature = "db")]
-        db,
-        &url,
-        app_id,
-        access_token,
-    )
-    .await?;
+    let value = loop {
+        let url = qobuz_api_endpoint!(
+            Favorites,
+            &[],
+            &[
+                ("offset", &offset.unwrap_or(0).to_string()),
+                ("limit", &limit.to_string()),
+                ("type", "albums"),
+            ]
+        );
 
-    let items = value.to_nested_value(&["albums", "items"])?;
+        match authenticated_request(
+            #[cfg(feature = "db")]
+            db,
+            &url,
+            app_id.clone(),
+            access_token.clone(),
+        )
+        .await
+        {
+            Ok(value) => break value,
+            Err(err) => match err {
+                AuthenticatedRequestError::NoResponseBody => {
+                    log::debug!("Received empty response for favorite albums... retrying");
+                    limit += 1;
+                }
+                _ => return Err(QobuzFavoriteAlbumsError::AuthenticatedRequest(err)),
+            },
+        }
+    };
+
+    let items = value
+        .to_nested_value::<Vec<_>>(&["albums", "items"])?
+        .into_iter()
+        .take(original_limit as usize)
+        .collect();
     let count = value.to_nested_value(&["albums", "total"])?;
 
     Ok((items, count))
