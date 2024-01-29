@@ -440,7 +440,7 @@ pub enum AuthenticatedRequestError {
     Unauthorized,
     #[error("Request failed (error {0})")]
     RequestFailed(u16, String),
-    #[error("MaxFailedAttempts")]
+    #[error("No response body")]
     NoResponseBody,
     #[error("MaxFailedAttempts")]
     MaxFailedAttempts,
