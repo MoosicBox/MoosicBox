@@ -1181,6 +1181,39 @@ pub async fn favorite_albums(
     Ok((items, count))
 }
 
+pub async fn all_favorite_albums(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    access_token: Option<String>,
+    app_id: Option<String>,
+) -> Result<Vec<QobuzAlbum>, QobuzFavoriteAlbumsError> {
+    let mut all_albums = vec![];
+
+    let mut offset = 0;
+    let limit = 100;
+
+    loop {
+        let albums = favorite_albums(
+            #[cfg(feature = "db")]
+            db,
+            Some(offset),
+            Some(limit),
+            access_token.clone(),
+            app_id.clone(),
+        )
+        .await?;
+
+        all_albums.extend_from_slice(&albums.0);
+
+        if albums.0.is_empty() || all_albums.len() == (albums.1 as usize) {
+            break;
+        }
+
+        offset += limit;
+    }
+
+    Ok(all_albums)
+}
+
 #[derive(Debug, Error)]
 pub enum QobuzAddFavoriteAlbumError {
     #[error(transparent)]
