@@ -1004,6 +1004,50 @@ pub async fn favorite_albums(
     Ok((items, count))
 }
 
+#[allow(clippy::too_many_arguments)]
+pub async fn all_favorite_albums(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    order: Option<TidalAlbumOrder>,
+    order_direction: Option<TidalAlbumOrderDirection>,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+    access_token: Option<String>,
+    user_id: Option<u64>,
+) -> Result<Vec<TidalAlbum>, TidalFavoriteAlbumsError> {
+    let mut all_albums = vec![];
+
+    let mut offset = 0;
+    let limit = 100;
+
+    loop {
+        let albums = favorite_albums(
+            #[cfg(feature = "db")]
+            db,
+            Some(offset),
+            Some(limit),
+            order,
+            order_direction,
+            country_code.clone(),
+            locale.clone(),
+            device_type,
+            access_token.clone(),
+            user_id,
+        )
+        .await?;
+
+        all_albums.extend_from_slice(&albums.0);
+
+        if albums.0.is_empty() || all_albums.len() == (albums.1 as usize) {
+            break;
+        }
+
+        offset += limit;
+    }
+
+    Ok(all_albums)
+}
+
 #[derive(Debug, Error)]
 pub enum TidalAddFavoriteAlbumError {
     #[error(transparent)]
