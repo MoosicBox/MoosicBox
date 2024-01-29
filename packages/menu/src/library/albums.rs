@@ -455,7 +455,29 @@ pub async fn add_album(
         false,
     )?;
 
-    albums.first().ok_or(AddAlbumError::NoAlbum).cloned()
+    if let Some(album) = albums.into_iter().next() {
+        return Ok(album);
+    }
+
+    if let Some(tidal_album_id) = tidal_album_id {
+        if let Some(album) = moosicbox_core::sqlite::db::get_tidal_album(
+            &db.library.lock().as_ref().unwrap().inner,
+            tidal_album_id as i32,
+        )? {
+            return Ok(album);
+        }
+    }
+
+    if let Some(qobuz_album_id) = &qobuz_album_id {
+        if let Some(album) = moosicbox_core::sqlite::db::get_qobuz_album(
+            &db.library.lock().as_ref().unwrap().inner,
+            qobuz_album_id,
+        )? {
+            return Ok(album);
+        }
+    }
+
+    Err(AddAlbumError::NoAlbum)
 }
 
 #[derive(Debug, Error)]
