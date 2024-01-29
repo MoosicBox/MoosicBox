@@ -2,6 +2,7 @@ use crate::{
     app::{AppState, Db},
     cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
 };
+use actix_web::error::{ErrorInternalServerError, ErrorNotFound};
 use std::{sync::PoisonError, time::Duration};
 use thiserror::Error;
 
@@ -168,6 +169,17 @@ pub enum GetAlbumError {
 impl<T> From<PoisonError<T>> for GetAlbumError {
     fn from(_err: PoisonError<T>) -> Self {
         Self::PoisonError
+    }
+}
+
+impl From<GetAlbumError> for actix_web::Error {
+    fn from(err: GetAlbumError) -> Self {
+        log::error!("{err:?}");
+        if let GetAlbumError::AlbumNotFound(_) = err {
+            return ErrorNotFound("Album not found");
+        }
+
+        ErrorInternalServerError(err.to_string())
     }
 }
 
