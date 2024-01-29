@@ -28,8 +28,8 @@ use moosicbox_search::{
     DeleteFromIndexError, PopulateIndexError,
 };
 use moosicbox_tidal::{
-    TidalAddFavoriteAlbumError, TidalAlbumError, TidalArtistAlbumsError, TidalArtistError,
-    TidalFavoriteAlbumsError, TidalRemoveFavoriteAlbumError,
+    TidalAddFavoriteAlbumError, TidalAlbumError, TidalAlbumType, TidalArtistAlbumsError,
+    TidalArtistError, TidalFavoriteAlbumsError, TidalRemoveFavoriteAlbumError,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -636,17 +636,52 @@ pub async fn refavorite_album(
     };
 
     let new_tidal_album_id = if let Some((artist, album)) = &tidal {
-        let (albums, _) =
-            moosicbox_tidal::artist_albums(db, artist.id, None, None, None, None, None, None, None)
-                .await?;
-
-        albums
-            .iter()
-            .find(|x| {
-                x.artist_id == album.artist_id
-                    && x.title.to_lowercase().trim() == album.title.to_lowercase().trim()
-            })
-            .map(|x| x.id)
+        futures::future::join_all(vec![
+            moosicbox_tidal::artist_albums(
+                db,
+                artist.id,
+                None,
+                None,
+                Some(TidalAlbumType::Lp),
+                None,
+                None,
+                None,
+                None,
+            ),
+            moosicbox_tidal::artist_albums(
+                db,
+                artist.id,
+                None,
+                None,
+                Some(TidalAlbumType::EpsAndSingles),
+                None,
+                None,
+                None,
+                None,
+            ),
+            moosicbox_tidal::artist_albums(
+                db,
+                artist.id,
+                None,
+                None,
+                Some(TidalAlbumType::Compilations),
+                None,
+                None,
+                None,
+                None,
+            ),
+        ])
+        .await
+        .into_iter()
+        .map(|res| res.map(|r| r.0))
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .flatten()
+        .find(|x| {
+            x.artist_id == album.artist_id
+                && x.title.to_lowercase().trim() == album.title.to_lowercase().trim()
+        })
+        .map(|x| x.id)
     } else {
         None
     };

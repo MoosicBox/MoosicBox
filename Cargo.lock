@@ -3069,6 +3069,7 @@ dependencies = [
  "actix-files",
  "actix-web",
  "awc",
+ "futures",
  "log",
  "moosicbox_core",
  "moosicbox_qobuz",
