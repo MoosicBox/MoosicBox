@@ -21,7 +21,7 @@ use moosicbox_core::{
 use moosicbox_qobuz::{QobuzAddFavoriteAlbumError, QobuzAlbumError, QobuzRemoveFavoriteAlbumError};
 use moosicbox_scan::output::ScanOutput;
 use moosicbox_search::{
-    data::{ToDataValues, ToDeleteTerm},
+    data::{AsDataValues, AsDeleteTerm},
     DeleteFromIndexError, PopulateIndexError,
 };
 use moosicbox_tidal::{TidalAddFavoriteAlbumError, TidalAlbumError, TidalRemoveFavoriteAlbumError};
@@ -379,8 +379,8 @@ pub async fn add_album(
     moosicbox_search::populate_global_search_index(
         results
             .artists
-            .into_iter()
-            .map(|artist| artist.to_data_values())
+            .iter()
+            .map(|artist| artist.as_data_values())
             .collect::<Vec<_>>(),
         false,
     )?;
@@ -399,8 +399,8 @@ pub async fn add_album(
         .collect::<Vec<_>>();
     moosicbox_search::populate_global_search_index(
         albums
-            .into_iter()
-            .map(|album| album.to_data_values())
+            .iter()
+            .map(|album| album.as_data_values())
             .collect::<Vec<_>>(),
         false,
     )?;
@@ -411,8 +411,8 @@ pub async fn add_album(
     )?;
     moosicbox_search::populate_global_search_index(
         tracks
-            .into_iter()
-            .map(|track| track.to_data_values())
+            .iter()
+            .map(|track| track.as_data_values())
             .collect::<Vec<_>>(),
         false,
     )?;
@@ -483,11 +483,11 @@ pub async fn remove_album(
 
     moosicbox_core::cache::clear_cache();
 
-    moosicbox_search::delete_from_global_search_index(vec![album.to_delete_term()])?;
+    moosicbox_search::delete_from_global_search_index(vec![album.as_delete_term()])?;
     moosicbox_search::delete_from_global_search_index(
         tracks
-            .into_iter()
-            .map(|track| track.to_delete_term())
+            .iter()
+            .map(|track| track.as_delete_term())
             .collect::<Vec<_>>(),
     )?;
 

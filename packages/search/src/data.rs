@@ -11,12 +11,12 @@ use thiserror::Error;
 
 use crate::{DataValue, PopulateIndexError, RecreateIndexError, GLOBAL_SEARCH_INDEX_PATH};
 
-pub trait ToDataValues {
-    fn to_data_values<'a>(self) -> Vec<(&'a str, DataValue)>;
+pub trait AsDataValues {
+    fn as_data_values<'a>(&self) -> Vec<(&'a str, DataValue)>;
 }
 
-impl ToDataValues for Artist {
-    fn to_data_values<'a>(self) -> Vec<(&'a str, DataValue)> {
+impl AsDataValues for Artist {
+    fn as_data_values<'a>(&self) -> Vec<(&'a str, DataValue)> {
         vec![
             ("document_type", DataValue::String("artists".into())),
             ("artist_title", DataValue::String(self.title.clone())),
@@ -36,8 +36,8 @@ impl ToDataValues for Artist {
     }
 }
 
-impl ToDataValues for Album {
-    fn to_data_values<'a>(self) -> Vec<(&'a str, DataValue)> {
+impl AsDataValues for Album {
+    fn as_data_values<'a>(&self) -> Vec<(&'a str, DataValue)> {
         let mut data = vec![
             ("document_type", DataValue::String("albums".into())),
             ("artist_title", DataValue::String(self.artist.clone())),
@@ -94,8 +94,8 @@ impl ToDataValues for Album {
     }
 }
 
-impl ToDataValues for LibraryTrack {
-    fn to_data_values<'a>(self) -> Vec<(&'a str, DataValue)> {
+impl AsDataValues for LibraryTrack {
+    fn as_data_values<'a>(&self) -> Vec<(&'a str, DataValue)> {
         vec![
             ("document_type", DataValue::String("tracks".into())),
             ("artist_title", DataValue::String(self.artist.clone())),
@@ -145,24 +145,24 @@ impl ToDataValues for LibraryTrack {
     }
 }
 
-pub trait ToDeleteTerm {
-    fn to_delete_term<'a>(self) -> (&'a str, DataValue);
+pub trait AsDeleteTerm {
+    fn as_delete_term<'a>(&self) -> (&'a str, DataValue);
 }
 
-impl ToDeleteTerm for Artist {
-    fn to_delete_term<'a>(self) -> (&'a str, DataValue) {
+impl AsDeleteTerm for Artist {
+    fn as_delete_term<'a>(&self) -> (&'a str, DataValue) {
         ("artist_id", DataValue::Number(self.id as u64))
     }
 }
 
-impl ToDeleteTerm for Album {
-    fn to_delete_term<'a>(self) -> (&'a str, DataValue) {
+impl AsDeleteTerm for Album {
+    fn as_delete_term<'a>(&self) -> (&'a str, DataValue) {
         ("album_id", DataValue::Number(self.id as u64))
     }
 }
 
-impl ToDeleteTerm for LibraryTrack {
-    fn to_delete_term<'a>(self) -> (&'a str, DataValue) {
+impl AsDeleteTerm for LibraryTrack {
+    fn as_delete_term<'a>(&self) -> (&'a str, DataValue) {
         ("track_id", DataValue::Number(self.id as u64))
     }
 }
@@ -185,21 +185,21 @@ pub fn reindex_global_search_index_from_db(
 
     let artists = moosicbox_core::sqlite::db::get_artists(&connection.inner)?
         .into_iter()
-        .map(|artist| artist.to_data_values())
+        .map(|artist| artist.as_data_values())
         .collect::<Vec<_>>();
 
     crate::populate_global_search_index(artists, false)?;
 
     let albums = moosicbox_core::sqlite::db::get_albums(&connection.inner)?
         .into_iter()
-        .map(|album| album.to_data_values())
+        .map(|album| album.as_data_values())
         .collect::<Vec<_>>();
 
     crate::populate_global_search_index(albums, false)?;
 
     let tracks = moosicbox_core::sqlite::db::get_tracks(&connection.inner, None)?
         .into_iter()
-        .map(|track| track.to_data_values())
+        .map(|track| track.as_data_values())
         .collect::<Vec<_>>();
 
     crate::populate_global_search_index(tracks, false)?;
