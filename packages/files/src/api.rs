@@ -448,6 +448,7 @@ pub async fn album_source_artwork_endpoint(
             .db
             .clone()
             .ok_or(ErrorInternalServerError("No DB set"))?,
+        None,
     )
     .await?
     {
@@ -501,6 +502,7 @@ pub async fn album_artwork_endpoint(
             .db
             .clone()
             .ok_or(ErrorInternalServerError("No DB set"))?,
+        Some(std::cmp::max(width, height)),
     )
     .await?;
 

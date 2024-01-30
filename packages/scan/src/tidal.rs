@@ -7,7 +7,8 @@ use moosicbox_core::{
 };
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
 use moosicbox_tidal::{
-    TidalAlbum, TidalAlbumTracksError, TidalArtistError, TidalFavoriteAlbumsError, TidalTrack,
+    TidalAlbum, TidalAlbumTracksError, TidalArtistError, TidalFavoriteAlbumsError, TidalImageSize,
+    TidalTrack,
 };
 use thiserror::Error;
 use tokio::{select, sync::RwLock};
@@ -170,7 +171,7 @@ pub async fn scan_albums(
                 }
             }
 
-            if let Some(cover_url) = album.cover_url(1280) {
+            if let Some(cover_url) = album.cover_url(TidalImageSize::Max) {
                 if read_album.cover.is_none() && !read_album.searched_cover {
                     scan_album
                         .write()

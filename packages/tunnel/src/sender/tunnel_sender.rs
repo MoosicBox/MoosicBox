@@ -1248,7 +1248,7 @@ impl TunnelSender {
                                     TunnelRequestError::BadRequest("Bad height".into())
                                 })?;
 
-                            match get_album_cover(album_id, db)
+                            match get_album_cover(album_id, db, Some(std::cmp::max(width, height)))
                                 .await
                                 .map_err(|e| TunnelRequestError::Request(e.to_string()))?
                             {

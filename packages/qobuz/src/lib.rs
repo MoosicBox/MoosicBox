@@ -5,7 +5,7 @@ pub mod api;
 #[cfg(feature = "db")]
 pub mod db;
 
-use std::{collections::HashMap, str::Utf8Error};
+use std::{collections::HashMap, fmt::Display, str::Utf8Error};
 
 use async_recursion::async_recursion;
 use base64::{engine::general_purpose, Engine as _};
@@ -42,15 +42,108 @@ pub struct QobuzImage {
     pub mega: Option<String>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum QobuzImageSize {
+    Mega,       // 4800
+    ExtraLarge, // 2400
+    Large,      // 1200
+    Medium,     // 600
+    Small,      // 300
+    Thumbnail,  // 100
+}
+
+impl From<QobuzImageSize> for u16 {
+    fn from(value: QobuzImageSize) -> Self {
+        match value {
+            QobuzImageSize::Mega => 4800,
+            QobuzImageSize::ExtraLarge => 2400,
+            QobuzImageSize::Large => 1200,
+            QobuzImageSize::Medium => 600,
+            QobuzImageSize::Small => 300,
+            QobuzImageSize::Thumbnail => 100,
+        }
+    }
+}
+
+impl From<u16> for QobuzImageSize {
+    fn from(value: u16) -> Self {
+        match value {
+            0..=100 => QobuzImageSize::Thumbnail,
+            101..=300 => QobuzImageSize::Small,
+            301..=600 => QobuzImageSize::Medium,
+            601..=1200 => QobuzImageSize::Large,
+            1201..=2400 => QobuzImageSize::ExtraLarge,
+            _ => QobuzImageSize::Mega,
+        }
+    }
+}
+
+impl Display for QobuzImageSize {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{}", Into::<u16>::into(*self)))
+    }
+}
+
 impl QobuzImage {
     pub fn cover_url(&self) -> Option<String> {
-        self.mega
-            .clone()
-            .or(self.extralarge.clone())
-            .or(self.large.clone())
-            .or(self.medium.clone())
-            .or(self.small.clone())
-            .or(self.thumbnail.clone())
+        self.cover_url_for_size(QobuzImageSize::Mega)
+    }
+
+    pub fn cover_url_for_size(&self, size: QobuzImageSize) -> Option<String> {
+        match size {
+            QobuzImageSize::Thumbnail => self
+                .thumbnail
+                .clone()
+                .or(self.small.clone())
+                .or(self.medium.clone())
+                .or(self.large.clone())
+                .or(self.extralarge.clone())
+                .or(self.mega.clone()),
+
+            QobuzImageSize::Small => self
+                .small
+                .clone()
+                .or(self.medium.clone())
+                .or(self.large.clone())
+                .or(self.extralarge.clone())
+                .or(self.mega.clone())
+                .or(self.thumbnail.clone()),
+            QobuzImageSize::Medium => self
+                .medium
+                .clone()
+                .or(self.large.clone())
+                .or(self.extralarge.clone())
+                .or(self.mega.clone())
+                .or(self.small.clone())
+                .or(self.thumbnail.clone()),
+
+            QobuzImageSize::Large => self
+                .large
+                .clone()
+                .or(self.extralarge.clone())
+                .or(self.mega.clone())
+                .or(self.medium.clone())
+                .or(self.small.clone())
+                .or(self.thumbnail.clone()),
+
+            QobuzImageSize::ExtraLarge => self
+                .extralarge
+                .clone()
+                .or(self.mega.clone())
+                .or(self.large.clone())
+                .or(self.medium.clone())
+                .or(self.small.clone())
+                .or(self.thumbnail.clone()),
+
+            QobuzImageSize::Mega => self
+                .mega
+                .clone()
+                .or(self.extralarge.clone())
+                .or(self.large.clone())
+                .or(self.medium.clone())
+                .or(self.small.clone())
+                .or(self.thumbnail.clone()),
+        }
     }
 }
 

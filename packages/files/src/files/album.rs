@@ -8,8 +8,8 @@ use moosicbox_core::{
         models::{Album, AlbumId},
     },
 };
-use moosicbox_qobuz::QobuzAlbum;
-use moosicbox_tidal::TidalAlbum;
+use moosicbox_qobuz::{QobuzAlbum, QobuzImageSize};
+use moosicbox_tidal::{TidalAlbum, TidalImageSize};
 use once_cell::sync::Lazy;
 use thiserror::Error;
 
@@ -34,6 +34,7 @@ pub enum FetchAlbumCoverError {
 
 async fn get_or_fetch_album_cover_from_remote_url(
     url: &str,
+    size: &str,
     source: &str,
     album_id: &str,
     artist_name: &str,
@@ -47,7 +48,7 @@ async fn get_or_fetch_album_cover_from_remote_url(
         .join(sanitize_filename(artist_name))
         .join(sanitize_filename(album_name));
 
-    let filename = format!("album_{album_id}.jpg");
+    let filename = format!("album_{size}_{album_id}.jpg");
     let file_path = path.join(filename);
 
     if Path::exists(&file_path) {
@@ -147,6 +148,7 @@ fn copy_streaming_cover_to_local(
 pub async fn get_album_cover(
     album_id: AlbumId,
     db: &Db,
+    size: Option<u32>,
 ) -> Result<AlbumCoverSource, AlbumCoverError> {
     let path = match &album_id {
         AlbumId::Library(library_album_id) => {
@@ -163,7 +165,7 @@ pub async fn get_album_cover(
 
             if let Some(tidal_id) = album.tidal_id {
                 if let Ok(AlbumCoverSource::LocalFilePath(cover)) =
-                    get_album_cover(AlbumId::Tidal(tidal_id), db).await
+                    get_album_cover(AlbumId::Tidal(tidal_id), db, None).await
                 {
                     return Ok(AlbumCoverSource::LocalFilePath(
                         copy_streaming_cover_to_local(db, album.id, cover)?,
@@ -173,7 +175,7 @@ pub async fn get_album_cover(
 
             if let Some(qobuz_id) = album.qobuz_id {
                 if let Ok(AlbumCoverSource::LocalFilePath(cover)) =
-                    get_album_cover(AlbumId::Qobuz(qobuz_id), db).await
+                    get_album_cover(AlbumId::Qobuz(qobuz_id), db, None).await
                 {
                     return Ok(AlbumCoverSource::LocalFilePath(
                         copy_streaming_cover_to_local(db, album.id, cover)?,
@@ -203,12 +205,17 @@ pub async fn get_album_cover(
                 album
             };
 
+            let size = size
+                .map(|size| (size as u16).into())
+                .unwrap_or(TidalImageSize::Max);
+
             let cover = album
-                .cover_url(1280)
+                .cover_url(size)
                 .ok_or(AlbumCoverError::NotFound(album_id.clone()))?;
 
             get_or_fetch_album_cover_from_remote_url(
                 &cover,
+                &size.to_string(),
                 "tidal",
                 &album.id.to_string(),
                 &album.artist,
@@ -235,12 +242,19 @@ pub async fn get_album_cover(
                 album
             };
 
+            let size = size
+                .map(|size| (size as u16).into())
+                .unwrap_or(QobuzImageSize::Mega);
+
             let cover = album
-                .cover_url()
+                .image
+                .as_ref()
+                .and_then(|image| image.cover_url_for_size(size))
                 .ok_or(AlbumCoverError::NotFound(album_id.clone()))?;
 
             get_or_fetch_album_cover_from_remote_url(
                 &cover,
+                &size.to_string(),
                 "qobuz",
                 &album.id,
                 &album.artist,
