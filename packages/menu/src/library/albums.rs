@@ -8,7 +8,7 @@ use moosicbox_core::{
     sqlite::{
         db::{
             delete, delete_session_playlist_tracks_by_track_id, delete_track_sizes_by_track_id,
-            delete_tracks, get_albums, DbError, SqliteValue,
+            delete_tracks, get_albums, update_and_get_row, DbError, SqliteValue,
         },
         menu::{get_album, GetAlbumError},
         models::{
@@ -503,7 +503,7 @@ pub async fn remove_album(
 ) -> Result<Album, RemoveAlbumError> {
     log::debug!("Removing album from library tidal_album_id={tidal_album_id:?} qobuz_album_id={qobuz_album_id:?}");
 
-    let album = match get_album(None, tidal_album_id, qobuz_album_id.clone(), db).await {
+    let mut album = match get_album(None, tidal_album_id, qobuz_album_id.clone(), db).await {
         Ok(album) => album,
         Err(GetAlbumError::AlbumNotFound { .. }) => {
             log::debug!("Album tidal_album_id={tidal_album_id:?} qobuz_album_id={qobuz_album_id:?} already removed");
@@ -548,6 +548,26 @@ pub async fn remove_album(
     )?;
     delete_track_sizes_by_track_id(&db.library.lock().as_ref().unwrap().inner, Some(&track_ids))?;
     delete_tracks(&db.library.lock().as_ref().unwrap().inner, Some(&track_ids))?;
+
+    let mut album_field_updates = vec![];
+
+    if tidal_album_id.is_some() {
+        album_field_updates.push(("tidal_id", SqliteValue::NumberOpt(None)));
+        album.tidal_id = None;
+    }
+    if qobuz_album_id.is_some() {
+        album_field_updates.push(("qobuz_id", SqliteValue::NumberOpt(None)));
+        album.qobuz_id = None;
+    }
+
+    if !album_field_updates.is_empty() {
+        update_and_get_row::<Album>(
+            &db.library.lock().as_ref().unwrap().inner,
+            "albums",
+            SqliteValue::Number(album.id as i64),
+            &album_field_updates,
+        )?;
+    }
 
     moosicbox_core::cache::clear_cache();
 
