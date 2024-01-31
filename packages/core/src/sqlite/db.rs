@@ -12,10 +12,10 @@ use thiserror::Error;
 use crate::types::PlaybackQuality;
 
 use super::models::{
-    ActivePlayer, Album, AlbumVersionQuality, Artist, AsId, AsModel, AsModelQuery, AsModelResult,
-    AsModelResultMappedMut, AsModelResultMut, ClientAccessToken, CreateSession, LibraryTrack,
-    MagicToken, NumberId, Player, Session, SessionPlaylist, SessionPlaylistTrack, TrackSize,
-    UpdateSession,
+    ActivePlayer, AlbumVersionQuality, AsId, AsModel, AsModelQuery, AsModelResult,
+    AsModelResultMappedMut, AsModelResultMut, ClientAccessToken, CreateSession, LibraryAlbum,
+    LibraryArtist, LibraryTrack, MagicToken, NumberId, Player, Session, SessionPlaylist,
+    SessionPlaylistTrack, TrackSize, UpdateSession,
 };
 
 impl<T> From<PoisonError<T>> for DbError {
@@ -580,7 +580,7 @@ pub fn delete_player(db: &Connection, player_id: i32) -> Result<(), DbError> {
     Ok(())
 }
 
-pub fn get_artists(db: &Connection) -> Result<Vec<Artist>, DbError> {
+pub fn get_artists(db: &Connection) -> Result<Vec<LibraryArtist>, DbError> {
     Ok(db
         .prepare_cached(
             "
@@ -592,7 +592,7 @@ pub fn get_artists(db: &Connection) -> Result<Vec<Artist>, DbError> {
         .collect())
 }
 
-pub fn get_albums(db: &Connection) -> Result<Vec<Album>, DbError> {
+pub fn get_albums(db: &Connection) -> Result<Vec<LibraryAlbum>, DbError> {
     db.prepare_cached(
         "
             SELECT DISTINCT
@@ -703,7 +703,7 @@ pub fn get_album_version_qualities(
     Ok(versions)
 }
 
-pub fn get_artist(db: &Connection, id: i32) -> Result<Option<Artist>, DbError> {
+pub fn get_artist(db: &Connection, id: i32) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
         .prepare_cached(
             "
@@ -715,7 +715,7 @@ pub fn get_artist(db: &Connection, id: i32) -> Result<Option<Artist>, DbError> {
         .find_map(|row| row.ok()))
 }
 
-pub fn get_tidal_artist(db: &Connection, tidal_id: i32) -> Result<Option<Artist>, DbError> {
+pub fn get_tidal_artist(db: &Connection, tidal_id: i32) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
         .prepare_cached(
             "
@@ -727,7 +727,7 @@ pub fn get_tidal_artist(db: &Connection, tidal_id: i32) -> Result<Option<Artist>
         .find_map(|row| row.ok()))
 }
 
-pub fn get_qobuz_artist(db: &Connection, qobuz_id: i32) -> Result<Option<Artist>, DbError> {
+pub fn get_qobuz_artist(db: &Connection, qobuz_id: i32) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
         .prepare_cached(
             "
@@ -739,7 +739,7 @@ pub fn get_qobuz_artist(db: &Connection, qobuz_id: i32) -> Result<Option<Artist>
         .find_map(|row| row.ok()))
 }
 
-pub fn get_album_artist(db: &Connection, album_id: i32) -> Result<Option<Artist>, DbError> {
+pub fn get_album_artist(db: &Connection, album_id: i32) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
         .prepare_cached(
             "
@@ -755,7 +755,7 @@ pub fn get_album_artist(db: &Connection, album_id: i32) -> Result<Option<Artist>
 pub fn get_tidal_album_artist(
     db: &Connection,
     tidal_album_id: i32,
-) -> Result<Option<Artist>, DbError> {
+) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
         .prepare_cached(
             "
@@ -771,7 +771,7 @@ pub fn get_tidal_album_artist(
 pub fn get_qobuz_album_artist(
     db: &Connection,
     qobuz_album_id: i32,
-) -> Result<Option<Artist>, DbError> {
+) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
         .prepare_cached(
             "
@@ -784,7 +784,7 @@ pub fn get_qobuz_album_artist(
         .find_map(|row| row.ok()))
 }
 
-pub fn get_album(db: &Connection, id: i32) -> Result<Option<Album>, DbError> {
+pub fn get_album(db: &Connection, id: i32) -> Result<Option<LibraryAlbum>, DbError> {
     db.prepare_cached(
         "
             SELECT albums.*, artists.title as artist, artists.tidal_id as tidal_artist_id, artists.qobuz_id as qobuz_artist_id
@@ -797,7 +797,7 @@ pub fn get_album(db: &Connection, id: i32) -> Result<Option<Album>, DbError> {
     .transpose()
 }
 
-pub fn get_tidal_album(db: &Connection, tidal_id: i32) -> Result<Option<Album>, DbError> {
+pub fn get_tidal_album(db: &Connection, tidal_id: i32) -> Result<Option<LibraryAlbum>, DbError> {
     db.prepare_cached(
         "
             SELECT albums.*, artists.title as artist, artists.tidal_id as tidal_artist_id, artists.qobuz_id as qobuz_artist_id
@@ -810,7 +810,7 @@ pub fn get_tidal_album(db: &Connection, tidal_id: i32) -> Result<Option<Album>, 
     .transpose()
 }
 
-pub fn get_qobuz_album(db: &Connection, qobuz_id: &str) -> Result<Option<Album>, DbError> {
+pub fn get_qobuz_album(db: &Connection, qobuz_id: &str) -> Result<Option<LibraryAlbum>, DbError> {
     db.prepare_cached(
         "
             SELECT albums.*, artists.title as artist, artists.tidal_id as tidal_artist_id, artists.qobuz_id as qobuz_artist_id
@@ -854,7 +854,7 @@ pub fn get_album_tracks(db: &Connection, album_id: i32) -> Result<Vec<LibraryTra
     .as_model_mut()
 }
 
-pub fn get_artist_albums(db: &Connection, artist_id: i32) -> Result<Vec<Album>, DbError> {
+pub fn get_artist_albums(db: &Connection, artist_id: i32) -> Result<Vec<LibraryAlbum>, DbError> {
     db.prepare_cached(
         "
             SELECT DISTINCT
@@ -1634,21 +1634,24 @@ where
     }
 }
 
-pub fn add_artist_and_get_artist(db: &Connection, artist: Artist) -> Result<Artist, DbError> {
+pub fn add_artist_and_get_artist(
+    db: &Connection,
+    artist: LibraryArtist,
+) -> Result<LibraryArtist, DbError> {
     Ok(add_artists_and_get_artists(db, vec![artist])?[0].clone())
 }
 
 pub fn add_artist_map_and_get_artist(
     db: &Connection,
     artist: HashMap<&str, SqliteValue>,
-) -> Result<Artist, DbError> {
+) -> Result<LibraryArtist, DbError> {
     Ok(add_artist_maps_and_get_artists(db, vec![artist])?[0].clone())
 }
 
 pub fn add_artists_and_get_artists(
     db: &Connection,
-    artists: Vec<Artist>,
-) -> Result<Vec<Artist>, DbError> {
+    artists: Vec<LibraryArtist>,
+) -> Result<Vec<LibraryArtist>, DbError> {
     add_artist_maps_and_get_artists(
         db,
         artists
@@ -1666,14 +1669,14 @@ pub fn add_artists_and_get_artists(
 pub fn add_artist_maps_and_get_artists(
     db: &Connection,
     artists: Vec<HashMap<&str, SqliteValue>>,
-) -> Result<Vec<Artist>, DbError> {
+) -> Result<Vec<LibraryArtist>, DbError> {
     Ok(artists
         .into_iter()
         .map(|artist| {
             if !artist.contains_key("title") {
                 return Err(DbError::InvalidRequest);
             }
-            let row: Artist = upsert_and_get_row(
+            let row: LibraryArtist = upsert_and_get_row(
                 db,
                 "artists",
                 vec![("title", artist.get("title").unwrap().clone())],
@@ -1686,11 +1689,14 @@ pub fn add_artist_maps_and_get_artists(
         .collect())
 }
 
-pub fn add_albums(db: &Connection, albums: Vec<Album>) -> Result<Vec<Album>, DbError> {
-    let mut data: Vec<Album> = Vec::new();
+pub fn add_albums(
+    db: &Connection,
+    albums: Vec<LibraryAlbum>,
+) -> Result<Vec<LibraryAlbum>, DbError> {
+    let mut data: Vec<LibraryAlbum> = Vec::new();
 
     for album in albums {
-        data.push(upsert::<Album>(
+        data.push(upsert::<LibraryAlbum>(
             db,
             "albums",
             vec![
@@ -1711,21 +1717,24 @@ pub fn add_albums(db: &Connection, albums: Vec<Album>) -> Result<Vec<Album>, DbE
     Ok(data)
 }
 
-pub fn add_album_and_get_album(db: &Connection, album: Album) -> Result<Album, DbError> {
+pub fn add_album_and_get_album(
+    db: &Connection,
+    album: LibraryAlbum,
+) -> Result<LibraryAlbum, DbError> {
     Ok(add_albums_and_get_albums(db, vec![album])?[0].clone())
 }
 
 pub fn add_album_map_and_get_album(
     db: &Connection,
     album: HashMap<&str, SqliteValue>,
-) -> Result<Album, DbError> {
+) -> Result<LibraryAlbum, DbError> {
     Ok(add_album_maps_and_get_albums(db, vec![album])?[0].clone())
 }
 
 pub fn add_albums_and_get_albums(
     db: &Connection,
-    albums: Vec<Album>,
-) -> Result<Vec<Album>, DbError> {
+    albums: Vec<LibraryAlbum>,
+) -> Result<Vec<LibraryAlbum>, DbError> {
     add_album_maps_and_get_albums(
         db,
         albums
@@ -1746,7 +1755,7 @@ pub fn add_albums_and_get_albums(
 pub fn add_album_maps_and_get_albums(
     db: &Connection,
     albums: Vec<HashMap<&str, SqliteValue>>,
-) -> Result<Vec<Album>, DbError> {
+) -> Result<Vec<LibraryAlbum>, DbError> {
     Ok(albums
         .into_iter()
         .map(|album| {

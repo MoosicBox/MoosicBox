@@ -2,13 +2,17 @@ use std::sync::Arc;
 
 use moosicbox_core::{
     app::Db,
-    sqlite::{db::DbError, models::TrackSource},
+    sqlite::{
+        db::DbError,
+        models::{
+            qobuz::{QobuzAlbum, QobuzTrack},
+            TrackSource,
+        },
+    },
     types::AudioFormat,
 };
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
-use moosicbox_qobuz::{
-    QobuzAlbum, QobuzAlbumTracksError, QobuzArtistError, QobuzFavoriteAlbumsError, QobuzTrack,
-};
+use moosicbox_qobuz::{QobuzAlbumTracksError, QobuzArtistError, QobuzFavoriteAlbumsError};
 use thiserror::Error;
 use tokio::{select, sync::RwLock};
 use tokio_util::sync::CancellationToken;
@@ -48,12 +52,13 @@ pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
         select! {
             resp = albums_resp => {
                 match resp {
-                    Ok((qobuz_albums, count)) => {
-                        let page_count = qobuz_albums.len();
+                    Ok(page) => {
+                        let page_count = page.len();
+                        let count = page.total().unwrap();
 
                         log::debug!("Fetched Qobuz albums offset={offset} limit={limit}: page_count={page_count}, total_count={count}");
 
-                        scan_albums(qobuz_albums, count, db, output.clone(), Some(token.clone())).await?;
+                        scan_albums(&page, count, db, output.clone(), Some(token.clone())).await?;
 
                         if page_count < (limit as usize) {
                             break;
@@ -96,7 +101,7 @@ pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
 }
 
 pub async fn scan_albums(
-    albums: Vec<QobuzAlbum>,
+    albums: &[QobuzAlbum],
     total: u32,
     db: &Db,
     output: Arc<RwLock<ScanOutput>>,
@@ -146,7 +151,7 @@ pub async fn scan_albums(
                 let read_artist = { scan_artist.read().await.clone() };
 
                 if read_artist.cover.is_none() && !read_artist.searched_cover {
-                    match moosicbox_qobuz::artist(db, album.artist_id, None, None).await {
+                    match moosicbox_qobuz::artist(db, album.artist_id.into(), None, None).await {
                         Ok(artist) => {
                             if let Some(url) = artist.cover_url() {
                                 scan_artist.write().await.search_cover(url, "qobuz").await?;
@@ -175,18 +180,25 @@ pub async fn scan_albums(
                 album.id
             );
 
-            let tracks_resp =
-                moosicbox_qobuz::album_tracks(db, &album.id, Some(offset), Some(limit), None, None);
+            let tracks_resp = moosicbox_qobuz::album_tracks(
+                db,
+                album.id.clone().into(),
+                Some(offset),
+                Some(limit),
+                None,
+                None,
+            );
 
             select! {
                 resp = tracks_resp => {
                     match resp {
-                        Ok((qobuz_tracks, count)) => {
-                            let page_count = qobuz_tracks.len();
+                        Ok(page) => {
+                            let page_count = page.len();
+                            let count = page.total().unwrap();
 
                             log::debug!("Fetched Qobuz tracks offset={offset} limit={limit}: page_count={page_count}, total_count={count}");
 
-                            scan_tracks(qobuz_tracks, scan_album.clone()).await?;
+                            scan_tracks(&page, scan_album.clone()).await?;
 
                             if page_count < (limit as usize) {
                                 break;
@@ -212,7 +224,7 @@ pub async fn scan_albums(
 }
 
 async fn scan_tracks(
-    tracks: Vec<QobuzTrack>,
+    tracks: &[QobuzTrack],
     scan_album: Arc<RwLock<ScanAlbum>>,
 ) -> Result<(), ScanError> {
     log::debug!("Processing Qobuz tracks count={}", tracks.len());

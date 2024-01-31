@@ -5,6 +5,7 @@ use actix_web::{
     HttpRequest, Result,
 };
 use moosicbox_core::sqlite::models::ToApi;
+use moosicbox_music_api::PagingResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
@@ -231,7 +232,7 @@ pub async fn track_file_url_endpoint(
             #[cfg(feature = "db")]
             data.db.as_ref().unwrap(),
             query.audio_quality,
-            query.track_id,
+            query.track_id.into(),
             req.headers()
                 .get(TIDAL_ACCESS_TOKEN_HEADER)
                 .map(|x| x.to_str().unwrap().to_string()),
@@ -265,28 +266,26 @@ pub async fn favorite_artists_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteArtistsQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<Value>> {
-    let (items, count) = favorite_artists(
-        #[cfg(feature = "db")]
-        data.db.as_ref().unwrap(),
-        query.offset,
-        query.limit,
-        query.order,
-        query.order_direction,
-        query.country_code.clone(),
-        query.locale.clone(),
-        query.device_type,
-        req.headers()
-            .get(TIDAL_ACCESS_TOKEN_HEADER)
-            .map(|x| x.to_str().unwrap().to_string()),
-        query.user_id,
-    )
-    .await?;
-
-    Ok(Json(serde_json::json!({
-        "count": count,
-        "items": items.iter().map(|item| item.to_api()).collect::<Vec<_>>(),
-    })))
+) -> Result<Json<PagingResponse<ApiArtist>>> {
+    Ok(Json(
+        favorite_artists(
+            #[cfg(feature = "db")]
+            data.db.as_ref().unwrap(),
+            query.offset,
+            query.limit,
+            query.order,
+            query.order_direction,
+            query.country_code.clone(),
+            query.locale.clone(),
+            query.device_type,
+            req.headers()
+                .get(TIDAL_ACCESS_TOKEN_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+            query.user_id,
+        )
+        .await?
+        .to_api(),
+    ))
 }
 
 impl From<TidalAddFavoriteArtistError> for actix_web::Error {
@@ -315,7 +314,7 @@ pub async fn add_favorite_artist_endpoint(
     add_favorite_artist(
         #[cfg(feature = "db")]
         data.db.as_ref().unwrap(),
-        query.artist_id,
+        query.artist_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,
@@ -357,7 +356,7 @@ pub async fn remove_favorite_artist_endpoint(
     remove_favorite_artist(
         #[cfg(feature = "db")]
         data.db.as_ref().unwrap(),
-        query.artist_id,
+        query.artist_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,
@@ -398,28 +397,26 @@ pub async fn favorite_albums_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteAlbumsQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<Value>> {
-    let (items, count) = favorite_albums(
-        #[cfg(feature = "db")]
-        data.db.as_ref().unwrap(),
-        query.offset,
-        query.limit,
-        query.order,
-        query.order_direction,
-        query.country_code.clone(),
-        query.locale.clone(),
-        query.device_type,
-        req.headers()
-            .get(TIDAL_ACCESS_TOKEN_HEADER)
-            .map(|x| x.to_str().unwrap().to_string()),
-        query.user_id,
-    )
-    .await?;
-
-    Ok(Json(serde_json::json!({
-        "count": count,
-        "items": items.iter().map(|item| item.to_api()).collect::<Vec<_>>(),
-    })))
+) -> Result<Json<PagingResponse<ApiAlbum>>> {
+    Ok(Json(
+        favorite_albums(
+            #[cfg(feature = "db")]
+            data.db.as_ref().unwrap(),
+            query.offset,
+            query.limit,
+            query.order,
+            query.order_direction,
+            query.country_code.clone(),
+            query.locale.clone(),
+            query.device_type,
+            req.headers()
+                .get(TIDAL_ACCESS_TOKEN_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+            query.user_id,
+        )
+        .await?
+        .to_api(),
+    ))
 }
 
 impl From<TidalAddFavoriteAlbumError> for actix_web::Error {
@@ -448,7 +445,7 @@ pub async fn add_favorite_album_endpoint(
     add_favorite_album(
         #[cfg(feature = "db")]
         data.db.as_ref().unwrap(),
-        query.album_id,
+        query.album_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,
@@ -490,7 +487,7 @@ pub async fn remove_favorite_album_endpoint(
     remove_favorite_album(
         #[cfg(feature = "db")]
         data.db.as_ref().unwrap(),
-        query.album_id,
+        query.album_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,
@@ -532,7 +529,7 @@ pub async fn add_favorite_track_endpoint(
     add_favorite_track(
         #[cfg(feature = "db")]
         data.db.as_ref().unwrap(),
-        query.track_id,
+        query.track_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,
@@ -574,7 +571,7 @@ pub async fn remove_favorite_track_endpoint(
     remove_favorite_track(
         #[cfg(feature = "db")]
         data.db.as_ref().unwrap(),
-        query.track_id,
+        query.track_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,
@@ -615,28 +612,26 @@ pub async fn favorite_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteTracksQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<Value>> {
-    let (items, count) = favorite_tracks(
-        #[cfg(feature = "db")]
-        data.db.as_ref().unwrap(),
-        query.offset,
-        query.limit,
-        query.order,
-        query.order_direction,
-        query.country_code.clone(),
-        query.locale.clone(),
-        query.device_type,
-        req.headers()
-            .get(TIDAL_ACCESS_TOKEN_HEADER)
-            .map(|x| x.to_str().unwrap().to_string()),
-        query.user_id,
-    )
-    .await?;
-
-    Ok(Json(serde_json::json!({
-        "count": count,
-        "items": items.iter().map(|item| item.to_api()).collect::<Vec<_>>(),
-    })))
+) -> Result<Json<PagingResponse<ApiTrack>>> {
+    Ok(Json(
+        favorite_tracks(
+            #[cfg(feature = "db")]
+            data.db.as_ref().unwrap(),
+            query.offset,
+            query.limit,
+            query.order,
+            query.order_direction,
+            query.country_code.clone(),
+            query.locale.clone(),
+            query.device_type,
+            req.headers()
+                .get(TIDAL_ACCESS_TOKEN_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+            query.user_id,
+        )
+        .await?
+        .to_api(),
+    ))
 }
 
 impl From<TidalArtistAlbumsError> for actix_web::Error {
@@ -682,27 +677,25 @@ pub async fn artist_albums_endpoint(
     req: HttpRequest,
     query: web::Query<TidalArtistAlbumsQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<Value>> {
-    let (items, count) = artist_albums(
-        #[cfg(feature = "db")]
-        data.db.as_ref().unwrap(),
-        query.artist_id,
-        query.offset,
-        query.limit,
-        query.album_type.map(|t| t.into()),
-        query.country_code.clone(),
-        query.locale.clone(),
-        query.device_type,
-        req.headers()
-            .get(TIDAL_ACCESS_TOKEN_HEADER)
-            .map(|x| x.to_str().unwrap().to_string()),
-    )
-    .await?;
-
-    Ok(Json(serde_json::json!({
-        "count": count,
-        "items": items.iter().map(|item| item.to_api()).collect::<Vec<_>>(),
-    })))
+) -> Result<Json<PagingResponse<ApiAlbum>>> {
+    Ok(Json(
+        artist_albums(
+            #[cfg(feature = "db")]
+            data.db.as_ref().unwrap(),
+            query.artist_id.into(),
+            query.offset,
+            query.limit,
+            query.album_type.map(|t| t.into()),
+            query.country_code.clone(),
+            query.locale.clone(),
+            query.device_type,
+            req.headers()
+                .get(TIDAL_ACCESS_TOKEN_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+        )
+        .await?
+        .to_api(),
+    ))
 }
 
 impl From<TidalAlbumTracksError> for actix_web::Error {
@@ -728,26 +721,24 @@ pub async fn album_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAlbumTracksQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<Value>> {
-    let (items, count) = album_tracks(
-        #[cfg(feature = "db")]
-        data.db.as_ref().expect("Db not set"),
-        query.album_id,
-        query.offset,
-        query.limit,
-        query.country_code.clone(),
-        query.locale.clone(),
-        query.device_type,
-        req.headers()
-            .get(TIDAL_ACCESS_TOKEN_HEADER)
-            .map(|x| x.to_str().unwrap().to_string()),
-    )
-    .await?;
-
-    Ok(Json(serde_json::json!({
-        "count": count,
-        "items": items.iter().map(|item| item.to_api()).collect::<Vec<_>>(),
-    })))
+) -> Result<Json<PagingResponse<ApiTrack>>> {
+    Ok(Json(
+        album_tracks(
+            #[cfg(feature = "db")]
+            data.db.as_ref().expect("Db not set"),
+            query.album_id.into(),
+            query.offset,
+            query.limit,
+            query.country_code.clone(),
+            query.locale.clone(),
+            query.device_type,
+            req.headers()
+                .get(TIDAL_ACCESS_TOKEN_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+        )
+        .await?
+        .to_api(),
+    ))
 }
 
 impl From<TidalAlbumError> for actix_web::Error {
@@ -785,7 +776,7 @@ pub async fn album_endpoint(
     let album = album(
         #[cfg(feature = "db")]
         data.db.as_ref().unwrap(),
-        query.album_id,
+        query.album_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,
@@ -823,7 +814,7 @@ pub async fn artist_endpoint(
     let artist = artist(
         #[cfg(feature = "db")]
         data.db.as_ref().expect("Db not set"),
-        query.artist_id,
+        query.artist_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,
@@ -861,7 +852,7 @@ pub async fn track_endpoint(
     let track = track(
         #[cfg(feature = "db")]
         data.db.as_ref().unwrap(),
-        query.track_id,
+        query.track_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,

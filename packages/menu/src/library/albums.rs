@@ -12,8 +12,8 @@ use moosicbox_core::{
         },
         menu::{get_album, GetAlbumError},
         models::{
-            track_source_to_u8, Album, AlbumSort, AlbumSource, ApiTrack, LibraryTrack, ToApi,
-            TrackSource,
+            track_source_to_u8, AlbumSort, AlbumSource, ApiSource, ApiTrack, LibraryAlbum,
+            LibraryTrack, ToApi, TrackSource,
         },
     },
     types::AudioFormat,
@@ -54,7 +54,7 @@ pub struct AlbumFilters {
     pub qobuz_artist_id: Option<u64>,
 }
 
-pub fn filter_albums(albums: Vec<Album>, request: &AlbumsRequest) -> Vec<Album> {
+pub fn filter_albums(albums: Vec<LibraryAlbum>, request: &AlbumsRequest) -> Vec<LibraryAlbum> {
     albums
         .into_iter()
         .filter(|album| {
@@ -106,7 +106,7 @@ pub fn filter_albums(albums: Vec<Album>, request: &AlbumsRequest) -> Vec<Album> 
         .collect()
 }
 
-pub fn sort_albums(mut albums: Vec<Album>, request: &AlbumsRequest) -> Vec<Album> {
+pub fn sort_albums(mut albums: Vec<LibraryAlbum>, request: &AlbumsRequest) -> Vec<LibraryAlbum> {
     match request.sort {
         Some(AlbumSort::ArtistAsc) => albums.sort_by(|a, b| a.artist.cmp(&b.artist)),
         Some(AlbumSort::NameAsc) => albums.sort_by(|a, b| a.title.cmp(&b.title)),
@@ -170,7 +170,7 @@ pub enum GetAlbumsError {
 pub async fn get_all_albums(
     data: &AppState,
     request: &AlbumsRequest,
-) -> Result<Vec<Album>, GetAlbumsError> {
+) -> Result<Vec<LibraryAlbum>, GetAlbumsError> {
     let albums = get_albums(
         &data
             .db
@@ -348,13 +348,32 @@ pub enum AddAlbumError {
     PopulateIndex(#[from] PopulateIndexError),
     #[error("No album")]
     NoAlbum,
+    #[error("Invalid album_id type")]
+    InvalidAlbumIdType,
 }
 
 pub async fn add_album(
     db: &Db,
-    tidal_album_id: Option<u64>,
-    qobuz_album_id: Option<String>,
-) -> Result<Album, AddAlbumError> {
+    album_id: String,
+    source: ApiSource,
+) -> Result<LibraryAlbum, AddAlbumError> {
+    log::debug!("Adding album to library album_id={album_id:?} source={source:?}");
+
+    let tidal_album_id = if source == ApiSource::Tidal {
+        Some(
+            album_id
+                .parse::<u64>()
+                .map_err(|_| AddAlbumError::InvalidAlbumIdType)?,
+        )
+    } else {
+        None
+    };
+    let qobuz_album_id = if source == ApiSource::Qobuz {
+        Some(album_id.clone())
+    } else {
+        None
+    };
+
     let (tidal_id_already_exists, qobuz_id_already_exists, album) =
         match get_album(None, tidal_album_id, qobuz_album_id.clone(), db).await {
             Ok(album) => (
@@ -399,14 +418,15 @@ pub async fn add_album(
     let output = Arc::new(RwLock::new(ScanOutput::new()));
 
     if let Some(album_id) = tidal_album_id {
-        let album = moosicbox_tidal::album(db, album_id, None, None, None, None).await?;
-        moosicbox_tidal::add_favorite_album(db, album_id, None, None, None, None, None).await?;
-        moosicbox_scan::tidal::scan_albums(vec![album], 1, db, output.clone(), None).await?;
+        let album = moosicbox_tidal::album(db, album_id.into(), None, None, None, None).await?;
+        moosicbox_tidal::add_favorite_album(db, album_id.into(), None, None, None, None, None)
+            .await?;
+        moosicbox_scan::tidal::scan_albums(&[album], 1, db, output.clone(), None).await?;
     }
     if let Some(album_id) = &qobuz_album_id {
-        let album = moosicbox_qobuz::album(db, album_id, None, None).await?;
-        moosicbox_qobuz::add_favorite_album(db, album_id, None, None).await?;
-        moosicbox_scan::qobuz::scan_albums(vec![album], 1, db, output.clone(), None).await?;
+        let album = moosicbox_qobuz::album(db, album_id.into(), None, None).await?;
+        moosicbox_qobuz::add_favorite_album(db, album_id.into(), None, None).await?;
+        moosicbox_scan::qobuz::scan_albums(&[album], 1, db, output.clone(), None).await?;
     }
 
     let output = output.read().await;
@@ -494,14 +514,31 @@ pub enum RemoveAlbumError {
     DeleteFromIndex(#[from] DeleteFromIndexError),
     #[error("No album")]
     NoAlbum,
+    #[error("Invalid album_id type")]
+    InvalidAlbumIdType,
 }
 
 pub async fn remove_album(
     db: &Db,
-    tidal_album_id: Option<u64>,
-    qobuz_album_id: Option<String>,
-) -> Result<Album, RemoveAlbumError> {
-    log::debug!("Removing album from library tidal_album_id={tidal_album_id:?} qobuz_album_id={qobuz_album_id:?}");
+    album_id: String,
+    source: ApiSource,
+) -> Result<LibraryAlbum, RemoveAlbumError> {
+    log::debug!("Removing album from library album_id={album_id:?} source={source:?}");
+
+    let tidal_album_id = if source == ApiSource::Tidal {
+        Some(
+            album_id
+                .parse::<u64>()
+                .map_err(|_| RemoveAlbumError::InvalidAlbumIdType)?,
+        )
+    } else {
+        None
+    };
+    let qobuz_album_id = if source == ApiSource::Qobuz {
+        Some(album_id.clone())
+    } else {
+        None
+    };
 
     let mut album = match get_album(None, tidal_album_id, qobuz_album_id.clone(), db).await {
         Ok(album) => album,
@@ -515,10 +552,11 @@ pub async fn remove_album(
     };
 
     if let Some(album_id) = tidal_album_id {
-        moosicbox_tidal::remove_favorite_album(db, album_id, None, None, None, None, None).await?;
+        moosicbox_tidal::remove_favorite_album(db, album_id.into(), None, None, None, None, None)
+            .await?;
     }
     if let Some(album_id) = &qobuz_album_id {
-        moosicbox_qobuz::remove_favorite_album(db, album_id, None, None).await?;
+        moosicbox_qobuz::remove_favorite_album(db, album_id.into(), None, None).await?;
     }
 
     let tracks = moosicbox_core::sqlite::db::get_album_tracks(
@@ -561,7 +599,7 @@ pub async fn remove_album(
     }
 
     if !album_field_updates.is_empty() {
-        update_and_get_row::<Album>(
+        update_and_get_row::<LibraryAlbum>(
             &db.library.lock().as_ref().unwrap().inner,
             "albums",
             SqliteValue::Number(album.id as i64),
@@ -586,7 +624,7 @@ pub async fn remove_album(
     }
 
     log::debug!("Deleting album db item: {}", album.id);
-    delete::<Album>(
+    delete::<LibraryAlbum>(
         &db.library.lock().as_ref().unwrap().inner,
         "albums",
         &vec![("id", SqliteValue::Number(album.id as i64))],
@@ -621,14 +659,31 @@ pub enum ReFavoriteAlbumError {
     QobuzFavoriteAlbums(#[from] QobuzFavoriteAlbumsError),
     #[error("No album")]
     NoAlbum,
+    #[error("Invalid album_id type")]
+    InvalidAlbumIdType,
 }
 
 pub async fn refavorite_album(
     db: &Db,
-    tidal_album_id: Option<u64>,
-    qobuz_album_id: Option<String>,
-) -> Result<Album, ReFavoriteAlbumError> {
-    log::debug!("Re-favoriting album from library tidal_album_id={tidal_album_id:?} qobuz_album_id={qobuz_album_id:?}");
+    album_id: String,
+    source: ApiSource,
+) -> Result<LibraryAlbum, ReFavoriteAlbumError> {
+    log::debug!("Re-favoriting album from library album_id={album_id:?} source={source:?}");
+
+    let tidal_album_id = if source == ApiSource::Tidal {
+        Some(
+            album_id
+                .parse::<u64>()
+                .map_err(|_| ReFavoriteAlbumError::InvalidAlbumIdType)?,
+        )
+    } else {
+        None
+    };
+    let qobuz_album_id = if source == ApiSource::Qobuz {
+        Some(album_id.clone())
+    } else {
+        None
+    };
 
     let tidal = if let Some(album_id) = tidal_album_id {
         let favorite_albums =
@@ -638,7 +693,8 @@ pub async fn refavorite_album(
             .into_iter()
             .find(|album| album.id == album_id)
             .ok_or(ReFavoriteAlbumError::NoAlbum)?;
-        let artist = moosicbox_tidal::artist(db, album.artist_id, None, None, None, None).await?;
+        let artist =
+            moosicbox_tidal::artist(db, album.artist_id.into(), None, None, None, None).await?;
         Some((artist, album))
     } else {
         None
@@ -649,7 +705,7 @@ pub async fn refavorite_album(
             .into_iter()
             .find(|album| album.id == *album_id)
             .ok_or(ReFavoriteAlbumError::NoAlbum)?;
-        let artist = moosicbox_qobuz::artist(db, album.artist_id, None, None).await?;
+        let artist = moosicbox_qobuz::artist(db, album.artist_id.into(), None, None).await?;
         Some((artist, album))
     } else {
         None
@@ -659,7 +715,7 @@ pub async fn refavorite_album(
         futures::future::join_all(vec![
             moosicbox_tidal::artist_albums(
                 db,
-                artist.id,
+                artist.id.into(),
                 None,
                 None,
                 Some(TidalAlbumType::Lp),
@@ -670,7 +726,7 @@ pub async fn refavorite_album(
             ),
             moosicbox_tidal::artist_albums(
                 db,
-                artist.id,
+                artist.id.into(),
                 None,
                 None,
                 Some(TidalAlbumType::EpsAndSingles),
@@ -681,7 +737,7 @@ pub async fn refavorite_album(
             ),
             moosicbox_tidal::artist_albums(
                 db,
-                artist.id,
+                artist.id.into(),
                 None,
                 None,
                 Some(TidalAlbumType::Compilations),
@@ -693,7 +749,7 @@ pub async fn refavorite_album(
         ])
         .await
         .into_iter()
-        .map(|res| res.map(|r| r.0))
+        .map(|res| res.map(|r| r.items()))
         .collect::<Result<Vec<_>, _>>()?
         .into_iter()
         .flatten()
@@ -707,18 +763,25 @@ pub async fn refavorite_album(
     };
 
     let new_qobuz_album_id = if let Some((artist, album)) = &qobuz {
-        let (albums, _) = moosicbox_qobuz::artist_albums(
-            db, artist.id, None, None, None, None, None, None, None, None,
+        moosicbox_qobuz::artist_albums(
+            db,
+            artist.id.into(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
         )
-        .await?;
-
-        albums
-            .iter()
-            .find(|x| {
-                x.artist_id == album.artist_id
-                    && x.title.to_lowercase().trim() == album.title.to_lowercase().trim()
-            })
-            .map(|x| x.id.clone())
+        .await?
+        .iter()
+        .find(|x| {
+            x.artist_id == album.artist_id
+                && x.title.to_lowercase().trim() == album.title.to_lowercase().trim()
+        })
+        .map(|x| x.id.clone())
     } else {
         None
     };
@@ -730,8 +793,8 @@ pub async fn refavorite_album(
 
     log::debug!("Re-favoriting with ids new_tidal_album_id={new_tidal_album_id:?} new_qobuz_album_id={new_qobuz_album_id:?}");
 
-    remove_album(db, tidal_album_id, qobuz_album_id.clone()).await?;
-    let album = add_album(db, new_tidal_album_id, new_qobuz_album_id).await?;
+    remove_album(db, album_id.clone(), source).await?;
+    let album = add_album(db, album_id, source).await?;
 
     Ok(album)
 }
@@ -763,7 +826,7 @@ mod test {
 
     #[test]
     fn filter_albums_filters_albums_of_sources_that_dont_match() {
-        let local = Album {
+        let local = LibraryAlbum {
             id: 0,
             title: "".to_string(),
             artist: "".to_string(),
@@ -771,7 +834,7 @@ mod test {
             source: AlbumSource::Local,
             ..Default::default()
         };
-        let tidal = Album {
+        let tidal = LibraryAlbum {
             id: 0,
             title: "".to_string(),
             artist: "".to_string(),
@@ -779,7 +842,7 @@ mod test {
             source: AlbumSource::Tidal,
             ..Default::default()
         };
-        let qobuz = Album {
+        let qobuz = LibraryAlbum {
             id: 0,
             title: "".to_string(),
             artist: "".to_string(),
@@ -808,7 +871,7 @@ mod test {
 
     #[test]
     fn filter_albums_filters_albums_of_name_that_dont_match() {
-        let bob = Album {
+        let bob = LibraryAlbum {
             id: 0,
             title: "bob".to_string(),
             artist: "".to_string(),
@@ -816,7 +879,7 @@ mod test {
             source: AlbumSource::Local,
             ..Default::default()
         };
-        let sally = Album {
+        let sally = LibraryAlbum {
             id: 0,
             title: "sally".to_string(),
             artist: "".to_string(),
@@ -824,7 +887,7 @@ mod test {
             source: AlbumSource::Local,
             ..Default::default()
         };
-        let test = Album {
+        let test = LibraryAlbum {
             id: 0,
             title: "test".to_string(),
             artist: "".to_string(),
@@ -853,7 +916,7 @@ mod test {
 
     #[test]
     fn filter_albums_filters_albums_of_name_that_dont_match_and_searches_multiple_words() {
-        let bob = Album {
+        let bob = LibraryAlbum {
             id: 0,
             title: "bob".to_string(),
             artist: "".to_string(),
@@ -861,7 +924,7 @@ mod test {
             source: AlbumSource::Local,
             ..Default::default()
         };
-        let sally = Album {
+        let sally = LibraryAlbum {
             id: 0,
             title: "sally".to_string(),
             artist: "".to_string(),
@@ -869,7 +932,7 @@ mod test {
             source: AlbumSource::Local,
             ..Default::default()
         };
-        let test = Album {
+        let test = LibraryAlbum {
             id: 0,
             title: "one test two".to_string(),
             artist: "".to_string(),
@@ -898,7 +961,7 @@ mod test {
 
     #[test]
     fn filter_albums_filters_albums_of_artist_that_dont_match() {
-        let bob = Album {
+        let bob = LibraryAlbum {
             id: 0,
             title: "".to_string(),
             artist: "bob".to_string(),
@@ -906,7 +969,7 @@ mod test {
             source: AlbumSource::Local,
             ..Default::default()
         };
-        let sally = Album {
+        let sally = LibraryAlbum {
             id: 0,
             title: "".to_string(),
             artist: "sally".to_string(),
@@ -914,7 +977,7 @@ mod test {
             source: AlbumSource::Local,
             ..Default::default()
         };
-        let test = Album {
+        let test = LibraryAlbum {
             id: 0,
             title: "".to_string(),
             artist: "test".to_string(),
@@ -943,7 +1006,7 @@ mod test {
 
     #[test]
     fn filter_albums_filters_albums_of_artist_that_dont_match_and_searches_multiple_words() {
-        let bob = Album {
+        let bob = LibraryAlbum {
             id: 0,
             title: "".to_string(),
             artist: "bob".to_string(),
@@ -951,7 +1014,7 @@ mod test {
             source: AlbumSource::Local,
             ..Default::default()
         };
-        let sally = Album {
+        let sally = LibraryAlbum {
             id: 0,
             title: "".to_string(),
             artist: "sally".to_string(),
@@ -959,7 +1022,7 @@ mod test {
             source: AlbumSource::Local,
             ..Default::default()
         };
-        let test = Album {
+        let test = LibraryAlbum {
             id: 0,
             title: "".to_string(),
             artist: "one test two".to_string(),
@@ -988,7 +1051,7 @@ mod test {
 
     #[test]
     fn filter_albums_filters_albums_of_search_that_dont_match_artist() {
-        let bob = Album {
+        let bob = LibraryAlbum {
             id: 0,
             title: "".to_string(),
             artist: "bob".to_string(),
@@ -996,7 +1059,7 @@ mod test {
             source: AlbumSource::Local,
             ..Default::default()
         };
-        let sally = Album {
+        let sally = LibraryAlbum {
             id: 0,
             title: "".to_string(),
             artist: "sally".to_string(),
@@ -1004,7 +1067,7 @@ mod test {
             source: AlbumSource::Local,
             ..Default::default()
         };
-        let test = Album {
+        let test = LibraryAlbum {
             id: 0,
             title: "".to_string(),
             artist: "test".to_string(),
@@ -1033,7 +1096,7 @@ mod test {
 
     #[test]
     fn filter_albums_filters_albums_of_search_that_dont_match_artist_and_searches_multiple_words() {
-        let bob = Album {
+        let bob = LibraryAlbum {
             id: 0,
             title: "".to_string(),
             artist: "bob".to_string(),
@@ -1041,7 +1104,7 @@ mod test {
             source: AlbumSource::Local,
             ..Default::default()
         };
-        let sally = Album {
+        let sally = LibraryAlbum {
             id: 0,
             title: "".to_string(),
             artist: "sally".to_string(),
@@ -1049,7 +1112,7 @@ mod test {
             source: AlbumSource::Local,
             ..Default::default()
         };
-        let test = Album {
+        let test = LibraryAlbum {
             id: 0,
             title: "".to_string(),
             artist: "one test two".to_string(),
@@ -1078,7 +1141,7 @@ mod test {
 
     #[test]
     fn filter_albums_filters_albums_of_search_that_dont_match_name() {
-        let bob = Album {
+        let bob = LibraryAlbum {
             id: 0,
             title: "bob".to_string(),
             artist: "".to_string(),
@@ -1086,7 +1149,7 @@ mod test {
             source: AlbumSource::Local,
             ..Default::default()
         };
-        let sally = Album {
+        let sally = LibraryAlbum {
             id: 0,
             title: "sally".to_string(),
             artist: "".to_string(),
@@ -1094,7 +1157,7 @@ mod test {
             source: AlbumSource::Local,
             ..Default::default()
         };
-        let test = Album {
+        let test = LibraryAlbum {
             id: 0,
             title: "test".to_string(),
             artist: "".to_string(),
@@ -1123,7 +1186,7 @@ mod test {
 
     #[test]
     fn filter_albums_filters_albums_of_search_that_dont_match_name_and_searches_multiple_words() {
-        let bob = Album {
+        let bob = LibraryAlbum {
             id: 0,
             title: "bob".to_string(),
             artist: "".to_string(),
@@ -1131,7 +1194,7 @@ mod test {
             source: AlbumSource::Local,
             ..Default::default()
         };
-        let sally = Album {
+        let sally = LibraryAlbum {
             id: 0,
             title: "sally".to_string(),
             artist: "".to_string(),
@@ -1139,7 +1202,7 @@ mod test {
             source: AlbumSource::Local,
             ..Default::default()
         };
-        let test = Album {
+        let test = LibraryAlbum {
             id: 0,
             title: "one test two".to_string(),
             artist: "".to_string(),
@@ -1168,7 +1231,7 @@ mod test {
 
     #[test]
     fn filter_albums_filters_albums_of_search_that_dont_match_and_searches_across_properties() {
-        let bob = Album {
+        let bob = LibraryAlbum {
             id: 0,
             title: "bob".to_string(),
             artist: "test".to_string(),
@@ -1176,7 +1239,7 @@ mod test {
             source: AlbumSource::Local,
             ..Default::default()
         };
-        let sally = Album {
+        let sally = LibraryAlbum {
             id: 0,
             title: "sally".to_string(),
             artist: "".to_string(),
@@ -1184,7 +1247,7 @@ mod test {
             source: AlbumSource::Local,
             ..Default::default()
         };
-        let test = Album {
+        let test = LibraryAlbum {
             id: 0,
             title: "one test two".to_string(),
             artist: "".to_string(),

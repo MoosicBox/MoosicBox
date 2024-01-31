@@ -8,7 +8,7 @@ use thiserror::Error;
 
 use super::{
     db::{self, DbError},
-    models::{Album, Artist},
+    models::{LibraryAlbum, LibraryArtist},
 };
 
 #[derive(Debug, Error)]
@@ -45,7 +45,7 @@ pub async fn get_artist(
     tidal_album_id: Option<u64>,
     qobuz_album_id: Option<u64>,
     data: &AppState,
-) -> Result<Artist, GetArtistError> {
+) -> Result<LibraryArtist, GetArtistError> {
     let request = CacheRequest {
         key: format!("artist|{artist_id:?}|{tidal_artist_id:?}|{qobuz_artist_id:?}|{album_id:?}|{tidal_album_id:?}|{qobuz_album_id:?}"),
         expiration: Duration::from_secs(5 * 60),
@@ -188,7 +188,7 @@ pub async fn get_album(
     tidal_album_id: Option<u64>,
     qobuz_album_id: Option<String>,
     db: &Db,
-) -> Result<Album, GetAlbumError> {
+) -> Result<LibraryAlbum, GetAlbumError> {
     let request = CacheRequest {
         key: format!("album|{album_id:?}|{tidal_album_id:?}|{qobuz_album_id:?}"),
         expiration: Duration::from_secs(5 * 60),
@@ -263,7 +263,7 @@ impl<T> From<PoisonError<T>> for GetAlbumsError {
     }
 }
 
-pub async fn get_albums(data: &AppState) -> Result<Vec<Album>, GetAlbumsError> {
+pub async fn get_albums(data: &AppState) -> Result<Vec<LibraryAlbum>, GetAlbumsError> {
     let request = CacheRequest {
         key: "sqlite|local_albums".to_string(),
         expiration: Duration::from_secs(5 * 60),
@@ -309,7 +309,7 @@ impl<T> From<PoisonError<T>> for GetArtistAlbumsError {
 pub async fn get_artist_albums(
     artist_id: i32,
     data: &AppState,
-) -> Result<Vec<Album>, GetArtistAlbumsError> {
+) -> Result<Vec<LibraryAlbum>, GetArtistAlbumsError> {
     let request = CacheRequest {
         key: format!("sqlite|local_artist_albums|{artist_id}"),
         expiration: Duration::from_secs(5 * 60),

@@ -5,11 +5,15 @@ use moosicbox_core::{
     app::Db,
     sqlite::{
         db::{get_album, DbError, SqliteValue},
-        models::{Album, AlbumId},
+        models::{
+            qobuz::{QobuzAlbum, QobuzImageSize},
+            tidal::{TidalAlbum, TidalImageSize},
+            AlbumId, LibraryAlbum,
+        },
     },
 };
-use moosicbox_qobuz::{QobuzAlbum, QobuzAlbumError, QobuzImageSize};
-use moosicbox_tidal::{TidalAlbum, TidalAlbumError, TidalImageSize};
+use moosicbox_qobuz::QobuzAlbumError;
+use moosicbox_tidal::TidalAlbumError;
 use once_cell::sync::Lazy;
 use thiserror::Error;
 
@@ -96,7 +100,7 @@ fn fetch_local_album_cover(
 
         log::debug!("Updating Album {album_id} artwork file from '{cover}' to '{artwork}'");
 
-        moosicbox_core::sqlite::db::update_and_get_row::<Album>(
+        moosicbox_core::sqlite::db::update_and_get_row::<LibraryAlbum>(
             &db.library.lock().as_ref().unwrap().inner,
             "albums",
             SqliteValue::Number(album_id as i64),
@@ -134,7 +138,7 @@ fn copy_streaming_cover_to_local(
 ) -> Result<String, AlbumCoverError> {
     log::debug!("Updating Album {album_id} cover file to '{cover}'");
 
-    moosicbox_core::sqlite::db::update_and_get_row::<Album>(
+    moosicbox_core::sqlite::db::update_and_get_row::<LibraryAlbum>(
         &db.library.lock().as_ref().unwrap().inner,
         "albums",
         SqliteValue::Number(album_id as i64),
@@ -198,7 +202,8 @@ pub async fn get_album_cover(
                 use moosicbox_tidal::AuthenticatedRequestError;
 
                 let album =
-                    match moosicbox_tidal::album(db, *tidal_album_id, None, None, None, None).await
+                    match moosicbox_tidal::album(db, tidal_album_id.into(), None, None, None, None)
+                        .await
                     {
                         Ok(album) => Ok(Some(album)),
                         Err(err) => match err {
@@ -248,15 +253,16 @@ pub async fn get_album_cover(
                 album
             } else {
                 use moosicbox_qobuz::AuthenticatedRequestError;
-                let album = match moosicbox_qobuz::album(db, qobuz_album_id, None, None).await {
-                    Ok(album) => Ok(Some(album)),
-                    Err(err) => match err {
-                        QobuzAlbumError::AuthenticatedRequest(
-                            AuthenticatedRequestError::RequestFailed(404, _),
-                        ) => Ok(None),
-                        _ => Err(err),
-                    },
-                }?;
+                let album =
+                    match moosicbox_qobuz::album(db, qobuz_album_id.into(), None, None).await {
+                        Ok(album) => Ok(Some(album)),
+                        Err(err) => match err {
+                            QobuzAlbumError::AuthenticatedRequest(
+                                AuthenticatedRequestError::RequestFailed(404, _),
+                            ) => Ok(None),
+                            _ => Err(err),
+                        },
+                    }?;
 
                 ALBUM_CACHE
                     .write()

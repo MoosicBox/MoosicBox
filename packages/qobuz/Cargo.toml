@@ -5,10 +5,11 @@ name    = "moosicbox_qobuz"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_core       = { path = "../core", default-features = false }
+moosicbox_core = { path = "../core", default-features = false }
 moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
     "serde_json",
 ] }
+moosicbox_music_api = { path = "../music_api", default-features = false }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -17,6 +18,7 @@ actix-web = { workspace = true, optional = true }
 rusqlite = { workspace = true, optional = true }
 
 async-recursion = { workspace = true }
+async-trait     = { workspace = true }
 base64          = { workspace = true }
 log             = { workspace = true }
 md5             = { workspace = true }
@@ -40,4 +42,4 @@ default = ["api", "db"]
 fail-on-warnings = []
 
 api = ["dep:actix-web"]
-db  = ["dep:rusqlite"]
+db  = ["dep:rusqlite", "moosicbox_music_api/db"]

@@ -1,7 +1,7 @@
 [package]
 authors = ["Braden Steffaniak"]
 edition = "2021"
-name    = "moosicbox_tidal"
+name    = "moosicbox_music_api"
 version = "0.1.0"
 
 [dependencies]
@@ -9,10 +9,6 @@ moosicbox_core = { path = "../core", default-features = false }
 moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
     "serde_json",
 ] }
-moosicbox_music_api = { path = "../music_api", default-features = false }
-
-# API Dependencies
-actix-web = { workspace = true, optional = true }
 
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }
@@ -31,9 +27,8 @@ thiserror       = { workspace = true }
 url             = { workspace = true }
 
 [features]
-default = ["api", "db"]
+default = ["db"]
 
 fail-on-warnings = []
 
-api = ["dep:actix-web"]
-db  = ["dep:rusqlite", "moosicbox_music_api/db"]
+db = ["dep:rusqlite"]

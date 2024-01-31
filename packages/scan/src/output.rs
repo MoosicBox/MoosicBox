@@ -12,7 +12,7 @@ use moosicbox_core::{
             add_album_maps_and_get_albums, add_artist_maps_and_get_artists, add_tracks, select,
             set_track_sizes, DbError, InsertTrack, SetTrackSize, SqliteValue,
         },
-        models::{Album, Artist, LibraryTrack, NumberId, TrackSource},
+        models::{LibraryAlbum, LibraryArtist, LibraryTrack, NumberId, TrackSource},
     },
     types::{AudioFormat, PlaybackQuality},
 };
@@ -369,8 +369,8 @@ impl ScanArtist {
 }
 
 pub struct UpdateDatabaseResults {
-    pub artists: Vec<Artist>,
-    pub albums: Vec<Album>,
+    pub artists: Vec<LibraryArtist>,
+    pub albums: Vec<LibraryAlbum>,
     pub tracks: Vec<LibraryTrack>,
 }
 

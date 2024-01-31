@@ -1,6 +1,8 @@
 use std::{path::PathBuf, str::FromStr};
 
-use moosicbox_json_utils::{rusqlite::ToValue, MissingValue, ParseError, ToValueType};
+use moosicbox_json_utils::{
+    rusqlite::ToValue as RusqliteToValue, MissingValue, ParseError, ToValueType,
+};
 use rusqlite::{
     types::{FromSql, Value},
     Row, Rows,
@@ -10,10 +12,18 @@ use strum_macros::{AsRefStr, EnumString};
 
 use crate::types::AudioFormat;
 
+use self::{
+    qobuz::{QobuzAlbum, QobuzArtist, QobuzTrack},
+    tidal::{TidalAlbum, TidalArtist, TidalTrack},
+};
+
 use super::db::{
     get_album_version_qualities, get_players, get_session_active_players, get_session_playlist,
     get_session_playlist_tracks, get_tracks, DbError, SqliteValue,
 };
+
+pub mod qobuz;
+pub mod tidal;
 
 pub trait AsModel<T> {
     fn as_model(&self) -> T;
@@ -146,18 +156,6 @@ pub enum Track {
     Library(LibraryTrack),
     Tidal(TidalTrack),
     Qobuz(QobuzTrack),
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct TidalTrack {
-    pub id: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct QobuzTrack {
-    pub id: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
@@ -329,8 +327,16 @@ pub enum ArtistId {
     Qobuz(u64),
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum Artist {
+    Library(LibraryArtist),
+    Tidal(TidalArtist),
+    Qobuz(QobuzArtist),
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-pub struct Artist {
+pub struct LibraryArtist {
     pub id: i32,
     pub title: String,
     pub cover: Option<String>,
@@ -338,15 +344,15 @@ pub struct Artist {
     pub qobuz_id: Option<u64>,
 }
 
-impl AsModel<Artist> for Row<'_> {
-    fn as_model(&self) -> Artist {
+impl AsModel<LibraryArtist> for Row<'_> {
+    fn as_model(&self) -> LibraryArtist {
         AsModelResult::as_model(self).unwrap()
     }
 }
 
-impl AsModelResult<Artist, ParseError> for Row<'_> {
-    fn as_model(&self) -> Result<Artist, ParseError> {
-        Ok(Artist {
+impl AsModelResult<LibraryArtist, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<LibraryArtist, ParseError> {
+        Ok(LibraryArtist {
             id: self.to_value("id")?,
             title: self.to_value("title")?,
             cover: self.to_value("cover")?,
@@ -356,7 +362,7 @@ impl AsModelResult<Artist, ParseError> for Row<'_> {
     }
 }
 
-impl AsId for Artist {
+impl AsId for LibraryArtist {
     fn as_id(&self) -> SqliteValue {
         SqliteValue::Number(self.id as i64)
     }
@@ -397,7 +403,7 @@ pub enum ApiArtist {
     Library(ApiLibraryArtist),
 }
 
-impl ToApi<ApiArtist> for Artist {
+impl ToApi<ApiArtist> for LibraryArtist {
     fn to_api(&self) -> ApiArtist {
         ApiArtist::Library(ApiLibraryArtist {
             artist_id: self.id,
@@ -465,8 +471,16 @@ pub enum AlbumId {
     Qobuz(String),
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum Album {
+    Library(LibraryAlbum),
+    Tidal(TidalAlbum),
+    Qobuz(QobuzAlbum),
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-pub struct Album {
+pub struct LibraryAlbum {
     pub id: i32,
     pub title: String,
     pub artist: String,
@@ -484,15 +498,15 @@ pub struct Album {
     pub qobuz_artist_id: Option<u64>,
 }
 
-impl AsModel<Album> for Row<'_> {
-    fn as_model(&self) -> Album {
+impl AsModel<LibraryAlbum> for Row<'_> {
+    fn as_model(&self) -> LibraryAlbum {
         AsModelResult::as_model(self).unwrap()
     }
 }
 
-impl AsModelResult<Album, ParseError> for Row<'_> {
-    fn as_model(&self) -> Result<Album, ParseError> {
-        Ok(Album {
+impl AsModelResult<LibraryAlbum, ParseError> for Row<'_> {
+    fn as_model(&self) -> Result<LibraryAlbum, ParseError> {
+        Ok(LibraryAlbum {
             id: self.to_value("id")?,
             artist: self.to_value("artist").unwrap_or_default(),
             artist_id: self.to_value("artist_id")?,
@@ -534,12 +548,12 @@ pub fn sort_album_versions(versions: &mut [AlbumVersionQuality]) {
     versions.sort_by(|a, b| track_source_to_u8(a.source).cmp(&track_source_to_u8(b.source)));
 }
 
-impl AsModelResultMappedMut<Album, DbError> for Rows<'_> {
-    fn as_model_mapped_mut<'a>(&'a mut self) -> Result<Vec<Album>, DbError>
+impl AsModelResultMappedMut<LibraryAlbum, DbError> for Rows<'_> {
+    fn as_model_mapped_mut<'a>(&'a mut self) -> Result<Vec<LibraryAlbum>, DbError>
     where
-        Row<'a>: AsModelResult<Album, ParseError>,
+        Row<'a>: AsModelResult<LibraryAlbum, ParseError>,
     {
-        let mut results: Vec<Album> = vec![];
+        let mut results: Vec<LibraryAlbum> = vec![];
         let mut last_album_id = 0;
 
         while let Some(row) = self.next()? {
@@ -630,11 +644,11 @@ impl AsModelResultMappedMut<Album, DbError> for Rows<'_> {
     }
 }
 
-impl AsModelQuery<Album> for Row<'_> {
-    fn as_model_query(&self, db: &rusqlite::Connection) -> Result<Album, DbError> {
+impl AsModelQuery<LibraryAlbum> for Row<'_> {
+    fn as_model_query(&self, db: &rusqlite::Connection) -> Result<LibraryAlbum, DbError> {
         let id = self.to_value("id")?;
 
-        Ok(Album {
+        Ok(LibraryAlbum {
             id,
             artist: self
                 .to_value::<Option<String>>("artist")?
@@ -656,7 +670,7 @@ impl AsModelQuery<Album> for Row<'_> {
     }
 }
 
-impl AsId for Album {
+impl AsId for LibraryAlbum {
     fn as_id(&self) -> SqliteValue {
         SqliteValue::Number(self.id as i64)
     }
@@ -696,7 +710,7 @@ pub struct ApiLibraryAlbum {
     pub qobuz_id: Option<String>,
 }
 
-impl ToApi<ApiAlbum> for Album {
+impl ToApi<ApiAlbum> for LibraryAlbum {
     fn to_api(&self) -> ApiAlbum {
         ApiAlbum::Library(ApiLibraryAlbum {
             album_id: self.id,

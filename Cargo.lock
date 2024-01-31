@@ -3019,6 +3019,7 @@ dependencies = [
  "moosicbox_config",
  "moosicbox_core",
  "moosicbox_image",
+ "moosicbox_music_api",
  "moosicbox_qobuz",
  "moosicbox_stream_utils",
  "moosicbox_symphonia_player",
@@ -3083,6 +3084,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_music_api"
+version = "0.1.0"
+dependencies = [
+ "async-recursion",
+ "async-trait",
+ "log",
+ "moosicbox_core",
+ "moosicbox_json_utils",
+ "once_cell",
+ "open",
+ "reqwest",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "strum",
+ "strum_macros",
+ "thiserror",
+ "url",
+]
+
+[[package]]
 name = "moosicbox_player"
 version = "0.1.0"
 dependencies = [
@@ -3119,11 +3141,13 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "async-recursion",
+ "async-trait",
  "base64",
  "log",
  "md5",
  "moosicbox_core",
  "moosicbox_json_utils",
+ "moosicbox_music_api",
  "once_cell",
  "open",
  "regex",
@@ -3279,9 +3303,11 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "async-recursion",
+ "async-trait",
  "log",
  "moosicbox_core",
  "moosicbox_json_utils",
+ "moosicbox_music_api",
  "once_cell",
  "open",
  "reqwest",

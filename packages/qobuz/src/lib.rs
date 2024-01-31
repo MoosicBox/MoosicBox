@@ -5,14 +5,23 @@ pub mod api;
 #[cfg(feature = "db")]
 pub mod db;
 
-use std::{collections::HashMap, fmt::Display, str::Utf8Error};
+use std::{collections::HashMap, str::Utf8Error};
 
 use async_recursion::async_recursion;
+use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
-use moosicbox_core::sqlite::models::AsModelResult;
+use moosicbox_core::sqlite::models::{
+    qobuz::{QobuzAlbum, QobuzArtist, QobuzImage, QobuzRelease, QobuzTrack},
+    Album, Artist, Track,
+};
 use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
-    MissingValue, ParseError, ToValueType,
+    ParseError, ToValueType,
+};
+use moosicbox_music_api::{
+    AlbumError, AlbumOrder, AlbumOrderDirection, AlbumsError, ArtistError, ArtistOrder,
+    ArtistOrderDirection, ArtistsError, Id, MusicApi, PagingResponse, TrackError, TrackOrder,
+    TrackOrderDirection, TracksError,
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -29,391 +38,6 @@ static APP_ID_HEADER_NAME: &str = "x-app-id";
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum QobuzDeviceType {
     Browser,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct QobuzImage {
-    pub thumbnail: Option<String>,
-    pub small: Option<String>,
-    pub medium: Option<String>,
-    pub large: Option<String>,
-    pub extralarge: Option<String>,
-    pub mega: Option<String>,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum QobuzImageSize {
-    Mega,       // 4800
-    ExtraLarge, // 2400
-    Large,      // 1200
-    Medium,     // 600
-    Small,      // 300
-    Thumbnail,  // 100
-}
-
-impl From<QobuzImageSize> for u16 {
-    fn from(value: QobuzImageSize) -> Self {
-        match value {
-            QobuzImageSize::Mega => 4800,
-            QobuzImageSize::ExtraLarge => 2400,
-            QobuzImageSize::Large => 1200,
-            QobuzImageSize::Medium => 600,
-            QobuzImageSize::Small => 300,
-            QobuzImageSize::Thumbnail => 100,
-        }
-    }
-}
-
-impl From<u16> for QobuzImageSize {
-    fn from(value: u16) -> Self {
-        match value {
-            0..=100 => QobuzImageSize::Thumbnail,
-            101..=300 => QobuzImageSize::Small,
-            301..=600 => QobuzImageSize::Medium,
-            601..=1200 => QobuzImageSize::Large,
-            1201..=2400 => QobuzImageSize::ExtraLarge,
-            _ => QobuzImageSize::Mega,
-        }
-    }
-}
-
-impl Display for QobuzImageSize {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{}", Into::<u16>::into(*self)))
-    }
-}
-
-impl QobuzImage {
-    pub fn cover_url(&self) -> Option<String> {
-        self.cover_url_for_size(QobuzImageSize::Mega)
-    }
-
-    pub fn cover_url_for_size(&self, size: QobuzImageSize) -> Option<String> {
-        match size {
-            QobuzImageSize::Thumbnail => self
-                .thumbnail
-                .clone()
-                .or(self.small.clone())
-                .or(self.medium.clone())
-                .or(self.large.clone())
-                .or(self.extralarge.clone())
-                .or(self.mega.clone()),
-
-            QobuzImageSize::Small => self
-                .small
-                .clone()
-                .or(self.medium.clone())
-                .or(self.large.clone())
-                .or(self.extralarge.clone())
-                .or(self.mega.clone())
-                .or(self.thumbnail.clone()),
-            QobuzImageSize::Medium => self
-                .medium
-                .clone()
-                .or(self.large.clone())
-                .or(self.extralarge.clone())
-                .or(self.mega.clone())
-                .or(self.small.clone())
-                .or(self.thumbnail.clone()),
-
-            QobuzImageSize::Large => self
-                .large
-                .clone()
-                .or(self.extralarge.clone())
-                .or(self.mega.clone())
-                .or(self.medium.clone())
-                .or(self.small.clone())
-                .or(self.thumbnail.clone()),
-
-            QobuzImageSize::ExtraLarge => self
-                .extralarge
-                .clone()
-                .or(self.mega.clone())
-                .or(self.large.clone())
-                .or(self.medium.clone())
-                .or(self.small.clone())
-                .or(self.thumbnail.clone()),
-
-            QobuzImageSize::Mega => self
-                .mega
-                .clone()
-                .or(self.extralarge.clone())
-                .or(self.large.clone())
-                .or(self.medium.clone())
-                .or(self.small.clone())
-                .or(self.thumbnail.clone()),
-        }
-    }
-}
-
-impl MissingValue<QobuzImage> for &Value {}
-impl ToValueType<QobuzImage> for &Value {
-    fn to_value_type(self) -> Result<QobuzImage, ParseError> {
-        self.as_model()
-    }
-}
-
-impl AsModelResult<QobuzImage, ParseError> for Value {
-    fn as_model(&self) -> Result<QobuzImage, ParseError> {
-        Ok(QobuzImage {
-            thumbnail: self.to_value("thumbnail")?,
-            small: self.to_value("small")?,
-            medium: self.to_value("medium")?,
-            large: self.to_value("large")?,
-            extralarge: self.to_value("extralarge")?,
-            mega: self.to_value("mega")?,
-        })
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct QobuzGenre {
-    pub id: u64,
-    pub name: String,
-    pub slug: String,
-}
-
-impl MissingValue<QobuzGenre> for &Value {}
-impl ToValueType<QobuzGenre> for &Value {
-    fn to_value_type(self) -> Result<QobuzGenre, ParseError> {
-        self.as_model()
-    }
-}
-
-impl AsModelResult<QobuzGenre, ParseError> for Value {
-    fn as_model(&self) -> Result<QobuzGenre, ParseError> {
-        Ok(QobuzGenre {
-            id: self.to_value("id")?,
-            name: self.to_value("name")?,
-            slug: self.to_value("slug")?,
-        })
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct QobuzAlbum {
-    pub id: String,
-    pub artist: String,
-    pub artist_id: u64,
-    pub maximum_bit_depth: u16,
-    pub image: Option<QobuzImage>,
-    pub title: String,
-    pub qobuz_id: u64,
-    pub released_at: u64,
-    pub release_date_original: String,
-    pub duration: u32,
-    pub parental_warning: bool,
-    pub popularity: u32,
-    pub tracks_count: u32,
-    pub genre: QobuzGenre,
-    pub maximum_channel_count: u16,
-    pub maximum_sampling_rate: f32,
-}
-
-impl QobuzAlbum {
-    pub fn cover_url(&self) -> Option<String> {
-        self.image.as_ref().and_then(|image| image.cover_url())
-    }
-}
-
-impl MissingValue<QobuzAlbum> for &Value {}
-impl ToValueType<QobuzAlbum> for &Value {
-    fn to_value_type(self) -> Result<QobuzAlbum, ParseError> {
-        self.as_model()
-    }
-}
-
-impl AsModelResult<QobuzAlbum, ParseError> for Value {
-    fn as_model(&self) -> Result<QobuzAlbum, ParseError> {
-        Ok(QobuzAlbum {
-            id: self.to_value("id")?,
-            artist: self
-                .to_nested_value::<String>(&["artist", "name"])
-                .or_else(|_| self.to_nested_value(&["artist", "name", "display"]))?,
-            artist_id: self.to_nested_value(&["artist", "id"])?,
-            maximum_bit_depth: self
-                .to_value("maximum_bit_depth")
-                .or_else(|_| self.to_nested_value(&["audio_info", "maximum_bit_depth"]))?,
-            image: self.to_value("image")?,
-            title: self.to_value("title")?,
-            qobuz_id: self.to_value("qobuz_id")?,
-            released_at: self.to_value("released_at")?,
-            release_date_original: self.to_value("release_date_original")?,
-            duration: self.to_value("duration")?,
-            parental_warning: self.to_value("parental_warning")?,
-            popularity: self.to_value("popularity")?,
-            tracks_count: self.to_value("tracks_count")?,
-            genre: self.to_value("genre")?,
-            maximum_channel_count: self
-                .to_value("maximum_channel_count")
-                .or_else(|_| self.to_nested_value(&["audio_info", "maximum_channel_count"]))?,
-            maximum_sampling_rate: self
-                .to_value("maximum_sampling_rate")
-                .or_else(|_| self.to_nested_value(&["audio_info", "maximum_sampling_rate"]))?,
-        })
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct QobuzRelease {
-    pub id: String,
-    pub artist: String,
-    pub artist_id: u64,
-    pub maximum_bit_depth: u16,
-    pub image: Option<QobuzImage>,
-    pub title: String,
-    pub release_date_original: String,
-    pub duration: u32,
-    pub parental_warning: bool,
-    pub tracks_count: u32,
-    pub genre: String,
-    pub maximum_channel_count: u16,
-    pub maximum_sampling_rate: f32,
-}
-
-impl QobuzRelease {
-    pub fn cover_url(&self) -> Option<String> {
-        self.image.as_ref().and_then(|image| image.cover_url())
-    }
-}
-
-impl MissingValue<QobuzRelease> for &Value {}
-impl ToValueType<QobuzRelease> for &Value {
-    fn to_value_type(self) -> Result<QobuzRelease, ParseError> {
-        self.as_model()
-    }
-}
-
-impl AsModelResult<QobuzRelease, ParseError> for Value {
-    fn as_model(&self) -> Result<QobuzRelease, ParseError> {
-        Ok(QobuzRelease {
-            id: self.to_value("id")?,
-            artist: self.to_nested_value(&["artist", "name", "display"])?,
-            artist_id: self.to_nested_value(&["artist", "id"])?,
-            maximum_bit_depth: self.to_nested_value(&["audio_info", "maximum_bit_depth"])?,
-            image: self.to_value("image")?,
-            title: self.to_value("title")?,
-            release_date_original: self.to_nested_value(&["dates", "original"])?,
-            duration: self.to_value("duration")?,
-            parental_warning: self.to_value("parental_warning")?,
-            tracks_count: self.to_value("tracks_count")?,
-            genre: self.to_nested_value(&["genre", "name"])?,
-            maximum_channel_count: self
-                .to_nested_value(&["audio_info", "maximum_channel_count"])?,
-            maximum_sampling_rate: self
-                .to_nested_value(&["audio_info", "maximum_sampling_rate"])?,
-        })
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "snake_case")]
-pub struct QobuzTrack {
-    pub id: u64,
-    pub track_number: u32,
-    pub artist: String,
-    pub artist_id: u64,
-    pub album: String,
-    pub album_id: String,
-    pub image: Option<QobuzImage>,
-    pub copyright: Option<String>,
-    pub duration: u32,
-    pub parental_warning: bool,
-    pub isrc: String,
-    pub title: String,
-}
-
-impl QobuzTrack {
-    pub fn cover_url(&self) -> Option<String> {
-        self.image.as_ref().and_then(|image| image.cover_url())
-    }
-}
-
-impl MissingValue<QobuzTrack> for &Value {}
-impl ToValueType<QobuzTrack> for &Value {
-    fn to_value_type(self) -> Result<QobuzTrack, ParseError> {
-        self.as_model()
-    }
-}
-
-impl QobuzTrack {
-    fn from_value(
-        value: &Value,
-        artist: &str,
-        artist_id: u64,
-        album: &str,
-        album_id: &str,
-        image: Option<QobuzImage>,
-    ) -> Result<QobuzTrack, ParseError> {
-        Ok(QobuzTrack {
-            id: value.to_value("id")?,
-            track_number: value.to_value("track_number")?,
-            artist: artist.to_string(),
-            artist_id,
-            album: album.to_string(),
-            album_id: album_id.to_string(),
-            image,
-            copyright: value.to_value("copyright")?,
-            duration: value.to_value("duration")?,
-            parental_warning: value.to_value("parental_warning")?,
-            isrc: value.to_value("isrc")?,
-            title: value.to_value("title")?,
-        })
-    }
-}
-
-impl AsModelResult<QobuzTrack, ParseError> for Value {
-    fn as_model(&self) -> Result<QobuzTrack, ParseError> {
-        Ok(QobuzTrack {
-            id: self.to_value("id")?,
-            track_number: self.to_value("track_number")?,
-            album: self.to_nested_value(&["album", "title"])?,
-            album_id: self.to_nested_value(&["album", "id"])?,
-            artist: self.to_nested_value(&["album", "artist", "name"])?,
-            artist_id: self.to_nested_value(&["album", "artist", "id"])?,
-            image: self.to_value("image")?,
-            copyright: self.to_value("copyright")?,
-            duration: self.to_value("duration")?,
-            parental_warning: self.to_value("parental_warning")?,
-            isrc: self.to_value("isrc")?,
-            title: self.to_value("title")?,
-        })
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct QobuzArtist {
-    pub id: u64,
-    pub image: Option<QobuzImage>,
-    pub name: String,
-}
-
-impl QobuzArtist {
-    pub fn cover_url(&self) -> Option<String> {
-        self.image.clone().and_then(|image| image.cover_url())
-    }
-}
-
-impl MissingValue<QobuzArtist> for &Value {}
-impl ToValueType<QobuzArtist> for &Value {
-    fn to_value_type(self) -> Result<QobuzArtist, ParseError> {
-        self.as_model()
-    }
-}
-
-impl AsModelResult<QobuzArtist, ParseError> for Value {
-    fn as_model(&self) -> Result<QobuzArtist, ParseError> {
-        Ok(QobuzArtist {
-            id: self.to_value("id")?,
-            image: self.to_value("image")?,
-            name: self.to_value("name")?,
-        })
-    }
 }
 
 trait ToUrl {
@@ -1012,7 +636,7 @@ pub enum QobuzArtistError {
 
 pub async fn artist(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    artist_id: u64,
+    artist_id: Id,
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> Result<QobuzArtist, QobuzArtistError> {
@@ -1053,13 +677,16 @@ pub async fn favorite_artists(
     limit: Option<u32>,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<(Vec<QobuzArtist>, u32), QobuzFavoriteArtistsError> {
+) -> Result<PagingResponse<QobuzArtist>, QobuzFavoriteArtistsError> {
+    let offset = offset.unwrap_or(0);
+    let limit = limit.unwrap_or(100);
+
     let url = qobuz_api_endpoint!(
         Favorites,
         &[],
         &[
-            ("offset", &offset.unwrap_or(0).to_string()),
-            ("limit", &limit.unwrap_or(100).to_string()),
+            ("offset", &offset.to_string()),
+            ("limit", &limit.to_string()),
             ("type", "artists"),
         ]
     );
@@ -1076,9 +703,13 @@ pub async fn favorite_artists(
     log::trace!("Received favorite artists response: {value:?}");
 
     let items = value.to_nested_value(&["artists", "items"])?;
-    let count = value.to_nested_value(&["artists", "total"])?;
+    let total = value.to_nested_value(&["artists", "total"])?;
 
-    Ok((items, count))
+    Ok(PagingResponse::WithTotal {
+        items,
+        offset,
+        total,
+    })
 }
 
 #[derive(Debug, Error)]
@@ -1089,7 +720,7 @@ pub enum QobuzAddFavoriteArtistError {
 
 pub async fn add_favorite_artist(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    artist_id: u64,
+    artist_id: Id,
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> Result<(), QobuzAddFavoriteArtistError> {
@@ -1121,7 +752,7 @@ pub enum QobuzRemoveFavoriteArtistError {
 
 pub async fn remove_favorite_artist(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    artist_id: u64,
+    artist_id: Id,
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> Result<(), QobuzRemoveFavoriteArtistError> {
@@ -1156,7 +787,7 @@ pub enum QobuzArtistAlbumsError {
 #[allow(clippy::too_many_arguments)]
 pub async fn artist_albums(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    artist_id: u64,
+    artist_id: Id,
     offset: Option<u32>,
     limit: Option<u32>,
     release_type: Option<QobuzAlbumReleaseType>,
@@ -1165,14 +796,17 @@ pub async fn artist_albums(
     track_size: Option<u8>,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<(Vec<QobuzRelease>, bool), QobuzArtistAlbumsError> {
+) -> Result<PagingResponse<QobuzRelease>, QobuzArtistAlbumsError> {
+    let offset = offset.unwrap_or(0);
+    let limit = limit.unwrap_or(100);
+
     let url = qobuz_api_endpoint!(
         ArtistAlbums,
         &[],
         &[
             ("artist_id", &artist_id.to_string()),
-            ("offset", &offset.unwrap_or(0).to_string()),
-            ("limit", &limit.unwrap_or(100).to_string()),
+            ("offset", &offset.to_string()),
+            ("limit", &limit.to_string()),
             ("release_type", release_type.unwrap_or_default().as_ref()),
             ("sort", sort.unwrap_or_default().as_ref()),
             ("order", order.unwrap_or_default().as_ref()),
@@ -1194,7 +828,11 @@ pub async fn artist_albums(
     let items = value.to_value("items")?;
     let has_more = value.to_value("has_more")?;
 
-    Ok((items, has_more))
+    Ok(PagingResponse::WithHasMore {
+        items,
+        offset,
+        has_more,
+    })
 }
 
 #[derive(Debug, Error)]
@@ -1207,11 +845,15 @@ pub enum QobuzAlbumError {
 
 pub async fn album(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    album_id: &str,
+    album_id: Id,
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> Result<QobuzAlbum, QobuzAlbumError> {
-    let url = qobuz_api_endpoint!(Album, &[], &[("album_id", album_id), ("limit", "0")]);
+    let url = qobuz_api_endpoint!(
+        Album,
+        &[],
+        &[("album_id", &album_id.to_string()), ("limit", "0")]
+    );
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
@@ -1241,7 +883,8 @@ pub async fn favorite_albums(
     limit: Option<u32>,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<(Vec<QobuzAlbum>, u32), QobuzFavoriteAlbumsError> {
+) -> Result<PagingResponse<QobuzAlbum>, QobuzFavoriteAlbumsError> {
+    let offset = offset.unwrap_or(0);
     let original_limit = limit.unwrap_or(100);
     let mut limit = original_limit;
 
@@ -1250,7 +893,7 @@ pub async fn favorite_albums(
             Favorites,
             &[],
             &[
-                ("offset", &offset.unwrap_or(0).to_string()),
+                ("offset", &offset.to_string()),
                 ("limit", &limit.to_string()),
                 ("type", "albums"),
             ]
@@ -1281,9 +924,13 @@ pub async fn favorite_albums(
         .into_iter()
         .take(original_limit as usize)
         .collect();
-    let count = value.to_nested_value(&["albums", "total"])?;
+    let total = value.to_nested_value(&["albums", "total"])?;
 
-    Ok((items, count))
+    Ok(PagingResponse::WithTotal {
+        items,
+        offset,
+        total,
+    })
 }
 
 pub async fn all_favorite_albums(
@@ -1307,9 +954,9 @@ pub async fn all_favorite_albums(
         )
         .await?;
 
-        all_albums.extend_from_slice(&albums.0);
+        all_albums.extend_from_slice(&albums);
 
-        if albums.0.is_empty() || all_albums.len() == (albums.1 as usize) {
+        if !albums.has_more() {
             break;
         }
 
@@ -1327,11 +974,11 @@ pub enum QobuzAddFavoriteAlbumError {
 
 pub async fn add_favorite_album(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    album_id: &str,
+    album_id: Id,
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> Result<(), QobuzAddFavoriteAlbumError> {
-    let url = qobuz_api_endpoint!(AddFavorites, &[], &[("album_ids", album_id),]);
+    let url = qobuz_api_endpoint!(AddFavorites, &[], &[("album_ids", &album_id.to_string()),]);
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
@@ -1355,11 +1002,15 @@ pub enum QobuzRemoveFavoriteAlbumError {
 
 pub async fn remove_favorite_album(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    album_id: &str,
+    album_id: Id,
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> Result<(), QobuzRemoveFavoriteAlbumError> {
-    let url = qobuz_api_endpoint!(RemoveFavorites, &[], &[("album_ids", album_id),]);
+    let url = qobuz_api_endpoint!(
+        RemoveFavorites,
+        &[],
+        &[("album_ids", &album_id.to_string()),]
+    );
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
@@ -1386,19 +1037,22 @@ pub enum QobuzAlbumTracksError {
 #[allow(clippy::too_many_arguments)]
 pub async fn album_tracks(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    album_id: &str,
+    album_id: Id,
     offset: Option<u32>,
     limit: Option<u32>,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<(Vec<QobuzTrack>, u32), QobuzAlbumTracksError> {
+) -> Result<PagingResponse<QobuzTrack>, QobuzAlbumTracksError> {
+    let offset = offset.unwrap_or(0);
+    let limit = limit.unwrap_or(100);
+
     let url = qobuz_api_endpoint!(
         Album,
         &[],
         &[
-            ("album_id", album_id),
-            ("offset", &offset.unwrap_or(0).to_string()),
-            ("limit", &limit.unwrap_or(100).to_string()),
+            ("album_id", &album_id.to_string()),
+            ("offset", &offset.to_string()),
+            ("limit", &limit.to_string()),
         ]
     );
 
@@ -1421,12 +1075,23 @@ pub async fn album_tracks(
         .to_nested_value::<Vec<&Value>>(&["tracks", "items"])?
         .iter()
         .map(move |value| {
-            QobuzTrack::from_value(value, artist, artist_id, album, album_id, image.clone())
+            QobuzTrack::from_value(
+                value,
+                artist,
+                artist_id,
+                album,
+                &Into::<String>::into(album_id.clone()),
+                image.clone(),
+            )
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let count = value.to_nested_value(&["tracks", "total"])?;
+    let total = value.to_nested_value(&["tracks", "total"])?;
 
-    Ok((items, count))
+    Ok(PagingResponse::WithTotal {
+        items,
+        offset,
+        total,
+    })
 }
 
 #[derive(Debug, Error)]
@@ -1440,7 +1105,7 @@ pub enum QobuzTrackError {
 #[allow(clippy::too_many_arguments)]
 pub async fn track(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    track_id: u64,
+    track_id: Id,
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> Result<QobuzTrack, QobuzTrackError> {
@@ -1479,13 +1144,16 @@ pub async fn favorite_tracks(
     limit: Option<u32>,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<(Vec<QobuzTrack>, u32), QobuzFavoriteTracksError> {
+) -> Result<PagingResponse<QobuzTrack>, QobuzFavoriteTracksError> {
+    let offset = offset.unwrap_or(0);
+    let limit = limit.unwrap_or(100);
+
     let url = qobuz_api_endpoint!(
         Favorites,
         &[],
         &[
-            ("offset", &offset.unwrap_or(0).to_string()),
-            ("limit", &limit.unwrap_or(100).to_string()),
+            ("offset", &offset.to_string()),
+            ("limit", &limit.to_string()),
             ("type", "tracks"),
         ]
     );
@@ -1500,9 +1168,13 @@ pub async fn favorite_tracks(
     .await?;
 
     let items = value.to_nested_value(&["tracks", "items"])?;
-    let count = value.to_nested_value(&["tracks", "total"])?;
+    let total = value.to_nested_value(&["tracks", "total"])?;
 
-    Ok((items, count))
+    Ok(PagingResponse::WithTotal {
+        items,
+        offset,
+        total,
+    })
 }
 
 #[derive(Debug, Error)]
@@ -1513,7 +1185,7 @@ pub enum QobuzAddFavoriteTrackError {
 
 pub async fn add_favorite_track(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    track_id: u64,
+    track_id: Id,
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> Result<(), QobuzAddFavoriteTrackError> {
@@ -1541,7 +1213,7 @@ pub enum QobuzRemoveFavoriteTrackError {
 
 pub async fn remove_favorite_track(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    track_id: u64,
+    track_id: Id,
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> Result<(), QobuzRemoveFavoriteTrackError> {
@@ -1602,7 +1274,7 @@ pub enum QobuzTrackFileUrlError {
 #[allow(clippy::too_many_arguments)]
 pub async fn track_file_url(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    track_id: u64,
+    track_id: Id,
     quality: QobuzAudioQuality,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -1854,6 +1526,161 @@ pub(crate) async fn search_app_config(
     }
 
     Ok(AppConfig { app_id, secrets })
+}
+
+impl From<QobuzFavoriteArtistsError> for ArtistsError {
+    fn from(err: QobuzFavoriteArtistsError) -> Self {
+        ArtistsError::Other(Box::new(err))
+    }
+}
+
+impl From<QobuzArtistError> for ArtistError {
+    fn from(err: QobuzArtistError) -> Self {
+        ArtistError::Other(Box::new(err))
+    }
+}
+
+impl From<QobuzFavoriteAlbumsError> for AlbumsError {
+    fn from(err: QobuzFavoriteAlbumsError) -> Self {
+        AlbumsError::Other(Box::new(err))
+    }
+}
+
+impl From<QobuzAlbumError> for AlbumError {
+    fn from(err: QobuzAlbumError) -> Self {
+        AlbumError::Other(Box::new(err))
+    }
+}
+
+impl From<QobuzFavoriteTracksError> for TracksError {
+    fn from(err: QobuzFavoriteTracksError) -> Self {
+        TracksError::Other(Box::new(err))
+    }
+}
+
+impl From<QobuzTrackError> for TrackError {
+    fn from(err: QobuzTrackError) -> Self {
+        TrackError::Other(Box::new(err))
+    }
+}
+
+pub struct QobuzMusicApi {}
+
+#[async_trait]
+impl MusicApi for QobuzMusicApi {
+    async fn artists(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        offset: Option<u32>,
+        limit: Option<u32>,
+        _order: Option<ArtistOrder>,
+        _order_direction: Option<ArtistOrderDirection>,
+    ) -> Result<PagingResponse<Artist>, ArtistsError> {
+        Ok(favorite_artists(
+            #[cfg(feature = "db")]
+            db,
+            offset,
+            limit,
+            None,
+            None,
+        )
+        .await?
+        .map(|x| x.into()))
+    }
+
+    async fn artist(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        artist_id: Id,
+    ) -> Result<Option<Artist>, ArtistError> {
+        Ok(Some(
+            artist(
+                #[cfg(feature = "db")]
+                db,
+                artist_id,
+                None,
+                None,
+            )
+            .await?
+            .into(),
+        ))
+    }
+
+    async fn albums(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        offset: Option<u32>,
+        limit: Option<u32>,
+        _order: Option<AlbumOrder>,
+        _order_direction: Option<AlbumOrderDirection>,
+    ) -> Result<PagingResponse<Album>, AlbumsError> {
+        Ok(favorite_albums(
+            #[cfg(feature = "db")]
+            db,
+            offset,
+            limit,
+            None,
+            None,
+        )
+        .await?
+        .map(|x| x.into()))
+    }
+
+    async fn album(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        album_id: Id,
+    ) -> Result<Option<Album>, AlbumError> {
+        Ok(Some(
+            album(
+                #[cfg(feature = "db")]
+                db,
+                album_id,
+                None,
+                None,
+            )
+            .await?
+            .into(),
+        ))
+    }
+
+    async fn tracks(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        offset: Option<u32>,
+        limit: Option<u32>,
+        _order: Option<TrackOrder>,
+        _order_direction: Option<TrackOrderDirection>,
+    ) -> Result<PagingResponse<Track>, TracksError> {
+        Ok(favorite_tracks(
+            #[cfg(feature = "db")]
+            db,
+            offset,
+            limit,
+            None,
+            None,
+        )
+        .await?
+        .map(|x| x.into()))
+    }
+
+    async fn track(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        track_id: Id,
+    ) -> Result<Option<Track>, TrackError> {
+        Ok(Some(
+            track(
+                #[cfg(feature = "db")]
+                db,
+                track_id,
+                None,
+                None,
+            )
+            .await?
+            .into(),
+        ))
+    }
 }
 
 #[cfg(test)]

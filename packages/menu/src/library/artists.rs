@@ -2,7 +2,7 @@ use moosicbox_core::{
     app::AppState,
     sqlite::{
         db::{get_artists, DbError},
-        models::{AlbumSource, Artist, ArtistSort},
+        models::{AlbumSource, ArtistSort, LibraryArtist},
     },
 };
 use serde::{Deserialize, Serialize};
@@ -23,7 +23,7 @@ pub struct ArtistFilters {
     pub search: Option<String>,
 }
 
-pub fn filter_artists(artists: Vec<Artist>, request: &ArtistsRequest) -> Vec<Artist> {
+pub fn filter_artists(artists: Vec<LibraryArtist>, request: &ArtistsRequest) -> Vec<LibraryArtist> {
     artists
         .into_iter()
         .filter(|artist| {
@@ -42,7 +42,10 @@ pub fn filter_artists(artists: Vec<Artist>, request: &ArtistsRequest) -> Vec<Art
         .collect()
 }
 
-pub fn sort_artists(mut artists: Vec<Artist>, request: &ArtistsRequest) -> Vec<Artist> {
+pub fn sort_artists(
+    mut artists: Vec<LibraryArtist>,
+    request: &ArtistsRequest,
+) -> Vec<LibraryArtist> {
     match request.sort {
         Some(ArtistSort::NameAsc) => artists.sort_by(|a, b| a.title.cmp(&b.title)),
         Some(ArtistSort::NameDesc) => artists.sort_by(|a, b| b.title.cmp(&a.title)),
@@ -71,7 +74,7 @@ pub enum GetArtistsError {
 pub async fn get_all_artists(
     data: &AppState,
     request: &ArtistsRequest,
-) -> Result<Vec<Artist>, GetArtistsError> {
+) -> Result<Vec<LibraryArtist>, GetArtistsError> {
     let artists = get_artists(
         &data
             .db

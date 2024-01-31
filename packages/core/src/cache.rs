@@ -1,4 +1,4 @@
-use crate::sqlite::models::{Album, Artist, LibraryTrack};
+use crate::sqlite::models::{LibraryAlbum, LibraryArtist, LibraryTrack};
 use enum_as_inner::EnumAsInner;
 use futures::Future;
 use once_cell::sync::Lazy;
@@ -17,11 +17,11 @@ struct CacheItem {
 #[derive(Debug, Serialize, Deserialize, Clone, EnumAsInner)]
 #[serde(untagged)]
 pub enum CacheItemType {
-    Albums(Vec<Album>),
+    Albums(Vec<LibraryAlbum>),
     AlbumTracks(Vec<LibraryTrack>),
-    ArtistAlbums(Vec<Album>),
-    Artist(Artist),
-    Album(Album),
+    ArtistAlbums(Vec<LibraryAlbum>),
+    Artist(LibraryArtist),
+    Album(LibraryAlbum),
 }
 
 pub fn current_time_nanos() -> u128 {

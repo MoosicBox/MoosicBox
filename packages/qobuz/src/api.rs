@@ -5,6 +5,7 @@ use actix_web::{
     HttpRequest, Result,
 };
 use moosicbox_core::sqlite::models::ToApi;
+use moosicbox_music_api::PagingResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
@@ -220,7 +221,7 @@ pub async fn artist_endpoint(
     let artist = artist(
         #[cfg(feature = "db")]
         data.db.as_ref().expect("Db not set"),
-        query.artist_id,
+        query.artist_id.into(),
         req.headers()
             .get(QOBUZ_ACCESS_TOKEN_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
@@ -251,25 +252,23 @@ pub async fn favorite_artists_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzFavoriteArtistsQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<Value>> {
-    let (items, count) = favorite_artists(
-        #[cfg(feature = "db")]
-        data.db.as_ref().unwrap(),
-        query.offset,
-        query.limit,
-        req.headers()
-            .get(QOBUZ_ACCESS_TOKEN_HEADER)
-            .map(|x| x.to_str().unwrap().to_string()),
-        req.headers()
-            .get(QOBUZ_APP_ID_HEADER)
-            .map(|x| x.to_str().unwrap().to_string()),
-    )
-    .await?;
-
-    Ok(Json(serde_json::json!({
-        "count": count,
-        "items": items.iter().map(|item| item.to_api()).collect::<Vec<_>>(),
-    })))
+) -> Result<Json<PagingResponse<ApiArtist>>> {
+    Ok(Json(
+        favorite_artists(
+            #[cfg(feature = "db")]
+            data.db.as_ref().unwrap(),
+            query.offset,
+            query.limit,
+            req.headers()
+                .get(QOBUZ_ACCESS_TOKEN_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+            req.headers()
+                .get(QOBUZ_APP_ID_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+        )
+        .await?
+        .to_api(),
+    ))
 }
 
 impl From<QobuzAlbumError> for actix_web::Error {
@@ -293,7 +292,7 @@ pub async fn album_endpoint(
     let album = album(
         #[cfg(feature = "db")]
         data.db.as_ref().expect("Db not set"),
-        &query.album_id,
+        query.album_id.clone().into(),
         req.headers()
             .get(QOBUZ_ACCESS_TOKEN_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
@@ -393,30 +392,28 @@ pub async fn artist_albums_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzArtistAlbumsQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<Value>> {
-    let (items, has_more) = artist_albums(
-        #[cfg(feature = "db")]
-        data.db.as_ref().expect("Db not set"),
-        query.artist_id,
-        query.offset,
-        query.limit,
-        query.release_type.map(|x| x.into()),
-        query.sort.map(|x| x.into()),
-        query.order.map(|x| x.into()),
-        query.track_size,
-        req.headers()
-            .get(QOBUZ_ACCESS_TOKEN_HEADER)
-            .map(|x| x.to_str().unwrap().to_string()),
-        req.headers()
-            .get(QOBUZ_APP_ID_HEADER)
-            .map(|x| x.to_str().unwrap().to_string()),
-    )
-    .await?;
-
-    Ok(Json(serde_json::json!({
-        "hasMore": has_more,
-        "items": items.iter().map(|item| item.to_api()).collect::<Vec<_>>(),
-    })))
+) -> Result<Json<PagingResponse<ApiRelease>>> {
+    Ok(Json(
+        artist_albums(
+            #[cfg(feature = "db")]
+            data.db.as_ref().expect("Db not set"),
+            query.artist_id.into(),
+            query.offset,
+            query.limit,
+            query.release_type.map(|x| x.into()),
+            query.sort.map(|x| x.into()),
+            query.order.map(|x| x.into()),
+            query.track_size,
+            req.headers()
+                .get(QOBUZ_ACCESS_TOKEN_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+            req.headers()
+                .get(QOBUZ_APP_ID_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+        )
+        .await?
+        .to_api(),
+    ))
 }
 
 impl From<QobuzFavoriteAlbumsError> for actix_web::Error {
@@ -437,25 +434,23 @@ pub async fn favorite_albums_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzFavoriteAlbumsQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<Value>> {
-    let (items, count) = favorite_albums(
-        #[cfg(feature = "db")]
-        data.db.as_ref().unwrap(),
-        query.offset,
-        query.limit,
-        req.headers()
-            .get(QOBUZ_ACCESS_TOKEN_HEADER)
-            .map(|x| x.to_str().unwrap().to_string()),
-        req.headers()
-            .get(QOBUZ_APP_ID_HEADER)
-            .map(|x| x.to_str().unwrap().to_string()),
-    )
-    .await?;
-
-    Ok(Json(serde_json::json!({
-        "count": count,
-        "items": items.iter().map(|item| item.to_api()).collect::<Vec<_>>(),
-    })))
+) -> Result<Json<PagingResponse<ApiAlbum>>> {
+    Ok(Json(
+        favorite_albums(
+            #[cfg(feature = "db")]
+            data.db.as_ref().unwrap(),
+            query.offset,
+            query.limit,
+            req.headers()
+                .get(QOBUZ_ACCESS_TOKEN_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+            req.headers()
+                .get(QOBUZ_APP_ID_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+        )
+        .await?
+        .to_api(),
+    ))
 }
 
 impl From<QobuzAlbumTracksError> for actix_web::Error {
@@ -477,26 +472,24 @@ pub async fn album_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzAlbumTracksQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<Value>> {
-    let (items, count) = album_tracks(
-        #[cfg(feature = "db")]
-        data.db.as_ref().expect("Db not set"),
-        &query.album_id,
-        query.offset,
-        query.limit,
-        req.headers()
-            .get(QOBUZ_ACCESS_TOKEN_HEADER)
-            .map(|x| x.to_str().unwrap().to_string()),
-        req.headers()
-            .get(QOBUZ_APP_ID_HEADER)
-            .map(|x| x.to_str().unwrap().to_string()),
-    )
-    .await?;
-
-    Ok(Json(serde_json::json!({
-        "count": count,
-        "items": items.iter().map(|item| item.to_api()).collect::<Vec<_>>(),
-    })))
+) -> Result<Json<PagingResponse<ApiTrack>>> {
+    Ok(Json(
+        album_tracks(
+            #[cfg(feature = "db")]
+            data.db.as_ref().expect("Db not set"),
+            query.album_id.clone().into(),
+            query.offset,
+            query.limit,
+            req.headers()
+                .get(QOBUZ_ACCESS_TOKEN_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+            req.headers()
+                .get(QOBUZ_APP_ID_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+        )
+        .await?
+        .to_api(),
+    ))
 }
 
 impl From<QobuzTrackError> for actix_web::Error {
@@ -520,7 +513,7 @@ pub async fn track_endpoint(
     let track = track(
         #[cfg(feature = "db")]
         data.db.as_ref().expect("Db not set"),
-        query.track_id,
+        query.track_id.into(),
         req.headers()
             .get(QOBUZ_ACCESS_TOKEN_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
@@ -551,25 +544,23 @@ pub async fn favorite_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzFavoriteTracksQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<Value>> {
-    let (items, count) = favorite_tracks(
-        #[cfg(feature = "db")]
-        data.db.as_ref().unwrap(),
-        query.offset,
-        query.limit,
-        req.headers()
-            .get(QOBUZ_ACCESS_TOKEN_HEADER)
-            .map(|x| x.to_str().unwrap().to_string()),
-        req.headers()
-            .get(QOBUZ_APP_ID_HEADER)
-            .map(|x| x.to_str().unwrap().to_string()),
-    )
-    .await?;
-
-    Ok(Json(serde_json::json!({
-        "count": count,
-        "items": items.iter().map(|item| item.to_api()).collect::<Vec<_>>(),
-    })))
+) -> Result<Json<PagingResponse<ApiTrack>>> {
+    Ok(Json(
+        favorite_tracks(
+            #[cfg(feature = "db")]
+            data.db.as_ref().unwrap(),
+            query.offset,
+            query.limit,
+            req.headers()
+                .get(QOBUZ_ACCESS_TOKEN_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+            req.headers()
+                .get(QOBUZ_APP_ID_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+        )
+        .await?
+        .to_api(),
+    ))
 }
 
 impl From<QobuzTrackFileUrlError> for actix_web::Error {
@@ -595,7 +586,7 @@ pub async fn track_file_url_endpoint(
         "url": track_file_url(
             #[cfg(feature = "db")]
             data.db.as_ref().unwrap(),
-            query.track_id,
+            query.track_id.into(),
             query.audio_quality,
             req.headers()
                 .get(QOBUZ_ACCESS_TOKEN_HEADER)

@@ -7,13 +7,15 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
-use moosicbox_core::sqlite::menu::get_artist_albums;
+use moosicbox_core::sqlite::{menu::get_artist_albums, models::ApiSource};
 use moosicbox_core::{
     app::AppState,
     sqlite::{
         db::get_tracks,
         menu::{get_album, get_artist},
-        models::{Album, AlbumSort, AlbumSource, ApiAlbum, ApiArtist, ApiTrack, ArtistSort, ToApi},
+        models::{
+            AlbumSort, AlbumSource, ApiAlbum, ApiArtist, ApiTrack, ArtistSort, LibraryAlbum, ToApi,
+        },
     },
     track_range::{parse_track_id_ranges, ParseTrackIdsError},
 };
@@ -42,7 +44,7 @@ pub enum MenuError {
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum MenuResponse {
-    Albums(Vec<Album>),
+    Albums(Vec<LibraryAlbum>),
     Error(Value),
 }
 
@@ -322,8 +324,8 @@ pub async fn get_album_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AddAlbumQuery {
-    tidal_album_id: Option<u64>,
-    qobuz_album_id: Option<String>,
+    album_id: String,
+    source: ApiSource,
 }
 
 #[post("/album")]
@@ -334,8 +336,8 @@ pub async fn add_album_endpoint(
     Ok(Json(
         add_album(
             data.db.as_ref().expect("No DB set"),
-            query.tidal_album_id,
-            query.qobuz_album_id.clone(),
+            query.album_id.clone(),
+            query.source,
         )
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to add album: {e:?}")))?
@@ -346,8 +348,8 @@ pub async fn add_album_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoveAlbumQuery {
-    tidal_album_id: Option<u64>,
-    qobuz_album_id: Option<String>,
+    album_id: String,
+    source: ApiSource,
 }
 
 #[delete("/album")]
@@ -358,8 +360,8 @@ pub async fn remove_album_endpoint(
     Ok(Json(
         remove_album(
             data.db.as_ref().expect("No DB set"),
-            query.tidal_album_id,
-            query.qobuz_album_id.clone(),
+            query.album_id.clone(),
+            query.source,
         )
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to remove album: {e:?}")))?
@@ -370,8 +372,8 @@ pub async fn remove_album_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ReFavoriteAlbumQuery {
-    tidal_album_id: Option<u64>,
-    qobuz_album_id: Option<String>,
+    album_id: String,
+    source: ApiSource,
 }
 
 #[post("/album/re-favorite")]
@@ -382,8 +384,8 @@ pub async fn refavorite_album_endpoint(
     Ok(Json(
         refavorite_album(
             data.db.as_ref().expect("No DB set"),
-            query.tidal_album_id,
-            query.qobuz_album_id.clone(),
+            query.album_id.clone(),
+            query.source,
         )
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to re-favorite album: {e:?}")))?

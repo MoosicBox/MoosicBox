@@ -8,6 +8,7 @@ version = "0.1.0"
 moosicbox_config           = { path = "../config" }
 moosicbox_core             = { path = "../core", default-features = false }
 moosicbox_image            = { path = "../image", default-features = false }
+moosicbox_music_api        = { path = "../music_api" }
 moosicbox_qobuz            = { path = "../qobuz" }
 moosicbox_stream_utils     = { path = "../stream_utils" }
 moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false }

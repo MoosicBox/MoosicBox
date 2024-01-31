@@ -83,7 +83,8 @@ pub async fn get_track_source(track_id: i32, db: Db) -> Result<TrackSource, Trac
                 moosicbox_tidal::TidalAudioQuality::High,
                 track
                     .tidal_id
-                    .unwrap_or_else(|| panic!("Track {track_id} is missing tidal_id")),
+                    .unwrap_or_else(|| panic!("Track {track_id} is missing tidal_id"))
+                    .into(),
                 None,
             )
             .await?
@@ -96,7 +97,8 @@ pub async fn get_track_source(track_id: i32, db: Db) -> Result<TrackSource, Trac
                 &db,
                 track
                     .qobuz_id
-                    .unwrap_or_else(|| panic!("Track {track_id} is missing qobuz_id")),
+                    .unwrap_or_else(|| panic!("Track {track_id} is missing qobuz_id"))
+                    .into(),
                 moosicbox_qobuz::QobuzAudioQuality::Low,
                 None,
                 None,

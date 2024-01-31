@@ -97,6 +97,10 @@ jobs:
                       path: packages/menu
                       os: ubuntu-latest
 
+                    - name: music_api
+                      path: packages/music_api
+                      os: ubuntu-latest
+
                     - name: player
                       path: packages/player
                       os: ubuntu-latest

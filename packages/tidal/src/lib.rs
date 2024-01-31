@@ -5,13 +5,17 @@ pub mod api;
 #[cfg(feature = "db")]
 pub mod db;
 
-use std::fmt::Display;
-
 use async_recursion::async_recursion;
-use moosicbox_core::sqlite::models::AsModelResult;
-use moosicbox_json_utils::{
-    serde_json::{ToNestedValue, ToValue},
-    MissingValue, ParseError, ToValueType,
+use async_trait::async_trait;
+use moosicbox_core::sqlite::models::{
+    tidal::{TidalAlbum, TidalArtist, TidalTrack},
+    Album, Artist, AsModelResult, Track,
+};
+use moosicbox_json_utils::{serde_json::ToValue, ParseError};
+use moosicbox_music_api::{
+    AlbumError, AlbumOrder, AlbumOrderDirection, AlbumsError, ArtistError, ArtistOrder,
+    ArtistOrderDirection, ArtistsError, Id, MusicApi, PagingResponse, TrackError, TrackOrder,
+    TrackOrderDirection, TracksError,
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -25,192 +29,6 @@ use url::form_urlencoded;
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum TidalDeviceType {
     Browser,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct TidalAlbum {
-    pub id: u64,
-    pub artist: String,
-    pub artist_id: u64,
-    pub contains_cover: bool,
-    pub audio_quality: String,
-    pub copyright: Option<String>,
-    pub cover: Option<String>,
-    pub duration: u32,
-    pub explicit: bool,
-    pub number_of_tracks: u32,
-    pub popularity: u32,
-    pub release_date: Option<String>,
-    pub title: String,
-    pub media_metadata_tags: Vec<String>,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum TidalImageSize {
-    Max,       // 1280
-    Large,     // 640
-    Medium,    // 320
-    Small,     // 160
-    Thumbnail, // 80
-}
-
-impl From<TidalImageSize> for u16 {
-    fn from(value: TidalImageSize) -> Self {
-        match value {
-            TidalImageSize::Max => 1280,
-            TidalImageSize::Large => 640,
-            TidalImageSize::Medium => 320,
-            TidalImageSize::Small => 160,
-            TidalImageSize::Thumbnail => 80,
-        }
-    }
-}
-
-impl From<u16> for TidalImageSize {
-    fn from(value: u16) -> Self {
-        match value {
-            0..=80 => TidalImageSize::Thumbnail,
-            81..=160 => TidalImageSize::Small,
-            161..=320 => TidalImageSize::Medium,
-            321..=640 => TidalImageSize::Large,
-            _ => TidalImageSize::Max,
-        }
-    }
-}
-
-impl Display for TidalImageSize {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{}", Into::<u16>::into(*self)))
-    }
-}
-
-impl TidalAlbum {
-    pub fn cover_url(&self, size: TidalImageSize) -> Option<String> {
-        self.cover.as_ref().map(|cover| {
-            let cover_path = cover.replace('-', "/");
-            format!("https://resources.tidal.com/images/{cover_path}/{size}x{size}.jpg")
-        })
-    }
-}
-
-impl MissingValue<TidalAlbum> for &Value {}
-impl ToValueType<TidalAlbum> for &Value {
-    fn to_value_type(self) -> Result<TidalAlbum, ParseError> {
-        self.as_model()
-    }
-}
-
-impl AsModelResult<TidalAlbum, ParseError> for Value {
-    fn as_model(&self) -> Result<TidalAlbum, ParseError> {
-        Ok(TidalAlbum {
-            id: self.to_value("id")?,
-            artist: self.to_nested_value(&["artist", "name"])?,
-            artist_id: self.to_nested_value(&["artist", "id"])?,
-            contains_cover: true,
-            audio_quality: self.to_value("audioQuality")?,
-            copyright: self.to_value("copyright")?,
-            cover: self.to_value("cover")?,
-            duration: self.to_value("duration")?,
-            explicit: self.to_value("explicit")?,
-            number_of_tracks: self.to_value("numberOfTracks")?,
-            popularity: self.to_value("popularity")?,
-            release_date: self.to_value("releaseDate")?,
-            title: self.to_value("title")?,
-            media_metadata_tags: self.to_nested_value(&["mediaMetadata", "tags"])?,
-        })
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct TidalTrack {
-    pub id: u64,
-    pub track_number: u32,
-    pub artist_id: u64,
-    pub artist: String,
-    pub artist_cover: Option<String>,
-    pub album_id: u64,
-    pub album: String,
-    pub album_cover: Option<String>,
-    pub audio_quality: String,
-    pub copyright: Option<String>,
-    pub duration: u32,
-    pub explicit: bool,
-    pub isrc: String,
-    pub popularity: u32,
-    pub title: String,
-    pub media_metadata_tags: Vec<String>,
-}
-
-impl MissingValue<TidalTrack> for &Value {}
-impl ToValueType<TidalTrack> for &Value {
-    fn to_value_type(self) -> Result<TidalTrack, ParseError> {
-        self.as_model()
-    }
-}
-
-impl AsModelResult<TidalTrack, ParseError> for Value {
-    fn as_model(&self) -> Result<TidalTrack, ParseError> {
-        Ok(TidalTrack {
-            id: self.to_value("id")?,
-            track_number: self.to_value("trackNumber")?,
-            artist_id: self.to_nested_value(&["artist", "id"])?,
-            artist: self.to_nested_value(&["artist", "name"])?,
-            artist_cover: self.to_nested_value(&["artist", "picture"])?,
-            album_id: self.to_nested_value(&["album", "id"])?,
-            album: self.to_nested_value(&["album", "title"])?,
-            album_cover: self.to_nested_value(&["album", "cover"])?,
-            audio_quality: self.to_value("audioQuality")?,
-            copyright: self.to_value("copyright")?,
-            duration: self.to_value("duration")?,
-            explicit: self.to_value("explicit")?,
-            isrc: self.to_value("isrc")?,
-            popularity: self.to_value("popularity")?,
-            title: self.to_value("title")?,
-            media_metadata_tags: self.to_nested_value(&["mediaMetadata", "tags"])?,
-        })
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct TidalArtist {
-    pub id: u64,
-    pub picture: Option<String>,
-    pub contains_cover: bool,
-    pub popularity: u32,
-    pub name: String,
-}
-
-impl TidalArtist {
-    pub fn picture_url(&self, size: TidalImageSize) -> Option<String> {
-        self.picture.as_ref().map(|picture| {
-            let picture_path = picture.replace('-', "/");
-            format!("https://resources.tidal.com/images/{picture_path}/{size}x{size}.jpg")
-        })
-    }
-}
-
-impl MissingValue<TidalArtist> for &Value {}
-impl ToValueType<TidalArtist> for &Value {
-    fn to_value_type(self) -> Result<TidalArtist, ParseError> {
-        self.as_model()
-    }
-}
-
-impl AsModelResult<TidalArtist, ParseError> for Value {
-    fn as_model(&self) -> Result<TidalArtist, ParseError> {
-        let picture: Option<String> = self.to_value("picture")?;
-
-        Ok(TidalArtist {
-            id: self.to_value("id")?,
-            contains_cover: picture.is_some(),
-            picture,
-            popularity: self.to_value("popularity")?,
-            name: self.to_value("name")?,
-        })
-    }
 }
 
 trait ToUrl {
@@ -773,7 +591,10 @@ pub async fn favorite_artists(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<(Vec<TidalArtist>, u32), TidalFavoriteArtistsError> {
+) -> Result<PagingResponse<TidalArtist>, TidalFavoriteArtistsError> {
+    let offset = offset.unwrap_or(0);
+    let limit = limit.unwrap_or(100);
+
     #[cfg(feature = "db")]
     let user_id = user_id.or_else(|| {
         match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
@@ -788,8 +609,8 @@ pub async fn favorite_artists(
         FavoriteArtists,
         &[(":userId", &user_id.to_string())],
         &[
-            ("offset", &offset.unwrap_or(0).to_string()),
-            ("limit", &limit.unwrap_or(100).to_string()),
+            ("offset", &offset.to_string()),
+            ("limit", &limit.to_string()),
             ("order", order.unwrap_or(TidalArtistOrder::Date).as_ref()),
             (
                 "orderDirection",
@@ -824,9 +645,13 @@ pub async fn favorite_artists(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| TidalFavoriteArtistsError::RequestFailed(format!("{e:?}: {value:?}")))?;
 
-    let count = value.to_value("totalNumberOfItems")?;
+    let total = value.to_value("totalNumberOfItems")?;
 
-    Ok((items, count))
+    Ok(PagingResponse::WithTotal {
+        items,
+        offset,
+        total,
+    })
 }
 
 #[derive(Debug, Error)]
@@ -844,7 +669,7 @@ pub enum TidalAddFavoriteArtistError {
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_artist(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    artist_id: u64,
+    artist_id: Id,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -904,7 +729,7 @@ pub enum TidalRemoveFavoriteArtistError {
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_artist(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    artist_id: u64,
+    artist_id: Id,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -989,7 +814,10 @@ pub async fn favorite_albums(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<(Vec<TidalAlbum>, u32), TidalFavoriteAlbumsError> {
+) -> Result<PagingResponse<TidalAlbum>, TidalFavoriteAlbumsError> {
+    let offset = offset.unwrap_or(0);
+    let limit = limit.unwrap_or(100);
+
     #[cfg(feature = "db")]
     let user_id = user_id.or_else(|| {
         match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
@@ -1004,8 +832,8 @@ pub async fn favorite_albums(
         FavoriteAlbums,
         &[(":userId", &user_id.to_string())],
         &[
-            ("offset", &offset.unwrap_or(0).to_string()),
-            ("limit", &limit.unwrap_or(100).to_string()),
+            ("offset", &offset.to_string()),
+            ("limit", &limit.to_string()),
             ("order", order.unwrap_or(TidalAlbumOrder::Date).as_ref()),
             (
                 "orderDirection",
@@ -1040,9 +868,13 @@ pub async fn favorite_albums(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| TidalFavoriteAlbumsError::RequestFailed(format!("{e:?}: {value:?}")))?;
 
-    let count = value.to_value("totalNumberOfItems")?;
+    let total = value.to_value("totalNumberOfItems")?;
 
-    Ok((items, count))
+    Ok(PagingResponse::WithTotal {
+        items,
+        offset,
+        total,
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1077,9 +909,9 @@ pub async fn all_favorite_albums(
         )
         .await?;
 
-        all_albums.extend_from_slice(&albums.0);
+        all_albums.extend_from_slice(&albums);
 
-        if albums.0.is_empty() || all_albums.len() == (albums.1 as usize) {
+        if albums.is_empty() || all_albums.len() == (albums.has_more() as usize) {
             break;
         }
 
@@ -1104,7 +936,7 @@ pub enum TidalAddFavoriteAlbumError {
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_album(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    album_id: u64,
+    album_id: Id,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -1164,7 +996,7 @@ pub enum TidalRemoveFavoriteAlbumError {
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_album(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    album_id: u64,
+    album_id: Id,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -1249,7 +1081,10 @@ pub async fn favorite_tracks(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<(Vec<TidalTrack>, u32), TidalFavoriteTracksError> {
+) -> Result<PagingResponse<TidalTrack>, TidalFavoriteTracksError> {
+    let offset = offset.unwrap_or(0);
+    let limit = limit.unwrap_or(100);
+
     #[cfg(feature = "db")]
     let user_id = user_id.or_else(|| {
         match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
@@ -1264,8 +1099,8 @@ pub async fn favorite_tracks(
         FavoriteTracks,
         &[(":userId", &user_id.to_string())],
         &[
-            ("offset", &offset.unwrap_or(0).to_string()),
-            ("limit", &limit.unwrap_or(100).to_string()),
+            ("offset", &offset.to_string()),
+            ("limit", &limit.to_string()),
             ("order", order.unwrap_or(TidalTrackOrder::Date).as_ref()),
             (
                 "orderDirection",
@@ -1300,9 +1135,13 @@ pub async fn favorite_tracks(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| TidalFavoriteTracksError::RequestFailed(format!("{e:?}: {value:?}")))?;
 
-    let count = value.to_value("totalNumberOfItems")?;
+    let total = value.to_value("totalNumberOfItems")?;
 
-    Ok((items, count))
+    Ok(PagingResponse::WithTotal {
+        items,
+        offset,
+        total,
+    })
 }
 
 #[derive(Debug, Error)]
@@ -1320,7 +1159,7 @@ pub enum TidalAddFavoriteTrackError {
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_track(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    track_id: u64,
+    track_id: Id,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -1380,7 +1219,7 @@ pub enum TidalRemoveFavoriteTrackError {
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_track(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    track_id: u64,
+    track_id: Id,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -1448,7 +1287,7 @@ pub enum TidalAlbumType {
 #[allow(clippy::too_many_arguments)]
 pub async fn artist_albums(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    artist_id: u64,
+    artist_id: Id,
     offset: Option<u32>,
     limit: Option<u32>,
     album_type: Option<TidalAlbumType>,
@@ -1456,10 +1295,13 @@ pub async fn artist_albums(
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
-) -> Result<(Vec<TidalAlbum>, u32), TidalArtistAlbumsError> {
+) -> Result<PagingResponse<TidalAlbum>, TidalArtistAlbumsError> {
+    let offset = offset.unwrap_or(0);
+    let limit = limit.unwrap_or(100);
+
     let mut query: Vec<(&str, String)> = vec![
-        ("offset", offset.unwrap_or(0).to_string()),
-        ("limit", limit.unwrap_or(100).to_string()),
+        ("offset", offset.to_string()),
+        ("limit", limit.to_string()),
         ("countryCode", country_code.clone().unwrap_or("US".into())),
         ("locale", locale.clone().unwrap_or("en_US".into())),
         (
@@ -1503,9 +1345,13 @@ pub async fn artist_albums(
         .to_value::<Option<_>>("items")?
         .ok_or_else(|| TidalArtistAlbumsError::RequestFailed(format!("{value:?}")))?;
 
-    let count = value.to_value("totalNumberOfItems")?;
+    let total = value.to_value("totalNumberOfItems")?;
 
-    Ok((items, count))
+    Ok(PagingResponse::WithTotal {
+        items,
+        offset,
+        total,
+    })
 }
 
 #[derive(Debug, Error)]
@@ -1521,20 +1367,23 @@ pub enum TidalAlbumTracksError {
 #[allow(clippy::too_many_arguments)]
 pub async fn album_tracks(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    album_id: u64,
+    album_id: Id,
     offset: Option<u32>,
     limit: Option<u32>,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
-) -> Result<(Vec<TidalTrack>, u32), TidalAlbumTracksError> {
+) -> Result<PagingResponse<TidalTrack>, TidalAlbumTracksError> {
+    let offset = offset.unwrap_or(0);
+    let limit = limit.unwrap_or(100);
+
     let url = tidal_api_endpoint!(
         AlbumTracks,
         &[(":albumId", &album_id.to_string())],
         &[
-            ("offset", &offset.unwrap_or(0).to_string()),
-            ("limit", &limit.unwrap_or(100).to_string()),
+            ("offset", &offset.to_string()),
+            ("limit", &limit.to_string()),
             ("countryCode", &country_code.clone().unwrap_or("US".into())),
             ("locale", &locale.clone().unwrap_or("en_US".into())),
             (
@@ -1558,9 +1407,13 @@ pub async fn album_tracks(
         .to_value::<Option<_>>("items")?
         .ok_or_else(|| TidalAlbumTracksError::RequestFailed(format!("{value:?}")))?;
 
-    let count = value.to_value("totalNumberOfItems")?;
+    let total = value.to_value("totalNumberOfItems")?;
 
-    Ok((items, count))
+    Ok(PagingResponse::WithTotal {
+        items,
+        offset,
+        total,
+    })
 }
 
 #[derive(Debug, Error)]
@@ -1576,7 +1429,7 @@ pub enum TidalAlbumError {
 #[allow(clippy::too_many_arguments)]
 pub async fn album(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    album_id: u64,
+    album_id: Id,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -1617,7 +1470,7 @@ pub enum TidalArtistError {
 #[allow(clippy::too_many_arguments)]
 pub async fn artist(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    artist_id: u64,
+    artist_id: Id,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -1660,7 +1513,7 @@ pub enum TidalTrackError {
 #[allow(clippy::too_many_arguments)]
 pub async fn track(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    track_id: u64,
+    track_id: Id,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -1712,7 +1565,7 @@ pub enum TidalTrackFileUrlError {
 pub async fn track_file_url(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     audio_quality: TidalAudioQuality,
-    track_id: u64,
+    track_id: Id,
     access_token: Option<String>,
 ) -> Result<Vec<String>, TidalTrackFileUrlError> {
     let url = tidal_api_endpoint!(
@@ -1736,4 +1589,231 @@ pub async fn track_file_url(
     log::trace!("Received track file url response: {value:?}");
 
     Ok(value.to_value("urls")?)
+}
+
+impl From<ArtistOrder> for TidalArtistOrder {
+    fn from(value: ArtistOrder) -> Self {
+        match value {
+            ArtistOrder::DateAdded => TidalArtistOrder::Date,
+        }
+    }
+}
+
+impl From<ArtistOrderDirection> for TidalArtistOrderDirection {
+    fn from(value: ArtistOrderDirection) -> Self {
+        match value {
+            ArtistOrderDirection::Ascending => TidalArtistOrderDirection::Asc,
+            ArtistOrderDirection::Descending => TidalArtistOrderDirection::Desc,
+        }
+    }
+}
+
+impl From<AlbumOrder> for TidalAlbumOrder {
+    fn from(value: AlbumOrder) -> Self {
+        match value {
+            AlbumOrder::DateAdded => TidalAlbumOrder::Date,
+        }
+    }
+}
+
+impl From<AlbumOrderDirection> for TidalAlbumOrderDirection {
+    fn from(value: AlbumOrderDirection) -> Self {
+        match value {
+            AlbumOrderDirection::Ascending => TidalAlbumOrderDirection::Asc,
+            AlbumOrderDirection::Descending => TidalAlbumOrderDirection::Desc,
+        }
+    }
+}
+
+impl From<TrackOrder> for TidalTrackOrder {
+    fn from(value: TrackOrder) -> Self {
+        match value {
+            TrackOrder::DateAdded => TidalTrackOrder::Date,
+        }
+    }
+}
+
+impl From<TrackOrderDirection> for TidalTrackOrderDirection {
+    fn from(value: TrackOrderDirection) -> Self {
+        match value {
+            TrackOrderDirection::Ascending => TidalTrackOrderDirection::Asc,
+            TrackOrderDirection::Descending => TidalTrackOrderDirection::Desc,
+        }
+    }
+}
+
+impl From<TidalFavoriteArtistsError> for ArtistsError {
+    fn from(err: TidalFavoriteArtistsError) -> Self {
+        ArtistsError::Other(Box::new(err))
+    }
+}
+
+impl From<TidalArtistError> for ArtistError {
+    fn from(err: TidalArtistError) -> Self {
+        ArtistError::Other(Box::new(err))
+    }
+}
+
+impl From<TidalFavoriteAlbumsError> for AlbumsError {
+    fn from(err: TidalFavoriteAlbumsError) -> Self {
+        AlbumsError::Other(Box::new(err))
+    }
+}
+
+impl From<TidalAlbumError> for AlbumError {
+    fn from(err: TidalAlbumError) -> Self {
+        AlbumError::Other(Box::new(err))
+    }
+}
+
+impl From<TidalFavoriteTracksError> for TracksError {
+    fn from(err: TidalFavoriteTracksError) -> Self {
+        TracksError::Other(Box::new(err))
+    }
+}
+
+impl From<TidalTrackError> for TrackError {
+    fn from(err: TidalTrackError) -> Self {
+        TrackError::Other(Box::new(err))
+    }
+}
+
+pub struct TidalMusicApi {}
+
+#[async_trait]
+impl MusicApi for TidalMusicApi {
+    async fn artists(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        offset: Option<u32>,
+        limit: Option<u32>,
+        order: Option<ArtistOrder>,
+        order_direction: Option<ArtistOrderDirection>,
+    ) -> Result<PagingResponse<Artist>, ArtistsError> {
+        Ok(favorite_artists(
+            #[cfg(feature = "db")]
+            db,
+            offset,
+            limit,
+            order.map(|x| x.into()),
+            order_direction.map(|x| x.into()),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?
+        .map(|x| x.into()))
+    }
+
+    async fn artist(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        artist_id: Id,
+    ) -> Result<Option<Artist>, ArtistError> {
+        Ok(Some(
+            artist(
+                #[cfg(feature = "db")]
+                db,
+                artist_id,
+                None,
+                None,
+                None,
+                None,
+            )
+            .await?
+            .into(),
+        ))
+    }
+
+    async fn albums(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        offset: Option<u32>,
+        limit: Option<u32>,
+        order: Option<AlbumOrder>,
+        order_direction: Option<AlbumOrderDirection>,
+    ) -> Result<PagingResponse<Album>, AlbumsError> {
+        Ok(favorite_albums(
+            #[cfg(feature = "db")]
+            db,
+            offset,
+            limit,
+            order.map(|x| x.into()),
+            order_direction.map(|x| x.into()),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?
+        .map(|x| x.into()))
+    }
+
+    async fn album(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        album_id: Id,
+    ) -> Result<Option<Album>, AlbumError> {
+        Ok(Some(
+            album(
+                #[cfg(feature = "db")]
+                db,
+                album_id,
+                None,
+                None,
+                None,
+                None,
+            )
+            .await?
+            .into(),
+        ))
+    }
+
+    async fn tracks(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        offset: Option<u32>,
+        limit: Option<u32>,
+        order: Option<TrackOrder>,
+        order_direction: Option<TrackOrderDirection>,
+    ) -> Result<PagingResponse<Track>, TracksError> {
+        Ok(favorite_tracks(
+            #[cfg(feature = "db")]
+            db,
+            offset,
+            limit,
+            order.map(|x| x.into()),
+            order_direction.map(|x| x.into()),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?
+        .map(|x| x.into()))
+    }
+
+    async fn track(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        track_id: Id,
+    ) -> Result<Option<Track>, TrackError> {
+        Ok(Some(
+            track(
+                #[cfg(feature = "db")]
+                db,
+                track_id,
+                None,
+                None,
+                None,
+                None,
+            )
+            .await?
+            .into(),
+        ))
+    }
 }

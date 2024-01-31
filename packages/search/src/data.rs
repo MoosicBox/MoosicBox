@@ -4,7 +4,7 @@ use moosicbox_core::{
     app::DbConnection,
     sqlite::{
         db::DbError,
-        models::{Album, Artist, LibraryTrack},
+        models::{LibraryAlbum, LibraryArtist, LibraryTrack},
     },
 };
 use thiserror::Error;
@@ -15,7 +15,7 @@ pub trait AsDataValues {
     fn as_data_values<'a>(&self) -> Vec<(&'a str, DataValue)>;
 }
 
-impl AsDataValues for Artist {
+impl AsDataValues for LibraryArtist {
     fn as_data_values<'a>(&self) -> Vec<(&'a str, DataValue)> {
         vec![
             ("document_type", DataValue::String("artists".into())),
@@ -36,7 +36,7 @@ impl AsDataValues for Artist {
     }
 }
 
-impl AsDataValues for Album {
+impl AsDataValues for LibraryAlbum {
     fn as_data_values<'a>(&self) -> Vec<(&'a str, DataValue)> {
         let mut data = vec![
             ("document_type", DataValue::String("albums".into())),
@@ -149,13 +149,13 @@ pub trait AsDeleteTerm {
     fn as_delete_term<'a>(&self) -> (&'a str, DataValue);
 }
 
-impl AsDeleteTerm for Artist {
+impl AsDeleteTerm for LibraryArtist {
     fn as_delete_term<'a>(&self) -> (&'a str, DataValue) {
         ("artist_id", DataValue::Number(self.id as u64))
     }
 }
 
-impl AsDeleteTerm for Album {
+impl AsDeleteTerm for LibraryAlbum {
     fn as_delete_term<'a>(&self) -> (&'a str, DataValue) {
         ("album_id", DataValue::Number(self.id as u64))
     }

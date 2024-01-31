@@ -11,6 +11,7 @@ members = [
     "packages/image",
     "packages/json_utils",
     "packages/menu",
+    "packages/music_api",
     "packages/player",
     "packages/qobuz",
     "packages/scan",

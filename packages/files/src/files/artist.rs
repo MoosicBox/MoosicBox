@@ -5,11 +5,15 @@ use moosicbox_core::{
     app::Db,
     sqlite::{
         db::{get_artist, DbError, SqliteValue},
-        models::{Artist, ArtistId},
+        models::{
+            qobuz::{QobuzArtist, QobuzImageSize},
+            tidal::{TidalArtist, TidalImageSize},
+            ArtistId, LibraryArtist,
+        },
     },
 };
-use moosicbox_qobuz::{QobuzArtist, QobuzArtistError, QobuzImageSize};
-use moosicbox_tidal::{TidalArtist, TidalArtistError, TidalImageSize};
+use moosicbox_qobuz::QobuzArtistError;
+use moosicbox_tidal::TidalArtistError;
 use once_cell::sync::Lazy;
 use thiserror::Error;
 
@@ -107,7 +111,7 @@ fn copy_streaming_cover_to_local(
 ) -> Result<String, ArtistCoverError> {
     log::debug!("Updating Artist {artist_id} cover file to '{cover}'");
 
-    moosicbox_core::sqlite::db::update_and_get_row::<Artist>(
+    moosicbox_core::sqlite::db::update_and_get_row::<LibraryArtist>(
         &db.library.lock().as_ref().unwrap().inner,
         "artists",
         SqliteValue::Number(artist_id as i64),
@@ -169,18 +173,24 @@ pub async fn get_artist_cover(
             } else {
                 use moosicbox_tidal::AuthenticatedRequestError;
 
-                let artist =
-                    match moosicbox_tidal::artist(db, *tidal_artist_id, None, None, None, None)
-                        .await
-                    {
-                        Ok(album) => Ok(Some(album)),
-                        Err(err) => match err {
-                            TidalArtistError::AuthenticatedRequest(
-                                AuthenticatedRequestError::RequestFailed(404, _),
-                            ) => Ok(None),
-                            _ => Err(err),
-                        },
-                    }?;
+                let artist = match moosicbox_tidal::artist(
+                    db,
+                    tidal_artist_id.into(),
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .await
+                {
+                    Ok(album) => Ok(Some(album)),
+                    Err(err) => match err {
+                        TidalArtistError::AuthenticatedRequest(
+                            AuthenticatedRequestError::RequestFailed(404, _),
+                        ) => Ok(None),
+                        _ => Err(err),
+                    },
+                }?;
 
                 ARTIST_CACHE
                     .write()
@@ -220,15 +230,16 @@ pub async fn get_artist_cover(
             } else {
                 use moosicbox_qobuz::AuthenticatedRequestError;
 
-                let artist = match moosicbox_qobuz::artist(db, *qobuz_artist_id, None, None).await {
-                    Ok(album) => Ok(Some(album)),
-                    Err(err) => match err {
-                        QobuzArtistError::AuthenticatedRequest(
-                            AuthenticatedRequestError::RequestFailed(404, _),
-                        ) => Ok(None),
-                        _ => Err(err),
-                    },
-                }?;
+                let artist =
+                    match moosicbox_qobuz::artist(db, qobuz_artist_id.into(), None, None).await {
+                        Ok(album) => Ok(Some(album)),
+                        Err(err) => match err {
+                            QobuzArtistError::AuthenticatedRequest(
+                                AuthenticatedRequestError::RequestFailed(404, _),
+                            ) => Ok(None),
+                            _ => Err(err),
+                        },
+                    }?;
 
                 ARTIST_CACHE
                     .write()

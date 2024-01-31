@@ -15,8 +15,8 @@ use moosicbox_core::{
     sqlite::{
         db::{get_album_tracks, get_session_playlist, get_tracks, DbError},
         models::{
-            ApiSource, LibraryTrack, QobuzTrack, TidalTrack, ToApi, Track, TrackSource,
-            UpdateSession, UpdateSessionPlaylistTrack,
+            qobuz::QobuzTrack, tidal::TidalTrack, ApiSource, LibraryTrack, ToApi, Track,
+            TrackSource, UpdateSession, UpdateSessionPlaylistTrack,
         },
     },
     types::{AudioFormat, PlaybackQuality},
@@ -421,9 +421,11 @@ impl Player {
                         }
                         ApiSource::Tidal => TrackOrId::Track(Box::new(Track::Tidal(TidalTrack {
                             id: *track_id as u64,
+                            ..Default::default()
                         }))),
                         ApiSource::Qobuz => TrackOrId::Track(Box::new(Track::Qobuz(QobuzTrack {
                             id: *track_id as u64,
+                            ..Default::default()
                         }))),
                     },
                     TrackOrId::Track(track) => TrackOrId::Track(track.clone()),

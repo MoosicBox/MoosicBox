@@ -2,14 +2,17 @@ use std::sync::Arc;
 
 use moosicbox_core::{
     app::Db,
-    sqlite::{db::DbError, models::TrackSource},
+    sqlite::{
+        db::DbError,
+        models::{
+            tidal::{TidalAlbum, TidalImageSize, TidalTrack},
+            TrackSource,
+        },
+    },
     types::AudioFormat,
 };
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
-use moosicbox_tidal::{
-    TidalAlbum, TidalAlbumTracksError, TidalArtistError, TidalFavoriteAlbumsError, TidalImageSize,
-    TidalTrack,
-};
+use moosicbox_tidal::{TidalAlbumTracksError, TidalArtistError, TidalFavoriteAlbumsError};
 use thiserror::Error;
 use tokio::{select, sync::RwLock};
 use tokio_util::sync::CancellationToken;
@@ -59,12 +62,12 @@ pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
         select! {
             resp = albums_resp => {
                 match resp {
-                    Ok((tidal_albums, count)) => {
-                        let page_count = tidal_albums.len();
+                    Ok(page) => {
+                        let page_count = page.len();
 
-                        log::debug!("Fetched Tidal albums offset={offset} limit={limit}: page_count={page_count}, total_count={count}");
+                        log::debug!("Fetched Tidal albums offset={offset} limit={limit}: page_count={page_count}, total_count={}", page.total().unwrap());
 
-                        scan_albums(tidal_albums, count, db, output.clone(), Some(token.clone())).await?;
+                        scan_albums(&page, page.total().unwrap(), db, output.clone(), Some(token.clone())).await?;
 
                         if page_count < (limit as usize) {
                             break;
@@ -107,7 +110,7 @@ pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
 }
 
 pub async fn scan_albums(
-    albums: Vec<TidalAlbum>,
+    albums: &[TidalAlbum],
     total: u32,
     db: &Db,
     output: Arc<RwLock<ScanOutput>>,
@@ -157,7 +160,15 @@ pub async fn scan_albums(
                 let read_artist = { scan_artist.read().await.clone() };
 
                 if read_artist.cover.is_none() && !read_artist.searched_cover {
-                    match moosicbox_tidal::artist(db, album.artist_id, None, None, None, None).await
+                    match moosicbox_tidal::artist(
+                        db,
+                        album.artist_id.into(),
+                        None,
+                        None,
+                        None,
+                        None,
+                    )
+                    .await
                     {
                         Ok(artist) => {
                             if let Some(url) = artist.picture_url(TidalImageSize::Max) {
@@ -193,7 +204,7 @@ pub async fn scan_albums(
 
             let tracks_resp = moosicbox_tidal::album_tracks(
                 db,
-                album.id,
+                album.id.into(),
                 Some(offset),
                 Some(limit),
                 None,
@@ -205,14 +216,14 @@ pub async fn scan_albums(
             select! {
                 resp = tracks_resp => {
                     match resp {
-                        Ok((tidal_tracks, count)) => {
-                            let page_count = tidal_tracks.len();
+                        Ok(page) => {
+                            let page_count = page.len();
 
-                            log::debug!("Fetched Tidal tracks offset={offset} limit={limit}: page_count={page_count}, total_count={count}");
+                            log::debug!("Fetched Tidal tracks offset={offset} limit={limit}: page_count={page_count}, total_count={}", page.total().unwrap());
 
-                            scan_tracks(tidal_tracks, scan_album.clone()).await?;
+                            scan_tracks(&page, scan_album.clone()).await?;
 
-                            if page_count < (limit as usize) {
+                            if !page.has_more() {
                                 break;
                             }
 
@@ -236,7 +247,7 @@ pub async fn scan_albums(
 }
 
 pub async fn scan_tracks(
-    tracks: Vec<TidalTrack>,
+    tracks: &[TidalTrack],
     scan_album: Arc<RwLock<ScanAlbum>>,
 ) -> Result<(), ScanError> {
     log::debug!("Processing Tidal tracks count={}", tracks.len());
