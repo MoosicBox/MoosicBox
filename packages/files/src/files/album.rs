@@ -8,8 +8,8 @@ use moosicbox_core::{
         models::{Album, AlbumId},
     },
 };
-use moosicbox_qobuz::{QobuzAlbum, QobuzImageSize};
-use moosicbox_tidal::{TidalAlbum, TidalImageSize};
+use moosicbox_qobuz::{QobuzAlbum, QobuzAlbumError, QobuzImageSize};
+use moosicbox_tidal::{TidalAlbum, TidalAlbumError, TidalImageSize};
 use once_cell::sync::Lazy;
 use thiserror::Error;
 
@@ -186,7 +186,7 @@ pub async fn get_album_cover(
             return Err(AlbumCoverError::NotFound(album_id));
         }
         AlbumId::Tidal(tidal_album_id) => {
-            static ALBUM_CACHE: Lazy<RwLock<HashMap<u64, TidalAlbum>>> =
+            static ALBUM_CACHE: Lazy<RwLock<HashMap<u64, Option<TidalAlbum>>>> =
                 Lazy::new(|| RwLock::new(HashMap::new()));
 
             let album = if let Some(album) = {
@@ -195,15 +195,29 @@ pub async fn get_album_cover(
             } {
                 album
             } else {
+                use moosicbox_tidal::AuthenticatedRequestError;
+
                 let album =
-                    moosicbox_tidal::album(db, *tidal_album_id, None, None, None, None).await?;
+                    match moosicbox_tidal::album(db, *tidal_album_id, None, None, None, None).await
+                    {
+                        Ok(album) => Ok(Some(album)),
+                        Err(err) => match err {
+                            TidalAlbumError::AuthenticatedRequest(
+                                AuthenticatedRequestError::RequestFailed(404, _),
+                            ) => Ok(None),
+                            _ => Err(err),
+                        },
+                    }?;
+
                 ALBUM_CACHE
                     .write()
                     .as_mut()
                     .unwrap()
                     .insert(*tidal_album_id, album.clone());
+
                 album
-            };
+            }
+            .ok_or_else(|| AlbumCoverError::NotFound(album_id.clone()))?;
 
             let size = size
                 .map(|size| (size as u16).into())
@@ -224,7 +238,7 @@ pub async fn get_album_cover(
             .await?
         }
         AlbumId::Qobuz(qobuz_album_id) => {
-            static ALBUM_CACHE: Lazy<RwLock<HashMap<String, QobuzAlbum>>> =
+            static ALBUM_CACHE: Lazy<RwLock<HashMap<String, Option<QobuzAlbum>>>> =
                 Lazy::new(|| RwLock::new(HashMap::new()));
 
             let album = if let Some(album) = {
@@ -233,14 +247,26 @@ pub async fn get_album_cover(
             } {
                 album
             } else {
-                let album = moosicbox_qobuz::album(db, qobuz_album_id, None, None).await?;
+                use moosicbox_qobuz::AuthenticatedRequestError;
+                let album = match moosicbox_qobuz::album(db, qobuz_album_id, None, None).await {
+                    Ok(album) => Ok(Some(album)),
+                    Err(err) => match err {
+                        QobuzAlbumError::AuthenticatedRequest(
+                            AuthenticatedRequestError::RequestFailed(404, _),
+                        ) => Ok(None),
+                        _ => Err(err),
+                    },
+                }?;
+
                 ALBUM_CACHE
                     .write()
                     .as_mut()
                     .unwrap()
                     .insert(qobuz_album_id.to_string(), album.clone());
+
                 album
-            };
+            }
+            .ok_or_else(|| AlbumCoverError::NotFound(album_id.clone()))?;
 
             let size = size
                 .map(|size| (size as u16).into())
