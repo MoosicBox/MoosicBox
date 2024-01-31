@@ -204,6 +204,18 @@ pub enum ArtistError {
 }
 
 #[derive(Debug, Error)]
+pub enum AddArtistError {
+    #[error(transparent)]
+    Other(#[from] Box<dyn std::error::Error>),
+}
+
+#[derive(Debug, Error)]
+pub enum RemoveArtistError {
+    #[error(transparent)]
+    Other(#[from] Box<dyn std::error::Error>),
+}
+
+#[derive(Debug, Error)]
 pub enum AlbumsError {
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error>),
@@ -216,6 +228,18 @@ pub enum AlbumError {
 }
 
 #[derive(Debug, Error)]
+pub enum AddAlbumError {
+    #[error(transparent)]
+    Other(#[from] Box<dyn std::error::Error>),
+}
+
+#[derive(Debug, Error)]
+pub enum RemoveAlbumError {
+    #[error(transparent)]
+    Other(#[from] Box<dyn std::error::Error>),
+}
+
+#[derive(Debug, Error)]
 pub enum TracksError {
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error>),
@@ -223,6 +247,18 @@ pub enum TracksError {
 
 #[derive(Debug, Error)]
 pub enum TrackError {
+    #[error(transparent)]
+    Other(#[from] Box<dyn std::error::Error>),
+}
+
+#[derive(Debug, Error)]
+pub enum AddTrackError {
+    #[error(transparent)]
+    Other(#[from] Box<dyn std::error::Error>),
+}
+
+#[derive(Debug, Error)]
+pub enum RemoveTrackError {
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error>),
 }
@@ -309,6 +345,18 @@ pub trait MusicApi {
         artist_id: Id,
     ) -> Result<Option<Artist>, ArtistError>;
 
+    async fn add_artist(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        artist_id: Id,
+    ) -> Result<(), AddArtistError>;
+
+    async fn remove_artist(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        artist_id: Id,
+    ) -> Result<(), RemoveArtistError>;
+
     async fn albums(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
@@ -324,6 +372,18 @@ pub trait MusicApi {
         album_id: Id,
     ) -> Result<Option<Album>, AlbumError>;
 
+    async fn add_album(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        album_id: Id,
+    ) -> Result<(), AddAlbumError>;
+
+    async fn remove_album(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        album_id: Id,
+    ) -> Result<(), RemoveAlbumError>;
+
     async fn tracks(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
@@ -338,4 +398,16 @@ pub trait MusicApi {
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
         track_id: Id,
     ) -> Result<Option<Track>, TrackError>;
+
+    async fn add_track(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        track_id: Id,
+    ) -> Result<(), AddTrackError>;
+
+    async fn remove_track(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        track_id: Id,
+    ) -> Result<(), RemoveTrackError>;
 }

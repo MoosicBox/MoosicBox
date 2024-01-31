@@ -13,8 +13,9 @@ use moosicbox_core::sqlite::models::{
 };
 use moosicbox_json_utils::{serde_json::ToValue, ParseError};
 use moosicbox_music_api::{
-    AlbumError, AlbumOrder, AlbumOrderDirection, AlbumsError, ArtistError, ArtistOrder,
-    ArtistOrderDirection, ArtistsError, Id, MusicApi, PagingResponse, TrackError, TrackOrder,
+    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumOrder, AlbumOrderDirection,
+    AlbumsError, ArtistError, ArtistOrder, ArtistOrderDirection, ArtistsError, Id, MusicApi,
+    PagingResponse, RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackError, TrackOrder,
     TrackOrderDirection, TracksError,
 };
 use once_cell::sync::Lazy;
@@ -1654,6 +1655,18 @@ impl From<TidalArtistError> for ArtistError {
     }
 }
 
+impl From<TidalAddFavoriteArtistError> for AddArtistError {
+    fn from(err: TidalAddFavoriteArtistError) -> Self {
+        AddArtistError::Other(Box::new(err))
+    }
+}
+
+impl From<TidalRemoveFavoriteArtistError> for RemoveArtistError {
+    fn from(err: TidalRemoveFavoriteArtistError) -> Self {
+        RemoveArtistError::Other(Box::new(err))
+    }
+}
+
 impl From<TidalFavoriteAlbumsError> for AlbumsError {
     fn from(err: TidalFavoriteAlbumsError) -> Self {
         AlbumsError::Other(Box::new(err))
@@ -1666,6 +1679,18 @@ impl From<TidalAlbumError> for AlbumError {
     }
 }
 
+impl From<TidalAddFavoriteAlbumError> for AddAlbumError {
+    fn from(err: TidalAddFavoriteAlbumError) -> Self {
+        AddAlbumError::Other(Box::new(err))
+    }
+}
+
+impl From<TidalRemoveFavoriteAlbumError> for RemoveAlbumError {
+    fn from(err: TidalRemoveFavoriteAlbumError) -> Self {
+        RemoveAlbumError::Other(Box::new(err))
+    }
+}
+
 impl From<TidalFavoriteTracksError> for TracksError {
     fn from(err: TidalFavoriteTracksError) -> Self {
         TracksError::Other(Box::new(err))
@@ -1675,6 +1700,18 @@ impl From<TidalFavoriteTracksError> for TracksError {
 impl From<TidalTrackError> for TrackError {
     fn from(err: TidalTrackError) -> Self {
         TrackError::Other(Box::new(err))
+    }
+}
+
+impl From<TidalAddFavoriteTrackError> for AddTrackError {
+    fn from(err: TidalAddFavoriteTrackError) -> Self {
+        AddTrackError::Other(Box::new(err))
+    }
+}
+
+impl From<TidalRemoveFavoriteTrackError> for RemoveTrackError {
+    fn from(err: TidalRemoveFavoriteTrackError) -> Self {
+        RemoveTrackError::Other(Box::new(err))
     }
 }
 
@@ -1727,6 +1764,42 @@ impl MusicApi for TidalMusicApi {
         ))
     }
 
+    async fn add_artist(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        artist_id: Id,
+    ) -> Result<(), AddArtistError> {
+        Ok(add_favorite_artist(
+            #[cfg(feature = "db")]
+            db,
+            artist_id,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?)
+    }
+
+    async fn remove_artist(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        artist_id: Id,
+    ) -> Result<(), RemoveArtistError> {
+        Ok(remove_favorite_artist(
+            #[cfg(feature = "db")]
+            db,
+            artist_id,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?)
+    }
+
     async fn albums(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
@@ -1772,6 +1845,42 @@ impl MusicApi for TidalMusicApi {
         ))
     }
 
+    async fn add_album(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        album_id: Id,
+    ) -> Result<(), AddAlbumError> {
+        Ok(add_favorite_album(
+            #[cfg(feature = "db")]
+            db,
+            album_id,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?)
+    }
+
+    async fn remove_album(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        album_id: Id,
+    ) -> Result<(), RemoveAlbumError> {
+        Ok(remove_favorite_album(
+            #[cfg(feature = "db")]
+            db,
+            album_id,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?)
+    }
+
     async fn tracks(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
@@ -1815,5 +1924,41 @@ impl MusicApi for TidalMusicApi {
             .await?
             .into(),
         ))
+    }
+
+    async fn add_track(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        track_id: Id,
+    ) -> Result<(), AddTrackError> {
+        Ok(add_favorite_track(
+            #[cfg(feature = "db")]
+            db,
+            track_id,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?)
+    }
+
+    async fn remove_track(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        track_id: Id,
+    ) -> Result<(), RemoveTrackError> {
+        Ok(remove_favorite_track(
+            #[cfg(feature = "db")]
+            db,
+            track_id,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?)
     }
 }

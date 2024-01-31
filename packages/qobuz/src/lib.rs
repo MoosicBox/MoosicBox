@@ -19,8 +19,9 @@ use moosicbox_json_utils::{
     ParseError, ToValueType,
 };
 use moosicbox_music_api::{
-    AlbumError, AlbumOrder, AlbumOrderDirection, AlbumsError, ArtistError, ArtistOrder,
-    ArtistOrderDirection, ArtistsError, Id, MusicApi, PagingResponse, TrackError, TrackOrder,
+    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumOrder, AlbumOrderDirection,
+    AlbumsError, ArtistError, ArtistOrder, ArtistOrderDirection, ArtistsError, Id, MusicApi,
+    PagingResponse, RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackError, TrackOrder,
     TrackOrderDirection, TracksError,
 };
 use once_cell::sync::Lazy;
@@ -1540,6 +1541,18 @@ impl From<QobuzArtistError> for ArtistError {
     }
 }
 
+impl From<QobuzAddFavoriteArtistError> for AddArtistError {
+    fn from(err: QobuzAddFavoriteArtistError) -> Self {
+        AddArtistError::Other(Box::new(err))
+    }
+}
+
+impl From<QobuzRemoveFavoriteArtistError> for RemoveArtistError {
+    fn from(err: QobuzRemoveFavoriteArtistError) -> Self {
+        RemoveArtistError::Other(Box::new(err))
+    }
+}
+
 impl From<QobuzFavoriteAlbumsError> for AlbumsError {
     fn from(err: QobuzFavoriteAlbumsError) -> Self {
         AlbumsError::Other(Box::new(err))
@@ -1552,6 +1565,18 @@ impl From<QobuzAlbumError> for AlbumError {
     }
 }
 
+impl From<QobuzAddFavoriteAlbumError> for AddAlbumError {
+    fn from(err: QobuzAddFavoriteAlbumError) -> Self {
+        AddAlbumError::Other(Box::new(err))
+    }
+}
+
+impl From<QobuzRemoveFavoriteAlbumError> for RemoveAlbumError {
+    fn from(err: QobuzRemoveFavoriteAlbumError) -> Self {
+        RemoveAlbumError::Other(Box::new(err))
+    }
+}
+
 impl From<QobuzFavoriteTracksError> for TracksError {
     fn from(err: QobuzFavoriteTracksError) -> Self {
         TracksError::Other(Box::new(err))
@@ -1561,6 +1586,18 @@ impl From<QobuzFavoriteTracksError> for TracksError {
 impl From<QobuzTrackError> for TrackError {
     fn from(err: QobuzTrackError) -> Self {
         TrackError::Other(Box::new(err))
+    }
+}
+
+impl From<QobuzAddFavoriteTrackError> for AddTrackError {
+    fn from(err: QobuzAddFavoriteTrackError) -> Self {
+        AddTrackError::Other(Box::new(err))
+    }
+}
+
+impl From<QobuzRemoveFavoriteTrackError> for RemoveTrackError {
+    fn from(err: QobuzRemoveFavoriteTrackError) -> Self {
+        RemoveTrackError::Other(Box::new(err))
     }
 }
 
@@ -1606,6 +1643,36 @@ impl MusicApi for QobuzMusicApi {
         ))
     }
 
+    async fn add_artist(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        artist_id: Id,
+    ) -> Result<(), AddArtistError> {
+        Ok(add_favorite_artist(
+            #[cfg(feature = "db")]
+            db,
+            artist_id,
+            None,
+            None,
+        )
+        .await?)
+    }
+
+    async fn remove_artist(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        artist_id: Id,
+    ) -> Result<(), RemoveArtistError> {
+        Ok(remove_favorite_artist(
+            #[cfg(feature = "db")]
+            db,
+            artist_id,
+            None,
+            None,
+        )
+        .await?)
+    }
+
     async fn albums(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
@@ -1644,6 +1711,36 @@ impl MusicApi for QobuzMusicApi {
         ))
     }
 
+    async fn add_album(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        album_id: Id,
+    ) -> Result<(), AddAlbumError> {
+        Ok(add_favorite_album(
+            #[cfg(feature = "db")]
+            db,
+            album_id,
+            None,
+            None,
+        )
+        .await?)
+    }
+
+    async fn remove_album(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        album_id: Id,
+    ) -> Result<(), RemoveAlbumError> {
+        Ok(remove_favorite_album(
+            #[cfg(feature = "db")]
+            db,
+            album_id,
+            None,
+            None,
+        )
+        .await?)
+    }
+
     async fn tracks(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
@@ -1680,6 +1777,36 @@ impl MusicApi for QobuzMusicApi {
             .await?
             .into(),
         ))
+    }
+
+    async fn add_track(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        track_id: Id,
+    ) -> Result<(), AddTrackError> {
+        Ok(add_favorite_track(
+            #[cfg(feature = "db")]
+            db,
+            track_id,
+            None,
+            None,
+        )
+        .await?)
+    }
+
+    async fn remove_track(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        track_id: Id,
+    ) -> Result<(), RemoveTrackError> {
+        Ok(remove_favorite_track(
+            #[cfg(feature = "db")]
+            db,
+            track_id,
+            None,
+            None,
+        )
+        .await?)
     }
 }
 
