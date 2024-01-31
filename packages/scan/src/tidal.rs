@@ -160,7 +160,7 @@ pub async fn scan_albums(
                     match moosicbox_tidal::artist(db, album.artist_id, None, None, None, None).await
                     {
                         Ok(artist) => {
-                            if let Some(url) = artist.picture_url(750) {
+                            if let Some(url) = artist.picture_url(TidalImageSize::Max) {
                                 scan_artist.write().await.search_cover(url, "tidal").await?;
                             }
                         }

@@ -184,7 +184,7 @@ pub struct TidalArtist {
 }
 
 impl TidalArtist {
-    pub fn picture_url(&self, size: u16) -> Option<String> {
+    pub fn picture_url(&self, size: TidalImageSize) -> Option<String> {
         self.picture.as_ref().map(|picture| {
             let picture_path = picture.replace('-', "/");
             format!("https://resources.tidal.com/images/{picture_path}/{size}x{size}.jpg")
@@ -1551,6 +1551,8 @@ pub async fn album_tracks(
         access_token,
     )
     .await?;
+
+    log::trace!("Received album tracks response: {value:?}");
 
     let items = value
         .to_value::<Option<_>>("items")?

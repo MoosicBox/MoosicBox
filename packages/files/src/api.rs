@@ -351,9 +351,11 @@ pub async fn artist_source_artwork_endpoint(
 
     match get_artist_cover(
         artist_id,
-        data.db
+        &data
+            .db
             .clone()
             .ok_or(ErrorInternalServerError("No DB set"))?,
+        None,
     )
     .await?
     {
@@ -403,9 +405,11 @@ pub async fn artist_cover_endpoint(
 
     let ArtistCoverSource::LocalFilePath(path) = get_artist_cover(
         artist_id,
-        data.db
+        &data
+            .db
             .clone()
             .ok_or(ErrorInternalServerError("No DB set"))?,
+        Some(std::cmp::max(width, height)),
     )
     .await?;
 

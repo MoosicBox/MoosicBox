@@ -395,15 +395,7 @@ pub struct QobuzArtist {
 
 impl QobuzArtist {
     pub fn cover_url(&self) -> Option<String> {
-        self.image.clone().and_then(|image| {
-            image
-                .mega
-                .or(image.extralarge)
-                .or(image.large)
-                .or(image.medium)
-                .or(image.small)
-                .or(image.thumbnail)
-        })
+        self.image.clone().and_then(|image| image.cover_url())
     }
 }
 

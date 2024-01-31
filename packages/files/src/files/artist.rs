@@ -1,14 +1,15 @@
 use std::{collections::HashMap, path::Path, sync::RwLock};
 
+use async_recursion::async_recursion;
 use moosicbox_core::{
     app::Db,
     sqlite::{
-        db::{get_artist, DbError},
-        models::ArtistId,
+        db::{get_artist, DbError, SqliteValue},
+        models::{Artist, ArtistId},
     },
 };
-use moosicbox_qobuz::QobuzArtist;
-use moosicbox_tidal::TidalArtist;
+use moosicbox_qobuz::{QobuzArtist, QobuzArtistError, QobuzImageSize};
+use moosicbox_tidal::{TidalArtist, TidalArtistError, TidalImageSize};
 use once_cell::sync::Lazy;
 use thiserror::Error;
 
@@ -32,6 +33,7 @@ pub enum FetchArtistCoverError {
 
 async fn get_or_fetch_artist_cover_from_remote_url(
     url: &str,
+    size: &str,
     source: &str,
     artist_name: &str,
 ) -> Result<String, FetchArtistCoverError> {
@@ -42,7 +44,7 @@ async fn get_or_fetch_artist_cover_from_remote_url(
         .join(source)
         .join(sanitize_filename(artist_name));
 
-    let filename = "artist.jpg";
+    let filename = format!("artist_{size}.jpg");
     let file_path = path.join(filename);
 
     if Path::exists(&file_path) {
@@ -59,8 +61,30 @@ async fn get_or_fetch_artist_cover_from_remote_url(
 }
 
 #[derive(Debug, Error)]
+pub enum FetchLocalArtistCoverError {
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Db(#[from] DbError),
+    #[error("No Artist Cover")]
+    NoArtistCover,
+}
+
+fn fetch_local_artist_cover(cover: Option<String>) -> Result<String, FetchLocalArtistCoverError> {
+    let cover = cover.ok_or(FetchLocalArtistCoverError::NoArtistCover)?;
+
+    let cover_path = std::path::PathBuf::from(&cover);
+
+    if Path::exists(&cover_path) {
+        return Ok(cover_path.to_str().unwrap().to_string());
+    }
+
+    Err(FetchLocalArtistCoverError::NoArtistCover)
+}
+
+#[derive(Debug, Error)]
 pub enum ArtistCoverError {
-    #[error("Artist cover not found for album: {0:?}")]
+    #[error("Artist cover not found for artist: {0:?}")]
     NotFound(ArtistId),
     #[error("Invalid source")]
     InvalidSource,
@@ -76,19 +100,65 @@ pub enum ArtistCoverError {
     File(String, String),
 }
 
+fn copy_streaming_cover_to_local(
+    db: &Db,
+    artist_id: i32,
+    cover: String,
+) -> Result<String, ArtistCoverError> {
+    log::debug!("Updating Artist {artist_id} cover file to '{cover}'");
+
+    moosicbox_core::sqlite::db::update_and_get_row::<Artist>(
+        &db.library.lock().as_ref().unwrap().inner,
+        "artists",
+        SqliteValue::Number(artist_id as i64),
+        &[("cover", SqliteValue::String(cover.to_string()))],
+    )?;
+
+    Ok(cover)
+}
+
+#[async_recursion]
 pub async fn get_artist_cover(
     artist_id: ArtistId,
-    db: Db,
+    db: &Db,
+    size: Option<u32>,
 ) -> Result<ArtistCoverSource, ArtistCoverError> {
     let path = match &artist_id {
-        ArtistId::Library(library_artist_id) => get_artist(
-            &db.library.lock().as_ref().unwrap().inner,
-            *library_artist_id,
-        )?
-        .and_then(|artist| artist.cover)
-        .ok_or(ArtistCoverError::NotFound(artist_id.clone()))?,
+        ArtistId::Library(library_artist_id) => {
+            let artist = get_artist(
+                &db.library.lock().as_ref().unwrap().inner,
+                *library_artist_id,
+            )?
+            .ok_or(ArtistCoverError::NotFound(artist_id.clone()))?;
+
+            if let Ok(cover) = fetch_local_artist_cover(artist.cover) {
+                return Ok(ArtistCoverSource::LocalFilePath(cover));
+            }
+
+            if let Some(tidal_id) = artist.tidal_id {
+                if let Ok(ArtistCoverSource::LocalFilePath(cover)) =
+                    get_artist_cover(ArtistId::Tidal(tidal_id), db, None).await
+                {
+                    return Ok(ArtistCoverSource::LocalFilePath(
+                        copy_streaming_cover_to_local(db, artist.id, cover)?,
+                    ));
+                }
+            }
+
+            if let Some(qobuz_id) = artist.qobuz_id {
+                if let Ok(ArtistCoverSource::LocalFilePath(cover)) =
+                    get_artist_cover(ArtistId::Qobuz(qobuz_id), db, None).await
+                {
+                    return Ok(ArtistCoverSource::LocalFilePath(
+                        copy_streaming_cover_to_local(db, artist.id, cover)?,
+                    ));
+                }
+            }
+
+            return Err(ArtistCoverError::NotFound(artist_id));
+        }
         ArtistId::Tidal(tidal_artist_id) => {
-            static ARTIST_CACHE: Lazy<RwLock<HashMap<u64, TidalArtist>>> =
+            static ARTIST_CACHE: Lazy<RwLock<HashMap<u64, Option<TidalArtist>>>> =
                 Lazy::new(|| RwLock::new(HashMap::new()));
 
             let artist = if let Some(artist) = {
@@ -97,24 +167,49 @@ pub async fn get_artist_cover(
             } {
                 artist
             } else {
+                use moosicbox_tidal::AuthenticatedRequestError;
+
                 let artist =
-                    moosicbox_tidal::artist(&db, *tidal_artist_id, None, None, None, None).await?;
+                    match moosicbox_tidal::artist(db, *tidal_artist_id, None, None, None, None)
+                        .await
+                    {
+                        Ok(album) => Ok(Some(album)),
+                        Err(err) => match err {
+                            TidalArtistError::AuthenticatedRequest(
+                                AuthenticatedRequestError::RequestFailed(404, _),
+                            ) => Ok(None),
+                            _ => Err(err),
+                        },
+                    }?;
+
                 ARTIST_CACHE
                     .write()
                     .as_mut()
                     .unwrap()
                     .insert(*tidal_artist_id, artist.clone());
+
                 artist
-            };
+            }
+            .ok_or_else(|| ArtistCoverError::NotFound(artist_id.clone()))?;
+
+            let size = size
+                .map(|size| (size as u16).into())
+                .unwrap_or(TidalImageSize::Max);
 
             let cover = artist
-                .picture_url(750)
+                .picture_url(size)
                 .ok_or(ArtistCoverError::NotFound(artist_id.clone()))?;
 
-            get_or_fetch_artist_cover_from_remote_url(&cover, "tidal", &artist.name).await?
+            get_or_fetch_artist_cover_from_remote_url(
+                &cover,
+                &size.to_string(),
+                "tidal",
+                &artist.name,
+            )
+            .await?
         }
         ArtistId::Qobuz(qobuz_artist_id) => {
-            static ARTIST_CACHE: Lazy<RwLock<HashMap<u64, QobuzArtist>>> =
+            static ARTIST_CACHE: Lazy<RwLock<HashMap<u64, Option<QobuzArtist>>>> =
                 Lazy::new(|| RwLock::new(HashMap::new()));
 
             let artist = if let Some(artist) = {
@@ -123,20 +218,45 @@ pub async fn get_artist_cover(
             } {
                 artist
             } else {
-                let artist = moosicbox_qobuz::artist(&db, *qobuz_artist_id, None, None).await?;
+                use moosicbox_qobuz::AuthenticatedRequestError;
+
+                let artist = match moosicbox_qobuz::artist(db, *qobuz_artist_id, None, None).await {
+                    Ok(album) => Ok(Some(album)),
+                    Err(err) => match err {
+                        QobuzArtistError::AuthenticatedRequest(
+                            AuthenticatedRequestError::RequestFailed(404, _),
+                        ) => Ok(None),
+                        _ => Err(err),
+                    },
+                }?;
+
                 ARTIST_CACHE
                     .write()
                     .as_mut()
                     .unwrap()
                     .insert(*qobuz_artist_id, artist.clone());
+
                 artist
-            };
+            }
+            .ok_or_else(|| ArtistCoverError::NotFound(artist_id.clone()))?;
+
+            let size = size
+                .map(|size| (size as u16).into())
+                .unwrap_or(QobuzImageSize::Mega);
 
             let cover = artist
-                .cover_url()
+                .image
+                .as_ref()
+                .and_then(|image| image.cover_url_for_size(size))
                 .ok_or(ArtistCoverError::NotFound(artist_id.clone()))?;
 
-            get_or_fetch_artist_cover_from_remote_url(&cover, "qobuz", &artist.name).await?
+            get_or_fetch_artist_cover_from_remote_url(
+                &cover,
+                &size.to_string(),
+                "qobuz",
+                &artist.name,
+            )
+            .await?
         }
     };
 
