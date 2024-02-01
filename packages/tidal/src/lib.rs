@@ -1943,21 +1943,23 @@ impl MusicApi for TidalMusicApi {
         .map(|x| x.into()))
     }
 
+    #[cfg(not(feature = "db"))]
+    async fn library_album(
+        &self,
+        _album_id: &Id,
+    ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
+        Err(LibraryAlbumError::NoDb)
+    }
+
+    #[cfg(feature = "db")]
     async fn library_album(
         &self,
         album_id: &Id,
     ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
-        #[cfg(not(feature = "db"))]
-        {
-            Err(LibraryAlbumError::NoDb)
-        }
-        #[cfg(feature = "db")]
-        {
-            Ok(moosicbox_core::sqlite::db::get_tidal_album(
-                &self.db.library.lock().as_ref().unwrap().inner,
-                Into::<u64>::into(album_id) as i32,
-            )?)
-        }
+        Ok(moosicbox_core::sqlite::db::get_tidal_album(
+            &self.db.library.lock().as_ref().unwrap().inner,
+            Into::<u64>::into(album_id) as i32,
+        )?)
     }
 
     async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {

@@ -6,9 +6,8 @@ use std::{
 };
 
 use async_trait::async_trait;
-use moosicbox_core::sqlite::{
-    db::DbError,
-    models::{Album, AlbumId, ApiSource, Artist, ArtistId, LibraryAlbum, ToApi, Track},
+use moosicbox_core::sqlite::models::{
+    Album, AlbumId, ApiSource, Artist, ArtistId, LibraryAlbum, ToApi, Track,
 };
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
@@ -251,10 +250,12 @@ pub enum ArtistAlbumsError {
 
 #[derive(Debug, Error)]
 pub enum LibraryAlbumError {
+    #[cfg(not(feature = "db"))]
     #[error("No DB")]
     NoDb,
+    #[cfg(feature = "db")]
     #[error(transparent)]
-    Db(#[from] DbError),
+    Db(#[from] moosicbox_core::sqlite::db::DbError),
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error>),
 }

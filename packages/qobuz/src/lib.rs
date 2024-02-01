@@ -1759,21 +1759,23 @@ impl MusicApi for QobuzMusicApi {
         .map(|x: QobuzAlbum| x.into()))
     }
 
+    #[cfg(not(feature = "db"))]
+    async fn library_album(
+        &self,
+        _album_id: &Id,
+    ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
+        Err(LibraryAlbumError::NoDb)
+    }
+
+    #[cfg(feature = "db")]
     async fn library_album(
         &self,
         album_id: &Id,
     ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
-        #[cfg(not(feature = "db"))]
-        {
-            Err(LibraryAlbumError::NoDb)
-        }
-        #[cfg(feature = "db")]
-        {
-            Ok(moosicbox_core::sqlite::db::get_qobuz_album(
-                &self.db.library.lock().as_ref().unwrap().inner,
-                &Into::<String>::into(album_id),
-            )?)
-        }
+        Ok(moosicbox_core::sqlite::db::get_qobuz_album(
+            &self.db.library.lock().as_ref().unwrap().inner,
+            &Into::<String>::into(album_id),
+        )?)
     }
 
     async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
