@@ -2026,6 +2026,7 @@ impl MusicApi for TidalMusicApi {
                 .into_iter()
                 .map(|album_type| {
                     artist_albums(
+                        #[cfg(feature = "db")]
                         &self.db,
                         artist_id,
                         Some(offset),
