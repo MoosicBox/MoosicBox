@@ -139,7 +139,40 @@ pub struct PagingResponse<T, E> {
 }
 
 impl<T, E> PagingResponse<T, E> {
-    pub async fn fetch_rest(self) -> Result<Vec<Page<T>>, E> {
+    pub async fn rest_of_pages(self) -> Result<Vec<Page<T>>, E> {
+        let mut limit = self.limit();
+        let mut offset = self.offset() + limit;
+        let mut fetch = self.fetch;
+        let mut responses = vec![];
+
+        loop {
+            let response = fetch(offset, limit).await?;
+
+            let has_more = response.has_more();
+            limit = response.limit();
+            offset = response.offset() + limit;
+            fetch = response.fetch;
+
+            responses.push(response.page);
+
+            if !has_more {
+                break;
+            }
+        }
+
+        Ok(responses)
+    }
+
+    pub async fn rest_of_items(self) -> Result<Vec<T>, E> {
+        Ok(self
+            .rest_of_pages()
+            .await?
+            .into_iter()
+            .flat_map(|response| response.items())
+            .collect::<Vec<_>>())
+    }
+
+    pub async fn with_rest_of_pages(self) -> Result<Vec<Page<T>>, E> {
         let mut limit = self.limit();
         let mut offset = self.offset() + limit;
         let mut fetch = self.fetch;
@@ -163,9 +196,9 @@ impl<T, E> PagingResponse<T, E> {
         Ok(responses)
     }
 
-    pub async fn fetch_rest_items(self) -> Result<Vec<T>, E> {
+    pub async fn with_rest_of_items(self) -> Result<Vec<T>, E> {
         Ok(self
-            .fetch_rest()
+            .with_rest_of_pages()
             .await?
             .into_iter()
             .flat_map(|response| response.items())

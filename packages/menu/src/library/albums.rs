@@ -586,7 +586,7 @@ pub async fn refavorite_album(
     let favorite_albums = api
         .albums(None, None, None, None)
         .await?
-        .fetch_rest_items()
+        .with_rest_of_items()
         .await?;
 
     let album = favorite_albums
@@ -601,6 +601,8 @@ pub async fn refavorite_album(
 
     let new_album_id = api
         .artist_albums(&artist.id().into(), AlbumType::All, None, None, None, None)
+        .await?
+        .with_rest_of_items()
         .await?
         .iter()
         .find(|x| {
