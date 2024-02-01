@@ -1748,7 +1748,22 @@ impl From<TidalRemoveFavoriteTrackError> for RemoveTrackError {
     }
 }
 
-pub struct TidalMusicApi {}
+pub struct TidalMusicApi {
+    #[cfg(feature = "db")]
+    db: moosicbox_core::app::Db,
+}
+
+impl TidalMusicApi {
+    #[cfg(not(feature = "db"))]
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    #[cfg(feature = "db")]
+    pub fn new(db: moosicbox_core::app::Db) -> Self {
+        Self { db }
+    }
+}
 
 #[async_trait]
 impl MusicApi for TidalMusicApi {
@@ -1758,7 +1773,6 @@ impl MusicApi for TidalMusicApi {
 
     async fn artists(
         &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
         offset: Option<u32>,
         limit: Option<u32>,
         order: Option<ArtistOrder>,
@@ -1766,7 +1780,7 @@ impl MusicApi for TidalMusicApi {
     ) -> Result<PagingResponse<Artist>, ArtistsError> {
         Ok(favorite_artists(
             #[cfg(feature = "db")]
-            db,
+            &self.db,
             offset,
             limit,
             order.map(|x| x.into()),
@@ -1781,15 +1795,11 @@ impl MusicApi for TidalMusicApi {
         .map(|x| x.into()))
     }
 
-    async fn artist(
-        &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        artist_id: &Id,
-    ) -> Result<Option<Artist>, ArtistError> {
+    async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, ArtistError> {
         Ok(Some(
             artist(
                 #[cfg(feature = "db")]
-                db,
+                &self.db,
                 artist_id,
                 None,
                 None,
@@ -1801,14 +1811,10 @@ impl MusicApi for TidalMusicApi {
         ))
     }
 
-    async fn add_artist(
-        &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        artist_id: &Id,
-    ) -> Result<(), AddArtistError> {
+    async fn add_artist(&self, artist_id: &Id) -> Result<(), AddArtistError> {
         Ok(add_favorite_artist(
             #[cfg(feature = "db")]
-            db,
+            &self.db,
             artist_id,
             None,
             None,
@@ -1819,14 +1825,10 @@ impl MusicApi for TidalMusicApi {
         .await?)
     }
 
-    async fn remove_artist(
-        &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        artist_id: &Id,
-    ) -> Result<(), RemoveArtistError> {
+    async fn remove_artist(&self, artist_id: &Id) -> Result<(), RemoveArtistError> {
         Ok(remove_favorite_artist(
             #[cfg(feature = "db")]
-            db,
+            &self.db,
             artist_id,
             None,
             None,
@@ -1839,7 +1841,6 @@ impl MusicApi for TidalMusicApi {
 
     async fn albums(
         &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
         offset: Option<u32>,
         limit: Option<u32>,
         order: Option<AlbumOrder>,
@@ -1847,7 +1848,7 @@ impl MusicApi for TidalMusicApi {
     ) -> Result<PagingResponse<Album>, AlbumsError> {
         Ok(favorite_albums(
             #[cfg(feature = "db")]
-            db,
+            &self.db,
             offset,
             limit,
             order.map(|x| x.into()),
@@ -1862,15 +1863,11 @@ impl MusicApi for TidalMusicApi {
         .map(|x| x.into()))
     }
 
-    async fn album(
-        &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        album_id: &Id,
-    ) -> Result<Option<Album>, AlbumError> {
+    async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError> {
         Ok(Some(
             album(
                 #[cfg(feature = "db")]
-                db,
+                &self.db,
                 album_id,
                 None,
                 None,
@@ -1884,7 +1881,6 @@ impl MusicApi for TidalMusicApi {
 
     async fn artist_albums(
         &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
         artist_id: &Id,
         album_type: AlbumType,
         offset: Option<u32>,
@@ -1902,7 +1898,7 @@ impl MusicApi for TidalMusicApi {
                 .into_iter()
                 .map(|album_type| {
                     artist_albums(
-                        db,
+                        &self.db,
                         artist_id,
                         offset,
                         limit,
@@ -1933,7 +1929,7 @@ impl MusicApi for TidalMusicApi {
 
         Ok(artist_albums(
             #[cfg(feature = "db")]
-            db,
+            &self.db,
             artist_id,
             offset,
             limit,
@@ -1949,7 +1945,6 @@ impl MusicApi for TidalMusicApi {
 
     async fn library_album(
         &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
         album_id: &Id,
     ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
         #[cfg(not(feature = "db"))]
@@ -1959,20 +1954,16 @@ impl MusicApi for TidalMusicApi {
         #[cfg(feature = "db")]
         {
             Ok(moosicbox_core::sqlite::db::get_tidal_album(
-                &db.library.lock().as_ref().unwrap().inner,
+                &self.db.library.lock().as_ref().unwrap().inner,
                 Into::<u64>::into(album_id) as i32,
             )?)
         }
     }
 
-    async fn add_album(
-        &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        album_id: &Id,
-    ) -> Result<(), AddAlbumError> {
+    async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
         Ok(add_favorite_album(
             #[cfg(feature = "db")]
-            db,
+            &self.db,
             album_id,
             None,
             None,
@@ -1983,14 +1974,10 @@ impl MusicApi for TidalMusicApi {
         .await?)
     }
 
-    async fn remove_album(
-        &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        album_id: &Id,
-    ) -> Result<(), RemoveAlbumError> {
+    async fn remove_album(&self, album_id: &Id) -> Result<(), RemoveAlbumError> {
         Ok(remove_favorite_album(
             #[cfg(feature = "db")]
-            db,
+            &self.db,
             album_id,
             None,
             None,
@@ -2003,7 +1990,6 @@ impl MusicApi for TidalMusicApi {
 
     async fn tracks(
         &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
         offset: Option<u32>,
         limit: Option<u32>,
         order: Option<TrackOrder>,
@@ -2011,7 +1997,7 @@ impl MusicApi for TidalMusicApi {
     ) -> Result<PagingResponse<Track>, TracksError> {
         Ok(favorite_tracks(
             #[cfg(feature = "db")]
-            db,
+            &self.db,
             offset,
             limit,
             order.map(|x| x.into()),
@@ -2026,15 +2012,11 @@ impl MusicApi for TidalMusicApi {
         .map(|x| x.into()))
     }
 
-    async fn track(
-        &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        track_id: &Id,
-    ) -> Result<Option<Track>, TrackError> {
+    async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError> {
         Ok(Some(
             track(
                 #[cfg(feature = "db")]
-                db,
+                &self.db,
                 track_id,
                 None,
                 None,
@@ -2046,14 +2028,10 @@ impl MusicApi for TidalMusicApi {
         ))
     }
 
-    async fn add_track(
-        &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        track_id: &Id,
-    ) -> Result<(), AddTrackError> {
+    async fn add_track(&self, track_id: &Id) -> Result<(), AddTrackError> {
         Ok(add_favorite_track(
             #[cfg(feature = "db")]
-            db,
+            &self.db,
             track_id,
             None,
             None,
@@ -2064,14 +2042,10 @@ impl MusicApi for TidalMusicApi {
         .await?)
     }
 
-    async fn remove_track(
-        &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        track_id: &Id,
-    ) -> Result<(), RemoveTrackError> {
+    async fn remove_track(&self, track_id: &Id) -> Result<(), RemoveTrackError> {
         Ok(remove_favorite_track(
             #[cfg(feature = "db")]
-            db,
+            &self.db,
             track_id,
             None,
             None,

@@ -466,50 +466,31 @@ pub trait MusicApi {
 
     async fn artists(
         &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
         offset: Option<u32>,
         limit: Option<u32>,
         order: Option<ArtistOrder>,
         order_direction: Option<ArtistOrderDirection>,
     ) -> Result<PagingResponse<Artist>, ArtistsError>;
 
-    async fn artist(
-        &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        artist_id: &Id,
-    ) -> Result<Option<Artist>, ArtistError>;
+    async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, ArtistError>;
 
-    async fn add_artist(
-        &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        artist_id: &Id,
-    ) -> Result<(), AddArtistError>;
+    async fn add_artist(&self, artist_id: &Id) -> Result<(), AddArtistError>;
 
-    async fn remove_artist(
-        &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        artist_id: &Id,
-    ) -> Result<(), RemoveArtistError>;
+    async fn remove_artist(&self, artist_id: &Id) -> Result<(), RemoveArtistError>;
 
     async fn albums(
         &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
         offset: Option<u32>,
         limit: Option<u32>,
         order: Option<AlbumOrder>,
         order_direction: Option<AlbumOrderDirection>,
     ) -> Result<PagingResponse<Album>, AlbumsError>;
 
-    async fn album(
-        &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        album_id: &Id,
-    ) -> Result<Option<Album>, AlbumError>;
+    async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError>;
 
     #[allow(clippy::too_many_arguments)]
     async fn artist_albums(
         &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
         artist_id: &Id,
         album_type: AlbumType,
         offset: Option<u32>,
@@ -518,48 +499,24 @@ pub trait MusicApi {
         order_direction: Option<AlbumOrderDirection>,
     ) -> Result<PagingResponse<Album>, ArtistAlbumsError>;
 
-    async fn library_album(
-        &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        album_id: &Id,
-    ) -> Result<Option<LibraryAlbum>, LibraryAlbumError>;
+    async fn library_album(&self, album_id: &Id)
+        -> Result<Option<LibraryAlbum>, LibraryAlbumError>;
 
-    async fn add_album(
-        &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        album_id: &Id,
-    ) -> Result<(), AddAlbumError>;
+    async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError>;
 
-    async fn remove_album(
-        &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        album_id: &Id,
-    ) -> Result<(), RemoveAlbumError>;
+    async fn remove_album(&self, album_id: &Id) -> Result<(), RemoveAlbumError>;
 
     async fn tracks(
         &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
         offset: Option<u32>,
         limit: Option<u32>,
         order: Option<TrackOrder>,
         order_direction: Option<TrackOrderDirection>,
     ) -> Result<PagingResponse<Track>, TracksError>;
 
-    async fn track(
-        &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        track_id: &Id,
-    ) -> Result<Option<Track>, TrackError>;
+    async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError>;
 
-    async fn add_track(
-        &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        track_id: &Id,
-    ) -> Result<(), AddTrackError>;
+    async fn add_track(&self, track_id: &Id) -> Result<(), AddTrackError>;
 
-    async fn remove_track(
-        &self,
-        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        track_id: &Id,
-    ) -> Result<(), RemoveTrackError>;
+    async fn remove_track(&self, track_id: &Id) -> Result<(), RemoveTrackError>;
 }

@@ -19,13 +19,11 @@ use moosicbox_core::{
     types::AudioFormat,
 };
 use moosicbox_music_api::{AlbumType, Id, LibraryAlbumError, MusicApi};
-use moosicbox_qobuz::{QobuzAddFavoriteAlbumError, QobuzAlbumError};
 use moosicbox_scan::output::ScanOutput;
 use moosicbox_search::{
     data::{AsDataValues, AsDeleteTerm},
     DeleteFromIndexError, PopulateIndexError,
 };
-use moosicbox_tidal::TidalAddFavoriteAlbumError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -326,8 +324,6 @@ pub enum AddAlbumError {
     #[error(transparent)]
     GetAlbum(#[from] GetAlbumError),
     #[error(transparent)]
-    TidalAddFavoriteAlbum(#[from] TidalAddFavoriteAlbumError),
-    #[error(transparent)]
     LibraryAlbum(#[from] LibraryAlbumError),
     #[error(transparent)]
     Album(#[from] moosicbox_music_api::AlbumError),
@@ -335,10 +331,6 @@ pub enum AddAlbumError {
     AddAlbum(#[from] moosicbox_music_api::AddAlbumError),
     #[error(transparent)]
     TidalScan(#[from] moosicbox_scan::tidal::ScanError),
-    #[error(transparent)]
-    QobuzAddFavoriteAlbum(#[from] QobuzAddFavoriteAlbumError),
-    #[error(transparent)]
-    QobuzAlbum(#[from] QobuzAlbumError),
     #[error(transparent)]
     QobuzScan(#[from] moosicbox_scan::qobuz::ScanError),
     #[error(transparent)]
@@ -361,19 +353,16 @@ pub async fn add_album(
         api.source()
     );
 
-    if let Some(album) = api.library_album(db, album_id).await? {
+    if let Some(album) = api.library_album(album_id).await? {
         log::debug!("Album album_id={album_id:?} already added: album={album:?}");
         return Ok(album);
     }
 
     let output = Arc::new(RwLock::new(ScanOutput::new()));
 
-    let album = api
-        .album(db, album_id)
-        .await?
-        .ok_or(AddAlbumError::NoAlbum)?;
+    let album = api.album(album_id).await?.ok_or(AddAlbumError::NoAlbum)?;
 
-    api.add_album(db, album_id).await?;
+    api.add_album(album_id).await?;
 
     match album {
         Album::Tidal(album) => {
@@ -436,7 +425,7 @@ pub async fn add_album(
         return Ok(album);
     }
 
-    api.library_album(db, album_id)
+    api.library_album(album_id)
         .await?
         .ok_or(AddAlbumError::NoAlbum)
 }
@@ -472,11 +461,11 @@ pub async fn remove_album(
     );
 
     let mut album = api
-        .library_album(db, album_id)
+        .library_album(album_id)
         .await?
         .ok_or(RemoveAlbumError::NoAlbum)?;
 
-    api.remove_album(db, album_id).await?;
+    api.remove_album(album_id).await?;
 
     let tracks = moosicbox_core::sqlite::db::get_album_tracks(
         &db.library.lock().as_ref().unwrap().inner,
@@ -594,7 +583,7 @@ pub async fn refavorite_album(
         api.source()
     );
 
-    let favorite_albums = api.albums(db, None, None, None, None).await?;
+    let favorite_albums = api.albums(None, None, None, None).await?;
 
     let album = favorite_albums
         .iter()
@@ -602,20 +591,12 @@ pub async fn refavorite_album(
         .ok_or(ReFavoriteAlbumError::NoAlbum)?;
 
     let artist = api
-        .artist(db, &album.artist_id().into())
+        .artist(&album.artist_id().into())
         .await?
         .ok_or(ReFavoriteAlbumError::NoArtist)?;
 
     let new_album_id = api
-        .artist_albums(
-            db,
-            &artist.id().into(),
-            AlbumType::All,
-            None,
-            None,
-            None,
-            None,
-        )
+        .artist_albums(&artist.id().into(), AlbumType::All, None, None, None, None)
         .await?
         .iter()
         .find(|x| {

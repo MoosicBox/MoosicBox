@@ -7,10 +7,6 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
-use moosicbox_core::sqlite::{
-    menu::get_artist_albums,
-    models::{AlbumId, ApiSource},
-};
 use moosicbox_core::{
     app::AppState,
     sqlite::{
@@ -21,6 +17,13 @@ use moosicbox_core::{
         },
     },
     track_range::{parse_track_id_ranges, ParseTrackIdsError},
+};
+use moosicbox_core::{
+    app::Db,
+    sqlite::{
+        menu::get_artist_albums,
+        models::{AlbumId, ApiSource},
+    },
 };
 use moosicbox_music_api::MusicApi;
 use moosicbox_qobuz::QobuzMusicApi;
@@ -51,10 +54,10 @@ fn album_id_for_source(id: &str, source: ApiSource) -> Result<AlbumId, actix_web
     })
 }
 
-fn music_api_from_source(source: ApiSource) -> Box<dyn MusicApi> {
+fn music_api_from_source(db: Db, source: ApiSource) -> Box<dyn MusicApi> {
     match source {
-        ApiSource::Tidal => Box::new(TidalMusicApi {}),
-        ApiSource::Qobuz => Box::new(QobuzMusicApi {}),
+        ApiSource::Tidal => Box::new(TidalMusicApi::new(db)),
+        ApiSource::Qobuz => Box::new(QobuzMusicApi::new(db)),
         ApiSource::Library => unimplemented!(),
     }
 }
@@ -365,7 +368,7 @@ pub async fn add_album_endpoint(
         add_album(
             data.db.as_ref().expect("No DB set"),
             &album_id_for_source(&query.album_id, query.source)?.into(),
-            &*music_api_from_source(query.source),
+            &*music_api_from_source(data.db.clone().expect("No DB"), query.source),
         )
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to add album: {e:?}")))?
@@ -389,7 +392,7 @@ pub async fn remove_album_endpoint(
         remove_album(
             data.db.as_ref().expect("No DB set"),
             &album_id_for_source(&query.album_id, query.source)?.into(),
-            &*music_api_from_source(query.source),
+            &*music_api_from_source(data.db.clone().expect("No DB"), query.source),
         )
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to remove album: {e:?}")))?
@@ -413,7 +416,7 @@ pub async fn refavorite_album_endpoint(
         refavorite_album(
             data.db.as_ref().expect("No DB set"),
             &album_id_for_source(&query.album_id, query.source)?.into(),
-            &*music_api_from_source(query.source),
+            &*music_api_from_source(data.db.clone().expect("No DB"), query.source),
         )
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to re-favorite album: {e:?}")))?
