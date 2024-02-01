@@ -1,4 +1,4 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{fmt::Display, path::PathBuf, str::FromStr};
 
 use moosicbox_json_utils::{
     rusqlite::ToValue as RusqliteToValue, MissingValue, ParseError, ToValueType,
@@ -335,6 +335,24 @@ pub enum Artist {
     Qobuz(QobuzArtist),
 }
 
+impl Artist {
+    pub fn id(&self) -> ArtistId {
+        match self {
+            Artist::Library(value) => ArtistId::Library(value.id),
+            Artist::Tidal(value) => ArtistId::Tidal(value.id),
+            Artist::Qobuz(value) => ArtistId::Qobuz(value.id),
+        }
+    }
+
+    pub fn title(&self) -> String {
+        match self {
+            Artist::Library(value) => value.title.clone(),
+            Artist::Tidal(value) => value.name.clone(),
+            Artist::Qobuz(value) => value.name.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 pub struct LibraryArtist {
     pub id: i32,
@@ -477,6 +495,32 @@ pub enum Album {
     Library(LibraryAlbum),
     Tidal(TidalAlbum),
     Qobuz(QobuzAlbum),
+}
+
+impl Album {
+    pub fn id(&self) -> AlbumId {
+        match self {
+            Album::Library(value) => AlbumId::Library(value.id),
+            Album::Tidal(value) => AlbumId::Tidal(value.id),
+            Album::Qobuz(value) => AlbumId::Qobuz(value.id.clone()),
+        }
+    }
+
+    pub fn artist_id(&self) -> ArtistId {
+        match self {
+            Album::Library(value) => ArtistId::Library(value.artist_id),
+            Album::Tidal(value) => ArtistId::Tidal(value.artist_id),
+            Album::Qobuz(value) => ArtistId::Qobuz(value.artist_id),
+        }
+    }
+
+    pub fn title(&self) -> String {
+        match self {
+            Album::Library(value) => value.title.clone(),
+            Album::Tidal(value) => value.title.clone(),
+            Album::Qobuz(value) => value.title.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
@@ -849,6 +893,12 @@ pub enum ApiSource {
     Library,
     Tidal,
     Qobuz,
+}
+
+impl Display for ApiSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_ref())
+    }
 }
 
 impl MissingValue<ApiSource> for &Row<'_> {}

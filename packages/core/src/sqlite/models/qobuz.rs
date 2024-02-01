@@ -400,6 +400,26 @@ impl From<QobuzArtist> for Artist {
     }
 }
 
+impl From<QobuzRelease> for QobuzAlbum {
+    fn from(value: QobuzRelease) -> Self {
+        QobuzAlbum {
+            id: value.id,
+            artist: value.artist,
+            artist_id: value.artist_id,
+            maximum_bit_depth: value.maximum_bit_depth,
+            image: value.image,
+            title: value.title,
+            release_date_original: value.release_date_original,
+            duration: value.duration,
+            parental_warning: value.parental_warning,
+            tracks_count: value.tracks_count,
+            maximum_channel_count: value.maximum_bit_depth,
+            maximum_sampling_rate: value.maximum_sampling_rate,
+            ..Default::default()
+        }
+    }
+}
+
 impl From<QobuzAlbum> for Album {
     fn from(value: QobuzAlbum) -> Self {
         Album::Qobuz(value)

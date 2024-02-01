@@ -10,6 +10,7 @@ moosicbox_qobuz  = { path = "../qobuz", default-features = false }
 moosicbox_scan   = { path = "../scan", default-features = false }
 moosicbox_search = { path = "../search", default-features = false }
 moosicbox_tidal  = { path = "../tidal", default-features = false }
+moosicbox_music_api = { path = "../music_api", features = ["db"] }
 
 actix-cors  = { workspace = true }
 actix-files = { workspace = true }

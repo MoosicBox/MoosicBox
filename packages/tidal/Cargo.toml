@@ -19,6 +19,7 @@ rusqlite = { workspace = true, optional = true }
 
 async-recursion = { workspace = true }
 async-trait     = { workspace = true }
+futures         = { workspace = true }
 log             = { workspace = true }
 once_cell       = { workspace = true }
 open            = { workspace = true }

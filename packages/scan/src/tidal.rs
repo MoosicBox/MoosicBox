@@ -162,7 +162,7 @@ pub async fn scan_albums(
                 if read_artist.cover.is_none() && !read_artist.searched_cover {
                     match moosicbox_tidal::artist(
                         db,
-                        album.artist_id.into(),
+                        &album.artist_id.into(),
                         None,
                         None,
                         None,
@@ -202,9 +202,10 @@ pub async fn scan_albums(
                 album.id
             );
 
+            let album_id = &album.id.into();
             let tracks_resp = moosicbox_tidal::album_tracks(
                 db,
-                album.id.into(),
+                album_id,
                 Some(offset),
                 Some(limit),
                 None,

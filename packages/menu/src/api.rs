@@ -7,7 +7,10 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
-use moosicbox_core::sqlite::{menu::get_artist_albums, models::ApiSource};
+use moosicbox_core::sqlite::{
+    menu::get_artist_albums,
+    models::{AlbumId, ApiSource},
+};
 use moosicbox_core::{
     app::AppState,
     sqlite::{
@@ -19,6 +22,9 @@ use moosicbox_core::{
     },
     track_range::{parse_track_id_ranges, ParseTrackIdsError},
 };
+use moosicbox_music_api::MusicApi;
+use moosicbox_qobuz::QobuzMusicApi;
+use moosicbox_tidal::TidalMusicApi;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
@@ -30,6 +36,28 @@ use crate::library::{
     },
     artists::{get_all_artists, ArtistFilters, ArtistsRequest},
 };
+
+fn album_id_for_source(id: &str, source: ApiSource) -> Result<AlbumId, actix_web::Error> {
+    Ok(match source {
+        ApiSource::Tidal => AlbumId::Tidal(
+            id.parse::<u64>()
+                .map_err(|_| ErrorBadRequest(format!("Bad Tidal album_id {id}")))?,
+        ),
+        ApiSource::Qobuz => AlbumId::Qobuz(id.to_string()),
+        ApiSource::Library => AlbumId::Library(
+            id.parse::<i32>()
+                .map_err(|_| ErrorBadRequest(format!("Bad Tidal album_id {id}")))?,
+        ),
+    })
+}
+
+fn music_api_from_source(source: ApiSource) -> Box<dyn MusicApi> {
+    match source {
+        ApiSource::Tidal => Box::new(TidalMusicApi {}),
+        ApiSource::Qobuz => Box::new(QobuzMusicApi {}),
+        ApiSource::Library => unimplemented!(),
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum MenuError {
@@ -336,8 +364,8 @@ pub async fn add_album_endpoint(
     Ok(Json(
         add_album(
             data.db.as_ref().expect("No DB set"),
-            query.album_id.clone(),
-            query.source,
+            &album_id_for_source(&query.album_id, query.source)?.into(),
+            &*music_api_from_source(query.source),
         )
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to add album: {e:?}")))?
@@ -360,8 +388,8 @@ pub async fn remove_album_endpoint(
     Ok(Json(
         remove_album(
             data.db.as_ref().expect("No DB set"),
-            query.album_id.clone(),
-            query.source,
+            &album_id_for_source(&query.album_id, query.source)?.into(),
+            &*music_api_from_source(query.source),
         )
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to remove album: {e:?}")))?
@@ -384,8 +412,8 @@ pub async fn refavorite_album_endpoint(
     Ok(Json(
         refavorite_album(
             data.db.as_ref().expect("No DB set"),
-            query.album_id.clone(),
-            query.source,
+            &album_id_for_source(&query.album_id, query.source)?.into(),
+            &*music_api_from_source(query.source),
         )
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to re-favorite album: {e:?}")))?

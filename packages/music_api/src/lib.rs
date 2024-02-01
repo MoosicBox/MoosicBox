@@ -6,7 +6,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use moosicbox_core::sqlite::models::{Album, Artist, ToApi, Track};
+use moosicbox_core::sqlite::{
+    db::DbError,
+    models::{Album, AlbumId, ApiSource, Artist, ArtistId, LibraryAlbum, ToApi, Track},
+};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
@@ -54,6 +57,19 @@ pub enum TrackOrder {
 pub enum TrackOrderDirection {
     Ascending,
     Descending,
+}
+
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum AlbumType {
+    All,
+    Lp,
+    Live,
+    Compilations,
+    EpsAndSingles,
+    Other,
+    Download,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -228,6 +244,22 @@ pub enum AlbumError {
 }
 
 #[derive(Debug, Error)]
+pub enum ArtistAlbumsError {
+    #[error(transparent)]
+    Other(#[from] Box<dyn std::error::Error>),
+}
+
+#[derive(Debug, Error)]
+pub enum LibraryAlbumError {
+    #[error("No DB")]
+    NoDb,
+    #[error(transparent)]
+    Db(#[from] DbError),
+    #[error(transparent)]
+    Other(#[from] Box<dyn std::error::Error>),
+}
+
+#[derive(Debug, Error)]
 pub enum AddAlbumError {
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error>),
@@ -263,10 +295,80 @@ pub enum RemoveTrackError {
     Other(#[from] Box<dyn std::error::Error>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Id {
     String(String),
     Number(u64),
+}
+
+impl From<ArtistId> for Id {
+    fn from(value: ArtistId) -> Self {
+        match value {
+            ArtistId::Library(value) => Id::Number(value as u64),
+            ArtistId::Tidal(value) => Id::Number(value),
+            ArtistId::Qobuz(value) => Id::Number(value),
+        }
+    }
+}
+
+impl From<&ArtistId> for Id {
+    fn from(value: &ArtistId) -> Self {
+        match value {
+            ArtistId::Library(value) => Id::Number(*value as u64),
+            ArtistId::Tidal(value) => Id::Number(*value),
+            ArtistId::Qobuz(value) => Id::Number(*value),
+        }
+    }
+}
+
+impl From<AlbumId> for Id {
+    fn from(value: AlbumId) -> Self {
+        match value {
+            AlbumId::Library(value) => Id::Number(value as u64),
+            AlbumId::Tidal(value) => Id::Number(value),
+            AlbumId::Qobuz(value) => Id::String(value.clone()),
+        }
+    }
+}
+
+impl From<&AlbumId> for Id {
+    fn from(value: &AlbumId) -> Self {
+        match value {
+            AlbumId::Library(value) => Id::Number(*value as u64),
+            AlbumId::Tidal(value) => Id::Number(*value),
+            AlbumId::Qobuz(value) => Id::String(value.clone()),
+        }
+    }
+}
+
+impl From<Artist> for Id {
+    fn from(value: Artist) -> Self {
+        match value {
+            Artist::Library(value) => Id::Number(value.id as u64),
+            Artist::Tidal(value) => Id::Number(value.id),
+            Artist::Qobuz(value) => Id::Number(value.id),
+        }
+    }
+}
+
+impl From<Album> for Id {
+    fn from(value: Album) -> Self {
+        match value {
+            Album::Library(value) => Id::Number(value.id as u64),
+            Album::Tidal(value) => Id::Number(value.id),
+            Album::Qobuz(value) => Id::String(value.id),
+        }
+    }
+}
+
+impl From<Track> for Id {
+    fn from(value: Track) -> Self {
+        match value {
+            Track::Library(value) => Id::Number(value.id as u64),
+            Track::Tidal(value) => Id::Number(value.id),
+            Track::Qobuz(value) => Id::Number(value.id),
+        }
+    }
 }
 
 impl From<&String> for Id {
@@ -283,6 +385,26 @@ impl From<String> for Id {
 
 impl From<Id> for String {
     fn from(value: Id) -> Self {
+        if let Id::String(string) = value {
+            string
+        } else {
+            panic!("Not String Id type");
+        }
+    }
+}
+
+impl From<&Id> for String {
+    fn from(value: &Id) -> Self {
+        if let Id::String(string) = value {
+            string.to_string()
+        } else {
+            panic!("Not String Id type");
+        }
+    }
+}
+
+impl<'a> From<&'a Id> for &'a str {
+    fn from(value: &'a Id) -> Self {
         if let Id::String(string) = value {
             string
         } else {
@@ -313,6 +435,16 @@ impl From<Id> for u64 {
     }
 }
 
+impl From<&Id> for u64 {
+    fn from(value: &Id) -> Self {
+        if let Id::Number(number) = value {
+            *number
+        } else {
+            panic!("Not u64 Id type");
+        }
+    }
+}
+
 impl From<&u64> for Id {
     fn from(value: &u64) -> Self {
         Id::Number(*value)
@@ -330,6 +462,8 @@ impl Display for Id {
 
 #[async_trait]
 pub trait MusicApi {
+    fn source(&self) -> ApiSource;
+
     async fn artists(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
@@ -342,19 +476,19 @@ pub trait MusicApi {
     async fn artist(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        artist_id: Id,
+        artist_id: &Id,
     ) -> Result<Option<Artist>, ArtistError>;
 
     async fn add_artist(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        artist_id: Id,
+        artist_id: &Id,
     ) -> Result<(), AddArtistError>;
 
     async fn remove_artist(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        artist_id: Id,
+        artist_id: &Id,
     ) -> Result<(), RemoveArtistError>;
 
     async fn albums(
@@ -369,19 +503,37 @@ pub trait MusicApi {
     async fn album(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        album_id: Id,
+        album_id: &Id,
     ) -> Result<Option<Album>, AlbumError>;
+
+    #[allow(clippy::too_many_arguments)]
+    async fn artist_albums(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        artist_id: &Id,
+        album_type: AlbumType,
+        offset: Option<u32>,
+        limit: Option<u32>,
+        order: Option<AlbumOrder>,
+        order_direction: Option<AlbumOrderDirection>,
+    ) -> Result<PagingResponse<Album>, ArtistAlbumsError>;
+
+    async fn library_album(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        album_id: &Id,
+    ) -> Result<Option<LibraryAlbum>, LibraryAlbumError>;
 
     async fn add_album(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        album_id: Id,
+        album_id: &Id,
     ) -> Result<(), AddAlbumError>;
 
     async fn remove_album(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        album_id: Id,
+        album_id: &Id,
     ) -> Result<(), RemoveAlbumError>;
 
     async fn tracks(
@@ -396,18 +548,18 @@ pub trait MusicApi {
     async fn track(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        track_id: Id,
+        track_id: &Id,
     ) -> Result<Option<Track>, TrackError>;
 
     async fn add_track(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        track_id: Id,
+        track_id: &Id,
     ) -> Result<(), AddTrackError>;
 
     async fn remove_track(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        track_id: Id,
+        track_id: &Id,
     ) -> Result<(), RemoveTrackError>;
 }

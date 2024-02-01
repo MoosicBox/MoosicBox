@@ -9,14 +9,14 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 use moosicbox_core::sqlite::models::{
     tidal::{TidalAlbum, TidalArtist, TidalTrack},
-    Album, Artist, AsModelResult, Track,
+    Album, ApiSource, Artist, AsModelResult, LibraryAlbum, Track,
 };
 use moosicbox_json_utils::{serde_json::ToValue, ParseError};
 use moosicbox_music_api::{
     AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumOrder, AlbumOrderDirection,
-    AlbumsError, ArtistError, ArtistOrder, ArtistOrderDirection, ArtistsError, Id, MusicApi,
-    PagingResponse, RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackError, TrackOrder,
-    TrackOrderDirection, TracksError,
+    AlbumType, AlbumsError, ArtistAlbumsError, ArtistError, ArtistOrder, ArtistOrderDirection,
+    ArtistsError, Id, LibraryAlbumError, MusicApi, PagingResponse, RemoveAlbumError,
+    RemoveArtistError, RemoveTrackError, TrackError, TrackOrder, TrackOrderDirection, TracksError,
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -670,7 +670,7 @@ pub enum TidalAddFavoriteArtistError {
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_artist(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    artist_id: Id,
+    artist_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -730,7 +730,7 @@ pub enum TidalRemoveFavoriteArtistError {
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_artist(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    artist_id: Id,
+    artist_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -937,7 +937,7 @@ pub enum TidalAddFavoriteAlbumError {
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_album(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    album_id: Id,
+    album_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -997,7 +997,7 @@ pub enum TidalRemoveFavoriteAlbumError {
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_album(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    album_id: Id,
+    album_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -1160,7 +1160,7 @@ pub enum TidalAddFavoriteTrackError {
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_track(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    track_id: Id,
+    track_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -1220,7 +1220,7 @@ pub enum TidalRemoveFavoriteTrackError {
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_track(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    track_id: Id,
+    track_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -1280,6 +1280,7 @@ pub enum TidalArtistAlbumsError {
 #[serde(rename_all = "UPPERCASE")]
 #[strum(serialize_all = "UPPERCASE")]
 pub enum TidalAlbumType {
+    All,
     Lp,
     EpsAndSingles,
     Compilations,
@@ -1288,7 +1289,7 @@ pub enum TidalAlbumType {
 #[allow(clippy::too_many_arguments)]
 pub async fn artist_albums(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    artist_id: Id,
+    artist_id: &Id,
     offset: Option<u32>,
     limit: Option<u32>,
     album_type: Option<TidalAlbumType>,
@@ -1368,7 +1369,7 @@ pub enum TidalAlbumTracksError {
 #[allow(clippy::too_many_arguments)]
 pub async fn album_tracks(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    album_id: Id,
+    album_id: &Id,
     offset: Option<u32>,
     limit: Option<u32>,
     country_code: Option<String>,
@@ -1430,7 +1431,7 @@ pub enum TidalAlbumError {
 #[allow(clippy::too_many_arguments)]
 pub async fn album(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    album_id: Id,
+    album_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -1471,7 +1472,7 @@ pub enum TidalArtistError {
 #[allow(clippy::too_many_arguments)]
 pub async fn artist(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    artist_id: Id,
+    artist_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -1514,7 +1515,7 @@ pub enum TidalTrackError {
 #[allow(clippy::too_many_arguments)]
 pub async fn track(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-    track_id: Id,
+    track_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
@@ -1566,7 +1567,7 @@ pub enum TidalTrackFileUrlError {
 pub async fn track_file_url(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     audio_quality: TidalAudioQuality,
-    track_id: Id,
+    track_id: &Id,
     access_token: Option<String>,
 ) -> Result<Vec<String>, TidalTrackFileUrlError> {
     let url = tidal_api_endpoint!(
@@ -1643,6 +1644,26 @@ impl From<TrackOrderDirection> for TidalTrackOrderDirection {
     }
 }
 
+#[derive(Debug, Error)]
+pub enum TryFromAlbumTypeError {
+    #[error("Unsupported AlbumType")]
+    UnsupportedAlbumType,
+}
+
+impl TryFrom<AlbumType> for TidalAlbumType {
+    type Error = TryFromAlbumTypeError;
+
+    fn try_from(value: AlbumType) -> Result<Self, Self::Error> {
+        match value {
+            AlbumType::All => Ok(TidalAlbumType::All),
+            AlbumType::Lp => Ok(TidalAlbumType::Lp),
+            AlbumType::Compilations => Ok(TidalAlbumType::Compilations),
+            AlbumType::EpsAndSingles => Ok(TidalAlbumType::EpsAndSingles),
+            _ => Err(TryFromAlbumTypeError::UnsupportedAlbumType),
+        }
+    }
+}
+
 impl From<TidalFavoriteArtistsError> for ArtistsError {
     fn from(err: TidalFavoriteArtistsError) -> Self {
         ArtistsError::Other(Box::new(err))
@@ -1676,6 +1697,18 @@ impl From<TidalFavoriteAlbumsError> for AlbumsError {
 impl From<TidalAlbumError> for AlbumError {
     fn from(err: TidalAlbumError) -> Self {
         AlbumError::Other(Box::new(err))
+    }
+}
+
+impl From<TidalArtistAlbumsError> for ArtistAlbumsError {
+    fn from(err: TidalArtistAlbumsError) -> Self {
+        ArtistAlbumsError::Other(Box::new(err))
+    }
+}
+
+impl From<TryFromAlbumTypeError> for ArtistAlbumsError {
+    fn from(err: TryFromAlbumTypeError) -> Self {
+        ArtistAlbumsError::Other(Box::new(err))
     }
 }
 
@@ -1719,6 +1752,10 @@ pub struct TidalMusicApi {}
 
 #[async_trait]
 impl MusicApi for TidalMusicApi {
+    fn source(&self) -> ApiSource {
+        ApiSource::Tidal
+    }
+
     async fn artists(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
@@ -1747,7 +1784,7 @@ impl MusicApi for TidalMusicApi {
     async fn artist(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        artist_id: Id,
+        artist_id: &Id,
     ) -> Result<Option<Artist>, ArtistError> {
         Ok(Some(
             artist(
@@ -1767,7 +1804,7 @@ impl MusicApi for TidalMusicApi {
     async fn add_artist(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        artist_id: Id,
+        artist_id: &Id,
     ) -> Result<(), AddArtistError> {
         Ok(add_favorite_artist(
             #[cfg(feature = "db")]
@@ -1785,7 +1822,7 @@ impl MusicApi for TidalMusicApi {
     async fn remove_artist(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        artist_id: Id,
+        artist_id: &Id,
     ) -> Result<(), RemoveArtistError> {
         Ok(remove_favorite_artist(
             #[cfg(feature = "db")]
@@ -1828,7 +1865,7 @@ impl MusicApi for TidalMusicApi {
     async fn album(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        album_id: Id,
+        album_id: &Id,
     ) -> Result<Option<Album>, AlbumError> {
         Ok(Some(
             album(
@@ -1845,10 +1882,93 @@ impl MusicApi for TidalMusicApi {
         ))
     }
 
+    async fn artist_albums(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        artist_id: &Id,
+        album_type: AlbumType,
+        offset: Option<u32>,
+        limit: Option<u32>,
+        _order: Option<AlbumOrder>,
+        _order_direction: Option<AlbumOrderDirection>,
+    ) -> Result<PagingResponse<Album>, ArtistAlbumsError> {
+        if album_type == AlbumType::All {
+            let pages = futures::future::join_all(
+                vec![
+                    TidalAlbumType::Lp,
+                    TidalAlbumType::EpsAndSingles,
+                    TidalAlbumType::Compilations,
+                ]
+                .into_iter()
+                .map(|album_type| {
+                    artist_albums(
+                        db,
+                        artist_id,
+                        offset,
+                        limit,
+                        Some(album_type),
+                        None,
+                        None,
+                        None,
+                        None,
+                    )
+                }),
+            )
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
+
+            let total = pages.iter().map(|page| page.total().unwrap()).sum();
+
+            return Ok(PagingResponse::WithTotal {
+                items: pages
+                    .into_iter()
+                    .flat_map(|page| page.items())
+                    .collect::<Vec<_>>(),
+                offset: offset.unwrap_or(0),
+                total,
+            }
+            .map(|item| item.into()));
+        }
+
+        Ok(artist_albums(
+            #[cfg(feature = "db")]
+            db,
+            artist_id,
+            offset,
+            limit,
+            Some(album_type.try_into()?),
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?
+        .map(|x| x.into()))
+    }
+
+    async fn library_album(
+        &self,
+        #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+        album_id: &Id,
+    ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
+        #[cfg(not(feature = "db"))]
+        {
+            Err(LibraryAlbumError::NoDb)
+        }
+        #[cfg(feature = "db")]
+        {
+            Ok(moosicbox_core::sqlite::db::get_tidal_album(
+                &db.library.lock().as_ref().unwrap().inner,
+                Into::<u64>::into(album_id) as i32,
+            )?)
+        }
+    }
+
     async fn add_album(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        album_id: Id,
+        album_id: &Id,
     ) -> Result<(), AddAlbumError> {
         Ok(add_favorite_album(
             #[cfg(feature = "db")]
@@ -1866,7 +1986,7 @@ impl MusicApi for TidalMusicApi {
     async fn remove_album(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        album_id: Id,
+        album_id: &Id,
     ) -> Result<(), RemoveAlbumError> {
         Ok(remove_favorite_album(
             #[cfg(feature = "db")]
@@ -1909,7 +2029,7 @@ impl MusicApi for TidalMusicApi {
     async fn track(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        track_id: Id,
+        track_id: &Id,
     ) -> Result<Option<Track>, TrackError> {
         Ok(Some(
             track(
@@ -1929,7 +2049,7 @@ impl MusicApi for TidalMusicApi {
     async fn add_track(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        track_id: Id,
+        track_id: &Id,
     ) -> Result<(), AddTrackError> {
         Ok(add_favorite_track(
             #[cfg(feature = "db")]
@@ -1947,7 +2067,7 @@ impl MusicApi for TidalMusicApi {
     async fn remove_track(
         &self,
         #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
-        track_id: Id,
+        track_id: &Id,
     ) -> Result<(), RemoveTrackError> {
         Ok(remove_favorite_track(
             #[cfg(feature = "db")]

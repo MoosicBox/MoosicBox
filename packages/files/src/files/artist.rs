@@ -175,7 +175,7 @@ pub async fn get_artist_cover(
 
                 let artist = match moosicbox_tidal::artist(
                     db,
-                    tidal_artist_id.into(),
+                    &tidal_artist_id.into(),
                     None,
                     None,
                     None,
@@ -231,7 +231,7 @@ pub async fn get_artist_cover(
                 use moosicbox_qobuz::AuthenticatedRequestError;
 
                 let artist =
-                    match moosicbox_qobuz::artist(db, qobuz_artist_id.into(), None, None).await {
+                    match moosicbox_qobuz::artist(db, &qobuz_artist_id.into(), None, None).await {
                         Ok(album) => Ok(Some(album)),
                         Err(err) => match err {
                             QobuzArtistError::AuthenticatedRequest(

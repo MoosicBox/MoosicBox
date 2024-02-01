@@ -10,27 +10,22 @@ use moosicbox_core::{
             delete, delete_session_playlist_tracks_by_track_id, delete_track_sizes_by_track_id,
             delete_tracks, get_albums, update_and_get_row, DbError, SqliteValue,
         },
-        menu::{get_album, GetAlbumError},
+        menu::GetAlbumError,
         models::{
-            track_source_to_u8, AlbumSort, AlbumSource, ApiSource, ApiTrack, LibraryAlbum,
+            track_source_to_u8, Album, AlbumSort, AlbumSource, ApiSource, ApiTrack, LibraryAlbum,
             LibraryTrack, ToApi, TrackSource,
         },
     },
     types::AudioFormat,
 };
-use moosicbox_qobuz::{
-    QobuzAddFavoriteAlbumError, QobuzAlbumError, QobuzArtistAlbumsError, QobuzArtistError,
-    QobuzFavoriteAlbumsError, QobuzRemoveFavoriteAlbumError,
-};
+use moosicbox_music_api::{AlbumType, Id, LibraryAlbumError, MusicApi};
+use moosicbox_qobuz::{QobuzAddFavoriteAlbumError, QobuzAlbumError};
 use moosicbox_scan::output::ScanOutput;
 use moosicbox_search::{
     data::{AsDataValues, AsDeleteTerm},
     DeleteFromIndexError, PopulateIndexError,
 };
-use moosicbox_tidal::{
-    TidalAddFavoriteAlbumError, TidalAlbumError, TidalAlbumType, TidalArtistAlbumsError,
-    TidalArtistError, TidalFavoriteAlbumsError, TidalRemoveFavoriteAlbumError,
-};
+use moosicbox_tidal::TidalAddFavoriteAlbumError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -333,7 +328,11 @@ pub enum AddAlbumError {
     #[error(transparent)]
     TidalAddFavoriteAlbum(#[from] TidalAddFavoriteAlbumError),
     #[error(transparent)]
-    TidalAlbum(#[from] TidalAlbumError),
+    LibraryAlbum(#[from] LibraryAlbumError),
+    #[error(transparent)]
+    Album(#[from] moosicbox_music_api::AlbumError),
+    #[error(transparent)]
+    AddAlbum(#[from] moosicbox_music_api::AddAlbumError),
     #[error(transparent)]
     TidalScan(#[from] moosicbox_scan::tidal::ScanError),
     #[error(transparent)]
@@ -354,79 +353,36 @@ pub enum AddAlbumError {
 
 pub async fn add_album(
     db: &Db,
-    album_id: String,
-    source: ApiSource,
+    album_id: &Id,
+    api: &dyn MusicApi,
 ) -> Result<LibraryAlbum, AddAlbumError> {
-    log::debug!("Adding album to library album_id={album_id:?} source={source:?}");
+    log::debug!(
+        "Adding album to library album_id={album_id:?} source={}",
+        api.source()
+    );
 
-    let tidal_album_id = if source == ApiSource::Tidal {
-        Some(
-            album_id
-                .parse::<u64>()
-                .map_err(|_| AddAlbumError::InvalidAlbumIdType)?,
-        )
-    } else {
-        None
-    };
-    let qobuz_album_id = if source == ApiSource::Qobuz {
-        Some(album_id.clone())
-    } else {
-        None
-    };
-
-    let (tidal_id_already_exists, qobuz_id_already_exists, album) =
-        match get_album(None, tidal_album_id, qobuz_album_id.clone(), db).await {
-            Ok(album) => (
-                tidal_album_id
-                    .is_some_and(|id| album.tidal_id.is_some_and(|existing_id| existing_id == id)),
-                qobuz_album_id.as_ref().is_some_and(|id| {
-                    album
-                        .qobuz_id
-                        .as_ref()
-                        .is_some_and(|existing_id| *existing_id == *id)
-                }),
-                Some(album),
-            ),
-            Err(GetAlbumError::AlbumNotFound { .. }) => (false, false, None),
-            Err(err) => {
-                return Err(AddAlbumError::GetAlbum(err));
-            }
-        };
-
-    let (tidal_album_id, qobuz_album_id) = if let Some(album) = album {
-        if tidal_id_already_exists && qobuz_id_already_exists {
-            log::debug!("Album tidal_album_id={tidal_album_id:?} qobuz_album_id={qobuz_album_id:?} already added: album={album:?}");
-            return Ok(album);
-        }
-
-        let tidal_album_id = if tidal_id_already_exists {
-            None
-        } else {
-            tidal_album_id
-        };
-        let qobuz_album_id = if qobuz_id_already_exists {
-            None
-        } else {
-            qobuz_album_id
-        };
-
-        (tidal_album_id, qobuz_album_id)
-    } else {
-        (tidal_album_id, qobuz_album_id)
-    };
+    if let Some(album) = api.library_album(db, album_id).await? {
+        log::debug!("Album album_id={album_id:?} already added: album={album:?}");
+        return Ok(album);
+    }
 
     let output = Arc::new(RwLock::new(ScanOutput::new()));
 
-    if let Some(album_id) = tidal_album_id {
-        let album = moosicbox_tidal::album(db, album_id.into(), None, None, None, None).await?;
-        moosicbox_tidal::add_favorite_album(db, album_id.into(), None, None, None, None, None)
-            .await?;
-        moosicbox_scan::tidal::scan_albums(&[album], 1, db, output.clone(), None).await?;
-    }
-    if let Some(album_id) = &qobuz_album_id {
-        let album = moosicbox_qobuz::album(db, album_id.into(), None, None).await?;
-        moosicbox_qobuz::add_favorite_album(db, album_id.into(), None, None).await?;
-        moosicbox_scan::qobuz::scan_albums(&[album], 1, db, output.clone(), None).await?;
+    let album = api
+        .album(db, album_id)
+        .await?
+        .ok_or(AddAlbumError::NoAlbum)?;
+
+    api.add_album(db, album_id).await?;
+
+    match album {
+        Album::Tidal(album) => {
+            moosicbox_scan::tidal::scan_albums(&[album], 1, db, output.clone(), None).await?;
+        }
+        Album::Qobuz(album) => {
+            moosicbox_scan::qobuz::scan_albums(&[album], 1, db, output.clone(), None).await?;
+        }
+        _ => {}
     }
 
     let output = output.read().await;
@@ -455,6 +411,7 @@ pub async fn add_album(
         .filter_map(|album| album.ok())
         .map(|album| album.unwrap())
         .collect::<Vec<_>>();
+
     moosicbox_search::populate_global_search_index(
         albums
             .iter()
@@ -479,25 +436,9 @@ pub async fn add_album(
         return Ok(album);
     }
 
-    if let Some(tidal_album_id) = tidal_album_id {
-        if let Some(album) = moosicbox_core::sqlite::db::get_tidal_album(
-            &db.library.lock().as_ref().unwrap().inner,
-            tidal_album_id as i32,
-        )? {
-            return Ok(album);
-        }
-    }
-
-    if let Some(qobuz_album_id) = &qobuz_album_id {
-        if let Some(album) = moosicbox_core::sqlite::db::get_qobuz_album(
-            &db.library.lock().as_ref().unwrap().inner,
-            qobuz_album_id,
-        )? {
-            return Ok(album);
-        }
-    }
-
-    Err(AddAlbumError::NoAlbum)
+    api.library_album(db, album_id)
+        .await?
+        .ok_or(AddAlbumError::NoAlbum)
 }
 
 #[derive(Debug, Error)]
@@ -507,9 +448,11 @@ pub enum RemoveAlbumError {
     #[error(transparent)]
     GetAlbum(#[from] GetAlbumError),
     #[error(transparent)]
-    TidalRemoveFavoriteAlbum(#[from] TidalRemoveFavoriteAlbumError),
+    LibraryAlbum(#[from] LibraryAlbumError),
     #[error(transparent)]
-    QobuzRemoveFavoriteAlbum(#[from] QobuzRemoveFavoriteAlbumError),
+    Album(#[from] moosicbox_music_api::AlbumError),
+    #[error(transparent)]
+    RemoveAlbum(#[from] moosicbox_music_api::RemoveAlbumError),
     #[error(transparent)]
     DeleteFromIndex(#[from] DeleteFromIndexError),
     #[error("No album")]
@@ -520,44 +463,20 @@ pub enum RemoveAlbumError {
 
 pub async fn remove_album(
     db: &Db,
-    album_id: String,
-    source: ApiSource,
+    album_id: &Id,
+    api: &dyn MusicApi,
 ) -> Result<LibraryAlbum, RemoveAlbumError> {
-    log::debug!("Removing album from library album_id={album_id:?} source={source:?}");
+    log::debug!(
+        "Removing album from library album_id={album_id:?} source={}",
+        api.source()
+    );
 
-    let tidal_album_id = if source == ApiSource::Tidal {
-        Some(
-            album_id
-                .parse::<u64>()
-                .map_err(|_| RemoveAlbumError::InvalidAlbumIdType)?,
-        )
-    } else {
-        None
-    };
-    let qobuz_album_id = if source == ApiSource::Qobuz {
-        Some(album_id.clone())
-    } else {
-        None
-    };
+    let mut album = api
+        .library_album(db, album_id)
+        .await?
+        .ok_or(RemoveAlbumError::NoAlbum)?;
 
-    let mut album = match get_album(None, tidal_album_id, qobuz_album_id.clone(), db).await {
-        Ok(album) => album,
-        Err(GetAlbumError::AlbumNotFound { .. }) => {
-            log::debug!("Album tidal_album_id={tidal_album_id:?} qobuz_album_id={qobuz_album_id:?} already removed");
-            return Err(RemoveAlbumError::NoAlbum);
-        }
-        Err(err) => {
-            return Err(RemoveAlbumError::GetAlbum(err));
-        }
-    };
-
-    if let Some(album_id) = tidal_album_id {
-        moosicbox_tidal::remove_favorite_album(db, album_id.into(), None, None, None, None, None)
-            .await?;
-    }
-    if let Some(album_id) = &qobuz_album_id {
-        moosicbox_qobuz::remove_favorite_album(db, album_id.into(), None, None).await?;
-    }
+    api.remove_album(db, album_id).await?;
 
     let tracks = moosicbox_core::sqlite::db::get_album_tracks(
         &db.library.lock().as_ref().unwrap().inner,
@@ -571,8 +490,8 @@ pub async fn remove_album(
     let target_tracks = tracks
         .into_iter()
         .filter(|track| match track.source {
-            TrackSource::Tidal => tidal_album_id.is_some(),
-            TrackSource::Qobuz => qobuz_album_id.is_some(),
+            TrackSource::Tidal => album.tidal_id.is_some(),
+            TrackSource::Qobuz => album.qobuz_id.is_some(),
             _ => false,
         })
         .collect::<Vec<_>>();
@@ -589,13 +508,16 @@ pub async fn remove_album(
 
     let mut album_field_updates = vec![];
 
-    if tidal_album_id.is_some() {
-        album_field_updates.push(("tidal_id", SqliteValue::NumberOpt(None)));
-        album.tidal_id = None;
-    }
-    if qobuz_album_id.is_some() {
-        album_field_updates.push(("qobuz_id", SqliteValue::NumberOpt(None)));
-        album.qobuz_id = None;
+    match api.source() {
+        ApiSource::Tidal => {
+            album_field_updates.push(("tidal_id", SqliteValue::NumberOpt(None)));
+            album.tidal_id = None;
+        }
+        ApiSource::Qobuz => {
+            album_field_updates.push(("qobuz_id", SqliteValue::NumberOpt(None)));
+            album.qobuz_id = None;
+        }
+        _ => {}
     }
 
     if !album_field_updates.is_empty() {
@@ -617,8 +539,11 @@ pub async fn remove_album(
     )?;
 
     if has_local_tracks
-        || tidal_album_id.is_none() && album.tidal_id.is_some()
-        || qobuz_album_id.is_none() && album.qobuz_id.is_some()
+        || match api.source() {
+            ApiSource::Tidal => album.tidal_id.is_some(),
+            ApiSource::Qobuz => album.qobuz_id.is_some(),
+            _ => false,
+        }
     {
         return Ok(album);
     }
@@ -642,21 +567,17 @@ pub enum ReFavoriteAlbumError {
     #[error(transparent)]
     RemoveAlbum(#[from] RemoveAlbumError),
     #[error(transparent)]
-    TidalAlbum(#[from] TidalAlbumError),
+    Artist(#[from] moosicbox_music_api::ArtistError),
     #[error(transparent)]
-    TidalArtist(#[from] TidalArtistError),
+    LibraryAlbum(#[from] LibraryAlbumError),
     #[error(transparent)]
-    TidalArtistAlbums(#[from] TidalArtistAlbumsError),
+    Album(#[from] moosicbox_music_api::AlbumError),
     #[error(transparent)]
-    TidalFavoriteAlbums(#[from] TidalFavoriteAlbumsError),
+    Albums(#[from] moosicbox_music_api::AlbumsError),
     #[error(transparent)]
-    QobuzAlbum(#[from] QobuzAlbumError),
-    #[error(transparent)]
-    QobuzArtist(#[from] QobuzArtistError),
-    #[error(transparent)]
-    QobuzArtistAlbums(#[from] QobuzArtistAlbumsError),
-    #[error(transparent)]
-    QobuzFavoriteAlbums(#[from] QobuzFavoriteAlbumsError),
+    ArtistAlbums(#[from] moosicbox_music_api::ArtistAlbumsError),
+    #[error("No artist")]
+    NoArtist,
     #[error("No album")]
     NoAlbum,
     #[error("Invalid album_id type")]
@@ -665,111 +586,31 @@ pub enum ReFavoriteAlbumError {
 
 pub async fn refavorite_album(
     db: &Db,
-    album_id: String,
-    source: ApiSource,
+    album_id: &Id,
+    api: &dyn MusicApi,
 ) -> Result<LibraryAlbum, ReFavoriteAlbumError> {
-    log::debug!("Re-favoriting album from library album_id={album_id:?} source={source:?}");
+    log::debug!(
+        "Re-favoriting album from library album_id={album_id:?} source={}",
+        api.source()
+    );
 
-    let tidal_album_id = if source == ApiSource::Tidal {
-        Some(
-            album_id
-                .parse::<u64>()
-                .map_err(|_| ReFavoriteAlbumError::InvalidAlbumIdType)?,
-        )
-    } else {
-        None
-    };
-    let qobuz_album_id = if source == ApiSource::Qobuz {
-        Some(album_id.clone())
-    } else {
-        None
-    };
+    let favorite_albums = api.albums(db, None, None, None, None).await?;
 
-    let tidal = if let Some(album_id) = tidal_album_id {
-        let favorite_albums =
-            moosicbox_tidal::all_favorite_albums(db, None, None, None, None, None, None, None)
-                .await?;
-        let album = favorite_albums
-            .into_iter()
-            .find(|album| album.id == album_id)
-            .ok_or(ReFavoriteAlbumError::NoAlbum)?;
-        let artist =
-            moosicbox_tidal::artist(db, album.artist_id.into(), None, None, None, None).await?;
-        Some((artist, album))
-    } else {
-        None
-    };
-    let qobuz = if let Some(album_id) = &qobuz_album_id {
-        let favorite_albums = moosicbox_qobuz::all_favorite_albums(db, None, None).await?;
-        let album = favorite_albums
-            .into_iter()
-            .find(|album| album.id == *album_id)
-            .ok_or(ReFavoriteAlbumError::NoAlbum)?;
-        let artist = moosicbox_qobuz::artist(db, album.artist_id.into(), None, None).await?;
-        Some((artist, album))
-    } else {
-        None
-    };
+    let album = favorite_albums
+        .iter()
+        .find(|album| &Into::<Id>::into(album.id()) == album_id)
+        .ok_or(ReFavoriteAlbumError::NoAlbum)?;
 
-    let new_tidal_album_id = if let Some((artist, album)) = &tidal {
-        futures::future::join_all(vec![
-            moosicbox_tidal::artist_albums(
-                db,
-                artist.id.into(),
-                None,
-                None,
-                Some(TidalAlbumType::Lp),
-                None,
-                None,
-                None,
-                None,
-            ),
-            moosicbox_tidal::artist_albums(
-                db,
-                artist.id.into(),
-                None,
-                None,
-                Some(TidalAlbumType::EpsAndSingles),
-                None,
-                None,
-                None,
-                None,
-            ),
-            moosicbox_tidal::artist_albums(
-                db,
-                artist.id.into(),
-                None,
-                None,
-                Some(TidalAlbumType::Compilations),
-                None,
-                None,
-                None,
-                None,
-            ),
-        ])
-        .await
-        .into_iter()
-        .map(|res| res.map(|r| r.items()))
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .flatten()
-        .find(|x| {
-            x.artist_id == album.artist_id
-                && x.title.to_lowercase().trim() == album.title.to_lowercase().trim()
-        })
-        .map(|x| x.id)
-    } else {
-        None
-    };
+    let artist = api
+        .artist(db, &album.artist_id().into())
+        .await?
+        .ok_or(ReFavoriteAlbumError::NoArtist)?;
 
-    let new_qobuz_album_id = if let Some((artist, album)) = &qobuz {
-        moosicbox_qobuz::artist_albums(
+    let new_album_id = api
+        .artist_albums(
             db,
-            artist.id.into(),
-            None,
-            None,
-            None,
-            None,
+            &artist.id().into(),
+            AlbumType::All,
             None,
             None,
             None,
@@ -778,23 +619,22 @@ pub async fn refavorite_album(
         .await?
         .iter()
         .find(|x| {
-            x.artist_id == album.artist_id
-                && x.title.to_lowercase().trim() == album.title.to_lowercase().trim()
+            x.artist_id() == album.artist_id()
+                && x.title().to_lowercase().trim() == album.title().to_lowercase().trim()
         })
-        .map(|x| x.id.clone())
+        .map(|x| x.id());
+
+    let new_album_id = if let Some(album_id) = new_album_id {
+        album_id
     } else {
-        None
+        log::debug!("No corresponding album to re-favorite album_id={album_id}");
+        return Err(ReFavoriteAlbumError::NoAlbum);
     };
 
-    if new_tidal_album_id.is_none() && new_qobuz_album_id.is_none() {
-        log::debug!("No corresponding album to re-favorite tidal={tidal:?} qobuz={qobuz:?}");
-        return Err(ReFavoriteAlbumError::NoAlbum);
-    }
+    log::debug!("Re-favoriting with ids album_id={album_id} new_album_id={new_album_id:?}");
 
-    log::debug!("Re-favoriting with ids new_tidal_album_id={new_tidal_album_id:?} new_qobuz_album_id={new_qobuz_album_id:?}");
-
-    remove_album(db, album_id.clone(), source).await?;
-    let album = add_album(db, album_id, source).await?;
+    remove_album(db, album_id, api).await?;
+    let album = add_album(db, &new_album_id.into(), api).await?;
 
     Ok(album)
 }

@@ -221,7 +221,7 @@ pub async fn artist_endpoint(
     let artist = artist(
         #[cfg(feature = "db")]
         data.db.as_ref().expect("Db not set"),
-        query.artist_id.into(),
+        &query.artist_id.into(),
         req.headers()
             .get(QOBUZ_ACCESS_TOKEN_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
@@ -292,7 +292,7 @@ pub async fn album_endpoint(
     let album = album(
         #[cfg(feature = "db")]
         data.db.as_ref().expect("Db not set"),
-        query.album_id.clone().into(),
+        &query.album_id.clone().into(),
         req.headers()
             .get(QOBUZ_ACCESS_TOKEN_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
@@ -397,7 +397,7 @@ pub async fn artist_albums_endpoint(
         artist_albums(
             #[cfg(feature = "db")]
             data.db.as_ref().expect("Db not set"),
-            query.artist_id.into(),
+            &query.artist_id.into(),
             query.offset,
             query.limit,
             query.release_type.map(|x| x.into()),
@@ -477,7 +477,7 @@ pub async fn album_tracks_endpoint(
         album_tracks(
             #[cfg(feature = "db")]
             data.db.as_ref().expect("Db not set"),
-            query.album_id.clone().into(),
+            &query.album_id.clone().into(),
             query.offset,
             query.limit,
             req.headers()
@@ -513,7 +513,7 @@ pub async fn track_endpoint(
     let track = track(
         #[cfg(feature = "db")]
         data.db.as_ref().expect("Db not set"),
-        query.track_id.into(),
+        &query.track_id.into(),
         req.headers()
             .get(QOBUZ_ACCESS_TOKEN_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
@@ -586,7 +586,7 @@ pub async fn track_file_url_endpoint(
         "url": track_file_url(
             #[cfg(feature = "db")]
             data.db.as_ref().unwrap(),
-            query.track_id.into(),
+            &query.track_id.into(),
             query.audio_quality,
             req.headers()
                 .get(QOBUZ_ACCESS_TOKEN_HEADER)

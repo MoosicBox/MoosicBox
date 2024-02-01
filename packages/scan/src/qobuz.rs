@@ -151,7 +151,7 @@ pub async fn scan_albums(
                 let read_artist = { scan_artist.read().await.clone() };
 
                 if read_artist.cover.is_none() && !read_artist.searched_cover {
-                    match moosicbox_qobuz::artist(db, album.artist_id.into(), None, None).await {
+                    match moosicbox_qobuz::artist(db, &album.artist_id.into(), None, None).await {
                         Ok(artist) => {
                             if let Some(url) = artist.cover_url() {
                                 scan_artist.write().await.search_cover(url, "qobuz").await?;
@@ -180,14 +180,9 @@ pub async fn scan_albums(
                 album.id
             );
 
-            let tracks_resp = moosicbox_qobuz::album_tracks(
-                db,
-                album.id.clone().into(),
-                Some(offset),
-                Some(limit),
-                None,
-                None,
-            );
+            let album_id = &album.id.clone().into();
+            let tracks_resp =
+                moosicbox_qobuz::album_tracks(db, album_id, Some(offset), Some(limit), None, None);
 
             select! {
                 resp = tracks_resp => {

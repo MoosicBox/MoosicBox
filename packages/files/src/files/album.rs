@@ -201,18 +201,24 @@ pub async fn get_album_cover(
             } else {
                 use moosicbox_tidal::AuthenticatedRequestError;
 
-                let album =
-                    match moosicbox_tidal::album(db, tidal_album_id.into(), None, None, None, None)
-                        .await
-                    {
-                        Ok(album) => Ok(Some(album)),
-                        Err(err) => match err {
-                            TidalAlbumError::AuthenticatedRequest(
-                                AuthenticatedRequestError::RequestFailed(404, _),
-                            ) => Ok(None),
-                            _ => Err(err),
-                        },
-                    }?;
+                let album = match moosicbox_tidal::album(
+                    db,
+                    &tidal_album_id.into(),
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .await
+                {
+                    Ok(album) => Ok(Some(album)),
+                    Err(err) => match err {
+                        TidalAlbumError::AuthenticatedRequest(
+                            AuthenticatedRequestError::RequestFailed(404, _),
+                        ) => Ok(None),
+                        _ => Err(err),
+                    },
+                }?;
 
                 ALBUM_CACHE
                     .write()
@@ -254,7 +260,7 @@ pub async fn get_album_cover(
             } else {
                 use moosicbox_qobuz::AuthenticatedRequestError;
                 let album =
-                    match moosicbox_qobuz::album(db, qobuz_album_id.into(), None, None).await {
+                    match moosicbox_qobuz::album(db, &qobuz_album_id.into(), None, None).await {
                         Ok(album) => Ok(Some(album)),
                         Err(err) => match err {
                             QobuzAlbumError::AuthenticatedRequest(

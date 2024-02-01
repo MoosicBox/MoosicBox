@@ -81,7 +81,7 @@ pub async fn get_track_source(track_id: i32, db: Db) -> Result<TrackSource, Trac
             moosicbox_tidal::track_file_url(
                 &db,
                 moosicbox_tidal::TidalAudioQuality::High,
-                track
+                &track
                     .tidal_id
                     .unwrap_or_else(|| panic!("Track {track_id} is missing tidal_id"))
                     .into(),
@@ -95,7 +95,7 @@ pub async fn get_track_source(track_id: i32, db: Db) -> Result<TrackSource, Trac
         moosicbox_core::sqlite::models::TrackSource::Qobuz => Ok(TrackSource::Qobuz(
             moosicbox_qobuz::track_file_url(
                 &db,
-                track
+                &track
                     .qobuz_id
                     .unwrap_or_else(|| panic!("Track {track_id} is missing qobuz_id"))
                     .into(),

@@ -232,7 +232,7 @@ pub async fn track_file_url_endpoint(
             #[cfg(feature = "db")]
             data.db.as_ref().unwrap(),
             query.audio_quality,
-            query.track_id.into(),
+            &query.track_id.into(),
             req.headers()
                 .get(TIDAL_ACCESS_TOKEN_HEADER)
                 .map(|x| x.to_str().unwrap().to_string()),
@@ -314,7 +314,7 @@ pub async fn add_favorite_artist_endpoint(
     add_favorite_artist(
         #[cfg(feature = "db")]
         data.db.as_ref().unwrap(),
-        query.artist_id.into(),
+        &query.artist_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,
@@ -356,7 +356,7 @@ pub async fn remove_favorite_artist_endpoint(
     remove_favorite_artist(
         #[cfg(feature = "db")]
         data.db.as_ref().unwrap(),
-        query.artist_id.into(),
+        &query.artist_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,
@@ -445,7 +445,7 @@ pub async fn add_favorite_album_endpoint(
     add_favorite_album(
         #[cfg(feature = "db")]
         data.db.as_ref().unwrap(),
-        query.album_id.into(),
+        &query.album_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,
@@ -487,7 +487,7 @@ pub async fn remove_favorite_album_endpoint(
     remove_favorite_album(
         #[cfg(feature = "db")]
         data.db.as_ref().unwrap(),
-        query.album_id.into(),
+        &query.album_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,
@@ -529,7 +529,7 @@ pub async fn add_favorite_track_endpoint(
     add_favorite_track(
         #[cfg(feature = "db")]
         data.db.as_ref().unwrap(),
-        query.track_id.into(),
+        &query.track_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,
@@ -571,7 +571,7 @@ pub async fn remove_favorite_track_endpoint(
     remove_favorite_track(
         #[cfg(feature = "db")]
         data.db.as_ref().unwrap(),
-        query.track_id.into(),
+        &query.track_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,
@@ -682,7 +682,7 @@ pub async fn artist_albums_endpoint(
         artist_albums(
             #[cfg(feature = "db")]
             data.db.as_ref().unwrap(),
-            query.artist_id.into(),
+            &query.artist_id.into(),
             query.offset,
             query.limit,
             query.album_type.map(|t| t.into()),
@@ -726,7 +726,7 @@ pub async fn album_tracks_endpoint(
         album_tracks(
             #[cfg(feature = "db")]
             data.db.as_ref().expect("Db not set"),
-            query.album_id.into(),
+            &query.album_id.into(),
             query.offset,
             query.limit,
             query.country_code.clone(),
@@ -776,7 +776,7 @@ pub async fn album_endpoint(
     let album = album(
         #[cfg(feature = "db")]
         data.db.as_ref().unwrap(),
-        query.album_id.into(),
+        &query.album_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,
@@ -814,7 +814,7 @@ pub async fn artist_endpoint(
     let artist = artist(
         #[cfg(feature = "db")]
         data.db.as_ref().expect("Db not set"),
-        query.artist_id.into(),
+        &query.artist_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,
@@ -852,7 +852,7 @@ pub async fn track_endpoint(
     let track = track(
         #[cfg(feature = "db")]
         data.db.as_ref().unwrap(),
-        query.track_id.into(),
+        &query.track_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
         query.device_type,
