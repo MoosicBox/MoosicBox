@@ -5,7 +5,7 @@ use actix_web::{
     HttpRequest, Result,
 };
 use moosicbox_core::sqlite::models::ToApi;
-use moosicbox_music_api::PagingResponse;
+use moosicbox_music_api::Page;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
@@ -27,7 +27,7 @@ pub enum ApiAlbum {
 }
 
 impl ToApi<ApiAlbum> for QobuzAlbum {
-    fn to_api(&self) -> ApiAlbum {
+    fn to_api(self) -> ApiAlbum {
         ApiAlbum::Qobuz(ApiQobuzAlbum {
             id: self.id.clone(),
             artist: self.artist.clone(),
@@ -115,7 +115,7 @@ pub enum ApiRelease {
 }
 
 impl ToApi<ApiRelease> for QobuzRelease {
-    fn to_api(&self) -> ApiRelease {
+    fn to_api(self) -> ApiRelease {
         ApiRelease::Qobuz(ApiQobuzRelease {
             id: self.id.clone(),
             artist: self.artist.clone(),
@@ -138,7 +138,7 @@ pub enum ApiTrack {
 }
 
 impl ToApi<ApiTrack> for QobuzTrack {
-    fn to_api(&self) -> ApiTrack {
+    fn to_api(self) -> ApiTrack {
         ApiTrack::Qobuz(ApiQobuzTrack {
             id: self.id,
             number: self.track_number,
@@ -179,7 +179,7 @@ pub enum ApiArtist {
 }
 
 impl ToApi<ApiArtist> for QobuzArtist {
-    fn to_api(&self) -> ApiArtist {
+    fn to_api(self) -> ApiArtist {
         ApiArtist::Qobuz(ApiQobuzArtist {
             id: self.id,
             contains_cover: self.cover_url().is_some(),
@@ -252,7 +252,7 @@ pub async fn favorite_artists_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzFavoriteArtistsQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<PagingResponse<ApiArtist>>> {
+) -> Result<Json<Page<ApiArtist>>> {
     Ok(Json(
         favorite_artists(
             #[cfg(feature = "db")]
@@ -267,7 +267,8 @@ pub async fn favorite_artists_endpoint(
                 .map(|x| x.to_str().unwrap().to_string()),
         )
         .await?
-        .to_api(),
+        .to_api()
+        .into(),
     ))
 }
 
@@ -392,7 +393,7 @@ pub async fn artist_albums_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzArtistAlbumsQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<PagingResponse<ApiRelease>>> {
+) -> Result<Json<Page<ApiRelease>>> {
     Ok(Json(
         artist_albums(
             #[cfg(feature = "db")]
@@ -412,7 +413,8 @@ pub async fn artist_albums_endpoint(
                 .map(|x| x.to_str().unwrap().to_string()),
         )
         .await?
-        .to_api(),
+        .to_api()
+        .into(),
     ))
 }
 
@@ -434,7 +436,7 @@ pub async fn favorite_albums_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzFavoriteAlbumsQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<PagingResponse<ApiAlbum>>> {
+) -> Result<Json<Page<ApiAlbum>>> {
     Ok(Json(
         favorite_albums(
             #[cfg(feature = "db")]
@@ -449,7 +451,8 @@ pub async fn favorite_albums_endpoint(
                 .map(|x| x.to_str().unwrap().to_string()),
         )
         .await?
-        .to_api(),
+        .to_api()
+        .into(),
     ))
 }
 
@@ -472,7 +475,7 @@ pub async fn album_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzAlbumTracksQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<PagingResponse<ApiTrack>>> {
+) -> Result<Json<Page<ApiTrack>>> {
     Ok(Json(
         album_tracks(
             #[cfg(feature = "db")]
@@ -488,7 +491,8 @@ pub async fn album_tracks_endpoint(
                 .map(|x| x.to_str().unwrap().to_string()),
         )
         .await?
-        .to_api(),
+        .to_api()
+        .into(),
     ))
 }
 
@@ -544,7 +548,7 @@ pub async fn favorite_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzFavoriteTracksQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<PagingResponse<ApiTrack>>> {
+) -> Result<Json<Page<ApiTrack>>> {
     Ok(Json(
         favorite_tracks(
             #[cfg(feature = "db")]
@@ -559,7 +563,8 @@ pub async fn favorite_tracks_endpoint(
                 .map(|x| x.to_str().unwrap().to_string()),
         )
         .await?
-        .to_api(),
+        .to_api()
+        .into(),
     ))
 }
 

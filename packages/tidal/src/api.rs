@@ -5,7 +5,7 @@ use actix_web::{
     HttpRequest, Result,
 };
 use moosicbox_core::sqlite::models::ToApi;
-use moosicbox_music_api::PagingResponse;
+use moosicbox_music_api::Page;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
@@ -33,7 +33,7 @@ pub enum ApiAlbum {
 }
 
 impl ToApi<ApiAlbum> for TidalAlbum {
-    fn to_api(&self) -> ApiAlbum {
+    fn to_api(self) -> ApiAlbum {
         ApiAlbum::Tidal(ApiTidalAlbum {
             id: self.id,
             artist: self.artist.clone(),
@@ -78,7 +78,7 @@ pub enum ApiTrack {
 }
 
 impl ToApi<ApiTrack> for TidalTrack {
-    fn to_api(&self) -> ApiTrack {
+    fn to_api(self) -> ApiTrack {
         ApiTrack::Tidal(ApiTidalTrack {
             id: self.id,
             number: self.track_number,
@@ -127,7 +127,7 @@ pub enum ApiArtist {
 }
 
 impl ToApi<ApiArtist> for TidalArtist {
-    fn to_api(&self) -> ApiArtist {
+    fn to_api(self) -> ApiArtist {
         ApiArtist::Tidal(ApiTidalArtist {
             id: self.id,
             contains_cover: self.contains_cover,
@@ -266,7 +266,7 @@ pub async fn favorite_artists_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteArtistsQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<PagingResponse<ApiArtist>>> {
+) -> Result<Json<Page<ApiArtist>>> {
     Ok(Json(
         favorite_artists(
             #[cfg(feature = "db")]
@@ -284,7 +284,8 @@ pub async fn favorite_artists_endpoint(
             query.user_id,
         )
         .await?
-        .to_api(),
+        .to_api()
+        .into(),
     ))
 }
 
@@ -397,7 +398,7 @@ pub async fn favorite_albums_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteAlbumsQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<PagingResponse<ApiAlbum>>> {
+) -> Result<Json<Page<ApiAlbum>>> {
     Ok(Json(
         favorite_albums(
             #[cfg(feature = "db")]
@@ -415,7 +416,8 @@ pub async fn favorite_albums_endpoint(
             query.user_id,
         )
         .await?
-        .to_api(),
+        .to_api()
+        .into(),
     ))
 }
 
@@ -612,7 +614,7 @@ pub async fn favorite_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteTracksQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<PagingResponse<ApiTrack>>> {
+) -> Result<Json<Page<ApiTrack>>> {
     Ok(Json(
         favorite_tracks(
             #[cfg(feature = "db")]
@@ -630,7 +632,8 @@ pub async fn favorite_tracks_endpoint(
             query.user_id,
         )
         .await?
-        .to_api(),
+        .to_api()
+        .into(),
     ))
 }
 
@@ -677,7 +680,7 @@ pub async fn artist_albums_endpoint(
     req: HttpRequest,
     query: web::Query<TidalArtistAlbumsQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<PagingResponse<ApiAlbum>>> {
+) -> Result<Json<Page<ApiAlbum>>> {
     Ok(Json(
         artist_albums(
             #[cfg(feature = "db")]
@@ -694,7 +697,8 @@ pub async fn artist_albums_endpoint(
                 .map(|x| x.to_str().unwrap().to_string()),
         )
         .await?
-        .to_api(),
+        .to_api()
+        .into(),
     ))
 }
 
@@ -721,7 +725,7 @@ pub async fn album_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAlbumTracksQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<PagingResponse<ApiTrack>>> {
+) -> Result<Json<Page<ApiTrack>>> {
     Ok(Json(
         album_tracks(
             #[cfg(feature = "db")]
@@ -737,7 +741,8 @@ pub async fn album_tracks_endpoint(
                 .map(|x| x.to_str().unwrap().to_string()),
         )
         .await?
-        .to_api(),
+        .to_api()
+        .into(),
     ))
 }
 

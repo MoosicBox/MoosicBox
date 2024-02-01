@@ -143,7 +143,7 @@ pub struct ApiPlayback {
 }
 
 impl ToApi<ApiPlayback> for Playback {
-    fn to_api(&self) -> ApiPlayback {
+    fn to_api(self) -> ApiPlayback {
         ApiPlayback {
             track_ids: self.tracks.iter().map(|t| t.id()).collect(),
             playing: self.playing,

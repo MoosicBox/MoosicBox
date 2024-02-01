@@ -85,7 +85,16 @@ pub trait AsModelQuery<T> {
 }
 
 pub trait ToApi<T> {
-    fn to_api(&self) -> T;
+    fn to_api(self) -> T;
+}
+
+impl<'a, T, X> ToApi<T> for &'a X
+where
+    X: ToApi<T> + Clone,
+{
+    fn to_api(self) -> T {
+        self.clone().to_api()
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
@@ -292,7 +301,7 @@ pub struct ApiLibraryTrack {
 }
 
 impl ToApi<ApiTrack> for LibraryTrack {
-    fn to_api(&self) -> ApiTrack {
+    fn to_api(self) -> ApiTrack {
         ApiTrack::Library(ApiLibraryTrack {
             track_id: self.id,
             number: self.number,
@@ -422,7 +431,7 @@ pub enum ApiArtist {
 }
 
 impl ToApi<ApiArtist> for LibraryArtist {
-    fn to_api(&self) -> ApiArtist {
+    fn to_api(self) -> ApiArtist {
         ApiArtist::Library(ApiLibraryArtist {
             artist_id: self.id,
             title: self.title.clone(),
@@ -443,7 +452,7 @@ pub struct AlbumVersionQuality {
 }
 
 impl ToApi<ApiAlbumVersionQuality> for AlbumVersionQuality {
-    fn to_api(&self) -> ApiAlbumVersionQuality {
+    fn to_api(self) -> ApiAlbumVersionQuality {
         ApiAlbumVersionQuality {
             format: self.format,
             bit_depth: self.bit_depth,
@@ -755,7 +764,7 @@ pub struct ApiLibraryAlbum {
 }
 
 impl ToApi<ApiAlbum> for LibraryAlbum {
-    fn to_api(&self) -> ApiAlbum {
+    fn to_api(self) -> ApiAlbum {
         ApiAlbum::Library(ApiLibraryAlbum {
             album_id: self.id,
             title: self.title.clone(),
@@ -870,7 +879,7 @@ pub struct UpdateSession {
 }
 
 impl ToApi<ApiUpdateSession> for UpdateSession {
-    fn to_api(&self) -> ApiUpdateSession {
+    fn to_api(self) -> ApiUpdateSession {
         ApiUpdateSession {
             session_id: self.session_id,
             play: self.play,
@@ -940,7 +949,7 @@ impl From<UpdateSessionPlaylistTrack> for SessionPlaylistTrack {
 }
 
 impl ToApi<ApiTrack> for SessionPlaylistTrack {
-    fn to_api(&self) -> ApiTrack {
+    fn to_api(self) -> ApiTrack {
         match self.r#type {
             ApiSource::Library => ApiTrack::Library(ApiLibraryTrack {
                 track_id: self.id as i32,
@@ -980,7 +989,7 @@ pub struct ApiUpdateSessionPlaylistTrack {
 }
 
 impl ToApi<ApiUpdateSessionPlaylistTrack> for UpdateSessionPlaylistTrack {
-    fn to_api(&self) -> ApiUpdateSessionPlaylistTrack {
+    fn to_api(self) -> ApiUpdateSessionPlaylistTrack {
         ApiUpdateSessionPlaylistTrack {
             id: self.id,
             r#type: self.r#type,
@@ -990,7 +999,7 @@ impl ToApi<ApiUpdateSessionPlaylistTrack> for UpdateSessionPlaylistTrack {
 }
 
 impl ToApi<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
-    fn to_api(&self) -> ApiUpdateSessionPlaylist {
+    fn to_api(self) -> ApiUpdateSessionPlaylist {
         ApiUpdateSessionPlaylist {
             session_playlist_id: self.session_playlist_id,
             tracks: self
@@ -1116,7 +1125,7 @@ pub struct ApiSession {
 }
 
 impl ToApi<ApiSession> for Session {
-    fn to_api(&self) -> ApiSession {
+    fn to_api(self) -> ApiSession {
         ApiSession {
             session_id: self.id,
             name: self.name.clone(),
@@ -1227,7 +1236,7 @@ pub struct ApiSessionPlaylistTrack {
 }
 
 impl ToApi<ApiSessionPlaylistTrack> for SessionPlaylistTrack {
-    fn to_api(&self) -> ApiSessionPlaylistTrack {
+    fn to_api(self) -> ApiSessionPlaylistTrack {
         ApiSessionPlaylistTrack {
             id: self.id,
             r#type: self.r#type,
@@ -1244,7 +1253,7 @@ pub struct ApiSessionPlaylist {
 }
 
 impl ToApi<ApiSessionPlaylist> for SessionPlaylist {
-    fn to_api(&self) -> ApiSessionPlaylist {
+    fn to_api(self) -> ApiSessionPlaylist {
         ApiSessionPlaylist {
             session_playlist_id: self.id,
             tracks: self.tracks.clone(),
@@ -1318,7 +1327,7 @@ pub struct ApiConnection {
 }
 
 impl ToApi<ApiConnection> for Connection {
-    fn to_api(&self) -> ApiConnection {
+    fn to_api(self) -> ApiConnection {
         ApiConnection {
             connection_id: self.id.clone(),
             name: self.name.clone(),
@@ -1449,7 +1458,7 @@ pub struct ApiPlayer {
 }
 
 impl ToApi<ApiPlayer> for Player {
-    fn to_api(&self) -> ApiPlayer {
+    fn to_api(self) -> ApiPlayer {
         ApiPlayer {
             player_id: self.id,
             name: self.name.clone(),

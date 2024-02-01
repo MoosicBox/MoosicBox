@@ -15,8 +15,9 @@ use moosicbox_json_utils::{serde_json::ToValue, ParseError};
 use moosicbox_music_api::{
     AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumOrder, AlbumOrderDirection,
     AlbumType, AlbumsError, ArtistAlbumsError, ArtistError, ArtistOrder, ArtistOrderDirection,
-    ArtistsError, Id, LibraryAlbumError, MusicApi, PagingResponse, RemoveAlbumError,
-    RemoveArtistError, RemoveTrackError, TrackError, TrackOrder, TrackOrderDirection, TracksError,
+    ArtistsError, Id, LibraryAlbumError, MusicApi, Page, PagingResponse, PagingResult,
+    RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackError, TrackOrder,
+    TrackOrderDirection, TracksError,
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -581,6 +582,7 @@ pub enum TidalFavoriteArtistsError {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[async_recursion]
 pub async fn favorite_artists(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     offset: Option<u32>,
@@ -592,7 +594,7 @@ pub async fn favorite_artists(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<PagingResponse<TidalArtist>, TidalFavoriteArtistsError> {
+) -> PagingResult<TidalArtist, TidalFavoriteArtistsError> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -632,7 +634,7 @@ pub async fn favorite_artists(
         #[cfg(feature = "db")]
         db,
         &url,
-        access_token,
+        access_token.clone(),
     )
     .await?;
 
@@ -648,10 +650,34 @@ pub async fn favorite_artists(
 
     let total = value.to_value("totalNumberOfItems")?;
 
-    Ok(PagingResponse::WithTotal {
-        items,
-        offset,
-        total,
+    #[cfg(feature = "db")]
+    let db = db.clone();
+
+    Ok(PagingResponse {
+        page: Page::WithTotal {
+            items,
+            offset,
+            limit,
+            total,
+        },
+        fetch: Box::new(move |offset, limit| {
+            Box::pin(async move {
+                favorite_artists(
+                    #[cfg(feature = "db")]
+                    &db,
+                    Some(offset),
+                    Some(limit),
+                    order,
+                    order_direction,
+                    country_code,
+                    locale,
+                    device_type,
+                    access_token,
+                    Some(user_id),
+                )
+                .await
+            })
+        }),
     })
 }
 
@@ -804,6 +830,7 @@ pub enum TidalFavoriteAlbumsError {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[async_recursion]
 pub async fn favorite_albums(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     offset: Option<u32>,
@@ -815,7 +842,7 @@ pub async fn favorite_albums(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<PagingResponse<TidalAlbum>, TidalFavoriteAlbumsError> {
+) -> PagingResult<TidalAlbum, TidalFavoriteAlbumsError> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -855,7 +882,7 @@ pub async fn favorite_albums(
         #[cfg(feature = "db")]
         db,
         &url,
-        access_token,
+        access_token.clone(),
     )
     .await?;
 
@@ -871,10 +898,34 @@ pub async fn favorite_albums(
 
     let total = value.to_value("totalNumberOfItems")?;
 
-    Ok(PagingResponse::WithTotal {
-        items,
-        offset,
-        total,
+    #[cfg(feature = "db")]
+    let db = db.clone();
+
+    Ok(PagingResponse {
+        page: Page::WithTotal {
+            items,
+            offset,
+            limit,
+            total,
+        },
+        fetch: Box::new(move |offset, limit| {
+            Box::pin(async move {
+                favorite_albums(
+                    #[cfg(feature = "db")]
+                    &db,
+                    Some(offset),
+                    Some(limit),
+                    order,
+                    order_direction,
+                    country_code,
+                    locale,
+                    device_type,
+                    access_token,
+                    Some(user_id),
+                )
+                .await
+            })
+        }),
     })
 }
 
@@ -1071,6 +1122,7 @@ pub enum TidalFavoriteTracksError {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[async_recursion]
 pub async fn favorite_tracks(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     offset: Option<u32>,
@@ -1082,7 +1134,7 @@ pub async fn favorite_tracks(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<PagingResponse<TidalTrack>, TidalFavoriteTracksError> {
+) -> PagingResult<TidalTrack, TidalFavoriteTracksError> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -1122,7 +1174,7 @@ pub async fn favorite_tracks(
         #[cfg(feature = "db")]
         db,
         &url,
-        access_token,
+        access_token.clone(),
     )
     .await?;
 
@@ -1138,10 +1190,34 @@ pub async fn favorite_tracks(
 
     let total = value.to_value("totalNumberOfItems")?;
 
-    Ok(PagingResponse::WithTotal {
-        items,
-        offset,
-        total,
+    #[cfg(feature = "db")]
+    let db = db.clone();
+
+    Ok(PagingResponse {
+        page: Page::WithTotal {
+            items,
+            offset,
+            limit,
+            total,
+        },
+        fetch: Box::new(move |offset, limit| {
+            Box::pin(async move {
+                favorite_tracks(
+                    #[cfg(feature = "db")]
+                    &db,
+                    Some(offset),
+                    Some(limit),
+                    order,
+                    order_direction,
+                    country_code,
+                    locale,
+                    device_type,
+                    access_token,
+                    Some(user_id),
+                )
+                .await
+            })
+        }),
     })
 }
 
@@ -1287,6 +1363,7 @@ pub enum TidalAlbumType {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[async_recursion]
 pub async fn artist_albums(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     artist_id: &Id,
@@ -1297,7 +1374,7 @@ pub async fn artist_albums(
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
-) -> Result<PagingResponse<TidalAlbum>, TidalArtistAlbumsError> {
+) -> PagingResult<TidalAlbum, TidalArtistAlbumsError> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -1337,7 +1414,7 @@ pub async fn artist_albums(
         #[cfg(feature = "db")]
         db,
         &url,
-        access_token,
+        access_token.clone(),
     )
     .await?;
 
@@ -1349,10 +1426,34 @@ pub async fn artist_albums(
 
     let total = value.to_value("totalNumberOfItems")?;
 
-    Ok(PagingResponse::WithTotal {
-        items,
-        offset,
-        total,
+    #[cfg(feature = "db")]
+    let db = db.clone();
+    let artist_id = artist_id.clone();
+
+    Ok(PagingResponse {
+        page: Page::WithTotal {
+            items,
+            offset,
+            limit,
+            total,
+        },
+        fetch: Box::new(move |offset, limit| {
+            Box::pin(async move {
+                artist_albums(
+                    #[cfg(feature = "db")]
+                    &db,
+                    &artist_id,
+                    Some(offset),
+                    Some(limit),
+                    album_type,
+                    country_code,
+                    locale,
+                    device_type,
+                    access_token,
+                )
+                .await
+            })
+        }),
     })
 }
 
@@ -1367,6 +1468,7 @@ pub enum TidalAlbumTracksError {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[async_recursion]
 pub async fn album_tracks(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     album_id: &Id,
@@ -1376,7 +1478,7 @@ pub async fn album_tracks(
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
-) -> Result<PagingResponse<TidalTrack>, TidalAlbumTracksError> {
+) -> PagingResult<TidalTrack, TidalAlbumTracksError> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -1399,7 +1501,7 @@ pub async fn album_tracks(
         #[cfg(feature = "db")]
         db,
         &url,
-        access_token,
+        access_token.clone(),
     )
     .await?;
 
@@ -1411,10 +1513,33 @@ pub async fn album_tracks(
 
     let total = value.to_value("totalNumberOfItems")?;
 
-    Ok(PagingResponse::WithTotal {
-        items,
-        offset,
-        total,
+    #[cfg(feature = "db")]
+    let db = db.clone();
+    let album_id = album_id.clone();
+
+    Ok(PagingResponse {
+        page: Page::WithTotal {
+            items,
+            offset,
+            limit,
+            total,
+        },
+        fetch: Box::new(move |offset, limit| {
+            Box::pin(async move {
+                album_tracks(
+                    #[cfg(feature = "db")]
+                    &db,
+                    &album_id,
+                    Some(offset),
+                    Some(limit),
+                    country_code,
+                    locale,
+                    device_type,
+                    access_token,
+                )
+                .await
+            })
+        }),
     })
 }
 
@@ -1777,7 +1902,7 @@ impl MusicApi for TidalMusicApi {
         limit: Option<u32>,
         order: Option<ArtistOrder>,
         order_direction: Option<ArtistOrderDirection>,
-    ) -> Result<PagingResponse<Artist>, ArtistsError> {
+    ) -> PagingResult<Artist, ArtistsError> {
         Ok(favorite_artists(
             #[cfg(feature = "db")]
             &self.db,
@@ -1845,7 +1970,7 @@ impl MusicApi for TidalMusicApi {
         limit: Option<u32>,
         order: Option<AlbumOrder>,
         order_direction: Option<AlbumOrderDirection>,
-    ) -> Result<PagingResponse<Album>, AlbumsError> {
+    ) -> PagingResult<Album, AlbumsError> {
         Ok(favorite_albums(
             #[cfg(feature = "db")]
             &self.db,
@@ -1887,7 +2012,10 @@ impl MusicApi for TidalMusicApi {
         limit: Option<u32>,
         _order: Option<AlbumOrder>,
         _order_direction: Option<AlbumOrderDirection>,
-    ) -> Result<PagingResponse<Album>, ArtistAlbumsError> {
+    ) -> PagingResult<Album, ArtistAlbumsError> {
+        let offset = offset.unwrap_or(0);
+        let limit = limit.unwrap_or(100);
+
         if album_type == AlbumType::All {
             let pages = futures::future::join_all(
                 vec![
@@ -1900,8 +2028,8 @@ impl MusicApi for TidalMusicApi {
                     artist_albums(
                         &self.db,
                         artist_id,
-                        offset,
-                        limit,
+                        Some(offset),
+                        Some(limit),
                         Some(album_type),
                         None,
                         None,
@@ -1916,13 +2044,38 @@ impl MusicApi for TidalMusicApi {
 
             let total = pages.iter().map(|page| page.total().unwrap()).sum();
 
-            return Ok(PagingResponse::WithTotal {
-                items: pages
-                    .into_iter()
-                    .flat_map(|page| page.items())
-                    .collect::<Vec<_>>(),
-                offset: offset.unwrap_or(0),
-                total,
+            #[cfg(feature = "db")]
+            let db = self.db.clone();
+            let artist_id = artist_id.clone();
+            let album_type = album_type.try_into()?;
+
+            return Ok(PagingResponse {
+                page: Page::WithTotal {
+                    items: pages
+                        .into_iter()
+                        .flat_map(|page| page.items())
+                        .collect::<Vec<_>>(),
+                    offset,
+                    limit,
+                    total,
+                },
+                fetch: Box::new(move |offset, limit| {
+                    Box::pin(async move {
+                        artist_albums(
+                            #[cfg(feature = "db")]
+                            &db,
+                            &artist_id,
+                            Some(offset),
+                            Some(limit),
+                            Some(album_type),
+                            None,
+                            None,
+                            None,
+                            None,
+                        )
+                        .await
+                    })
+                }),
             }
             .map(|item| item.into()));
         }
@@ -1931,8 +2084,8 @@ impl MusicApi for TidalMusicApi {
             #[cfg(feature = "db")]
             &self.db,
             artist_id,
-            offset,
-            limit,
+            Some(offset),
+            Some(limit),
             Some(album_type.try_into()?),
             None,
             None,
@@ -1996,7 +2149,7 @@ impl MusicApi for TidalMusicApi {
         limit: Option<u32>,
         order: Option<TrackOrder>,
         order_direction: Option<TrackOrderDirection>,
-    ) -> Result<PagingResponse<Track>, TracksError> {
+    ) -> PagingResult<Track, TracksError> {
         Ok(favorite_tracks(
             #[cfg(feature = "db")]
             &self.db,

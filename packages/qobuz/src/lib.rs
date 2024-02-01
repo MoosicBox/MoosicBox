@@ -21,8 +21,9 @@ use moosicbox_json_utils::{
 use moosicbox_music_api::{
     AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumOrder, AlbumOrderDirection,
     AlbumType, AlbumsError, ArtistAlbumsError, ArtistError, ArtistOrder, ArtistOrderDirection,
-    ArtistsError, Id, LibraryAlbumError, MusicApi, PagingResponse, RemoveAlbumError,
-    RemoveArtistError, RemoveTrackError, TrackError, TrackOrder, TrackOrderDirection, TracksError,
+    ArtistsError, Id, LibraryAlbumError, MusicApi, Page, PagingResponse, PagingResult,
+    RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackError, TrackOrder,
+    TrackOrderDirection, TracksError,
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -672,13 +673,14 @@ pub enum QobuzFavoriteArtistsError {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[async_recursion]
 pub async fn favorite_artists(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     offset: Option<u32>,
     limit: Option<u32>,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<PagingResponse<QobuzArtist>, QobuzFavoriteArtistsError> {
+) -> PagingResult<QobuzArtist, QobuzFavoriteArtistsError> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -696,8 +698,8 @@ pub async fn favorite_artists(
         #[cfg(feature = "db")]
         db,
         &url,
-        app_id,
-        access_token,
+        app_id.clone(),
+        access_token.clone(),
     )
     .await?;
 
@@ -706,10 +708,29 @@ pub async fn favorite_artists(
     let items = value.to_nested_value(&["artists", "items"])?;
     let total = value.to_nested_value(&["artists", "total"])?;
 
-    Ok(PagingResponse::WithTotal {
-        items,
-        offset,
-        total,
+    #[cfg(feature = "db")]
+    let db = db.clone();
+
+    Ok(PagingResponse {
+        page: Page::WithTotal {
+            items,
+            offset,
+            limit,
+            total,
+        },
+        fetch: Box::new(move |offset, limit| {
+            Box::pin(async move {
+                favorite_artists(
+                    #[cfg(feature = "db")]
+                    &db,
+                    Some(offset),
+                    Some(limit),
+                    access_token,
+                    app_id,
+                )
+                .await
+            })
+        }),
     })
 }
 
@@ -786,6 +807,7 @@ pub enum QobuzArtistAlbumsError {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[async_recursion]
 pub async fn artist_albums(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     artist_id: &Id,
@@ -797,7 +819,7 @@ pub async fn artist_albums(
     track_size: Option<u8>,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<PagingResponse<QobuzRelease>, QobuzArtistAlbumsError> {
+) -> PagingResult<QobuzRelease, QobuzArtistAlbumsError> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -819,8 +841,8 @@ pub async fn artist_albums(
         #[cfg(feature = "db")]
         db,
         &url,
-        app_id,
-        access_token,
+        app_id.clone(),
+        access_token.clone(),
     )
     .await?;
 
@@ -829,10 +851,35 @@ pub async fn artist_albums(
     let items = value.to_value("items")?;
     let has_more = value.to_value("has_more")?;
 
-    Ok(PagingResponse::WithHasMore {
-        items,
-        offset,
-        has_more,
+    #[cfg(feature = "db")]
+    let db = db.clone();
+    let artist_id = artist_id.clone();
+
+    Ok(PagingResponse {
+        page: Page::WithHasMore {
+            items,
+            offset,
+            limit,
+            has_more,
+        },
+        fetch: Box::new(move |offset, limit| {
+            Box::pin(async move {
+                artist_albums(
+                    #[cfg(feature = "db")]
+                    &db,
+                    &artist_id,
+                    Some(offset),
+                    Some(limit),
+                    release_type,
+                    sort,
+                    order,
+                    track_size,
+                    access_token,
+                    app_id,
+                )
+                .await
+            })
+        }),
     })
 }
 
@@ -878,13 +925,14 @@ pub enum QobuzFavoriteAlbumsError {
     Parse(#[from] ParseError),
 }
 
+#[async_recursion]
 pub async fn favorite_albums(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     offset: Option<u32>,
     limit: Option<u32>,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<PagingResponse<QobuzAlbum>, QobuzFavoriteAlbumsError> {
+) -> PagingResult<QobuzAlbum, QobuzFavoriteAlbumsError> {
     let offset = offset.unwrap_or(0);
     let original_limit = limit.unwrap_or(100);
     let mut limit = original_limit;
@@ -925,12 +973,32 @@ pub async fn favorite_albums(
         .into_iter()
         .take(original_limit as usize)
         .collect();
+
     let total = value.to_nested_value(&["albums", "total"])?;
 
-    Ok(PagingResponse::WithTotal {
-        items,
-        offset,
-        total,
+    #[cfg(feature = "db")]
+    let db = db.clone();
+
+    Ok(PagingResponse {
+        page: Page::WithTotal {
+            items,
+            offset,
+            limit,
+            total,
+        },
+        fetch: Box::new(move |offset, limit| {
+            Box::pin(async move {
+                favorite_albums(
+                    #[cfg(feature = "db")]
+                    &db,
+                    Some(offset),
+                    Some(limit),
+                    access_token,
+                    app_id,
+                )
+                .await
+            })
+        }),
     })
 }
 
@@ -1036,6 +1104,7 @@ pub enum QobuzAlbumTracksError {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[async_recursion]
 pub async fn album_tracks(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     album_id: &Id,
@@ -1043,7 +1112,7 @@ pub async fn album_tracks(
     limit: Option<u32>,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<PagingResponse<QobuzTrack>, QobuzAlbumTracksError> {
+) -> PagingResult<QobuzTrack, QobuzAlbumTracksError> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -1061,8 +1130,8 @@ pub async fn album_tracks(
         #[cfg(feature = "db")]
         db,
         &url,
-        app_id,
-        access_token,
+        app_id.clone(),
+        access_token.clone(),
     )
     .await?;
 
@@ -1088,10 +1157,31 @@ pub async fn album_tracks(
         .collect::<Result<Vec<_>, _>>()?;
     let total = value.to_nested_value(&["tracks", "total"])?;
 
-    Ok(PagingResponse::WithTotal {
-        items,
-        offset,
-        total,
+    #[cfg(feature = "db")]
+    let db = db.clone();
+    let album_id = album_id.clone();
+
+    Ok(PagingResponse {
+        page: Page::WithTotal {
+            items,
+            offset,
+            limit,
+            total,
+        },
+        fetch: Box::new(move |offset, limit| {
+            Box::pin(async move {
+                album_tracks(
+                    #[cfg(feature = "db")]
+                    &db,
+                    &album_id,
+                    Some(offset),
+                    Some(limit),
+                    access_token,
+                    app_id,
+                )
+                .await
+            })
+        }),
     })
 }
 
@@ -1139,13 +1229,14 @@ pub enum QobuzFavoriteTracksError {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[async_recursion]
 pub async fn favorite_tracks(
     #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
     offset: Option<u32>,
     limit: Option<u32>,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<PagingResponse<QobuzTrack>, QobuzFavoriteTracksError> {
+) -> PagingResult<QobuzTrack, QobuzFavoriteTracksError> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -1163,18 +1254,37 @@ pub async fn favorite_tracks(
         #[cfg(feature = "db")]
         db,
         &url,
-        app_id,
-        access_token,
+        app_id.clone(),
+        access_token.clone(),
     )
     .await?;
 
     let items = value.to_nested_value(&["tracks", "items"])?;
     let total = value.to_nested_value(&["tracks", "total"])?;
 
-    Ok(PagingResponse::WithTotal {
-        items,
-        offset,
-        total,
+    #[cfg(feature = "db")]
+    let db = db.clone();
+
+    Ok(PagingResponse {
+        page: Page::WithTotal {
+            items,
+            offset,
+            limit,
+            total,
+        },
+        fetch: Box::new(move |offset, limit| {
+            Box::pin(async move {
+                favorite_tracks(
+                    #[cfg(feature = "db")]
+                    &db,
+                    Some(offset),
+                    Some(limit),
+                    access_token,
+                    app_id,
+                )
+                .await
+            })
+        }),
     })
 }
 
@@ -1650,7 +1760,7 @@ impl MusicApi for QobuzMusicApi {
         limit: Option<u32>,
         _order: Option<ArtistOrder>,
         _order_direction: Option<ArtistOrderDirection>,
-    ) -> Result<PagingResponse<Artist>, ArtistsError> {
+    ) -> PagingResult<Artist, ArtistsError> {
         Ok(favorite_artists(
             #[cfg(feature = "db")]
             &self.db,
@@ -1705,7 +1815,7 @@ impl MusicApi for QobuzMusicApi {
         limit: Option<u32>,
         _order: Option<AlbumOrder>,
         _order_direction: Option<AlbumOrderDirection>,
-    ) -> Result<PagingResponse<Album>, AlbumsError> {
+    ) -> PagingResult<Album, AlbumsError> {
         Ok(favorite_albums(
             #[cfg(feature = "db")]
             &self.db,
@@ -1740,7 +1850,7 @@ impl MusicApi for QobuzMusicApi {
         limit: Option<u32>,
         _order: Option<AlbumOrder>,
         _order_direction: Option<AlbumOrderDirection>,
-    ) -> Result<PagingResponse<Album>, ArtistAlbumsError> {
+    ) -> PagingResult<Album, ArtistAlbumsError> {
         Ok(artist_albums(
             #[cfg(feature = "db")]
             &self.db,
@@ -1755,8 +1865,10 @@ impl MusicApi for QobuzMusicApi {
             None,
         )
         .await?
-        .map(|x| x.into())
-        .map(|x: QobuzAlbum| x.into()))
+        .map(|x: QobuzRelease| {
+            let album: QobuzAlbum = x.into();
+            album.into()
+        }))
     }
 
     #[cfg(not(feature = "db"))]
@@ -1806,7 +1918,7 @@ impl MusicApi for QobuzMusicApi {
         limit: Option<u32>,
         _order: Option<TrackOrder>,
         _order_direction: Option<TrackOrderDirection>,
-    ) -> Result<PagingResponse<Track>, TracksError> {
+    ) -> PagingResult<Track, TracksError> {
         Ok(favorite_tracks(
             #[cfg(feature = "db")]
             &self.db,

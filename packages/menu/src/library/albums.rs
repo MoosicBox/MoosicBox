@@ -224,7 +224,7 @@ pub struct AlbumVersion {
 }
 
 impl ToApi<ApiAlbumVersion> for AlbumVersion {
-    fn to_api(&self) -> ApiAlbumVersion {
+    fn to_api(self) -> ApiAlbumVersion {
         ApiAlbumVersion {
             tracks: self.tracks.iter().map(|track| track.to_api()).collect(),
             format: self.format,
@@ -583,7 +583,11 @@ pub async fn refavorite_album(
         api.source()
     );
 
-    let favorite_albums = api.albums(None, None, None, None).await?;
+    let favorite_albums = api
+        .albums(None, None, None, None)
+        .await?
+        .fetch_rest_items()
+        .await?;
 
     let album = favorite_albums
         .iter()
