@@ -60,7 +60,7 @@ pub fn search_for_cover(
     path: PathBuf,
     filename: &str,
     save_path: Option<PathBuf>,
-    tag: Option<Box<dyn AudioTag>>,
+    tag: Option<Box<dyn AudioTag + Send + Sync>>,
 ) -> Result<Option<PathBuf>, std::io::Error> {
     log::trace!("Searching for cover {path:?}");
     if let Some(cover_file) = fs::read_dir(path.clone()).ok().and_then(|path| {

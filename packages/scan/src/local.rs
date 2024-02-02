@@ -74,13 +74,44 @@ pub async fn scan(directory: &str, db: &Db, token: CancellationToken) -> Result<
     Ok(())
 }
 
+fn extract_track_number(track_filestem: &str) -> Option<u16> {
+    let numbers = track_filestem
+        .chars()
+        .take_while(|c| c.is_numeric())
+        .collect::<Vec<_>>();
+    let number = numbers
+        .into_iter()
+        .skip_while(|c| *c == '0')
+        .collect::<String>();
+
+    if number.is_empty() {
+        None
+    } else {
+        number.parse::<u16>().ok()
+    }
+}
+
+fn extract_track_name(track_filestem: &str) -> Option<String> {
+    let name = track_filestem
+        .chars()
+        .skip_while(|c| c.is_numeric() || c.is_whitespace() || *c == '-' || *c == '_')
+        .map(|c| if c == '_' { ' ' } else { c })
+        .collect::<String>();
+
+    if name.is_empty() {
+        None
+    } else {
+        Some(name)
+    }
+}
+
 fn scan_track(
     path: PathBuf,
     output: Arc<RwLock<ScanOutput>>,
     metadata: Metadata,
 ) -> Pin<Box<dyn Future<Output = Result<(), ScanError>> + Send>> {
     Box::pin(async move {
-        let tag = Tag::new().read_from_path(path.to_str().unwrap())?;
+        let tag = Tag::new().read_from_path(path.to_str().unwrap());
         let lofty_tag = lofty::Probe::open(path.clone())
             .expect("ERROR: Bad path provided!")
             .options(ParseOptions::new().read_picture(false))
@@ -92,40 +123,19 @@ fn scan_track(
                 .unwrap()
                 .as_secs_f64()
         } else {
-            tag.duration().unwrap()
+            match tag {
+                Ok(ref tag) => tag.duration().unwrap(),
+                Err(err) => return Err(ScanError::Tag(err)),
+            }
         };
+
+        let tag = tag.ok();
 
         let extension = path
             .extension()
             .and_then(std::ffi::OsStr::to_str)
             .unwrap_or("")
             .to_uppercase();
-
-        let format = match extension.as_str() {
-            #[cfg(feature = "aac")]
-            "M4A" => AudioFormat::Aac,
-            #[cfg(feature = "flac")]
-            "FLAC" => AudioFormat::Flac,
-            #[cfg(feature = "mp3")]
-            "MP3" => AudioFormat::Mp3,
-            #[cfg(feature = "opus")]
-            "OPUS" => AudioFormat::Opus,
-            _ => AudioFormat::Source,
-        };
-        let bytes = metadata.len();
-        let title = tag.title().unwrap_or("(untitled)").to_string();
-        let number = tag.track_number().unwrap_or(1) as i32;
-        let album = tag.album_title().unwrap_or("(none)").to_string();
-        let artist_name = tag
-            .artist()
-            .or(tag.album_artist())
-            .unwrap_or("(none)")
-            .to_string();
-        let album_artist = tag
-            .album_artist()
-            .unwrap_or(artist_name.as_str())
-            .to_string();
-        let date_released = tag.date().map(|date| date.to_string());
 
         let path_artist = path.clone().parent().unwrap().parent().unwrap().to_owned();
         let artist_dir_name = path_artist
@@ -141,6 +151,50 @@ fn scan_track(
             .to_str()
             .unwrap()
             .to_string();
+
+        let track_filestem = path.file_stem().unwrap().to_str().unwrap().to_string();
+
+        let format = match extension.as_str() {
+            #[cfg(feature = "aac")]
+            "M4A" => AudioFormat::Aac,
+            #[cfg(feature = "flac")]
+            "FLAC" => AudioFormat::Flac,
+            #[cfg(feature = "mp3")]
+            "MP3" => AudioFormat::Mp3,
+            #[cfg(feature = "opus")]
+            "OPUS" => AudioFormat::Opus,
+            _ => AudioFormat::Source,
+        };
+        let bytes = metadata.len();
+        let title = tag
+            .as_ref()
+            .and_then(|tag| tag.title().map(|title| title.to_string()))
+            .or_else(|| extract_track_name(&track_filestem))
+            .unwrap_or("(untitled)".to_string());
+        let number = tag
+            .as_ref()
+            .and_then(|tag| tag.track_number())
+            .or_else(|| extract_track_number(&track_filestem))
+            .unwrap_or(1) as i32;
+        let album = tag
+            .as_ref()
+            .and_then(|tag| tag.album_title())
+            .unwrap_or(&album_dir_name)
+            .to_string();
+        let artist_name = tag
+            .as_ref()
+            .and_then(|tag| tag.artist().or(tag.album_artist()))
+            .unwrap_or(&artist_dir_name)
+            .to_string();
+        let album_artist = tag
+            .as_ref()
+            .and_then(|tag| tag.album_artist())
+            .unwrap_or(artist_name.as_str())
+            .to_string();
+        let date_released = tag
+            .as_ref()
+            .and_then(|tag| tag.date())
+            .map(|date| date.to_string());
 
         let audio_bitrate = &lofty_tag.properties().audio_bitrate();
         let overall_bitrate = &lofty_tag.properties().overall_bitrate();
@@ -165,7 +219,10 @@ fn scan_track(
         log::debug!("artist: {}", artist_name.clone());
         log::debug!("album_artist: {}", album_artist.clone());
         log::debug!("date_released: {:?}", date_released);
-        log::debug!("contains cover: {:?}", tag.album_cover().is_some());
+        log::debug!(
+            "contains cover: {:?}",
+            tag.as_ref().is_some_and(|tag| tag.album_cover().is_some())
+        );
 
         let album_artist = match MULTI_ARTIST_PATTERN.find(album_artist.as_str()) {
             Some(comma) => album_artist[..comma.start() + 1].to_string(),
@@ -204,7 +261,7 @@ fn scan_track(
                 path_album.clone(),
                 "cover",
                 Some(save_path.join("album.jpg")),
-                Some(tag),
+                tag,
             )? {
                 let cover = Some(cover.to_str().unwrap().to_string());
 
@@ -327,24 +384,22 @@ where
                                 break;
                             }
                             process_dir_entry(p, output.clone(), token.clone(), fun.clone())
-                                .await
-                                .unwrap();
+                                .await?;
                         }
+                        Ok::<_, ScanError>(())
                     })
                 })
                 .collect::<Vec<_>>();
 
             while let Some(cur_thread) = handles.pop() {
-                cur_thread.join().unwrap().await;
+                cur_thread.join().unwrap().await?;
             }
         } else {
             for p in dir.filter_map(|p| p.ok()) {
                 if token.is_cancelled() {
                     break;
                 }
-                process_dir_entry(p, output.clone(), token.clone(), fun.clone())
-                    .await
-                    .unwrap();
+                process_dir_entry(p, output.clone(), token.clone(), fun.clone()).await?;
             }
         }
 
