@@ -76,6 +76,8 @@ pub enum AlbumType {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(untagged)]
 pub enum Page<T> {
     WithTotal {
         items: Vec<T>,
