@@ -7,7 +7,7 @@ use moosicbox_core::{
         db::{get_album, DbError, SqliteValue},
         models::{
             qobuz::{QobuzAlbum, QobuzImageSize},
-            tidal::{TidalAlbum, TidalImageSize},
+            tidal::{TidalAlbum, TidalAlbumImageSize},
             AlbumId, LibraryAlbum,
         },
     },
@@ -232,7 +232,7 @@ pub async fn get_album_cover(
 
             let size = size
                 .map(|size| (size as u16).into())
-                .unwrap_or(TidalImageSize::Max);
+                .unwrap_or(TidalAlbumImageSize::Max);
 
             let cover = album
                 .cover_url(size)

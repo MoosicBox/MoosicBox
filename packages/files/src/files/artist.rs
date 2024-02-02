@@ -7,7 +7,7 @@ use moosicbox_core::{
         db::{get_artist, DbError, SqliteValue},
         models::{
             qobuz::{QobuzArtist, QobuzImageSize},
-            tidal::{TidalArtist, TidalImageSize},
+            tidal::{TidalArtist, TidalArtistImageSize},
             ArtistId, LibraryArtist,
         },
     },
@@ -40,6 +40,7 @@ async fn get_or_fetch_artist_cover_from_remote_url(
     size: &str,
     source: &str,
     artist_name: &str,
+    artist_id: u64,
 ) -> Result<String, FetchArtistCoverError> {
     static IMAGE_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
 
@@ -48,7 +49,7 @@ async fn get_or_fetch_artist_cover_from_remote_url(
         .join(source)
         .join(sanitize_filename(artist_name));
 
-    let filename = format!("artist_{size}.jpg");
+    let filename = format!("artist_{artist_id}_{size}.jpg");
     let file_path = path.join(filename);
 
     if Path::exists(&file_path) {
@@ -204,7 +205,7 @@ pub async fn get_artist_cover(
 
             let size = size
                 .map(|size| (size as u16).into())
-                .unwrap_or(TidalImageSize::Max);
+                .unwrap_or(TidalArtistImageSize::Max);
 
             let cover = artist
                 .picture_url(size)
@@ -215,6 +216,7 @@ pub async fn get_artist_cover(
                 &size.to_string(),
                 "tidal",
                 &artist.name,
+                artist.id,
             )
             .await?
         }
@@ -266,6 +268,7 @@ pub async fn get_artist_cover(
                 &size.to_string(),
                 "qobuz",
                 &artist.name,
+                artist.id,
             )
             .await?
         }

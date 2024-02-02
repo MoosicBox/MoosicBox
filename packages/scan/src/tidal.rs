@@ -5,7 +5,7 @@ use moosicbox_core::{
     sqlite::{
         db::DbError,
         models::{
-            tidal::{TidalAlbum, TidalImageSize, TidalTrack},
+            tidal::{TidalAlbum, TidalAlbumImageSize, TidalArtistImageSize, TidalTrack},
             TrackSource,
         },
     },
@@ -171,7 +171,7 @@ pub async fn scan_albums(
                     .await
                     {
                         Ok(artist) => {
-                            if let Some(url) = artist.picture_url(TidalImageSize::Max) {
+                            if let Some(url) = artist.picture_url(TidalArtistImageSize::Max) {
                                 scan_artist.write().await.search_cover(url, "tidal").await?;
                             }
                         }
@@ -182,7 +182,7 @@ pub async fn scan_albums(
                 }
             }
 
-            if let Some(cover_url) = album.cover_url(TidalImageSize::Max) {
+            if let Some(cover_url) = album.cover_url(TidalAlbumImageSize::Max) {
                 if read_album.cover.is_none() && !read_album.searched_cover {
                     scan_album
                         .write()
