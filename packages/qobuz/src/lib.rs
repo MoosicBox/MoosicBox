@@ -1380,10 +1380,10 @@ pub async fn remove_favorite_track(
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum QobuzAudioQuality {
-    Low,
-    FlacLossless,
-    FlacHiRes,
-    FlacHighestRes,
+    Low,            // MP3 320
+    FlacLossless,   // FLAC 16 bit 44.1kHz
+    FlacHiRes,      // FLAC 24 bit <= 96kHz
+    FlacHighestRes, // FLAC 24 bit > 96kHz <= 192kHz
 }
 
 impl QobuzAudioQuality {
