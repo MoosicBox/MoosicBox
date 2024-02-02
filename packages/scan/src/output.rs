@@ -12,7 +12,10 @@ use moosicbox_core::{
             add_album_maps_and_get_albums, add_artist_maps_and_get_artists, add_tracks, select,
             set_track_sizes, DbError, InsertTrack, SetTrackSize, SqliteValue,
         },
-        models::{LibraryAlbum, LibraryArtist, LibraryTrack, NumberId, TrackSource},
+        models::{
+            qobuz::QobuzImageSize, tidal::TidalAlbumImageSize, LibraryAlbum, LibraryArtist,
+            LibraryTrack, NumberId, TrackSource,
+        },
     },
     types::{AudioFormat, PlaybackQuality},
 };
@@ -336,9 +339,11 @@ impl ScanArtist {
             let filename = if source == "local" {
                 "artist.jpg".to_string()
             } else if let Some(id) = self.tidal_id {
-                format!("artist_{}.jpg", id)
+                let size = TidalAlbumImageSize::Max;
+                format!("artist_{id}_{size}.jpg")
             } else if let Some(id) = &self.qobuz_id {
-                format!("artist_{}.jpg", id)
+                let size = QobuzImageSize::Mega;
+                format!("artist_{id}_{size}.jpg")
             } else {
                 "artist.jpg".to_string()
             };
