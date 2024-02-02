@@ -44,6 +44,8 @@ pub enum FetchAndSaveBytesFromRemoteUrlError {
     Reqwest(#[from] reqwest::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error("Request failed: (error {status})")]
+    RequestFailed { status: u16, message: String },
 }
 
 pub async fn fetch_and_save_bytes_from_remote_url(
@@ -51,7 +53,23 @@ pub async fn fetch_and_save_bytes_from_remote_url(
     file_path: &Path,
     url: &str,
 ) -> Result<PathBuf, FetchAndSaveBytesFromRemoteUrlError> {
-    let bytes = client.get(url).send().await?.bytes().await?;
+    log::debug!("Fetching bytes from remote url: {url}");
+    let response = client.get(url).send().await?;
+
+    let status = response.status();
+
+    if status != 200 {
+        let message = response.text().await.unwrap_or("".to_string());
+
+        log::error!("Request failed: {status} ({message})");
+        return Err(FetchAndSaveBytesFromRemoteUrlError::RequestFailed {
+            status: status.into(),
+            message,
+        });
+    }
+
+    let bytes = response.bytes().await?;
+    log::debug!("Saving bytes to file: {file_path:?}");
     save_bytes_to_file(&bytes, file_path)?;
     Ok(file_path.to_path_buf())
 }
