@@ -3103,6 +3103,8 @@ dependencies = [
  "strum",
  "strum_macros",
  "thiserror",
+ "tokio",
+ "tokio-util",
  "url",
 ]
 
@@ -3161,6 +3163,7 @@ dependencies = [
  "strum_macros",
  "thiserror",
  "tokio",
+ "tokio-util",
  "url",
 ]
 
@@ -3320,6 +3323,8 @@ dependencies = [
  "strum",
  "strum_macros",
  "thiserror",
+ "tokio",
+ "tokio-util",
  "url",
 ]
 

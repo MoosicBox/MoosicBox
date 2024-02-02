@@ -4,6 +4,7 @@ use std::{
     fmt::{Display, Formatter},
     ops::Deref,
     pin::Pin,
+    sync::Arc,
 };
 
 use async_trait::async_trait;
@@ -14,6 +15,7 @@ use moosicbox_core::sqlite::models::{
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -132,21 +134,100 @@ impl<T> Page<T> {
 }
 
 type FuturePagingResponse<T, E> = Pin<Box<dyn Future<Output = PagingResult<T, E>> + Send>>;
+type FetchPagingResponse<T, E> = Box<dyn FnMut(u32, u32) -> FuturePagingResponse<T, E> + Send>;
 
 pub struct PagingResponse<T, E> {
     pub page: Page<T>,
-    pub fetch: Box<dyn FnOnce(u32, u32) -> FuturePagingResponse<T, E> + Send>,
+    pub fetch: Arc<Mutex<FetchPagingResponse<T, E>>>,
 }
 
 impl<T, E> PagingResponse<T, E> {
+    pub async fn rest_of_pages_in_batches(self) -> Result<Vec<Page<T>>, E> {
+        self.rest_of_pages_in_batches_inner(false).await
+    }
+
+    async fn rest_of_pages_in_batches_inner(self, include_self: bool) -> Result<Vec<Page<T>>, E> {
+        let total = if let Some(total) = self.total() {
+            total
+        } else {
+            return self.rest_of_pages_inner(include_self).await;
+        };
+
+        let limit = self.limit();
+        let mut offset = self.offset() + limit;
+        let mut requests = vec![];
+
+        while offset < total {
+            log::debug!(
+                "Adding request into batch: request {} offset={offset} limit={limit}",
+                requests.len() + 1
+            );
+            requests.push((offset, limit));
+
+            offset += limit;
+        }
+
+        let mut responses = vec![];
+
+        if include_self {
+            responses.push(self.page);
+        }
+
+        let mut fetch = self.fetch.lock().await;
+        let page_responses = futures::future::join_all(
+            requests
+                .into_iter()
+                .map(|(offset, limit)| fetch(offset, limit)),
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
+
+        for response in page_responses {
+            responses.push(response.page);
+        }
+
+        Ok(responses)
+    }
+
+    pub async fn rest_of_items_in_batches(self) -> Result<Vec<T>, E> {
+        Ok(self
+            .rest_of_pages_in_batches()
+            .await?
+            .into_iter()
+            .flat_map(|response| response.items())
+            .collect::<Vec<_>>())
+    }
+
+    pub async fn with_rest_of_pages_in_batches(self) -> Result<Vec<Page<T>>, E> {
+        self.rest_of_pages_in_batches_inner(true).await
+    }
+
+    pub async fn with_rest_of_items_in_batches(self) -> Result<Vec<T>, E> {
+        Ok(self
+            .with_rest_of_pages_in_batches()
+            .await?
+            .into_iter()
+            .flat_map(|response| response.items())
+            .collect::<Vec<_>>())
+    }
+
     pub async fn rest_of_pages(self) -> Result<Vec<Page<T>>, E> {
+        self.rest_of_pages_inner(false).await
+    }
+
+    async fn rest_of_pages_inner(self, include_self: bool) -> Result<Vec<Page<T>>, E> {
         let mut limit = self.limit();
         let mut offset = self.offset() + limit;
         let mut fetch = self.fetch;
         let mut responses = vec![];
 
+        if include_self {
+            responses.push(self.page);
+        }
+
         loop {
-            let response = fetch(offset, limit).await?;
+            let response = (fetch.lock().await)(offset, limit).await?;
 
             let has_more = response.has_more();
             limit = response.limit();
@@ -173,27 +254,7 @@ impl<T, E> PagingResponse<T, E> {
     }
 
     pub async fn with_rest_of_pages(self) -> Result<Vec<Page<T>>, E> {
-        let mut limit = self.limit();
-        let mut offset = self.offset() + limit;
-        let mut fetch = self.fetch;
-        let mut responses = vec![self.page];
-
-        loop {
-            let response = fetch(offset, limit).await?;
-
-            let has_more = response.has_more();
-            limit = response.limit();
-            offset = response.offset() + limit;
-            fetch = response.fetch;
-
-            responses.push(response.page);
-
-            if !has_more {
-                break;
-            }
-        }
-
-        Ok(responses)
+        self.rest_of_pages_inner(true).await
     }
 
     pub async fn with_rest_of_items(self) -> Result<Vec<T>, E> {
@@ -227,7 +288,7 @@ impl<T, E> PagingResponse<T, E> {
 
     pub fn map<U, F, OE>(self, mut f: F) -> PagingResponse<U, OE>
     where
-        F: FnMut(T) -> U + Send + 'static,
+        F: FnMut(T) -> U + Send + Clone + 'static,
         T: 'static,
         OE: 'static,
         E: Into<OE> + 'static,
@@ -261,14 +322,20 @@ impl<T, E> PagingResponse<T, E> {
 
         PagingResponse {
             page,
-            fetch: Box::new(move |offset, count| {
-                Box::pin(async move {
+            fetch: Arc::new(Mutex::new(Box::new(move |offset, count| {
+                let fetch = fetch.clone();
+                let f = f.clone();
+
+                let closure = async move {
+                    let mut fetch = fetch.lock().await;
                     fetch(offset, count)
                         .await
                         .map_err(|e| e.into())
                         .map(|results| results.map(f))
-                })
-            }),
+                };
+
+                Box::pin(closure)
+            }))),
         }
     }
 }

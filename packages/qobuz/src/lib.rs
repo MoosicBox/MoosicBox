@@ -5,7 +5,7 @@ pub mod api;
 #[cfg(feature = "db")]
 pub mod db;
 
-use std::{collections::HashMap, str::Utf8Error};
+use std::{collections::HashMap, str::Utf8Error, sync::Arc};
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
@@ -30,6 +30,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
+use tokio::sync::Mutex;
 use url::form_urlencoded;
 
 static AUTH_HEADER_NAME: &str = "x-user-auth-token";
@@ -718,7 +719,12 @@ pub async fn favorite_artists(
             limit,
             total,
         },
-        fetch: Box::new(move |offset, limit| {
+        fetch: Arc::new(Mutex::new(Box::new(move |offset, limit| {
+            #[cfg(feature = "db")]
+            let db = db.clone();
+            let access_token = access_token.clone();
+            let app_id = app_id.clone();
+
             Box::pin(async move {
                 favorite_artists(
                     #[cfg(feature = "db")]
@@ -730,7 +736,7 @@ pub async fn favorite_artists(
                 )
                 .await
             })
-        }),
+        }))),
     })
 }
 
@@ -862,7 +868,13 @@ pub async fn artist_albums(
             limit,
             has_more,
         },
-        fetch: Box::new(move |offset, limit| {
+        fetch: Arc::new(Mutex::new(Box::new(move |offset, limit| {
+            #[cfg(feature = "db")]
+            let db = db.clone();
+            let artist_id = artist_id.clone();
+            let access_token = access_token.clone();
+            let app_id = app_id.clone();
+
             Box::pin(async move {
                 artist_albums(
                     #[cfg(feature = "db")]
@@ -879,7 +891,7 @@ pub async fn artist_albums(
                 )
                 .await
             })
-        }),
+        }))),
     })
 }
 
@@ -986,7 +998,12 @@ pub async fn favorite_albums(
             limit,
             total,
         },
-        fetch: Box::new(move |offset, limit| {
+        fetch: Arc::new(Mutex::new(Box::new(move |offset, limit| {
+            #[cfg(feature = "db")]
+            let db = db.clone();
+            let access_token = access_token.clone();
+            let app_id = app_id.clone();
+
             Box::pin(async move {
                 favorite_albums(
                     #[cfg(feature = "db")]
@@ -998,7 +1015,7 @@ pub async fn favorite_albums(
                 )
                 .await
             })
-        }),
+        }))),
     })
 }
 
@@ -1168,7 +1185,13 @@ pub async fn album_tracks(
             limit,
             total,
         },
-        fetch: Box::new(move |offset, limit| {
+        fetch: Arc::new(Mutex::new(Box::new(move |offset, limit| {
+            #[cfg(feature = "db")]
+            let db = db.clone();
+            let album_id = album_id.clone();
+            let access_token = access_token.clone();
+            let app_id = app_id.clone();
+
             Box::pin(async move {
                 album_tracks(
                     #[cfg(feature = "db")]
@@ -1181,7 +1204,7 @@ pub async fn album_tracks(
                 )
                 .await
             })
-        }),
+        }))),
     })
 }
 
@@ -1272,7 +1295,12 @@ pub async fn favorite_tracks(
             limit,
             total,
         },
-        fetch: Box::new(move |offset, limit| {
+        fetch: Arc::new(Mutex::new(Box::new(move |offset, limit| {
+            #[cfg(feature = "db")]
+            let db = db.clone();
+            let access_token = access_token.clone();
+            let app_id = app_id.clone();
+
             Box::pin(async move {
                 favorite_tracks(
                     #[cfg(feature = "db")]
@@ -1284,7 +1312,7 @@ pub async fn favorite_tracks(
                 )
                 .await
             })
-        }),
+        }))),
     })
 }
 

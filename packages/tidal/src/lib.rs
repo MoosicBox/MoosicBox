@@ -5,6 +5,8 @@ pub mod api;
 #[cfg(feature = "db")]
 pub mod db;
 
+use std::sync::Arc;
+
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use moosicbox_core::sqlite::models::{
@@ -24,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
+use tokio::sync::Mutex;
 use url::form_urlencoded;
 
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
@@ -660,7 +663,13 @@ pub async fn favorite_artists(
             limit,
             total,
         },
-        fetch: Box::new(move |offset, limit| {
+        fetch: Arc::new(Mutex::new(Box::new(move |offset, limit| {
+            #[cfg(feature = "db")]
+            let db = db.clone();
+            let country_code = country_code.clone();
+            let locale = locale.clone();
+            let access_token = access_token.clone();
+
             Box::pin(async move {
                 favorite_artists(
                     #[cfg(feature = "db")]
@@ -677,7 +686,7 @@ pub async fn favorite_artists(
                 )
                 .await
             })
-        }),
+        }))),
     })
 }
 
@@ -908,7 +917,13 @@ pub async fn favorite_albums(
             limit,
             total,
         },
-        fetch: Box::new(move |offset, limit| {
+        fetch: Arc::new(Mutex::new(Box::new(move |offset, limit| {
+            #[cfg(feature = "db")]
+            let db = db.clone();
+            let country_code = country_code.clone();
+            let locale = locale.clone();
+            let access_token = access_token.clone();
+
             Box::pin(async move {
                 favorite_albums(
                     #[cfg(feature = "db")]
@@ -925,7 +940,7 @@ pub async fn favorite_albums(
                 )
                 .await
             })
-        }),
+        }))),
     })
 }
 
@@ -1200,7 +1215,13 @@ pub async fn favorite_tracks(
             limit,
             total,
         },
-        fetch: Box::new(move |offset, limit| {
+        fetch: Arc::new(Mutex::new(Box::new(move |offset, limit| {
+            #[cfg(feature = "db")]
+            let db = db.clone();
+            let country_code = country_code.clone();
+            let locale = locale.clone();
+            let access_token = access_token.clone();
+
             Box::pin(async move {
                 favorite_tracks(
                     #[cfg(feature = "db")]
@@ -1217,7 +1238,7 @@ pub async fn favorite_tracks(
                 )
                 .await
             })
-        }),
+        }))),
     })
 }
 
@@ -1437,7 +1458,14 @@ pub async fn artist_albums(
             limit,
             total,
         },
-        fetch: Box::new(move |offset, limit| {
+        fetch: Arc::new(Mutex::new(Box::new(move |offset, limit| {
+            #[cfg(feature = "db")]
+            let db = db.clone();
+            let country_code = country_code.clone();
+            let artist_id = artist_id.clone();
+            let locale = locale.clone();
+            let access_token = access_token.clone();
+
             Box::pin(async move {
                 artist_albums(
                     #[cfg(feature = "db")]
@@ -1453,7 +1481,7 @@ pub async fn artist_albums(
                 )
                 .await
             })
-        }),
+        }))),
     })
 }
 
@@ -1524,7 +1552,14 @@ pub async fn album_tracks(
             limit,
             total,
         },
-        fetch: Box::new(move |offset, limit| {
+        fetch: Arc::new(Mutex::new(Box::new(move |offset, limit| {
+            #[cfg(feature = "db")]
+            let db = db.clone();
+            let album_id = album_id.clone();
+            let country_code = country_code.clone();
+            let locale = locale.clone();
+            let access_token = access_token.clone();
+
             Box::pin(async move {
                 album_tracks(
                     #[cfg(feature = "db")]
@@ -1539,7 +1574,7 @@ pub async fn album_tracks(
                 )
                 .await
             })
-        }),
+        }))),
     })
 }
 
@@ -2060,7 +2095,11 @@ impl MusicApi for TidalMusicApi {
                     limit,
                     total,
                 },
-                fetch: Box::new(move |offset, limit| {
+                fetch: Arc::new(Mutex::new(Box::new(move |offset, limit| {
+                    #[cfg(feature = "db")]
+                    let db = db.clone();
+                    let artist_id = artist_id.clone();
+
                     Box::pin(async move {
                         artist_albums(
                             #[cfg(feature = "db")]
@@ -2076,7 +2115,7 @@ impl MusicApi for TidalMusicApi {
                         )
                         .await
                     })
-                }),
+                }))),
             }
             .map(|item| item.into()));
         }

@@ -586,7 +586,7 @@ pub async fn refavorite_album(
     let favorite_albums = api
         .albums(None, None, None, None)
         .await?
-        .with_rest_of_items()
+        .with_rest_of_items_in_batches()
         .await?;
 
     let album = favorite_albums
