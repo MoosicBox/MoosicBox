@@ -58,6 +58,7 @@ enum TidalApiEndpoint {
     RemoveFavoriteTrack,
     AlbumTracks,
     TrackUrl,
+    TrackPlaybackInfo,
 }
 
 static CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
@@ -101,6 +102,7 @@ impl ToUrl for TidalApiEndpoint {
             }
             Self::AlbumTracks => format!("{TIDAL_API_BASE_URL}/albums/:albumId/tracks"),
             Self::TrackUrl => format!("{TIDAL_API_BASE_URL}/tracks/:trackId/urlpostpaywall"),
+            Self::TrackPlaybackInfo => format!("{TIDAL_API_BASE_URL}/tracks/:trackId/playbackinfo"),
         }
     }
 }
@@ -1751,6 +1753,63 @@ pub async fn track_file_url(
     log::trace!("Received track file url response: {value:?}");
 
     Ok(value.to_value("urls")?)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalTrackPlaybackInfo {
+    pub album_peak_amplitude: f64,
+    pub album_replay_gain: f64,
+    pub asset_presentation: String,
+    pub audio_mode: String,
+    pub audio_quality: String,
+    pub bit_depth: Option<u8>,
+    pub manifest: String,
+    pub manifest_hash: String,
+    pub manifest_mime_type: String,
+    pub sample_rate: Option<u32>,
+    pub track_id: u64,
+    pub track_peak_amplitude: f64,
+    pub track_replay_gain: f64,
+}
+
+#[derive(Debug, Error)]
+pub enum TidalTrackPlaybackInfoError {
+    #[error(transparent)]
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+}
+
+pub async fn track_playback_info(
+    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    audio_quality: TidalAudioQuality,
+    track_id: &Id,
+    access_token: Option<String>,
+) -> Result<TidalTrackPlaybackInfo, TidalTrackPlaybackInfoError> {
+    let url = tidal_api_endpoint!(
+        TrackPlaybackInfo,
+        &[(":trackId", &track_id.to_string())],
+        &[
+            ("audioquality", audio_quality.as_ref()),
+            ("playbackmode", "STREAM"),
+            ("assetpresentation", "FULL")
+        ]
+    );
+
+    let value = authenticated_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        access_token,
+    )
+    .await?;
+
+    log::trace!("Received track playback info response: {value:?}");
+
+    Ok(serde_json::from_value(value)?)
 }
 
 impl From<ArtistOrder> for TidalArtistOrder {

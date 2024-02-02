@@ -14,7 +14,7 @@ use crate::{
     add_favorite_album, add_favorite_artist, add_favorite_track, album, album_tracks, artist,
     artist_albums, device_authorization, device_authorization_token, favorite_albums,
     favorite_artists, favorite_tracks, remove_favorite_album, remove_favorite_artist,
-    remove_favorite_track, track, track_file_url, AuthenticatedRequestError,
+    remove_favorite_track, track, track_file_url, track_playback_info, AuthenticatedRequestError,
     TidalAddFavoriteAlbumError, TidalAddFavoriteArtistError, TidalAddFavoriteTrackError,
     TidalAlbum, TidalAlbumError, TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError,
     TidalAlbumType, TidalArtist, TidalArtistAlbumsError, TidalArtistError, TidalArtistOrder,
@@ -22,7 +22,8 @@ use crate::{
     TidalDeviceAuthorizationTokenError, TidalDeviceType, TidalFavoriteAlbumsError,
     TidalFavoriteArtistsError, TidalFavoriteTracksError, TidalRemoveFavoriteAlbumError,
     TidalRemoveFavoriteArtistError, TidalRemoveFavoriteTrackError, TidalTrack, TidalTrackError,
-    TidalTrackFileUrlError, TidalTrackOrder, TidalTrackOrderDirection,
+    TidalTrackFileUrlError, TidalTrackOrder, TidalTrackOrderDirection, TidalTrackPlaybackInfo,
+    TidalTrackPlaybackInfoError,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -239,6 +240,40 @@ pub async fn track_file_url_endpoint(
         )
         .await?,
     })))
+}
+
+impl From<TidalTrackPlaybackInfoError> for actix_web::Error {
+    fn from(err: TidalTrackPlaybackInfoError) -> Self {
+        log::error!("{err:?}");
+        ErrorInternalServerError(err.to_string())
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalTrackPlaybackInfoQuery {
+    audio_quality: TidalAudioQuality,
+    track_id: u64,
+}
+
+#[route("/tidal/track/playback-info", method = "GET")]
+pub async fn track_playback_info_endpoint(
+    req: HttpRequest,
+    query: web::Query<TidalTrackPlaybackInfoQuery>,
+    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<TidalTrackPlaybackInfo>> {
+    Ok(Json(
+        track_playback_info(
+            #[cfg(feature = "db")]
+            data.db.as_ref().unwrap(),
+            query.audio_quality,
+            &query.track_id.into(),
+            req.headers()
+                .get(TIDAL_ACCESS_TOKEN_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+        )
+        .await?,
+    ))
 }
 
 impl From<TidalFavoriteArtistsError> for actix_web::Error {
