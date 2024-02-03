@@ -58,9 +58,11 @@ pub async fn track_visualization_endpoint(
 ) -> Result<Json<Vec<u8>>> {
     let source = get_track_source(
         query.track_id,
-        data.db
+        &data
+            .db
             .clone()
             .ok_or(ErrorInternalServerError("No DB set"))?,
+        None,
     )
     .await?;
 
@@ -90,9 +92,11 @@ pub async fn track_endpoint(
 ) -> Result<HttpResponse> {
     let source = get_track_source(
         query.track_id as i32,
-        data.db
+        &data
+            .db
             .clone()
             .ok_or(ErrorInternalServerError("No DB set"))?,
+        None,
     )
     .await?;
 
@@ -103,6 +107,7 @@ pub async fn track_endpoint(
         query.track_id,
         source,
         format,
+        true,
     )
     .await?;
 

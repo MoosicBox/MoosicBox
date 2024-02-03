@@ -18,15 +18,16 @@ use moosicbox_core::{
     },
     types::{AudioFormat, PlaybackQuality},
 };
-use moosicbox_qobuz::QobuzTrackFileUrlError;
+use moosicbox_qobuz::{QobuzAudioQuality, QobuzTrackFileUrlError};
 use moosicbox_stream_utils::ByteWriter;
 use moosicbox_symphonia_player::{
     media_sources::remote_bytestream::RemoteByteStream, output::AudioOutputHandler,
     play_file_path_str, play_media_source, PlaybackError,
 };
-use moosicbox_tidal::TidalTrackFileUrlError;
+use moosicbox_tidal::{TidalAudioQuality, TidalTrackFileUrlError};
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
+use strum_macros::{AsRefStr, EnumString};
 use symphonia::core::{
     audio::{AudioBuffer, AudioBufferRef, Signal},
     conv::{FromSample, IntoSample},
@@ -55,6 +56,38 @@ pub enum TrackSource {
     Qobuz(String),
 }
 
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum TrackAudioQuality {
+    Low,            // MP3 320
+    FlacLossless,   // FLAC 16 bit 44.1kHz
+    FlacHiRes,      // FLAC 24 bit <= 96kHz
+    FlacHighestRes, // FLAC 24 bit > 96kHz <= 192kHz
+}
+
+impl From<TrackAudioQuality> for TidalAudioQuality {
+    fn from(value: TrackAudioQuality) -> Self {
+        match value {
+            TrackAudioQuality::Low => TidalAudioQuality::High,
+            TrackAudioQuality::FlacLossless => TidalAudioQuality::Lossless,
+            TrackAudioQuality::FlacHiRes => TidalAudioQuality::HiResLossless,
+            TrackAudioQuality::FlacHighestRes => TidalAudioQuality::HiResLossless,
+        }
+    }
+}
+
+impl From<TrackAudioQuality> for QobuzAudioQuality {
+    fn from(value: TrackAudioQuality) -> Self {
+        match value {
+            TrackAudioQuality::Low => QobuzAudioQuality::Low,
+            TrackAudioQuality::FlacLossless => QobuzAudioQuality::FlacLossless,
+            TrackAudioQuality::FlacHiRes => QobuzAudioQuality::FlacHiRes,
+            TrackAudioQuality::FlacHighestRes => QobuzAudioQuality::FlacHighestRes,
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum TrackSourceError {
     #[error("Track not found: {0}")]
@@ -69,7 +102,11 @@ pub enum TrackSourceError {
     QobuzTrackUrl(#[from] QobuzTrackFileUrlError),
 }
 
-pub async fn get_track_source(track_id: i32, db: Db) -> Result<TrackSource, TrackSourceError> {
+pub async fn get_track_source(
+    track_id: i32,
+    db: &Db,
+    quality: Option<TrackAudioQuality>,
+) -> Result<TrackSource, TrackSourceError> {
     debug!("Getting track audio file {track_id}");
 
     let track = {
@@ -100,35 +137,30 @@ pub async fn get_track_source(track_id: i32, db: Db) -> Result<TrackSource, Trac
             },
             None => Err(TrackSourceError::InvalidSource),
         },
-        moosicbox_core::sqlite::models::TrackSource::Tidal => Ok(TrackSource::Tidal(
-            moosicbox_tidal::track_file_url(
-                &db,
-                moosicbox_tidal::TidalAudioQuality::High,
-                &track
-                    .tidal_id
-                    .unwrap_or_else(|| panic!("Track {track_id} is missing tidal_id"))
-                    .into(),
-                None,
-            )
-            .await?
-            .first()
-            .unwrap()
-            .to_string(),
-        )),
-        moosicbox_core::sqlite::models::TrackSource::Qobuz => Ok(TrackSource::Qobuz(
-            moosicbox_qobuz::track_file_url(
-                &db,
-                &track
-                    .qobuz_id
-                    .unwrap_or_else(|| panic!("Track {track_id} is missing qobuz_id"))
-                    .into(),
-                moosicbox_qobuz::QobuzAudioQuality::Low,
-                None,
-                None,
-                None,
-            )
-            .await?,
-        )),
+        moosicbox_core::sqlite::models::TrackSource::Tidal => {
+            let quality = quality.map(|q| q.into()).unwrap_or(TidalAudioQuality::High);
+            let track_id = track
+                .tidal_id
+                .unwrap_or_else(|| panic!("Track {track_id} is missing tidal_id"))
+                .into();
+            Ok(TrackSource::Tidal(
+                moosicbox_tidal::track_file_url(db, quality, &track_id, None)
+                    .await?
+                    .first()
+                    .unwrap()
+                    .to_string(),
+            ))
+        }
+        moosicbox_core::sqlite::models::TrackSource::Qobuz => {
+            let quality = quality.map(|q| q.into()).unwrap_or(QobuzAudioQuality::Low);
+            let track_id = track
+                .qobuz_id
+                .unwrap_or_else(|| panic!("Track {track_id} is missing qobuz_id"))
+                .into();
+            Ok(TrackSource::Qobuz(
+                moosicbox_qobuz::track_file_url(db, &track_id, quality, None, None, None).await?,
+            ))
+        }
     }
 }
 
@@ -161,23 +193,28 @@ pub async fn get_track_bytes(
     track_id: u64,
     source: TrackSource,
     format: AudioFormat,
+    try_to_get_size: bool,
 ) -> Result<TrackBytes, GetTrackBytesError> {
-    let size = match get_or_init_track_size(
-        track_id as i32,
-        &source,
-        PlaybackQuality { format },
-        &db.library.lock().as_ref().unwrap(),
-    ) {
-        Ok(size) => Some(size),
-        Err(err) => match err {
-            TrackInfoError::UnsupportedFormat(_) | TrackInfoError::UnsupportedSource(_) => None,
-            TrackInfoError::NotFound(_) => {
-                return Err(GetTrackBytesError::NotFound);
-            }
-            _ => {
-                return Err(GetTrackBytesError::TrackInfo(err));
-            }
-        },
+    let size = if try_to_get_size {
+        match get_or_init_track_size(
+            track_id as i32,
+            &source,
+            PlaybackQuality { format },
+            &db.library.lock().as_ref().unwrap(),
+        ) {
+            Ok(size) => Some(size),
+            Err(err) => match err {
+                TrackInfoError::UnsupportedFormat(_) | TrackInfoError::UnsupportedSource(_) => None,
+                TrackInfoError::NotFound(_) => {
+                    return Err(GetTrackBytesError::NotFound);
+                }
+                _ => {
+                    return Err(GetTrackBytesError::TrackInfo(err));
+                }
+            },
+        }
+    } else {
+        None
     };
 
     let writer = ByteWriter::default();
