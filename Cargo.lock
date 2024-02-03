@@ -2997,6 +2997,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_downloader"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "futures",
+ "log",
+ "moosicbox_core",
+ "moosicbox_files",
+ "pretty_assertions",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "static_init",
+ "test-log",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "moosicbox_env_utils"
 version = "0.1.0"
 dependencies = [
@@ -3239,6 +3260,7 @@ dependencies = [
  "log",
  "moosicbox_auth",
  "moosicbox_core",
+ "moosicbox_downloader",
  "moosicbox_env_utils",
  "moosicbox_files",
  "moosicbox_menu",

@@ -7,6 +7,9 @@ version = "0.1.0"
 [dependencies]
 moosicbox_auth = { path = "../packages/auth" }
 moosicbox_core = { path = "../packages/core", default-features = false }
+moosicbox_downloader = { path = "../packages/downloader", default-features = false, features = [
+    "api",
+] }
 moosicbox_env_utils = { path = "../packages/env_utils" }
 moosicbox_files = { path = "../packages/files", default-features = false, features = [
     "api",
@@ -83,6 +86,7 @@ static-token-auth = []
 aac = [
     "moosicbox_tunnel/aac",
     "moosicbox_player/aac",
+    "moosicbox_downloader/aac",
     "moosicbox_files/aac",
     "moosicbox_core/aac",
     "moosicbox_scan/aac",
@@ -90,6 +94,7 @@ aac = [
 flac = [
     "moosicbox_tunnel/flac",
     "moosicbox_player/flac",
+    "moosicbox_downloader/flac",
     "moosicbox_files/flac",
     "moosicbox_core/flac",
     "moosicbox_scan/flac",
@@ -97,6 +102,7 @@ flac = [
 mp3 = [
     "moosicbox_tunnel/mp3",
     "moosicbox_player/mp3",
+    "moosicbox_downloader/mp3",
     "moosicbox_files/mp3",
     "moosicbox_core/mp3",
     "moosicbox_scan/mp3",
@@ -104,6 +110,7 @@ mp3 = [
 opus = [
     "moosicbox_tunnel/opus",
     "moosicbox_player/opus",
+    "moosicbox_downloader/opus",
     "moosicbox_files/opus",
     "moosicbox_core/opus",
     "moosicbox_scan/opus",

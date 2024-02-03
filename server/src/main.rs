@@ -225,6 +225,7 @@ fn main() -> std::io::Result<()> {
                 .service(moosicbox_scan::api::remove_scan_path_endpoint)
                 .service(moosicbox_auth::api::get_magic_token_endpoint)
                 .service(moosicbox_auth::api::create_magic_token_endpoint)
+                .service(moosicbox_downloader::api::download_endpoint)
                 .service(moosicbox_menu::api::get_artists_endpoint)
                 .service(moosicbox_menu::api::get_artist_endpoint)
                 .service(moosicbox_menu::api::get_album_endpoint)

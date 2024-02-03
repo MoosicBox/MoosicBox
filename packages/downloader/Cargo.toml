@@ -1,0 +1,40 @@
+[package]
+authors = ["Braden Steffaniak"]
+edition = "2021"
+name    = "moosicbox_downloader"
+version = "0.1.0"
+
+[dependencies]
+moosicbox_core  = { path = "../core", default-features = false }
+moosicbox_files = { path = "../files", default-features = false }
+
+# API Dependencies
+actix-web = { workspace = true, optional = true }
+
+futures    = { workspace = true }
+log        = { workspace = true }
+reqwest    = { workspace = true, features = ["json"] }
+serde      = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror  = { workspace = true }
+tokio      = { workspace = true }
+tokio-util = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+serial_test       = { workspace = true }
+static_init       = { workspace = true }
+test-log          = { workspace = true }
+tokio             = { workspace = true, features = ["rt", "macros"] }
+
+[features]
+default = ["api", "aac", "flac", "mp3", "opus"]
+
+fail-on-warnings = []
+
+api = ["dep:actix-web"]
+
+aac  = ["moosicbox_core/aac", "moosicbox_files/aac"]
+flac = ["moosicbox_core/flac", "moosicbox_files/flac"]
+mp3  = ["moosicbox_core/mp3", "moosicbox_files/mp3"]
+opus = ["moosicbox_core/opus", "moosicbox_files/opus"]
