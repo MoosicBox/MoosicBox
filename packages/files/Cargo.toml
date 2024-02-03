@@ -21,6 +21,8 @@ async-recursion = { workspace = true }
 audiotags       = { workspace = true }
 awc             = { workspace = true }
 bytes           = { workspace = true }
+futures         = { workspace = true }
+futures-core    = { workspace = true }
 lazy_static     = { workspace = true }
 log             = { workspace = true }
 once_cell       = { workspace = true }

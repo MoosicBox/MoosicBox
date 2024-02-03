@@ -1,48 +1,31 @@
-use std::path::PathBuf;
-
 use actix_web::{
-    error::{ErrorBadRequest, ErrorInternalServerError},
+    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     route,
     web::{self, Json},
     HttpRequest, HttpResponse, Result,
 };
-use lazy_static::lazy_static;
 use moosicbox_core::{
     app::AppState,
     sqlite::models::{AlbumId, ApiSource, ArtistId},
     track_range::{parse_track_id_ranges, ParseTrackIdsError},
-    types::{AudioFormat, PlaybackQuality},
-};
-use moosicbox_stream_utils::ByteWriter;
-use moosicbox_symphonia_player::{
-    media_sources::remote_bytestream::RemoteByteStream, play_file_path_str, play_media_source,
+    types::AudioFormat,
 };
 use serde::Deserialize;
-use symphonia::core::{io::MediaSourceStream, probe::Hint};
-use tokio_util::sync::CancellationToken;
 
 use crate::files::{
     album::{get_album_cover, AlbumCoverError, AlbumCoverSource},
     artist::{get_artist_cover, ArtistCoverError, ArtistCoverSource},
     resize_image_path,
     track::{
-        get_or_init_track_size, get_or_init_track_visualization, get_track_info, get_track_source,
-        get_tracks_info, TrackInfo, TrackInfoError, TrackSource, TrackSourceError,
+        get_or_init_track_visualization, get_track_bytes, get_track_info, get_track_source,
+        get_tracks_info, GetTrackBytesError, TrackInfo, TrackInfoError, TrackSourceError,
     },
 };
-
-lazy_static! {
-    static ref RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .max_blocking_threads(4)
-        .build()
-        .unwrap();
-}
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTrackQuery {
-    pub track_id: i32,
+    pub track_id: u64,
     pub format: Option<AudioFormat>,
 }
 
@@ -88,14 +71,25 @@ pub async fn track_visualization_endpoint(
     )?))
 }
 
+impl From<GetTrackBytesError> for actix_web::Error {
+    fn from(err: GetTrackBytesError) -> Self {
+        log::error!("{err:?}");
+        match err {
+            GetTrackBytesError::Db(_) => ErrorInternalServerError(err),
+            GetTrackBytesError::TrackInfo(_) => ErrorInternalServerError(err),
+            GetTrackBytesError::NotFound => ErrorNotFound(err),
+            GetTrackBytesError::UnsupportedFormat => ErrorBadRequest(err),
+        }
+    }
+}
+
 #[route("/track", method = "GET", method = "HEAD")]
 pub async fn track_endpoint(
-    req: HttpRequest,
     query: web::Query<GetTrackQuery>,
     data: web::Data<AppState>,
 ) -> Result<HttpResponse> {
     let source = get_track_source(
-        query.track_id,
+        query.track_id as i32,
         data.db
             .clone()
             .ok_or(ErrorInternalServerError("No DB set"))?,
@@ -104,163 +98,42 @@ pub async fn track_endpoint(
 
     let format = query.format.unwrap_or_default();
 
-    let size = get_or_init_track_size(
+    let bytes = get_track_bytes(
+        data.db.as_ref().expect("No DB set"),
         query.track_id,
-        &source,
-        PlaybackQuality { format },
-        &data
-            .db
-            .as_ref()
-            .ok_or(ErrorInternalServerError("No DB set"))?
-            .library
-            .lock()
-            .unwrap(),
-    )?;
+        source,
+        format,
+    )
+    .await?;
 
-    let writer = ByteWriter::default();
-    #[allow(unused)]
-    let stream = writer.stream();
+    let mut response = HttpResponse::Ok();
 
-    {
-        let source = source.clone();
-        RT.spawn(async move {
-            let audio_output_handler = match format {
-                #[cfg(feature = "aac")]
-                AudioFormat::Aac => {
-                    use moosicbox_symphonia_player::output::encoder::aac::encoder::AacEncoder;
-                    let mut audio_output_handler =
-                        moosicbox_symphonia_player::output::AudioOutputHandler::new();
-                    audio_output_handler.with_output(Box::new(move |spec, duration| {
-                        let mut encoder = AacEncoder::new(writer.clone());
-                        encoder.open(spec, duration);
-                        Ok(Box::new(encoder))
-                    }));
-                    Some(audio_output_handler)
-                }
-                #[cfg(feature = "flac")]
-                AudioFormat::Flac => None,
-                #[cfg(feature = "mp3")]
-                AudioFormat::Mp3 => {
-                    use moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder;
-                    let encoder_writer = writer.clone();
-                    let mut audio_output_handler =
-                        moosicbox_symphonia_player::output::AudioOutputHandler::new();
-                    audio_output_handler.with_output(Box::new(move |spec, duration| {
-                        let mut encoder = Mp3Encoder::new(encoder_writer.clone());
-                        encoder.open(spec, duration);
-                        Ok(Box::new(encoder))
-                    }));
-                    Some(audio_output_handler)
-                }
-                #[cfg(feature = "opus")]
-                AudioFormat::Opus => {
-                    use moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder;
-                    let encoder_writer = writer.clone();
-                    let mut audio_output_handler =
-                        moosicbox_symphonia_player::output::AudioOutputHandler::new();
-                    audio_output_handler.with_output(Box::new(move |spec, duration| {
-                        let mut encoder: OpusEncoder<i16, ByteWriter> =
-                            OpusEncoder::new(encoder_writer.clone());
-                        encoder.open(spec, duration);
-                        Ok(Box::new(encoder))
-                    }));
-                    Some(audio_output_handler)
-                }
-                AudioFormat::Source => None,
-            };
-
-            if let Some(mut audio_output_handler) = audio_output_handler {
-                match source {
-                    TrackSource::LocalFilePath(ref path) => {
-                        if let Err(err) = play_file_path_str(
-                            path,
-                            &mut audio_output_handler,
-                            true,
-                            true,
-                            None,
-                            None,
-                        ) {
-                            log::error!("Failed to encode to aac: {err:?}");
-                        }
-                    }
-                    TrackSource::Tidal(url) | TrackSource::Qobuz(url) => {
-                        let source = Box::new(RemoteByteStream::new(
-                            url,
-                            Some(size),
-                            true,
-                            CancellationToken::new(),
-                        ));
-                        if let Err(err) = play_media_source(
-                            MediaSourceStream::new(source, Default::default()),
-                            &Hint::new(),
-                            &mut audio_output_handler,
-                            true,
-                            true,
-                            None,
-                            None,
-                        ) {
-                            log::error!("Failed to encode to aac: {err:?}");
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    match source {
-        TrackSource::LocalFilePath(path) => match format {
-            #[cfg(feature = "aac")]
-            AudioFormat::Aac => Ok(HttpResponse::Ok()
-                .insert_header((actix_web::http::header::CONTENT_TYPE, "audio/mp4"))
-                .body(actix_web::body::SizedStream::new(size, stream))),
-            #[cfg(feature = "flac")]
-            AudioFormat::Flac => {
-                let track = moosicbox_core::sqlite::db::get_track(
-                    &data
-                        .db
-                        .as_ref()
-                        .ok_or(ErrorInternalServerError("No DB set"))?
-                        .library
-                        .lock()
-                        .unwrap()
-                        .inner,
-                    query.track_id,
-                )
-                .map_err(|e| ErrorInternalServerError(format!("DbError: {}", e)))?
-                .ok_or(actix_web::error::ErrorNotFound(format!(
-                    "Missing track {}",
-                    query.track_id
-                )))?;
-
-                if track.format != Some(AudioFormat::Flac) {
-                    return Err(ErrorBadRequest("Unsupported format FLAC"));
-                }
-
-                Ok(
-                    actix_files::NamedFile::open_async(PathBuf::from(path).as_path())
-                        .await?
-                        .into_response(&req),
-                )
-            }
-            #[cfg(feature = "mp3")]
-            AudioFormat::Mp3 => Ok(HttpResponse::Ok()
-                .insert_header((actix_web::http::header::CONTENT_TYPE, "audio/mp3"))
-                .body(actix_web::body::SizedStream::new(size, stream))),
-            #[cfg(feature = "opus")]
-            AudioFormat::Opus => Ok(HttpResponse::Ok()
-                .insert_header((actix_web::http::header::CONTENT_TYPE, "audio/opus"))
-                .body(actix_web::body::SizedStream::new(size, stream))),
-            AudioFormat::Source => Ok(actix_files::NamedFile::open_async(
-                PathBuf::from(path).as_path(),
-            )
-            .await?
-            .into_response(&req)),
-        },
-        TrackSource::Tidal(url) | TrackSource::Qobuz(url) => {
-            let client = reqwest::Client::new();
-            let bytes = client.get(url).send().await.unwrap().bytes_stream();
-            Ok(HttpResponse::Ok().streaming(bytes))
+    match format {
+        #[cfg(feature = "aac")]
+        AudioFormat::Aac => {
+            response.insert_header((actix_web::http::header::CONTENT_TYPE, "audio/mp4"))
         }
+        #[cfg(feature = "flac")]
+        AudioFormat::Flac => {
+            response.insert_header((actix_web::http::header::CONTENT_TYPE, "audio/flac"))
+        }
+        #[cfg(feature = "mp3")]
+        AudioFormat::Mp3 => {
+            response.insert_header((actix_web::http::header::CONTENT_TYPE, "audio/mp3"))
+        }
+        #[cfg(feature = "opus")]
+        AudioFormat::Opus => {
+            response.insert_header((actix_web::http::header::CONTENT_TYPE, "audio/opus"))
+        }
+        AudioFormat::Source => {
+            response.insert_header((actix_web::http::header::CONTENT_TYPE, "audio/mp4"))
+        }
+    };
+
+    if let Some(size) = bytes.size {
+        Ok(response.body(actix_web::body::SizedStream::new(size, bytes.stream)))
+    } else {
+        Ok(response.streaming(bytes.stream))
     }
 }
 

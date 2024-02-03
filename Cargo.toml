@@ -77,6 +77,7 @@ env_logger = "0.10"
 fdk-aac = "0.5.0"
 futures = "0.3"
 futures-channel = "0.3.30"
+futures-core = "0.3.30"
 futures-util = { version = "0.3.30", default-features = false, features = [
     "std",
 ] }

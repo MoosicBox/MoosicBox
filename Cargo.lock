@@ -3014,6 +3014,8 @@ dependencies = [
  "audiotags",
  "awc",
  "bytes",
+ "futures",
+ "futures-core",
  "lazy_static",
  "log",
  "moosicbox_config",

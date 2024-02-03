@@ -1,9 +1,14 @@
 use std::{
     env,
     fs::File,
+    pin::Pin,
     sync::{Arc, RwLock},
 };
 
+use bytes::{Bytes, BytesMut};
+use futures::prelude::*;
+use futures_core::Stream;
+use lazy_static::lazy_static;
 use log::{debug, error, trace};
 use moosicbox_core::{
     app::{Db, DbConnection},
@@ -14,16 +19,34 @@ use moosicbox_core::{
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_qobuz::QobuzTrackFileUrlError;
-use moosicbox_symphonia_player::{output::AudioOutputHandler, play_file_path_str, PlaybackError};
+use moosicbox_stream_utils::ByteWriter;
+use moosicbox_symphonia_player::{
+    media_sources::remote_bytestream::RemoteByteStream, output::AudioOutputHandler,
+    play_file_path_str, play_media_source, PlaybackError,
+};
 use moosicbox_tidal::TidalTrackFileUrlError;
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use symphonia::core::{
     audio::{AudioBuffer, AudioBufferRef, Signal},
     conv::{FromSample, IntoSample},
+    io::MediaSourceStream,
+    probe::Hint,
     sample::Sample,
 };
 use thiserror::Error;
+use tokio_util::{
+    codec::{BytesCodec, FramedRead},
+    sync::CancellationToken,
+};
+
+lazy_static! {
+    static ref RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .max_blocking_threads(4)
+        .build()
+        .unwrap();
+}
 
 #[derive(Clone, Debug)]
 pub enum TrackSource {
@@ -107,6 +130,209 @@ pub async fn get_track_source(track_id: i32, db: Db) -> Result<TrackSource, Trac
             .await?,
         )),
     }
+}
+
+#[derive(Debug, Error)]
+pub enum GetTrackBytesError {
+    #[error(transparent)]
+    Db(#[from] DbError),
+    #[error(transparent)]
+    TrackInfo(#[from] TrackInfoError),
+    #[error("Track not found")]
+    NotFound,
+    #[error("Unsupported format")]
+    UnsupportedFormat,
+}
+
+#[derive(Debug, Error)]
+pub enum TrackByteStreamError {
+    #[error("Unknown {0:?}")]
+    UnsupportedFormat(Box<dyn std::error::Error>),
+}
+
+pub struct TrackBytes {
+    pub stream: Pin<Box<dyn Stream<Item = Result<Bytes, TrackByteStreamError>>>>,
+    pub size: Option<u64>,
+    pub format: AudioFormat,
+}
+
+pub async fn get_track_bytes(
+    db: &Db,
+    track_id: u64,
+    source: TrackSource,
+    format: AudioFormat,
+) -> Result<TrackBytes, GetTrackBytesError> {
+    let size = match get_or_init_track_size(
+        track_id as i32,
+        &source,
+        PlaybackQuality { format },
+        &db.library.lock().as_ref().unwrap(),
+    ) {
+        Ok(size) => Some(size),
+        Err(err) => match err {
+            TrackInfoError::UnsupportedFormat(_) | TrackInfoError::UnsupportedSource(_) => None,
+            TrackInfoError::NotFound(_) => {
+                return Err(GetTrackBytesError::NotFound);
+            }
+            _ => {
+                return Err(GetTrackBytesError::TrackInfo(err));
+            }
+        },
+    };
+
+    let writer = ByteWriter::default();
+    #[allow(unused)]
+    let stream = writer.stream();
+
+    {
+        let source = source.clone();
+        RT.spawn(async move {
+            let audio_output_handler = match format {
+                #[cfg(feature = "aac")]
+                AudioFormat::Aac => {
+                    use moosicbox_symphonia_player::output::encoder::aac::encoder::AacEncoder;
+                    let mut audio_output_handler =
+                        moosicbox_symphonia_player::output::AudioOutputHandler::new();
+                    audio_output_handler.with_output(Box::new(move |spec, duration| {
+                        let mut encoder = AacEncoder::new(writer.clone());
+                        encoder.open(spec, duration);
+                        Ok(Box::new(encoder))
+                    }));
+                    Some(audio_output_handler)
+                }
+                #[cfg(feature = "flac")]
+                AudioFormat::Flac => None,
+                #[cfg(feature = "mp3")]
+                AudioFormat::Mp3 => {
+                    use moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder;
+                    let encoder_writer = writer.clone();
+                    let mut audio_output_handler =
+                        moosicbox_symphonia_player::output::AudioOutputHandler::new();
+                    audio_output_handler.with_output(Box::new(move |spec, duration| {
+                        let mut encoder = Mp3Encoder::new(encoder_writer.clone());
+                        encoder.open(spec, duration);
+                        Ok(Box::new(encoder))
+                    }));
+                    Some(audio_output_handler)
+                }
+                #[cfg(feature = "opus")]
+                AudioFormat::Opus => {
+                    use moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder;
+                    let encoder_writer = writer.clone();
+                    let mut audio_output_handler =
+                        moosicbox_symphonia_player::output::AudioOutputHandler::new();
+                    audio_output_handler.with_output(Box::new(move |spec, duration| {
+                        let mut encoder: OpusEncoder<i16, ByteWriter> =
+                            OpusEncoder::new(encoder_writer.clone());
+                        encoder.open(spec, duration);
+                        Ok(Box::new(encoder))
+                    }));
+                    Some(audio_output_handler)
+                }
+                AudioFormat::Source => None,
+            };
+
+            if let Some(mut audio_output_handler) = audio_output_handler {
+                match source {
+                    TrackSource::LocalFilePath(ref path) => {
+                        if let Err(err) = play_file_path_str(
+                            path,
+                            &mut audio_output_handler,
+                            true,
+                            true,
+                            None,
+                            None,
+                        ) {
+                            log::error!("Failed to encode to aac: {err:?}");
+                        }
+                    }
+                    TrackSource::Tidal(url) | TrackSource::Qobuz(url) => {
+                        let source = Box::new(RemoteByteStream::new(
+                            url,
+                            size,
+                            true,
+                            CancellationToken::new(),
+                        ));
+                        if let Err(err) = play_media_source(
+                            MediaSourceStream::new(source, Default::default()),
+                            &Hint::new(),
+                            &mut audio_output_handler,
+                            true,
+                            true,
+                            None,
+                            None,
+                        ) {
+                            log::error!("Failed to encode to aac: {err:?}");
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    let track_bytes = match source {
+        TrackSource::LocalFilePath(path) => match format {
+            #[cfg(feature = "flac")]
+            AudioFormat::Flac | AudioFormat::Source => {
+                let track = moosicbox_core::sqlite::db::get_track(
+                    &db.library.lock().as_ref().unwrap().inner,
+                    track_id as i32,
+                )?
+                .ok_or(GetTrackBytesError::NotFound)?;
+
+                let format = match format {
+                    AudioFormat::Flac => {
+                        if track.format != Some(AudioFormat::Flac) {
+                            return Err(GetTrackBytesError::UnsupportedFormat);
+                        }
+                        format
+                    }
+                    AudioFormat::Source => {
+                        track.format.ok_or(GetTrackBytesError::UnsupportedFormat)?
+                    }
+                    _ => format,
+                };
+
+                let stream = tokio::fs::File::open(path)
+                    .map_ok(|file| {
+                        FramedRead::new(file, BytesCodec::new()).map_ok(BytesMut::freeze)
+                    })
+                    .try_flatten_stream()
+                    .map_err(|e| TrackByteStreamError::UnsupportedFormat(Box::new(e)));
+
+                TrackBytes {
+                    stream: stream.boxed(),
+                    size,
+                    format,
+                }
+            }
+            _ => TrackBytes {
+                stream: stream
+                    .map_err(|e| TrackByteStreamError::UnsupportedFormat(Box::new(e)))
+                    .boxed(),
+                size,
+                format,
+            },
+        },
+        TrackSource::Tidal(url) | TrackSource::Qobuz(url) => {
+            let client = reqwest::Client::new();
+            let stream = client
+                .get(url)
+                .send()
+                .await
+                .unwrap()
+                .bytes_stream()
+                .map_err(|e| TrackByteStreamError::UnsupportedFormat(Box::new(e)));
+
+            TrackBytes {
+                stream: stream.boxed(),
+                size,
+                format,
+            }
+        }
+    };
+
+    Ok(track_bytes)
 }
 
 #[derive(Debug, Error)]
