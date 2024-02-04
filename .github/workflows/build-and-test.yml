@@ -64,6 +64,21 @@ jobs:
                       path: packages/core
                       os: ubuntu-latest
 
+                    - name: downloader
+                      path: packages/downloader
+                      os: ubuntu-latest
+
+                    - name: downloader-no-default-utils
+                      path: packages/downloader
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+
+                    - name: downloader-api
+                      path: packages/downloader
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: api
+
                     - name: env_utils
                       path: packages/env_utils
                       os: ubuntu-latest
