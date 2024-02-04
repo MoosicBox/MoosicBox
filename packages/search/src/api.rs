@@ -8,7 +8,7 @@ use actix_web::{
 };
 use moosicbox_core::{
     app::AppState,
-    sqlite::models::{ApiAlbumVersionQuality, TrackSource},
+    sqlite::models::{ApiAlbumVersionQuality, TrackApiSource},
     types::AudioFormat,
 };
 use moosicbox_json_utils::{
@@ -120,7 +120,7 @@ impl ToValueType<ApiGlobalAlbumSearchResult> for &NamedFieldDocument {
                         bit_depth: *bit_depth,
                         sample_rate: *sample_rate,
                         channels: *channels,
-                        source: TrackSource::from_str(source)
+                        source: TrackApiSource::from_str(source)
                             .map_err(|_| ParseError::ConvertType("TrackSource".into()))?,
                     })
                 })
@@ -155,7 +155,7 @@ impl ToValueType<ApiGlobalTrackSearchResult> for &NamedFieldDocument {
             bit_depth: self.to_value("version_bit_depths")?,
             sample_rate: self.to_value("version_sample_rates")?,
             channels: self.to_value("version_channels")?,
-            source: TrackSource::from_str(self.to_value("version_sources")?)
+            source: TrackApiSource::from_str(self.to_value("version_sources")?)
                 .map_err(|_| ParseError::ConvertType("TrackSource".into()))?,
         })
     }
@@ -215,7 +215,7 @@ pub struct ApiGlobalTrackSearchResult {
     pub bit_depth: Option<u8>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
-    pub source: TrackSource,
+    pub source: TrackApiSource,
 }
 
 #[get("/search/global-search")]

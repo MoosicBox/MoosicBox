@@ -6,7 +6,7 @@ use moosicbox_core::{
         db::DbError,
         models::{
             qobuz::{QobuzAlbum, QobuzTrack},
-            TrackSource,
+            TrackApiSource,
         },
     },
     types::AudioFormat,
@@ -240,7 +240,7 @@ async fn scan_tracks(
                 &None,
                 &None,
                 &None,
-                TrackSource::Qobuz,
+                TrackApiSource::Qobuz,
                 &Some(track.id),
                 &None,
             )

@@ -14,7 +14,7 @@ use moosicbox_core::{
     app::{Db, DbConnection},
     sqlite::{
         db::{get_track, get_track_size, get_tracks, set_track_size, DbError, SetTrackSize},
-        models::LibraryTrack,
+        models::{LibraryTrack, TrackApiSource},
     },
     types::{AudioFormat, PlaybackQuality},
 };
@@ -106,7 +106,9 @@ pub async fn get_track_source(
     track_id: i32,
     db: &Db,
     quality: Option<TrackAudioQuality>,
+    source: Option<TrackApiSource>,
 ) -> Result<TrackSource, TrackSourceError> {
+    let source = source.unwrap_or(TrackApiSource::Local);
     debug!("Getting track audio file {track_id}");
 
     let track = {
@@ -122,8 +124,8 @@ pub async fn get_track_source(
 
     let track = track.unwrap();
 
-    match track.source {
-        moosicbox_core::sqlite::models::TrackSource::Local => match track.file {
+    match source {
+        TrackApiSource::Local => match track.file {
             Some(file) => match env::consts::OS {
                 "windows" => Ok(TrackSource::LocalFilePath(
                     Regex::new(r"/mnt/(\w+)")
@@ -137,11 +139,11 @@ pub async fn get_track_source(
             },
             None => Err(TrackSourceError::InvalidSource),
         },
-        moosicbox_core::sqlite::models::TrackSource::Tidal => {
+        TrackApiSource::Tidal => {
             let quality = quality.map(|q| q.into()).unwrap_or(TidalAudioQuality::High);
             let track_id = track
                 .tidal_id
-                .unwrap_or_else(|| panic!("Track {track_id} is missing tidal_id"))
+                .ok_or(TrackSourceError::InvalidSource)?
                 .into();
             Ok(TrackSource::Tidal(
                 moosicbox_tidal::track_file_url(db, quality, &track_id, None)
@@ -151,11 +153,11 @@ pub async fn get_track_source(
                     .to_string(),
             ))
         }
-        moosicbox_core::sqlite::models::TrackSource::Qobuz => {
+        TrackApiSource::Qobuz => {
             let quality = quality.map(|q| q.into()).unwrap_or(QobuzAudioQuality::Low);
             let track_id = track
                 .qobuz_id
-                .unwrap_or_else(|| panic!("Track {track_id} is missing qobuz_id"))
+                .ok_or(TrackSourceError::InvalidSource)?
                 .into();
             Ok(TrackSource::Qobuz(
                 moosicbox_qobuz::track_file_url(db, &track_id, quality, None, None, None).await?,

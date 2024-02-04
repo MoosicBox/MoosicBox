@@ -30,7 +30,7 @@ pub enum FetchArtistCoverError {
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
     #[error(transparent)]
-    Io(#[from] std::io::Error),
+    IO(#[from] std::io::Error),
     #[error(transparent)]
     FetchAndSaveBytesFromRemoteUrl(#[from] FetchAndSaveBytesFromRemoteUrlError),
 }
@@ -68,7 +68,7 @@ async fn get_or_fetch_artist_cover_from_remote_url(
 #[derive(Debug, Error)]
 pub enum FetchLocalArtistCoverError {
     #[error(transparent)]
-    Io(#[from] std::io::Error),
+    IO(#[from] std::io::Error),
     #[error(transparent)]
     Db(#[from] DbError),
     #[error("No Artist Cover")]

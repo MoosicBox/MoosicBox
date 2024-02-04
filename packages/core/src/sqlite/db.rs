@@ -1,3 +1,4 @@
+use actix_web::error::ErrorInternalServerError;
 use log::debug;
 use moosicbox_json_utils::ParseError;
 use rusqlite::{params, Connection, Row, Statement};
@@ -36,6 +37,13 @@ pub enum DbError {
     Unknown,
     #[error(transparent)]
     Parse(#[from] ParseError),
+}
+
+impl From<DbError> for actix_web::Error {
+    fn from(err: DbError) -> Self {
+        log::error!("{err:?}");
+        ErrorInternalServerError(format!("Database error"))
+    }
 }
 
 pub fn get_session_playlist_tracks(

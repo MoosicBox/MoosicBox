@@ -152,7 +152,7 @@ impl AsId for StringId {
 #[derive(Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
-pub enum TrackSource {
+pub enum TrackApiSource {
     #[default]
     Local,
     Tidal,
@@ -190,7 +190,7 @@ pub struct LibraryTrack {
     pub overall_bitrate: Option<u32>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
-    pub source: TrackSource,
+    pub source: TrackApiSource,
     pub qobuz_id: Option<u64>,
     pub tidal_id: Option<u64>,
 }
@@ -252,7 +252,7 @@ impl AsModelResult<LibraryTrack, ParseError> for &Row<'_> {
             overall_bitrate: self.to_value("overall_bitrate").unwrap_or_default(),
             sample_rate: self.to_value("sample_rate").unwrap_or_default(),
             channels: self.to_value("channels").unwrap_or_default(),
-            source: TrackSource::from_str(&self.to_value::<String>("source")?)
+            source: TrackApiSource::from_str(&self.to_value::<String>("source")?)
                 .expect("Missing source"),
             qobuz_id: self.to_value("qobuz_id")?,
             tidal_id: self.to_value("tidal_id")?,
@@ -297,7 +297,7 @@ pub struct ApiLibraryTrack {
     pub overall_bitrate: Option<u32>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
-    pub source: TrackSource,
+    pub source: TrackApiSource,
 }
 
 impl ToApi<ApiTrack> for LibraryTrack {
@@ -448,7 +448,7 @@ pub struct AlbumVersionQuality {
     pub bit_depth: Option<u8>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
-    pub source: TrackSource,
+    pub source: TrackApiSource,
 }
 
 impl ToApi<ApiAlbumVersionQuality> for AlbumVersionQuality {
@@ -483,7 +483,7 @@ impl AsModelResult<AlbumVersionQuality, ParseError> for Row<'_> {
             bit_depth: self.to_value("bit_depth").unwrap_or_default(),
             sample_rate: self.to_value("sample_rate")?,
             channels: self.to_value("channels")?,
-            source: TrackSource::from_str(&self.to_value::<String>("source")?)
+            source: TrackApiSource::from_str(&self.to_value::<String>("source")?)
                 .map_err(|e| ParseError::ConvertType(format!("Invalid source: {e:?}")))?,
         })
     }
@@ -579,11 +579,11 @@ impl AsModelResult<LibraryAlbum, ParseError> for Row<'_> {
     }
 }
 
-pub fn track_source_to_u8(source: TrackSource) -> u8 {
+pub fn track_source_to_u8(source: TrackApiSource) -> u8 {
     match source {
-        TrackSource::Local => 1,
-        TrackSource::Tidal => 2,
-        TrackSource::Qobuz => 3,
+        TrackApiSource::Local => 1,
+        TrackApiSource::Tidal => 2,
+        TrackApiSource::Qobuz => 3,
     }
 }
 
@@ -658,7 +658,7 @@ impl AsModelResultMappedMut<LibraryAlbum, DbError> for Rows<'_> {
                             bit_depth: None,
                             sample_rate: None,
                             channels: None,
-                            source: TrackSource::Tidal,
+                            source: TrackApiSource::Tidal,
                         });
                         log::trace!(
                             "Added Tidal version to album id={} count={}",
@@ -672,7 +672,7 @@ impl AsModelResultMappedMut<LibraryAlbum, DbError> for Rows<'_> {
                             bit_depth: None,
                             sample_rate: None,
                             channels: None,
-                            source: TrackSource::Qobuz,
+                            source: TrackApiSource::Qobuz,
                         });
                         log::trace!(
                             "Added Qobuz version to album id={} count={}",
@@ -743,7 +743,7 @@ pub struct ApiAlbumVersionQuality {
     pub bit_depth: Option<u8>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
-    pub source: TrackSource,
+    pub source: TrackApiSource,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]

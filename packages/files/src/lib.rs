@@ -43,7 +43,7 @@ pub enum FetchAndSaveBytesFromRemoteUrlError {
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
     #[error(transparent)]
-    Io(#[from] std::io::Error),
+    IO(#[from] std::io::Error),
     #[error("Request failed: (error {status})")]
     RequestFailed { status: u16, message: String },
 }

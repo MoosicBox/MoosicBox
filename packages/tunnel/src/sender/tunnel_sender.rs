@@ -1051,7 +1051,7 @@ impl TunnelSender {
                     let mut response_headers = HashMap::new();
                     response_headers.insert("accept-ranges".to_string(), "bytes".to_string());
 
-                    match get_track_source(query.track_id, &db, None).await {
+                    match get_track_source(query.track_id, &db, None, None).await {
                         Ok(TrackSource::LocalFilePath(path)) => {
                             static CONTENT_TYPE: &str = "content-type";
                             match query.format {

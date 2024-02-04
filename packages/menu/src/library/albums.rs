@@ -13,7 +13,7 @@ use moosicbox_core::{
         menu::GetAlbumError,
         models::{
             track_source_to_u8, Album, AlbumSort, AlbumSource, ApiSource, ApiTrack, LibraryAlbum,
-            LibraryTrack, ToApi, TrackSource,
+            LibraryTrack, ToApi, TrackApiSource,
         },
     },
     types::AudioFormat,
@@ -220,7 +220,7 @@ pub struct AlbumVersion {
     pub bit_depth: Option<u8>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
-    pub source: TrackSource,
+    pub source: TrackApiSource,
 }
 
 impl ToApi<ApiAlbumVersion> for AlbumVersion {
@@ -258,7 +258,7 @@ pub struct ApiAlbumVersion {
     pub bit_depth: Option<u8>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
-    pub source: TrackSource,
+    pub source: TrackApiSource,
 }
 
 #[derive(Debug, Error)]
@@ -474,13 +474,13 @@ pub async fn remove_album(
 
     let has_local_tracks = tracks
         .iter()
-        .any(|track| track.source == TrackSource::Local);
+        .any(|track| track.source == TrackApiSource::Local);
 
     let target_tracks = tracks
         .into_iter()
         .filter(|track| match track.source {
-            TrackSource::Tidal => album.tidal_id.is_some(),
-            TrackSource::Qobuz => album.qobuz_id.is_some(),
+            TrackApiSource::Tidal => album.tidal_id.is_some(),
+            TrackApiSource::Qobuz => album.qobuz_id.is_some(),
             _ => false,
         })
         .collect::<Vec<_>>();

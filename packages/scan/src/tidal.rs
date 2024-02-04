@@ -6,7 +6,7 @@ use moosicbox_core::{
         db::DbError,
         models::{
             tidal::{TidalAlbum, TidalAlbumImageSize, TidalArtistImageSize, TidalTrack},
-            TrackSource,
+            TrackApiSource,
         },
     },
     types::AudioFormat,
@@ -269,7 +269,7 @@ pub async fn scan_tracks(
                 &None,
                 &None,
                 &None,
-                TrackSource::Tidal,
+                TrackApiSource::Tidal,
                 &None,
                 &Some(track.id),
             )

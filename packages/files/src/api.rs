@@ -6,7 +6,7 @@ use actix_web::{
 };
 use moosicbox_core::{
     app::AppState,
-    sqlite::models::{AlbumId, ApiSource, ArtistId},
+    sqlite::models::{AlbumId, ApiSource, ArtistId, TrackApiSource},
     track_range::{parse_track_id_ranges, ParseTrackIdsError},
     types::AudioFormat,
 };
@@ -27,6 +27,7 @@ use crate::files::{
 pub struct GetTrackQuery {
     pub track_id: u64,
     pub format: Option<AudioFormat>,
+    pub source: Option<TrackApiSource>,
 }
 
 impl From<TrackSourceError> for actix_web::Error {
@@ -63,6 +64,7 @@ pub async fn track_visualization_endpoint(
             .clone()
             .ok_or(ErrorInternalServerError("No DB set"))?,
         None,
+        None,
     )
     .await?;
 
@@ -97,6 +99,7 @@ pub async fn track_endpoint(
             .clone()
             .ok_or(ErrorInternalServerError("No DB set"))?,
         None,
+        query.source,
     )
     .await?;
 

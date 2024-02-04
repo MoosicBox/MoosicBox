@@ -84,6 +84,7 @@ futures-util = { version = "0.3.30", default-features = false, features = [
 ] }
 hex = "0.4.3"
 home = "0.5.9"
+id3 = "1.1.0"
 image = "0.24.8"
 io-streams = "0.15.0"
 itertools = "0.12.0"

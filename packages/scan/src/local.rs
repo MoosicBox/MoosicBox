@@ -3,7 +3,7 @@ use futures::Future;
 use lofty::{AudioFile, ParseOptions};
 use moosicbox_core::{
     app::Db,
-    sqlite::{db::DbError, models::TrackSource},
+    sqlite::{db::DbError, models::TrackApiSource},
     types::AudioFormat,
 };
 use moosicbox_files::{sanitize_filename, search_for_cover};
@@ -308,7 +308,7 @@ fn scan_track(
                 overall_bitrate,
                 sample_rate,
                 channels,
-                TrackSource::Local,
+                TrackApiSource::Local,
                 &None,
                 &None,
             )

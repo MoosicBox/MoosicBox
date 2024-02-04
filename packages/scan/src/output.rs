@@ -14,7 +14,7 @@ use moosicbox_core::{
         },
         models::{
             qobuz::QobuzImageSize, tidal::TidalAlbumImageSize, LibraryAlbum, LibraryArtist,
-            LibraryTrack, NumberId, TrackSource,
+            LibraryTrack, NumberId, TrackApiSource,
         },
     },
     types::{AudioFormat, PlaybackQuality},
@@ -70,7 +70,7 @@ pub struct ScanTrack {
     pub overall_bitrate: Option<u32>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
-    pub source: TrackSource,
+    pub source: TrackApiSource,
     pub qobuz_id: Option<u64>,
     pub tidal_id: Option<u64>,
 }
@@ -90,7 +90,7 @@ impl ScanTrack {
         overall_bitrate: &Option<u32>,
         sample_rate: &Option<u32>,
         channels: &Option<u8>,
-        source: TrackSource,
+        source: TrackApiSource,
         qobuz_id: &Option<u64>,
         tidal_id: &Option<u64>,
     ) -> Self {
@@ -164,7 +164,7 @@ impl ScanAlbum {
         overall_bitrate: &Option<u32>,
         sample_rate: &Option<u32>,
         channels: &Option<u8>,
-        source: TrackSource,
+        source: TrackApiSource,
         qobuz_id: &Option<u64>,
         tidal_id: &Option<u64>,
     ) -> Arc<RwLock<ScanTrack>> {

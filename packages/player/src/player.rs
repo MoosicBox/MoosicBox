@@ -16,7 +16,7 @@ use moosicbox_core::{
         db::{get_album_tracks, get_session_playlist, get_tracks, DbError},
         models::{
             qobuz::QobuzTrack, tidal::TidalTrack, ApiSource, LibraryTrack, ToApi, Track,
-            TrackSource, UpdateSession, UpdateSessionPlaylistTrack,
+            TrackApiSource, UpdateSession, UpdateSessionPlaylistTrack,
         },
     },
     types::{AudioFormat, PlaybackQuality},
@@ -184,17 +184,17 @@ impl TrackOrId {
         }
     }
 
-    pub fn track_source(&self) -> TrackSource {
+    pub fn track_source(&self) -> TrackApiSource {
         match self {
             TrackOrId::Track(track) => match track.as_ref() {
                 Track::Library(track) => track.source,
-                Track::Tidal(_) => TrackSource::Tidal,
-                Track::Qobuz(_) => TrackSource::Qobuz,
+                Track::Tidal(_) => TrackApiSource::Tidal,
+                Track::Qobuz(_) => TrackApiSource::Qobuz,
             },
             TrackOrId::Id(_id, source) => match source {
-                ApiSource::Library => TrackSource::Local,
-                ApiSource::Tidal => TrackSource::Tidal,
-                ApiSource::Qobuz => TrackSource::Qobuz,
+                ApiSource::Library => TrackApiSource::Local,
+                ApiSource::Tidal => TrackApiSource::Tidal,
+                ApiSource::Qobuz => TrackApiSource::Qobuz,
             },
         }
     }
@@ -607,7 +607,7 @@ impl Player {
             );
 
             let playback_type = match track_or_id.track_source() {
-                TrackSource::Local => self.playback_type,
+                TrackApiSource::Local => self.playback_type,
                 _ => PlaybackType::Stream,
             };
 
