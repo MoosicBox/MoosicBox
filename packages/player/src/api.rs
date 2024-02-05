@@ -11,8 +11,8 @@ use actix_web::{
 };
 use moosicbox_core::{
     app::AppState,
+    integer_range::{parse_integer_ranges, ParseIntegersError},
     sqlite::models::ApiSource,
-    track_range::{parse_track_id_ranges, ParseTrackIdsError},
     types::{AudioFormat, PlaybackQuality},
 };
 use once_cell::sync::Lazy;
@@ -183,20 +183,20 @@ pub async fn play_tracks_endpoint(
             .play_tracks(
                 Some(data.db.clone().expect("No DB bound on AppState")),
                 query.session_id,
-                parse_track_id_ranges(&query.track_ids)
+                parse_integer_ranges(&query.track_ids)
                     .map_err(|e| match e {
-                        ParseTrackIdsError::ParseId(id) => {
+                        ParseIntegersError::ParseId(id) => {
                             ErrorBadRequest(format!("Could not parse trackId '{id}'"))
                         }
-                        ParseTrackIdsError::UnmatchedRange(range) => {
+                        ParseIntegersError::UnmatchedRange(range) => {
                             ErrorBadRequest(format!("Unmatched range '{range}'"))
                         }
-                        ParseTrackIdsError::RangeTooLarge(range) => {
+                        ParseIntegersError::RangeTooLarge(range) => {
                             ErrorBadRequest(format!("Range too large '{range}'"))
                         }
                     })?
-                    .iter()
-                    .map(|id| TrackOrId::Id(*id, query.source.unwrap_or(ApiSource::Library)))
+                    .into_iter()
+                    .map(|id| TrackOrId::Id(id as i32, query.source.unwrap_or(ApiSource::Library)))
                     .collect(),
                 query.position,
                 query.seek,
@@ -275,20 +275,22 @@ pub async fn update_playback_endpoint(
                 .track_ids
                 .clone()
                 .map(|track_ids| {
-                    Ok(parse_track_id_ranges(&track_ids)?
-                        .iter()
-                        .map(|id| TrackOrId::Id(*id, query.source.unwrap_or(ApiSource::Library)))
+                    Ok(parse_integer_ranges(&track_ids)?
+                        .into_iter()
+                        .map(|id| {
+                            TrackOrId::Id(id as i32, query.source.unwrap_or(ApiSource::Library))
+                        })
                         .collect())
                 })
                 .transpose()
                 .map_err(|e| match e {
-                    ParseTrackIdsError::ParseId(id) => {
+                    ParseIntegersError::ParseId(id) => {
                         ErrorBadRequest(format!("Could not parse trackId '{id}'"))
                     }
-                    ParseTrackIdsError::UnmatchedRange(range) => {
+                    ParseIntegersError::UnmatchedRange(range) => {
                         ErrorBadRequest(format!("Unmatched range '{range}'"))
                     }
-                    ParseTrackIdsError::RangeTooLarge(range) => {
+                    ParseIntegersError::RangeTooLarge(range) => {
                         ErrorBadRequest(format!("Range too large '{range}'"))
                     }
                 })?,

@@ -6,8 +6,8 @@ use actix_web::{
 };
 use moosicbox_core::{
     app::AppState,
+    integer_range::{parse_integer_ranges, ParseIntegersError},
     sqlite::models::{AlbumId, ApiSource, ArtistId, TrackApiSource},
-    track_range::{parse_track_id_ranges, ParseTrackIdsError},
     types::AudioFormat,
 };
 use serde::Deserialize;
@@ -178,17 +178,21 @@ pub async fn tracks_info_endpoint(
     query: web::Query<GetTracksInfoQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<Vec<TrackInfo>>> {
-    let ids = parse_track_id_ranges(&query.track_ids).map_err(|e| match e {
-        ParseTrackIdsError::ParseId(id) => {
-            ErrorBadRequest(format!("Could not parse trackId '{id}'"))
-        }
-        ParseTrackIdsError::UnmatchedRange(range) => {
-            ErrorBadRequest(format!("Unmatched range '{range}'"))
-        }
-        ParseTrackIdsError::RangeTooLarge(range) => {
-            ErrorBadRequest(format!("Range too large '{range}'"))
-        }
-    })?;
+    let ids = parse_integer_ranges(&query.track_ids)
+        .map_err(|e| match e {
+            ParseIntegersError::ParseId(id) => {
+                ErrorBadRequest(format!("Could not parse trackId '{id}'"))
+            }
+            ParseIntegersError::UnmatchedRange(range) => {
+                ErrorBadRequest(format!("Unmatched range '{range}'"))
+            }
+            ParseIntegersError::RangeTooLarge(range) => {
+                ErrorBadRequest(format!("Range too large '{range}'"))
+            }
+        })?
+        .into_iter()
+        .map(|id| id as i32)
+        .collect::<Vec<_>>();
 
     Ok(Json(
         get_tracks_info(

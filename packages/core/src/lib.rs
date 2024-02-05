@@ -2,6 +2,6 @@
 
 pub mod app;
 pub mod cache;
+pub mod integer_range;
 pub mod sqlite;
-pub mod track_range;
 pub mod types;
