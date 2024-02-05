@@ -7,9 +7,10 @@ use std::{
 };
 
 use bytes::Bytes;
-use futures::Stream;
-use thiserror::Error;
+use stalled_monitor::StalledReadMonitor;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+
+pub mod stalled_monitor;
 
 #[derive(Clone)]
 pub struct ByteWriter {
@@ -71,15 +72,24 @@ impl std::io::Write for ByteWriter {
     }
 }
 
-#[derive(Error, Debug)]
-pub enum ByteStreamError {}
-
 pub struct ByteStream {
     receiver: UnboundedReceiver<Bytes>,
 }
 
-impl Stream for ByteStream {
-    type Item = Result<Bytes, ByteStreamError>;
+impl ByteStream {
+    pub fn stalled_monitor(self) -> StalledReadMonitor<Bytes, ByteStream> {
+        self.into()
+    }
+}
+
+impl Into<StalledReadMonitor<Bytes, ByteStream>> for ByteStream {
+    fn into(self) -> StalledReadMonitor<Bytes, ByteStream> {
+        StalledReadMonitor::new(self)
+    }
+}
+
+impl futures::Stream for ByteStream {
+    type Item = Result<Bytes, std::io::Error>;
 
     fn poll_next(
         self: std::pin::Pin<&mut Self>,

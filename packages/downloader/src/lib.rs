@@ -2,6 +2,7 @@
 
 use std::{path::PathBuf, str::FromStr};
 
+use async_recursion::async_recursion;
 use audiotags::Tag;
 use futures::StreamExt;
 use id3::Timestamp;
@@ -22,7 +23,7 @@ use moosicbox_files::{
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncSeekExt, AsyncWriteExt, BufWriter};
 
 #[cfg(feature = "api")]
 pub mod api;
@@ -42,6 +43,16 @@ impl From<DownloadApiSource> for TrackApiSource {
         match value {
             DownloadApiSource::Tidal => TrackApiSource::Tidal,
             DownloadApiSource::Qobuz => TrackApiSource::Qobuz,
+        }
+    }
+}
+
+impl From<TrackApiSource> for DownloadApiSource {
+    fn from(value: TrackApiSource) -> Self {
+        match value {
+            TrackApiSource::Tidal => DownloadApiSource::Tidal,
+            TrackApiSource::Qobuz => DownloadApiSource::Qobuz,
+            _ => panic!("Invalid TrackApiSource"),
         }
     }
 }
@@ -67,7 +78,7 @@ pub enum DownloadTrackError {
     #[error(transparent)]
     IO(#[from] std::io::Error),
     #[error(transparent)]
-    Tag(#[from] audiotags::Error),
+    TagTrackFile(#[from] TagTrackFileError),
     #[error("Invalid source")]
     InvalidSource,
     #[error("Not found")]
@@ -86,21 +97,23 @@ pub async fn download_track_id(
     let track = get_track(&db.library.lock().as_ref().unwrap().inner, track_id as i32)?
         .ok_or(DownloadTrackError::NotFound)?;
 
-    download_track(db, path, &track, quality, source).await
+    download_track(db, path, &track, quality, source, None).await
 }
 
+#[async_recursion]
 pub async fn download_track(
     db: &Db,
     path: &str,
     track: &LibraryTrack,
     quality: Option<TrackAudioQuality>,
     source: Option<DownloadApiSource>,
+    start: Option<u64>,
 ) -> Result<(), DownloadTrackError> {
     log::debug!(
-        "Starting download for track={track:?} quality={quality:?} source={source:?} path={path}"
+        "Starting download for track={track:?} quality={quality:?} source={source:?} path={path} start={start:?}"
     );
 
-    let source = if let Some(source) = source {
+    let download_source = if let Some(source) = source {
         source
     } else if track.qobuz_id.is_some() {
         log::debug!("Falling back to Qobuz DownloadApiSource");
@@ -112,9 +125,17 @@ pub async fn download_track(
         return Err(DownloadTrackError::InvalidSource);
     };
 
-    let source = get_track_source(track.id, db, quality, Some(source.into())).await?;
-    let mut bytes =
-        get_track_bytes(db, track.id as u64, source, AudioFormat::Source, false).await?;
+    let source = get_track_source(track.id, db, quality, Some(download_source.into())).await?;
+    let bytes = get_track_bytes(
+        db,
+        track.id as u64,
+        source,
+        AudioFormat::Source,
+        false,
+        start,
+        None,
+    )
+    .await?;
 
     let path_buf = PathBuf::from_str(path)
         .unwrap()
@@ -129,34 +150,79 @@ pub async fn download_track(
         .unwrap()
         .to_string();
 
-    let mut reader = bytes.stream.as_mut();
-
     log::debug!("Downloading track to track_path={track_path:?}");
 
     {
-        let mut file = tokio::fs::OpenOptions::new()
+        let mut reader = bytes.stream;
+
+        let file = tokio::fs::OpenOptions::new()
             .write(true)
             .create(true)
-            .truncate(true)
+            .truncate(!start.is_some_and(|start| start > 0))
             .open(track_path)
             .await?;
 
-        let mut total = 0_usize;
+        let mut writer = BufWriter::new(file);
 
-        while let Some(Ok(data)) = reader.next().await {
-            total += data.len();
-            log::debug!(
-                "Writing bytes to '{track_path}': {} ({total} total)",
-                data.len()
-            );
-            file.write(&data).await?;
+        if let Some(start) = start {
+            writer.seek(std::io::SeekFrom::Start(start)).await?;
         }
+
+        let mut total = start.unwrap_or(0) as usize;
+
+        while let Some(data) = reader.next().await {
+            match data {
+                Ok(data) => {
+                    total += data.len();
+                    log::debug!(
+                        "Writing bytes to '{track_path}': {} ({total} total)",
+                        data.len()
+                    );
+                    writer.write(&data).await?;
+                }
+                Err(err) => {
+                    if err.kind() == std::io::ErrorKind::TimedOut {
+                        log::warn!("Track download timed out. Trying again at position {total}");
+                        return download_track(
+                            db,
+                            path,
+                            track,
+                            quality,
+                            Some(download_source),
+                            Some(total as u64),
+                        )
+                        .await;
+                    } else {
+                        return Err(DownloadTrackError::IO(err));
+                    }
+                }
+            }
+        }
+
+        writer.flush().await?;
     }
 
     log::debug!("Finished downloading track to track_path={track_path:?}");
+
+    tag_track_file(track_path, track).await?;
+
+    log::debug!("Completed track download for track_path={track_path:?}");
+
+    Ok(())
+}
+
+#[derive(Debug, Error)]
+pub enum TagTrackFileError {
+    #[error(transparent)]
+    Tag(#[from] audiotags::Error),
+}
+
+pub async fn tag_track_file(
+    track_path: &str,
+    track: &LibraryTrack,
+) -> Result<(), TagTrackFileError> {
     log::debug!("Adding tags to track_path={track_path:?}");
 
-    //let mut tag: Box<dyn AudioTag> = Box::new(FlacTag::new());
     let mut tag = Tag::new().read_from_path(track_path)?;
 
     tag.set_title(&track.title);
@@ -172,8 +238,6 @@ pub async fn download_track(
     }
 
     tag.write_to_path(track_path)?;
-
-    log::debug!("Completed track download for track_path={track_path:?}");
 
     Ok(())
 }
@@ -199,8 +263,19 @@ pub async fn download_album_id(
 
     let tracks = get_album_tracks(&db.library.lock().as_ref().unwrap().inner, album_id as i32)?;
 
+    let tracks = if let Some(source) = source {
+        let track_source = source.into();
+
+        tracks
+            .into_iter()
+            .filter(|track| track.source == track_source)
+            .collect()
+    } else {
+        tracks
+    };
+
     for track in tracks.iter() {
-        download_track(db, path, track, quality, source).await?
+        download_track(db, path, track, quality, source, None).await?
     }
 
     log::debug!("Completed album download for {} tracks", tracks.len());

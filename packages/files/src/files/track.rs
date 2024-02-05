@@ -19,7 +19,7 @@ use moosicbox_core::{
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_qobuz::{QobuzAudioQuality, QobuzTrackFileUrlError};
-use moosicbox_stream_utils::ByteWriter;
+use moosicbox_stream_utils::{stalled_monitor::StalledReadMonitor, ByteWriter};
 use moosicbox_symphonia_player::{
     media_sources::remote_bytestream::RemoteByteStream, output::AudioOutputHandler,
     play_file_path_str, play_media_source, PlaybackError,
@@ -171,6 +171,8 @@ pub enum GetTrackBytesError {
     #[error(transparent)]
     Db(#[from] DbError),
     #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[error(transparent)]
     TrackInfo(#[from] TrackInfoError),
     #[error("Track not found")]
     NotFound,
@@ -185,7 +187,10 @@ pub enum TrackByteStreamError {
 }
 
 pub struct TrackBytes {
-    pub stream: Pin<Box<dyn Stream<Item = Result<Bytes, TrackByteStreamError>>>>,
+    pub stream: StalledReadMonitor<
+        Bytes,
+        Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>,
+    >,
     pub size: Option<u64>,
     pub format: AudioFormat,
 }
@@ -196,6 +201,8 @@ pub async fn get_track_bytes(
     source: TrackSource,
     format: AudioFormat,
     try_to_get_size: bool,
+    start: Option<u64>,
+    end: Option<u64>,
 ) -> Result<TrackBytes, GetTrackBytesError> {
     let size = if try_to_get_size {
         match get_or_init_track_size(
@@ -336,35 +343,34 @@ pub async fn get_track_bytes(
                     .map_ok(|file| {
                         FramedRead::new(file, BytesCodec::new()).map_ok(BytesMut::freeze)
                     })
-                    .try_flatten_stream()
-                    .map_err(|e| TrackByteStreamError::UnsupportedFormat(Box::new(e)));
+                    .try_flatten_stream();
 
                 TrackBytes {
-                    stream: stream.boxed(),
+                    stream: StalledReadMonitor::new(stream.boxed()),
                     size,
                     format,
                 }
             }
             _ => TrackBytes {
-                stream: stream
-                    .map_err(|e| TrackByteStreamError::UnsupportedFormat(Box::new(e)))
-                    .boxed(),
+                stream: StalledReadMonitor::new(stream.boxed()),
                 size,
                 format,
             },
         },
         TrackSource::Tidal(url) | TrackSource::Qobuz(url) => {
             let client = reqwest::Client::new();
+            let start = start.map(|start| start.to_string()).unwrap_or("".into());
+            let end = end.map(|end| end.to_string()).unwrap_or("".into());
             let stream = client
                 .get(url)
+                .header("Range", format!("bytes={start}-{end}"))
                 .send()
-                .await
-                .unwrap()
+                .await?
                 .bytes_stream()
-                .map_err(|e| TrackByteStreamError::UnsupportedFormat(Box::new(e)));
+                .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err));
 
             TrackBytes {
-                stream: stream.boxed(),
+                stream: StalledReadMonitor::new(stream.boxed()),
                 size,
                 format,
             }

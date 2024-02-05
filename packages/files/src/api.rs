@@ -80,6 +80,7 @@ impl From<GetTrackBytesError> for actix_web::Error {
         log::error!("{err:?}");
         match err {
             GetTrackBytesError::Db(_) => ErrorInternalServerError(err),
+            GetTrackBytesError::Reqwest(_) => ErrorInternalServerError(err),
             GetTrackBytesError::TrackInfo(_) => ErrorInternalServerError(err),
             GetTrackBytesError::NotFound => ErrorNotFound(err),
             GetTrackBytesError::UnsupportedFormat => ErrorBadRequest(err),
@@ -111,6 +112,8 @@ pub async fn track_endpoint(
         source,
         format,
         true,
+        None,
+        None,
     )
     .await?;
 
