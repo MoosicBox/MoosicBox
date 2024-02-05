@@ -44,6 +44,7 @@ pub struct DownloadQuery {
     track_ids: Option<String>,
     album_id: Option<u64>,
     album_ids: Option<String>,
+    download_album_cover: Option<bool>,
     quality: Option<TrackAudioQuality>,
     source: Option<DownloadApiSource>,
 }
@@ -96,6 +97,7 @@ pub async fn download_endpoint(
             &data.db.as_ref().expect("No DB set"),
             &path,
             album_id,
+            query.download_album_cover.unwrap_or(true),
             query.quality,
             query.source,
             *TIMEOUT_DURATION,
@@ -127,6 +129,7 @@ pub async fn download_endpoint(
                 &data.db.as_ref().expect("No DB set"),
                 &path,
                 album_id,
+                query.download_album_cover.unwrap_or(true),
                 query.quality,
                 query.source,
                 *TIMEOUT_DURATION,

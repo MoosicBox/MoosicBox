@@ -4,11 +4,19 @@ use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
+    pin::Pin,
 };
 
 use audiotags::AudioTag;
+use bytes::Bytes;
+use futures::{StreamExt, TryStreamExt};
+use futures_core::Stream;
 use once_cell::sync::Lazy;
 use thiserror::Error;
+use tokio::{
+    io::{AsyncWriteExt, BufWriter},
+    pin,
+};
 
 #[cfg(feature = "api")]
 pub mod api;
@@ -26,7 +34,7 @@ pub fn sanitize_filename(string: &str) -> String {
     NON_ALPHA_NUMERIC_REGEX.replace_all(string, "_").to_string()
 }
 
-fn save_bytes_to_file(bytes: &[u8], path: &Path) -> Result<(), std::io::Error> {
+pub fn save_bytes_to_file(bytes: &[u8], path: &Path) -> Result<(), std::io::Error> {
     std::fs::create_dir_all(path.parent().expect("No parent directory"))?;
 
     let mut file = std::fs::OpenOptions::new()
@@ -36,6 +44,31 @@ fn save_bytes_to_file(bytes: &[u8], path: &Path) -> Result<(), std::io::Error> {
         .unwrap();
 
     file.write_all(bytes)
+}
+
+pub async fn save_bytes_stream_to_file<S: Stream<Item = Result<Bytes, std::io::Error>>>(
+    stream: S,
+    path: &Path,
+) -> Result<(), tokio::io::Error> {
+    std::fs::create_dir_all(path.parent().expect("No parent directory"))?;
+
+    let file = tokio::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(path)
+        .await?;
+
+    let mut writer = BufWriter::new(file);
+
+    pin!(stream);
+
+    while let Some(bytes) = stream.next().await {
+        writer.write(&bytes?).await?;
+    }
+
+    writer.flush().await?;
+
+    Ok(())
 }
 
 #[derive(Debug, Error)]
@@ -48,11 +81,13 @@ pub enum FetchAndSaveBytesFromRemoteUrlError {
     RequestFailed { status: u16, message: String },
 }
 
-pub async fn fetch_and_save_bytes_from_remote_url(
+pub async fn fetch_bytes_from_remote_url(
     client: &reqwest::Client,
-    file_path: &Path,
     url: &str,
-) -> Result<PathBuf, FetchAndSaveBytesFromRemoteUrlError> {
+) -> Result<
+    Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>,
+    FetchAndSaveBytesFromRemoteUrlError,
+> {
     log::debug!("Fetching bytes from remote url: {url}");
     let response = client.get(url).send().await?;
 
@@ -68,9 +103,20 @@ pub async fn fetch_and_save_bytes_from_remote_url(
         });
     }
 
-    let bytes = response.bytes().await?;
+    Ok(response
+        .bytes_stream()
+        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
+        .boxed())
+}
+
+pub async fn fetch_and_save_bytes_from_remote_url(
+    client: &reqwest::Client,
+    file_path: &Path,
+    url: &str,
+) -> Result<PathBuf, FetchAndSaveBytesFromRemoteUrlError> {
     log::debug!("Saving bytes to file: {file_path:?}");
-    save_bytes_to_file(&bytes, file_path)?;
+    let stream = fetch_bytes_from_remote_url(client, url).await?;
+    save_bytes_stream_to_file(stream, file_path).await?;
     Ok(file_path.to_path_buf())
 }
 

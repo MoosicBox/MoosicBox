@@ -1,6 +1,14 @@
-use std::{collections::HashMap, path::Path, sync::RwLock};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    pin::Pin,
+    sync::RwLock,
+};
 
 use async_recursion::async_recursion;
+use bytes::{Bytes, BytesMut};
+use futures::{StreamExt, TryFutureExt, TryStreamExt};
+use futures_core::Stream;
 use moosicbox_core::{
     app::Db,
     sqlite::{
@@ -16,10 +24,11 @@ use moosicbox_qobuz::QobuzAlbumError;
 use moosicbox_tidal::TidalAlbumError;
 use once_cell::sync::Lazy;
 use thiserror::Error;
+use tokio_util::codec::{BytesCodec, FramedRead};
 
 use crate::{
-    fetch_and_save_bytes_from_remote_url, sanitize_filename, search_for_cover,
-    FetchAndSaveBytesFromRemoteUrlError,
+    fetch_and_save_bytes_from_remote_url, fetch_bytes_from_remote_url, sanitize_filename,
+    search_for_cover, FetchAndSaveBytesFromRemoteUrlError,
 };
 
 pub enum AlbumCoverSource {
@@ -36,16 +45,13 @@ pub enum FetchAlbumCoverError {
     FetchAndSaveBytesFromRemoteUrl(#[from] FetchAndSaveBytesFromRemoteUrlError),
 }
 
-async fn get_or_fetch_album_cover_from_remote_url(
-    url: &str,
+fn get_album_cover_path(
     size: &str,
     source: &str,
     album_id: &str,
     artist_name: &str,
     album_name: &str,
-) -> Result<String, FetchAlbumCoverError> {
-    static IMAGE_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
-
+) -> PathBuf {
     let path = moosicbox_config::get_cache_dir_path()
         .expect("Failed to get cache directory")
         .join(source)
@@ -53,9 +59,34 @@ async fn get_or_fetch_album_cover_from_remote_url(
         .join(sanitize_filename(album_name));
 
     let filename = format!("album_{size}_{album_id}.jpg");
-    let file_path = path.join(filename);
 
-    if Path::exists(&file_path) {
+    path.join(filename)
+}
+
+async fn get_or_fetch_album_cover_bytes_from_remote_url(
+    url: &str,
+    file_path: &Path,
+) -> Result<Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>, FetchAlbumCoverError>
+{
+    static IMAGE_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
+
+    if Path::exists(file_path) {
+        Ok(tokio::fs::File::open(file_path.to_path_buf())
+            .map_ok(|file| FramedRead::new(file, BytesCodec::new()).map_ok(BytesMut::freeze))
+            .try_flatten_stream()
+            .boxed())
+    } else {
+        Ok(fetch_bytes_from_remote_url(&IMAGE_CLIENT, url).await?)
+    }
+}
+
+async fn get_or_fetch_album_cover_from_remote_url(
+    url: &str,
+    file_path: &Path,
+) -> Result<String, FetchAlbumCoverError> {
+    static IMAGE_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
+
+    if Path::exists(file_path) {
         Ok(file_path.to_str().unwrap().to_string())
     } else {
         Ok(
@@ -113,6 +144,47 @@ fn fetch_local_album_cover(
     Err(FetchLocalAlbumCoverError::NoAlbumCover)
 }
 
+fn fetch_local_album_cover_bytes(
+    db: &Db,
+    cover: Option<String>,
+    album_id: i32,
+    directory: Option<String>,
+) -> Result<BytesStream, FetchLocalAlbumCoverError> {
+    let cover = cover.ok_or(FetchLocalAlbumCoverError::NoAlbumCover)?;
+
+    let cover_path = std::path::PathBuf::from(&cover);
+
+    if Path::exists(&cover_path) {
+        return Ok(tokio::fs::File::open(cover_path.to_path_buf())
+            .map_ok(|file| FramedRead::new(file, BytesCodec::new()).map_ok(BytesMut::freeze))
+            .try_flatten_stream()
+            .boxed());
+    }
+
+    let directory = directory.ok_or(FetchLocalAlbumCoverError::NoAlbumCover)?;
+    let directory_path = std::path::PathBuf::from(directory);
+
+    if let Some(path) = search_for_cover(directory_path, "cover", None, None)? {
+        let artwork = path.to_str().unwrap().to_string();
+
+        log::debug!("Updating Album {album_id} artwork file from '{cover}' to '{artwork}'");
+
+        moosicbox_core::sqlite::db::update_and_get_row::<LibraryAlbum>(
+            &db.library.lock().as_ref().unwrap().inner,
+            "albums",
+            SqliteValue::Number(album_id as i64),
+            &[("artwork", SqliteValue::String(artwork))],
+        )?;
+
+        return Ok(tokio::fs::File::open(path)
+            .map_ok(|file| FramedRead::new(file, BytesCodec::new()).map_ok(BytesMut::freeze))
+            .try_flatten_stream()
+            .boxed());
+    }
+
+    Err(FetchLocalAlbumCoverError::NoAlbumCover)
+}
+
 #[derive(Debug, Error)]
 pub enum AlbumCoverError {
     #[error("Album cover not found for album: {0:?}")]
@@ -121,6 +193,8 @@ pub enum AlbumCoverError {
     FetchAlbumCover(#[from] FetchAlbumCoverError),
     #[error(transparent)]
     FetchLocalAlbumCover(#[from] FetchLocalAlbumCoverError),
+    #[error(transparent)]
+    IO(#[from] tokio::io::Error),
     #[error(transparent)]
     Db(#[from] DbError),
     #[error(transparent)]
@@ -149,6 +223,25 @@ fn copy_streaming_cover_to_local(
 }
 
 #[async_recursion]
+pub async fn get_album_cover_bytes(
+    album_id: AlbumId,
+    db: &Db,
+    size: Option<u32>,
+) -> Result<BytesStream, AlbumCoverError> {
+    Ok(match &album_id {
+        AlbumId::Library(library_album_id) => {
+            get_library_album_cover_bytes(*library_album_id, db).await?
+        }
+        AlbumId::Tidal(tidal_album_id) => {
+            get_tidal_album_cover_bytes(*tidal_album_id, db, size).await?
+        }
+        AlbumId::Qobuz(qobuz_album_id) => {
+            get_qobuz_album_cover_bytes(qobuz_album_id, db, size).await?
+        }
+    })
+}
+
+#[async_recursion]
 pub async fn get_album_cover(
     album_id: AlbumId,
     db: &Db,
@@ -156,151 +249,235 @@ pub async fn get_album_cover(
 ) -> Result<AlbumCoverSource, AlbumCoverError> {
     let path = match &album_id {
         AlbumId::Library(library_album_id) => {
-            let album = get_album(
-                &db.library.lock().as_ref().unwrap().inner,
-                *library_album_id,
-            )?
-            .ok_or(AlbumCoverError::NotFound(album_id.clone()))?;
-
-            if let Ok(cover) = fetch_local_album_cover(db, album.artwork, album.id, album.directory)
-            {
-                return Ok(AlbumCoverSource::LocalFilePath(cover));
-            }
-
-            if let Some(tidal_id) = album.tidal_id {
-                if let Ok(AlbumCoverSource::LocalFilePath(cover)) =
-                    get_album_cover(AlbumId::Tidal(tidal_id), db, None).await
-                {
-                    return Ok(AlbumCoverSource::LocalFilePath(
-                        copy_streaming_cover_to_local(db, album.id, cover)?,
-                    ));
-                }
-            }
-
-            if let Some(qobuz_id) = album.qobuz_id {
-                if let Ok(AlbumCoverSource::LocalFilePath(cover)) =
-                    get_album_cover(AlbumId::Qobuz(qobuz_id), db, None).await
-                {
-                    return Ok(AlbumCoverSource::LocalFilePath(
-                        copy_streaming_cover_to_local(db, album.id, cover)?,
-                    ));
-                }
-            }
-
-            return Err(AlbumCoverError::NotFound(album_id));
+            get_library_album_cover(*library_album_id, db).await?
         }
-        AlbumId::Tidal(tidal_album_id) => {
-            static ALBUM_CACHE: Lazy<RwLock<HashMap<u64, Option<TidalAlbum>>>> =
-                Lazy::new(|| RwLock::new(HashMap::new()));
-
-            let album = if let Some(album) = {
-                let binding = ALBUM_CACHE.read().unwrap();
-                binding.get(tidal_album_id).cloned()
-            } {
-                album
-            } else {
-                use moosicbox_tidal::AuthenticatedRequestError;
-
-                let album = match moosicbox_tidal::album(
-                    db,
-                    &tidal_album_id.into(),
-                    None,
-                    None,
-                    None,
-                    None,
-                )
-                .await
-                {
-                    Ok(album) => Ok(Some(album)),
-                    Err(err) => match err {
-                        TidalAlbumError::AuthenticatedRequest(
-                            AuthenticatedRequestError::RequestFailed(404, _),
-                        ) => Ok(None),
-                        _ => Err(err),
-                    },
-                }?;
-
-                ALBUM_CACHE
-                    .write()
-                    .as_mut()
-                    .unwrap()
-                    .insert(*tidal_album_id, album.clone());
-
-                album
-            }
-            .ok_or_else(|| AlbumCoverError::NotFound(album_id.clone()))?;
-
-            let size = size
-                .map(|size| (size as u16).into())
-                .unwrap_or(TidalAlbumImageSize::Max);
-
-            let cover = album
-                .cover_url(size)
-                .ok_or(AlbumCoverError::NotFound(album_id.clone()))?;
-
-            get_or_fetch_album_cover_from_remote_url(
-                &cover,
-                &size.to_string(),
-                "tidal",
-                &album.id.to_string(),
-                &album.artist,
-                &album.title,
-            )
-            .await?
-        }
-        AlbumId::Qobuz(qobuz_album_id) => {
-            static ALBUM_CACHE: Lazy<RwLock<HashMap<String, Option<QobuzAlbum>>>> =
-                Lazy::new(|| RwLock::new(HashMap::new()));
-
-            let album = if let Some(album) = {
-                let binding = ALBUM_CACHE.read().unwrap();
-                binding.get(qobuz_album_id).cloned()
-            } {
-                album
-            } else {
-                use moosicbox_qobuz::AuthenticatedRequestError;
-                let album =
-                    match moosicbox_qobuz::album(db, &qobuz_album_id.into(), None, None).await {
-                        Ok(album) => Ok(Some(album)),
-                        Err(err) => match err {
-                            QobuzAlbumError::AuthenticatedRequest(
-                                AuthenticatedRequestError::RequestFailed(404, _),
-                            ) => Ok(None),
-                            _ => Err(err),
-                        },
-                    }?;
-
-                ALBUM_CACHE
-                    .write()
-                    .as_mut()
-                    .unwrap()
-                    .insert(qobuz_album_id.to_string(), album.clone());
-
-                album
-            }
-            .ok_or_else(|| AlbumCoverError::NotFound(album_id.clone()))?;
-
-            let size = size
-                .map(|size| (size as u16).into())
-                .unwrap_or(QobuzImageSize::Mega);
-
-            let cover = album
-                .image
-                .as_ref()
-                .and_then(|image| image.cover_url_for_size(size))
-                .ok_or(AlbumCoverError::NotFound(album_id.clone()))?;
-
-            get_or_fetch_album_cover_from_remote_url(
-                &cover,
-                &size.to_string(),
-                "qobuz",
-                &album.id,
-                &album.artist,
-                &album.title,
-            )
-            .await?
-        }
+        AlbumId::Tidal(tidal_album_id) => get_tidal_album_cover(*tidal_album_id, db, size).await?,
+        AlbumId::Qobuz(qobuz_album_id) => get_qobuz_album_cover(qobuz_album_id, db, size).await?,
     };
 
     Ok(AlbumCoverSource::LocalFilePath(path))
+}
+
+pub async fn get_library_album_cover(
+    library_album_id: i32,
+    db: &Db,
+) -> Result<String, AlbumCoverError> {
+    let album = get_album(&db.library.lock().as_ref().unwrap().inner, library_album_id)?.ok_or(
+        AlbumCoverError::NotFound(AlbumId::Library(library_album_id)),
+    )?;
+
+    if let Ok(cover) = fetch_local_album_cover(db, album.artwork, album.id, album.directory) {
+        return Ok(cover);
+    }
+
+    if let Some(tidal_id) = album.tidal_id {
+        if let Ok(AlbumCoverSource::LocalFilePath(cover)) =
+            get_album_cover(AlbumId::Tidal(tidal_id), db, None).await
+        {
+            return Ok(copy_streaming_cover_to_local(db, album.id, cover)?);
+        }
+    }
+
+    if let Some(qobuz_id) = album.qobuz_id {
+        if let Ok(AlbumCoverSource::LocalFilePath(cover)) =
+            get_album_cover(AlbumId::Qobuz(qobuz_id), db, None).await
+        {
+            return Ok(copy_streaming_cover_to_local(db, album.id, cover)?);
+        }
+    }
+
+    return Err(AlbumCoverError::NotFound(AlbumId::Library(
+        library_album_id,
+    )));
+}
+
+pub async fn get_library_album_cover_bytes(
+    library_album_id: i32,
+    db: &Db,
+) -> Result<BytesStream, AlbumCoverError> {
+    let album = get_album(&db.library.lock().as_ref().unwrap().inner, library_album_id)?.ok_or(
+        AlbumCoverError::NotFound(AlbumId::Library(library_album_id)),
+    )?;
+
+    if let Ok(bytes) = fetch_local_album_cover_bytes(db, album.artwork, album.id, album.directory) {
+        return Ok(bytes);
+    }
+
+    if let Some(tidal_id) = album.tidal_id {
+        if let Ok(bytes) = get_album_cover_bytes(AlbumId::Tidal(tidal_id), db, None).await {
+            return Ok(bytes);
+        }
+    }
+
+    if let Some(qobuz_id) = album.qobuz_id {
+        if let Ok(bytes) = get_album_cover_bytes(AlbumId::Qobuz(qobuz_id), db, None).await {
+            return Ok(bytes);
+        }
+    }
+
+    return Err(AlbumCoverError::NotFound(AlbumId::Library(
+        library_album_id,
+    )));
+}
+
+async fn get_tidal_album_cover_request(
+    tidal_album_id: u64,
+    db: &Db,
+    size: Option<u32>,
+) -> Result<AlbumCoverRequest, AlbumCoverError> {
+    static ALBUM_CACHE: Lazy<RwLock<HashMap<u64, Option<TidalAlbum>>>> =
+        Lazy::new(|| RwLock::new(HashMap::new()));
+
+    let album = if let Some(album) = {
+        let binding = ALBUM_CACHE.read().unwrap();
+        binding.get(&tidal_album_id).cloned()
+    } {
+        album
+    } else {
+        use moosicbox_tidal::AuthenticatedRequestError;
+
+        let album = match moosicbox_tidal::album(db, &tidal_album_id.into(), None, None, None, None)
+            .await
+        {
+            Ok(album) => Ok(Some(album)),
+            Err(err) => match err {
+                TidalAlbumError::AuthenticatedRequest(
+                    AuthenticatedRequestError::RequestFailed(404, _),
+                ) => Ok(None),
+                _ => Err(err),
+            },
+        }?;
+
+        ALBUM_CACHE
+            .write()
+            .as_mut()
+            .unwrap()
+            .insert(tidal_album_id, album.clone());
+
+        album
+    }
+    .ok_or_else(|| AlbumCoverError::NotFound(AlbumId::Tidal(tidal_album_id)))?;
+
+    let size = size
+        .map(|size| (size as u16).into())
+        .unwrap_or(TidalAlbumImageSize::Max);
+
+    let url = album
+        .cover_url(size)
+        .ok_or(AlbumCoverError::NotFound(AlbumId::Tidal(tidal_album_id)))?;
+
+    let file_path = get_album_cover_path(
+        &size.to_string(),
+        "tidal",
+        &album.id.to_string(),
+        &album.artist,
+        &album.title,
+    );
+
+    Ok(AlbumCoverRequest { url, file_path })
+}
+
+async fn get_tidal_album_cover(
+    tidal_album_id: u64,
+    db: &Db,
+    size: Option<u32>,
+) -> Result<String, AlbumCoverError> {
+    let request = get_tidal_album_cover_request(tidal_album_id, db, size).await?;
+
+    Ok(get_or_fetch_album_cover_from_remote_url(&request.url, &request.file_path).await?)
+}
+
+async fn get_tidal_album_cover_bytes(
+    tidal_album_id: u64,
+    db: &Db,
+    size: Option<u32>,
+) -> Result<BytesStream, AlbumCoverError> {
+    let request = get_tidal_album_cover_request(tidal_album_id, db, size).await?;
+
+    Ok(get_or_fetch_album_cover_bytes_from_remote_url(&request.url, &request.file_path).await?)
+}
+
+struct AlbumCoverRequest {
+    url: String,
+    file_path: PathBuf,
+}
+
+type BytesStream = Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>;
+
+async fn get_qobuz_album_cover_request(
+    qobuz_album_id: &str,
+    db: &Db,
+    size: Option<u32>,
+) -> Result<AlbumCoverRequest, AlbumCoverError> {
+    static ALBUM_CACHE: Lazy<RwLock<HashMap<String, Option<QobuzAlbum>>>> =
+        Lazy::new(|| RwLock::new(HashMap::new()));
+
+    let album = if let Some(album) = {
+        let binding = ALBUM_CACHE.read().unwrap();
+        binding.get(qobuz_album_id).cloned()
+    } {
+        album
+    } else {
+        use moosicbox_qobuz::AuthenticatedRequestError;
+        let album = match moosicbox_qobuz::album(db, &qobuz_album_id.into(), None, None).await {
+            Ok(album) => Ok(Some(album)),
+            Err(err) => match err {
+                QobuzAlbumError::AuthenticatedRequest(
+                    AuthenticatedRequestError::RequestFailed(404, _),
+                ) => Ok(None),
+                _ => Err(err),
+            },
+        }?;
+
+        ALBUM_CACHE
+            .write()
+            .as_mut()
+            .unwrap()
+            .insert(qobuz_album_id.to_string(), album.clone());
+
+        album
+    }
+    .ok_or_else(|| AlbumCoverError::NotFound(AlbumId::Qobuz(qobuz_album_id.to_string())))?;
+
+    let size = size
+        .map(|size| (size as u16).into())
+        .unwrap_or(QobuzImageSize::Mega);
+
+    let url = album
+        .image
+        .as_ref()
+        .and_then(|image| image.cover_url_for_size(size))
+        .ok_or(AlbumCoverError::NotFound(AlbumId::Qobuz(
+            qobuz_album_id.to_string(),
+        )))?;
+
+    let file_path = get_album_cover_path(
+        &size.to_string(),
+        "qobuz",
+        &album.id,
+        &album.artist,
+        &album.title,
+    );
+
+    Ok(AlbumCoverRequest { url, file_path })
+}
+
+async fn get_qobuz_album_cover(
+    qobuz_album_id: &str,
+    db: &Db,
+    size: Option<u32>,
+) -> Result<String, AlbumCoverError> {
+    let request = get_qobuz_album_cover_request(qobuz_album_id, db, size).await?;
+
+    Ok(get_or_fetch_album_cover_from_remote_url(&request.url, &request.file_path).await?)
+}
+
+async fn get_qobuz_album_cover_bytes(
+    qobuz_album_id: &str,
+    db: &Db,
+    size: Option<u32>,
+) -> Result<BytesStream, AlbumCoverError> {
+    let request = get_qobuz_album_cover_request(qobuz_album_id, db, size).await?;
+
+    Ok(get_or_fetch_album_cover_bytes_from_remote_url(&request.url, &request.file_path).await?)
 }

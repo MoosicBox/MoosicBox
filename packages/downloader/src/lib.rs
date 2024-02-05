@@ -1,6 +1,11 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
-use std::{error::Error, path::PathBuf, str::FromStr, time::Duration};
+use std::{
+    error::Error,
+    path::{Path, PathBuf},
+    str::FromStr,
+    time::Duration,
+};
 
 use async_recursion::async_recursion;
 use audiotags::Tag;
@@ -9,16 +14,20 @@ use id3::Timestamp;
 use moosicbox_core::{
     app::Db,
     sqlite::{
-        db::{get_album_tracks, get_track},
+        db::{get_album, get_album_tracks, get_track},
         models::{LibraryTrack, TrackApiSource},
     },
     types::AudioFormat,
 };
 use moosicbox_files::{
-    files::track::{
-        get_track_bytes, get_track_source, GetTrackBytesError, TrackAudioQuality, TrackSourceError,
+    files::{
+        album::{get_library_album_cover_bytes, AlbumCoverError},
+        track::{
+            get_track_bytes, get_track_source, GetTrackBytesError, TrackAudioQuality,
+            TrackSourceError,
+        },
     },
-    sanitize_filename,
+    sanitize_filename, save_bytes_stream_to_file,
 };
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
@@ -79,7 +88,7 @@ pub enum DownloadTrackError {
     #[error(transparent)]
     GetTrackBytes(#[from] GetTrackBytesError),
     #[error(transparent)]
-    IO(#[from] std::io::Error),
+    IO(#[from] tokio::io::Error),
     #[error(transparent)]
     TagTrackFile(#[from] TagTrackFileError),
     #[error("Invalid source")]
@@ -230,13 +239,16 @@ async fn download_track_inner(
         .join(&sanitize_filename(&track.artist))
         .join(&sanitize_filename(&track.album));
 
-    std::fs::create_dir_all(&path_buf)?;
+    tokio::fs::create_dir_all(&path_buf).await?;
 
-    let track_path = &path_buf
-        .join(&get_filename_for_track(&track))
-        .to_str()
-        .unwrap()
-        .to_string();
+    let track_path = path_buf.join(&get_filename_for_track(&track));
+
+    if Path::exists(&track_path) {
+        log::debug!("Track already downloaded");
+        return Ok(());
+    }
+
+    let track_path = &track_path.to_str().unwrap().to_string();
 
     log::debug!("Downloading track to track_path={track_path:?}");
 
@@ -331,6 +343,12 @@ pub enum DownloadAlbumError {
     Db(#[from] moosicbox_core::sqlite::db::DbError),
     #[error(transparent)]
     DownloadTrack(#[from] DownloadTrackError),
+    #[error(transparent)]
+    IO(#[from] std::io::Error),
+    #[error(transparent)]
+    AlbumCover(#[from] AlbumCoverError),
+    #[error("Invalid source")]
+    InvalidSource,
     #[error("Not found")]
     NotFound,
 }
@@ -339,6 +357,7 @@ pub async fn download_album_id(
     db: &Db,
     path: &str,
     album_id: u64,
+    download_cover: bool,
     quality: Option<TrackAudioQuality>,
     source: Option<DownloadApiSource>,
     timeout_duration: Option<Duration>,
@@ -363,6 +382,45 @@ pub async fn download_album_id(
     }
 
     log::debug!("Completed album download for {} tracks", tracks.len());
+
+    if download_cover {
+        download_album_cover(db, path, album_id).await?;
+    }
+
+    Ok(())
+}
+
+async fn download_album_cover(
+    db: &Db,
+    path: &str,
+    album_id: u64,
+) -> Result<(), DownloadAlbumError> {
+    log::debug!("Downloading album cover");
+
+    let album = get_album(&db.library.lock().as_ref().unwrap().inner, album_id as i32)?
+        .ok_or(DownloadAlbumError::NotFound)?;
+
+    let path_buf = PathBuf::from_str(path)
+        .unwrap()
+        .join(&sanitize_filename(&album.artist))
+        .join(&sanitize_filename(&album.title));
+
+    tokio::fs::create_dir_all(&path_buf).await?;
+
+    let cover_path = path_buf.join("cover.jpg");
+
+    if Path::exists(&cover_path) {
+        log::debug!("Album cover already downloaded");
+        return Ok(());
+    }
+
+    let bytes = get_library_album_cover_bytes(album_id as i32, db).await?;
+
+    log::debug!("Saving album cover to {cover_path:?}");
+
+    save_bytes_stream_to_file(bytes, &cover_path).await?;
+
+    log::debug!("Completed album cover download");
 
     Ok(())
 }
