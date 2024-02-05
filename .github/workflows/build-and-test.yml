@@ -68,7 +68,7 @@ jobs:
                       path: packages/downloader
                       os: ubuntu-latest
 
-                    - name: downloader-no-default-utils
+                    - name: downloader-no-default-features
                       path: packages/downloader
                       os: ubuntu-latest
                       cargo: --no-default-features
