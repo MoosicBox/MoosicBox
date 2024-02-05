@@ -61,7 +61,7 @@ enum TidalApiEndpoint {
     TrackPlaybackInfo,
 }
 
-static CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
+static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| reqwest::Client::builder().build().unwrap());
 
 static TIDAL_AUTH_API_BASE_URL: &str = "https://auth.tidal.com/v1";
 static TIDAL_API_BASE_URL: &str = "https://api.tidal.com/v1";

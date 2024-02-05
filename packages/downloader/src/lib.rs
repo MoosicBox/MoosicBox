@@ -1,6 +1,6 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
-use std::{path::PathBuf, str::FromStr};
+use std::{error::Error, path::PathBuf, str::FromStr, time::Duration};
 
 use async_recursion::async_recursion;
 use audiotags::Tag;
@@ -23,7 +23,10 @@ use moosicbox_files::{
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
-use tokio::io::{AsyncSeekExt, AsyncWriteExt, BufWriter};
+use tokio::{
+    io::{AsyncSeekExt, AsyncWriteExt, BufWriter},
+    select,
+};
 
 #[cfg(feature = "api")]
 pub mod api;
@@ -91,24 +94,74 @@ pub async fn download_track_id(
     track_id: u64,
     quality: Option<TrackAudioQuality>,
     source: Option<DownloadApiSource>,
+    timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadTrackError> {
     log::debug!("Starting download for track_id={track_id} quality={quality:?} source={source:?} path={path}");
 
     let track = get_track(&db.library.lock().as_ref().unwrap().inner, track_id as i32)?
         .ok_or(DownloadTrackError::NotFound)?;
 
-    download_track(db, path, &track, quality, source, None).await
+    download_track(db, path, &track, quality, source, None, timeout_duration).await
 }
 
 #[async_recursion]
-pub async fn download_track(
+async fn download_track(
     db: &Db,
     path: &str,
     track: &LibraryTrack,
     quality: Option<TrackAudioQuality>,
     source: Option<DownloadApiSource>,
     start: Option<u64>,
+    timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadTrackError> {
+    match download_track_inner(db, path, track, quality, source, start, timeout_duration).await {
+        Ok(_) => Ok(()),
+        Err(err) => Err(match err {
+            DownloadTrackInnerError::Db(err) => DownloadTrackError::Db(err),
+            DownloadTrackInnerError::TrackSource(err) => DownloadTrackError::TrackSource(err),
+            DownloadTrackInnerError::GetTrackBytes(err) => DownloadTrackError::GetTrackBytes(err),
+            DownloadTrackInnerError::IO(err) => DownloadTrackError::IO(err),
+            DownloadTrackInnerError::TagTrackFile(err) => DownloadTrackError::TagTrackFile(err),
+            DownloadTrackInnerError::InvalidSource => DownloadTrackError::InvalidSource,
+            DownloadTrackInnerError::NotFound => DownloadTrackError::NotFound,
+            DownloadTrackInnerError::Timeout(start) => {
+                log::warn!("Track download timed out. Trying again at start {start:?}");
+                return download_track(db, path, track, quality, source, start, timeout_duration)
+                    .await;
+            }
+        }),
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum DownloadTrackInnerError {
+    #[error(transparent)]
+    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    #[error(transparent)]
+    TrackSource(#[from] TrackSourceError),
+    #[error(transparent)]
+    GetTrackBytes(#[from] GetTrackBytesError),
+    #[error(transparent)]
+    IO(#[from] std::io::Error),
+    #[error(transparent)]
+    TagTrackFile(#[from] TagTrackFileError),
+    #[error("Invalid source")]
+    InvalidSource,
+    #[error("Not found")]
+    NotFound,
+    #[error("Timeout")]
+    Timeout(Option<u64>),
+}
+
+async fn download_track_inner(
+    db: &Db,
+    path: &str,
+    track: &LibraryTrack,
+    quality: Option<TrackAudioQuality>,
+    source: Option<DownloadApiSource>,
+    start: Option<u64>,
+    timeout_duration: Option<Duration>,
+) -> Result<(), DownloadTrackInnerError> {
     log::debug!(
         "Starting download for track={track:?} quality={quality:?} source={source:?} path={path} start={start:?}"
     );
@@ -122,10 +175,45 @@ pub async fn download_track(
         log::debug!("Falling back to Tidal DownloadApiSource");
         DownloadApiSource::Tidal
     } else {
-        return Err(DownloadTrackError::InvalidSource);
+        return Err(DownloadTrackInnerError::InvalidSource);
     };
 
-    let source = get_track_source(track.id, db, quality, Some(download_source.into())).await?;
+    let req = get_track_source(track.id, db, quality, Some(download_source.into()));
+
+    let result = if let Some(timeout_duration) = timeout_duration {
+        select! {
+            result = req => result,
+            _ = tokio::time::sleep(timeout_duration) => {
+                return Err(DownloadTrackInnerError::Timeout(start));
+            }
+        }
+    } else {
+        req.await
+    };
+
+    let source = match result {
+        Ok(source) => source,
+        Err(err) => {
+            let is_timeout = err.source().is_some_and(|source| {
+                if let Some(error) = source.downcast_ref::<hyper::Error>() {
+                    error.is_timeout()
+                        || error.is_connect()
+                        || error.is_closed()
+                        || error.is_canceled()
+                        || error.is_incomplete_message()
+                } else {
+                    source.to_string() == "operation timed out"
+                }
+            });
+
+            if is_timeout {
+                return Err(DownloadTrackInnerError::Timeout(start));
+            }
+
+            return Err(DownloadTrackInnerError::TrackSource(err));
+        }
+    };
+
     let bytes = get_track_bytes(
         db,
         track.id as u64,
@@ -155,6 +243,10 @@ pub async fn download_track(
     {
         let mut reader = bytes.stream;
 
+        if let Some(timeout_duration) = timeout_duration {
+            reader = reader.with_timeout(timeout_duration);
+        }
+
         let file = tokio::fs::OpenOptions::new()
             .write(true)
             .create(true)
@@ -182,19 +274,10 @@ pub async fn download_track(
                 }
                 Err(err) => {
                     if err.kind() == std::io::ErrorKind::TimedOut {
-                        log::warn!("Track download timed out. Trying again at position {total}");
-                        return download_track(
-                            db,
-                            path,
-                            track,
-                            quality,
-                            Some(download_source),
-                            Some(total as u64),
-                        )
-                        .await;
-                    } else {
-                        return Err(DownloadTrackError::IO(err));
+                        return Err(DownloadTrackInnerError::Timeout(Some(total as u64)));
                     }
+
+                    return Err(DownloadTrackInnerError::IO(err));
                 }
             }
         }
@@ -258,6 +341,7 @@ pub async fn download_album_id(
     album_id: u64,
     quality: Option<TrackAudioQuality>,
     source: Option<DownloadApiSource>,
+    timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadAlbumError> {
     log::debug!("Starting download for album_id={album_id} quality={quality:?} source={source:?} path={path}");
 
@@ -275,7 +359,7 @@ pub async fn download_album_id(
     };
 
     for track in tracks.iter() {
-        download_track(db, path, track, quality, source, None).await?
+        download_track(db, path, track, quality, source, None, timeout_duration).await?
     }
 
     log::debug!("Completed album download for {} tracks", tracks.len());

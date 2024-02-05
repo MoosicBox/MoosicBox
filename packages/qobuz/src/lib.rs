@@ -50,7 +50,7 @@ trait ToUrl {
 static QOBUZ_PLAY_API_BASE_URL: &str = "https://play.qobuz.com";
 static QOBUZ_API_BASE_URL: &str = "https://www.qobuz.com/api.json/0.2";
 
-static CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
+static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| reqwest::Client::builder().build().unwrap());
 
 #[derive(Clone)]
 struct QobuzCredentials {

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::db::get_download_location;
 use crate::download_album_id;
 use crate::download_track_id;
@@ -14,8 +16,11 @@ use actix_web::{
 use moosicbox_config::get_config_dir_path;
 use moosicbox_core::integer_range::parse_integer_ranges;
 use moosicbox_files::files::track::TrackAudioQuality;
+use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde_json::Value;
+
+static TIMEOUT_DURATION: Lazy<Option<Duration>> = Lazy::new(|| Some(Duration::from_secs(30)));
 
 impl From<DownloadTrackError> for actix_web::Error {
     fn from(err: DownloadTrackError) -> Self {
@@ -81,6 +86,7 @@ pub async fn download_endpoint(
             track_id,
             query.quality,
             query.source,
+            *TIMEOUT_DURATION,
         )
         .await?;
     }
@@ -92,6 +98,7 @@ pub async fn download_endpoint(
             album_id,
             query.quality,
             query.source,
+            *TIMEOUT_DURATION,
         )
         .await?;
     }
@@ -106,6 +113,7 @@ pub async fn download_endpoint(
                 track_id,
                 query.quality,
                 query.source,
+                *TIMEOUT_DURATION,
             )
             .await?;
         }
@@ -121,6 +129,7 @@ pub async fn download_endpoint(
                 album_id,
                 query.quality,
                 query.source,
+                *TIMEOUT_DURATION,
             )
             .await?;
         }
