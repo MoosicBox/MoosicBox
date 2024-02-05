@@ -18,7 +18,8 @@ use crate::files::{
     resize_image_path,
     track::{
         get_or_init_track_visualization, get_track_bytes, get_track_info, get_track_source,
-        get_tracks_info, GetTrackBytesError, TrackInfo, TrackInfoError, TrackSourceError,
+        get_tracks_info, GetTrackBytesError, TrackAudioQuality, TrackInfo, TrackInfoError,
+        TrackSourceError,
     },
 };
 
@@ -27,6 +28,7 @@ use crate::files::{
 pub struct GetTrackQuery {
     pub track_id: u64,
     pub format: Option<AudioFormat>,
+    pub quality: Option<TrackAudioQuality>,
     pub source: Option<TrackApiSource>,
 }
 
@@ -99,7 +101,7 @@ pub async fn track_endpoint(
             .db
             .clone()
             .ok_or(ErrorInternalServerError("No DB set"))?,
-        None,
+        query.quality,
         query.source,
     )
     .await?;
@@ -116,6 +118,8 @@ pub async fn track_endpoint(
         None,
     )
     .await?;
+
+    log::debug!("Got bytes with size={:?}", bytes.size);
 
     let mut response = HttpResponse::Ok();
 
@@ -137,7 +141,7 @@ pub async fn track_endpoint(
             response.insert_header((actix_web::http::header::CONTENT_TYPE, "audio/opus"))
         }
         AudioFormat::Source => {
-            response.insert_header((actix_web::http::header::CONTENT_TYPE, "audio/mp4"))
+            response.insert_header((actix_web::http::header::CONTENT_TYPE, "audio/flac"))
         }
     };
 

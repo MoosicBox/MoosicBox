@@ -108,15 +108,18 @@ pub async fn get_track_source(
     quality: Option<TrackAudioQuality>,
     source: Option<TrackApiSource>,
 ) -> Result<TrackSource, TrackSourceError> {
-    let source = source.unwrap_or(TrackApiSource::Local);
-    debug!("Getting track audio file {track_id}");
+    debug!("Getting track audio file {track_id} quality={quality:?} source={source:?}");
 
     let track = {
         let library = db.library.lock().unwrap();
         get_track(&library.inner, track_id)?
     };
 
-    debug!("Got track {track:?}");
+    let source = source
+        .or_else(|| track.as_ref().map(|track| track.source))
+        .unwrap_or(TrackApiSource::Local);
+
+    debug!("Got track {track:?}. Getting source={source:?}");
 
     if track.is_none() {
         return Err(TrackSourceError::NotFound(track_id));
@@ -186,11 +189,10 @@ pub enum TrackByteStreamError {
     UnsupportedFormat(Box<dyn std::error::Error>),
 }
 
+type BytesStream = Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>;
+
 pub struct TrackBytes {
-    pub stream: StalledReadMonitor<
-        Bytes,
-        Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>,
-    >,
+    pub stream: StalledReadMonitor<Bytes, BytesStream>,
     pub size: Option<u64>,
     pub format: AudioFormat,
 }
@@ -204,6 +206,8 @@ pub async fn get_track_bytes(
     start: Option<u64>,
     end: Option<u64>,
 ) -> Result<TrackBytes, GetTrackBytesError> {
+    log::debug!("Getting track bytes track_id={track_id} format={format:?} try_to_get_size={try_to_get_size} start={start:?} end={end:?}");
+
     let size = if try_to_get_size {
         match get_or_init_track_size(
             track_id as i32,
@@ -232,6 +236,7 @@ pub async fn get_track_bytes(
 
     {
         let source = source.clone();
+
         RT.spawn(async move {
             let audio_output_handler = match format {
                 #[cfg(feature = "aac")]
@@ -318,66 +323,107 @@ pub async fn get_track_bytes(
 
     let track_bytes = match source {
         TrackSource::LocalFilePath(path) => match format {
-            #[cfg(feature = "flac")]
-            AudioFormat::Flac | AudioFormat::Source => {
-                let track = moosicbox_core::sqlite::db::get_track(
-                    &db.library.lock().as_ref().unwrap().inner,
-                    track_id as i32,
-                )?
-                .ok_or(GetTrackBytesError::NotFound)?;
-
-                let format = match format {
-                    AudioFormat::Flac => {
-                        if track.format != Some(AudioFormat::Flac) {
-                            return Err(GetTrackBytesError::UnsupportedFormat);
-                        }
-                        format
-                    }
-                    AudioFormat::Source => {
-                        track.format.ok_or(GetTrackBytesError::UnsupportedFormat)?
-                    }
-                    _ => format,
-                };
-
-                let stream = tokio::fs::File::open(path)
-                    .map_ok(|file| {
-                        FramedRead::new(file, BytesCodec::new()).map_ok(BytesMut::freeze)
-                    })
-                    .try_flatten_stream();
-
-                TrackBytes {
-                    stream: StalledReadMonitor::new(stream.boxed()),
-                    size,
-                    format,
-                }
+            AudioFormat::Source => {
+                request_track_bytes_from_file(db, track_id, path, format, size).await?
             }
+            #[cfg(feature = "flac")]
+            AudioFormat::Flac => {
+                request_track_bytes_from_file(db, track_id, path, format, size).await?
+            }
+            #[allow(unreachable_patterns)]
             _ => TrackBytes {
                 stream: StalledReadMonitor::new(stream.boxed()),
                 size,
                 format,
             },
         },
-        TrackSource::Tidal(url) | TrackSource::Qobuz(url) => {
-            let client = reqwest::Client::new();
-            let start = start.map(|start| start.to_string()).unwrap_or("".into());
-            let end = end.map(|end| end.to_string()).unwrap_or("".into());
-            let stream = client
-                .get(url)
-                .header("Range", format!("bytes={start}-{end}"))
-                .send()
-                .await?
-                .bytes_stream()
-                .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err));
-
-            TrackBytes {
+        TrackSource::Tidal(url) | TrackSource::Qobuz(url) => match format {
+            AudioFormat::Source => {
+                request_track_bytes_from_url(&url, start, end, format, size).await?
+            }
+            #[cfg(feature = "flac")]
+            AudioFormat::Flac => {
+                request_track_bytes_from_url(&url, start, end, format, size).await?
+            }
+            #[allow(unreachable_patterns)]
+            _ => TrackBytes {
                 stream: StalledReadMonitor::new(stream.boxed()),
                 size,
                 format,
-            }
-        }
+            },
+        },
     };
 
     Ok(track_bytes)
+}
+
+async fn request_track_bytes_from_file(
+    db: &Db,
+    track_id: u64,
+    path: String,
+    format: AudioFormat,
+    size: Option<u64>,
+) -> Result<TrackBytes, GetTrackBytesError> {
+    let track = moosicbox_core::sqlite::db::get_track(
+        &db.library.lock().as_ref().unwrap().inner,
+        track_id as i32,
+    )?
+    .ok_or(GetTrackBytesError::NotFound)?;
+
+    let format = match format {
+        #[cfg(feature = "flac")]
+        AudioFormat::Flac => {
+            if track.format != Some(AudioFormat::Flac) {
+                return Err(GetTrackBytesError::UnsupportedFormat);
+            }
+            format
+        }
+        AudioFormat::Source => track.format.ok_or(GetTrackBytesError::UnsupportedFormat)?,
+        _ => format,
+    };
+
+    let stream = tokio::fs::File::open(path)
+        .map_ok(|file| FramedRead::new(file, BytesCodec::new()).map_ok(BytesMut::freeze))
+        .try_flatten_stream();
+
+    Ok(TrackBytes {
+        stream: StalledReadMonitor::new(stream.boxed()),
+        size,
+        format,
+    })
+}
+
+async fn request_track_bytes_from_url(
+    url: &str,
+    start: Option<u64>,
+    end: Option<u64>,
+    format: AudioFormat,
+    size: Option<u64>,
+) -> Result<TrackBytes, GetTrackBytesError> {
+    let client = reqwest::Client::new();
+
+    log::debug!("Getting track source from url: {url}");
+
+    let mut request = client.get(url);
+
+    if start.is_some() || end.is_some() {
+        let start = start.map(|start| start.to_string()).unwrap_or("".into());
+        let end = end.map(|end| end.to_string()).unwrap_or("".into());
+
+        request = request.header("Range", format!("bytes={start}-{end}"))
+    }
+
+    let stream = request
+        .send()
+        .await?
+        .bytes_stream()
+        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err));
+
+    Ok(TrackBytes {
+        stream: StalledReadMonitor::new(stream.boxed()),
+        size,
+        format,
+    })
 }
 
 #[derive(Debug, Error)]

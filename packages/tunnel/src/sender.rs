@@ -1,5 +1,6 @@
 use bytes::Bytes;
-use moosicbox_core::types::AudioFormat;
+use moosicbox_core::{sqlite::models::TrackApiSource, types::AudioFormat};
+use moosicbox_files::files::track::TrackAudioQuality;
 use moosicbox_ws::api::WebsocketMessageError;
 use serde::Deserialize;
 use serde_aux::prelude::*;
@@ -43,6 +44,8 @@ struct GetTrackQuery {
     #[serde(deserialize_with = "deserialize_number_from_string")]
     track_id: i32,
     format: Option<AudioFormat>,
+    quality: Option<TrackAudioQuality>,
+    source: Option<TrackApiSource>,
 }
 
 #[derive(Debug, Deserialize)]
