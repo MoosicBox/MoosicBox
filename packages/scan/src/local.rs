@@ -10,14 +10,17 @@ use moosicbox_files::{sanitize_filename, search_for_cover};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::{
-    fs::{self, DirEntry, Metadata},
+    fs::Metadata,
     num::ParseIntError,
     path::{Path, PathBuf},
     pin::Pin,
     sync::Arc,
 };
 use thiserror::Error;
-use tokio::sync::RwLock;
+use tokio::{
+    fs::{self, DirEntry},
+    sync::RwLock,
+};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
@@ -36,7 +39,7 @@ pub enum ScanError {
     #[error(transparent)]
     Tag(#[from] audiotags::error::Error),
     #[error(transparent)]
-    IO(#[from] std::io::Error),
+    IO(#[from] tokio::io::Error),
     #[error(transparent)]
     UpdateDatabase(#[from] UpdateDatabaseError),
 }
@@ -331,7 +334,7 @@ where
     F: Future<Output = Result<(), ScanError>> + Send + 'static,
 {
     Box::pin(async move {
-        let metadata = p.metadata().unwrap();
+        let metadata = p.metadata().await?;
 
         if metadata.is_dir() {
             scan_dir(p.path(), output.clone(), token.clone(), fun, None).await?;
@@ -356,7 +359,7 @@ where
     F: Future<Output = Result<(), ScanError>> + Send + 'static,
 {
     Box::pin(async move {
-        let dir = match fs::read_dir(path) {
+        let mut dir = match fs::read_dir(path).await {
             Ok(dir) => dir,
             Err(_err) => return Ok(()),
         };
@@ -364,12 +367,16 @@ where
         if let Some(max_parallel) = max_parallel {
             let mut chunks = vec![];
 
-            for (c, p) in dir.filter_map(|p| p.ok()).enumerate() {
+            let mut c = 0;
+
+            while let Some(entry) = dir.next_entry().await? {
                 if chunks.len() < (max_parallel as usize) {
-                    chunks.push(vec![p]);
+                    chunks.push(vec![entry]);
                 } else {
-                    chunks[c % (max_parallel as usize)].push(p);
+                    chunks[c % (max_parallel as usize)].push(entry);
                 }
+
+                c += 1;
             }
 
             let mut handles = chunks
@@ -395,11 +402,11 @@ where
                 cur_thread.join().unwrap().await?;
             }
         } else {
-            for p in dir.filter_map(|p| p.ok()) {
+            while let Some(entry) = dir.next_entry().await? {
                 if token.is_cancelled() {
                     break;
                 }
-                process_dir_entry(p, output.clone(), token.clone(), fun.clone()).await?;
+                process_dir_entry(entry, output.clone(), token.clone(), fun.clone()).await?;
             }
         }
 
