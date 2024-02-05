@@ -1,5 +1,5 @@
 use crate::db::get_download_location;
-use crate::download_album;
+use crate::download_album_id;
 use crate::download_track_id;
 use crate::DownloadAlbumError;
 use crate::DownloadApiSource;
@@ -12,6 +12,7 @@ use actix_web::{
     Result,
 };
 use moosicbox_config::get_config_dir_path;
+use moosicbox_core::integer_range::parse_integer_ranges;
 use moosicbox_files::files::track::TrackAudioQuality;
 use serde::Deserialize;
 use serde_json::Value;
@@ -35,7 +36,9 @@ impl From<DownloadAlbumError> for actix_web::Error {
 pub struct DownloadQuery {
     location_id: Option<u64>,
     track_id: Option<u64>,
+    track_ids: Option<String>,
     album_id: Option<u64>,
+    album_ids: Option<String>,
     quality: Option<TrackAudioQuality>,
     source: Option<DownloadApiSource>,
 }
@@ -83,7 +86,7 @@ pub async fn download_endpoint(
     }
 
     if let Some(album_id) = query.album_id {
-        download_album(
+        download_album_id(
             &data.db.as_ref().expect("No DB set"),
             &path,
             album_id,
@@ -91,6 +94,36 @@ pub async fn download_endpoint(
             query.source,
         )
         .await?;
+    }
+
+    if let Some(track_ids) = &query.track_ids {
+        let track_ids = parse_integer_ranges(track_ids)?;
+
+        for track_id in track_ids {
+            download_track_id(
+                &data.db.as_ref().expect("No DB set"),
+                &path,
+                track_id,
+                query.quality,
+                query.source,
+            )
+            .await?;
+        }
+    }
+
+    if let Some(album_ids) = &query.album_ids {
+        let album_ids = parse_integer_ranges(album_ids)?;
+
+        for album_id in album_ids {
+            download_album_id(
+                &data.db.as_ref().expect("No DB set"),
+                &path,
+                album_id,
+                query.quality,
+                query.source,
+            )
+            .await?;
+        }
     }
 
     Ok(Json(serde_json::json!({"success": true})))

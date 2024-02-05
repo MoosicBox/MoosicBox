@@ -188,7 +188,7 @@ pub enum DownloadAlbumError {
     NotFound,
 }
 
-pub async fn download_album(
+pub async fn download_album_id(
     db: &Db,
     path: &str,
     album_id: u64,
