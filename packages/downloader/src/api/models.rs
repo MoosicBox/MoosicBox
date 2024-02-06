@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use moosicbox_files::files::track::TrackAudioQuality;
 use moosicbox_json_utils::{serde_json::ToValue, MissingValue, ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
@@ -93,17 +94,20 @@ impl ToValueType<ApiDownloadApiSource> for &serde_json::Value {
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
 pub enum ApiDownloadItem {
-    Track(u64),
-    AlbumCover(u64),
-    ArtistCover(u64),
+    #[serde(rename_all = "camelCase")]
+    Track { track_id: u64 },
+    #[serde(rename_all = "camelCase")]
+    AlbumCover { album_id: u64 },
+    #[serde(rename_all = "camelCase")]
+    ArtistCover { album_id: u64 },
 }
 
 impl From<DownloadItem> for ApiDownloadItem {
     fn from(value: DownloadItem) -> Self {
         match value {
-            DownloadItem::Track(track_id) => ApiDownloadItem::Track(track_id),
-            DownloadItem::AlbumCover(album_id) => ApiDownloadItem::AlbumCover(album_id),
-            DownloadItem::ArtistCover(album_id) => ApiDownloadItem::ArtistCover(album_id),
+            DownloadItem::Track(track_id) => ApiDownloadItem::Track { track_id },
+            DownloadItem::AlbumCover(album_id) => ApiDownloadItem::AlbumCover { album_id },
+            DownloadItem::ArtistCover(album_id) => ApiDownloadItem::ArtistCover { album_id },
         }
     }
 }
@@ -114,9 +118,15 @@ impl ToValueType<ApiDownloadItem> for &serde_json::Value {
         let item_type: String = self.to_value("type")?;
 
         Ok(match item_type.as_str() {
-            "TRACK" => ApiDownloadItem::Track(self.to_value("track_id")?),
-            "ALBUM_COVER" => ApiDownloadItem::AlbumCover(self.to_value("album_id")?),
-            "ARTIST_COVER" => ApiDownloadItem::ArtistCover(self.to_value("album_id")?),
+            "TRACK" => ApiDownloadItem::Track {
+                track_id: self.to_value("track_id")?,
+            },
+            "ALBUM_COVER" => ApiDownloadItem::AlbumCover {
+                album_id: self.to_value("album_id")?,
+            },
+            "ARTIST_COVER" => ApiDownloadItem::ArtistCover {
+                album_id: self.to_value("album_id")?,
+            },
             _ => {
                 return Err(ParseError::ConvertType(format!(
                     "Invalid DownloadItem type '{item_type}'"
@@ -132,7 +142,8 @@ pub struct ApiDownloadTask {
     pub id: u64,
     pub state: ApiDownloadTaskState,
     pub item: ApiDownloadItem,
-    pub source: ApiDownloadApiSource,
+    pub source: Option<ApiDownloadApiSource>,
+    pub quality: Option<TrackAudioQuality>,
     pub file_path: String,
     pub progress: f64,
     pub bytes: u64,
@@ -147,6 +158,7 @@ impl ToValueType<ApiDownloadTask> for &serde_json::Value {
             state: self.to_value("state")?,
             item: self.to_value_type()?,
             source: self.to_value("source")?,
+            quality: self.to_value("quality")?,
             file_path: self.to_value("file_path")?,
             progress: self.to_value("progress")?,
             bytes: self.to_value("bytes")?,
@@ -161,7 +173,8 @@ impl From<DownloadTask> for ApiDownloadTask {
             id: value.id,
             state: value.state.into(),
             item: value.item.into(),
-            source: value.source.into(),
+            source: value.source.map(|source| source.into()),
+            quality: value.quality.map(|quality| quality.into()),
             file_path: value.file_path,
             progress: value.progress,
             bytes: value.bytes,

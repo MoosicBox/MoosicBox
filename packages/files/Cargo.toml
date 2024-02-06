@@ -5,14 +5,18 @@ name    = "moosicbox_files"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_config           = { path = "../config" }
-moosicbox_core             = { path = "../core", default-features = false }
-moosicbox_image            = { path = "../image", default-features = false }
-moosicbox_music_api        = { path = "../music_api" }
-moosicbox_qobuz            = { path = "../qobuz" }
-moosicbox_stream_utils     = { path = "../stream_utils" }
+moosicbox_config = { path = "../config" }
+moosicbox_core = { path = "../core", default-features = false }
+moosicbox_image = { path = "../image", default-features = false }
+moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
+    "rusqlite",
+    "serde_json",
+] }
+moosicbox_music_api = { path = "../music_api" }
+moosicbox_qobuz = { path = "../qobuz" }
+moosicbox_stream_utils = { path = "../stream_utils" }
 moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false }
-moosicbox_tidal            = { path = "../tidal" }
+moosicbox_tidal = { path = "../tidal" }
 
 actix-cors      = { workspace = true }
 actix-files     = { workspace = true }
@@ -28,6 +32,7 @@ log             = { workspace = true }
 once_cell       = { workspace = true }
 regex           = { workspace = true }
 reqwest         = { workspace = true }
+rusqlite        = { workspace = true }
 serde           = { workspace = true, features = ["derive"] }
 serde_json      = { workspace = true }
 strum           = { workspace = true }

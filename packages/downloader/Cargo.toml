@@ -20,10 +20,12 @@ moosicbox_paging = { path = "../paging", default-features = false }
 actix-web = { workspace = true, optional = true }
 
 async-recursion = { workspace = true }
+async-trait     = { workspace = true }
 audiotags       = { workspace = true }
 futures         = { workspace = true }
 hyper           = { version = "0.14.28" }
 id3             = { workspace = true }
+lazy_static     = { workspace = true }
 lofty           = { workspace = true }
 log             = { workspace = true }
 mp3-duration    = { workspace = true }

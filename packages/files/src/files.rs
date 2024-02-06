@@ -16,6 +16,7 @@ pub enum ResizeImageError {
     NoImageResizeFeaturesEnabled,
 }
 
+#[allow(unused)]
 pub(crate) fn resize_image_path(
     path: &str,
     width: u32,

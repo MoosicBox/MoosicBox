@@ -4,6 +4,7 @@ use moosicbox_core::sqlite::{
     db::SqliteValue,
     models::{AsId, AsModel, AsModelResult, TrackApiSource},
 };
+use moosicbox_files::files::track::TrackAudioQuality;
 use moosicbox_json_utils::{
     rusqlite::ToValue as RusqliteToValue, serde_json::ToValue, MissingValue, ParseError,
     ToValueType,
@@ -197,11 +198,21 @@ impl ToValueType<DownloadItem> for &Row<'_> {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
+pub struct CreateDownloadTask {
+    pub item: DownloadItem,
+    pub file_path: String,
+    pub source: Option<DownloadApiSource>,
+    pub quality: Option<TrackAudioQuality>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct DownloadTask {
     pub id: u64,
     pub state: DownloadTaskState,
     pub item: DownloadItem,
-    pub source: DownloadApiSource,
+    pub source: Option<DownloadApiSource>,
+    pub quality: Option<TrackAudioQuality>,
     pub file_path: String,
     pub progress: f64,
     pub bytes: u64,
@@ -224,6 +235,7 @@ impl AsModelResult<DownloadTask, ParseError> for Row<'_> {
             state: self.to_value("state")?,
             item: self.to_value_type()?,
             source: self.to_value("source")?,
+            quality: self.to_value("quality")?,
             file_path: self.to_value("file_path")?,
             progress: self.to_value("progress")?,
             bytes: self.to_value("bytes")?,
@@ -242,6 +254,7 @@ impl ToValueType<DownloadTask> for &serde_json::Value {
             state: self.to_value("state")?,
             item: self.to_value("track_id")?,
             source: self.to_value("source")?,
+            quality: self.to_value("quality")?,
             file_path: self.to_value("file_path")?,
             progress: self.to_value("progress")?,
             bytes: self.to_value("bytes")?,

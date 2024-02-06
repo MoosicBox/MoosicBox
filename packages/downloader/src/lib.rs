@@ -9,7 +9,12 @@ use std::{
 
 use crate::db::models::DownloadApiSource;
 use async_recursion::async_recursion;
+use async_trait::async_trait;
 use audiotags::Tag;
+use db::{
+    create_download_task,
+    models::{CreateDownloadTask, DownloadTask},
+};
 use futures::StreamExt;
 use id3::Timestamp;
 use moosicbox_core::{
@@ -41,7 +46,25 @@ use tokio::{
 pub mod api;
 
 pub mod db;
-pub mod models;
+pub mod queue;
+
+#[derive(Debug, Error)]
+pub enum CreateDownloadTasksError {
+    #[error(transparent)]
+    Db(#[from] moosicbox_core::sqlite::db::DbError),
+}
+
+pub fn create_download_tasks(
+    db: &Db,
+    tasks: Vec<CreateDownloadTask>,
+) -> Result<Vec<DownloadTask>, CreateDownloadTasksError> {
+    let db = &db.library.lock().unwrap().inner;
+
+    Ok(tasks
+        .into_iter()
+        .map(|task| create_download_task(db, &task))
+        .collect::<Result<Vec<_>, _>>()?)
+}
 
 fn get_filename_for_track(track: &LibraryTrack) -> String {
     let extension = "flac";
@@ -371,7 +394,7 @@ pub async fn download_album_id(
     Ok(())
 }
 
-async fn download_album_cover(
+pub async fn download_album_cover(
     db: &Db,
     path: &str,
     album_id: u64,
@@ -417,7 +440,7 @@ async fn download_album_cover(
     Ok(())
 }
 
-async fn download_artist_cover(
+pub async fn download_artist_cover(
     db: &Db,
     path: &str,
     album_id: u64,
@@ -461,4 +484,67 @@ async fn download_artist_cover(
     log::debug!("Completed artist cover download");
 
     Ok(())
+}
+
+#[async_trait]
+pub trait Downloader /*: Clone + Send + Sync*/ {
+    async fn download_track_id(
+        &self,
+        db: &Db,
+        path: &str,
+        track_id: u64,
+        quality: Option<TrackAudioQuality>,
+        source: Option<DownloadApiSource>,
+        timeout_duration: Option<Duration>,
+    ) -> Result<(), DownloadTrackError>;
+
+    async fn download_album_cover(
+        &self,
+        db: &Db,
+        path: &str,
+        album_id: u64,
+    ) -> Result<(), DownloadAlbumError>;
+
+    async fn download_artist_cover(
+        &self,
+        db: &Db,
+        path: &str,
+        album_id: u64,
+    ) -> Result<(), DownloadAlbumError>;
+}
+
+// #[derive(Clone)]
+pub struct MoosicboxDownloader {}
+
+#[async_trait]
+impl Downloader for MoosicboxDownloader {
+    async fn download_track_id(
+        &self,
+        db: &Db,
+        path: &str,
+        track_id: u64,
+        quality: Option<TrackAudioQuality>,
+        source: Option<DownloadApiSource>,
+        timeout_duration: Option<Duration>,
+    ) -> Result<(), DownloadTrackError> {
+        download_track_id(db, path, track_id, quality, source, timeout_duration).await
+    }
+
+    async fn download_album_cover(
+        &self,
+        db: &Db,
+        path: &str,
+        album_id: u64,
+    ) -> Result<(), DownloadAlbumError> {
+        download_album_cover(db, path, album_id).await
+    }
+
+    async fn download_artist_cover(
+        &self,
+        db: &Db,
+        path: &str,
+        album_id: u64,
+    ) -> Result<(), DownloadAlbumError> {
+        download_artist_cover(db, path, album_id).await
+    }
 }
