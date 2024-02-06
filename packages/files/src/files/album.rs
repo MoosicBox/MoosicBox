@@ -1,14 +1,12 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    pin::Pin,
     sync::RwLock,
 };
 
 use async_recursion::async_recursion;
-use bytes::{Bytes, BytesMut};
+use bytes::BytesMut;
 use futures::{StreamExt, TryFutureExt, TryStreamExt};
-use futures_core::Stream;
 use moosicbox_core::{
     app::Db,
     sqlite::{
@@ -27,22 +25,12 @@ use thiserror::Error;
 use tokio_util::codec::{BytesCodec, FramedRead};
 
 use crate::{
-    fetch_and_save_bytes_from_remote_url, fetch_bytes_from_remote_url, sanitize_filename,
-    search_for_cover, FetchAndSaveBytesFromRemoteUrlError,
+    get_or_fetch_cover_bytes_from_remote_url, get_or_fetch_cover_from_remote_url,
+    sanitize_filename, search_for_cover, BytesStream, FetchCoverError,
 };
 
 pub enum AlbumCoverSource {
     LocalFilePath(String),
-}
-
-#[derive(Debug, Error)]
-pub enum FetchAlbumCoverError {
-    #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
-    #[error(transparent)]
-    IO(#[from] std::io::Error),
-    #[error(transparent)]
-    FetchAndSaveBytesFromRemoteUrl(#[from] FetchAndSaveBytesFromRemoteUrlError),
 }
 
 fn get_album_cover_path(
@@ -61,42 +49,6 @@ fn get_album_cover_path(
     let filename = format!("album_{size}_{album_id}.jpg");
 
     path.join(filename)
-}
-
-async fn get_or_fetch_album_cover_bytes_from_remote_url(
-    url: &str,
-    file_path: &Path,
-) -> Result<Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>, FetchAlbumCoverError>
-{
-    static IMAGE_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
-
-    if Path::exists(file_path) {
-        Ok(tokio::fs::File::open(file_path.to_path_buf())
-            .map_ok(|file| FramedRead::new(file, BytesCodec::new()).map_ok(BytesMut::freeze))
-            .try_flatten_stream()
-            .boxed())
-    } else {
-        Ok(fetch_bytes_from_remote_url(&IMAGE_CLIENT, url).await?)
-    }
-}
-
-async fn get_or_fetch_album_cover_from_remote_url(
-    url: &str,
-    file_path: &Path,
-) -> Result<String, FetchAlbumCoverError> {
-    static IMAGE_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
-
-    if Path::exists(file_path) {
-        Ok(file_path.to_str().unwrap().to_string())
-    } else {
-        Ok(
-            fetch_and_save_bytes_from_remote_url(&IMAGE_CLIENT, &file_path, url)
-                .await?
-                .to_str()
-                .unwrap()
-                .to_string(),
-        )
-    }
 }
 
 #[derive(Debug, Error)]
@@ -190,7 +142,7 @@ pub enum AlbumCoverError {
     #[error("Album cover not found for album: {0:?}")]
     NotFound(AlbumId),
     #[error(transparent)]
-    FetchAlbumCover(#[from] FetchAlbumCoverError),
+    FetchCover(#[from] FetchCoverError),
     #[error(transparent)]
     FetchLocalAlbumCover(#[from] FetchLocalAlbumCoverError),
     #[error(transparent)]
@@ -384,7 +336,7 @@ async fn get_tidal_album_cover(
 ) -> Result<String, AlbumCoverError> {
     let request = get_tidal_album_cover_request(tidal_album_id, db, size).await?;
 
-    Ok(get_or_fetch_album_cover_from_remote_url(&request.url, &request.file_path).await?)
+    Ok(get_or_fetch_cover_from_remote_url(&request.url, &request.file_path).await?)
 }
 
 async fn get_tidal_album_cover_bytes(
@@ -394,15 +346,13 @@ async fn get_tidal_album_cover_bytes(
 ) -> Result<BytesStream, AlbumCoverError> {
     let request = get_tidal_album_cover_request(tidal_album_id, db, size).await?;
 
-    Ok(get_or_fetch_album_cover_bytes_from_remote_url(&request.url, &request.file_path).await?)
+    Ok(get_or_fetch_cover_bytes_from_remote_url(&request.url, &request.file_path).await?)
 }
 
 struct AlbumCoverRequest {
     url: String,
     file_path: PathBuf,
 }
-
-type BytesStream = Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>;
 
 async fn get_qobuz_album_cover_request(
     qobuz_album_id: &str,
@@ -469,7 +419,7 @@ async fn get_qobuz_album_cover(
 ) -> Result<String, AlbumCoverError> {
     let request = get_qobuz_album_cover_request(qobuz_album_id, db, size).await?;
 
-    Ok(get_or_fetch_album_cover_from_remote_url(&request.url, &request.file_path).await?)
+    Ok(get_or_fetch_cover_from_remote_url(&request.url, &request.file_path).await?)
 }
 
 async fn get_qobuz_album_cover_bytes(
@@ -479,5 +429,5 @@ async fn get_qobuz_album_cover_bytes(
 ) -> Result<BytesStream, AlbumCoverError> {
     let request = get_qobuz_album_cover_request(qobuz_album_id, db, size).await?;
 
-    Ok(get_or_fetch_album_cover_bytes_from_remote_url(&request.url, &request.file_path).await?)
+    Ok(get_or_fetch_cover_bytes_from_remote_url(&request.url, &request.file_path).await?)
 }

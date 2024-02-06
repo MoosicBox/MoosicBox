@@ -8,8 +8,8 @@ use std::{
 };
 
 use audiotags::AudioTag;
-use bytes::Bytes;
-use futures::{StreamExt, TryStreamExt};
+use bytes::{Bytes, BytesMut};
+use futures::{StreamExt, TryFutureExt, TryStreamExt};
 use futures_core::Stream;
 use once_cell::sync::Lazy;
 use thiserror::Error;
@@ -17,6 +17,7 @@ use tokio::{
     io::{AsyncWriteExt, BufWriter},
     pin,
 };
+use tokio_util::codec::{BytesCodec, FramedRead};
 
 #[cfg(feature = "api")]
 pub mod api;
@@ -69,6 +70,53 @@ pub async fn save_bytes_stream_to_file<S: Stream<Item = Result<Bytes, std::io::E
     writer.flush().await?;
 
     Ok(())
+}
+
+#[derive(Debug, Error)]
+pub enum FetchCoverError {
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[error(transparent)]
+    IO(#[from] std::io::Error),
+    #[error(transparent)]
+    FetchAndSaveBytesFromRemoteUrl(#[from] FetchAndSaveBytesFromRemoteUrlError),
+}
+
+pub(crate) type BytesStream = Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>;
+
+async fn get_or_fetch_cover_bytes_from_remote_url(
+    url: &str,
+    file_path: &Path,
+) -> Result<BytesStream, FetchCoverError> {
+    static IMAGE_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
+
+    if Path::exists(file_path) {
+        Ok(tokio::fs::File::open(file_path.to_path_buf())
+            .map_ok(|file| FramedRead::new(file, BytesCodec::new()).map_ok(BytesMut::freeze))
+            .try_flatten_stream()
+            .boxed())
+    } else {
+        Ok(fetch_bytes_from_remote_url(&IMAGE_CLIENT, url).await?)
+    }
+}
+
+async fn get_or_fetch_cover_from_remote_url(
+    url: &str,
+    file_path: &Path,
+) -> Result<String, FetchCoverError> {
+    static IMAGE_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
+
+    if Path::exists(file_path) {
+        Ok(file_path.to_str().unwrap().to_string())
+    } else {
+        Ok(
+            fetch_and_save_bytes_from_remote_url(&IMAGE_CLIENT, &file_path, url)
+                .await?
+                .to_str()
+                .unwrap()
+                .to_string(),
+        )
+    }
 }
 
 #[derive(Debug, Error)]
