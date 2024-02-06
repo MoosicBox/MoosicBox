@@ -233,7 +233,7 @@ async fn scan_tracks(
                 track.track_number,
                 &track.title,
                 track.duration as f64,
-                0,
+                &None,
                 AudioFormat::Source,
                 &None,
                 &None,

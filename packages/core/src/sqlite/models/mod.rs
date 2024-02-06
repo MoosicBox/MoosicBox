@@ -1545,7 +1545,7 @@ impl AsId for MagicToken {
 pub struct TrackSize {
     pub id: i32,
     pub track_id: i32,
-    pub bytes: u64,
+    pub bytes: Option<u64>,
     pub format: String,
 }
 

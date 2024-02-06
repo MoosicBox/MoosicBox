@@ -304,7 +304,7 @@ fn scan_track(
                 number as u32,
                 &title,
                 duration,
-                bytes,
+                &Some(bytes),
                 format,
                 bit_depth,
                 audio_bitrate,

@@ -661,7 +661,7 @@ pub fn get_or_init_track_size(
         SetTrackSize {
             track_id,
             quality,
-            bytes,
+            bytes: Some(Some(bytes)),
             bit_depth: Some(None),
             audio_bitrate: Some(None),
             overall_bitrate: Some(None),

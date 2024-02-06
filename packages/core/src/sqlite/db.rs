@@ -892,7 +892,7 @@ pub fn get_artist_albums(db: &Connection, artist_id: i32) -> Result<Vec<LibraryA
 pub struct SetTrackSize {
     pub track_id: i32,
     pub quality: PlaybackQuality,
-    pub bytes: u64,
+    pub bytes: Option<Option<u64>>,
     pub bit_depth: Option<Option<u8>>,
     pub audio_bitrate: Option<Option<u32>>,
     pub overall_bitrate: Option<Option<u32>>,
@@ -917,9 +917,11 @@ pub fn set_track_sizes(
                     "format",
                     SqliteValue::String(v.quality.format.as_ref().to_string()),
                 ),
-                ("bytes", SqliteValue::Number(v.bytes as i64)),
             ];
 
+            if let Some(bytes) = v.bytes {
+                values.push(("bytes", SqliteValue::NumberOpt(bytes.map(|x| x as i64))));
+            }
             if let Some(bit_depth) = v.bit_depth {
                 values.push((
                     "bit_depth",
