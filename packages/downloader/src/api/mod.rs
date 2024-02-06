@@ -1,6 +1,8 @@
 use std::time::Duration;
 
+use crate::api::models::ApiDownloadTask;
 use crate::db::get_download_location;
+use crate::db::get_download_tasks;
 use crate::download_album_id;
 use crate::download_track_id;
 use crate::DownloadAlbumError;
@@ -16,9 +18,12 @@ use actix_web::{
 use moosicbox_config::get_config_dir_path;
 use moosicbox_core::integer_range::parse_integer_ranges;
 use moosicbox_files::files::track::TrackAudioQuality;
+use moosicbox_paging::Page;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde_json::Value;
+
+pub mod models;
 
 static TIMEOUT_DURATION: Lazy<Option<Duration>> = Lazy::new(|| Some(Duration::from_secs(30)));
 
@@ -142,4 +147,26 @@ pub async fn download_endpoint(
     }
 
     Ok(Json(serde_json::json!({"success": true})))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetDownloadTasks {}
+
+#[route("/download-tasks", method = "GET")]
+pub async fn download_tasks_endpoint(
+    _query: web::Query<GetDownloadTasks>,
+    data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<Page<ApiDownloadTask>>> {
+    let tasks = get_download_tasks(&data.db.as_ref().unwrap().library.lock().unwrap().inner)?;
+
+    Ok(Json(Page::WithTotal {
+        offset: 0,
+        limit: tasks.len() as u32,
+        total: tasks.len() as u32,
+        items: tasks
+            .into_iter()
+            .map(|task| task.into())
+            .collect::<Vec<_>>(),
+    }))
 }

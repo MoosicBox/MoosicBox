@@ -7,6 +7,7 @@ use std::{
     time::Duration,
 };
 
+use crate::db::models::DownloadApiSource;
 use async_recursion::async_recursion;
 use audiotags::Tag;
 use futures::StreamExt;
@@ -15,7 +16,7 @@ use moosicbox_core::{
     app::Db,
     sqlite::{
         db::{get_album, get_album_tracks, get_artist_by_album_id, get_track},
-        models::{LibraryTrack, TrackApiSource},
+        models::LibraryTrack,
     },
     types::AudioFormat,
 };
@@ -30,8 +31,6 @@ use moosicbox_files::{
     },
     sanitize_filename, save_bytes_stream_to_file,
 };
-use serde::{Deserialize, Serialize};
-use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
 use tokio::{
     io::{AsyncSeekExt, AsyncWriteExt, BufWriter},
@@ -42,33 +41,7 @@ use tokio::{
 pub mod api;
 
 pub mod db;
-
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
-pub enum DownloadApiSource {
-    Tidal,
-    Qobuz,
-}
-
-impl From<DownloadApiSource> for TrackApiSource {
-    fn from(value: DownloadApiSource) -> Self {
-        match value {
-            DownloadApiSource::Tidal => TrackApiSource::Tidal,
-            DownloadApiSource::Qobuz => TrackApiSource::Qobuz,
-        }
-    }
-}
-
-impl From<TrackApiSource> for DownloadApiSource {
-    fn from(value: TrackApiSource) -> Self {
-        match value {
-            TrackApiSource::Tidal => DownloadApiSource::Tidal,
-            TrackApiSource::Qobuz => DownloadApiSource::Qobuz,
-            _ => panic!("Invalid TrackApiSource"),
-        }
-    }
-}
+pub mod models;
 
 fn get_filename_for_track(track: &LibraryTrack) -> String {
     let extension = "flac";

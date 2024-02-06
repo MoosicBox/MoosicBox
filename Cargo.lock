@@ -3012,6 +3012,7 @@ dependencies = [
  "moosicbox_core",
  "moosicbox_files",
  "moosicbox_json_utils",
+ "moosicbox_paging",
  "mp3-duration",
  "once_cell",
  "pretty_assertions",

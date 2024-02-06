@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use moosicbox_core::sqlite::{
     db::SqliteValue,
-    models::{AsId, AsModel, AsModelResult},
+    models::{AsId, AsModel, AsModelResult, TrackApiSource},
 };
 use moosicbox_json_utils::{
     rusqlite::ToValue as RusqliteToValue, serde_json::ToValue, MissingValue, ParseError,
@@ -93,14 +93,119 @@ impl ToValueType<DownloadTaskState> for Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum DownloadApiSource {
+    Tidal,
+    Qobuz,
+}
+
+impl From<DownloadApiSource> for TrackApiSource {
+    fn from(value: DownloadApiSource) -> Self {
+        match value {
+            DownloadApiSource::Tidal => TrackApiSource::Tidal,
+            DownloadApiSource::Qobuz => TrackApiSource::Qobuz,
+        }
+    }
+}
+
+impl From<TrackApiSource> for DownloadApiSource {
+    fn from(value: TrackApiSource) -> Self {
+        match value {
+            TrackApiSource::Tidal => DownloadApiSource::Tidal,
+            TrackApiSource::Qobuz => DownloadApiSource::Qobuz,
+            _ => panic!("Invalid TrackApiSource"),
+        }
+    }
+}
+
+impl MissingValue<DownloadApiSource> for &serde_json::Value {}
+impl MissingValue<DownloadApiSource> for serde_json::Value {}
+impl ToValueType<DownloadApiSource> for &serde_json::Value {
+    fn to_value_type(self) -> Result<DownloadApiSource, ParseError> {
+        Ok(DownloadApiSource::from_str(
+            self.as_str()
+                .ok_or_else(|| ParseError::ConvertType("DownloadApiSource".into()))?,
+        )
+        .map_err(|_| ParseError::ConvertType("DownloadApiSource".into()))?)
+    }
+}
+
+impl MissingValue<DownloadApiSource> for &Row<'_> {}
+impl MissingValue<DownloadApiSource> for Value {}
+impl ToValueType<DownloadApiSource> for Value {
+    fn to_value_type(self) -> Result<DownloadApiSource, ParseError> {
+        match self {
+            Value::Text(str) => Ok(DownloadApiSource::from_str(&str)
+                .map_err(|_| ParseError::ConvertType("DownloadApiSource".into()))?),
+            _ => Err(ParseError::ConvertType("DownloadApiSource".into())),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Clone, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
+pub enum DownloadItem {
+    Track(u64),
+    AlbumCover(u64),
+    ArtistCover(u64),
+}
+
+impl MissingValue<DownloadItem> for &serde_json::Value {}
+impl MissingValue<DownloadItem> for serde_json::Value {}
+impl ToValueType<DownloadItem> for &serde_json::Value {
+    fn to_value_type(self) -> Result<DownloadItem, ParseError> {
+        Ok(DownloadItem::from_str(
+            self.as_str()
+                .ok_or_else(|| ParseError::ConvertType("DownloadItem".into()))?,
+        )
+        .map_err(|_| ParseError::ConvertType("DownloadItem".into()))?)
+    }
+}
+
+impl MissingValue<DownloadItem> for &Row<'_> {}
+impl MissingValue<DownloadItem> for Value {}
+impl ToValueType<DownloadItem> for Value {
+    fn to_value_type(self) -> Result<DownloadItem, ParseError> {
+        match self {
+            Value::Text(str) => Ok(DownloadItem::from_str(&str)
+                .map_err(|_| ParseError::ConvertType("DownloadItem".into()))?),
+            _ => Err(ParseError::ConvertType("DownloadItem".into())),
+        }
+    }
+}
+
+impl ToValueType<DownloadItem> for &Row<'_> {
+    fn to_value_type(self) -> Result<DownloadItem, ParseError> {
+        let item_type: String = self.to_value("type")?;
+
+        Ok(match item_type.as_str() {
+            "TRACK" => DownloadItem::Track(self.to_value("track_id")?),
+            "ALBUM_COVER" => DownloadItem::AlbumCover(self.to_value("album_id")?),
+            "ARTIST_COVER" => DownloadItem::ArtistCover(self.to_value("album_id")?),
+            _ => {
+                return Err(ParseError::ConvertType(format!(
+                    "Invalid DownloadItem type '{item_type}'"
+                )));
+            }
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadTask {
     pub id: u64,
-    pub download_location_id: u64,
-    pub track_id: u64,
-    pub progress: f64,
     pub state: DownloadTaskState,
+    pub item: DownloadItem,
+    pub source: DownloadApiSource,
+    pub file_path: String,
+    pub progress: f64,
+    pub bytes: u64,
+    pub speed: Option<u64>,
     pub created: String,
     pub updated: String,
 }
@@ -116,10 +221,13 @@ impl AsModelResult<DownloadTask, ParseError> for Row<'_> {
     fn as_model(&self) -> Result<DownloadTask, ParseError> {
         Ok(DownloadTask {
             id: self.to_value("id")?,
-            download_location_id: self.to_value("download_location_id")?,
-            track_id: self.to_value("track_id")?,
-            progress: self.to_value("progress")?,
             state: self.to_value("state")?,
+            item: self.to_value_type()?,
+            source: self.to_value("source")?,
+            file_path: self.to_value("file_path")?,
+            progress: self.to_value("progress")?,
+            bytes: self.to_value("bytes")?,
+            speed: self.to_value("speed")?,
             created: self.to_value("created")?,
             updated: self.to_value("updated")?,
         })
@@ -131,10 +239,13 @@ impl ToValueType<DownloadTask> for &serde_json::Value {
     fn to_value_type(self) -> Result<DownloadTask, ParseError> {
         Ok(DownloadTask {
             id: self.to_value("id")?,
-            download_location_id: self.to_value("download_location_id")?,
-            track_id: self.to_value("track_id")?,
-            progress: self.to_value("progress")?,
             state: self.to_value("state")?,
+            item: self.to_value("track_id")?,
+            source: self.to_value("source")?,
+            file_path: self.to_value("file_path")?,
+            progress: self.to_value("progress")?,
+            bytes: self.to_value("bytes")?,
+            speed: self.to_value("speed")?,
             created: self.to_value("created")?,
             updated: self.to_value("updated")?,
         })
