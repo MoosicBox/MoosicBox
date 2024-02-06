@@ -13,3 +13,12 @@ CREATE TABLE IF NOT EXISTS download_tasks (
     `created` TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now')),
     `updated` TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now'))
 );
+
+CREATE UNIQUE INDEX ux_download_tasks ON download_tasks(
+    `type`,
+    ifnull(`track_id`, 0),
+    ifnull(`album_id`, 0),
+    ifnull(`source`, ''),
+    ifnull(`quality`, ''),
+    `file_path`
+);
