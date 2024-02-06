@@ -14,7 +14,7 @@ use id3::Timestamp;
 use moosicbox_core::{
     app::Db,
     sqlite::{
-        db::{get_album, get_album_tracks, get_track},
+        db::{get_album, get_album_tracks, get_artist_by_album_id, get_track},
         models::{LibraryTrack, TrackApiSource},
     },
     types::AudioFormat,
@@ -22,6 +22,7 @@ use moosicbox_core::{
 use moosicbox_files::{
     files::{
         album::{get_library_album_cover_bytes, AlbumCoverError},
+        artist::{get_library_artist_cover_bytes, ArtistCoverError},
         track::{
             get_track_bytes, get_track_source, GetTrackBytesError, TrackAudioQuality,
             TrackSourceError,
@@ -346,6 +347,8 @@ pub enum DownloadAlbumError {
     #[error(transparent)]
     IO(#[from] std::io::Error),
     #[error(transparent)]
+    ArtistCover(#[from] ArtistCoverError),
+    #[error(transparent)]
     AlbumCover(#[from] AlbumCoverError),
     #[error("Invalid source")]
     InvalidSource,
@@ -357,7 +360,8 @@ pub async fn download_album_id(
     db: &Db,
     path: &str,
     album_id: u64,
-    download_cover: bool,
+    try_download_album_cover: bool,
+    try_download_artist_cover: bool,
     quality: Option<TrackAudioQuality>,
     source: Option<DownloadApiSource>,
     timeout_duration: Option<Duration>,
@@ -383,8 +387,12 @@ pub async fn download_album_id(
 
     log::debug!("Completed album download for {} tracks", tracks.len());
 
-    if download_cover {
+    if try_download_album_cover {
         download_album_cover(db, path, album_id).await?;
+    }
+
+    if try_download_artist_cover {
+        download_artist_cover(db, path, album_id).await?;
     }
 
     Ok(())
@@ -414,13 +422,70 @@ async fn download_album_cover(
         return Ok(());
     }
 
-    let bytes = get_library_album_cover_bytes(album_id as i32, db).await?;
+    let bytes = match get_library_album_cover_bytes(album_id as i32, db).await {
+        Ok(bytes) => bytes,
+        Err(err) => match err {
+            AlbumCoverError::NotFound(_) => {
+                log::debug!("No album cover found");
+                return Ok(());
+            }
+            _ => {
+                return Err(DownloadAlbumError::AlbumCover(err));
+            }
+        },
+    };
 
     log::debug!("Saving album cover to {cover_path:?}");
 
     save_bytes_stream_to_file(bytes, &cover_path).await?;
 
     log::debug!("Completed album cover download");
+
+    Ok(())
+}
+
+async fn download_artist_cover(
+    db: &Db,
+    path: &str,
+    album_id: u64,
+) -> Result<(), DownloadAlbumError> {
+    log::debug!("Downloading artist cover");
+
+    let artist =
+        get_artist_by_album_id(&db.library.lock().as_ref().unwrap().inner, album_id as i32)?
+            .ok_or(DownloadAlbumError::NotFound)?;
+
+    let path_buf = PathBuf::from_str(path)
+        .unwrap()
+        .join(&sanitize_filename(&artist.title));
+
+    tokio::fs::create_dir_all(&path_buf).await?;
+
+    let cover_path = path_buf.join("artist.jpg");
+
+    if Path::exists(&cover_path) {
+        log::debug!("Artist cover already downloaded");
+        return Ok(());
+    }
+
+    let bytes = match get_library_artist_cover_bytes(artist.id, db).await {
+        Ok(bytes) => bytes,
+        Err(err) => match err {
+            ArtistCoverError::NotFound(_) => {
+                log::debug!("No artist cover found");
+                return Ok(());
+            }
+            _ => {
+                return Err(DownloadAlbumError::ArtistCover(err));
+            }
+        },
+    };
+
+    log::debug!("Saving artist cover to {cover_path:?}");
+
+    save_bytes_stream_to_file(bytes, &cover_path).await?;
+
+    log::debug!("Completed artist cover download");
 
     Ok(())
 }

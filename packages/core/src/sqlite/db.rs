@@ -723,6 +723,19 @@ pub fn get_artist(db: &Connection, id: i32) -> Result<Option<LibraryArtist>, DbE
         .find_map(|row| row.ok()))
 }
 
+pub fn get_artist_by_album_id(db: &Connection, id: i32) -> Result<Option<LibraryArtist>, DbError> {
+    Ok(db
+        .prepare_cached(
+            "
+            SELECT *
+            FROM artists
+            JOIN albums ON albums.artist_id = artists.id
+            WHERE albums.id=?1",
+        )?
+        .query_map(params![id], |row| Ok(AsModel::as_model(row)))?
+        .find_map(|row| row.ok()))
+}
+
 pub fn get_tidal_artist(db: &Connection, tidal_id: i32) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
         .prepare_cached(

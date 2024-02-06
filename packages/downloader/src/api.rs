@@ -45,6 +45,7 @@ pub struct DownloadQuery {
     album_id: Option<u64>,
     album_ids: Option<String>,
     download_album_cover: Option<bool>,
+    download_artist_cover: Option<bool>,
     quality: Option<TrackAudioQuality>,
     source: Option<DownloadApiSource>,
 }
@@ -98,6 +99,7 @@ pub async fn download_endpoint(
             &path,
             album_id,
             query.download_album_cover.unwrap_or(true),
+            query.download_artist_cover.unwrap_or(true),
             query.quality,
             query.source,
             *TIMEOUT_DURATION,
@@ -130,6 +132,7 @@ pub async fn download_endpoint(
                 &path,
                 album_id,
                 query.download_album_cover.unwrap_or(true),
+                query.download_artist_cover.unwrap_or(true),
                 query.quality,
                 query.source,
                 *TIMEOUT_DURATION,
