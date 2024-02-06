@@ -116,6 +116,10 @@ jobs:
                       path: packages/music_api
                       os: ubuntu-latest
 
+                    - name: paging
+                      path: packages/paging
+                      os: ubuntu-latest
+
                     - name: player
                       path: packages/player
                       os: ubuntu-latest

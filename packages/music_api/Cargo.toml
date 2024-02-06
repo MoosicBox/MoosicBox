@@ -9,6 +9,7 @@ moosicbox_core = { path = "../core", default-features = false }
 moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
     "serde_json",
 ] }
+moosicbox_paging = { path = "../paging", default-features = false }
 
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }

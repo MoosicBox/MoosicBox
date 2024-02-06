@@ -1,0 +1,22 @@
+[package]
+authors = ["Braden Steffaniak"]
+edition = "2021"
+name    = "moosicbox_paging"
+version = "0.1.0"
+
+[dependencies]
+moosicbox_core = { path = "../core", default-features = false }
+moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
+    "serde_json",
+] }
+
+futures   = { workspace = true }
+log       = { workspace = true }
+serde     = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+tokio     = { workspace = true, features = ["macros"] }
+
+[features]
+default = []
+
+fail-on-warnings = []

@@ -3129,6 +3129,7 @@ dependencies = [
  "log",
  "moosicbox_core",
  "moosicbox_json_utils",
+ "moosicbox_paging",
  "once_cell",
  "open",
  "reqwest",
@@ -3141,6 +3142,19 @@ dependencies = [
  "tokio",
  "tokio-util",
  "url",
+]
+
+[[package]]
+name = "moosicbox_paging"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "log",
+ "moosicbox_core",
+ "moosicbox_json_utils",
+ "serde",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
@@ -3187,6 +3201,7 @@ dependencies = [
  "moosicbox_core",
  "moosicbox_json_utils",
  "moosicbox_music_api",
+ "moosicbox_paging",
  "once_cell",
  "open",
  "regex",
@@ -3351,6 +3366,7 @@ dependencies = [
  "moosicbox_core",
  "moosicbox_json_utils",
  "moosicbox_music_api",
+ "moosicbox_paging",
  "once_cell",
  "open",
  "reqwest",

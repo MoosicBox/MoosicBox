@@ -17,10 +17,10 @@ use moosicbox_json_utils::{serde_json::ToValue, ParseError};
 use moosicbox_music_api::{
     AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumOrder, AlbumOrderDirection,
     AlbumType, AlbumsError, ArtistAlbumsError, ArtistError, ArtistOrder, ArtistOrderDirection,
-    ArtistsError, Id, LibraryAlbumError, MusicApi, Page, PagingResponse, PagingResult,
-    RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackError, TrackOrder,
-    TrackOrderDirection, TracksError,
+    ArtistsError, Id, LibraryAlbumError, MusicApi, RemoveAlbumError, RemoveArtistError,
+    RemoveTrackError, TrackError, TrackOrder, TrackOrderDirection, TracksError,
 };
+use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
