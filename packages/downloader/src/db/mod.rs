@@ -42,41 +42,38 @@ pub fn create_download_task(
     db: &Connection,
     task: &CreateDownloadTask,
 ) -> Result<DownloadTask, DbError> {
-    upsert::<DownloadTask>(
-        db,
-        "download_tasks",
-        vec![("file_path", SqliteValue::String(task.file_path.clone()))],
-        vec![
-            ("file_path", SqliteValue::String(task.file_path.clone())),
-            (
-                "source",
-                SqliteValue::StringOpt(
-                    task.source
-                        .as_ref()
-                        .map(|source| source.as_ref().to_string()),
-                ),
+    let values = vec![
+        ("file_path", SqliteValue::String(task.file_path.clone())),
+        (
+            "source",
+            SqliteValue::StringOpt(
+                task.source
+                    .as_ref()
+                    .map(|source| source.as_ref().to_string()),
             ),
-            ("type", SqliteValue::String(task.item.as_ref().to_string())),
-            (
-                "track_id",
-                SqliteValue::NumberOpt(if let DownloadItem::Track(track_id) = task.item {
-                    Some(track_id as i64)
-                } else {
-                    None
-                }),
-            ),
-            (
-                "album_id",
-                SqliteValue::NumberOpt(if let DownloadItem::AlbumCover(album_id) = task.item {
-                    Some(album_id as i64)
-                } else if let DownloadItem::ArtistCover(album_id) = task.item {
-                    Some(album_id as i64)
-                } else {
-                    None
-                }),
-            ),
-        ],
-    )
+        ),
+        ("type", SqliteValue::String(task.item.as_ref().to_string())),
+        (
+            "track_id",
+            SqliteValue::NumberOpt(if let DownloadItem::Track(track_id) = task.item {
+                Some(track_id as i64)
+            } else {
+                None
+            }),
+        ),
+        (
+            "album_id",
+            SqliteValue::NumberOpt(if let DownloadItem::AlbumCover(album_id) = task.item {
+                Some(album_id as i64)
+            } else if let DownloadItem::ArtistCover(album_id) = task.item {
+                Some(album_id as i64)
+            } else {
+                None
+            }),
+        ),
+    ];
+
+    upsert::<DownloadTask>(db, "download_tasks", values.clone(), values)
 }
 
 pub fn get_download_tasks(db: &Connection) -> Result<Vec<DownloadTask>, DbError> {
