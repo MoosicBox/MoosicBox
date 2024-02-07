@@ -736,6 +736,32 @@ pub fn get_artist_by_album_id(db: &Connection, id: i32) -> Result<Option<Library
         .find_map(|row| row.ok()))
 }
 
+pub fn get_artists_by_album_ids(
+    db: &Connection,
+    album_ids: &[i32],
+) -> Result<Vec<LibraryArtist>, DbError> {
+    let mut statement = db.prepare_cached(&format!(
+        "
+            SELECT DISTINCT *
+            FROM artists
+            JOIN albums ON albums.artist_id = artists.id
+            WHERE albums.id IN ({})",
+        album_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ")
+    ))?;
+
+    let mut index = 1;
+    for id in album_ids {
+        statement.raw_bind_parameter(index, *id)?;
+        index += 1;
+    }
+
+    Ok(statement
+        .raw_query()
+        .mapped(|row| Ok(AsModel::as_model(row)))
+        .filter_map(|row| row.ok())
+        .collect())
+}
+
 pub fn get_tidal_artist(db: &Connection, tidal_id: i32) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
         .prepare_cached(
