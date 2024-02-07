@@ -184,6 +184,8 @@ async fn download_track_inner(
         return Err(DownloadTrackInnerError::InvalidSource);
     };
 
+    let quality = quality.or(Some(TrackAudioQuality::FlacHighestRes));
+
     let req = get_track_source(track.id, db, quality, Some(download_source.into()));
 
     let result = if let Some(timeout_duration) = timeout_duration {
