@@ -1,7 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
 use lazy_static::lazy_static;
-use moosicbox_core::app::Db;
+use moosicbox_core::{app::Db, sqlite::db::DbError};
+use moosicbox_database::{rusqlite::RusqliteDatabase, Database, DatabaseError, DatabaseValue};
 use thiserror::Error;
 use tokio::{
     sync::{Mutex, RwLock},
@@ -24,6 +25,10 @@ lazy_static! {
 
 #[derive(Debug, Error)]
 pub enum ProcessDownloadQueueError {
+    #[error(transparent)]
+    Db(#[from] DbError),
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
     #[error(transparent)]
     Join(#[from] JoinError),
     #[error(transparent)]
@@ -67,6 +72,7 @@ impl DownloadQueueState {
 #[derive(Clone)]
 pub struct DownloadQueue {
     db: Db,
+    database: Arc<Box<dyn Database + Send + Sync>>,
     downloader: Arc<Box<dyn Downloader + Send + Sync>>,
     state: Arc<RwLock<DownloadQueueState>>,
     join_handle: Arc<Mutex<Option<JoinHandle<Result<(), ProcessDownloadQueueError>>>>>,
@@ -75,16 +81,28 @@ pub struct DownloadQueue {
 impl DownloadQueue {
     pub fn new(db: Db) -> Self {
         Self {
-            db,
+            db: db.clone(),
+            database: Arc::new(Box::new(RusqliteDatabase::new(db.library))),
             downloader: Arc::new(Box::new(MoosicboxDownloader {})),
             state: Arc::new(RwLock::new(DownloadQueueState::new())),
             join_handle: Arc::new(Mutex::new(None)),
         }
     }
 
+    pub fn with_database(self, database: Box<dyn Database + Send + Sync>) -> Self {
+        Self {
+            db: self.db.clone(),
+            database: Arc::new(database),
+            downloader: self.downloader.clone(),
+            state: self.state.clone(),
+            join_handle: self.join_handle.clone(),
+        }
+    }
+
     pub fn with_downloader(self, downloader: Box<dyn Downloader + Send + Sync>) -> Self {
         Self {
             db: self.db.clone(),
+            database: self.database.clone(),
             downloader: Arc::new(downloader),
             state: self.state.clone(),
             join_handle: self.join_handle.clone(),
@@ -99,29 +117,41 @@ impl DownloadQueue {
         self.state.write().await.add_tasks_to_queue(tasks);
     }
 
-    pub async fn process(&mut self) -> Result<(), ProcessDownloadQueueError> {
-        let mut handle = self.join_handle.lock().await;
-        if handle.as_ref().is_none() {
-            let db = self.db.clone();
-            let downloader = self.downloader.clone();
-            let state = self.state.clone();
-            let handle_arc = self.join_handle.clone();
+    pub fn process(&mut self) -> JoinHandle<Result<(), ProcessDownloadQueueError>> {
+        let db = self.db.clone();
+        let database = self.database.clone();
+        let downloader = self.downloader.clone();
+        let state = self.state.clone();
+        let join_handle = self.join_handle.clone();
 
-            *handle = Some(RT.spawn(async move {
-                Self::process_inner(&db, downloader, state).await?;
-                handle_arc.lock().await.take();
+        tokio::task::spawn(async move {
+            let mut handle = join_handle.lock().await;
+
+            if let Some(handle) = handle.as_mut() {
+                if !handle.is_finished() {
+                    handle.await??;
+                }
+            }
+
+            handle.replace(RT.spawn(async move {
+                Self::process_inner(&db, database, downloader, state).await?;
                 Ok(())
             }));
-        }
 
-        Ok(())
+            Ok::<_, ProcessDownloadQueueError>(())
+        })
     }
 
     #[allow(unused)]
     async fn shutdown(&mut self) -> Result<(), ProcessDownloadQueueError> {
         let mut handle = self.join_handle.lock().await;
+
         if let Some(handle) = handle.as_mut() {
-            Ok(handle.await??)
+            if handle.is_finished() {
+                Ok(())
+            } else {
+                Ok(handle.await??)
+            }
         } else {
             Ok(())
         }
@@ -129,6 +159,7 @@ impl DownloadQueue {
 
     async fn process_inner(
         db: &Db,
+        database: Arc<Box<dyn Database + Send + Sync>>,
         downloader: Arc<Box<dyn Downloader + Send + Sync>>,
         state: Arc<RwLock<DownloadQueueState>>,
     ) -> Result<(), ProcessDownloadQueueError> {
@@ -136,7 +167,8 @@ impl DownloadQueue {
             let state = state.as_ref().read().await;
             state.tasks.first().cloned()
         } {
-            let result = Self::process_task(db, downloader.clone(), &mut task).await;
+            let result =
+                Self::process_task(db, database.clone(), downloader.clone(), &mut task).await;
 
             let mut state = state.write().await;
 
@@ -153,12 +185,23 @@ impl DownloadQueue {
 
     async fn process_task(
         db: &Db,
+        database: Arc<Box<dyn Database + Send + Sync>>,
         downloader: Arc<Box<dyn Downloader + Send + Sync>>,
         task: &mut DownloadTask,
     ) -> Result<ProcessDownloadTaskResponse, ProcessDownloadQueueError> {
         log::debug!("Processing task {task:?}");
 
         task.state = DownloadTaskState::Started;
+        database
+            .update_and_get_row(
+                "download_tasks",
+                DatabaseValue::UNumber(task.id),
+                &[(
+                    "state",
+                    DatabaseValue::String(task.state.as_ref().to_string()),
+                )],
+            )
+            .await?;
 
         match task.item {
             DownloadItem::Track(track_id) => {
@@ -186,6 +229,16 @@ impl DownloadQueue {
         }
 
         task.state = DownloadTaskState::Finished;
+        database
+            .update_and_get_row(
+                "download_tasks",
+                DatabaseValue::UNumber(task.id),
+                &[(
+                    "state",
+                    DatabaseValue::String(task.state.as_ref().to_string()),
+                )],
+            )
+            .await?;
 
         Ok(ProcessDownloadTaskResponse {})
     }
@@ -198,8 +251,10 @@ impl Drop for DownloadQueue {
         tokio::task::spawn(async move {
             let mut handle = handle.lock().await;
             if let Some(handle) = handle.as_mut() {
-                if let Err(err) = handle.await {
-                    log::error!("Failed to drop DownloadQueue: {err:?}");
+                if !handle.is_finished() {
+                    if let Err(err) = handle.await {
+                        log::error!("Failed to drop DownloadQueue: {err:?}");
+                    }
                 }
             }
         });
@@ -210,6 +265,7 @@ impl Drop for DownloadQueue {
 mod tests {
     use async_trait::async_trait;
     use moosicbox_core::app::DbConnection;
+    use moosicbox_database::Row;
     use pretty_assertions::assert_eq;
 
     use crate::db::models::{DownloadItem, DownloadTaskState};
@@ -251,13 +307,29 @@ mod tests {
         }
     }
 
+    struct TestDatabase {}
+
+    #[async_trait]
+    impl Database for TestDatabase {
+        async fn update_and_get_row<'a>(
+            &self,
+            _table_name: &str,
+            _id: DatabaseValue,
+            _values: &[(&'a str, DatabaseValue)],
+        ) -> Result<Option<Row>, DatabaseError> {
+            Ok(None)
+        }
+    }
+
     fn new_queue() -> DownloadQueue {
         let library = ::rusqlite::Connection::open_in_memory().unwrap();
         let db = Db {
             library: Arc::new(std::sync::Mutex::new(DbConnection { inner: library })),
         };
 
-        DownloadQueue::new(db).with_downloader(Box::new(TestDownloader {}))
+        DownloadQueue::new(db)
+            .with_database(Box::new(TestDatabase {}))
+            .with_downloader(Box::new(TestDownloader {}))
     }
 
     #[test_log::test(tokio::test)]
@@ -272,15 +344,12 @@ mod tests {
                 source: None,
                 quality: None,
                 file_path: "".into(),
-                progress: 0.0,
-                bytes: 0,
-                speed: None,
                 created: "".into(),
                 updated: "".into(),
             })
             .await;
 
-        queue.process().await.unwrap();
+        queue.process().await.unwrap().unwrap();
         queue.shutdown().await.unwrap();
 
         let responses = queue
@@ -308,9 +377,6 @@ mod tests {
                     source: None,
                     quality: None,
                     file_path: "".into(),
-                    progress: 0.0,
-                    bytes: 0,
-                    speed: None,
                     created: "".into(),
                     updated: "".into(),
                 },
@@ -321,16 +387,13 @@ mod tests {
                     source: None,
                     quality: None,
                     file_path: "".into(),
-                    progress: 0.0,
-                    bytes: 0,
-                    speed: None,
                     created: "".into(),
                     updated: "".into(),
                 },
             ])
             .await;
 
-        queue.process().await.unwrap();
+        queue.process().await.unwrap().unwrap();
         queue.shutdown().await.unwrap();
 
         let responses = queue
@@ -364,9 +427,6 @@ mod tests {
                     source: None,
                     quality: None,
                     file_path: "".into(),
-                    progress: 0.0,
-                    bytes: 0,
-                    speed: None,
                     created: "".into(),
                     updated: "".into(),
                 },
@@ -377,16 +437,13 @@ mod tests {
                     source: None,
                     quality: None,
                     file_path: "".into(),
-                    progress: 0.0,
-                    bytes: 0,
-                    speed: None,
                     created: "".into(),
                     updated: "".into(),
                 },
             ])
             .await;
 
-        queue.process().await.unwrap();
+        queue.process().await.unwrap().unwrap();
         queue.shutdown().await.unwrap();
 
         let responses = queue
@@ -413,15 +470,12 @@ mod tests {
                 source: None,
                 quality: None,
                 file_path: "".into(),
-                progress: 0.0,
-                bytes: 0,
-                speed: None,
                 created: "".into(),
                 updated: "".into(),
             })
             .await;
 
-        queue.process().await.unwrap();
+        queue.process().await.unwrap().unwrap();
 
         queue
             .add_task_to_queue(DownloadTask {
@@ -431,9 +485,6 @@ mod tests {
                 source: None,
                 quality: None,
                 file_path: "".into(),
-                progress: 0.0,
-                bytes: 0,
-                speed: None,
                 created: "".into(),
                 updated: "".into(),
             })

@@ -160,9 +160,9 @@ impl ToValueType<ApiDownloadTask> for &serde_json::Value {
             source: self.to_value("source")?,
             quality: self.to_value("quality")?,
             file_path: self.to_value("file_path")?,
-            progress: self.to_value("progress")?,
-            bytes: self.to_value("bytes")?,
-            speed: self.to_value("speed")?,
+            progress: 0.0,
+            bytes: 0,
+            speed: None,
         })
     }
 }
@@ -176,9 +176,9 @@ impl From<DownloadTask> for ApiDownloadTask {
             source: value.source.map(|source| source.into()),
             quality: value.quality.map(|quality| quality.into()),
             file_path: value.file_path,
-            progress: value.progress,
-            bytes: value.bytes,
-            speed: value.speed,
+            progress: 0.0,
+            bytes: 0,
+            speed: None,
         }
     }
 }

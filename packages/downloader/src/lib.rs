@@ -12,16 +12,18 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 use audiotags::Tag;
 use db::{
-    create_download_task,
-    models::{CreateDownloadTask, DownloadTask},
+    create_download_task, get_download_location,
+    models::{CreateDownloadTask, DownloadItem, DownloadTask},
 };
 use futures::StreamExt;
 use id3::Timestamp;
+use moosicbox_config::get_config_dir_path;
 use moosicbox_core::{
     app::Db,
+    integer_range::{parse_integer_ranges, ParseIntegersError},
     sqlite::{
-        db::{get_album, get_album_tracks, get_artist_by_album_id, get_track},
-        models::LibraryTrack,
+        db::{get_album, get_album_tracks, get_artist_by_album_id, get_track, get_tracks, DbError},
+        models::{LibraryTrack, TrackApiSource},
     },
     types::AudioFormat,
 };
@@ -49,9 +51,232 @@ pub mod db;
 pub mod queue;
 
 #[derive(Debug, Error)]
+pub enum GetDownloadPathError {
+    #[error(transparent)]
+    Db(#[from] DbError),
+    #[error("Failed to get config directory")]
+    FailedToGetConfigDirectory,
+    #[error("Not found")]
+    NotFound,
+}
+
+pub fn get_download_path(
+    db: &Db,
+    location_id: Option<u64>,
+) -> Result<PathBuf, GetDownloadPathError> {
+    Ok(if let Some(location_id) = location_id {
+        PathBuf::from_str(
+            &get_download_location(&db.library.lock().as_ref().unwrap().inner, location_id)?
+                .ok_or(GetDownloadPathError::NotFound)?
+                .path,
+        )
+        .unwrap()
+    } else {
+        get_config_dir_path()
+            .ok_or(GetDownloadPathError::FailedToGetConfigDirectory)?
+            .join("downloads")
+    })
+}
+
+#[derive(Debug, Error)]
+pub enum GetCreateDownloadTasksError {
+    #[error(transparent)]
+    Db(#[from] DbError),
+    #[error(transparent)]
+    ParseIntegers(#[from] ParseIntegersError),
+    #[error("Not found")]
+    NotFound,
+}
+
+pub fn get_create_download_tasks(
+    db: &Db,
+    download_path: &Path,
+    track_id: Option<u64>,
+    track_ids: Option<String>,
+    album_id: Option<u64>,
+    album_ids: Option<String>,
+    download_album_cover: bool,
+    download_artist_cover: bool,
+    quality: Option<TrackAudioQuality>,
+    source: Option<DownloadApiSource>,
+) -> Result<Vec<CreateDownloadTask>, GetCreateDownloadTasksError> {
+    let mut tasks = vec![];
+
+    if let Some(track_id) = track_id {
+        tasks.extend(get_create_download_tasks_for_track_ids(
+            db,
+            &[track_id],
+            download_path,
+            source,
+            quality,
+        )?);
+    }
+
+    if let Some(track_ids) = &track_ids {
+        let track_ids = parse_integer_ranges(track_ids)?;
+
+        tasks.extend(get_create_download_tasks_for_track_ids(
+            db,
+            &track_ids,
+            download_path,
+            source,
+            quality,
+        )?);
+    }
+
+    if let Some(album_id) = album_id {
+        tasks.extend(get_create_download_tasks_for_album_ids(
+            db,
+            &[album_id],
+            download_path,
+            source,
+            quality,
+            download_album_cover,
+            download_artist_cover,
+        )?);
+    }
+
+    if let Some(album_ids) = &album_ids {
+        let album_ids = parse_integer_ranges(album_ids)?;
+
+        tasks.extend(get_create_download_tasks_for_album_ids(
+            db,
+            &album_ids,
+            download_path,
+            source,
+            quality,
+            download_album_cover,
+            download_artist_cover,
+        )?);
+    }
+
+    Ok(tasks)
+}
+
+pub fn get_create_download_tasks_for_track_ids(
+    db: &Db,
+    track_ids: &[u64],
+    download_path: &Path,
+    source: Option<DownloadApiSource>,
+    quality: Option<TrackAudioQuality>,
+) -> Result<Vec<CreateDownloadTask>, GetCreateDownloadTasksError> {
+    let tracks = get_tracks(
+        &db.library.lock().as_ref().unwrap().inner,
+        Some(&track_ids.iter().map(|id| *id as i32).collect::<Vec<_>>()),
+    )?;
+
+    Ok(tracks
+        .into_iter()
+        .map(|track| CreateDownloadTask {
+            file_path: download_path
+                .join(&sanitize_filename(&track.artist))
+                .join(&sanitize_filename(&track.album))
+                .join(&get_filename_for_track(&track))
+                .to_str()
+                .unwrap()
+                .to_string(),
+            item: DownloadItem::Track(track.id as u64),
+            source,
+            quality,
+        })
+        .collect::<Vec<_>>())
+}
+
+pub fn get_create_download_tasks_for_album_ids(
+    db: &Db,
+    album_ids: &[u64],
+    download_path: &Path,
+    source: Option<DownloadApiSource>,
+    quality: Option<TrackAudioQuality>,
+    download_album_cover: bool,
+    download_artist_cover: bool,
+) -> Result<Vec<CreateDownloadTask>, GetCreateDownloadTasksError> {
+    let mut tasks = vec![];
+
+    for album_id in album_ids {
+        let tracks =
+            get_album_tracks(&db.library.lock().as_ref().unwrap().inner, *album_id as i32)?
+                .into_iter()
+                .filter(|track| {
+                    if let Some(source) = source {
+                        let track_source = source.into();
+                        track.source == track_source
+                    } else {
+                        track.source != TrackApiSource::Local
+                    }
+                })
+                .collect::<Vec<_>>();
+
+        tasks.extend(
+            tracks
+                .iter()
+                .map(|track| CreateDownloadTask {
+                    file_path: download_path
+                        .join(&sanitize_filename(&track.artist))
+                        .join(&sanitize_filename(&track.album))
+                        .join(&get_filename_for_track(&track))
+                        .to_str()
+                        .unwrap()
+                        .to_string(),
+                    item: DownloadItem::Track(track.id as u64),
+                    source,
+                    quality,
+                })
+                .collect::<Vec<_>>(),
+        );
+
+        if download_album_cover || download_artist_cover {
+            let album_path = tracks
+                .first()
+                .map(|track| {
+                    Ok::<_, GetCreateDownloadTasksError>(
+                        download_path
+                            .join(&sanitize_filename(&track.artist))
+                            .join(&sanitize_filename(&track.album)),
+                    )
+                })
+                .unwrap_or_else(|| {
+                    let album =
+                        get_album(&db.library.lock().as_ref().unwrap().inner, *album_id as i32)?
+                            .ok_or(GetCreateDownloadTasksError::NotFound)?;
+
+                    Ok(download_path
+                        .join(&sanitize_filename(&album.artist))
+                        .join(&sanitize_filename(&album.title)))
+                })?;
+
+            if download_album_cover {
+                tasks.push(CreateDownloadTask {
+                    file_path: album_path.join("cover.jpg").to_str().unwrap().to_string(),
+                    item: DownloadItem::AlbumCover(*album_id),
+                    source,
+                    quality,
+                });
+            }
+            if download_artist_cover {
+                tasks.push(CreateDownloadTask {
+                    file_path: album_path
+                        .parent()
+                        .unwrap()
+                        .join("artist.jpg")
+                        .to_str()
+                        .unwrap()
+                        .to_string(),
+                    item: DownloadItem::ArtistCover(*album_id),
+                    source,
+                    quality,
+                });
+            }
+        }
+    }
+
+    Ok(tasks)
+}
+
+#[derive(Debug, Error)]
 pub enum CreateDownloadTasksError {
     #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    Db(#[from] DbError),
 }
 
 pub fn create_download_tasks(
@@ -79,7 +304,7 @@ fn get_filename_for_track(track: &LibraryTrack) -> String {
 #[derive(Debug, Error)]
 pub enum DownloadTrackError {
     #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    Db(#[from] DbError),
     #[error(transparent)]
     TrackSource(#[from] TrackSourceError),
     #[error(transparent)]
@@ -142,7 +367,7 @@ async fn download_track(
 #[derive(Debug, Error)]
 pub enum DownloadTrackInnerError {
     #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    Db(#[from] DbError),
     #[error(transparent)]
     TrackSource(#[from] TrackSourceError),
     #[error(transparent)]
@@ -233,14 +458,9 @@ async fn download_track_inner(
     )
     .await?;
 
-    let path_buf = PathBuf::from_str(path)
-        .unwrap()
-        .join(&sanitize_filename(&track.artist))
-        .join(&sanitize_filename(&track.album));
+    let track_path = PathBuf::from_str(path).unwrap();
 
-    tokio::fs::create_dir_all(&path_buf).await?;
-
-    let track_path = path_buf.join(&get_filename_for_track(&track));
+    tokio::fs::create_dir_all(&track_path.parent().unwrap()).await?;
 
     if Path::exists(&track_path) {
         log::debug!("Track already downloaded");
@@ -339,7 +559,7 @@ pub async fn tag_track_file(
 #[derive(Debug, Error)]
 pub enum DownloadAlbumError {
     #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    Db(#[from] DbError),
     #[error(transparent)]
     DownloadTrack(#[from] DownloadTrackError),
     #[error(transparent)]
@@ -403,15 +623,9 @@ pub async fn download_album_cover(
 ) -> Result<(), DownloadAlbumError> {
     log::debug!("Downloading album cover");
 
-    let album = get_album(&db.library.lock().as_ref().unwrap().inner, album_id as i32)?
-        .ok_or(DownloadAlbumError::NotFound)?;
+    let path_buf = PathBuf::from_str(path).unwrap();
 
-    let path_buf = PathBuf::from_str(path)
-        .unwrap()
-        .join(&sanitize_filename(&album.artist))
-        .join(&sanitize_filename(&album.title));
-
-    tokio::fs::create_dir_all(&path_buf).await?;
+    tokio::fs::create_dir_all(&path_buf.parent().unwrap()).await?;
 
     let cover_path = path_buf.join("cover.jpg");
 
@@ -449,15 +663,9 @@ pub async fn download_artist_cover(
 ) -> Result<(), DownloadAlbumError> {
     log::debug!("Downloading artist cover");
 
-    let artist =
-        get_artist_by_album_id(&db.library.lock().as_ref().unwrap().inner, album_id as i32)?
-            .ok_or(DownloadAlbumError::NotFound)?;
+    let path_buf = PathBuf::from_str(path).unwrap();
 
-    let path_buf = PathBuf::from_str(path)
-        .unwrap()
-        .join(&sanitize_filename(&artist.title));
-
-    tokio::fs::create_dir_all(&path_buf).await?;
+    tokio::fs::create_dir_all(&path_buf.parent().unwrap()).await?;
 
     let cover_path = path_buf.join("artist.jpg");
 
@@ -465,6 +673,10 @@ pub async fn download_artist_cover(
         log::debug!("Artist cover already downloaded");
         return Ok(());
     }
+
+    let artist =
+        get_artist_by_album_id(&db.library.lock().as_ref().unwrap().inner, album_id as i32)?
+            .ok_or(DownloadAlbumError::NotFound)?;
 
     let bytes = match get_library_artist_cover_bytes(artist.id, db).await {
         Ok(bytes) => bytes,
@@ -515,7 +727,6 @@ pub trait Downloader /*: Clone + Send + Sync*/ {
     ) -> Result<(), DownloadAlbumError>;
 }
 
-// #[derive(Clone)]
 pub struct MoosicboxDownloader {}
 
 #[async_trait]

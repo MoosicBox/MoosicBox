@@ -1,32 +1,24 @@
-use std::path::PathBuf;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
 use crate::api::models::ApiDownloadTask;
 use crate::create_download_tasks;
-use crate::db::get_download_location;
 use crate::db::get_download_tasks;
-use crate::db::models::CreateDownloadTask;
-use crate::db::models::DownloadItem;
+use crate::get_create_download_tasks;
+use crate::get_download_path;
 use crate::queue::DownloadQueue;
 use crate::queue::ProcessDownloadQueueError;
 use crate::CreateDownloadTasksError;
-use crate::DownloadAlbumError;
 use crate::DownloadApiSource;
-use crate::DownloadTrackError;
+use crate::GetCreateDownloadTasksError;
+use crate::GetDownloadPathError;
 use actix_web::error::ErrorInternalServerError;
-use actix_web::error::ErrorNotFound;
 use actix_web::{
     route,
     web::{self, Json},
     Result,
 };
-use moosicbox_config::get_config_dir_path;
 use moosicbox_core::app::Db;
-use moosicbox_core::integer_range::parse_integer_ranges;
-use moosicbox_core::sqlite::db::get_album_tracks;
-use moosicbox_core::sqlite::models::TrackApiSource;
 use moosicbox_files::files::track::TrackAudioQuality;
 use moosicbox_paging::Page;
 use serde::Deserialize;
@@ -43,15 +35,15 @@ fn get_default_download_queue(db: Db) -> Arc<RwLock<DownloadQueue>> {
         .clone()
 }
 
-impl From<DownloadTrackError> for actix_web::Error {
-    fn from(err: DownloadTrackError) -> Self {
+impl From<GetDownloadPathError> for actix_web::Error {
+    fn from(err: GetDownloadPathError) -> Self {
         log::error!("{err:?}");
         ErrorInternalServerError(err.to_string())
     }
 }
 
-impl From<DownloadAlbumError> for actix_web::Error {
-    fn from(err: DownloadAlbumError) -> Self {
+impl From<GetCreateDownloadTasksError> for actix_web::Error {
+    fn from(err: GetCreateDownloadTasksError) -> Self {
         log::error!("{err:?}");
         ErrorInternalServerError(err.to_string())
     }
@@ -90,174 +82,20 @@ pub async fn download_endpoint(
     query: web::Query<DownloadQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<Value>> {
-    let path = if let Some(location_id) = query.location_id {
-        PathBuf::from_str(
-            &get_download_location(
-                &data
-                    .db
-                    .as_ref()
-                    .unwrap()
-                    .library
-                    .lock()
-                    .as_ref()
-                    .unwrap()
-                    .inner,
-                location_id,
-            )?
-            .ok_or(ErrorNotFound("Database Location with id not found"))?
-            .path,
-        )
-        .unwrap()
-    } else {
-        get_config_dir_path()
-            .ok_or(ErrorInternalServerError(
-                "Failed to get moosicbox config dir",
-            ))?
-            .join("downloads")
-    };
+    let download_path = get_download_path(&data.db.as_ref().unwrap(), query.location_id)?;
 
-    let path_str = path.to_str().unwrap();
-
-    let mut tasks = vec![];
-
-    if let Some(track_id) = query.track_id {
-        tasks.push(CreateDownloadTask {
-            file_path: path_str.to_string(),
-            item: DownloadItem::Track(track_id),
-            source: query.source,
-            quality: query.quality,
-        });
-    }
-
-    if let Some(track_ids) = &query.track_ids {
-        let track_ids = parse_integer_ranges(track_ids)?;
-
-        tasks.extend(
-            track_ids
-                .into_iter()
-                .map(|track_id| CreateDownloadTask {
-                    file_path: path_str.to_string(),
-                    item: DownloadItem::Track(track_id),
-                    source: query.source,
-                    quality: query.quality,
-                })
-                .collect::<Vec<_>>(),
-        );
-    }
-
-    if let Some(album_id) = query.album_id {
-        let tracks = get_album_tracks(
-            &data
-                .db
-                .as_ref()
-                .unwrap()
-                .library
-                .lock()
-                .as_ref()
-                .unwrap()
-                .inner,
-            album_id as i32,
-        )?
-        .into_iter()
-        .filter(|track| {
-            if let Some(source) = query.source {
-                let track_source = source.into();
-                track.source == track_source
-            } else {
-                track.source != TrackApiSource::Local
-            }
-        })
-        .collect::<Vec<_>>();
-
-        tasks.extend(
-            tracks
-                .into_iter()
-                .map(|track| track.id as u64)
-                .map(|track_id| CreateDownloadTask {
-                    file_path: path_str.to_string(),
-                    item: DownloadItem::Track(track_id),
-                    source: query.source,
-                    quality: query.quality,
-                })
-                .collect::<Vec<_>>(),
-        );
-
-        if query.download_album_cover.unwrap_or(true) {
-            tasks.push(CreateDownloadTask {
-                file_path: path_str.to_string(),
-                item: DownloadItem::AlbumCover(album_id),
-                source: query.source,
-                quality: query.quality,
-            });
-        }
-        if query.download_artist_cover.unwrap_or(true) {
-            tasks.push(CreateDownloadTask {
-                file_path: path_str.to_string(),
-                item: DownloadItem::ArtistCover(album_id),
-                source: query.source,
-                quality: query.quality,
-            });
-        }
-    }
-
-    if let Some(album_ids) = &query.album_ids {
-        let album_ids = parse_integer_ranges(album_ids)?;
-
-        for album_id in album_ids {
-            let tracks = get_album_tracks(
-                &data
-                    .db
-                    .as_ref()
-                    .unwrap()
-                    .library
-                    .lock()
-                    .as_ref()
-                    .unwrap()
-                    .inner,
-                album_id as i32,
-            )?
-            .into_iter()
-            .filter(|track| {
-                if let Some(source) = query.source {
-                    let track_source = source.into();
-                    track.source == track_source
-                } else {
-                    track.source != TrackApiSource::Local
-                }
-            })
-            .collect::<Vec<_>>();
-
-            tasks.extend(
-                tracks
-                    .into_iter()
-                    .map(|track| track.id as u64)
-                    .map(|track_id| CreateDownloadTask {
-                        file_path: path_str.to_string(),
-                        item: DownloadItem::Track(track_id),
-                        source: query.source,
-                        quality: query.quality,
-                    })
-                    .collect::<Vec<_>>(),
-            );
-
-            if query.download_album_cover.unwrap_or(true) {
-                tasks.push(CreateDownloadTask {
-                    file_path: path_str.to_string(),
-                    item: DownloadItem::AlbumCover(album_id),
-                    source: query.source,
-                    quality: query.quality,
-                });
-            }
-            if query.download_artist_cover.unwrap_or(true) {
-                tasks.push(CreateDownloadTask {
-                    file_path: path_str.to_string(),
-                    item: DownloadItem::ArtistCover(album_id),
-                    source: query.source,
-                    quality: query.quality,
-                });
-            }
-        }
-    }
+    let tasks = get_create_download_tasks(
+        &data.db.as_ref().unwrap(),
+        &download_path,
+        query.track_id,
+        query.track_ids.clone(),
+        query.album_id,
+        query.album_ids.clone(),
+        query.download_album_cover.unwrap_or(true),
+        query.download_artist_cover.unwrap_or(true),
+        query.quality,
+        query.source,
+    )?;
 
     let tasks = create_download_tasks(&data.db.as_ref().unwrap(), tasks)?;
 
@@ -266,7 +104,7 @@ pub async fn download_endpoint(
     let mut download_queue = queue.write().await;
 
     download_queue.add_tasks_to_queue(tasks).await;
-    download_queue.process().await?;
+    let _ = download_queue.process();
 
     Ok(Json(serde_json::json!({"success": true})))
 }

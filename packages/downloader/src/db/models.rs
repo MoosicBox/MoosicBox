@@ -214,9 +214,6 @@ pub struct DownloadTask {
     pub source: Option<DownloadApiSource>,
     pub quality: Option<TrackAudioQuality>,
     pub file_path: String,
-    pub progress: f64,
-    pub bytes: u64,
-    pub speed: Option<u64>,
     pub created: String,
     pub updated: String,
 }
@@ -237,9 +234,6 @@ impl AsModelResult<DownloadTask, ParseError> for Row<'_> {
             source: self.to_value("source")?,
             quality: self.to_value("quality")?,
             file_path: self.to_value("file_path")?,
-            progress: self.to_value("progress")?,
-            bytes: self.to_value("bytes")?,
-            speed: self.to_value("speed")?,
             created: self.to_value("created")?,
             updated: self.to_value("updated")?,
         })
@@ -256,9 +250,6 @@ impl ToValueType<DownloadTask> for &serde_json::Value {
             source: self.to_value("source")?,
             quality: self.to_value("quality")?,
             file_path: self.to_value("file_path")?,
-            progress: self.to_value("progress")?,
-            bytes: self.to_value("bytes")?,
-            speed: self.to_value("speed")?,
             created: self.to_value("created")?,
             updated: self.to_value("updated")?,
         })
