@@ -1,9 +1,11 @@
 use std::sync::Arc;
 use std::sync::OnceLock;
 
+use crate::api::models::to_api_download_task;
 use crate::api::models::ApiDownloadTask;
 use crate::create_download_tasks;
 use crate::db::get_download_tasks;
+use crate::db::models::DownloadItem;
 use crate::get_create_download_tasks;
 use crate::get_download_path;
 use crate::queue::DownloadQueue;
@@ -19,6 +21,8 @@ use actix_web::{
     Result,
 };
 use moosicbox_core::app::Db;
+use moosicbox_core::sqlite::db::get_albums;
+use moosicbox_core::sqlite::db::get_tracks;
 use moosicbox_files::files::track::TrackAudioQuality;
 use moosicbox_paging::Page;
 use serde::Deserialize;
@@ -120,13 +124,45 @@ pub async fn download_tasks_endpoint(
 ) -> Result<Json<Page<ApiDownloadTask>>> {
     let tasks = get_download_tasks(&data.db.as_ref().unwrap().library.lock().unwrap().inner)?;
 
+    let track_ids = tasks
+        .iter()
+        .filter_map(|task| {
+            if let DownloadItem::Track { track_id, .. } = task.item {
+                Some(track_id as i32)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let tracks = get_tracks(
+        &data.db.as_ref().unwrap().library.lock().unwrap().inner,
+        Some(&track_ids),
+    )?;
+
+    let album_ids = tasks
+        .iter()
+        .filter_map(|task| {
+            if let DownloadItem::AlbumCover(album_id) = task.item {
+                Some(album_id as i32)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let albums = get_albums(&data.db.as_ref().unwrap().library.lock().unwrap().inner)?
+        .into_iter()
+        .filter(|album| album_ids.contains(&album.id))
+        .collect::<Vec<_>>();
+
     Ok(Json(Page::WithTotal {
         offset: 0,
         limit: tasks.len() as u32,
         total: tasks.len() as u32,
         items: tasks
             .into_iter()
-            .map(|task| task.into())
+            .map(|task| to_api_download_task(task, &tracks, &albums))
             .collect::<Vec<_>>(),
     }))
 }

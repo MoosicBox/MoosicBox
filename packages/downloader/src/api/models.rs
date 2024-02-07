@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use moosicbox_core::sqlite::models::{LibraryAlbum, LibraryTrack};
 use moosicbox_files::files::track::TrackAudioQuality;
 use moosicbox_json_utils::{serde_json::ToValue, ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
@@ -94,27 +95,78 @@ pub enum ApiDownloadItem {
         track_id: u64,
         source: DownloadApiSource,
         quality: TrackAudioQuality,
+        artist_id: u64,
+        artist: String,
+        album_id: u64,
+        album: String,
+        title: String,
     },
     #[serde(rename_all = "camelCase")]
-    AlbumCover { album_id: u64 },
+    AlbumCover {
+        artist_id: u64,
+        artist: String,
+        album_id: u64,
+        title: String,
+    },
     #[serde(rename_all = "camelCase")]
-    ArtistCover { album_id: u64 },
+    ArtistCover {
+        artist_id: u64,
+        album_id: u64,
+        title: String,
+    },
 }
 
-impl From<DownloadItem> for ApiDownloadItem {
-    fn from(value: DownloadItem) -> Self {
-        match value {
-            DownloadItem::Track {
+pub(crate) fn to_api_download_item(
+    item: DownloadItem,
+    tracks: &[LibraryTrack],
+    albums: &[LibraryAlbum],
+) -> ApiDownloadItem {
+    match item {
+        DownloadItem::Track {
+            track_id,
+            source,
+            quality,
+        } => {
+            let track = tracks
+                .iter()
+                .find(|track| track.id == track_id as i32)
+                .unwrap_or_else(|| panic!("No Track for id {track_id}"));
+
+            ApiDownloadItem::Track {
                 track_id,
                 source,
                 quality,
-            } => ApiDownloadItem::Track {
-                track_id,
-                source,
-                quality,
-            },
-            DownloadItem::AlbumCover(album_id) => ApiDownloadItem::AlbumCover { album_id },
-            DownloadItem::ArtistCover(album_id) => ApiDownloadItem::ArtistCover { album_id },
+                artist_id: track.artist_id as u64,
+                artist: track.artist.clone(),
+                album_id: track.album_id as u64,
+                album: track.album.clone(),
+                title: track.title.clone(),
+            }
+        }
+        DownloadItem::AlbumCover(album_id) => {
+            let album = albums
+                .iter()
+                .find(|album| album.id == album_id as i32)
+                .unwrap_or_else(|| panic!("No Album for id {album_id}"));
+
+            ApiDownloadItem::AlbumCover {
+                artist_id: album.artist_id as u64,
+                artist: album.artist.clone(),
+                album_id,
+                title: album.title.clone(),
+            }
+        }
+        DownloadItem::ArtistCover(album_id) => {
+            let album = albums
+                .iter()
+                .find(|album| album.id == album_id as i32)
+                .unwrap_or_else(|| panic!("No Album for id {album_id}"));
+
+            ApiDownloadItem::ArtistCover {
+                artist_id: album.artist_id as u64,
+                album_id,
+                title: album.artist.clone(),
+            }
         }
     }
 }
@@ -128,12 +180,22 @@ impl ToValueType<ApiDownloadItem> for &serde_json::Value {
                 track_id: self.to_value("track_id")?,
                 source: self.to_value("source")?,
                 quality: self.to_value("quality")?,
+                artist_id: self.to_value("artist_id")?,
+                artist: self.to_value("artist")?,
+                album_id: self.to_value("album_id")?,
+                album: self.to_value("album")?,
+                title: self.to_value("title")?,
             },
             "ALBUM_COVER" => ApiDownloadItem::AlbumCover {
+                artist_id: self.to_value("artist_id")?,
+                artist: self.to_value("artist")?,
                 album_id: self.to_value("album_id")?,
+                title: self.to_value("title")?,
             },
             "ARTIST_COVER" => ApiDownloadItem::ArtistCover {
+                artist_id: self.to_value("artist_id")?,
                 album_id: self.to_value("album_id")?,
+                title: self.to_value("title")?,
             },
             _ => {
                 return Err(ParseError::ConvertType(format!(
@@ -170,16 +232,18 @@ impl ToValueType<ApiDownloadTask> for &serde_json::Value {
     }
 }
 
-impl From<DownloadTask> for ApiDownloadTask {
-    fn from(value: DownloadTask) -> Self {
-        Self {
-            id: value.id,
-            state: value.state.into(),
-            item: value.item.into(),
-            file_path: value.file_path,
-            progress: 0.0,
-            bytes: 0,
-            speed: None,
-        }
+pub(crate) fn to_api_download_task(
+    task: DownloadTask,
+    tracks: &[LibraryTrack],
+    albums: &[LibraryAlbum],
+) -> ApiDownloadTask {
+    ApiDownloadTask {
+        id: task.id,
+        state: task.state.into(),
+        item: to_api_download_item(task.item, tracks, albums),
+        file_path: task.file_path,
+        progress: 0.0,
+        bytes: 0,
+        speed: None,
     }
 }
