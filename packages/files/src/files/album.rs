@@ -71,7 +71,7 @@ fn fetch_local_album_cover(
 
     let cover_path = std::path::PathBuf::from(&cover);
 
-    if Path::exists(&cover_path) {
+    if Path::is_file(&cover_path) {
         return Ok(cover_path.to_str().unwrap().to_string());
     }
 
@@ -106,7 +106,7 @@ fn fetch_local_album_cover_bytes(
 
     let cover_path = std::path::PathBuf::from(&cover);
 
-    if Path::exists(&cover_path) {
+    if Path::is_file(&cover_path) {
         return Ok(tokio::fs::File::open(cover_path.to_path_buf())
             .map_ok(|file| FramedRead::new(file, BytesCodec::new()).map_ok(BytesMut::freeze))
             .try_flatten_stream()

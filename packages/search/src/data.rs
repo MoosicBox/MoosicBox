@@ -1,12 +1,10 @@
 use std::path::Path;
 
-use moosicbox_core::{
-    app::DbConnection,
-    sqlite::{
-        db::DbError,
-        models::{LibraryAlbum, LibraryArtist, LibraryTrack},
-    },
+use moosicbox_core::sqlite::{
+    db::DbError,
+    models::{LibraryAlbum, LibraryArtist, LibraryTrack},
 };
+use moosicbox_database::DbConnection;
 use thiserror::Error;
 
 use crate::{DataValue, PopulateIndexError, RecreateIndexError, GLOBAL_SEARCH_INDEX_PATH};

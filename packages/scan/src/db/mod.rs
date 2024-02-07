@@ -1,7 +1,5 @@
-use moosicbox_core::{
-    app::DbConnection,
-    sqlite::db::{delete, select, select_distinct, upsert, DbError, SqliteValue},
-};
+use moosicbox_core::sqlite::db::{delete, select, select_distinct, upsert, DbError, SqliteValue};
+use moosicbox_database::DbConnection;
 
 use crate::ScanOrigin;
 

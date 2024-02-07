@@ -15,7 +15,6 @@ use db::{
     create_download_task, get_download_location,
     models::{CreateDownloadTask, DownloadItem, DownloadTask},
 };
-use futures::StreamExt;
 use id3::Timestamp;
 use moosicbox_config::get_config_dir_path;
 use moosicbox_core::{
@@ -36,13 +35,10 @@ use moosicbox_files::{
             TrackSourceError,
         },
     },
-    sanitize_filename, save_bytes_stream_to_file,
+    sanitize_filename, save_bytes_stream_to_file, SaveBytesStreamToFileError,
 };
 use thiserror::Error;
-use tokio::{
-    io::{AsyncSeekExt, AsyncWriteExt, BufWriter},
-    select,
-};
+use tokio::select;
 
 #[cfg(feature = "api")]
 pub mod api;
@@ -326,6 +322,8 @@ pub enum DownloadTrackError {
     #[error(transparent)]
     IO(#[from] tokio::io::Error),
     #[error(transparent)]
+    SaveBytesStreamToFile(#[from] SaveBytesStreamToFileError),
+    #[error(transparent)]
     TagTrackFile(#[from] TagTrackFileError),
     #[error("Invalid source")]
     InvalidSource,
@@ -366,6 +364,9 @@ async fn download_track(
             DownloadTrackInnerError::TrackSource(err) => DownloadTrackError::TrackSource(err),
             DownloadTrackInnerError::GetTrackBytes(err) => DownloadTrackError::GetTrackBytes(err),
             DownloadTrackInnerError::IO(err) => DownloadTrackError::IO(err),
+            DownloadTrackInnerError::SaveBytesStreamToFile(err) => {
+                DownloadTrackError::SaveBytesStreamToFile(err)
+            }
             DownloadTrackInnerError::TagTrackFile(err) => DownloadTrackError::TagTrackFile(err),
             DownloadTrackInnerError::InvalidSource => DownloadTrackError::InvalidSource,
             DownloadTrackInnerError::NotFound => DownloadTrackError::NotFound,
@@ -388,6 +389,8 @@ pub enum DownloadTrackInnerError {
     GetTrackBytes(#[from] GetTrackBytesError),
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    #[error(transparent)]
+    SaveBytesStreamToFile(#[from] SaveBytesStreamToFileError),
     #[error(transparent)]
     TagTrackFile(#[from] TagTrackFileError),
     #[error("Invalid source")]
@@ -462,12 +465,10 @@ async fn download_track_inner(
 
     tokio::fs::create_dir_all(&track_path.parent().unwrap()).await?;
 
-    if Path::exists(&track_path) {
+    if Path::is_file(&track_path) {
         log::debug!("Track already downloaded");
         return Ok(());
     }
-
-    let track_path = &track_path.to_str().unwrap().to_string();
 
     log::debug!("Downloading track to track_path={track_path:?}");
 
@@ -478,47 +479,24 @@ async fn download_track_inner(
             reader = reader.with_timeout(timeout_duration);
         }
 
-        let file = tokio::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(!start.is_some_and(|start| start > 0))
-            .open(track_path)
-            .await?;
-
-        let mut writer = BufWriter::new(file);
-
-        if let Some(start) = start {
-            writer.seek(std::io::SeekFrom::Start(start)).await?;
-        }
-
-        let mut total = start.unwrap_or(0) as usize;
-
-        while let Some(data) = reader.next().await {
-            match data {
-                Ok(data) => {
-                    total += data.len();
-                    log::debug!(
-                        "Writing bytes to '{track_path}': {} ({total} total)",
-                        data.len()
-                    );
-                    writer.write(&data).await?;
-                }
-                Err(err) => {
-                    if err.kind() == std::io::ErrorKind::TimedOut {
-                        return Err(DownloadTrackInnerError::Timeout(Some(total as u64)));
-                    }
-
-                    return Err(DownloadTrackInnerError::IO(err));
+        if let Err(err) = save_bytes_stream_to_file(reader, &track_path, start).await {
+            if let SaveBytesStreamToFileError::Read {
+                bytes_read,
+                ref source,
+            } = err
+            {
+                if source.kind() == tokio::io::ErrorKind::TimedOut {
+                    return Err(DownloadTrackInnerError::Timeout(Some(bytes_read)));
                 }
             }
-        }
 
-        writer.flush().await?;
+            return Err(DownloadTrackInnerError::SaveBytesStreamToFile(err));
+        }
     }
 
     log::debug!("Finished downloading track to track_path={track_path:?}");
 
-    tag_track_file(track_path, track).await?;
+    tag_track_file(&track_path, track).await?;
 
     log::debug!("Completed track download for track_path={track_path:?}");
 
@@ -532,7 +510,7 @@ pub enum TagTrackFileError {
 }
 
 pub async fn tag_track_file(
-    track_path: &str,
+    track_path: &Path,
     track: &LibraryTrack,
 ) -> Result<(), TagTrackFileError> {
     log::debug!("Adding tags to track_path={track_path:?}");
@@ -551,7 +529,7 @@ pub async fn tag_track_file(
         }
     }
 
-    tag.write_to_path(track_path)?;
+    tag.write_to_path(track_path.to_str().unwrap())?;
 
     Ok(())
 }
@@ -564,6 +542,8 @@ pub enum DownloadAlbumError {
     DownloadTrack(#[from] DownloadTrackError),
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    #[error(transparent)]
+    SaveBytesStreamToFile(#[from] SaveBytesStreamToFileError),
     #[error(transparent)]
     ArtistCover(#[from] ArtistCoverError),
     #[error(transparent)]
@@ -614,15 +594,11 @@ pub async fn download_album_cover(
     path: &str,
     album_id: u64,
 ) -> Result<(), DownloadAlbumError> {
-    log::debug!("Downloading album cover");
+    log::debug!("Downloading album cover path={path}");
 
-    let path_buf = PathBuf::from_str(path).unwrap();
+    let cover_path = PathBuf::from_str(path).unwrap();
 
-    tokio::fs::create_dir_all(&path_buf.parent().unwrap()).await?;
-
-    let cover_path = path_buf.join("cover.jpg");
-
-    if Path::exists(&cover_path) {
+    if Path::is_file(&cover_path) {
         log::debug!("Album cover already downloaded");
         return Ok(());
     }
@@ -642,7 +618,7 @@ pub async fn download_album_cover(
 
     log::debug!("Saving album cover to {cover_path:?}");
 
-    save_bytes_stream_to_file(bytes, &cover_path).await?;
+    save_bytes_stream_to_file(bytes, &cover_path, None).await?;
 
     log::debug!("Completed album cover download");
 
@@ -654,15 +630,11 @@ pub async fn download_artist_cover(
     path: &str,
     album_id: u64,
 ) -> Result<(), DownloadAlbumError> {
-    log::debug!("Downloading artist cover");
+    log::debug!("Downloading artist cover path={path}");
 
-    let path_buf = PathBuf::from_str(path).unwrap();
+    let cover_path = PathBuf::from_str(path).unwrap();
 
-    tokio::fs::create_dir_all(&path_buf.parent().unwrap()).await?;
-
-    let cover_path = path_buf.join("artist.jpg");
-
-    if Path::exists(&cover_path) {
+    if Path::is_file(&cover_path) {
         log::debug!("Artist cover already downloaded");
         return Ok(());
     }
@@ -686,7 +658,7 @@ pub async fn download_artist_cover(
 
     log::debug!("Saving artist cover to {cover_path:?}");
 
-    save_bytes_stream_to_file(bytes, &cover_path).await?;
+    save_bytes_stream_to_file(bytes, &cover_path, None).await?;
 
     log::debug!("Completed artist cover download");
 

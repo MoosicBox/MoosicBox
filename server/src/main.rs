@@ -10,7 +10,8 @@ use actix_cors::Cors;
 use actix_web::{http, middleware, web, App};
 use log::{debug, error, info};
 use moosicbox_auth::get_client_id_and_access_token;
-use moosicbox_core::app::{AppState, Db, DbConnection};
+use moosicbox_core::app::{AppState, Db};
+use moosicbox_database::DbConnection;
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 use moosicbox_tunnel::{
     sender::{tunnel_sender::TunnelSender, TunnelMessage},

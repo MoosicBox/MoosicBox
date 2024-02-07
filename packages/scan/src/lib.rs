@@ -4,10 +4,8 @@ use std::path::PathBuf;
 
 use db::get_enabled_scan_origins;
 use moosicbox_config::get_cache_dir_path;
-use moosicbox_core::{
-    app::{Db, DbConnection},
-    sqlite::db::DbError,
-};
+use moosicbox_core::{app::Db, sqlite::db::DbError};
+use moosicbox_database::DbConnection;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};

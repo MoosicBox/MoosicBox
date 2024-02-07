@@ -1,11 +1,16 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use moosicbox_core::app::DbConnection;
 use rusqlite::{types::Value, Connection, Row, Statement};
 use thiserror::Error;
 
-use crate::{Database, DatabaseError, DatabaseValue};
+use crate::{Database, DatabaseError, DatabaseValue, DbConnection};
+
+impl From<Connection> for DbConnection {
+    fn from(value: Connection) -> Self {
+        DbConnection { inner: value }
+    }
+}
 
 pub struct RusqliteDatabase {
     connection: Arc<Mutex<DbConnection>>,

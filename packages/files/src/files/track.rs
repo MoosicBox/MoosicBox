@@ -12,13 +12,14 @@ use futures_core::Stream;
 use lazy_static::lazy_static;
 use log::{debug, error, trace};
 use moosicbox_core::{
-    app::{Db, DbConnection},
+    app::Db,
     sqlite::{
         db::{get_track, get_track_size, get_tracks, set_track_size, DbError, SetTrackSize},
         models::{LibraryTrack, TrackApiSource},
     },
     types::{AudioFormat, PlaybackQuality},
 };
+use moosicbox_database::DbConnection;
 use moosicbox_json_utils::{MissingValue, ParseError, ToValueType};
 use moosicbox_qobuz::{QobuzAudioQuality, QobuzTrackFileUrlError};
 use moosicbox_stream_utils::{stalled_monitor::StalledReadMonitor, ByteWriter};

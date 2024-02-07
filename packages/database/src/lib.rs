@@ -29,8 +29,29 @@ pub enum DatabaseError {
     Rusqlite(rusqlite::RusqliteDatabaseError),
 }
 
+pub struct DbConnection {
+    #[cfg(feature = "rusqlite")]
+    pub inner: ::rusqlite::Connection,
+}
+
+impl std::fmt::Debug for DbConnection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DbConnection")
+    }
+}
+
+#[derive(Debug)]
 pub struct Row {
     pub columns: Vec<(String, DatabaseValue)>,
+}
+
+impl Row {
+    pub fn get(&self, column_name: &str) -> Option<DatabaseValue> {
+        self.columns
+            .iter()
+            .find(|c| c.0 == column_name)
+            .map(|c| c.1.clone())
+    }
 }
 
 #[async_trait]

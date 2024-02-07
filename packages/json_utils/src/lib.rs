@@ -2,6 +2,9 @@
 
 use thiserror::Error;
 
+#[cfg(feature = "database")]
+pub mod database;
+
 #[cfg(feature = "rusqlite")]
 pub mod rusqlite;
 

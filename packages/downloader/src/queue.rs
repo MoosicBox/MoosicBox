@@ -268,8 +268,7 @@ impl Drop for DownloadQueue {
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
-    use moosicbox_core::app::DbConnection;
-    use moosicbox_database::Row;
+    use moosicbox_database::{DbConnection, Row};
     use moosicbox_files::files::track::TrackAudioQuality;
     use pretty_assertions::assert_eq;
 

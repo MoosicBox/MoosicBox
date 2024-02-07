@@ -44,6 +44,15 @@ pub fn create_download_task(
 ) -> Result<DownloadTask, DbError> {
     let values = vec![
         ("file_path", SqliteValue::String(task.file_path.clone())),
+        ("type", SqliteValue::String(task.item.as_ref().to_string())),
+        (
+            "track_id",
+            SqliteValue::NumberOpt(if let DownloadItem::Track { track_id, .. } = task.item {
+                Some(track_id as i64)
+            } else {
+                None
+            }),
+        ),
         (
             "source",
             SqliteValue::StringOpt(if let DownloadItem::Track { source, .. } = task.item {
@@ -56,15 +65,6 @@ pub fn create_download_task(
             "quality",
             SqliteValue::StringOpt(if let DownloadItem::Track { quality, .. } = task.item {
                 Some(quality.as_ref().to_string())
-            } else {
-                None
-            }),
-        ),
-        ("type", SqliteValue::String(task.item.as_ref().to_string())),
-        (
-            "track_id",
-            SqliteValue::NumberOpt(if let DownloadItem::Track { track_id, .. } = task.item {
-                Some(track_id as i64)
             } else {
                 None
             }),

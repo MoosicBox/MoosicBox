@@ -7,6 +7,9 @@ version = "0.1.0"
 [dependencies]
 moosicbox_auth = { path = "../packages/auth" }
 moosicbox_core = { path = "../packages/core", default-features = false }
+moosicbox_database = { path = "../packages/database", default-features = false, features = [
+    "rusqlite",
+] }
 moosicbox_downloader = { path = "../packages/downloader", default-features = false, features = [
     "api",
 ] }

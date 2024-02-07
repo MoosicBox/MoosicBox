@@ -5,6 +5,9 @@ name    = "moosicbox_core"
 version = "0.1.0"
 
 [dependencies]
+moosicbox_database = { path = "../database", default-features = false, features = [
+    "rusqlite",
+] }
 moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
     "rusqlite",
     "serde_json",
