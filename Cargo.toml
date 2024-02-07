@@ -6,6 +6,7 @@ members = [
     "packages/config",
     "packages/converter",
     "packages/core",
+    "packages/database",
     "packages/downloader",
     "packages/env_utils",
     "packages/files",

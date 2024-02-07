@@ -64,6 +64,10 @@ jobs:
                       path: packages/core
                       os: ubuntu-latest
 
+                    - name: database
+                      path: packages/database
+                      os: ubuntu-latest
+
                     - name: downloader
                       path: packages/downloader
                       os: ubuntu-latest
