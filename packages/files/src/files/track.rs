@@ -59,13 +59,14 @@ pub enum TrackSource {
     Qobuz(String),
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Default, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum TrackAudioQuality {
-    Low,            // MP3 320
-    FlacLossless,   // FLAC 16 bit 44.1kHz
-    FlacHiRes,      // FLAC 24 bit <= 96kHz
+    Low,          // MP3 320
+    FlacLossless, // FLAC 16 bit 44.1kHz
+    FlacHiRes,    // FLAC 24 bit <= 96kHz
+    #[default]
     FlacHighestRes, // FLAC 24 bit > 96kHz <= 192kHz
 }
 

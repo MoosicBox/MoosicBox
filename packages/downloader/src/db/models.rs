@@ -145,12 +145,16 @@ impl ToValueType<DownloadApiSource> for Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, AsRefStr, Clone, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
 pub enum DownloadItem {
-    Track(u64),
+    Track {
+        track_id: u64,
+        source: DownloadApiSource,
+        quality: TrackAudioQuality,
+    },
     AlbumCover(u64),
     ArtistCover(u64),
 }
@@ -159,32 +163,36 @@ impl MissingValue<DownloadItem> for &serde_json::Value {}
 impl MissingValue<DownloadItem> for serde_json::Value {}
 impl ToValueType<DownloadItem> for &serde_json::Value {
     fn to_value_type(self) -> Result<DownloadItem, ParseError> {
-        Ok(DownloadItem::from_str(
-            self.as_str()
-                .ok_or_else(|| ParseError::ConvertType("DownloadItem".into()))?,
-        )
-        .map_err(|_| ParseError::ConvertType("DownloadItem".into()))?)
+        let item_type: String = self.to_value("type")?;
+
+        Ok(match item_type.as_str() {
+            "TRACK" => DownloadItem::Track {
+                track_id: self.to_value("track_id")?,
+                source: self.to_value("source")?,
+                quality: self.to_value("quality")?,
+            },
+            "ALBUM_COVER" => DownloadItem::AlbumCover(self.to_value("album_id")?),
+            "ARTIST_COVER" => DownloadItem::ArtistCover(self.to_value("album_id")?),
+            _ => {
+                return Err(ParseError::ConvertType(format!(
+                    "Invalid DownloadItem type '{item_type}'"
+                )));
+            }
+        })
     }
 }
 
 impl MissingValue<DownloadItem> for &Row<'_> {}
-impl MissingValue<DownloadItem> for Value {}
-impl ToValueType<DownloadItem> for Value {
-    fn to_value_type(self) -> Result<DownloadItem, ParseError> {
-        match self {
-            Value::Text(str) => Ok(DownloadItem::from_str(&str)
-                .map_err(|_| ParseError::ConvertType("DownloadItem".into()))?),
-            _ => Err(ParseError::ConvertType("DownloadItem".into())),
-        }
-    }
-}
-
 impl ToValueType<DownloadItem> for &Row<'_> {
     fn to_value_type(self) -> Result<DownloadItem, ParseError> {
         let item_type: String = self.to_value("type")?;
 
         Ok(match item_type.as_str() {
-            "TRACK" => DownloadItem::Track(self.to_value("track_id")?),
+            "TRACK" => DownloadItem::Track {
+                track_id: self.to_value("track_id")?,
+                source: self.to_value("source")?,
+                quality: self.to_value("quality")?,
+            },
             "ALBUM_COVER" => DownloadItem::AlbumCover(self.to_value("album_id")?),
             "ARTIST_COVER" => DownloadItem::ArtistCover(self.to_value("album_id")?),
             _ => {
@@ -201,8 +209,6 @@ impl ToValueType<DownloadItem> for &Row<'_> {
 pub struct CreateDownloadTask {
     pub item: DownloadItem,
     pub file_path: String,
-    pub source: Option<DownloadApiSource>,
-    pub quality: Option<TrackAudioQuality>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -211,8 +217,6 @@ pub struct DownloadTask {
     pub id: u64,
     pub state: DownloadTaskState,
     pub item: DownloadItem,
-    pub source: Option<DownloadApiSource>,
-    pub quality: Option<TrackAudioQuality>,
     pub file_path: String,
     pub created: String,
     pub updated: String,
@@ -231,8 +235,6 @@ impl AsModelResult<DownloadTask, ParseError> for Row<'_> {
             id: self.to_value("id")?,
             state: self.to_value("state")?,
             item: self.to_value_type()?,
-            source: self.to_value("source")?,
-            quality: self.to_value("quality")?,
             file_path: self.to_value("file_path")?,
             created: self.to_value("created")?,
             updated: self.to_value("updated")?,
@@ -246,9 +248,7 @@ impl ToValueType<DownloadTask> for &serde_json::Value {
         Ok(DownloadTask {
             id: self.to_value("id")?,
             state: self.to_value("state")?,
-            item: self.to_value("track_id")?,
-            source: self.to_value("source")?,
-            quality: self.to_value("quality")?,
+            item: self.to_value_type()?,
             file_path: self.to_value("file_path")?,
             created: self.to_value("created")?,
             updated: self.to_value("updated")?,

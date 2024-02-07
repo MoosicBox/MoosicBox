@@ -84,6 +84,8 @@ pub enum GetCreateDownloadTasksError {
     Db(#[from] DbError),
     #[error(transparent)]
     ParseIntegers(#[from] ParseIntegersError),
+    #[error("Invalid source")]
+    InvalidSource,
     #[error("Not found")]
     NotFound,
 }
@@ -165,21 +167,48 @@ pub fn get_create_download_tasks_for_track_ids(
         Some(&track_ids.iter().map(|id| *id as i32).collect::<Vec<_>>()),
     )?;
 
+    get_create_download_tasks_for_tracks(&tracks, download_path, source, quality)
+}
+
+pub fn get_create_download_tasks_for_tracks(
+    tracks: &[LibraryTrack],
+    download_path: &Path,
+    source: Option<DownloadApiSource>,
+    quality: Option<TrackAudioQuality>,
+) -> Result<Vec<CreateDownloadTask>, GetCreateDownloadTasksError> {
     Ok(tracks
         .into_iter()
-        .map(|track| CreateDownloadTask {
-            file_path: download_path
-                .join(&sanitize_filename(&track.artist))
-                .join(&sanitize_filename(&track.album))
-                .join(&get_filename_for_track(&track))
-                .to_str()
-                .unwrap()
-                .to_string(),
-            item: DownloadItem::Track(track.id as u64),
-            source,
-            quality,
+        .map(|track| {
+            let source = if let Some(source) = source {
+                source
+            } else if track.qobuz_id.is_some() {
+                log::debug!("Falling back to Qobuz DownloadApiSource");
+                DownloadApiSource::Qobuz
+            } else if track.tidal_id.is_some() {
+                log::debug!("Falling back to Tidal DownloadApiSource");
+                DownloadApiSource::Tidal
+            } else {
+                return Err(GetCreateDownloadTasksError::InvalidSource);
+            };
+
+            let quality = quality.unwrap_or(TrackAudioQuality::FlacHighestRes);
+
+            Ok(CreateDownloadTask {
+                file_path: download_path
+                    .join(&sanitize_filename(&track.artist))
+                    .join(&sanitize_filename(&track.album))
+                    .join(&get_filename_for_track(&track))
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
+                item: DownloadItem::Track {
+                    track_id: track.id as u64,
+                    source,
+                    quality,
+                },
+            })
         })
-        .collect::<Vec<_>>())
+        .collect::<Result<Vec<_>, _>>()?)
 }
 
 pub fn get_create_download_tasks_for_album_ids(
@@ -207,23 +236,12 @@ pub fn get_create_download_tasks_for_album_ids(
                 })
                 .collect::<Vec<_>>();
 
-        tasks.extend(
-            tracks
-                .iter()
-                .map(|track| CreateDownloadTask {
-                    file_path: download_path
-                        .join(&sanitize_filename(&track.artist))
-                        .join(&sanitize_filename(&track.album))
-                        .join(&get_filename_for_track(&track))
-                        .to_str()
-                        .unwrap()
-                        .to_string(),
-                    item: DownloadItem::Track(track.id as u64),
-                    source,
-                    quality,
-                })
-                .collect::<Vec<_>>(),
-        );
+        tasks.extend(get_create_download_tasks_for_tracks(
+            &tracks,
+            download_path,
+            source,
+            quality,
+        )?);
 
         if download_album_cover || download_artist_cover {
             let album_path = tracks
@@ -249,8 +267,6 @@ pub fn get_create_download_tasks_for_album_ids(
                 tasks.push(CreateDownloadTask {
                     file_path: album_path.join("cover.jpg").to_str().unwrap().to_string(),
                     item: DownloadItem::AlbumCover(*album_id),
-                    source,
-                    quality,
                 });
             }
             if download_artist_cover {
@@ -263,8 +279,6 @@ pub fn get_create_download_tasks_for_album_ids(
                         .unwrap()
                         .to_string(),
                     item: DownloadItem::ArtistCover(*album_id),
-                    source,
-                    quality,
                 });
             }
         }
@@ -323,8 +337,8 @@ pub async fn download_track_id(
     db: &Db,
     path: &str,
     track_id: u64,
-    quality: Option<TrackAudioQuality>,
-    source: Option<DownloadApiSource>,
+    quality: TrackAudioQuality,
+    source: DownloadApiSource,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadTrackError> {
     log::debug!("Starting download for track_id={track_id} quality={quality:?} source={source:?} path={path}");
@@ -340,8 +354,8 @@ async fn download_track(
     db: &Db,
     path: &str,
     track: &LibraryTrack,
-    quality: Option<TrackAudioQuality>,
-    source: Option<DownloadApiSource>,
+    quality: TrackAudioQuality,
+    source: DownloadApiSource,
     start: Option<u64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadTrackError> {
@@ -388,8 +402,8 @@ async fn download_track_inner(
     db: &Db,
     path: &str,
     track: &LibraryTrack,
-    quality: Option<TrackAudioQuality>,
-    source: Option<DownloadApiSource>,
+    quality: TrackAudioQuality,
+    source: DownloadApiSource,
     start: Option<u64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadTrackInnerError> {
@@ -397,21 +411,7 @@ async fn download_track_inner(
         "Starting download for track={track:?} quality={quality:?} source={source:?} path={path} start={start:?}"
     );
 
-    let download_source = if let Some(source) = source {
-        source
-    } else if track.qobuz_id.is_some() {
-        log::debug!("Falling back to Qobuz DownloadApiSource");
-        DownloadApiSource::Qobuz
-    } else if track.tidal_id.is_some() {
-        log::debug!("Falling back to Tidal DownloadApiSource");
-        DownloadApiSource::Tidal
-    } else {
-        return Err(DownloadTrackInnerError::InvalidSource);
-    };
-
-    let quality = quality.or(Some(TrackAudioQuality::FlacHighestRes));
-
-    let req = get_track_source(track.id, db, quality, Some(download_source.into()));
+    let req = get_track_source(track.id, db, Some(quality), Some(source.into()));
 
     let result = if let Some(timeout_duration) = timeout_duration {
         select! {
@@ -580,24 +580,17 @@ pub async fn download_album_id(
     album_id: u64,
     try_download_album_cover: bool,
     try_download_artist_cover: bool,
-    quality: Option<TrackAudioQuality>,
-    source: Option<DownloadApiSource>,
+    quality: TrackAudioQuality,
+    source: DownloadApiSource,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadAlbumError> {
     log::debug!("Starting download for album_id={album_id} quality={quality:?} source={source:?} path={path}");
 
-    let tracks = get_album_tracks(&db.library.lock().as_ref().unwrap().inner, album_id as i32)?;
-
-    let tracks = if let Some(source) = source {
-        let track_source = source.into();
-
-        tracks
-            .into_iter()
-            .filter(|track| track.source == track_source)
-            .collect()
-    } else {
-        tracks
-    };
+    let track_source = source.into();
+    let tracks = get_album_tracks(&db.library.lock().as_ref().unwrap().inner, album_id as i32)?
+        .into_iter()
+        .filter(|track| track.source == track_source)
+        .collect::<Vec<_>>();
 
     for track in tracks.iter() {
         download_track(db, path, track, quality, source, None, timeout_duration).await?
@@ -707,8 +700,8 @@ pub trait Downloader /*: Clone + Send + Sync*/ {
         db: &Db,
         path: &str,
         track_id: u64,
-        quality: Option<TrackAudioQuality>,
-        source: Option<DownloadApiSource>,
+        quality: TrackAudioQuality,
+        source: DownloadApiSource,
         timeout_duration: Option<Duration>,
     ) -> Result<(), DownloadTrackError>;
 
@@ -736,8 +729,8 @@ impl Downloader for MoosicboxDownloader {
         db: &Db,
         path: &str,
         track_id: u64,
-        quality: Option<TrackAudioQuality>,
-        source: Option<DownloadApiSource>,
+        quality: TrackAudioQuality,
+        source: DownloadApiSource,
         timeout_duration: Option<Duration>,
     ) -> Result<(), DownloadTrackError> {
         download_track_id(db, path, track_id, quality, source, timeout_duration).await

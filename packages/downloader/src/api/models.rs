@@ -89,13 +89,17 @@ impl ToValueType<ApiDownloadApiSource> for &serde_json::Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, AsRefStr, Clone, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
 pub enum ApiDownloadItem {
     #[serde(rename_all = "camelCase")]
-    Track { track_id: u64 },
+    Track {
+        track_id: u64,
+        source: DownloadApiSource,
+        quality: TrackAudioQuality,
+    },
     #[serde(rename_all = "camelCase")]
     AlbumCover { album_id: u64 },
     #[serde(rename_all = "camelCase")]
@@ -105,7 +109,15 @@ pub enum ApiDownloadItem {
 impl From<DownloadItem> for ApiDownloadItem {
     fn from(value: DownloadItem) -> Self {
         match value {
-            DownloadItem::Track(track_id) => ApiDownloadItem::Track { track_id },
+            DownloadItem::Track {
+                track_id,
+                source,
+                quality,
+            } => ApiDownloadItem::Track {
+                track_id,
+                source,
+                quality,
+            },
             DownloadItem::AlbumCover(album_id) => ApiDownloadItem::AlbumCover { album_id },
             DownloadItem::ArtistCover(album_id) => ApiDownloadItem::ArtistCover { album_id },
         }
@@ -120,6 +132,8 @@ impl ToValueType<ApiDownloadItem> for &serde_json::Value {
         Ok(match item_type.as_str() {
             "TRACK" => ApiDownloadItem::Track {
                 track_id: self.to_value("track_id")?,
+                source: self.to_value("source")?,
+                quality: self.to_value("quality")?,
             },
             "ALBUM_COVER" => ApiDownloadItem::AlbumCover {
                 album_id: self.to_value("album_id")?,
@@ -142,8 +156,6 @@ pub struct ApiDownloadTask {
     pub id: u64,
     pub state: ApiDownloadTaskState,
     pub item: ApiDownloadItem,
-    pub source: Option<ApiDownloadApiSource>,
-    pub quality: Option<TrackAudioQuality>,
     pub file_path: String,
     pub progress: f64,
     pub bytes: u64,
@@ -157,8 +169,6 @@ impl ToValueType<ApiDownloadTask> for &serde_json::Value {
             id: self.to_value("id")?,
             state: self.to_value("state")?,
             item: self.to_value_type()?,
-            source: self.to_value("source")?,
-            quality: self.to_value("quality")?,
             file_path: self.to_value("file_path")?,
             progress: 0.0,
             bytes: 0,
@@ -173,8 +183,6 @@ impl From<DownloadTask> for ApiDownloadTask {
             id: value.id,
             state: value.state.into(),
             item: value.item.into(),
-            source: value.source.map(|source| source.into()),
-            quality: value.quality.map(|quality| quality.into()),
             file_path: value.file_path,
             progress: 0.0,
             bytes: 0,

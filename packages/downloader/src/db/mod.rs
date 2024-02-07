@@ -46,16 +46,24 @@ pub fn create_download_task(
         ("file_path", SqliteValue::String(task.file_path.clone())),
         (
             "source",
-            SqliteValue::StringOpt(
-                task.source
-                    .as_ref()
-                    .map(|source| source.as_ref().to_string()),
-            ),
+            SqliteValue::StringOpt(if let DownloadItem::Track { source, .. } = task.item {
+                Some(source.as_ref().to_string())
+            } else {
+                None
+            }),
+        ),
+        (
+            "quality",
+            SqliteValue::StringOpt(if let DownloadItem::Track { quality, .. } = task.item {
+                Some(quality.as_ref().to_string())
+            } else {
+                None
+            }),
         ),
         ("type", SqliteValue::String(task.item.as_ref().to_string())),
         (
             "track_id",
-            SqliteValue::NumberOpt(if let DownloadItem::Track(track_id) = task.item {
+            SqliteValue::NumberOpt(if let DownloadItem::Track { track_id, .. } = task.item {
                 Some(track_id as i64)
             } else {
                 None

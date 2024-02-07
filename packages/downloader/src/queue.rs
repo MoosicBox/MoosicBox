@@ -64,7 +64,7 @@ impl DownloadQueueState {
 
     fn finish_task(&mut self, task: &DownloadTask) {
         self.tasks.retain(|x| {
-            !(task.file_path == x.file_path && task.item == x.item && task.source == x.source)
+            !(task.file_path == x.file_path && task.item == x.item && task.item == x.item)
         });
     }
 }
@@ -204,14 +204,18 @@ impl DownloadQueue {
             .await?;
 
         match task.item {
-            DownloadItem::Track(track_id) => {
+            DownloadItem::Track {
+                track_id,
+                quality,
+                source,
+            } => {
                 downloader
                     .download_track_id(
                         db,
                         &task.file_path,
                         track_id,
-                        task.quality,
-                        task.source,
+                        quality,
+                        source,
                         *TIMEOUT_DURATION,
                     )
                     .await?
@@ -266,9 +270,10 @@ mod tests {
     use async_trait::async_trait;
     use moosicbox_core::app::DbConnection;
     use moosicbox_database::Row;
+    use moosicbox_files::files::track::TrackAudioQuality;
     use pretty_assertions::assert_eq;
 
-    use crate::db::models::{DownloadItem, DownloadTaskState};
+    use crate::db::models::{DownloadApiSource, DownloadItem, DownloadTaskState};
 
     use super::*;
 
@@ -281,8 +286,8 @@ mod tests {
             _db: &Db,
             _path: &str,
             _track_id: u64,
-            _quality: Option<moosicbox_files::files::track::TrackAudioQuality>,
-            _source: Option<crate::db::models::DownloadApiSource>,
+            _quality: moosicbox_files::files::track::TrackAudioQuality,
+            _source: crate::db::models::DownloadApiSource,
             _timeout_duration: Option<Duration>,
         ) -> Result<(), DownloadTrackError> {
             Ok(())
@@ -340,9 +345,11 @@ mod tests {
             .add_task_to_queue(DownloadTask {
                 id: 1,
                 state: DownloadTaskState::Pending,
-                item: DownloadItem::Track(1),
-                source: None,
-                quality: None,
+                item: DownloadItem::Track {
+                    track_id: 1,
+                    source: DownloadApiSource::Tidal,
+                    quality: TrackAudioQuality::FlacHighestRes,
+                },
                 file_path: "".into(),
                 created: "".into(),
                 updated: "".into(),
@@ -373,9 +380,11 @@ mod tests {
                 DownloadTask {
                     id: 1,
                     state: DownloadTaskState::Pending,
-                    item: DownloadItem::Track(1),
-                    source: None,
-                    quality: None,
+                    item: DownloadItem::Track {
+                        track_id: 1,
+                        source: DownloadApiSource::Tidal,
+                        quality: TrackAudioQuality::FlacHighestRes,
+                    },
                     file_path: "".into(),
                     created: "".into(),
                     updated: "".into(),
@@ -383,9 +392,11 @@ mod tests {
                 DownloadTask {
                     id: 2,
                     state: DownloadTaskState::Pending,
-                    item: DownloadItem::Track(2),
-                    source: None,
-                    quality: None,
+                    item: DownloadItem::Track {
+                        track_id: 2,
+                        source: DownloadApiSource::Tidal,
+                        quality: TrackAudioQuality::FlacHighestRes,
+                    },
                     file_path: "".into(),
                     created: "".into(),
                     updated: "".into(),
@@ -423,9 +434,11 @@ mod tests {
                 DownloadTask {
                     id: 1,
                     state: DownloadTaskState::Pending,
-                    item: DownloadItem::Track(1),
-                    source: None,
-                    quality: None,
+                    item: DownloadItem::Track {
+                        track_id: 1,
+                        source: DownloadApiSource::Tidal,
+                        quality: TrackAudioQuality::FlacHighestRes,
+                    },
                     file_path: "".into(),
                     created: "".into(),
                     updated: "".into(),
@@ -433,9 +446,11 @@ mod tests {
                 DownloadTask {
                     id: 1,
                     state: DownloadTaskState::Pending,
-                    item: DownloadItem::Track(1),
-                    source: None,
-                    quality: None,
+                    item: DownloadItem::Track {
+                        track_id: 1,
+                        source: DownloadApiSource::Tidal,
+                        quality: TrackAudioQuality::FlacHighestRes,
+                    },
                     file_path: "".into(),
                     created: "".into(),
                     updated: "".into(),
@@ -466,9 +481,11 @@ mod tests {
             .add_task_to_queue(DownloadTask {
                 id: 1,
                 state: DownloadTaskState::Pending,
-                item: DownloadItem::Track(1),
-                source: None,
-                quality: None,
+                item: DownloadItem::Track {
+                    track_id: 1,
+                    source: DownloadApiSource::Tidal,
+                    quality: TrackAudioQuality::FlacHighestRes,
+                },
                 file_path: "".into(),
                 created: "".into(),
                 updated: "".into(),
@@ -481,9 +498,11 @@ mod tests {
             .add_task_to_queue(DownloadTask {
                 id: 2,
                 state: DownloadTaskState::Pending,
-                item: DownloadItem::Track(2),
-                source: None,
-                quality: None,
+                item: DownloadItem::Track {
+                    track_id: 2,
+                    source: DownloadApiSource::Tidal,
+                    quality: TrackAudioQuality::FlacHighestRes,
+                },
                 file_path: "".into(),
                 created: "".into(),
                 updated: "".into(),
