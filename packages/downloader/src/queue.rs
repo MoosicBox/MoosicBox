@@ -105,8 +105,13 @@ impl DownloadQueue {
             let db = self.db.clone();
             let downloader = self.downloader.clone();
             let state = self.state.clone();
-            *handle =
-                Some(RT.spawn(async move { Self::process_inner(&db, downloader, state).await }));
+            let handle_arc = self.join_handle.clone();
+
+            *handle = Some(RT.spawn(async move {
+                Self::process_inner(&db, downloader, state).await?;
+                handle_arc.lock().await.take();
+                Ok(())
+            }));
         }
 
         Ok(())
