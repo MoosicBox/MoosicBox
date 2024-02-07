@@ -26,6 +26,7 @@ use moosicbox_config::get_config_dir_path;
 use moosicbox_core::app::Db;
 use moosicbox_core::integer_range::parse_integer_ranges;
 use moosicbox_core::sqlite::db::get_album_tracks;
+use moosicbox_core::sqlite::models::TrackApiSource;
 use moosicbox_files::files::track::TrackAudioQuality;
 use moosicbox_paging::Page;
 use serde::Deserialize;
@@ -156,7 +157,17 @@ pub async fn download_endpoint(
                 .unwrap()
                 .inner,
             album_id as i32,
-        )?;
+        )?
+        .into_iter()
+        .filter(|track| {
+            if let Some(source) = query.source {
+                let track_source = source.into();
+                track.source == track_source
+            } else {
+                track.source != TrackApiSource::Local
+            }
+        })
+        .collect::<Vec<_>>();
 
         tasks.extend(
             tracks
@@ -204,7 +215,17 @@ pub async fn download_endpoint(
                     .unwrap()
                     .inner,
                 album_id as i32,
-            )?;
+            )?
+            .into_iter()
+            .filter(|track| {
+                if let Some(source) = query.source {
+                    let track_source = source.into();
+                    track.source == track_source
+                } else {
+                    track.source != TrackApiSource::Local
+                }
+            })
+            .collect::<Vec<_>>();
 
             tasks.extend(
                 tracks
