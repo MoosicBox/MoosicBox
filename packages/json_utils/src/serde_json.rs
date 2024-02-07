@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use crate::{MissingValue, ParseError, ToValueType};
+use crate::{ParseError, ToValueType};
 
 pub trait ToNested<Type> {
     fn to_nested<'a>(&'a self, path: &[&str]) -> Result<&'a Type, ParseError>;
@@ -31,7 +31,6 @@ pub fn get_nested_value<'a>(mut value: &'a Value, path: &[&str]) -> Result<&'a V
     Ok(value)
 }
 
-impl<'a> MissingValue<&'a str> for &'a Value {}
 impl<'a> ToValueType<&'a str> for &'a Value {
     fn to_value_type(self) -> Result<&'a str, ParseError> {
         self.as_str()
@@ -39,18 +38,12 @@ impl<'a> ToValueType<&'a str> for &'a Value {
     }
 }
 
-impl<'a> MissingValue<&'a Value> for &'a Value {}
 impl<'a> ToValueType<&'a Value> for &'a Value {
     fn to_value_type(self) -> Result<&'a Value, ParseError> {
         Ok(self)
     }
 }
 
-impl<'a, T> MissingValue<Option<T>> for &'a Value {
-    fn missing_value(&self, _error: ParseError) -> Result<Option<T>, ParseError> {
-        Ok(None)
-    }
-}
 impl<'a, T> ToValueType<Option<T>> for &'a Value
 where
     &'a Value: ToValueType<T>,
@@ -58,9 +51,12 @@ where
     fn to_value_type(self) -> Result<Option<T>, ParseError> {
         self.to_value_type().map(|inner| Some(inner))
     }
+
+    fn missing_value(&self, _error: ParseError) -> Result<Option<T>, ParseError> {
+        Ok(None)
+    }
 }
 
-impl<'a, T> MissingValue<Vec<T>> for &'a Value {}
 impl<'a, T> ToValueType<Vec<T>> for &'a Value
 where
     &'a Value: ToValueType<T>,
@@ -74,7 +70,6 @@ where
     }
 }
 
-impl MissingValue<String> for &Value {}
 impl ToValueType<String> for &Value {
     fn to_value_type(self) -> Result<String, ParseError> {
         Ok(self
@@ -84,7 +79,6 @@ impl ToValueType<String> for &Value {
     }
 }
 
-impl MissingValue<bool> for &Value {}
 impl ToValueType<bool> for &Value {
     fn to_value_type(self) -> Result<bool, ParseError> {
         self.as_bool()
@@ -92,7 +86,6 @@ impl ToValueType<bool> for &Value {
     }
 }
 
-impl MissingValue<f32> for &Value {}
 impl ToValueType<f32> for &Value {
     fn to_value_type(self) -> Result<f32, ParseError> {
         Ok(self
@@ -101,7 +94,6 @@ impl ToValueType<f32> for &Value {
     }
 }
 
-impl MissingValue<f64> for &Value {}
 impl ToValueType<f64> for &Value {
     fn to_value_type(self) -> Result<f64, ParseError> {
         self.as_f64()
@@ -109,7 +101,6 @@ impl ToValueType<f64> for &Value {
     }
 }
 
-impl MissingValue<u8> for &Value {}
 impl ToValueType<u8> for &Value {
     fn to_value_type(self) -> Result<u8, ParseError> {
         Ok(self
@@ -118,7 +109,6 @@ impl ToValueType<u8> for &Value {
     }
 }
 
-impl MissingValue<u16> for &Value {}
 impl ToValueType<u16> for &Value {
     fn to_value_type(self) -> Result<u16, ParseError> {
         Ok(self
@@ -127,7 +117,6 @@ impl ToValueType<u16> for &Value {
     }
 }
 
-impl MissingValue<u32> for &Value {}
 impl ToValueType<u32> for &Value {
     fn to_value_type(self) -> Result<u32, ParseError> {
         Ok(self
@@ -136,7 +125,6 @@ impl ToValueType<u32> for &Value {
     }
 }
 
-impl MissingValue<u64> for &Value {}
 impl ToValueType<u64> for &Value {
     fn to_value_type(self) -> Result<u64, ParseError> {
         self.as_u64()

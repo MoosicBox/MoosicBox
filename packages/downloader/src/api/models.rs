@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use moosicbox_files::files::track::TrackAudioQuality;
-use moosicbox_json_utils::{serde_json::ToValue, MissingValue, ParseError, ToValueType};
+use moosicbox_json_utils::{serde_json::ToValue, ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 
@@ -14,7 +14,6 @@ pub struct ApiDownloadLocation {
     pub path: String,
 }
 
-impl MissingValue<ApiDownloadLocation> for &serde_json::Value {}
 impl ToValueType<ApiDownloadLocation> for &serde_json::Value {
     fn to_value_type(self) -> Result<ApiDownloadLocation, ParseError> {
         Ok(ApiDownloadLocation {
@@ -36,8 +35,6 @@ pub enum ApiDownloadTaskState {
     Finished,
 }
 
-impl MissingValue<ApiDownloadTaskState> for &serde_json::Value {}
-impl MissingValue<ApiDownloadTaskState> for serde_json::Value {}
 impl ToValueType<ApiDownloadTaskState> for &serde_json::Value {
     fn to_value_type(self) -> Result<ApiDownloadTaskState, ParseError> {
         Ok(ApiDownloadTaskState::from_str(
@@ -77,8 +74,6 @@ impl From<DownloadApiSource> for ApiDownloadApiSource {
     }
 }
 
-impl MissingValue<ApiDownloadApiSource> for &serde_json::Value {}
-impl MissingValue<ApiDownloadApiSource> for serde_json::Value {}
 impl ToValueType<ApiDownloadApiSource> for &serde_json::Value {
     fn to_value_type(self) -> Result<ApiDownloadApiSource, ParseError> {
         Ok(ApiDownloadApiSource::from_str(
@@ -124,7 +119,6 @@ impl From<DownloadItem> for ApiDownloadItem {
     }
 }
 
-impl MissingValue<ApiDownloadItem> for &serde_json::Value {}
 impl ToValueType<ApiDownloadItem> for &serde_json::Value {
     fn to_value_type(self) -> Result<ApiDownloadItem, ParseError> {
         let item_type: String = self.to_value("type")?;
@@ -162,7 +156,6 @@ pub struct ApiDownloadTask {
     pub speed: Option<u64>,
 }
 
-impl MissingValue<ApiDownloadTask> for &serde_json::Value {}
 impl ToValueType<ApiDownloadTask> for &serde_json::Value {
     fn to_value_type(self) -> Result<ApiDownloadTask, ParseError> {
         Ok(ApiDownloadTask {

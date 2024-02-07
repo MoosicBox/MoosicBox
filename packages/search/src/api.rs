@@ -13,7 +13,7 @@ use moosicbox_core::{
 };
 use moosicbox_json_utils::{
     tantivy::{ToValue, ToValueType},
-    MissingValue, ParseError,
+    ParseError,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -67,7 +67,6 @@ impl ApiGlobalSearchResult {
     }
 }
 
-impl MissingValue<ApiGlobalArtistSearchResult> for &NamedFieldDocument {}
 impl ToValueType<ApiGlobalArtistSearchResult> for &NamedFieldDocument {
     fn to_value_type(self) -> std::result::Result<ApiGlobalArtistSearchResult, ParseError> {
         Ok(ApiGlobalArtistSearchResult {
@@ -81,7 +80,6 @@ impl ToValueType<ApiGlobalArtistSearchResult> for &NamedFieldDocument {
     }
 }
 
-impl MissingValue<ApiGlobalAlbumSearchResult> for &NamedFieldDocument {}
 impl ToValueType<ApiGlobalAlbumSearchResult> for &NamedFieldDocument {
     fn to_value_type(self) -> std::result::Result<ApiGlobalAlbumSearchResult, ParseError> {
         Ok(ApiGlobalAlbumSearchResult {
@@ -129,7 +127,6 @@ impl ToValueType<ApiGlobalAlbumSearchResult> for &NamedFieldDocument {
     }
 }
 
-impl MissingValue<ApiGlobalTrackSearchResult> for &NamedFieldDocument {}
 impl ToValueType<ApiGlobalTrackSearchResult> for &NamedFieldDocument {
     fn to_value_type(self) -> std::result::Result<ApiGlobalTrackSearchResult, ParseError> {
         Ok(ApiGlobalTrackSearchResult {
@@ -161,7 +158,6 @@ impl ToValueType<ApiGlobalTrackSearchResult> for &NamedFieldDocument {
     }
 }
 
-impl MissingValue<ApiGlobalSearchResult> for &NamedFieldDocument {}
 impl ToValueType<ApiGlobalSearchResult> for &NamedFieldDocument {
     fn to_value_type(self) -> std::result::Result<ApiGlobalSearchResult, ParseError> {
         Ok(match self.to_value("document_type")? {

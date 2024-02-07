@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
-    MissingValue, ParseError, ToValueType,
+    ParseError, ToValueType,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -125,7 +125,6 @@ impl QobuzImage {
     }
 }
 
-impl MissingValue<QobuzImage> for &Value {}
 impl ToValueType<QobuzImage> for &Value {
     fn to_value_type(self) -> Result<QobuzImage, ParseError> {
         self.as_model()
@@ -153,7 +152,6 @@ pub struct QobuzGenre {
     pub slug: String,
 }
 
-impl MissingValue<QobuzGenre> for &Value {}
 impl ToValueType<QobuzGenre> for &Value {
     fn to_value_type(self) -> Result<QobuzGenre, ParseError> {
         self.as_model()
@@ -197,7 +195,6 @@ impl QobuzAlbum {
     }
 }
 
-impl MissingValue<QobuzAlbum> for &Value {}
 impl ToValueType<QobuzAlbum> for &Value {
     fn to_value_type(self) -> Result<QobuzAlbum, ParseError> {
         self.as_model()
@@ -259,7 +256,6 @@ impl QobuzRelease {
     }
 }
 
-impl MissingValue<QobuzRelease> for &Value {}
 impl ToValueType<QobuzRelease> for &Value {
     fn to_value_type(self) -> Result<QobuzRelease, ParseError> {
         self.as_model()
@@ -311,7 +307,6 @@ impl QobuzTrack {
     }
 }
 
-impl MissingValue<QobuzTrack> for &Value {}
 impl ToValueType<QobuzTrack> for &Value {
     fn to_value_type(self) -> Result<QobuzTrack, ParseError> {
         self.as_model()
@@ -377,7 +372,6 @@ impl QobuzArtist {
     }
 }
 
-impl MissingValue<QobuzArtist> for &Value {}
 impl ToValueType<QobuzArtist> for &Value {
     fn to_value_type(self) -> Result<QobuzArtist, ParseError> {
         self.as_model()

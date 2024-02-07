@@ -2,7 +2,7 @@ use moosicbox_core::sqlite::{
     db::SqliteValue,
     models::{AsId, AsModel, AsModelResult},
 };
-use moosicbox_json_utils::{rusqlite::ToValue, MissingValue, ParseError, ToValueType};
+use moosicbox_json_utils::{rusqlite::ToValue, ParseError, ToValueType};
 use rusqlite::Row;
 use serde::{Deserialize, Serialize};
 
@@ -24,7 +24,6 @@ pub struct TidalConfig {
     pub updated: String,
 }
 
-impl MissingValue<TidalConfig> for &Row<'_> {}
 impl ToValueType<TidalConfig> for &Row<'_> {
     fn to_value_type(self) -> Result<TidalConfig, ParseError> {
         Ok(TidalConfig {

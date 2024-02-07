@@ -24,12 +24,9 @@ pub enum ParseError {
     MissingValue(String),
 }
 
-pub trait ToValueType<T>: MissingValue<T> {
+pub trait ToValueType<T> {
     fn to_value_type(self) -> Result<T, ParseError>;
-}
-
-pub trait MissingValue<Type> {
-    fn missing_value(&self, error: ParseError) -> Result<Type, ParseError> {
+    fn missing_value(&self, error: ParseError) -> Result<T, ParseError> {
         Err(error)
     }
 }

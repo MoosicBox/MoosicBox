@@ -5,7 +5,7 @@ use moosicbox_core::sqlite::{
 use moosicbox_json_utils::{
     rusqlite::ToValue as RusqliteToValue,
     serde_json::{ToNestedValue, ToValue},
-    MissingValue, ParseError, ToValueType,
+    ParseError, ToValueType,
 };
 use rusqlite::Row;
 use serde::{Deserialize, Serialize};
@@ -40,7 +40,6 @@ impl AsModelResult<QobuzAppSecret, ParseError> for Row<'_> {
     }
 }
 
-impl MissingValue<QobuzAppSecret> for &Value {}
 impl ToValueType<QobuzAppSecret> for &Value {
     fn to_value_type(self) -> Result<QobuzAppSecret, ParseError> {
         Ok(QobuzAppSecret {
@@ -88,7 +87,6 @@ impl AsModelResult<QobuzAppConfig, ParseError> for Row<'_> {
     }
 }
 
-impl MissingValue<QobuzAppConfig> for &Value {}
 impl ToValueType<QobuzAppConfig> for &Value {
     fn to_value_type(self) -> Result<QobuzAppConfig, ParseError> {
         Ok(QobuzAppConfig {
@@ -139,7 +137,6 @@ impl AsModelResult<QobuzConfig, ParseError> for Row<'_> {
     }
 }
 
-impl MissingValue<QobuzConfig> for &Value {}
 impl ToValueType<QobuzConfig> for &Value {
     fn to_value_type(self) -> Result<QobuzConfig, ParseError> {
         Ok(QobuzConfig {

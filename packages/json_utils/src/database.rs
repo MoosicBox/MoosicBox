@@ -1,8 +1,7 @@
 use moosicbox_database::{DatabaseValue, Row};
 
-use crate::{MissingValue, ParseError, ToValueType};
+use crate::{ParseError, ToValueType};
 
-impl<'a> MissingValue<&'a str> for &'a DatabaseValue {}
 impl<'a> ToValueType<&'a str> for &'a DatabaseValue {
     fn to_value_type(self) -> Result<&'a str, ParseError> {
         match self {
@@ -12,19 +11,9 @@ impl<'a> ToValueType<&'a str> for &'a DatabaseValue {
     }
 }
 
-impl<'a> MissingValue<&'a DatabaseValue> for &'a DatabaseValue {}
 impl<'a> ToValueType<&'a DatabaseValue> for &'a DatabaseValue {
     fn to_value_type(self) -> Result<&'a DatabaseValue, ParseError> {
         Ok(self)
-    }
-}
-
-impl<'a, T> MissingValue<Option<T>> for &'a DatabaseValue
-where
-    &'a DatabaseValue: ToValueType<T>,
-{
-    fn missing_value(&self, _error: ParseError) -> Result<Option<T>, ParseError> {
-        Ok(None)
     }
 }
 
@@ -43,9 +32,12 @@ where
             _ => self.to_value_type().map(|inner| Some(inner)),
         }
     }
+
+    fn missing_value(&self, _error: ParseError) -> Result<Option<T>, ParseError> {
+        Ok(None)
+    }
 }
 
-impl MissingValue<String> for &DatabaseValue {}
 impl ToValueType<String> for &DatabaseValue {
     fn to_value_type(self) -> Result<String, ParseError> {
         match self {
@@ -55,7 +47,6 @@ impl ToValueType<String> for &DatabaseValue {
     }
 }
 
-impl MissingValue<bool> for &DatabaseValue {}
 impl ToValueType<bool> for &DatabaseValue {
     fn to_value_type(self) -> Result<bool, ParseError> {
         match self {
@@ -65,7 +56,6 @@ impl ToValueType<bool> for &DatabaseValue {
     }
 }
 
-impl MissingValue<f32> for &DatabaseValue {}
 impl ToValueType<f32> for &DatabaseValue {
     fn to_value_type(self) -> Result<f32, ParseError> {
         match self {
@@ -75,7 +65,6 @@ impl ToValueType<f32> for &DatabaseValue {
     }
 }
 
-impl MissingValue<f64> for &DatabaseValue {}
 impl ToValueType<f64> for &DatabaseValue {
     fn to_value_type(self) -> Result<f64, ParseError> {
         match self {
@@ -85,7 +74,6 @@ impl ToValueType<f64> for &DatabaseValue {
     }
 }
 
-impl MissingValue<i8> for &DatabaseValue {}
 impl ToValueType<i8> for &DatabaseValue {
     fn to_value_type(self) -> Result<i8, ParseError> {
         match self {
@@ -96,7 +84,6 @@ impl ToValueType<i8> for &DatabaseValue {
     }
 }
 
-impl MissingValue<i16> for &DatabaseValue {}
 impl ToValueType<i16> for &DatabaseValue {
     fn to_value_type(self) -> Result<i16, ParseError> {
         match self {
@@ -107,7 +94,6 @@ impl ToValueType<i16> for &DatabaseValue {
     }
 }
 
-impl MissingValue<i32> for &DatabaseValue {}
 impl ToValueType<i32> for &DatabaseValue {
     fn to_value_type(self) -> Result<i32, ParseError> {
         match self {
@@ -118,7 +104,6 @@ impl ToValueType<i32> for &DatabaseValue {
     }
 }
 
-impl MissingValue<i64> for &DatabaseValue {}
 impl ToValueType<i64> for &DatabaseValue {
     fn to_value_type(self) -> Result<i64, ParseError> {
         match self {
@@ -129,7 +114,6 @@ impl ToValueType<i64> for &DatabaseValue {
     }
 }
 
-impl MissingValue<isize> for &DatabaseValue {}
 impl ToValueType<isize> for &DatabaseValue {
     fn to_value_type(self) -> Result<isize, ParseError> {
         match self {
@@ -140,7 +124,6 @@ impl ToValueType<isize> for &DatabaseValue {
     }
 }
 
-impl MissingValue<u8> for &DatabaseValue {}
 impl ToValueType<u8> for &DatabaseValue {
     fn to_value_type(self) -> Result<u8, ParseError> {
         match self {
@@ -151,7 +134,6 @@ impl ToValueType<u8> for &DatabaseValue {
     }
 }
 
-impl MissingValue<u16> for &DatabaseValue {}
 impl ToValueType<u16> for &DatabaseValue {
     fn to_value_type(self) -> Result<u16, ParseError> {
         match self {
@@ -162,7 +144,6 @@ impl ToValueType<u16> for &DatabaseValue {
     }
 }
 
-impl MissingValue<u32> for &DatabaseValue {}
 impl ToValueType<u32> for &DatabaseValue {
     fn to_value_type(self) -> Result<u32, ParseError> {
         match self {
@@ -173,7 +154,6 @@ impl ToValueType<u32> for &DatabaseValue {
     }
 }
 
-impl MissingValue<u64> for &DatabaseValue {}
 impl ToValueType<u64> for &DatabaseValue {
     fn to_value_type(self) -> Result<u64, ParseError> {
         match self {
@@ -184,7 +164,6 @@ impl ToValueType<u64> for &DatabaseValue {
     }
 }
 
-impl MissingValue<usize> for &DatabaseValue {}
 impl ToValueType<usize> for &DatabaseValue {
     fn to_value_type(self) -> Result<usize, ParseError> {
         match self {
@@ -198,8 +177,11 @@ impl ToValueType<usize> for &DatabaseValue {
 pub trait ToValue<Type> {
     fn to_value<T>(self, index: &str) -> Result<T, ParseError>
     where
-        Type: ToValueType<T>,
-        for<'a> &'a Row: MissingValue<T>;
+        Type: ToValueType<T>;
+
+    fn missing_value<T>(&self, error: ParseError) -> Result<T, ParseError> {
+        Err(error)
+    }
 }
 
 impl ToValue<DatabaseValue> for DatabaseValue {
@@ -211,37 +193,10 @@ impl ToValue<DatabaseValue> for DatabaseValue {
     }
 }
 
-impl<'a, T> MissingValue<Option<T>> for &'a Row
-where
-    DatabaseValue: MissingValue<T>,
-{
-    fn missing_value(&self, _error: ParseError) -> Result<Option<T>, ParseError> {
-        Ok(None)
-    }
-}
-
-impl<'a> MissingValue<&'a str> for &'a Row {}
-impl<'a> MissingValue<&'a DatabaseValue> for &'a Row {}
-impl MissingValue<String> for &Row {}
-impl MissingValue<bool> for &Row {}
-impl MissingValue<f32> for &Row {}
-impl MissingValue<f64> for &Row {}
-impl MissingValue<i8> for &Row {}
-impl MissingValue<i16> for &Row {}
-impl MissingValue<i32> for &Row {}
-impl MissingValue<i64> for &Row {}
-impl MissingValue<isize> for &Row {}
-impl MissingValue<u8> for &Row {}
-impl MissingValue<u16> for &Row {}
-impl MissingValue<u32> for &Row {}
-impl MissingValue<u64> for &Row {}
-impl MissingValue<usize> for &Row {}
-
 impl ToValue<DatabaseValue> for &Row {
     fn to_value<T>(self, index: &str) -> Result<T, ParseError>
     where
         DatabaseValue: ToValueType<T>,
-        for<'a> &'a Row: MissingValue<T>,
     {
         get_value_type(self, index)
     }
@@ -251,7 +206,6 @@ impl ToValue<DatabaseValue> for Row {
     fn to_value<T>(self, index: &str) -> Result<T, ParseError>
     where
         DatabaseValue: ToValueType<T>,
-        for<'a> &'a Row: MissingValue<T>,
     {
         get_value_type(&self, index)
     }
@@ -260,7 +214,6 @@ impl ToValue<DatabaseValue> for Row {
 pub fn get_value_type<T>(row: &Row, index: &str) -> Result<T, ParseError>
 where
     DatabaseValue: ToValueType<T>,
-    for<'a> &'a Row: MissingValue<T>,
 {
     match row.get(index) {
         Some(inner) => match inner.to_value_type() {
@@ -285,12 +238,6 @@ where
     }
 }
 
-impl<T> MissingValue<Option<T>> for DatabaseValue {
-    fn missing_value(&self, _error: ParseError) -> Result<Option<T>, ParseError> {
-        Ok(None)
-    }
-}
-
 impl<T> ToValueType<Option<T>> for DatabaseValue
 where
     DatabaseValue: ToValueType<T>,
@@ -306,9 +253,12 @@ where
             _ => self.to_value_type().map(|inner| Some(inner)),
         }
     }
+
+    fn missing_value(&self, _error: ParseError) -> Result<Option<T>, ParseError> {
+        Ok(None)
+    }
 }
 
-impl MissingValue<String> for DatabaseValue {}
 impl ToValueType<String> for DatabaseValue {
     fn to_value_type(self) -> Result<String, ParseError> {
         match self {
@@ -318,7 +268,6 @@ impl ToValueType<String> for DatabaseValue {
     }
 }
 
-impl MissingValue<bool> for DatabaseValue {}
 impl ToValueType<bool> for DatabaseValue {
     fn to_value_type(self) -> Result<bool, ParseError> {
         match self {
@@ -328,7 +277,6 @@ impl ToValueType<bool> for DatabaseValue {
     }
 }
 
-impl MissingValue<f32> for DatabaseValue {}
 impl ToValueType<f32> for DatabaseValue {
     fn to_value_type(self) -> Result<f32, ParseError> {
         match self {
@@ -338,7 +286,6 @@ impl ToValueType<f32> for DatabaseValue {
     }
 }
 
-impl MissingValue<f64> for DatabaseValue {}
 impl ToValueType<f64> for DatabaseValue {
     fn to_value_type(self) -> Result<f64, ParseError> {
         match self {
@@ -348,7 +295,6 @@ impl ToValueType<f64> for DatabaseValue {
     }
 }
 
-impl MissingValue<i8> for DatabaseValue {}
 impl ToValueType<i8> for DatabaseValue {
     fn to_value_type(self) -> Result<i8, ParseError> {
         match self {
@@ -359,7 +305,6 @@ impl ToValueType<i8> for DatabaseValue {
     }
 }
 
-impl MissingValue<i16> for DatabaseValue {}
 impl ToValueType<i16> for DatabaseValue {
     fn to_value_type(self) -> Result<i16, ParseError> {
         match self {
@@ -370,7 +315,6 @@ impl ToValueType<i16> for DatabaseValue {
     }
 }
 
-impl MissingValue<i32> for DatabaseValue {}
 impl ToValueType<i32> for DatabaseValue {
     fn to_value_type(self) -> Result<i32, ParseError> {
         match self {
@@ -381,7 +325,6 @@ impl ToValueType<i32> for DatabaseValue {
     }
 }
 
-impl MissingValue<i64> for DatabaseValue {}
 impl ToValueType<i64> for DatabaseValue {
     fn to_value_type(self) -> Result<i64, ParseError> {
         match self {
@@ -392,7 +335,6 @@ impl ToValueType<i64> for DatabaseValue {
     }
 }
 
-impl MissingValue<isize> for DatabaseValue {}
 impl ToValueType<isize> for DatabaseValue {
     fn to_value_type(self) -> Result<isize, ParseError> {
         match self {
@@ -403,7 +345,6 @@ impl ToValueType<isize> for DatabaseValue {
     }
 }
 
-impl MissingValue<u8> for DatabaseValue {}
 impl ToValueType<u8> for DatabaseValue {
     fn to_value_type(self) -> Result<u8, ParseError> {
         match self {
@@ -414,7 +355,6 @@ impl ToValueType<u8> for DatabaseValue {
     }
 }
 
-impl MissingValue<u16> for DatabaseValue {}
 impl ToValueType<u16> for DatabaseValue {
     fn to_value_type(self) -> Result<u16, ParseError> {
         match self {
@@ -425,7 +365,6 @@ impl ToValueType<u16> for DatabaseValue {
     }
 }
 
-impl MissingValue<u32> for DatabaseValue {}
 impl ToValueType<u32> for DatabaseValue {
     fn to_value_type(self) -> Result<u32, ParseError> {
         match self {
@@ -436,7 +375,6 @@ impl ToValueType<u32> for DatabaseValue {
     }
 }
 
-impl MissingValue<u64> for DatabaseValue {}
 impl ToValueType<u64> for DatabaseValue {
     fn to_value_type(self) -> Result<u64, ParseError> {
         match self {
@@ -447,7 +385,6 @@ impl ToValueType<u64> for DatabaseValue {
     }
 }
 
-impl MissingValue<usize> for DatabaseValue {}
 impl ToValueType<usize> for DatabaseValue {
     fn to_value_type(self) -> Result<usize, ParseError> {
         match self {

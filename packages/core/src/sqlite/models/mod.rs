@@ -1,8 +1,6 @@
 use std::{fmt::Display, path::PathBuf, str::FromStr};
 
-use moosicbox_json_utils::{
-    rusqlite::ToValue as RusqliteToValue, MissingValue, ParseError, ToValueType,
-};
+use moosicbox_json_utils::{rusqlite::ToValue as RusqliteToValue, ParseError, ToValueType};
 use rusqlite::{
     types::{FromSql, Value},
     Row, Rows,
@@ -159,8 +157,6 @@ pub enum TrackApiSource {
     Qobuz,
 }
 
-impl MissingValue<TrackApiSource> for &serde_json::Value {}
-impl MissingValue<TrackApiSource> for serde_json::Value {}
 impl ToValueType<TrackApiSource> for &serde_json::Value {
     fn to_value_type(self) -> Result<TrackApiSource, ParseError> {
         Ok(TrackApiSource::from_str(
@@ -171,8 +167,6 @@ impl ToValueType<TrackApiSource> for &serde_json::Value {
     }
 }
 
-impl MissingValue<TrackApiSource> for &Row<'_> {}
-impl MissingValue<TrackApiSource> for rusqlite::types::Value {}
 impl ToValueType<TrackApiSource> for rusqlite::types::Value {
     fn to_value_type(self) -> Result<TrackApiSource, ParseError> {
         match self {
@@ -934,8 +928,6 @@ impl Display for ApiSource {
     }
 }
 
-impl MissingValue<ApiSource> for &Row<'_> {}
-impl MissingValue<ApiSource> for Value {}
 impl ToValueType<ApiSource> for Value {
     fn to_value_type(self) -> Result<ApiSource, ParseError> {
         match self {
@@ -1378,8 +1370,6 @@ pub enum PlayerType {
     Unknown,
 }
 
-impl MissingValue<PlayerType> for &Row<'_> {}
-impl MissingValue<PlayerType> for Value {}
 impl ToValueType<PlayerType> for Value {
     fn to_value_type(self) -> Result<PlayerType, ParseError> {
         match self {
@@ -1441,7 +1431,6 @@ pub struct ActivePlayer {
     pub updated: String,
 }
 
-impl MissingValue<ActivePlayer> for &Row<'_> {}
 impl ToValueType<ActivePlayer> for &Row<'_> {
     fn to_value_type(self) -> Result<ActivePlayer, ParseError> {
         Ok(ActivePlayer {

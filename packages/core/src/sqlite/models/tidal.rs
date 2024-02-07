@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
-    MissingValue, ParseError, ToValueType,
+    ParseError, ToValueType,
 };
 use serde::{Deserialize, Serialize};
 
@@ -63,7 +63,6 @@ impl TidalArtist {
     }
 }
 
-impl MissingValue<TidalArtist> for &serde_json::Value {}
 impl ToValueType<TidalArtist> for &serde_json::Value {
     fn to_value_type(self) -> Result<TidalArtist, ParseError> {
         self.as_model()
@@ -151,7 +150,6 @@ impl TidalAlbum {
     }
 }
 
-impl MissingValue<TidalAlbum> for &serde_json::Value {}
 impl ToValueType<TidalAlbum> for &serde_json::Value {
     fn to_value_type(self) -> Result<TidalAlbum, ParseError> {
         self.as_model()
@@ -200,7 +198,6 @@ pub struct TidalTrack {
     pub media_metadata_tags: Vec<String>,
 }
 
-impl MissingValue<TidalTrack> for &serde_json::Value {}
 impl ToValueType<TidalTrack> for &serde_json::Value {
     fn to_value_type(self) -> Result<TidalTrack, ParseError> {
         self.as_model()

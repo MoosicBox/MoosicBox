@@ -1,12 +1,15 @@
 use tantivy::schema::{NamedFieldDocument, Value};
 
-use crate::{MissingValue, ParseError};
+use crate::ParseError;
 
-pub trait ToValueType<T>: MissingValue<T> {
+pub trait ToValueType<T> {
     fn to_value_type(self) -> Result<T, ParseError>;
+
+    fn missing_value(&self, error: ParseError) -> Result<T, ParseError> {
+        Err(error)
+    }
 }
 
-impl<'a> MissingValue<&'a str> for &'a Value {}
 impl<'a> ToValueType<&'a str> for &'a Value {
     fn to_value_type(self) -> Result<&'a str, ParseError> {
         self.as_text()
@@ -14,18 +17,12 @@ impl<'a> ToValueType<&'a str> for &'a Value {
     }
 }
 
-impl<'a> MissingValue<&'a Value> for &'a Value {}
 impl<'a> ToValueType<&'a Value> for &'a Value {
     fn to_value_type(self) -> Result<&'a Value, ParseError> {
         Ok(self)
     }
 }
 
-impl<'a, T> MissingValue<Option<T>> for &'a Value {
-    fn missing_value(&self, _error: ParseError) -> Result<Option<T>, ParseError> {
-        Ok(None)
-    }
-}
 impl<'a, T> ToValueType<Option<T>> for &'a Value
 where
     &'a Value: ToValueType<T>,
@@ -33,9 +30,12 @@ where
     fn to_value_type(self) -> Result<Option<T>, ParseError> {
         self.to_value_type().map(|inner| Some(inner))
     }
+
+    fn missing_value(&self, _error: ParseError) -> Result<Option<T>, ParseError> {
+        Ok(None)
+    }
 }
 
-impl MissingValue<String> for &Value {}
 impl ToValueType<String> for &Value {
     fn to_value_type(self) -> Result<String, ParseError> {
         Ok(self
@@ -45,7 +45,6 @@ impl ToValueType<String> for &Value {
     }
 }
 
-impl MissingValue<bool> for &Value {}
 impl ToValueType<bool> for &Value {
     fn to_value_type(self) -> Result<bool, ParseError> {
         self.as_bool()
@@ -53,7 +52,6 @@ impl ToValueType<bool> for &Value {
     }
 }
 
-impl MissingValue<f32> for &Value {}
 impl ToValueType<f32> for &Value {
     fn to_value_type(self) -> Result<f32, ParseError> {
         Ok(self
@@ -62,7 +60,6 @@ impl ToValueType<f32> for &Value {
     }
 }
 
-impl MissingValue<f64> for &Value {}
 impl ToValueType<f64> for &Value {
     fn to_value_type(self) -> Result<f64, ParseError> {
         self.as_f64()
@@ -70,7 +67,6 @@ impl ToValueType<f64> for &Value {
     }
 }
 
-impl MissingValue<u8> for &Value {}
 impl ToValueType<u8> for &Value {
     fn to_value_type(self) -> Result<u8, ParseError> {
         Ok(self
@@ -79,7 +75,6 @@ impl ToValueType<u8> for &Value {
     }
 }
 
-impl MissingValue<u16> for &Value {}
 impl ToValueType<u16> for &Value {
     fn to_value_type(self) -> Result<u16, ParseError> {
         Ok(self
@@ -88,7 +83,6 @@ impl ToValueType<u16> for &Value {
     }
 }
 
-impl MissingValue<u32> for &Value {}
 impl ToValueType<u32> for &Value {
     fn to_value_type(self) -> Result<u32, ParseError> {
         Ok(self
@@ -97,7 +91,6 @@ impl ToValueType<u32> for &Value {
     }
 }
 
-impl MissingValue<u64> for &Value {}
 impl ToValueType<u64> for &Value {
     fn to_value_type(self) -> Result<u64, ParseError> {
         self.as_u64()
@@ -160,7 +153,6 @@ where
     Err(ParseError::Parse(format!("Missing value: '{}'", index)))
 }
 
-impl<'a> MissingValue<&'a str> for &'a Vec<Value> {}
 impl<'a> ToValueType<&'a str> for &'a Vec<Value> {
     fn to_value_type(self) -> Result<&'a str, ParseError> {
         self.first()
@@ -169,14 +161,12 @@ impl<'a> ToValueType<&'a str> for &'a Vec<Value> {
     }
 }
 
-impl<'a> MissingValue<&'a Vec<Value>> for &'a Vec<Value> {}
 impl<'a> ToValueType<&'a Vec<Value>> for &'a Vec<Value> {
     fn to_value_type(self) -> Result<&'a Vec<Value>, ParseError> {
         Ok(self)
     }
 }
 
-impl<'a, T> MissingValue<Vec<T>> for &'a Vec<Value> {}
 impl<'a, T> ToValueType<Vec<T>> for &'a Vec<Value>
 where
     &'a Value: ToValueType<T>,
@@ -188,11 +178,6 @@ where
     }
 }
 
-impl<'a, T> MissingValue<Option<T>> for &'a Vec<Value> {
-    fn missing_value(&self, _error: ParseError) -> Result<Option<T>, ParseError> {
-        Ok(None)
-    }
-}
 impl<'a, T> ToValueType<Option<T>> for &'a Vec<Value>
 where
     &'a Vec<Value>: ToValueType<T>,
@@ -200,9 +185,12 @@ where
     fn to_value_type(self) -> Result<Option<T>, ParseError> {
         self.to_value_type().map(|inner| Some(inner))
     }
+
+    fn missing_value(&self, _error: ParseError) -> Result<Option<T>, ParseError> {
+        Ok(None)
+    }
 }
 
-impl MissingValue<String> for &Vec<Value> {}
 impl ToValueType<String> for &Vec<Value> {
     fn to_value_type(self) -> Result<String, ParseError> {
         self.first()
@@ -211,7 +199,6 @@ impl ToValueType<String> for &Vec<Value> {
     }
 }
 
-impl MissingValue<bool> for &Vec<Value> {}
 impl ToValueType<bool> for &Vec<Value> {
     fn to_value_type(self) -> Result<bool, ParseError> {
         self.first()
@@ -220,7 +207,6 @@ impl ToValueType<bool> for &Vec<Value> {
     }
 }
 
-impl MissingValue<f32> for &Vec<Value> {}
 impl ToValueType<f32> for &Vec<Value> {
     fn to_value_type(self) -> Result<f32, ParseError> {
         self.first()
@@ -229,7 +215,6 @@ impl ToValueType<f32> for &Vec<Value> {
     }
 }
 
-impl MissingValue<f64> for &Vec<Value> {}
 impl ToValueType<f64> for &Vec<Value> {
     fn to_value_type(self) -> Result<f64, ParseError> {
         self.first()
@@ -238,7 +223,6 @@ impl ToValueType<f64> for &Vec<Value> {
     }
 }
 
-impl MissingValue<u8> for &Vec<Value> {}
 impl ToValueType<u8> for &Vec<Value> {
     fn to_value_type(self) -> Result<u8, ParseError> {
         self.first()
@@ -247,7 +231,6 @@ impl ToValueType<u8> for &Vec<Value> {
     }
 }
 
-impl MissingValue<u16> for &Vec<Value> {}
 impl ToValueType<u16> for &Vec<Value> {
     fn to_value_type(self) -> Result<u16, ParseError> {
         self.first()
@@ -256,7 +239,6 @@ impl ToValueType<u16> for &Vec<Value> {
     }
 }
 
-impl MissingValue<u32> for &Vec<Value> {}
 impl ToValueType<u32> for &Vec<Value> {
     fn to_value_type(self) -> Result<u32, ParseError> {
         self.first()
@@ -265,7 +247,6 @@ impl ToValueType<u32> for &Vec<Value> {
     }
 }
 
-impl MissingValue<u64> for &Vec<Value> {}
 impl ToValueType<u64> for &Vec<Value> {
     fn to_value_type(self) -> Result<u64, ParseError> {
         self.first()
