@@ -159,6 +159,30 @@ pub enum TrackApiSource {
     Qobuz,
 }
 
+impl MissingValue<TrackApiSource> for &serde_json::Value {}
+impl MissingValue<TrackApiSource> for serde_json::Value {}
+impl ToValueType<TrackApiSource> for &serde_json::Value {
+    fn to_value_type(self) -> Result<TrackApiSource, ParseError> {
+        Ok(TrackApiSource::from_str(
+            self.as_str()
+                .ok_or_else(|| ParseError::ConvertType("TrackApiSource".into()))?,
+        )
+        .map_err(|_| ParseError::ConvertType("TrackApiSource".into()))?)
+    }
+}
+
+impl MissingValue<TrackApiSource> for &Row<'_> {}
+impl MissingValue<TrackApiSource> for rusqlite::types::Value {}
+impl ToValueType<TrackApiSource> for rusqlite::types::Value {
+    fn to_value_type(self) -> Result<TrackApiSource, ParseError> {
+        match self {
+            rusqlite::types::Value::Text(str) => Ok(TrackApiSource::from_str(&str)
+                .map_err(|_| ParseError::ConvertType("TrackApiSource".into()))?),
+            _ => Err(ParseError::ConvertType("TrackApiSource".into())),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum Track {
