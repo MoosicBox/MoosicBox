@@ -3,6 +3,7 @@ use std::sync::OnceLock;
 
 use crate::api::models::to_api_download_task;
 use crate::api::models::ApiDownloadTask;
+use crate::api::models::ApiDownloadTaskState;
 use crate::create_download_tasks;
 use crate::db::get_download_tasks;
 use crate::db::models::DownloadItem;
@@ -155,14 +156,25 @@ pub async fn download_tasks_endpoint(
         .into_iter()
         .filter(|album| album_ids.contains(&album.id))
         .collect::<Vec<_>>();
+    let len = tasks.len() as u32;
+
+    let mut items = tasks
+        .into_iter()
+        .map(|task| to_api_download_task(task, &tracks, &albums))
+        .collect::<Vec<_>>();
+
+    if let Some(queue) = DOWNLOAD_QUEUE.get() {
+        for item in items.iter_mut() {
+            if item.state == ApiDownloadTaskState::Started {
+                item.speed.replace(queue.read().await.speed() as u64);
+            }
+        }
+    }
 
     Ok(Json(Page::WithTotal {
         offset: 0,
-        limit: tasks.len() as u32,
-        total: tasks.len() as u32,
-        items: tasks
-            .into_iter()
-            .map(|task| to_api_download_task(task, &tracks, &albums))
-            .collect::<Vec<_>>(),
+        items,
+        limit: len,
+        total: len,
     }))
 }

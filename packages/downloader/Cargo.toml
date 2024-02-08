@@ -24,6 +24,7 @@ actix-web = { workspace = true, optional = true }
 
 async-recursion = { workspace = true }
 async-trait     = { workspace = true }
+atomic_float    = { workspace = true }
 audiotags       = { workspace = true }
 futures         = { workspace = true }
 hyper           = { version = "0.14.28" }

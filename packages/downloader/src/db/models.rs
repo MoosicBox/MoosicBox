@@ -212,6 +212,7 @@ pub struct DownloadTask {
     pub state: DownloadTaskState,
     pub item: DownloadItem,
     pub file_path: String,
+    pub total_bytes: Option<u64>,
     pub created: String,
     pub updated: String,
 }
@@ -230,6 +231,7 @@ impl AsModelResult<DownloadTask, ParseError> for Row<'_> {
             state: self.to_value("state")?,
             item: self.to_value_type()?,
             file_path: self.to_value("file_path")?,
+            total_bytes: self.to_value("total_bytes")?,
             created: self.to_value("created")?,
             updated: self.to_value("updated")?,
         })
@@ -243,6 +245,7 @@ impl ToValueType<DownloadTask> for &serde_json::Value {
             state: self.to_value("state")?,
             item: self.to_value_type()?,
             file_path: self.to_value("file_path")?,
+            total_bytes: self.to_value("total_bytes")?,
             created: self.to_value("created")?,
             updated: self.to_value("updated")?,
         })

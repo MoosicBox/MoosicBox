@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use lazy_static::lazy_static;
 use moosicbox_core::{app::Db, sqlite::db::DbError};
-use moosicbox_database::{rusqlite::RusqliteDatabase, Database, DatabaseError, DatabaseValue};
+use moosicbox_database::{rusqlite::RusqliteDatabase, Database, DatabaseError, DatabaseValue, Row};
 use thiserror::Error;
 use tokio::{
     sync::{Mutex, RwLock},
@@ -24,11 +24,21 @@ lazy_static! {
 }
 
 #[derive(Debug, Error)]
+pub enum UpdateTaskError {
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+    #[error("No row")]
+    NoRow,
+}
+
+#[derive(Debug, Error)]
 pub enum ProcessDownloadQueueError {
     #[error(transparent)]
     Db(#[from] DbError),
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    #[error(transparent)]
+    UpdateTask(#[from] UpdateTaskError),
     #[error(transparent)]
     Join(#[from] JoinError),
     #[error(transparent)]
@@ -83,7 +93,7 @@ impl DownloadQueue {
         Self {
             db: db.clone(),
             database: Arc::new(Box::new(RusqliteDatabase::new(db.library))),
-            downloader: Arc::new(Box::new(MoosicboxDownloader {})),
+            downloader: Arc::new(Box::new(MoosicboxDownloader::new())),
             state: Arc::new(RwLock::new(DownloadQueueState::new())),
             join_handle: Arc::new(Mutex::new(None)),
         }
@@ -109,6 +119,10 @@ impl DownloadQueue {
         }
     }
 
+    pub fn speed(&self) -> f64 {
+        self.downloader.speed()
+    }
+
     pub async fn add_task_to_queue(&mut self, task: DownloadTask) {
         self.state.write().await.add_task_to_queue(task);
     }
@@ -118,11 +132,8 @@ impl DownloadQueue {
     }
 
     pub fn process(&mut self) -> JoinHandle<Result<(), ProcessDownloadQueueError>> {
-        let db = self.db.clone();
-        let database = self.database.clone();
-        let downloader = self.downloader.clone();
-        let state = self.state.clone();
         let join_handle = self.join_handle.clone();
+        let this = self.clone();
 
         tokio::task::spawn(async move {
             let mut handle = join_handle.lock().await;
@@ -134,7 +145,7 @@ impl DownloadQueue {
             }
 
             handle.replace(RT.spawn(async move {
-                Self::process_inner(&db, database, downloader, state).await?;
+                this.process_inner().await?;
                 Ok(())
             }));
 
@@ -157,24 +168,18 @@ impl DownloadQueue {
         }
     }
 
-    async fn process_inner(
-        db: &Db,
-        database: Arc<Box<dyn Database + Send + Sync>>,
-        downloader: Arc<Box<dyn Downloader + Send + Sync>>,
-        state: Arc<RwLock<DownloadQueueState>>,
-    ) -> Result<(), ProcessDownloadQueueError> {
+    async fn process_inner(&self) -> Result<(), ProcessDownloadQueueError> {
         while let Some(mut task) = {
-            let state = state.as_ref().read().await;
+            let state = self.state.as_ref().read().await;
             state.tasks.first().cloned()
         } {
-            let result =
-                Self::process_task(db, database.clone(), downloader.clone(), &mut task).await;
+            let result = self.process_task(&mut task).await;
 
-            let mut state = state.write().await;
+            let mut state = self.state.write().await;
 
             if let Err(ref err) = result {
                 log::error!("Encountered error when processing task in DownloadQueue: {err:?}");
-                Self::update_task_state(database.clone(), &mut task, DownloadTaskState::Error)
+                self.update_task_state(&mut task, DownloadTaskState::Error)
                     .await?;
             }
 
@@ -186,34 +191,65 @@ impl DownloadQueue {
     }
 
     async fn update_task_state(
-        database: Arc<Box<dyn Database + Send + Sync>>,
+        &self,
         task: &mut DownloadTask,
         state: DownloadTaskState,
-    ) -> Result<(), DatabaseError> {
+    ) -> Result<Row, UpdateTaskError> {
         task.state = state;
-        database
-            .update_and_get_row(
-                "download_tasks",
-                DatabaseValue::UNumber(task.id),
-                &[(
-                    "state",
-                    DatabaseValue::String(task.state.as_ref().to_string()),
-                )],
-            )
-            .await?;
 
-        Ok(())
+        self.update_task(
+            task.id,
+            &[(
+                "state",
+                DatabaseValue::String(task.state.as_ref().to_string()),
+            )],
+        )
+        .await
+    }
+
+    async fn update_task(
+        &self,
+        task_id: u64,
+        values: &[(&str, DatabaseValue)],
+    ) -> Result<Row, UpdateTaskError> {
+        Ok(self
+            .database
+            .update_and_get_row("download_tasks", DatabaseValue::UNumber(task_id), values)
+            .await?
+            .ok_or(UpdateTaskError::NoRow)?)
     }
 
     async fn process_task(
-        db: &Db,
-        database: Arc<Box<dyn Database + Send + Sync>>,
-        downloader: Arc<Box<dyn Downloader + Send + Sync>>,
+        &self,
         task: &mut DownloadTask,
     ) -> Result<ProcessDownloadTaskResponse, ProcessDownloadQueueError> {
         log::debug!("Processing task {task:?}");
 
-        Self::update_task_state(database.clone(), task, DownloadTaskState::Started).await?;
+        self.update_task_state(task, DownloadTaskState::Started)
+            .await?;
+
+        let mut task_size = None;
+        let database = self.database.clone();
+        let task_id = task.id;
+        let on_size = Box::new(move |size| {
+            log::debug!("Got size of task: {size:?}");
+            if let Some(size) = size {
+                task_size.replace(size);
+                let database = database.clone();
+                tokio::task::spawn(async move {
+                    if let Err(err) = database
+                        .update_and_get_row(
+                            "download_tasks",
+                            DatabaseValue::UNumber(task_id),
+                            &[("total_bytes", DatabaseValue::UNumber(size))],
+                        )
+                        .await
+                    {
+                        log::error!("Failed to set DownloadTask total_bytes: {err:?}");
+                    }
+                });
+            }
+        });
 
         match task.item {
             DownloadItem::Track {
@@ -221,30 +257,36 @@ impl DownloadQueue {
                 quality,
                 source,
             } => {
-                downloader
+                self.downloader
                     .download_track_id(
-                        db,
+                        &self.db,
                         &task.file_path,
                         track_id,
                         quality,
                         source,
+                        on_size,
                         *TIMEOUT_DURATION,
                     )
                     .await?
             }
             DownloadItem::AlbumCover(album_id) => {
-                downloader
-                    .download_album_cover(db, &task.file_path, album_id)
+                self.downloader
+                    .download_album_cover(&self.db, &task.file_path, album_id, on_size)
                     .await?;
             }
             DownloadItem::ArtistCover(album_id) => {
-                downloader
-                    .download_artist_cover(db, &task.file_path, album_id)
+                self.downloader
+                    .download_artist_cover(&self.db, &task.file_path, album_id, on_size)
                     .await?;
             }
         }
 
-        Self::update_task_state(database, task, DownloadTaskState::Finished).await?;
+        if let Some(size) = task_size {
+            task.total_bytes.replace(size);
+        }
+
+        self.update_task_state(task, DownloadTaskState::Finished)
+            .await?;
 
         Ok(ProcessDownloadTaskResponse {})
     }
@@ -289,6 +331,7 @@ mod tests {
             _track_id: u64,
             _quality: moosicbox_files::files::track::TrackAudioQuality,
             _source: crate::db::models::DownloadApiSource,
+            _on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
             _timeout_duration: Option<Duration>,
         ) -> Result<(), DownloadTrackError> {
             Ok(())
@@ -299,6 +342,7 @@ mod tests {
             _db: &Db,
             _path: &str,
             _album_id: u64,
+            _on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
         ) -> Result<(), DownloadAlbumError> {
             Ok(())
         }
@@ -308,6 +352,7 @@ mod tests {
             _db: &Db,
             _path: &str,
             _album_id: u64,
+            _on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
         ) -> Result<(), DownloadAlbumError> {
             Ok(())
         }
@@ -323,7 +368,7 @@ mod tests {
             _id: DatabaseValue,
             _values: &[(&'a str, DatabaseValue)],
         ) -> Result<Option<Row>, DatabaseError> {
-            Ok(None)
+            Ok(Some(Row { columns: vec![] }))
         }
     }
 
@@ -354,6 +399,7 @@ mod tests {
                 file_path: "".into(),
                 created: "".into(),
                 updated: "".into(),
+                total_bytes: None,
             })
             .await;
 
@@ -389,6 +435,7 @@ mod tests {
                     file_path: "".into(),
                     created: "".into(),
                     updated: "".into(),
+                    total_bytes: None,
                 },
                 DownloadTask {
                     id: 2,
@@ -401,6 +448,7 @@ mod tests {
                     file_path: "".into(),
                     created: "".into(),
                     updated: "".into(),
+                    total_bytes: None,
                 },
             ])
             .await;
@@ -443,6 +491,7 @@ mod tests {
                     file_path: "".into(),
                     created: "".into(),
                     updated: "".into(),
+                    total_bytes: None,
                 },
                 DownloadTask {
                     id: 1,
@@ -455,6 +504,7 @@ mod tests {
                     file_path: "".into(),
                     created: "".into(),
                     updated: "".into(),
+                    total_bytes: None,
                 },
             ])
             .await;
@@ -490,6 +540,7 @@ mod tests {
                 file_path: "".into(),
                 created: "".into(),
                 updated: "".into(),
+                total_bytes: None,
             })
             .await;
 
@@ -507,6 +558,7 @@ mod tests {
                 file_path: "".into(),
                 created: "".into(),
                 updated: "".into(),
+                total_bytes: None,
             })
             .await;
 

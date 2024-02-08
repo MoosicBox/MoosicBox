@@ -217,21 +217,43 @@ pub struct ApiDownloadTask {
     pub file_path: String,
     pub progress: f64,
     pub bytes: u64,
+    pub total_bytes: Option<u64>,
     pub speed: Option<u64>,
 }
 
 impl ToValueType<ApiDownloadTask> for &serde_json::Value {
     fn to_value_type(self) -> Result<ApiDownloadTask, ParseError> {
-        Ok(ApiDownloadTask {
+        Ok(calc_progress_for_task(ApiDownloadTask {
             id: self.to_value("id")?,
             state: self.to_value("state")?,
             item: self.to_value_type()?,
             file_path: self.to_value("file_path")?,
             progress: 0.0,
             bytes: 0,
+            total_bytes: self.to_value("total_bytes")?,
             speed: None,
-        })
+        }))
     }
+}
+
+fn calc_progress_for_task(mut task: ApiDownloadTask) -> ApiDownloadTask {
+    task.bytes = std::fs::File::open(&task.file_path)
+        .ok()
+        .and_then(|file| file.metadata().ok().map(|metadata| metadata.len()))
+        .unwrap_or(0);
+
+    if let Some(total_bytes) = task.total_bytes {
+        task.progress = 100.0_f64.min((task.bytes as f64) / (total_bytes as f64) * 100.0);
+    } else {
+        match task.state {
+            ApiDownloadTaskState::Finished => {
+                task.progress = 100.0;
+            }
+            _ => {}
+        }
+    }
+
+    task
 }
 
 pub(crate) fn to_api_download_task(
@@ -239,13 +261,14 @@ pub(crate) fn to_api_download_task(
     tracks: &[LibraryTrack],
     albums: &[LibraryAlbum],
 ) -> ApiDownloadTask {
-    ApiDownloadTask {
+    calc_progress_for_task(ApiDownloadTask {
         id: task.id,
         state: task.state.into(),
         item: to_api_download_item(task.item, tracks, albums),
         file_path: task.file_path,
         progress: 0.0,
         bytes: 0,
+        total_bytes: task.total_bytes,
         speed: None,
-    }
+    })
 }

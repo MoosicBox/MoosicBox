@@ -4,12 +4,14 @@ use std::{
     error::Error,
     path::{Path, PathBuf},
     str::FromStr,
+    sync::Arc,
     time::Duration,
 };
 
 use crate::db::models::DownloadApiSource;
 use async_recursion::async_recursion;
 use async_trait::async_trait;
+use atomic_float::AtomicF64;
 use audiotags::Tag;
 use db::{
     create_download_task, get_download_location,
@@ -35,7 +37,8 @@ use moosicbox_files::{
             TrackSourceError,
         },
     },
-    sanitize_filename, save_bytes_stream_to_file, SaveBytesStreamToFileError,
+    get_content_length, sanitize_filename, save_bytes_stream_to_file_with_speed_listener,
+    GetContentLengthError, SaveBytesStreamToFileError,
 };
 use thiserror::Error;
 use tokio::select;
@@ -322,6 +325,8 @@ pub enum DownloadTrackError {
     #[error(transparent)]
     IO(#[from] tokio::io::Error),
     #[error(transparent)]
+    GetContentLength(#[from] GetContentLengthError),
+    #[error(transparent)]
     SaveBytesStreamToFile(#[from] SaveBytesStreamToFileError),
     #[error(transparent)]
     TagTrackFile(#[from] TagTrackFileError),
@@ -337,6 +342,8 @@ pub async fn download_track_id(
     track_id: u64,
     quality: TrackAudioQuality,
     source: DownloadApiSource,
+    on_size: &mut (impl FnMut(Option<u64>) + Send + Sync),
+    speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadTrackError> {
     log::debug!("Starting download for track_id={track_id} quality={quality:?} source={source:?} path={path}");
@@ -344,7 +351,18 @@ pub async fn download_track_id(
     let track = get_track(&db.library.lock().as_ref().unwrap().inner, track_id as i32)?
         .ok_or(DownloadTrackError::NotFound)?;
 
-    download_track(db, path, &track, quality, source, None, timeout_duration).await
+    download_track(
+        db,
+        path,
+        &track,
+        quality,
+        source,
+        None,
+        on_size,
+        speed,
+        timeout_duration,
+    )
+    .await
 }
 
 #[async_recursion]
@@ -355,15 +373,32 @@ async fn download_track(
     quality: TrackAudioQuality,
     source: DownloadApiSource,
     start: Option<u64>,
+    on_size: &mut (impl FnMut(Option<u64>) + Send + Sync),
+    speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadTrackError> {
-    match download_track_inner(db, path, track, quality, source, start, timeout_duration).await {
+    match download_track_inner(
+        db,
+        path,
+        track,
+        quality,
+        source,
+        start,
+        on_size,
+        speed.clone(),
+        timeout_duration,
+    )
+    .await
+    {
         Ok(_) => Ok(()),
         Err(err) => Err(match err {
             DownloadTrackInnerError::Db(err) => DownloadTrackError::Db(err),
             DownloadTrackInnerError::TrackSource(err) => DownloadTrackError::TrackSource(err),
             DownloadTrackInnerError::GetTrackBytes(err) => DownloadTrackError::GetTrackBytes(err),
             DownloadTrackInnerError::IO(err) => DownloadTrackError::IO(err),
+            DownloadTrackInnerError::GetContentLength(err) => {
+                DownloadTrackError::GetContentLength(err)
+            }
             DownloadTrackInnerError::SaveBytesStreamToFile(err) => {
                 DownloadTrackError::SaveBytesStreamToFile(err)
             }
@@ -372,8 +407,18 @@ async fn download_track(
             DownloadTrackInnerError::NotFound => DownloadTrackError::NotFound,
             DownloadTrackInnerError::Timeout(start) => {
                 log::warn!("Track download timed out. Trying again at start {start:?}");
-                return download_track(db, path, track, quality, source, start, timeout_duration)
-                    .await;
+                return download_track(
+                    db,
+                    path,
+                    track,
+                    quality,
+                    source,
+                    start,
+                    on_size,
+                    speed,
+                    timeout_duration,
+                )
+                .await;
             }
         }),
     }
@@ -389,6 +434,8 @@ pub enum DownloadTrackInnerError {
     GetTrackBytes(#[from] GetTrackBytesError),
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    #[error(transparent)]
+    GetContentLength(#[from] GetContentLengthError),
     #[error(transparent)]
     SaveBytesStreamToFile(#[from] SaveBytesStreamToFileError),
     #[error(transparent)]
@@ -408,6 +455,8 @@ async fn download_track_inner(
     quality: TrackAudioQuality,
     source: DownloadApiSource,
     start: Option<u64>,
+    on_size: &mut (impl FnMut(Option<u64>) + Send + Sync),
+    speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadTrackInnerError> {
     log::debug!(
@@ -450,7 +499,29 @@ async fn download_track_inner(
         }
     };
 
-    let bytes = get_track_bytes(
+    let size = match &source {
+        moosicbox_files::files::track::TrackSource::LocalFilePath(path) => {
+            if let Ok(file) = tokio::fs::File::open(path).await {
+                if let Ok(metadata) = file.metadata().await {
+                    Some(metadata.len())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        }
+        moosicbox_files::files::track::TrackSource::Tidal(url)
+        | moosicbox_files::files::track::TrackSource::Qobuz(url) => {
+            get_content_length(&url, start, None).await?
+        }
+    };
+
+    log::debug!("Got track size: {size:?}");
+
+    on_size(size);
+
+    let mut bytes = get_track_bytes(
         db,
         track.id as u64,
         source,
@@ -460,6 +531,10 @@ async fn download_track_inner(
         None,
     )
     .await?;
+
+    if let Some(size) = size {
+        bytes.size.replace(size);
+    }
 
     let track_path = PathBuf::from_str(path).unwrap();
 
@@ -479,7 +554,23 @@ async fn download_track_inner(
             reader = reader.with_timeout(timeout_duration);
         }
 
-        if let Err(err) = save_bytes_stream_to_file(reader, &track_path, start).await {
+        speed.store(0.0, std::sync::atomic::Ordering::SeqCst);
+
+        let result = save_bytes_stream_to_file_with_speed_listener(
+            reader,
+            &track_path,
+            start,
+            Box::new({
+                let speed = speed.clone();
+                move |x| speed.store(x, std::sync::atomic::Ordering::SeqCst)
+            }),
+            None,
+        )
+        .await;
+
+        speed.store(0.0, std::sync::atomic::Ordering::SeqCst);
+
+        if let Err(err) = result {
             if let SaveBytesStreamToFileError::Read {
                 bytes_read,
                 ref source,
@@ -562,6 +653,8 @@ pub async fn download_album_id(
     try_download_artist_cover: bool,
     quality: TrackAudioQuality,
     source: DownloadApiSource,
+    on_size: &mut (impl FnMut(Option<u64>) + Send + Sync),
+    speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadAlbumError> {
     log::debug!("Starting download for album_id={album_id} quality={quality:?} source={source:?} path={path}");
@@ -573,17 +666,28 @@ pub async fn download_album_id(
         .collect::<Vec<_>>();
 
     for track in tracks.iter() {
-        download_track(db, path, track, quality, source, None, timeout_duration).await?
+        download_track(
+            db,
+            path,
+            track,
+            quality,
+            source,
+            None,
+            on_size,
+            speed.clone(),
+            timeout_duration,
+        )
+        .await?
     }
 
     log::debug!("Completed album download for {} tracks", tracks.len());
 
     if try_download_album_cover {
-        download_album_cover(db, path, album_id).await?;
+        download_album_cover(db, path, album_id, on_size, speed.clone()).await?;
     }
 
     if try_download_artist_cover {
-        download_artist_cover(db, path, album_id).await?;
+        download_artist_cover(db, path, album_id, on_size, speed).await?;
     }
 
     Ok(())
@@ -593,8 +697,12 @@ pub async fn download_album_cover(
     db: &Db,
     path: &str,
     album_id: u64,
+    on_size: &mut (impl FnMut(Option<u64>) + Send + Sync),
+    speed: Arc<AtomicF64>,
 ) -> Result<(), DownloadAlbumError> {
     log::debug!("Downloading album cover path={path}");
+
+    speed.store(0.0, std::sync::atomic::Ordering::SeqCst);
 
     let cover_path = PathBuf::from_str(path).unwrap();
 
@@ -616,9 +724,27 @@ pub async fn download_album_cover(
         },
     };
 
+    log::debug!("Got album cover size: {:?}", bytes.size);
+
+    on_size(bytes.size);
+
     log::debug!("Saving album cover to {cover_path:?}");
 
-    save_bytes_stream_to_file(bytes, &cover_path, None).await?;
+    let result = save_bytes_stream_to_file_with_speed_listener(
+        bytes.stream,
+        &cover_path,
+        None,
+        Box::new({
+            let speed = speed.clone();
+            move |x| speed.store(x, std::sync::atomic::Ordering::SeqCst)
+        }),
+        None,
+    )
+    .await;
+
+    speed.store(0.0, std::sync::atomic::Ordering::SeqCst);
+
+    result?;
 
     log::debug!("Completed album cover download");
 
@@ -629,6 +755,8 @@ pub async fn download_artist_cover(
     db: &Db,
     path: &str,
     album_id: u64,
+    on_size: &mut (impl FnMut(Option<u64>) + Send + Sync),
+    speed: Arc<AtomicF64>,
 ) -> Result<(), DownloadAlbumError> {
     log::debug!("Downloading artist cover path={path}");
 
@@ -656,9 +784,27 @@ pub async fn download_artist_cover(
         },
     };
 
+    log::debug!("Got artist cover size: {:?}", bytes.size);
+
+    on_size(bytes.size);
+
     log::debug!("Saving artist cover to {cover_path:?}");
 
-    save_bytes_stream_to_file(bytes, &cover_path, None).await?;
+    let result = save_bytes_stream_to_file_with_speed_listener(
+        bytes.stream,
+        &cover_path,
+        None,
+        Box::new({
+            let speed = speed.clone();
+            move |x| speed.store(x, std::sync::atomic::Ordering::SeqCst)
+        }),
+        None,
+    )
+    .await;
+
+    speed.store(0.0, std::sync::atomic::Ordering::SeqCst);
+
+    result?;
 
     log::debug!("Completed artist cover download");
 
@@ -666,7 +812,11 @@ pub async fn download_artist_cover(
 }
 
 #[async_trait]
-pub trait Downloader /*: Clone + Send + Sync*/ {
+pub trait Downloader {
+    fn speed(&self) -> f64 {
+        0.0
+    }
+
     async fn download_track_id(
         &self,
         db: &Db,
@@ -674,6 +824,7 @@ pub trait Downloader /*: Clone + Send + Sync*/ {
         track_id: u64,
         quality: TrackAudioQuality,
         source: DownloadApiSource,
+        on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
         timeout_duration: Option<Duration>,
     ) -> Result<(), DownloadTrackError>;
 
@@ -682,6 +833,7 @@ pub trait Downloader /*: Clone + Send + Sync*/ {
         db: &Db,
         path: &str,
         album_id: u64,
+        on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
     ) -> Result<(), DownloadAlbumError>;
 
     async fn download_artist_cover(
@@ -689,13 +841,28 @@ pub trait Downloader /*: Clone + Send + Sync*/ {
         db: &Db,
         path: &str,
         album_id: u64,
+        on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
     ) -> Result<(), DownloadAlbumError>;
 }
 
-pub struct MoosicboxDownloader {}
+pub struct MoosicboxDownloader {
+    speed: Arc<AtomicF64>,
+}
+
+impl MoosicboxDownloader {
+    pub fn new() -> Self {
+        Self {
+            speed: Arc::new(AtomicF64::new(0.0)),
+        }
+    }
+}
 
 #[async_trait]
 impl Downloader for MoosicboxDownloader {
+    fn speed(&self) -> f64 {
+        self.speed.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
     async fn download_track_id(
         &self,
         db: &Db,
@@ -703,9 +870,20 @@ impl Downloader for MoosicboxDownloader {
         track_id: u64,
         quality: TrackAudioQuality,
         source: DownloadApiSource,
+        mut on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
         timeout_duration: Option<Duration>,
     ) -> Result<(), DownloadTrackError> {
-        download_track_id(db, path, track_id, quality, source, timeout_duration).await
+        download_track_id(
+            db,
+            path,
+            track_id,
+            quality,
+            source,
+            &mut on_size,
+            self.speed.clone(),
+            timeout_duration,
+        )
+        .await
     }
 
     async fn download_album_cover(
@@ -713,8 +891,9 @@ impl Downloader for MoosicboxDownloader {
         db: &Db,
         path: &str,
         album_id: u64,
+        mut on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
     ) -> Result<(), DownloadAlbumError> {
-        download_album_cover(db, path, album_id).await
+        download_album_cover(db, path, album_id, &mut on_size, self.speed.clone()).await
     }
 
     async fn download_artist_cover(
@@ -722,7 +901,8 @@ impl Downloader for MoosicboxDownloader {
         db: &Db,
         path: &str,
         album_id: u64,
+        mut on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
     ) -> Result<(), DownloadAlbumError> {
-        download_artist_cover(db, path, album_id).await
+        download_artist_cover(db, path, album_id, &mut on_size, self.speed.clone()).await
     }
 }

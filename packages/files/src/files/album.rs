@@ -6,7 +6,7 @@ use std::{
 
 use async_recursion::async_recursion;
 use bytes::BytesMut;
-use futures::{StreamExt, TryFutureExt, TryStreamExt};
+use futures::{StreamExt, TryStreamExt};
 use moosicbox_core::{
     app::Db,
     sqlite::{
@@ -19,6 +19,7 @@ use moosicbox_core::{
     },
 };
 use moosicbox_qobuz::QobuzAlbumError;
+use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use moosicbox_tidal::TidalAlbumError;
 use once_cell::sync::Lazy;
 use thiserror::Error;
@@ -26,7 +27,7 @@ use tokio_util::codec::{BytesCodec, FramedRead};
 
 use crate::{
     get_or_fetch_cover_bytes_from_remote_url, get_or_fetch_cover_from_remote_url,
-    sanitize_filename, search_for_cover, BytesStream, FetchCoverError,
+    sanitize_filename, search_for_cover, CoverBytes, FetchCoverError,
 };
 
 pub enum AlbumCoverSource {
@@ -96,21 +97,33 @@ fn fetch_local_album_cover(
     Err(FetchLocalAlbumCoverError::NoAlbumCover)
 }
 
-fn fetch_local_album_cover_bytes(
+async fn fetch_local_album_cover_bytes(
     db: &Db,
     cover: Option<String>,
     album_id: i32,
     directory: Option<String>,
-) -> Result<BytesStream, FetchLocalAlbumCoverError> {
+) -> Result<CoverBytes, FetchLocalAlbumCoverError> {
     let cover = cover.ok_or(FetchLocalAlbumCoverError::NoAlbumCover)?;
 
     let cover_path = std::path::PathBuf::from(&cover);
 
     if Path::is_file(&cover_path) {
-        return Ok(tokio::fs::File::open(cover_path.to_path_buf())
-            .map_ok(|file| FramedRead::new(file, BytesCodec::new()).map_ok(BytesMut::freeze))
-            .try_flatten_stream()
-            .boxed());
+        let file = tokio::fs::File::open(cover_path.to_path_buf()).await?;
+
+        let size = if let Ok(metadata) = file.metadata().await {
+            Some(metadata.len())
+        } else {
+            None
+        };
+
+        return Ok(CoverBytes {
+            stream: StalledReadMonitor::new(
+                FramedRead::new(file, BytesCodec::new())
+                    .map_ok(BytesMut::freeze)
+                    .boxed(),
+            ),
+            size,
+        });
     }
 
     let directory = directory.ok_or(FetchLocalAlbumCoverError::NoAlbumCover)?;
@@ -128,10 +141,22 @@ fn fetch_local_album_cover_bytes(
             &[("artwork", SqliteValue::String(artwork))],
         )?;
 
-        return Ok(tokio::fs::File::open(path)
-            .map_ok(|file| FramedRead::new(file, BytesCodec::new()).map_ok(BytesMut::freeze))
-            .try_flatten_stream()
-            .boxed());
+        let file = tokio::fs::File::open(path).await?;
+
+        let size = if let Ok(metadata) = file.metadata().await {
+            Some(metadata.len())
+        } else {
+            None
+        };
+
+        return Ok(CoverBytes {
+            stream: StalledReadMonitor::new(
+                FramedRead::new(file, BytesCodec::new())
+                    .map_ok(BytesMut::freeze)
+                    .boxed(),
+            ),
+            size,
+        });
     }
 
     Err(FetchLocalAlbumCoverError::NoAlbumCover)
@@ -179,7 +204,7 @@ pub async fn get_album_cover_bytes(
     album_id: AlbumId,
     db: &Db,
     size: Option<u32>,
-) -> Result<BytesStream, AlbumCoverError> {
+) -> Result<CoverBytes, AlbumCoverError> {
     Ok(match &album_id {
         AlbumId::Library(library_album_id) => {
             get_library_album_cover_bytes(*library_album_id, db).await?
@@ -246,12 +271,14 @@ pub async fn get_library_album_cover(
 pub async fn get_library_album_cover_bytes(
     library_album_id: i32,
     db: &Db,
-) -> Result<BytesStream, AlbumCoverError> {
+) -> Result<CoverBytes, AlbumCoverError> {
     let album = get_album(&db.library.lock().as_ref().unwrap().inner, library_album_id)?.ok_or(
         AlbumCoverError::NotFound(AlbumId::Library(library_album_id)),
     )?;
 
-    if let Ok(bytes) = fetch_local_album_cover_bytes(db, album.artwork, album.id, album.directory) {
+    if let Ok(bytes) =
+        fetch_local_album_cover_bytes(db, album.artwork, album.id, album.directory).await
+    {
         return Ok(bytes);
     }
 
@@ -343,7 +370,7 @@ async fn get_tidal_album_cover_bytes(
     tidal_album_id: u64,
     db: &Db,
     size: Option<u32>,
-) -> Result<BytesStream, AlbumCoverError> {
+) -> Result<CoverBytes, AlbumCoverError> {
     let request = get_tidal_album_cover_request(tidal_album_id, db, size).await?;
 
     Ok(get_or_fetch_cover_bytes_from_remote_url(&request.url, &request.file_path).await?)
@@ -426,7 +453,7 @@ async fn get_qobuz_album_cover_bytes(
     qobuz_album_id: &str,
     db: &Db,
     size: Option<u32>,
-) -> Result<BytesStream, AlbumCoverError> {
+) -> Result<CoverBytes, AlbumCoverError> {
     let request = get_qobuz_album_cover_request(qobuz_album_id, db, size).await?;
 
     Ok(get_or_fetch_cover_bytes_from_remote_url(&request.url, &request.file_path).await?)
