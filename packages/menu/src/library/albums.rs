@@ -465,7 +465,11 @@ pub async fn remove_album(
         .await?
         .ok_or(RemoveAlbumError::NoAlbum)?;
 
-    api.remove_album(album_id).await?;
+    log::debug!("Removing album from library album={album:?}");
+
+    if let Err(err) = api.remove_album(album_id).await {
+        log::error!("Failed to remove album from MusicApi: {err:?}");
+    }
 
     let tracks = moosicbox_core::sqlite::db::get_album_tracks(
         &db.library.lock().as_ref().unwrap().inner,
@@ -534,6 +538,7 @@ pub async fn remove_album(
             _ => false,
         }
     {
+        log::debug!("Album has other sources, keeping LibraryAlbum");
         return Ok(album);
     }
 
