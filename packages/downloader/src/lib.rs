@@ -711,7 +711,7 @@ pub async fn download_album_cover(
         return Ok(());
     }
 
-    let bytes = match get_library_album_cover_bytes(album_id as i32, db).await {
+    let bytes = match get_library_album_cover_bytes(album_id as i32, db, true).await {
         Ok(bytes) => bytes,
         Err(err) => match err {
             AlbumCoverError::NotFound(_) => {
@@ -771,7 +771,7 @@ pub async fn download_artist_cover(
         get_artist_by_album_id(&db.library.lock().as_ref().unwrap().inner, album_id as i32)?
             .ok_or(DownloadAlbumError::NotFound)?;
 
-    let bytes = match get_library_artist_cover_bytes(artist.id, db).await {
+    let bytes = match get_library_artist_cover_bytes(artist.id, db, true).await {
         Ok(bytes) => bytes,
         Err(err) => match err {
             ArtistCoverError::NotFound(_) => {

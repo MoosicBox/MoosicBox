@@ -266,6 +266,7 @@ pub struct CoverBytes {
 async fn get_or_fetch_cover_bytes_from_remote_url(
     url: &str,
     file_path: &Path,
+    try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, FetchCoverError> {
     static IMAGE_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
 
@@ -287,7 +288,11 @@ async fn get_or_fetch_cover_bytes_from_remote_url(
             size,
         });
     } else {
-        let size = get_content_length(&url, None, None).await?;
+        let size = if try_to_get_stream_size {
+            get_content_length(&url, None, None).await?
+        } else {
+            None
+        };
 
         Ok(CoverBytes {
             stream: StalledReadMonitor::new(fetch_bytes_from_remote_url(&IMAGE_CLIENT, url).await?),

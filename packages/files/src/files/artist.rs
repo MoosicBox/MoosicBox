@@ -147,16 +147,17 @@ pub async fn get_artist_cover_bytes(
     artist_id: ArtistId,
     db: &Db,
     size: Option<u32>,
+    try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, ArtistCoverError> {
     Ok(match &artist_id {
         ArtistId::Library(library_artist_id) => {
-            get_library_artist_cover_bytes(*library_artist_id, db).await?
+            get_library_artist_cover_bytes(*library_artist_id, db, try_to_get_stream_size).await?
         }
         ArtistId::Tidal(tidal_artist_id) => {
-            get_tidal_artist_cover_bytes(*tidal_artist_id, db, size).await?
+            get_tidal_artist_cover_bytes(*tidal_artist_id, db, size, try_to_get_stream_size).await?
         }
         ArtistId::Qobuz(qobuz_artist_id) => {
-            get_qobuz_artist_cover_bytes(*qobuz_artist_id, db, size).await?
+            get_qobuz_artist_cover_bytes(*qobuz_artist_id, db, size, try_to_get_stream_size).await?
         }
     })
 }
@@ -229,6 +230,7 @@ pub async fn get_library_artist_cover(
 pub async fn get_library_artist_cover_bytes(
     library_artist_id: i32,
     db: &Db,
+    try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, ArtistCoverError> {
     let artist = get_artist(
         &db.library.lock().as_ref().unwrap().inner,
@@ -243,13 +245,19 @@ pub async fn get_library_artist_cover_bytes(
     }
 
     if let Some(tidal_id) = artist.tidal_id {
-        if let Ok(bytes) = get_artist_cover_bytes(ArtistId::Tidal(tidal_id), db, None).await {
+        if let Ok(bytes) =
+            get_artist_cover_bytes(ArtistId::Tidal(tidal_id), db, None, try_to_get_stream_size)
+                .await
+        {
             return Ok(bytes);
         }
     }
 
     if let Some(qobuz_id) = artist.qobuz_id {
-        if let Ok(bytes) = get_artist_cover_bytes(ArtistId::Qobuz(qobuz_id), db, None).await {
+        if let Ok(bytes) =
+            get_artist_cover_bytes(ArtistId::Qobuz(qobuz_id), db, None, try_to_get_stream_size)
+                .await
+        {
             return Ok(bytes);
         }
     }
@@ -268,10 +276,16 @@ pub async fn get_tidal_artist_cover_bytes(
     tidal_artist_id: u64,
     db: &Db,
     size: Option<u32>,
+    try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, ArtistCoverError> {
     let request = get_tidal_artist_cover_request(tidal_artist_id, db, size).await?;
 
-    Ok(get_or_fetch_cover_bytes_from_remote_url(&request.url, &request.file_path).await?)
+    Ok(get_or_fetch_cover_bytes_from_remote_url(
+        &request.url,
+        &request.file_path,
+        try_to_get_stream_size,
+    )
+    .await?)
 }
 
 pub async fn get_tidal_artist_cover(
@@ -352,10 +366,16 @@ pub async fn get_qobuz_artist_cover_bytes(
     qobuz_artist_id: u64,
     db: &Db,
     size: Option<u32>,
+    try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, ArtistCoverError> {
     let request = get_qobuz_artist_cover_request(qobuz_artist_id, db, size).await?;
 
-    Ok(get_or_fetch_cover_bytes_from_remote_url(&request.url, &request.file_path).await?)
+    Ok(get_or_fetch_cover_bytes_from_remote_url(
+        &request.url,
+        &request.file_path,
+        try_to_get_stream_size,
+    )
+    .await?)
 }
 
 pub async fn get_qobuz_artist_cover(

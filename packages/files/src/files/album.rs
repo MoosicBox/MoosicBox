@@ -204,16 +204,17 @@ pub async fn get_album_cover_bytes(
     album_id: AlbumId,
     db: &Db,
     size: Option<u32>,
+    try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, AlbumCoverError> {
     Ok(match &album_id {
         AlbumId::Library(library_album_id) => {
-            get_library_album_cover_bytes(*library_album_id, db).await?
+            get_library_album_cover_bytes(*library_album_id, db, try_to_get_stream_size).await?
         }
         AlbumId::Tidal(tidal_album_id) => {
-            get_tidal_album_cover_bytes(*tidal_album_id, db, size).await?
+            get_tidal_album_cover_bytes(*tidal_album_id, db, size, try_to_get_stream_size).await?
         }
         AlbumId::Qobuz(qobuz_album_id) => {
-            get_qobuz_album_cover_bytes(qobuz_album_id, db, size).await?
+            get_qobuz_album_cover_bytes(qobuz_album_id, db, size, try_to_get_stream_size).await?
         }
     })
 }
@@ -271,6 +272,7 @@ pub async fn get_library_album_cover(
 pub async fn get_library_album_cover_bytes(
     library_album_id: i32,
     db: &Db,
+    try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, AlbumCoverError> {
     let album = get_album(&db.library.lock().as_ref().unwrap().inner, library_album_id)?.ok_or(
         AlbumCoverError::NotFound(AlbumId::Library(library_album_id)),
@@ -283,13 +285,17 @@ pub async fn get_library_album_cover_bytes(
     }
 
     if let Some(tidal_id) = album.tidal_id {
-        if let Ok(bytes) = get_album_cover_bytes(AlbumId::Tidal(tidal_id), db, None).await {
+        if let Ok(bytes) =
+            get_album_cover_bytes(AlbumId::Tidal(tidal_id), db, None, try_to_get_stream_size).await
+        {
             return Ok(bytes);
         }
     }
 
     if let Some(qobuz_id) = album.qobuz_id {
-        if let Ok(bytes) = get_album_cover_bytes(AlbumId::Qobuz(qobuz_id), db, None).await {
+        if let Ok(bytes) =
+            get_album_cover_bytes(AlbumId::Qobuz(qobuz_id), db, None, try_to_get_stream_size).await
+        {
             return Ok(bytes);
         }
     }
@@ -370,10 +376,16 @@ async fn get_tidal_album_cover_bytes(
     tidal_album_id: u64,
     db: &Db,
     size: Option<u32>,
+    try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, AlbumCoverError> {
     let request = get_tidal_album_cover_request(tidal_album_id, db, size).await?;
 
-    Ok(get_or_fetch_cover_bytes_from_remote_url(&request.url, &request.file_path).await?)
+    Ok(get_or_fetch_cover_bytes_from_remote_url(
+        &request.url,
+        &request.file_path,
+        try_to_get_stream_size,
+    )
+    .await?)
 }
 
 struct AlbumCoverRequest {
@@ -453,8 +465,14 @@ async fn get_qobuz_album_cover_bytes(
     qobuz_album_id: &str,
     db: &Db,
     size: Option<u32>,
+    try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, AlbumCoverError> {
     let request = get_qobuz_album_cover_request(qobuz_album_id, db, size).await?;
 
-    Ok(get_or_fetch_cover_bytes_from_remote_url(&request.url, &request.file_path).await?)
+    Ok(get_or_fetch_cover_bytes_from_remote_url(
+        &request.url,
+        &request.file_path,
+        try_to_get_stream_size,
+    )
+    .await?)
 }
