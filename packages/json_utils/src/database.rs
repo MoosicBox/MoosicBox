@@ -1,6 +1,6 @@
 use moosicbox_database::{DatabaseValue, Row};
 
-use crate::{ParseError, ToValueType};
+use crate::{MissingValue, ParseError, ToValueType};
 
 impl<'a> ToValueType<&'a str> for &'a DatabaseValue {
     fn to_value_type(self) -> Result<&'a str, ParseError> {
@@ -174,12 +174,38 @@ impl ToValueType<usize> for &DatabaseValue {
     }
 }
 
+impl<'a, Type> MissingValue<Option<Type>> for &'a Row
+where
+    &'a Row: MissingValue<Type>,
+{
+    fn missing_value(&self, _error: ParseError) -> Result<Option<Type>, ParseError> {
+        Ok(None)
+    }
+}
+
+impl MissingValue<i8> for &Row {}
+impl MissingValue<i16> for &Row {}
+impl MissingValue<i32> for &Row {}
+impl MissingValue<i64> for &Row {}
+impl MissingValue<isize> for &Row {}
+impl MissingValue<u8> for &Row {}
+impl MissingValue<u16> for &Row {}
+impl MissingValue<u32> for &Row {}
+impl MissingValue<u64> for &Row {}
+impl MissingValue<usize> for &Row {}
+impl MissingValue<bool> for &Row {}
+impl MissingValue<String> for &Row {}
+impl MissingValue<&str> for &Row {}
+impl MissingValue<f32> for &Row {}
+impl MissingValue<f64> for &Row {}
+
 pub trait ToValue<Type> {
     fn to_value<T>(self, index: &str) -> Result<T, ParseError>
     where
-        Type: ToValueType<T>;
+        Type: ToValueType<T>,
+        for<'a> &'a Row: MissingValue<T>;
 
-    fn missing_value<T>(&self, error: ParseError) -> Result<T, ParseError> {
+    fn missing_value(&self, error: ParseError) -> Result<Type, ParseError> {
         Err(error)
     }
 }
@@ -188,6 +214,7 @@ impl ToValue<DatabaseValue> for DatabaseValue {
     fn to_value<T>(self, _index: &str) -> Result<T, ParseError>
     where
         DatabaseValue: ToValueType<T>,
+        for<'b> &'b Row: MissingValue<T>,
     {
         self.to_value_type()
     }
@@ -197,6 +224,7 @@ impl ToValue<DatabaseValue> for &Row {
     fn to_value<T>(self, index: &str) -> Result<T, ParseError>
     where
         DatabaseValue: ToValueType<T>,
+        for<'b> &'b Row: MissingValue<T>,
     {
         get_value_type(self, index)
     }
@@ -206,14 +234,32 @@ impl ToValue<DatabaseValue> for Row {
     fn to_value<T>(self, index: &str) -> Result<T, ParseError>
     where
         DatabaseValue: ToValueType<T>,
+        for<'b> &'b Row: MissingValue<T>,
     {
         get_value_type(&self, index)
     }
 }
 
-pub fn get_value_type<T>(row: &Row, index: &str) -> Result<T, ParseError>
+trait Get {
+    fn get(&self, index: &str) -> Option<DatabaseValue>;
+}
+
+impl Get for &Row {
+    fn get(&self, index: &str) -> Option<DatabaseValue> {
+        moosicbox_database::Row::get(self, index)
+    }
+}
+
+impl Get for Row {
+    fn get(&self, index: &str) -> Option<DatabaseValue> {
+        moosicbox_database::Row::get(self, index)
+    }
+}
+
+fn get_value_type<T, X>(row: X, index: &str) -> Result<T, ParseError>
 where
     DatabaseValue: ToValueType<T>,
+    X: MissingValue<T> + Get + std::fmt::Debug,
 {
     match row.get(index) {
         Some(inner) => match inner.to_value_type() {
@@ -404,6 +450,38 @@ mod tests {
         let value = &DatabaseValue::UNumber(123);
 
         assert_eq!(ToValueType::<u64>::to_value_type(value).unwrap(), 123_u64);
+    }
+
+    #[test]
+    fn test_to_value_option_string_where_property_doesnt_exist() {
+        let row = Row {
+            columns: vec![("test".to_string(), DatabaseValue::UNumber(123))],
+        };
+        assert_eq!(row.to_value::<Option<String>>("bob").unwrap(), None);
+    }
+
+    #[test]
+    fn test_to_value_option_u64_where_property_doesnt_exist() {
+        let row = Row {
+            columns: vec![("test".to_string(), DatabaseValue::UNumber(123))],
+        };
+        assert_eq!(row.to_value::<Option<u64>>("bob").unwrap(), None);
+    }
+
+    #[test]
+    fn test_to_value_option_u64_where_property_exists_but_is_null() {
+        let row = Row {
+            columns: vec![("bob".to_string(), DatabaseValue::Null)],
+        };
+        assert_eq!(row.to_value::<Option<u64>>("bob").unwrap(), None);
+    }
+
+    #[test]
+    fn test_to_value_option_u64_where_property_exists_but_is_null_bool() {
+        let row = Row {
+            columns: vec![("bob".to_string(), DatabaseValue::BoolOpt(None))],
+        };
+        assert_eq!(row.to_value::<Option<u64>>("bob").unwrap(), None);
     }
 
     #[test]

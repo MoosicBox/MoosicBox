@@ -20,7 +20,7 @@ use moosicbox_core::{
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_database::DbConnection;
-use moosicbox_json_utils::{ParseError, ToValueType};
+use moosicbox_json_utils::{MissingValue, ParseError, ToValueType};
 use moosicbox_qobuz::{QobuzAudioQuality, QobuzTrackFileUrlError};
 use moosicbox_stream_utils::{stalled_monitor::StalledReadMonitor, ByteWriter};
 use moosicbox_symphonia_player::{
@@ -70,6 +70,7 @@ pub enum TrackAudioQuality {
     FlacHighestRes, // FLAC 24 bit > 96kHz <= 192kHz
 }
 
+impl MissingValue<TrackAudioQuality> for &serde_json::Value {}
 impl ToValueType<TrackAudioQuality> for &serde_json::Value {
     fn to_value_type(self) -> Result<TrackAudioQuality, ParseError> {
         Ok(TrackAudioQuality::from_str(
@@ -80,6 +81,7 @@ impl ToValueType<TrackAudioQuality> for &serde_json::Value {
     }
 }
 
+impl MissingValue<TrackAudioQuality> for &rusqlite::Row<'_> {}
 impl ToValueType<TrackAudioQuality> for rusqlite::types::Value {
     fn to_value_type(self) -> Result<TrackAudioQuality, ParseError> {
         match self {

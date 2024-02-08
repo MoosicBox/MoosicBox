@@ -1,6 +1,6 @@
 use rusqlite::{types::Value, Row};
 
-use crate::{ParseError, ToValueType};
+use crate::{MissingValue, ParseError, ToValueType};
 
 impl<'a> ToValueType<&'a str> for &'a Value {
     fn to_value_type(self) -> Result<&'a str, ParseError> {
@@ -159,10 +159,36 @@ impl ToValueType<usize> for &Value {
     }
 }
 
+impl<'a, Type> MissingValue<Option<Type>> for &'a Row<'a>
+where
+    &'a Row<'a>: MissingValue<Type>,
+{
+    fn missing_value(&self, _error: ParseError) -> Result<Option<Type>, ParseError> {
+        Ok(None)
+    }
+}
+
+impl MissingValue<i8> for &Row<'_> {}
+impl MissingValue<i16> for &Row<'_> {}
+impl MissingValue<i32> for &Row<'_> {}
+impl MissingValue<i64> for &Row<'_> {}
+impl MissingValue<isize> for &Row<'_> {}
+impl MissingValue<u8> for &Row<'_> {}
+impl MissingValue<u16> for &Row<'_> {}
+impl MissingValue<u32> for &Row<'_> {}
+impl MissingValue<u64> for &Row<'_> {}
+impl MissingValue<usize> for &Row<'_> {}
+impl MissingValue<bool> for &Row<'_> {}
+impl MissingValue<String> for &Row<'_> {}
+impl MissingValue<&str> for &Row<'_> {}
+impl MissingValue<f32> for &Row<'_> {}
+impl MissingValue<f64> for &Row<'_> {}
+
 pub trait ToValue<Type> {
     fn to_value<T>(self, index: &str) -> Result<T, ParseError>
     where
-        Type: ToValueType<T>;
+        Type: ToValueType<T>,
+        for<'a> &'a Row<'a>: MissingValue<T>;
 
     fn missing_value<T>(&self, error: ParseError) -> Result<T, ParseError> {
         Err(error)
@@ -173,6 +199,7 @@ impl ToValue<Value> for Value {
     fn to_value<T>(self, _index: &str) -> Result<T, ParseError>
     where
         Value: ToValueType<T>,
+        for<'a> &'a Row<'a>: MissingValue<T>,
     {
         self.to_value_type()
     }
@@ -182,6 +209,7 @@ impl ToValue<Value> for &Row<'_> {
     fn to_value<T>(self, index: &str) -> Result<T, ParseError>
     where
         Value: ToValueType<T>,
+        for<'a> &'a Row<'a>: MissingValue<T>,
     {
         get_value_type(self, index)
     }
@@ -191,16 +219,34 @@ impl ToValue<Value> for Row<'_> {
     fn to_value<T>(self, index: &str) -> Result<T, ParseError>
     where
         Value: ToValueType<T>,
+        for<'a> &'a Row<'a>: MissingValue<T>,
     {
         get_value_type(&self, index)
     }
 }
 
-pub fn get_value_type<T>(row: &Row<'_>, index: &str) -> Result<T, ParseError>
+trait Get {
+    fn get(&self, index: &str) -> Result<Value, rusqlite::Error>;
+}
+
+impl Get for &Row<'_> {
+    fn get(&self, index: &str) -> Result<Value, rusqlite::Error> {
+        rusqlite::Row::get::<_, Value>(self, index)
+    }
+}
+
+impl Get for Row<'_> {
+    fn get(&self, index: &str) -> Result<Value, rusqlite::Error> {
+        rusqlite::Row::get::<_, Value>(self, index)
+    }
+}
+
+fn get_value_type<T, X>(row: X, index: &str) -> Result<T, ParseError>
 where
     Value: ToValueType<T>,
+    X: MissingValue<T> + Get + std::fmt::Debug,
 {
-    match row.get::<_, Value>(index) {
+    match row.get(index) {
         Ok(inner) => match inner.to_value_type() {
             Ok(inner) => Ok(inner),
 

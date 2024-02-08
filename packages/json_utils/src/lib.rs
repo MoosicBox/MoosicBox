@@ -30,3 +30,9 @@ pub trait ToValueType<T> {
         Err(error)
     }
 }
+
+pub trait MissingValue<Type> {
+    fn missing_value(&self, error: ParseError) -> Result<Type, ParseError> {
+        Err(error)
+    }
+}
