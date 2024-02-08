@@ -34,6 +34,7 @@ pub enum ApiDownloadTaskState {
     Cancelled,
     Started,
     Finished,
+    Error,
 }
 
 impl ToValueType<ApiDownloadTaskState> for &serde_json::Value {
@@ -54,6 +55,7 @@ impl From<DownloadTaskState> for ApiDownloadTaskState {
             DownloadTaskState::Cancelled => ApiDownloadTaskState::Cancelled,
             DownloadTaskState::Started => ApiDownloadTaskState::Started,
             DownloadTaskState::Finished => ApiDownloadTaskState::Finished,
+            DownloadTaskState::Error => ApiDownloadTaskState::Error,
         }
     }
 }

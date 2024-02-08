@@ -67,6 +67,7 @@ pub enum DownloadTaskState {
     Cancelled,
     Started,
     Finished,
+    Error,
 }
 
 impl ToValueType<DownloadTaskState> for &serde_json::Value {
