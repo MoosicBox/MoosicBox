@@ -174,11 +174,33 @@ impl DownloadQueue {
 
             if let Err(ref err) = result {
                 log::error!("Encountered error when processing task in DownloadQueue: {err:?}");
+                Self::update_task_state(database.clone(), &mut task, DownloadTaskState::Error)
+                    .await?;
             }
 
             state.results.push(result);
             state.finish_task(&task);
         }
+
+        Ok(())
+    }
+
+    async fn update_task_state(
+        database: Arc<Box<dyn Database + Send + Sync>>,
+        task: &mut DownloadTask,
+        state: DownloadTaskState,
+    ) -> Result<(), DatabaseError> {
+        task.state = state;
+        database
+            .update_and_get_row(
+                "download_tasks",
+                DatabaseValue::UNumber(task.id),
+                &[(
+                    "state",
+                    DatabaseValue::String(task.state.as_ref().to_string()),
+                )],
+            )
+            .await?;
 
         Ok(())
     }
@@ -191,17 +213,7 @@ impl DownloadQueue {
     ) -> Result<ProcessDownloadTaskResponse, ProcessDownloadQueueError> {
         log::debug!("Processing task {task:?}");
 
-        task.state = DownloadTaskState::Started;
-        database
-            .update_and_get_row(
-                "download_tasks",
-                DatabaseValue::UNumber(task.id),
-                &[(
-                    "state",
-                    DatabaseValue::String(task.state.as_ref().to_string()),
-                )],
-            )
-            .await?;
+        Self::update_task_state(database.clone(), task, DownloadTaskState::Started).await?;
 
         match task.item {
             DownloadItem::Track {
@@ -232,17 +244,7 @@ impl DownloadQueue {
             }
         }
 
-        task.state = DownloadTaskState::Finished;
-        database
-            .update_and_get_row(
-                "download_tasks",
-                DatabaseValue::UNumber(task.id),
-                &[(
-                    "state",
-                    DatabaseValue::String(task.state.as_ref().to_string()),
-                )],
-            )
-            .await?;
+        Self::update_task_state(database, task, DownloadTaskState::Finished).await?;
 
         Ok(ProcessDownloadTaskResponse {})
     }
