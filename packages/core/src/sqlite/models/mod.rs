@@ -159,7 +159,6 @@ pub enum TrackApiSource {
     Qobuz,
 }
 
-impl MissingValue<TrackApiSource> for &serde_json::Value {}
 impl ToValueType<TrackApiSource> for &serde_json::Value {
     fn to_value_type(self) -> Result<TrackApiSource, ParseError> {
         Ok(TrackApiSource::from_str(

@@ -40,7 +40,6 @@ impl AsModelResult<DownloadLocation, ParseError> for Row<'_> {
     }
 }
 
-impl MissingValue<DownloadLocation> for &serde_json::Value {}
 impl ToValueType<DownloadLocation> for &serde_json::Value {
     fn to_value_type(self) -> Result<DownloadLocation, ParseError> {
         Ok(DownloadLocation {
@@ -70,7 +69,6 @@ pub enum DownloadTaskState {
     Finished,
 }
 
-impl MissingValue<DownloadTaskState> for &serde_json::Value {}
 impl ToValueType<DownloadTaskState> for &serde_json::Value {
     fn to_value_type(self) -> Result<DownloadTaskState, ParseError> {
         Ok(DownloadTaskState::from_str(
@@ -120,7 +118,6 @@ impl From<TrackApiSource> for DownloadApiSource {
     }
 }
 
-impl MissingValue<DownloadApiSource> for &serde_json::Value {}
 impl ToValueType<DownloadApiSource> for &serde_json::Value {
     fn to_value_type(self) -> Result<DownloadApiSource, ParseError> {
         Ok(DownloadApiSource::from_str(
@@ -157,7 +154,6 @@ pub enum DownloadItem {
     ArtistCover(u64),
 }
 
-impl MissingValue<DownloadItem> for &serde_json::Value {}
 impl ToValueType<DownloadItem> for &serde_json::Value {
     fn to_value_type(self) -> Result<DownloadItem, ParseError> {
         let item_type: String = self.to_value("type")?;
@@ -239,7 +235,6 @@ impl AsModelResult<DownloadTask, ParseError> for Row<'_> {
     }
 }
 
-impl MissingValue<DownloadTask> for &serde_json::Value {}
 impl ToValueType<DownloadTask> for &serde_json::Value {
     fn to_value_type(self) -> Result<DownloadTask, ParseError> {
         Ok(DownloadTask {

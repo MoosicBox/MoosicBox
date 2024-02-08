@@ -70,7 +70,6 @@ pub enum TrackAudioQuality {
     FlacHighestRes, // FLAC 24 bit > 96kHz <= 192kHz
 }
 
-impl MissingValue<TrackAudioQuality> for &serde_json::Value {}
 impl ToValueType<TrackAudioQuality> for &serde_json::Value {
     fn to_value_type(self) -> Result<TrackAudioQuality, ParseError> {
         Ok(TrackAudioQuality::from_str(
