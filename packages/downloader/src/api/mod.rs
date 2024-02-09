@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::api::models::to_api_download_task;
@@ -21,6 +22,7 @@ use actix_web::{
     Result,
 };
 use moosicbox_core::sqlite::db::get_albums_database;
+use moosicbox_core::sqlite::db::get_artists_database;
 use moosicbox_core::sqlite::db::get_tracks_database;
 use moosicbox_database::Database;
 use moosicbox_files::files::track::TrackAudioQuality;
@@ -170,11 +172,23 @@ pub async fn download_tasks_endpoint(
         .into_iter()
         .filter(|album| album_ids.contains(&album.id))
         .collect::<Vec<_>>();
+
+    let artist_ids = albums
+        .iter()
+        .map(|album| album.artist_id)
+        .collect::<HashSet<_>>();
+
+    let artists = get_artists_database(&data.database)
+        .await?
+        .into_iter()
+        .filter(|artist| artist_ids.contains(&artist.id))
+        .collect::<Vec<_>>();
+
     let len = tasks.len() as u32;
 
     let mut items = tasks
         .into_iter()
-        .map(|task| to_api_download_task(task, &tracks, &albums))
+        .map(|task| to_api_download_task(task, &tracks, &albums, &artists))
         .collect::<Vec<_>>();
 
     for item in items.iter_mut() {
