@@ -66,7 +66,7 @@ pub async fn user_login_endpoint(
     Ok(Json(
         user_login(
             #[cfg(feature = "db")]
-            data.db.as_ref().unwrap(),
+            data.database.clone(),
             &query.username,
             &query.password,
             req.headers()
@@ -220,7 +220,7 @@ pub async fn artist_endpoint(
 ) -> Result<Json<ApiArtist>> {
     let artist = artist(
         #[cfg(feature = "db")]
-        data.db.as_ref().expect("Db not set"),
+        data.database.clone(),
         &query.artist_id.into(),
         req.headers()
             .get(QOBUZ_ACCESS_TOKEN_HEADER)
@@ -256,7 +256,7 @@ pub async fn favorite_artists_endpoint(
     Ok(Json(
         favorite_artists(
             #[cfg(feature = "db")]
-            data.db.as_ref().unwrap(),
+            data.database.clone(),
             query.offset,
             query.limit,
             req.headers()
@@ -292,7 +292,7 @@ pub async fn album_endpoint(
 ) -> Result<Json<ApiAlbum>> {
     let album = album(
         #[cfg(feature = "db")]
-        data.db.as_ref().expect("Db not set"),
+        data.database.clone(),
         &query.album_id.clone().into(),
         req.headers()
             .get(QOBUZ_ACCESS_TOKEN_HEADER)
@@ -397,7 +397,7 @@ pub async fn artist_albums_endpoint(
     Ok(Json(
         artist_albums(
             #[cfg(feature = "db")]
-            data.db.as_ref().expect("Db not set"),
+            data.database.clone(),
             &query.artist_id.into(),
             query.offset,
             query.limit,
@@ -440,7 +440,7 @@ pub async fn favorite_albums_endpoint(
     Ok(Json(
         favorite_albums(
             #[cfg(feature = "db")]
-            data.db.as_ref().unwrap(),
+            data.database.clone(),
             query.offset,
             query.limit,
             req.headers()
@@ -479,7 +479,7 @@ pub async fn album_tracks_endpoint(
     Ok(Json(
         album_tracks(
             #[cfg(feature = "db")]
-            data.db.as_ref().expect("Db not set"),
+            data.database.clone(),
             &query.album_id.clone().into(),
             query.offset,
             query.limit,
@@ -516,7 +516,7 @@ pub async fn track_endpoint(
 ) -> Result<Json<ApiTrack>> {
     let track = track(
         #[cfg(feature = "db")]
-        data.db.as_ref().expect("Db not set"),
+        data.database.clone(),
         &query.track_id.into(),
         req.headers()
             .get(QOBUZ_ACCESS_TOKEN_HEADER)
@@ -552,7 +552,7 @@ pub async fn favorite_tracks_endpoint(
     Ok(Json(
         favorite_tracks(
             #[cfg(feature = "db")]
-            data.db.as_ref().unwrap(),
+            data.database.clone(),
             query.offset,
             query.limit,
             req.headers()
@@ -590,7 +590,7 @@ pub async fn track_file_url_endpoint(
     Ok(Json(serde_json::json!({
         "url": track_file_url(
             #[cfg(feature = "db")]
-            data.db.as_ref().unwrap(),
+            data.database.clone(),
             &query.track_id.into(),
             query.audio_quality,
             req.headers()

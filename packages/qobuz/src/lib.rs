@@ -5,6 +5,11 @@ pub mod api;
 #[cfg(feature = "db")]
 pub mod db;
 
+#[cfg(feature = "db")]
+use moosicbox_core::sqlite::db::DbError;
+#[cfg(feature = "db")]
+use moosicbox_database::{Database, DatabaseError, DatabaseValue};
+
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use std::{collections::HashMap, str::Utf8Error, sync::Arc};
 
@@ -65,69 +70,67 @@ struct QobuzCredentials {
 pub enum FetchCredentialsError {
     #[cfg(feature = "db")]
     #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    Database(#[from] DatabaseError),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    Db(#[from] DbError),
     #[error("No access token available")]
     NoAccessTokenAvailable,
 }
 
-fn fetch_credentials(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+async fn fetch_credentials(
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     app_id: Option<String>,
     access_token: Option<String>,
 ) -> Result<QobuzCredentials, FetchCredentialsError> {
     #[cfg(feature = "db")]
     {
-        access_token
-            .map(|token| {
-                log::debug!("Using passed access_token");
-                Ok(QobuzCredentials {
-                    access_token: token,
-                    app_id: None,
-                    username: None,
-                    persist: false,
-                })
-            })
-            .or_else(|| {
-                log::debug!("Fetching db Qobuz config");
+        Ok(if let Some(access_token) = access_token {
+            log::debug!("Using passed access_token");
+            Some(Ok(QobuzCredentials {
+                access_token: access_token.to_string(),
+                app_id: None,
+                username: None,
+                persist: false,
+            }))
+        } else {
+            log::debug!("Fetching db Qobuz config");
 
-                let db = &db.library.lock().unwrap().inner;
-
-                match db::get_qobuz_config(db) {
-                    Ok(Some(config)) => {
-                        log::debug!("Using db Qobuz config");
-                        log::debug!("Fetching db Qobuz app config");
-                        match db::get_qobuz_app_config(db) {
-                            Ok(Some(app_config)) => {
-                                log::debug!("Using db Qobuz app config");
-                                Some(Ok(QobuzCredentials {
-                                    access_token: config.access_token,
-                                    app_id: app_id.or(Some(app_config.app_id)),
-                                    username: Some(config.user_email),
-                                    persist: true,
-                                }))
-                            }
-                            Ok(None) => {
-                                log::debug!("No Qobuz app config available");
-                                None
-                            }
-                            Err(err) => {
-                                log::error!("Failed to get Qobuz app config: {err:?}");
-                                Some(Err(err))
-                            }
+            match db::get_qobuz_config(&db).await {
+                Ok(Some(config)) => {
+                    log::debug!("Using db Qobuz config");
+                    log::debug!("Fetching db Qobuz app config");
+                    match db::get_qobuz_app_config(&db).await {
+                        Ok(Some(app_config)) => {
+                            log::debug!("Using db Qobuz app config");
+                            Some(Ok(QobuzCredentials {
+                                access_token: config.access_token,
+                                app_id: app_id.or(Some(app_config.app_id)),
+                                username: Some(config.user_email),
+                                persist: true,
+                            }))
+                        }
+                        Ok(None) => {
+                            log::debug!("No Qobuz app config available");
+                            None
+                        }
+                        Err(err) => {
+                            log::error!("Failed to get Qobuz app config: {err:?}");
+                            Some(Err(err))
                         }
                     }
-                    Ok(None) => {
-                        log::debug!("No Qobuz config available");
-                        None
-                    }
-                    Err(err) => {
-                        log::error!("Failed to get Qobuz app config: {err:?}");
-                        Some(Err(err))
-                    }
                 }
-            })
-            .transpose()?
-            .ok_or(FetchCredentialsError::NoAccessTokenAvailable)
+                Ok(None) => {
+                    log::debug!("No Qobuz config available");
+                    None
+                }
+                Err(err) => {
+                    log::error!("Failed to get Qobuz app config: {err:?}");
+                    Some(Err(err))
+                }
+            }
+        }
+        .ok_or(FetchCredentialsError::NoAccessTokenAvailable)??)
     }
 
     #[cfg(not(feature = "db"))]
@@ -159,7 +162,7 @@ pub enum AuthenticatedRequestError {
 }
 
 async fn authenticated_request(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     url: &str,
     app_id: Option<String>,
     access_token: Option<String>,
@@ -181,7 +184,7 @@ async fn authenticated_request(
 
 #[allow(unused)]
 async fn authenticated_post_request(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     url: &str,
     app_id: Option<String>,
     access_token: Option<String>,
@@ -209,7 +212,7 @@ async fn authenticated_post_request(
 
 #[allow(unused)]
 async fn authenticated_delete_request(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     url: &str,
     app_id: Option<String>,
     access_token: Option<String>,
@@ -238,7 +241,7 @@ enum Method {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 async fn authenticated_request_inner(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     method: Method,
     url: &str,
     app_id: Option<String>,
@@ -256,10 +259,11 @@ async fn authenticated_request_inner(
 
     let credentials = fetch_credentials(
         #[cfg(feature = "db")]
-        db,
+        db.clone(),
         app_id,
         access_token,
-    )?;
+    )
+    .await?;
 
     let app_id = if let Some(ref app_id) = credentials.app_id {
         app_id
@@ -301,7 +305,7 @@ async fn authenticated_request_inner(
 
             return authenticated_request_inner(
                 #[cfg(feature = "db")]
-                db,
+                db.clone(),
                 method,
                 url,
                 Some(app_id.to_string()),
@@ -347,13 +351,16 @@ pub enum RefetchAccessTokenError {
     Reqwest(#[from] reqwest::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    Database(#[from] DatabaseError),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    Db(#[from] DbError),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
 
 async fn refetch_access_token(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     app_id: &str,
     username: &str,
     access_token: &str,
@@ -383,13 +390,7 @@ async fn refetch_access_token(
         let user_email: &str = value.to_nested_value(&["user", "email"])?;
         let user_public_id: &str = value.to_nested_value(&["user", "publicId"])?;
 
-        db::create_qobuz_config(
-            &db.library.lock().as_ref().unwrap().inner,
-            access_token,
-            user_id,
-            user_email,
-            user_public_id,
-        )?;
+        db::create_qobuz_config(&db, access_token, user_id, user_email, user_public_id).await?;
     }
 
     Ok(access_token.to_string())
@@ -504,7 +505,10 @@ pub enum QobuzUserLoginError {
     Reqwest(#[from] reqwest::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    Database(#[from] DatabaseError),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    Db(#[from] DbError),
     #[error("No access token available")]
     NoAccessTokenAvailable,
     #[error("No app id available")]
@@ -522,7 +526,7 @@ pub enum QobuzUserLoginError {
 }
 
 pub async fn user_login(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     username: &str,
     password: &str,
     app_id: Option<String>,
@@ -544,8 +548,7 @@ pub async fn user_login(
             if let Some(app_config) = {
                 #[cfg(feature = "db")]
                 {
-                    let db_connection = &db.library.lock().unwrap().inner;
-                    db::get_qobuz_app_config(db_connection)?
+                    db::get_qobuz_app_config(&db).await?
                 }
 
                 #[cfg(not(feature = "db"))]
@@ -574,21 +577,12 @@ pub async fn user_login(
                         "Creating Qobuz app config: bundle_version={bundle_version} app_id={}",
                         config.app_id
                     );
-                    let db_connection = &db.library.lock().unwrap().inner;
-                    let app_config = db::create_qobuz_app_config(
-                        db_connection,
-                        &bundle_version,
-                        &config.app_id,
-                    )?;
+                    let app_config =
+                        db::create_qobuz_app_config(&db, &bundle_version, &config.app_id).await?;
 
                     for (timezone, secret) in config.secrets {
                         log::debug!("Creating Qobuz app secret: timezone={bundle_version}");
-                        db::create_qobuz_app_secret(
-                            db_connection,
-                            app_config.id,
-                            &timezone,
-                            &secret,
-                        )?;
+                        db::create_qobuz_app_secret(&db, app_config.id, &timezone, &secret).await?;
                     }
                 }
 
@@ -612,13 +606,7 @@ pub async fn user_login(
 
     #[cfg(feature = "db")]
     if persist.unwrap_or(false) {
-        db::create_qobuz_config(
-            &db.library.lock().as_ref().unwrap().inner,
-            access_token,
-            user_id,
-            user_email,
-            user_public_id,
-        )?;
+        db::create_qobuz_config(&db, access_token, user_id, user_email, user_public_id).await?;
     }
 
     Ok(serde_json::json!({
@@ -638,7 +626,7 @@ pub enum QobuzArtistError {
 }
 
 pub async fn artist(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     artist_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -676,7 +664,7 @@ pub enum QobuzFavoriteArtistsError {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_artists(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     offset: Option<u32>,
     limit: Option<u32>,
     access_token: Option<String>,
@@ -697,7 +685,7 @@ pub async fn favorite_artists(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        db,
+        db.clone(),
         &url,
         app_id.clone(),
         access_token.clone(),
@@ -728,7 +716,7 @@ pub async fn favorite_artists(
             Box::pin(async move {
                 favorite_artists(
                     #[cfg(feature = "db")]
-                    &db,
+                    db,
                     Some(offset),
                     Some(limit),
                     access_token,
@@ -747,7 +735,7 @@ pub enum QobuzAddFavoriteArtistError {
 }
 
 pub async fn add_favorite_artist(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     artist_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -779,7 +767,7 @@ pub enum QobuzRemoveFavoriteArtistError {
 }
 
 pub async fn remove_favorite_artist(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     artist_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -815,7 +803,7 @@ pub enum QobuzArtistAlbumsError {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn artist_albums(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     artist_id: &Id,
     offset: Option<u32>,
     limit: Option<u32>,
@@ -845,7 +833,7 @@ pub async fn artist_albums(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        db,
+        db.clone(),
         &url,
         app_id.clone(),
         access_token.clone(),
@@ -878,7 +866,7 @@ pub async fn artist_albums(
             Box::pin(async move {
                 artist_albums(
                     #[cfg(feature = "db")]
-                    &db,
+                    db,
                     &artist_id,
                     Some(offset),
                     Some(limit),
@@ -904,7 +892,7 @@ pub enum QobuzAlbumError {
 }
 
 pub async fn album(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     album_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -939,7 +927,7 @@ pub enum QobuzFavoriteAlbumsError {
 
 #[async_recursion]
 pub async fn favorite_albums(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     offset: Option<u32>,
     limit: Option<u32>,
     access_token: Option<String>,
@@ -962,7 +950,7 @@ pub async fn favorite_albums(
 
         match authenticated_request(
             #[cfg(feature = "db")]
-            db,
+            db.clone(),
             &url,
             app_id.clone(),
             access_token.clone(),
@@ -1007,7 +995,7 @@ pub async fn favorite_albums(
             Box::pin(async move {
                 favorite_albums(
                     #[cfg(feature = "db")]
-                    &db,
+                    db,
                     Some(offset),
                     Some(limit),
                     access_token,
@@ -1020,7 +1008,7 @@ pub async fn favorite_albums(
 }
 
 pub async fn all_favorite_albums(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> Result<Vec<QobuzAlbum>, QobuzFavoriteAlbumsError> {
@@ -1032,7 +1020,7 @@ pub async fn all_favorite_albums(
     loop {
         let albums = favorite_albums(
             #[cfg(feature = "db")]
-            db,
+            db.clone(),
             Some(offset),
             Some(limit),
             access_token.clone(),
@@ -1059,7 +1047,7 @@ pub enum QobuzAddFavoriteAlbumError {
 }
 
 pub async fn add_favorite_album(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     album_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -1087,7 +1075,7 @@ pub enum QobuzRemoveFavoriteAlbumError {
 }
 
 pub async fn remove_favorite_album(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     album_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -1123,7 +1111,7 @@ pub enum QobuzAlbumTracksError {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn album_tracks(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     album_id: &Id,
     offset: Option<u32>,
     limit: Option<u32>,
@@ -1145,7 +1133,7 @@ pub async fn album_tracks(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        db,
+        db.clone(),
         &url,
         app_id.clone(),
         access_token.clone(),
@@ -1195,7 +1183,7 @@ pub async fn album_tracks(
             Box::pin(async move {
                 album_tracks(
                     #[cfg(feature = "db")]
-                    &db,
+                    db,
                     &album_id,
                     Some(offset),
                     Some(limit),
@@ -1218,7 +1206,7 @@ pub enum QobuzTrackError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn track(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     track_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -1254,7 +1242,7 @@ pub enum QobuzFavoriteTracksError {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_tracks(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     offset: Option<u32>,
     limit: Option<u32>,
     access_token: Option<String>,
@@ -1275,7 +1263,7 @@ pub async fn favorite_tracks(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        db,
+        db.clone(),
         &url,
         app_id.clone(),
         access_token.clone(),
@@ -1304,7 +1292,7 @@ pub async fn favorite_tracks(
             Box::pin(async move {
                 favorite_tracks(
                     #[cfg(feature = "db")]
-                    &db,
+                    db,
                     Some(offset),
                     Some(limit),
                     access_token,
@@ -1323,7 +1311,7 @@ pub enum QobuzAddFavoriteTrackError {
 }
 
 pub async fn add_favorite_track(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     track_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -1351,7 +1339,7 @@ pub enum QobuzRemoveFavoriteTrackError {
 }
 
 pub async fn remove_favorite_track(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     track_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -1403,7 +1391,10 @@ pub enum QobuzTrackFileUrlError {
     AuthenticatedRequest(#[from] AuthenticatedRequestError),
     #[cfg(feature = "db")]
     #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    Database(#[from] DatabaseError),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    Db(#[from] DbError),
     #[error("No app secret available")]
     NoAppSecretAvailable,
     #[error(transparent)]
@@ -1412,7 +1403,7 @@ pub enum QobuzTrackFileUrlError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn track_file_url(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     track_id: &Id,
     quality: QobuzAudioQuality,
     access_token: Option<String>,
@@ -1423,8 +1414,7 @@ pub async fn track_file_url(
     let app_secret = match app_secret {
         Some(app_secret) => app_secret,
         _ => {
-            let app_secrets =
-                db::get_qobuz_app_secrets(&db.library.lock().as_ref().unwrap().inner)?;
+            let app_secrets = db::get_qobuz_app_secrets(&db).await?;
             let app_secrets = app_secrets
                 .iter()
                 .find(|secret| secret.timezone == "berlin")
@@ -1482,7 +1472,7 @@ pub enum QobuzFetchLoginSourceError {
     Reqwest(#[from] reqwest::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    Database(#[from] DatabaseError),
 }
 
 #[allow(unused)]
@@ -1518,7 +1508,7 @@ pub enum QobuzFetchBundleSourceError {
     Reqwest(#[from] reqwest::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    Database(#[from] DatabaseError),
 }
 
 #[allow(unused)]
@@ -1536,7 +1526,7 @@ pub enum QobuzFetchAppSecretsError {
     Base64Decode(#[from] base64::DecodeError),
     #[cfg(feature = "db")]
     #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    Database(#[from] DatabaseError),
     #[error("No App ID found in output")]
     NoAppId,
     #[error("No seed and timezone found in output")]
@@ -1761,7 +1751,7 @@ impl From<QobuzRemoveFavoriteTrackError> for RemoveTrackError {
 
 pub struct QobuzMusicApi {
     #[cfg(feature = "db")]
-    db: moosicbox_core::app::Db,
+    db: Arc<Box<dyn Database>>,
 }
 
 impl QobuzMusicApi {
@@ -1771,7 +1761,7 @@ impl QobuzMusicApi {
     }
 
     #[cfg(feature = "db")]
-    pub fn new(db: moosicbox_core::app::Db) -> Self {
+    pub fn new(db: Arc<Box<dyn Database>>) -> Self {
         Self { db }
     }
 }
@@ -1791,7 +1781,7 @@ impl MusicApi for QobuzMusicApi {
     ) -> PagingResult<Artist, ArtistsError> {
         Ok(favorite_artists(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             offset,
             limit,
             None,
@@ -1805,7 +1795,7 @@ impl MusicApi for QobuzMusicApi {
         Ok(Some(
             artist(
                 #[cfg(feature = "db")]
-                &self.db,
+                self.db.clone(),
                 artist_id,
                 None,
                 None,
@@ -1818,7 +1808,7 @@ impl MusicApi for QobuzMusicApi {
     async fn add_artist(&self, artist_id: &Id) -> Result<(), AddArtistError> {
         Ok(add_favorite_artist(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             artist_id,
             None,
             None,
@@ -1829,7 +1819,7 @@ impl MusicApi for QobuzMusicApi {
     async fn remove_artist(&self, artist_id: &Id) -> Result<(), RemoveArtistError> {
         Ok(remove_favorite_artist(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             artist_id,
             None,
             None,
@@ -1846,7 +1836,7 @@ impl MusicApi for QobuzMusicApi {
     ) -> PagingResult<Album, AlbumsError> {
         Ok(favorite_albums(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             offset,
             limit,
             None,
@@ -1860,7 +1850,7 @@ impl MusicApi for QobuzMusicApi {
         Ok(Some(
             album(
                 #[cfg(feature = "db")]
-                &self.db,
+                self.db.clone(),
                 album_id,
                 None,
                 None,
@@ -1881,7 +1871,7 @@ impl MusicApi for QobuzMusicApi {
     ) -> PagingResult<Album, ArtistAlbumsError> {
         Ok(artist_albums(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             artist_id,
             offset,
             limit,
@@ -1912,16 +1902,18 @@ impl MusicApi for QobuzMusicApi {
         &self,
         album_id: &Id,
     ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
-        Ok(moosicbox_core::sqlite::db::get_qobuz_album(
-            &self.db.library.lock().as_ref().unwrap().inner,
-            &Into::<String>::into(album_id),
-        )?)
+        Ok(moosicbox_core::sqlite::db::get_album_database(
+            &self.db,
+            "qobuz_id",
+            DatabaseValue::String(album_id.into()),
+        )
+        .await?)
     }
 
     async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
         Ok(add_favorite_album(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             album_id,
             None,
             None,
@@ -1932,7 +1924,7 @@ impl MusicApi for QobuzMusicApi {
     async fn remove_album(&self, album_id: &Id) -> Result<(), RemoveAlbumError> {
         Ok(remove_favorite_album(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             album_id,
             None,
             None,
@@ -1949,7 +1941,7 @@ impl MusicApi for QobuzMusicApi {
     ) -> PagingResult<Track, TracksError> {
         Ok(favorite_tracks(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             offset,
             limit,
             None,
@@ -1963,7 +1955,7 @@ impl MusicApi for QobuzMusicApi {
         Ok(Some(
             track(
                 #[cfg(feature = "db")]
-                &self.db,
+                self.db.clone(),
                 track_id,
                 None,
                 None,
@@ -1976,7 +1968,7 @@ impl MusicApi for QobuzMusicApi {
     async fn add_track(&self, track_id: &Id) -> Result<(), AddTrackError> {
         Ok(add_favorite_track(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             track_id,
             None,
             None,
@@ -1987,7 +1979,7 @@ impl MusicApi for QobuzMusicApi {
     async fn remove_track(&self, track_id: &Id) -> Result<(), RemoveTrackError> {
         Ok(remove_favorite_track(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             track_id,
             None,
             None,

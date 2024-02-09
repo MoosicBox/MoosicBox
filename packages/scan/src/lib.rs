@@ -1,11 +1,12 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use db::get_enabled_scan_origins;
 use moosicbox_config::get_cache_dir_path;
-use moosicbox_core::{app::Db, sqlite::db::DbError};
-use moosicbox_database::DbConnection;
+use moosicbox_core::sqlite::db::DbError;
+use moosicbox_database::Database;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
@@ -61,8 +62,11 @@ pub enum ScanError {
     Qobuz(#[from] qobuz::ScanError),
 }
 
-pub async fn scan(db: &Db, origins: Option<Vec<ScanOrigin>>) -> Result<(), ScanError> {
-    let enabled_origins = get_enabled_scan_origins(db.library.lock().as_ref().unwrap())?;
+pub async fn scan(
+    db: Arc<Box<dyn Database>>,
+    origins: Option<Vec<ScanOrigin>>,
+) -> Result<(), ScanError> {
+    let enabled_origins = get_enabled_scan_origins(&db).await?;
 
     let search_origins = origins
         .map(|origins| {
@@ -77,11 +81,11 @@ pub async fn scan(db: &Db, origins: Option<Vec<ScanOrigin>>) -> Result<(), ScanE
     for origin in search_origins {
         match origin {
             #[cfg(feature = "local")]
-            ScanOrigin::Local => scan_local(db).await?,
+            ScanOrigin::Local => scan_local(db.clone()).await?,
             #[cfg(feature = "tidal")]
-            ScanOrigin::Tidal => scan_tidal(db).await?,
+            ScanOrigin::Tidal => scan_tidal(db.clone()).await?,
             #[cfg(feature = "qobuz")]
-            ScanOrigin::Qobuz => scan_qobuz(db).await?,
+            ScanOrigin::Qobuz => scan_qobuz(db.clone()).await?,
         }
     }
 
@@ -89,11 +93,10 @@ pub async fn scan(db: &Db, origins: Option<Vec<ScanOrigin>>) -> Result<(), ScanE
 }
 
 #[cfg(feature = "local")]
-pub async fn scan_local(db: &Db) -> Result<(), local::ScanError> {
+pub async fn scan_local(db: Arc<Box<dyn Database>>) -> Result<(), local::ScanError> {
     use db::get_scan_locations_for_origin;
 
-    let locations =
-        get_scan_locations_for_origin(db.library.lock().as_ref().unwrap(), ScanOrigin::Local)?;
+    let locations = get_scan_locations_for_origin(&db, ScanOrigin::Local).await?;
     let paths = locations
         .iter()
         .map(|location| {
@@ -105,15 +108,15 @@ pub async fn scan_local(db: &Db) -> Result<(), local::ScanError> {
         .collect::<Vec<_>>();
 
     for path in paths {
-        local::scan(path, db, CANCELLATION_TOKEN.clone()).await?;
+        local::scan(path, db.clone(), CANCELLATION_TOKEN.clone()).await?;
     }
 
     Ok(())
 }
 
 #[cfg(feature = "tidal")]
-pub async fn scan_tidal(db: &Db) -> Result<(), tidal::ScanError> {
-    let enabled_origins = get_enabled_scan_origins(&db.library.lock().unwrap())?;
+pub async fn scan_tidal(db: Arc<Box<dyn Database>>) -> Result<(), tidal::ScanError> {
+    let enabled_origins = get_enabled_scan_origins(&db).await?;
     let enabled = enabled_origins
         .into_iter()
         .any(|origin| origin == ScanOrigin::Tidal);
@@ -128,8 +131,8 @@ pub async fn scan_tidal(db: &Db) -> Result<(), tidal::ScanError> {
 }
 
 #[cfg(feature = "qobuz")]
-pub async fn scan_qobuz(db: &Db) -> Result<(), qobuz::ScanError> {
-    let enabled_origins = get_enabled_scan_origins(&db.library.lock().unwrap())?;
+pub async fn scan_qobuz(db: Arc<Box<dyn Database>>) -> Result<(), qobuz::ScanError> {
+    let enabled_origins = get_enabled_scan_origins(&db).await?;
     let enabled = enabled_origins
         .into_iter()
         .any(|origin| origin == ScanOrigin::Qobuz);
@@ -143,38 +146,41 @@ pub async fn scan_qobuz(db: &Db) -> Result<(), qobuz::ScanError> {
     Ok(())
 }
 
-pub fn get_scan_origins(db: &DbConnection) -> Result<Vec<ScanOrigin>, DbError> {
-    get_enabled_scan_origins(db)
+pub async fn get_scan_origins(db: &Box<dyn Database>) -> Result<Vec<ScanOrigin>, DbError> {
+    get_enabled_scan_origins(db).await
 }
 
-pub fn enable_scan_origin(db: &DbConnection, origin: ScanOrigin) -> Result<(), DbError> {
+pub async fn enable_scan_origin(db: &Box<dyn Database>, origin: ScanOrigin) -> Result<(), DbError> {
     #[cfg(feature = "local")]
     if origin == ScanOrigin::Local {
         return Ok(());
     }
 
-    let locations = db::get_scan_locations(db)?;
+    let locations = db::get_scan_locations(db).await?;
 
     if locations.iter().any(|location| location.origin == origin) {
         return Ok(());
     }
 
-    db::enable_scan_origin(db, origin)
+    db::enable_scan_origin(db, origin).await
 }
 
-pub fn disable_scan_origin(db: &DbConnection, origin: ScanOrigin) -> Result<(), DbError> {
-    let locations = db::get_scan_locations(db)?;
+pub async fn disable_scan_origin(
+    db: &Box<dyn Database>,
+    origin: ScanOrigin,
+) -> Result<(), DbError> {
+    let locations = db::get_scan_locations(db).await?;
 
     if locations.iter().all(|location| location.origin != origin) {
         return Ok(());
     }
 
-    db::disable_scan_origin(db, origin)
+    db::disable_scan_origin(db, origin).await
 }
 
 #[cfg(feature = "local")]
-pub fn get_scan_paths(db: &DbConnection) -> Result<Vec<String>, DbError> {
-    let locations = db::get_scan_locations_for_origin(db, ScanOrigin::Local)?;
+pub async fn get_scan_paths(db: &Box<dyn Database>) -> Result<Vec<String>, DbError> {
+    let locations = db::get_scan_locations_for_origin(db, ScanOrigin::Local).await?;
 
     Ok(locations
         .iter()
@@ -189,8 +195,8 @@ pub fn get_scan_paths(db: &DbConnection) -> Result<Vec<String>, DbError> {
 }
 
 #[cfg(feature = "local")]
-pub fn add_scan_path(db: &DbConnection, path: &str) -> Result<(), DbError> {
-    let locations = db::get_scan_locations(db)?;
+pub async fn add_scan_path(db: &Box<dyn Database>, path: &str) -> Result<(), DbError> {
+    let locations = db::get_scan_locations(db).await?;
 
     if locations
         .iter()
@@ -199,12 +205,12 @@ pub fn add_scan_path(db: &DbConnection, path: &str) -> Result<(), DbError> {
         return Ok(());
     }
 
-    db::add_scan_path(db, path)
+    db::add_scan_path(db, path).await
 }
 
 #[cfg(feature = "local")]
-pub fn remove_scan_path(db: &DbConnection, path: &str) -> Result<(), DbError> {
-    let locations = db::get_scan_locations(db)?;
+pub async fn remove_scan_path(db: &Box<dyn Database>, path: &str) -> Result<(), DbError> {
+    let locations = db::get_scan_locations(db).await?;
 
     if locations
         .iter()
@@ -213,5 +219,5 @@ pub fn remove_scan_path(db: &DbConnection, path: &str) -> Result<(), DbError> {
         return Ok(());
     }
 
-    db::remove_scan_path(db, path)
+    db::remove_scan_path(db, path).await
 }

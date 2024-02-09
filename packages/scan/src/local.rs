@@ -2,10 +2,10 @@ use audiotags::Tag;
 use futures::Future;
 use lofty::{AudioFile, ParseOptions};
 use moosicbox_core::{
-    app::Db,
     sqlite::{db::DbError, models::TrackApiSource},
     types::AudioFormat,
 };
+use moosicbox_database::Database;
 use moosicbox_files::{sanitize_filename, search_for_cover};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -44,7 +44,11 @@ pub enum ScanError {
     UpdateDatabase(#[from] UpdateDatabaseError),
 }
 
-pub async fn scan(directory: &str, db: &Db, token: CancellationToken) -> Result<(), ScanError> {
+pub async fn scan(
+    directory: &str,
+    db: Arc<Box<dyn Database>>,
+    token: CancellationToken,
+) -> Result<(), ScanError> {
     let total_start = std::time::SystemTime::now();
     let start = std::time::SystemTime::now();
     let output = Arc::new(RwLock::new(ScanOutput::new()));
@@ -64,8 +68,8 @@ pub async fn scan(directory: &str, db: &Db, token: CancellationToken) -> Result<
 
     {
         let output = output.read().await;
-        output.update_database(db).await?;
-        output.reindex_global_search_index(db)?;
+        output.update_database(db.clone()).await?;
+        output.reindex_global_search_index(&db).await?;
     }
 
     let end = std::time::SystemTime::now();

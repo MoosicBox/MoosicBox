@@ -2,14 +2,14 @@ use std::str::FromStr;
 
 use moosicbox_core::sqlite::{
     db::SqliteValue,
-    models::{AsId, AsModel, AsModelResult, TrackApiSource},
+    models::{AsId, TrackApiSource},
 };
+use moosicbox_database::DatabaseValue;
 use moosicbox_files::files::track::TrackAudioQuality;
 use moosicbox_json_utils::{
-    rusqlite::ToValue as RusqliteToValue, serde_json::ToValue, MissingValue, ParseError,
-    ToValueType,
+    database::ToValue as _, serde_json::ToValue, MissingValue, ParseError, ToValueType,
 };
-use rusqlite::{types::Value, Row};
+use rusqlite::types::Value;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 
@@ -22,15 +22,8 @@ pub struct DownloadLocation {
     pub updated: String,
 }
 
-impl AsModel<DownloadLocation> for Row<'_> {
-    fn as_model(&self) -> DownloadLocation {
-        AsModelResult::as_model(self)
-            .unwrap_or_else(|e| panic!("Failed to get DownloadLocation: {e:?}"))
-    }
-}
-
-impl AsModelResult<DownloadLocation, ParseError> for Row<'_> {
-    fn as_model(&self) -> Result<DownloadLocation, ParseError> {
+impl ToValueType<DownloadLocation> for &moosicbox_database::Row {
+    fn to_value_type(self) -> Result<DownloadLocation, ParseError> {
         Ok(DownloadLocation {
             id: self.to_value("id")?,
             path: self.to_value("path")?,
@@ -70,6 +63,16 @@ pub enum DownloadTaskState {
     Error,
 }
 
+impl ToValueType<DownloadTaskState> for DatabaseValue {
+    fn to_value_type(self) -> Result<DownloadTaskState, ParseError> {
+        Ok(DownloadTaskState::from_str(
+            self.as_str()
+                .ok_or_else(|| ParseError::ConvertType("DownloadTaskState".into()))?,
+        )
+        .map_err(|_| ParseError::ConvertType("DownloadTaskState".into()))?)
+    }
+}
+
 impl ToValueType<DownloadTaskState> for &serde_json::Value {
     fn to_value_type(self) -> Result<DownloadTaskState, ParseError> {
         Ok(DownloadTaskState::from_str(
@@ -81,7 +84,7 @@ impl ToValueType<DownloadTaskState> for &serde_json::Value {
 }
 
 impl MissingValue<DownloadTaskState> for Value {}
-impl MissingValue<DownloadTaskState> for &Row<'_> {}
+impl MissingValue<DownloadTaskState> for &moosicbox_database::Row {}
 impl ToValueType<DownloadTaskState> for Value {
     fn to_value_type(self) -> Result<DownloadTaskState, ParseError> {
         match self {
@@ -119,6 +122,16 @@ impl From<TrackApiSource> for DownloadApiSource {
     }
 }
 
+impl ToValueType<DownloadApiSource> for DatabaseValue {
+    fn to_value_type(self) -> Result<DownloadApiSource, ParseError> {
+        Ok(DownloadApiSource::from_str(
+            self.as_str()
+                .ok_or_else(|| ParseError::ConvertType("DownloadApiSource".into()))?,
+        )
+        .map_err(|_| ParseError::ConvertType("DownloadApiSource".into()))?)
+    }
+}
+
 impl ToValueType<DownloadApiSource> for &serde_json::Value {
     fn to_value_type(self) -> Result<DownloadApiSource, ParseError> {
         Ok(DownloadApiSource::from_str(
@@ -129,7 +142,7 @@ impl ToValueType<DownloadApiSource> for &serde_json::Value {
     }
 }
 
-impl MissingValue<DownloadApiSource> for &Row<'_> {}
+impl MissingValue<DownloadApiSource> for &moosicbox_database::Row {}
 impl MissingValue<DownloadApiSource> for Value {}
 impl ToValueType<DownloadApiSource> for Value {
     fn to_value_type(self) -> Result<DownloadApiSource, ParseError> {
@@ -176,8 +189,8 @@ impl ToValueType<DownloadItem> for &serde_json::Value {
     }
 }
 
-impl MissingValue<DownloadItem> for &Row<'_> {}
-impl ToValueType<DownloadItem> for &Row<'_> {
+impl MissingValue<DownloadItem> for &moosicbox_database::Row {}
+impl ToValueType<DownloadItem> for &moosicbox_database::Row {
     fn to_value_type(self) -> Result<DownloadItem, ParseError> {
         let item_type: String = self.to_value("type")?;
 
@@ -217,15 +230,8 @@ pub struct DownloadTask {
     pub updated: String,
 }
 
-impl AsModel<DownloadTask> for Row<'_> {
-    fn as_model(&self) -> DownloadTask {
-        AsModelResult::as_model(self)
-            .unwrap_or_else(|e| panic!("Failed to get DownloadTask: {e:?}"))
-    }
-}
-
-impl AsModelResult<DownloadTask, ParseError> for Row<'_> {
-    fn as_model(&self) -> Result<DownloadTask, ParseError> {
+impl ToValueType<DownloadTask> for &moosicbox_database::Row {
+    fn to_value_type(self) -> Result<DownloadTask, ParseError> {
         Ok(DownloadTask {
             id: self.to_value("id")?,
             state: self.to_value("state")?,

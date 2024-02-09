@@ -7,6 +7,9 @@ version = "0.1.0"
 [dependencies]
 moosicbox_auth = { path = "../auth", optional = true }
 moosicbox_core = { path = "../core", optional = true, default-features = false }
+moosicbox_database = { path = "../database", optional = true, default-features = false, features = [
+    "rusqlite",
+] }
 moosicbox_env_utils = { path = "../env_utils", optional = true }
 moosicbox_files = { path = "../files", default-features = false, optional = true }
 moosicbox_image = { path = "../image", default-features = false, features = [
@@ -49,6 +52,7 @@ sender = [
     "dep:lazy_static",
     "dep:moosicbox_auth",
     "dep:moosicbox_core",
+    "dep:moosicbox_database",
     "dep:moosicbox_env_utils",
     "dep:moosicbox_files",
     "dep:moosicbox_image",

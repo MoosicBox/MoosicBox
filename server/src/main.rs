@@ -11,7 +11,7 @@ use actix_web::{http, middleware, web, App};
 use log::{debug, error, info};
 use moosicbox_auth::get_client_id_and_access_token;
 use moosicbox_core::app::{AppState, Db};
-use moosicbox_database::DbConnection;
+use moosicbox_database::{rusqlite::RusqliteDatabase, Database, DbConnection};
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 use moosicbox_tunnel::{
     sender::{tunnel_sender::TunnelSender, TunnelMessage},
@@ -67,10 +67,13 @@ fn main() -> std::io::Result<()> {
             library
                 .busy_timeout(Duration::from_millis(10))
                 .expect("Failed to set busy timeout");
-            Db {
-                library: Arc::new(Mutex::new(DbConnection { inner: library })),
-            }
+            let library = Arc::new(Mutex::new(DbConnection { inner: library }));
+
+            Db { library }
         });
+
+        let database: Arc<Box<dyn Database>> =
+            Arc::new(Box::new(RusqliteDatabase::new(db.library.clone())));
 
         let (mut chat_server, server_tx) = ChatServer::new(Arc::new(db.clone()));
         CHAT_SERVER_HANDLE.write().unwrap().replace(server_tx);
@@ -111,6 +114,7 @@ fn main() -> std::io::Result<()> {
             let (mut tunnel, handle) =
                 TunnelSender::new(host.clone(), ws_url, client_id, access_token);
 
+            let database_send = database.clone();
             (
                 Some(host),
                 Some(spawn(async move {
@@ -121,12 +125,14 @@ fn main() -> std::io::Result<()> {
                             TunnelMessage::Text(m) => {
                                 debug!("Received text TunnelMessage {}", &m);
                                 let tunnel = tunnel.clone();
+                                let database_send = database_send.clone();
                                 spawn(async move {
                                     match serde_json::from_str(&m).unwrap() {
                                         TunnelRequest::Http(request) => {
                                             if let Err(err) = tunnel
                                                 .tunnel_request(
                                                     db,
+                                                    database_send.clone(),
                                                     service_port,
                                                     request.request_id,
                                                     request.method,
@@ -191,11 +197,13 @@ fn main() -> std::io::Result<()> {
 
         let chat_server_handle = spawn(async move { chat_server.run() });
 
+        let database = database.clone();
         let app = move || {
             let app_data = AppState {
                 tunnel_host: tunnel_host.clone(),
                 service_port,
                 db: Some(db.clone()),
+                database: database.clone(),
             };
 
             let cors = Cors::default()

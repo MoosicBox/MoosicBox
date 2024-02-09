@@ -1,13 +1,9 @@
-use moosicbox_core::sqlite::{
-    db::SqliteValue,
-    models::{AsId, AsModel, AsModelResult},
-};
+use moosicbox_database::Row;
 use moosicbox_json_utils::{
-    rusqlite::ToValue as RusqliteToValue,
+    database::ToValue as _,
     serde_json::{ToNestedValue, ToValue},
     ParseError, ToValueType,
 };
-use rusqlite::Row;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -21,15 +17,8 @@ pub struct QobuzAppSecret {
     pub updated: String,
 }
 
-impl AsModel<QobuzAppSecret> for Row<'_> {
-    fn as_model(&self) -> QobuzAppSecret {
-        AsModelResult::as_model(self)
-            .unwrap_or_else(|e| panic!("Failed to get QobuzAppSecret: {e:?}"))
-    }
-}
-
-impl AsModelResult<QobuzAppSecret, ParseError> for Row<'_> {
-    fn as_model(&self) -> Result<QobuzAppSecret, ParseError> {
+impl ToValueType<QobuzAppSecret> for &Row {
+    fn to_value_type(self) -> Result<QobuzAppSecret, ParseError> {
         Ok(QobuzAppSecret {
             id: self.to_value("id")?,
             timezone: self.to_value("timezone")?,
@@ -52,12 +41,6 @@ impl ToValueType<QobuzAppSecret> for &Value {
     }
 }
 
-impl AsId for QobuzAppSecret {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::Number(self.id as i64)
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzAppConfig {
@@ -68,15 +51,8 @@ pub struct QobuzAppConfig {
     pub updated: String,
 }
 
-impl AsModel<QobuzAppConfig> for Row<'_> {
-    fn as_model(&self) -> QobuzAppConfig {
-        AsModelResult::as_model(self)
-            .unwrap_or_else(|e| panic!("Failed to get QobuzAppConfig: {e:?}"))
-    }
-}
-
-impl AsModelResult<QobuzAppConfig, ParseError> for Row<'_> {
-    fn as_model(&self) -> Result<QobuzAppConfig, ParseError> {
+impl ToValueType<QobuzAppConfig> for &Row {
+    fn to_value_type(self) -> Result<QobuzAppConfig, ParseError> {
         Ok(QobuzAppConfig {
             id: self.to_value("id")?,
             bundle_version: self.to_value("bundle_version")?,
@@ -99,12 +75,6 @@ impl ToValueType<QobuzAppConfig> for &Value {
     }
 }
 
-impl AsId for QobuzAppConfig {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::Number(self.id as i64)
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzConfig {
@@ -117,14 +87,8 @@ pub struct QobuzConfig {
     pub updated: String,
 }
 
-impl AsModel<QobuzConfig> for Row<'_> {
-    fn as_model(&self) -> QobuzConfig {
-        AsModelResult::as_model(self).unwrap_or_else(|e| panic!("Failed to get QobuzConfig: {e:?}"))
-    }
-}
-
-impl AsModelResult<QobuzConfig, ParseError> for Row<'_> {
-    fn as_model(&self) -> Result<QobuzConfig, ParseError> {
+impl ToValueType<QobuzConfig> for &Row {
+    fn to_value_type(self) -> Result<QobuzConfig, ParseError> {
         Ok(QobuzConfig {
             id: self.to_value("id")?,
             access_token: self.to_value("access_token")?,
@@ -148,11 +112,5 @@ impl ToValueType<QobuzConfig> for &Value {
             created: self.to_value("created")?,
             updated: self.to_value("updated")?,
         })
-    }
-}
-
-impl AsId for QobuzConfig {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::Number(self.id as i64)
     }
 }

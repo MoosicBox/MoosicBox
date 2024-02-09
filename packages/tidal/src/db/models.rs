@@ -2,8 +2,8 @@ use moosicbox_core::sqlite::{
     db::SqliteValue,
     models::{AsId, AsModel, AsModelResult},
 };
-use moosicbox_json_utils::{rusqlite::ToValue, ParseError, ToValueType};
-use rusqlite::Row;
+use moosicbox_database::Row;
+use moosicbox_json_utils::{database::ToValue, MissingValue, ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
@@ -24,7 +24,8 @@ pub struct TidalConfig {
     pub updated: String,
 }
 
-impl ToValueType<TidalConfig> for &Row<'_> {
+impl MissingValue<TidalConfig> for &moosicbox_database::Row {}
+impl ToValueType<TidalConfig> for &Row {
     fn to_value_type(self) -> Result<TidalConfig, ParseError> {
         Ok(TidalConfig {
             id: self.to_value("id")?,
@@ -44,13 +45,13 @@ impl ToValueType<TidalConfig> for &Row<'_> {
     }
 }
 
-impl AsModelResult<TidalConfig, ParseError> for Row<'_> {
+impl AsModelResult<TidalConfig, ParseError> for Row {
     fn as_model(&self) -> Result<TidalConfig, ParseError> {
         self.to_value_type()
     }
 }
 
-impl AsModel<TidalConfig> for Row<'_> {
+impl AsModel<TidalConfig> for Row {
     fn as_model(&self) -> TidalConfig {
         AsModelResult::as_model(self).unwrap()
     }

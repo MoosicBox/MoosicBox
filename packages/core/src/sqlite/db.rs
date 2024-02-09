@@ -1,6 +1,9 @@
 use actix_web::error::ErrorInternalServerError;
 use log::debug;
-use moosicbox_json_utils::ParseError;
+use moosicbox_database::{
+    join, left_join, where_eq, where_in, Database, DatabaseError, DatabaseValue,
+};
+use moosicbox_json_utils::{ParseError, ToValueType as _};
 use rusqlite::{params, Connection, Row, Statement};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -37,6 +40,8 @@ pub enum DbError {
     Unknown,
     #[error(transparent)]
     Parse(#[from] ParseError),
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
 }
 
 impl From<DbError> for actix_web::Error {
@@ -588,6 +593,13 @@ pub fn delete_player(db: &Connection, player_id: i32) -> Result<(), DbError> {
     Ok(())
 }
 
+pub async fn get_artists_database(db: &Box<dyn Database>) -> Result<Vec<LibraryArtist>, DbError> {
+    Ok(db
+        .select("artists", &["*"], None, None, None)
+        .await?
+        .to_value_type()?)
+}
+
 pub fn get_artists(db: &Connection) -> Result<Vec<LibraryArtist>, DbError> {
     Ok(db
         .prepare_cached(
@@ -598,6 +610,35 @@ pub fn get_artists(db: &Connection) -> Result<Vec<LibraryArtist>, DbError> {
         .query_map([], |row| Ok(AsModel::as_model(row)))?
         .filter_map(|c| c.ok())
         .collect())
+}
+
+pub async fn get_albums_database(db: &Box<dyn Database>) -> Result<Vec<LibraryAlbum>, DbError> {
+    Ok(db
+        .select_distinct(
+            "albums",
+            &[
+                "albums.*",
+                "albums.id as album_id",
+                "track_sizes.bit_depth",
+                "track_sizes.sample_rate",
+                "track_sizes.channels",
+                "artists.title as artist",
+                "artists.tidal_id as tidal_artist_id",
+                "artists.qobuz_id as qobuz_artist_id",
+                "tracks.format",
+                "tracks.source",
+            ],
+            None,
+            Some(&[
+                left_join("tracks", "tracks.album_id=albums.id"),
+                left_join("track_sizes", "track_sizes.track_id=tracks.id"),
+                join("artists", "artists.id=albums.artist_id"),
+            ]),
+            None,
+            //ORDER BY albums.id desc
+        )
+        .await?
+        .to_value_type()?)
 }
 
 pub fn get_albums(db: &Connection) -> Result<Vec<LibraryAlbum>, DbError> {
@@ -711,6 +752,23 @@ pub fn get_album_version_qualities(
     Ok(versions)
 }
 
+pub async fn get_artist_database(
+    db: &Box<dyn Database>,
+    id: u64,
+) -> Result<Option<LibraryArtist>, DbError> {
+    Ok(db
+        .select_first(
+            "artists",
+            &["*"],
+            Some(&[where_eq("artists.id", DatabaseValue::UNumber(id))]),
+            None,
+            None,
+        )
+        .await?
+        .as_ref()
+        .to_value_type()?)
+}
+
 pub fn get_artist(db: &Connection, id: i32) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
         .prepare_cached(
@@ -721,6 +779,23 @@ pub fn get_artist(db: &Connection, id: i32) -> Result<Option<LibraryArtist>, DbE
         )?
         .query_map(params![id], |row| Ok(AsModel::as_model(row)))?
         .find_map(|row| row.ok()))
+}
+
+pub async fn get_artist_by_album_id_database(
+    db: &Box<dyn Database>,
+    id: u64,
+) -> Result<Option<LibraryArtist>, DbError> {
+    Ok(db
+        .select_first(
+            "artists",
+            &["*"],
+            Some(&[where_eq("albums.id", DatabaseValue::UNumber(id))]),
+            Some(&[join("albums", "albums.artist_id = artists.id")]),
+            None,
+        )
+        .await?
+        .as_ref()
+        .to_value_type()?)
 }
 
 pub fn get_artist_by_album_id(db: &Connection, id: i32) -> Result<Option<LibraryArtist>, DbError> {
@@ -844,6 +919,29 @@ pub fn get_album(db: &Connection, id: i32) -> Result<Option<LibraryAlbum>, DbErr
     .transpose()
 }
 
+pub async fn get_album_database(
+    db: &Box<dyn Database>,
+    column: &str,
+    id: DatabaseValue,
+) -> Result<Option<LibraryAlbum>, DbError> {
+    Ok(db
+        .select_first(
+            "albums",
+            &[
+                "albums.*",
+                "artists.title as artist",
+                "artists.tidal_id as tidal_artist_id",
+                "artists.qobuz_id as qobuz_artist_id",
+            ],
+            Some(&[where_eq(format!("albums.{column}"), id)]),
+            Some(&[join("artists", "artists.id = albums.artist_id")]),
+            None,
+        )
+        .await?
+        .as_ref()
+        .to_value_type()?)
+}
+
 pub fn get_tidal_album(db: &Connection, tidal_id: i32) -> Result<Option<LibraryAlbum>, DbError> {
     db.prepare_cached(
         "
@@ -868,6 +966,51 @@ pub fn get_qobuz_album(db: &Connection, qobuz_id: &str) -> Result<Option<Library
     .query_map(params![qobuz_id], |row| Ok(row.as_model_query(db)))?
     .find_map(|row| row.ok())
     .transpose()
+}
+
+pub async fn get_album_tracks_database(
+    db: &Box<dyn Database>,
+    album_id: u64,
+) -> Result<Vec<LibraryTrack>, DbError> {
+    Ok(db
+        .select(
+            "tracks",
+            &[
+                "tracks.*",
+                "albums.title as album",
+                "albums.blur as blur",
+                "albums.date_released as date_released",
+                "albums.date_added as date_added",
+                "artists.title as artist",
+                "artists.tidal_id as tidal_artist_id",
+                "artists.qobuz_id as qobuz_artist_id",
+                "artists.id as artist_id",
+                "albums.artwork",
+                "track_sizes.format",
+                "track_sizes.bytes",
+                "track_sizes.bit_depth",
+                "track_sizes.audio_bitrate",
+                "track_sizes.overall_bitrate",
+                "track_sizes.sample_rate",
+                "track_sizes.channels",
+            ],
+            Some(&[where_eq(
+                "tracks.album_id",
+                DatabaseValue::UNumber(album_id),
+            )]),
+            Some(&[
+                join("albums", "albums.id=tracks.album_id"),
+                join("artists", "artists.id=albums.artist_id"),
+                left_join(
+                    "track_sizes",
+                    "tracks.id=track_sizes.track_id AND track_sizes.format=tracks.format",
+                ),
+            ]),
+            None,
+            //ORDER BY number ASC,
+        )
+        .await?
+        .to_value_type()?)
 }
 
 pub fn get_album_tracks(db: &Connection, album_id: i32) -> Result<Vec<LibraryTrack>, DbError> {
@@ -939,56 +1082,63 @@ pub struct SetTrackSize {
     pub channels: Option<Option<u8>>,
 }
 
-pub fn set_track_size(db: &Connection, value: SetTrackSize) -> Result<TrackSize, DbError> {
-    Ok(set_track_sizes(db, &[value])?.first().unwrap().clone())
+pub async fn set_track_size(
+    db: &Box<dyn Database>,
+    value: SetTrackSize,
+) -> Result<TrackSize, DbError> {
+    Ok(set_track_sizes(db, &[value])
+        .await?
+        .first()
+        .unwrap()
+        .clone())
 }
 
-pub fn set_track_sizes(
-    db: &Connection,
+pub async fn set_track_sizes(
+    db: &Box<dyn Database>,
     values: &[SetTrackSize],
 ) -> Result<Vec<TrackSize>, DbError> {
     let values = values
         .iter()
         .map(|v| {
             let mut values = vec![
-                ("track_id", SqliteValue::Number(v.track_id as i64)),
+                ("track_id", DatabaseValue::Number(v.track_id as i64)),
                 (
                     "format",
-                    SqliteValue::String(v.quality.format.as_ref().to_string()),
+                    DatabaseValue::String(v.quality.format.as_ref().to_string()),
                 ),
             ];
 
             if let Some(bytes) = v.bytes {
-                values.push(("bytes", SqliteValue::NumberOpt(bytes.map(|x| x as i64))));
+                values.push(("bytes", DatabaseValue::NumberOpt(bytes.map(|x| x as i64))));
             }
             if let Some(bit_depth) = v.bit_depth {
                 values.push((
                     "bit_depth",
-                    SqliteValue::NumberOpt(bit_depth.map(|x| x as i64)),
+                    DatabaseValue::NumberOpt(bit_depth.map(|x| x as i64)),
                 ));
             }
             if let Some(audio_bitrate) = v.audio_bitrate {
                 values.push((
                     "audio_bitrate",
-                    SqliteValue::NumberOpt(audio_bitrate.map(|x| x as i64)),
+                    DatabaseValue::NumberOpt(audio_bitrate.map(|x| x as i64)),
                 ));
             }
             if let Some(overall_bitrate) = v.overall_bitrate {
                 values.push((
                     "overall_bitrate",
-                    SqliteValue::NumberOpt(overall_bitrate.map(|x| x as i64)),
+                    DatabaseValue::NumberOpt(overall_bitrate.map(|x| x as i64)),
                 ));
             }
             if let Some(sample_rate) = v.sample_rate {
                 values.push((
                     "sample_rate",
-                    SqliteValue::NumberOpt(sample_rate.map(|x| x as i64)),
+                    DatabaseValue::NumberOpt(sample_rate.map(|x| x as i64)),
                 ));
             }
             if let Some(channels) = v.channels {
                 values.push((
                     "channels",
-                    SqliteValue::NumberOpt(channels.map(|x| x as i64)),
+                    DatabaseValue::NumberOpt(channels.map(|x| x as i64)),
                 ));
             }
 
@@ -996,38 +1146,112 @@ pub fn set_track_sizes(
         })
         .collect::<Vec<_>>();
 
-    upsert_multi(
-        db,
-        "track_sizes",
-        &[
-            "track_id",
-            "ifnull(`format`, '')",
-            "ifnull(`audio_bitrate`, 0)",
-            "ifnull(`overall_bitrate`, 0)",
-            "ifnull(`bit_depth`, 0)",
-            "ifnull(`sample_rate`, 0)",
-            "ifnull(`channels`, 0)",
-        ],
-        &values,
-    )
+    Ok(db
+        .upsert_multi(
+            "track_sizes",
+            &[
+                "track_id",
+                "ifnull(`format`, '')",
+                "ifnull(`audio_bitrate`, 0)",
+                "ifnull(`overall_bitrate`, 0)",
+                "ifnull(`bit_depth`, 0)",
+                "ifnull(`sample_rate`, 0)",
+                "ifnull(`channels`, 0)",
+            ],
+            values.as_slice(),
+        )
+        .await?
+        .to_value_type()?)
 }
 
-pub fn get_track_size(
-    db: &Connection,
-    id: i32,
+pub async fn get_track_size(
+    db: &Box<dyn Database>,
+    id: u64,
     quality: &PlaybackQuality,
 ) -> Result<Option<u64>, DbError> {
     Ok(db
-        .prepare_cached(
-            "
-            SELECT bytes
-            FROM track_sizes
-            WHERE track_id=?1 AND format=?2",
-        )?
-        .query_map(params![id, quality.format.as_ref()], |row| {
-            Ok(row.get("bytes").unwrap())
-        })?
-        .find_map(|row| row.ok()))
+        .select_first(
+            "track_sizes",
+            &["bytes"],
+            Some(&[
+                where_eq("track_id", DatabaseValue::UNumber(id)),
+                where_eq(
+                    "format",
+                    DatabaseValue::String(quality.format.as_ref().to_string()),
+                ),
+            ]),
+            None,
+            None,
+        )
+        .await?
+        .and_then(|x| x.columns.first().map(|(_, c)| c.to_value_type()))
+        .transpose()?)
+}
+
+pub async fn get_track_database(
+    db: &Box<dyn Database>,
+    id: u64,
+) -> Result<Option<LibraryTrack>, DbError> {
+    Ok(get_tracks_database(db, Some(&vec![id]))
+        .await?
+        .into_iter()
+        .next())
+}
+
+pub async fn get_tracks_database(
+    db: &Box<dyn Database>,
+    ids: Option<&Vec<u64>>,
+) -> Result<Vec<LibraryTrack>, DbError> {
+    if ids.is_some_and(|ids| ids.is_empty()) {
+        return Ok(vec![]);
+    }
+
+    let where_clause = if let Some(ids) = ids {
+        let values = ids
+            .iter()
+            .map(|id| DatabaseValue::UNumber(*id))
+            .collect::<Vec<_>>();
+
+        Some(vec![where_in("tracks.id", &values)])
+    } else {
+        None
+    };
+
+    Ok(db
+        .select(
+            "tracks",
+            &[
+                "tracks.*",
+                "albums.title as album",
+                "albums.blur as blur",
+                "albums.date_released as date_released",
+                "albums.date_added as date_added",
+                "artists.title as artist",
+                "artists.tidal_id as tidal_artist_id",
+                "artists.qobuz_id as qobuz_artist_id",
+                "artists.id as artist_id",
+                "albums.artwork",
+                "track_sizes.format",
+                "track_sizes.bytes",
+                "track_sizes.bit_depth",
+                "track_sizes.audio_bitrate",
+                "track_sizes.overall_bitrate",
+                "track_sizes.sample_rate",
+                "track_sizes.channels",
+            ],
+            where_clause.as_deref(),
+            Some(&[
+                join("albums", "albums.id=tracks.album_id"),
+                join("artists", "artists.id=albums.artist_id"),
+                left_join(
+                    "track_sizes",
+                    "tracks.id=track_sizes.track_id AND track_sizes.format=tracks.format",
+                ),
+            ]),
+            None,
+        )
+        .await?
+        .to_value_type()?)
 }
 
 pub fn get_track(db: &Connection, id: i32) -> Result<Option<LibraryTrack>, DbError> {
@@ -1088,6 +1312,31 @@ pub fn delete_track(db: &Connection, id: i32) -> Result<Option<LibraryTrack>, Db
     Ok(delete_tracks(db, Some(&vec![id]))?.into_iter().next())
 }
 
+pub async fn delete_tracks_database(
+    db: &Box<dyn Database>,
+    ids: Option<&Vec<i32>>,
+) -> Result<Vec<LibraryTrack>, DbError> {
+    if ids.is_some_and(|ids| ids.is_empty()) {
+        return Ok(vec![]);
+    }
+
+    let where_clause = if let Some(ids) = ids {
+        Some(vec![where_in(
+            "id",
+            &ids.into_iter()
+                .map(|id| DatabaseValue::UNumber(*id as u64))
+                .collect::<Vec<_>>(),
+        )])
+    } else {
+        None
+    };
+
+    Ok(db
+        .delete("tracks", where_clause.as_deref(), None)
+        .await?
+        .to_value_type()?)
+}
+
 pub fn delete_tracks(
     db: &Connection,
     ids: Option<&Vec<i32>>,
@@ -1124,6 +1373,31 @@ pub fn delete_track_size_by_track_id(
     Ok(delete_track_sizes_by_track_id(db, Some(&vec![id]))?
         .into_iter()
         .next())
+}
+
+pub async fn delete_track_sizes_by_track_id_database(
+    db: &Box<dyn Database>,
+    ids: Option<&Vec<i32>>,
+) -> Result<Vec<TrackSize>, DbError> {
+    if ids.is_some_and(|ids| ids.is_empty()) {
+        return Ok(vec![]);
+    }
+
+    let where_clause = if let Some(ids) = ids {
+        Some(vec![where_in(
+            "track_id",
+            &ids.into_iter()
+                .map(|id| DatabaseValue::UNumber(*id as u64))
+                .collect::<Vec<_>>(),
+        )])
+    } else {
+        None
+    };
+
+    Ok(db
+        .delete("track_sizes", where_clause.as_deref(), None)
+        .await?
+        .to_value_type()?)
 }
 
 pub fn delete_track_sizes_by_track_id(
@@ -1164,6 +1438,34 @@ pub fn delete_session_playlist_track_by_track_id(
             .into_iter()
             .next(),
     )
+}
+
+pub async fn delete_session_playlist_tracks_by_track_id_database(
+    db: &Box<dyn Database>,
+    ids: Option<&Vec<i32>>,
+) -> Result<Vec<SessionPlaylistTrack>, DbError> {
+    if ids.is_some_and(|ids| ids.is_empty()) {
+        return Ok(vec![]);
+    }
+
+    let where_clause = if let Some(ids) = ids {
+        Some(vec![
+            where_eq("`type`", "'LIBRARY'"),
+            where_in(
+                "track_id",
+                &ids.into_iter()
+                    .map(|id| DatabaseValue::UNumber(*id as u64))
+                    .collect::<Vec<_>>(),
+            ),
+        ])
+    } else {
+        Some(vec![where_eq("`type`", "'LIBRARY'")])
+    };
+
+    Ok(db
+        .delete("session_playlist_tracks", where_clause.as_deref(), None)
+        .await?
+        .to_value_type()?)
 }
 
 pub fn delete_session_playlist_tracks_by_track_id(
@@ -1715,6 +2017,35 @@ pub fn add_artists_and_get_artists(
     )
 }
 
+pub async fn add_artist_maps_and_get_artists_database(
+    db: &Box<dyn Database>,
+    artists: Vec<HashMap<&str, DatabaseValue>>,
+) -> Result<Vec<LibraryArtist>, DbError> {
+    let mut results = vec![];
+
+    for artist in artists {
+        if !artist.contains_key("title") {
+            return Err(DbError::InvalidRequest);
+        }
+
+        let filters = &[where_eq("title", artist.get("title").unwrap().clone())];
+
+        let row: LibraryArtist = db
+            .upsert(
+                "artists",
+                artist.into_iter().collect::<Vec<_>>().as_slice(),
+                Some(filters),
+                None,
+            )
+            .await?
+            .to_value_type()?;
+
+        results.push(row);
+    }
+
+    Ok(results)
+}
+
 pub fn add_artist_maps_and_get_artists(
     db: &Connection,
     artists: Vec<HashMap<&str, SqliteValue>>,
@@ -1801,6 +2132,38 @@ pub fn add_albums_and_get_albums(
     )
 }
 
+pub async fn add_album_maps_and_get_albums_database(
+    db: &Box<dyn Database>,
+    albums: Vec<HashMap<&str, DatabaseValue>>,
+) -> Result<Vec<LibraryAlbum>, DbError> {
+    let mut results = vec![];
+
+    for album in albums {
+        if !album.contains_key("artist_id") || !album.contains_key("title") {
+            return Err(DbError::InvalidRequest);
+        }
+
+        let filters = &[
+            where_eq("artist_id", album.get("artist_id").unwrap().clone()),
+            where_eq("title", album.get("title").unwrap().clone()),
+        ];
+
+        let row: LibraryAlbum = db
+            .upsert(
+                "albums",
+                album.into_iter().collect::<Vec<_>>().as_slice(),
+                Some(filters),
+                None,
+            )
+            .await?
+            .to_value_type()?;
+
+        results.push(row);
+    }
+
+    Ok(results)
+}
+
 pub fn add_album_maps_and_get_albums(
     db: &Connection,
     albums: Vec<HashMap<&str, SqliteValue>>,
@@ -1839,6 +2202,66 @@ pub struct InsertTrack {
     pub file: Option<String>,
     pub qobuz_id: Option<u64>,
     pub tidal_id: Option<u64>,
+}
+
+pub async fn add_tracks_database(
+    db: &Box<dyn Database>,
+    tracks: Vec<InsertTrack>,
+) -> Result<Vec<LibraryTrack>, DbError> {
+    let values = tracks
+        .iter()
+        .map(|insert| {
+            let mut values = vec![
+                ("number", DatabaseValue::Number(insert.track.number as i64)),
+                ("duration", DatabaseValue::Real(insert.track.duration)),
+                ("album_id", DatabaseValue::Number(insert.album_id as i64)),
+                ("title", DatabaseValue::String(insert.track.title.clone())),
+                (
+                    "format",
+                    DatabaseValue::String(
+                        insert.track.format.unwrap_or_default().as_ref().to_string(),
+                    ),
+                ),
+                (
+                    "source",
+                    DatabaseValue::String(insert.track.source.as_ref().to_string()),
+                ),
+            ];
+
+            if let Some(file) = &insert.file {
+                values.push(("file", DatabaseValue::String(file.clone())));
+            }
+
+            if let Some(qobuz_id) = &insert.qobuz_id {
+                values.push(("qobuz_id", DatabaseValue::Number(*qobuz_id as i64)));
+            }
+
+            if let Some(tidal_id) = &insert.tidal_id {
+                values.push(("tidal_id", DatabaseValue::Number(*tidal_id as i64)));
+            }
+
+            values
+        })
+        .collect::<Vec<_>>();
+
+    Ok(db
+        .upsert_multi(
+            "tracks",
+            &[
+                "ifnull(`file`, '')",
+                "`album_id`",
+                "`title`",
+                "`duration`",
+                "`number`",
+                "ifnull(`format`, '')",
+                "`source`",
+                "ifnull(`tidal_id`, 0)",
+                "ifnull(`qobuz_id`, 0)",
+            ],
+            values.as_slice(),
+        )
+        .await?
+        .to_value_type()?)
 }
 
 pub fn add_tracks(db: &Connection, tracks: Vec<InsertTrack>) -> Result<Vec<LibraryTrack>, DbError> {

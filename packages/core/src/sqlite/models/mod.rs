@@ -1,7 +1,9 @@
 use std::{fmt::Display, path::PathBuf, str::FromStr};
 
+use moosicbox_database::DatabaseValue;
 use moosicbox_json_utils::{
-    rusqlite::ToValue as RusqliteToValue, MissingValue, ParseError, ToValueType,
+    database::ToValue as _, rusqlite::ToValue as RusqliteToValue, MissingValue, ParseError,
+    ToValueType,
 };
 use rusqlite::{
     types::{FromSql, Value},
@@ -31,6 +33,10 @@ pub trait AsModel<T> {
 
 pub trait AsModelResult<T, E> {
     fn as_model(&self) -> Result<T, E>;
+}
+
+pub trait AsModelResultMapped<T, E> {
+    fn as_model_mapped<'a>(&'a self) -> Result<Vec<T>, E>;
 }
 
 pub trait AsModelResultMappedMut<T, E> {
@@ -243,6 +249,44 @@ impl AsModelResult<LibraryTrack, ParseError> for Row<'_> {
     }
 }
 
+impl ToValueType<LibraryTrack> for &moosicbox_database::Row {
+    fn to_value_type(self) -> Result<LibraryTrack, ParseError> {
+        Ok(LibraryTrack {
+            id: self.to_value("id")?,
+            number: self.to_value("number")?,
+            title: self.to_value("title")?,
+            duration: self.to_value("duration")?,
+            album: self.to_value("album").unwrap_or_default(),
+            album_id: self.to_value("album_id")?,
+            date_released: self.to_value("date_released").unwrap_or_default(),
+            date_added: self.to_value("date_added").unwrap_or_default(),
+            artist: self.to_value("artist").unwrap_or_default(),
+            artist_id: self.to_value("artist_id").unwrap_or_default(),
+            file: self.to_value("file")?,
+            artwork: self.to_value("artwork").unwrap_or_default(),
+            blur: self.to_value("blur").unwrap_or_default(),
+            bytes: self.to_value("bytes").unwrap_or_default(),
+            format: self
+                .to_value::<Option<String>>("format")
+                .unwrap_or(None)
+                .map(|s| {
+                    AudioFormat::from_str(&s)
+                        .map_err(|_e| ParseError::ConvertType(format!("Invalid format: {s}")))
+                })
+                .transpose()?,
+            bit_depth: self.to_value("bit_depth").unwrap_or_default(),
+            audio_bitrate: self.to_value("audio_bitrate").unwrap_or_default(),
+            overall_bitrate: self.to_value("overall_bitrate").unwrap_or_default(),
+            sample_rate: self.to_value("sample_rate").unwrap_or_default(),
+            channels: self.to_value("channels").unwrap_or_default(),
+            source: TrackApiSource::from_str(&self.to_value::<String>("source")?)
+                .expect("Missing source"),
+            qobuz_id: self.to_value("qobuz_id")?,
+            tidal_id: self.to_value("tidal_id")?,
+        })
+    }
+}
+
 impl AsModelResult<LibraryTrack, ParseError> for &Row<'_> {
     fn as_model(&self) -> Result<LibraryTrack, ParseError> {
         Ok(LibraryTrack {
@@ -398,6 +442,18 @@ impl AsModel<LibraryArtist> for Row<'_> {
     }
 }
 
+impl ToValueType<LibraryArtist> for &moosicbox_database::Row {
+    fn to_value_type(self) -> Result<LibraryArtist, ParseError> {
+        Ok(LibraryArtist {
+            id: self.to_value("id")?,
+            title: self.to_value("title")?,
+            cover: self.to_value("cover")?,
+            tidal_id: self.to_value("tidal_id")?,
+            qobuz_id: self.to_value("qobuz_id")?,
+        })
+    }
+}
+
 impl AsModelResult<LibraryArtist, ParseError> for Row<'_> {
     fn as_model(&self) -> Result<LibraryArtist, ParseError> {
         Ok(LibraryArtist {
@@ -490,6 +546,26 @@ impl AsModel<AlbumVersionQuality> for Row<'_> {
     }
 }
 
+impl ToValueType<AlbumVersionQuality> for &moosicbox_database::Row {
+    fn to_value_type(self) -> Result<AlbumVersionQuality, ParseError> {
+        Ok(AlbumVersionQuality {
+            format: self
+                .to_value::<Option<String>>("format")
+                .unwrap_or(None)
+                .map(|s| {
+                    AudioFormat::from_str(&s)
+                        .map_err(|_e| ParseError::ConvertType(format!("Invalid format: {s}")))
+                })
+                .transpose()?,
+            bit_depth: self.to_value("bit_depth").unwrap_or_default(),
+            sample_rate: self.to_value("sample_rate")?,
+            channels: self.to_value("channels")?,
+            source: TrackApiSource::from_str(&self.to_value::<String>("source")?)
+                .map_err(|e| ParseError::ConvertType(format!("Invalid source: {e:?}")))?,
+        })
+    }
+}
+
 impl AsModelResult<AlbumVersionQuality, ParseError> for Row<'_> {
     fn as_model(&self) -> Result<AlbumVersionQuality, ParseError> {
         Ok(AlbumVersionQuality {
@@ -578,6 +654,29 @@ impl AsModel<LibraryAlbum> for Row<'_> {
     }
 }
 
+impl MissingValue<LibraryAlbum> for &moosicbox_database::Row {}
+impl ToValueType<LibraryAlbum> for &moosicbox_database::Row {
+    fn to_value_type(self) -> Result<LibraryAlbum, ParseError> {
+        Ok(LibraryAlbum {
+            id: self.to_value("id")?,
+            artist: self.to_value("artist").unwrap_or_default(),
+            artist_id: self.to_value("artist_id")?,
+            title: self.to_value("title")?,
+            date_released: self.to_value("date_released")?,
+            date_added: self.to_value("date_added")?,
+            artwork: self.to_value("artwork")?,
+            directory: self.to_value("directory")?,
+            source: AlbumSource::Local,
+            blur: self.to_value("blur")?,
+            versions: vec![],
+            tidal_id: self.to_value("tidal_id")?,
+            qobuz_id: self.to_value("qobuz_id")?,
+            tidal_artist_id: self.to_value("tidal_artist_id")?,
+            qobuz_artist_id: self.to_value("qobuz_artist_id")?,
+        })
+    }
+}
+
 impl AsModelResult<LibraryAlbum, ParseError> for Row<'_> {
     fn as_model(&self) -> Result<LibraryAlbum, ParseError> {
         Ok(LibraryAlbum {
@@ -620,6 +719,103 @@ pub fn sort_album_versions(versions: &mut [AlbumVersionQuality]) {
             .cmp(&a.bit_depth.unwrap_or_default())
     });
     versions.sort_by(|a, b| track_source_to_u8(a.source).cmp(&track_source_to_u8(b.source)));
+}
+
+impl AsModelResultMapped<LibraryAlbum, DbError> for Vec<moosicbox_database::Row> {
+    fn as_model_mapped(&self) -> Result<Vec<LibraryAlbum>, DbError> {
+        let mut results: Vec<LibraryAlbum> = vec![];
+        let mut last_album_id = 0;
+
+        for row in self {
+            let album_id: i32 = row
+                .get("album_id")
+                .ok_or(DbError::InvalidRequest)?
+                .try_into()
+                .map_err(|_| DbError::InvalidRequest)?;
+
+            if album_id != last_album_id {
+                if let Some(ref mut album) = results.last_mut() {
+                    log::trace!(
+                        "Sorting versions for album id={} count={}",
+                        album.id,
+                        album.versions.len()
+                    );
+                    sort_album_versions(&mut album.versions);
+                }
+                match row.to_value_type() {
+                    Ok(album) => {
+                        results.push(album);
+                    }
+                    Err(err) => {
+                        log::error!("Failed to parse Album for album id={}: {err:?}", album_id);
+                        continue;
+                    }
+                }
+                last_album_id = album_id;
+            }
+
+            if let Some(album) = results.last_mut() {
+                if let Some(_source) = row.get("source") {
+                    match ToValueType::<AlbumVersionQuality>::to_value_type(row) {
+                        Ok(version) => {
+                            album.versions.push(version);
+                            log::trace!(
+                                "Added version to album id={} count={}",
+                                album.id,
+                                album.versions.len()
+                            );
+                        }
+                        Err(err) => {
+                            log::error!(
+                                "Failed to parse AlbumVersionQuality for album id={}: {err:?}",
+                                album.id
+                            );
+                        }
+                    }
+                } else {
+                    if album.tidal_id.is_some() {
+                        album.versions.push(AlbumVersionQuality {
+                            format: None,
+                            bit_depth: None,
+                            sample_rate: None,
+                            channels: None,
+                            source: TrackApiSource::Tidal,
+                        });
+                        log::trace!(
+                            "Added Tidal version to album id={} count={}",
+                            album.id,
+                            album.versions.len()
+                        );
+                    }
+                    if album.qobuz_id.is_some() {
+                        album.versions.push(AlbumVersionQuality {
+                            format: None,
+                            bit_depth: None,
+                            sample_rate: None,
+                            channels: None,
+                            source: TrackApiSource::Qobuz,
+                        });
+                        log::trace!(
+                            "Added Qobuz version to album id={} count={}",
+                            album.id,
+                            album.versions.len()
+                        );
+                    }
+                }
+            }
+        }
+
+        if let Some(ref mut album) = results.last_mut() {
+            log::trace!(
+                "Sorting versions for last album id={} count={}",
+                album.id,
+                album.versions.len()
+            );
+            sort_album_versions(&mut album.versions);
+        }
+
+        Ok(results)
+    }
 }
 
 impl AsModelResultMappedMut<LibraryAlbum, DbError> for Rows<'_> {
@@ -931,6 +1127,17 @@ impl Display for ApiSource {
     }
 }
 
+impl MissingValue<ApiSource> for &moosicbox_database::Row {}
+impl ToValueType<ApiSource> for DatabaseValue {
+    fn to_value_type(self) -> Result<ApiSource, ParseError> {
+        Ok(ApiSource::from_str(
+            self.as_str()
+                .ok_or_else(|| ParseError::ConvertType("ApiSource".into()))?,
+        )
+        .map_err(|_| ParseError::ConvertType("ApiSource".into()))?)
+    }
+}
+
 impl MissingValue<ApiSource> for &rusqlite::Row<'_> {}
 impl ToValueType<ApiSource> for Value {
     fn to_value_type(self) -> Result<ApiSource, ParseError> {
@@ -1234,6 +1441,16 @@ pub struct SessionPlaylistTrack {
     pub r#type: ApiSource,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<String>,
+}
+
+impl ToValueType<SessionPlaylistTrack> for &moosicbox_database::Row {
+    fn to_value_type(self) -> Result<SessionPlaylistTrack, ParseError> {
+        Ok(SessionPlaylistTrack {
+            id: self.to_value("track_id")?,
+            r#type: self.to_value("type")?,
+            data: self.to_value("data")?,
+        })
+    }
 }
 
 impl AsModelResult<SessionPlaylistTrack, ParseError> for Row<'_> {
@@ -1571,6 +1788,17 @@ pub struct TrackSize {
 impl AsModel<TrackSize> for Row<'_> {
     fn as_model(&self) -> TrackSize {
         AsModelResult::as_model(self).unwrap()
+    }
+}
+
+impl ToValueType<TrackSize> for &moosicbox_database::Row {
+    fn to_value_type(self) -> Result<TrackSize, ParseError> {
+        Ok(TrackSize {
+            id: self.to_value("id")?,
+            track_id: self.to_value("track_id")?,
+            bytes: self.to_value("bytes")?,
+            format: self.to_value("format")?,
+        })
     }
 }
 

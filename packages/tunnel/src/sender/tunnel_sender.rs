@@ -14,10 +14,11 @@ use lazy_static::lazy_static;
 use moosicbox_core::app::Db;
 use moosicbox_core::sqlite::models::{AlbumId, ApiSource};
 use moosicbox_core::types::AudioFormat;
+use moosicbox_database::Database;
 use moosicbox_env_utils::default_env_usize;
 use moosicbox_files::api::AlbumCoverQuery;
 use moosicbox_files::files::album::{get_album_cover, AlbumCoverError, AlbumCoverSource};
-use moosicbox_files::files::track::{get_track_info, get_track_source, TrackSource};
+use moosicbox_files::files::track::{get_track_id_source, get_track_info, TrackSource};
 use moosicbox_files::range::{parse_ranges, Range};
 use moosicbox_stream_utils::ByteWriter;
 use moosicbox_symphonia_player::media_sources::remote_bytestream::RemoteByteStream;
@@ -1021,6 +1022,7 @@ impl TunnelSender {
     pub async fn tunnel_request(
         &self,
         db: &Db,
+        database: Arc<Box<dyn Database>>,
         service_port: u16,
         request_id: usize,
         method: Method,
@@ -1073,7 +1075,14 @@ impl TunnelSender {
                     let mut response_headers = HashMap::new();
                     response_headers.insert("accept-ranges".to_string(), "bytes".to_string());
 
-                    match get_track_source(query.track_id, &db, query.quality, query.source).await {
+                    match get_track_id_source(
+                        query.track_id,
+                        database.clone(),
+                        query.quality,
+                        query.source,
+                    )
+                    .await
+                    {
                         Ok(TrackSource::LocalFilePath(path)) => {
                             static CONTENT_TYPE: &str = "content-type";
                             match query.format {
@@ -1261,18 +1270,26 @@ impl TunnelSender {
                                 TunnelRequestError::BadRequest("Invalid album_id".into())
                             })?;
 
-                            let width =
-                                caps.get(2).unwrap().as_str().parse::<u32>().map_err(|_| {
-                                    TunnelRequestError::BadRequest("Bad width".into())
-                                })?;
-                            let height =
-                                caps.get(3).unwrap().as_str().parse::<u32>().map_err(|_| {
-                                    TunnelRequestError::BadRequest("Bad height".into())
-                                })?;
+                            let width = caps
+                                .get(2)
+                                .ok_or(TunnelRequestError::BadRequest("Missing width".into()))?
+                                .as_str()
+                                .parse::<u32>()
+                                .map_err(|_| TunnelRequestError::BadRequest("Bad width".into()))?;
+                            let height = caps
+                                .get(3)
+                                .ok_or(TunnelRequestError::BadRequest("Missing height".into()))?
+                                .as_str()
+                                .parse::<u32>()
+                                .map_err(|_| TunnelRequestError::BadRequest("Bad height".into()))?;
 
-                            match get_album_cover(album_id, db, Some(std::cmp::max(width, height)))
-                                .await
-                                .map_err(|e| TunnelRequestError::Request(e.to_string()))?
+                            match get_album_cover(
+                                album_id,
+                                database.clone(),
+                                Some(std::cmp::max(width, height)),
+                            )
+                            .await
+                            .map_err(|e| TunnelRequestError::Request(e.to_string()))?
                             {
                                 AlbumCoverSource::LocalFilePath(path) => {
                                     let mut headers = HashMap::new();

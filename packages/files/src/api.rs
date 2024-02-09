@@ -17,7 +17,7 @@ use crate::files::{
     artist::{get_artist_cover, ArtistCoverError, ArtistCoverSource},
     resize_image_path,
     track::{
-        get_or_init_track_visualization, get_track_bytes, get_track_info, get_track_source,
+        get_or_init_track_visualization, get_track_bytes, get_track_id_source, get_track_info,
         get_tracks_info, GetTrackBytesError, TrackAudioQuality, TrackInfo, TrackInfoError,
         TrackSourceError,
     },
@@ -34,14 +34,14 @@ pub struct GetTrackQuery {
 
 impl From<TrackSourceError> for actix_web::Error {
     fn from(err: TrackSourceError) -> Self {
-        log::error!("{err:?}");
+        log::error!("TrackSourceError {err:?}");
         ErrorInternalServerError(err.to_string())
     }
 }
 
 impl From<TrackInfoError> for actix_web::Error {
     fn from(err: TrackInfoError) -> Self {
-        log::error!("{err:?}");
+        log::error!("TrackInfoError {err:?}");
         ErrorInternalServerError(err.to_string())
     }
 }
@@ -59,16 +59,7 @@ pub async fn track_visualization_endpoint(
     query: web::Query<GetTrackVisualizationQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<Vec<u8>>> {
-    let source = get_track_source(
-        query.track_id,
-        &data
-            .db
-            .clone()
-            .ok_or(ErrorInternalServerError("No DB set"))?,
-        None,
-        None,
-    )
-    .await?;
+    let source = get_track_id_source(query.track_id, data.database.clone(), None, None).await?;
 
     Ok(Json(get_or_init_track_visualization(
         query.track_id,
@@ -79,7 +70,7 @@ pub async fn track_visualization_endpoint(
 
 impl From<GetTrackBytesError> for actix_web::Error {
     fn from(err: GetTrackBytesError) -> Self {
-        log::error!("{err:?}");
+        log::error!("GetTrackBytesError {err:?}");
         match err {
             GetTrackBytesError::Db(_) => ErrorInternalServerError(err),
             GetTrackBytesError::Reqwest(_) => ErrorInternalServerError(err),
@@ -95,12 +86,9 @@ pub async fn track_endpoint(
     query: web::Query<GetTrackQuery>,
     data: web::Data<AppState>,
 ) -> Result<HttpResponse> {
-    let source = get_track_source(
+    let source = get_track_id_source(
         query.track_id as i32,
-        &data
-            .db
-            .clone()
-            .ok_or(ErrorInternalServerError("No DB set"))?,
+        data.database.clone(),
         query.quality,
         query.source,
     )
@@ -109,7 +97,7 @@ pub async fn track_endpoint(
     let format = query.format.unwrap_or_default();
 
     let bytes = get_track_bytes(
-        data.db.as_ref().expect("No DB set"),
+        data.database.clone(),
         query.track_id,
         source,
         format,
@@ -241,16 +229,7 @@ pub async fn artist_source_artwork_endpoint(
     }
     .map_err(|_e| ErrorBadRequest("Invalid artist_id"))?;
 
-    match get_artist_cover(
-        artist_id,
-        &data
-            .db
-            .clone()
-            .ok_or(ErrorInternalServerError("No DB set"))?,
-        None,
-    )
-    .await?
-    {
+    match get_artist_cover(artist_id, data.database.clone(), None).await? {
         ArtistCoverSource::LocalFilePath(path) => {
             let path_buf = std::path::PathBuf::from(path);
             let file_path = path_buf.as_path();
@@ -297,10 +276,7 @@ pub async fn artist_cover_endpoint(
 
     let ArtistCoverSource::LocalFilePath(path) = get_artist_cover(
         artist_id,
-        &data
-            .db
-            .clone()
-            .ok_or(ErrorInternalServerError("No DB set"))?,
+        data.database.clone(),
         Some(std::cmp::max(width, height)),
     )
     .await?;
@@ -338,16 +314,7 @@ pub async fn album_source_artwork_endpoint(
     }
     .map_err(|_e| ErrorBadRequest("Invalid album_id"))?;
 
-    match get_album_cover(
-        album_id,
-        &data
-            .db
-            .clone()
-            .ok_or(ErrorInternalServerError("No DB set"))?,
-        None,
-    )
-    .await?
-    {
+    match get_album_cover(album_id, data.database.clone(), None).await? {
         AlbumCoverSource::LocalFilePath(path) => {
             let path_buf = std::path::PathBuf::from(path);
             let file_path = path_buf.as_path();
@@ -394,10 +361,7 @@ pub async fn album_artwork_endpoint(
 
     let AlbumCoverSource::LocalFilePath(path) = get_album_cover(
         album_id,
-        &data
-            .db
-            .clone()
-            .ok_or(ErrorInternalServerError("No DB set"))?,
+        data.database.clone(),
         Some(std::cmp::max(width, height)),
     )
     .await?;

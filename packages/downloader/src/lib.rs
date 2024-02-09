@@ -20,14 +20,17 @@ use db::{
 use id3::Timestamp;
 use moosicbox_config::get_config_dir_path;
 use moosicbox_core::{
-    app::Db,
     integer_range::{parse_integer_ranges, ParseIntegersError},
     sqlite::{
-        db::{get_album, get_album_tracks, get_artist_by_album_id, get_track, get_tracks, DbError},
+        db::{
+            get_album_database, get_album_tracks_database, get_artist_by_album_id_database,
+            get_track_database, get_tracks_database, DbError,
+        },
         models::{LibraryTrack, TrackApiSource},
     },
     types::AudioFormat,
 };
+use moosicbox_database::{Database, DatabaseValue};
 use moosicbox_files::{
     files::{
         album::{get_library_album_cover_bytes, AlbumCoverError},
@@ -59,13 +62,14 @@ pub enum GetDownloadPathError {
     NotFound,
 }
 
-pub fn get_download_path(
-    db: &Db,
+pub async fn get_download_path(
+    db: Arc<Box<dyn Database>>,
     location_id: Option<u64>,
 ) -> Result<PathBuf, GetDownloadPathError> {
     Ok(if let Some(location_id) = location_id {
         PathBuf::from_str(
-            &get_download_location(&db.library.lock().as_ref().unwrap().inner, location_id)?
+            &get_download_location(&db, location_id)
+                .await?
                 .ok_or(GetDownloadPathError::NotFound)?
                 .path,
         )
@@ -89,8 +93,8 @@ pub enum GetCreateDownloadTasksError {
     NotFound,
 }
 
-pub fn get_create_download_tasks(
-    db: &Db,
+pub async fn get_create_download_tasks(
+    db: Arc<Box<dyn Database>>,
     download_path: &Path,
     track_id: Option<u64>,
     track_ids: Option<String>,
@@ -104,67 +108,76 @@ pub fn get_create_download_tasks(
     let mut tasks = vec![];
 
     if let Some(track_id) = track_id {
-        tasks.extend(get_create_download_tasks_for_track_ids(
-            db,
-            &[track_id],
-            download_path,
-            source,
-            quality,
-        )?);
+        tasks.extend(
+            get_create_download_tasks_for_track_ids(
+                db.clone(),
+                &[track_id],
+                download_path,
+                source,
+                quality,
+            )
+            .await?,
+        );
     }
 
     if let Some(track_ids) = &track_ids {
         let track_ids = parse_integer_ranges(track_ids)?;
 
-        tasks.extend(get_create_download_tasks_for_track_ids(
-            db,
-            &track_ids,
-            download_path,
-            source,
-            quality,
-        )?);
+        tasks.extend(
+            get_create_download_tasks_for_track_ids(
+                db.clone(),
+                &track_ids,
+                download_path,
+                source,
+                quality,
+            )
+            .await?,
+        );
     }
 
     if let Some(album_id) = album_id {
-        tasks.extend(get_create_download_tasks_for_album_ids(
-            db,
-            &[album_id],
-            download_path,
-            source,
-            quality,
-            download_album_cover,
-            download_artist_cover,
-        )?);
+        tasks.extend(
+            get_create_download_tasks_for_album_ids(
+                db.clone(),
+                &[album_id],
+                download_path,
+                source,
+                quality,
+                download_album_cover,
+                download_artist_cover,
+            )
+            .await?,
+        );
     }
 
     if let Some(album_ids) = &album_ids {
         let album_ids = parse_integer_ranges(album_ids)?;
 
-        tasks.extend(get_create_download_tasks_for_album_ids(
-            db,
-            &album_ids,
-            download_path,
-            source,
-            quality,
-            download_album_cover,
-            download_artist_cover,
-        )?);
+        tasks.extend(
+            get_create_download_tasks_for_album_ids(
+                db,
+                &album_ids,
+                download_path,
+                source,
+                quality,
+                download_album_cover,
+                download_artist_cover,
+            )
+            .await?,
+        );
     }
 
     Ok(tasks)
 }
 
-pub fn get_create_download_tasks_for_track_ids(
-    db: &Db,
+pub async fn get_create_download_tasks_for_track_ids(
+    db: Arc<Box<dyn Database>>,
     track_ids: &[u64],
     download_path: &Path,
     source: Option<DownloadApiSource>,
     quality: Option<TrackAudioQuality>,
 ) -> Result<Vec<CreateDownloadTask>, GetCreateDownloadTasksError> {
-    let tracks = get_tracks(
-        &db.library.lock().as_ref().unwrap().inner,
-        Some(&track_ids.iter().map(|id| *id as i32).collect::<Vec<_>>()),
-    )?;
+    let tracks = get_tracks_database(&db, Some(&track_ids.to_vec())).await?;
 
     get_create_download_tasks_for_tracks(&tracks, download_path, source, quality)
 }
@@ -210,8 +223,8 @@ pub fn get_create_download_tasks_for_tracks(
         .collect::<Result<Vec<_>, _>>()?)
 }
 
-pub fn get_create_download_tasks_for_album_ids(
-    db: &Db,
+pub async fn get_create_download_tasks_for_album_ids(
+    db: Arc<Box<dyn Database>>,
     album_ids: &[u64],
     download_path: &Path,
     source: Option<DownloadApiSource>,
@@ -222,18 +235,18 @@ pub fn get_create_download_tasks_for_album_ids(
     let mut tasks = vec![];
 
     for album_id in album_ids {
-        let tracks =
-            get_album_tracks(&db.library.lock().as_ref().unwrap().inner, *album_id as i32)?
-                .into_iter()
-                .filter(|track| {
-                    if let Some(source) = source {
-                        let track_source = source.into();
-                        track.source == track_source
-                    } else {
-                        track.source != TrackApiSource::Local
-                    }
-                })
-                .collect::<Vec<_>>();
+        let tracks = get_album_tracks_database(&db, *album_id)
+            .await?
+            .into_iter()
+            .filter(|track| {
+                if let Some(source) = source {
+                    let track_source = source.into();
+                    track.source == track_source
+                } else {
+                    track.source != TrackApiSource::Local
+                }
+            })
+            .collect::<Vec<_>>();
 
         tasks.extend(get_create_download_tasks_for_tracks(
             &tracks,
@@ -243,24 +256,19 @@ pub fn get_create_download_tasks_for_album_ids(
         )?);
 
         if download_album_cover || download_artist_cover {
-            let album_path = tracks
-                .first()
-                .map(|track| {
-                    Ok::<_, GetCreateDownloadTasksError>(
-                        download_path
-                            .join(&sanitize_filename(&track.artist))
-                            .join(&sanitize_filename(&track.album)),
-                    )
-                })
-                .unwrap_or_else(|| {
-                    let album =
-                        get_album(&db.library.lock().as_ref().unwrap().inner, *album_id as i32)?
-                            .ok_or(GetCreateDownloadTasksError::NotFound)?;
+            let album_path = if let Some(track) = tracks.first() {
+                download_path
+                    .join(&sanitize_filename(&track.artist))
+                    .join(&sanitize_filename(&track.album))
+            } else {
+                let album = get_album_database(&db, "id", DatabaseValue::UNumber(*album_id))
+                    .await?
+                    .ok_or(GetCreateDownloadTasksError::NotFound)?;
 
-                    Ok(download_path
-                        .join(&sanitize_filename(&album.artist))
-                        .join(&sanitize_filename(&album.title)))
-                })?;
+                download_path
+                    .join(&sanitize_filename(&album.artist))
+                    .join(&sanitize_filename(&album.title))
+            };
 
             if download_album_cover {
                 tasks.push(CreateDownloadTask {
@@ -292,16 +300,17 @@ pub enum CreateDownloadTasksError {
     Db(#[from] DbError),
 }
 
-pub fn create_download_tasks(
-    db: &Db,
+pub async fn create_download_tasks(
+    db: Arc<Box<dyn Database>>,
     tasks: Vec<CreateDownloadTask>,
 ) -> Result<Vec<DownloadTask>, CreateDownloadTasksError> {
-    let db = &db.library.lock().unwrap().inner;
+    let mut results = vec![];
 
-    Ok(tasks
-        .into_iter()
-        .map(|task| create_download_task(db, &task))
-        .collect::<Result<Vec<_>, _>>()?)
+    for task in tasks {
+        results.push(create_download_task(&db, &task).await?);
+    }
+
+    Ok(results)
 }
 
 fn get_filename_for_track(track: &LibraryTrack) -> String {
@@ -337,7 +346,7 @@ pub enum DownloadTrackError {
 }
 
 pub async fn download_track_id(
-    db: &Db,
+    db: Arc<Box<dyn Database>>,
     path: &str,
     track_id: u64,
     quality: TrackAudioQuality,
@@ -348,7 +357,8 @@ pub async fn download_track_id(
 ) -> Result<(), DownloadTrackError> {
     log::debug!("Starting download for track_id={track_id} quality={quality:?} source={source:?} path={path}");
 
-    let track = get_track(&db.library.lock().as_ref().unwrap().inner, track_id as i32)?
+    let track = get_track_database(&db, track_id)
+        .await?
         .ok_or(DownloadTrackError::NotFound)?;
 
     download_track(
@@ -367,7 +377,7 @@ pub async fn download_track_id(
 
 #[async_recursion]
 async fn download_track(
-    db: &Db,
+    db: Arc<Box<dyn Database>>,
     path: &str,
     track: &LibraryTrack,
     quality: TrackAudioQuality,
@@ -378,7 +388,7 @@ async fn download_track(
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadTrackError> {
     match download_track_inner(
-        db,
+        db.clone(),
         path,
         track,
         quality,
@@ -408,7 +418,7 @@ async fn download_track(
             DownloadTrackInnerError::Timeout(start) => {
                 log::warn!("Track download timed out. Trying again at start {start:?}");
                 return download_track(
-                    db,
+                    db.clone(),
                     path,
                     track,
                     quality,
@@ -449,7 +459,7 @@ pub enum DownloadTrackInnerError {
 }
 
 async fn download_track_inner(
-    db: &Db,
+    db: Arc<Box<dyn Database>>,
     path: &str,
     track: &LibraryTrack,
     quality: TrackAudioQuality,
@@ -463,7 +473,7 @@ async fn download_track_inner(
         "Starting download for track={track:?} quality={quality:?} source={source:?} path={path} start={start:?}"
     );
 
-    let req = get_track_source(track.id, db, Some(quality), Some(source.into()));
+    let req = get_track_source(track, db.clone(), Some(quality), Some(source.into()));
 
     let result = if let Some(timeout_duration) = timeout_duration {
         select! {
@@ -646,7 +656,7 @@ pub enum DownloadAlbumError {
 }
 
 pub async fn download_album_id(
-    db: &Db,
+    db: Arc<Box<dyn Database>>,
     path: &str,
     album_id: u64,
     try_download_album_cover: bool,
@@ -660,14 +670,15 @@ pub async fn download_album_id(
     log::debug!("Starting download for album_id={album_id} quality={quality:?} source={source:?} path={path}");
 
     let track_source = source.into();
-    let tracks = get_album_tracks(&db.library.lock().as_ref().unwrap().inner, album_id as i32)?
+    let tracks = get_album_tracks_database(&db, album_id)
+        .await?
         .into_iter()
         .filter(|track| track.source == track_source)
         .collect::<Vec<_>>();
 
     for track in tracks.iter() {
         download_track(
-            db,
+            db.clone(),
             path,
             track,
             quality,
@@ -683,7 +694,7 @@ pub async fn download_album_id(
     log::debug!("Completed album download for {} tracks", tracks.len());
 
     if try_download_album_cover {
-        download_album_cover(db, path, album_id, on_size, speed.clone()).await?;
+        download_album_cover(db.clone(), path, album_id, on_size, speed.clone()).await?;
     }
 
     if try_download_artist_cover {
@@ -694,7 +705,7 @@ pub async fn download_album_id(
 }
 
 pub async fn download_album_cover(
-    db: &Db,
+    db: Arc<Box<dyn Database>>,
     path: &str,
     album_id: u64,
     on_size: &mut (impl FnMut(Option<u64>) + Send + Sync),
@@ -752,7 +763,7 @@ pub async fn download_album_cover(
 }
 
 pub async fn download_artist_cover(
-    db: &Db,
+    db: Arc<Box<dyn Database>>,
     path: &str,
     album_id: u64,
     on_size: &mut (impl FnMut(Option<u64>) + Send + Sync),
@@ -767,9 +778,9 @@ pub async fn download_artist_cover(
         return Ok(());
     }
 
-    let artist =
-        get_artist_by_album_id(&db.library.lock().as_ref().unwrap().inner, album_id as i32)?
-            .ok_or(DownloadAlbumError::NotFound)?;
+    let artist = get_artist_by_album_id_database(&db, album_id)
+        .await?
+        .ok_or(DownloadAlbumError::NotFound)?;
 
     let bytes = match get_library_artist_cover_bytes(artist.id, db, true).await {
         Ok(bytes) => bytes,
@@ -813,13 +824,12 @@ pub async fn download_artist_cover(
 
 #[async_trait]
 pub trait Downloader {
-    fn speed(&self) -> f64 {
-        0.0
+    fn speed(&self) -> Option<f64> {
+        None
     }
 
     async fn download_track_id(
         &self,
-        db: &Db,
         path: &str,
         track_id: u64,
         quality: TrackAudioQuality,
@@ -830,7 +840,6 @@ pub trait Downloader {
 
     async fn download_album_cover(
         &self,
-        db: &Db,
         path: &str,
         album_id: u64,
         on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
@@ -838,7 +847,6 @@ pub trait Downloader {
 
     async fn download_artist_cover(
         &self,
-        db: &Db,
         path: &str,
         album_id: u64,
         on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
@@ -847,25 +855,26 @@ pub trait Downloader {
 
 pub struct MoosicboxDownloader {
     speed: Arc<AtomicF64>,
+    db: Arc<Box<dyn Database>>,
 }
 
 impl MoosicboxDownloader {
-    pub fn new() -> Self {
+    pub fn new(db: Arc<Box<dyn Database>>) -> Self {
         Self {
             speed: Arc::new(AtomicF64::new(0.0)),
+            db,
         }
     }
 }
 
 #[async_trait]
 impl Downloader for MoosicboxDownloader {
-    fn speed(&self) -> f64 {
-        self.speed.load(std::sync::atomic::Ordering::SeqCst)
+    fn speed(&self) -> Option<f64> {
+        Some(self.speed.load(std::sync::atomic::Ordering::SeqCst))
     }
 
     async fn download_track_id(
         &self,
-        db: &Db,
         path: &str,
         track_id: u64,
         quality: TrackAudioQuality,
@@ -874,7 +883,7 @@ impl Downloader for MoosicboxDownloader {
         timeout_duration: Option<Duration>,
     ) -> Result<(), DownloadTrackError> {
         download_track_id(
-            db,
+            self.db.clone(),
             path,
             track_id,
             quality,
@@ -888,21 +897,33 @@ impl Downloader for MoosicboxDownloader {
 
     async fn download_album_cover(
         &self,
-        db: &Db,
         path: &str,
         album_id: u64,
         mut on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
     ) -> Result<(), DownloadAlbumError> {
-        download_album_cover(db, path, album_id, &mut on_size, self.speed.clone()).await
+        download_album_cover(
+            self.db.clone(),
+            path,
+            album_id,
+            &mut on_size,
+            self.speed.clone(),
+        )
+        .await
     }
 
     async fn download_artist_cover(
         &self,
-        db: &Db,
         path: &str,
         album_id: u64,
         mut on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
     ) -> Result<(), DownloadAlbumError> {
-        download_artist_cover(db, path, album_id, &mut on_size, self.speed.clone()).await
+        download_artist_cover(
+            self.db.clone(),
+            path,
+            album_id,
+            &mut on_size,
+            self.speed.clone(),
+        )
+        .await
     }
 }

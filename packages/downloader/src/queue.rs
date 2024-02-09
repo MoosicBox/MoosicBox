@@ -1,8 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
 use lazy_static::lazy_static;
-use moosicbox_core::{app::Db, sqlite::db::DbError};
-use moosicbox_database::{rusqlite::RusqliteDatabase, Database, DatabaseError, DatabaseValue, Row};
+use moosicbox_core::sqlite::db::DbError;
+use moosicbox_database::{Database, DatabaseError, DatabaseValue, Row};
 use thiserror::Error;
 use tokio::{
     sync::{Mutex, RwLock},
@@ -11,7 +11,7 @@ use tokio::{
 
 use crate::{
     db::models::{DownloadItem, DownloadTask, DownloadTaskState},
-    DownloadAlbumError, DownloadTrackError, Downloader, MoosicboxDownloader,
+    DownloadAlbumError, DownloadTrackError, Downloader,
 };
 
 lazy_static! {
@@ -27,6 +27,8 @@ lazy_static! {
 pub enum UpdateTaskError {
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    #[error("No database")]
+    NoDatabase,
     #[error("No row")]
     NoRow,
 }
@@ -45,6 +47,10 @@ pub enum ProcessDownloadQueueError {
     DownloadTrack(#[from] DownloadTrackError),
     #[error(transparent)]
     DownloadAlbum(#[from] DownloadAlbumError),
+    #[error("No database")]
+    NoDatabase,
+    #[error("No downloader")]
+    NoDownloader,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -79,48 +85,55 @@ impl DownloadQueueState {
     }
 }
 
+pub type ProgressListener = Box<dyn Fn() + Send + Sync>;
+
 #[derive(Clone)]
 pub struct DownloadQueue {
-    db: Db,
-    database: Arc<Box<dyn Database + Send + Sync>>,
-    downloader: Arc<Box<dyn Downloader + Send + Sync>>,
+    progress_listeners: Arc<RwLock<Vec<ProgressListener>>>,
+    database: Option<Arc<Box<dyn Database>>>,
+    downloader: Option<Arc<Box<dyn Downloader + Send + Sync>>>,
     state: Arc<RwLock<DownloadQueueState>>,
     join_handle: Arc<Mutex<Option<JoinHandle<Result<(), ProcessDownloadQueueError>>>>>,
 }
 
 impl DownloadQueue {
-    pub fn new(db: Db) -> Self {
+    pub fn new() -> Self {
         Self {
-            db: db.clone(),
-            database: Arc::new(Box::new(RusqliteDatabase::new(db.library))),
-            downloader: Arc::new(Box::new(MoosicboxDownloader::new())),
+            progress_listeners: Arc::new(RwLock::new(vec![])),
+            database: None,
+            downloader: None,
             state: Arc::new(RwLock::new(DownloadQueueState::new())),
             join_handle: Arc::new(Mutex::new(None)),
         }
     }
 
-    pub fn with_database(self, database: Box<dyn Database + Send + Sync>) -> Self {
-        Self {
-            db: self.db.clone(),
-            database: Arc::new(database),
-            downloader: self.downloader.clone(),
-            state: self.state.clone(),
-            join_handle: self.join_handle.clone(),
-        }
+    pub fn has_database(&self) -> bool {
+        self.database.is_some()
     }
 
-    pub fn with_downloader(self, downloader: Box<dyn Downloader + Send + Sync>) -> Self {
-        Self {
-            db: self.db.clone(),
-            database: self.database.clone(),
-            downloader: Arc::new(downloader),
-            state: self.state.clone(),
-            join_handle: self.join_handle.clone(),
-        }
+    pub fn with_database(&mut self, database: Arc<Box<dyn Database>>) -> Self {
+        self.database.replace(database);
+        self.clone()
     }
 
-    pub fn speed(&self) -> f64 {
-        self.downloader.speed()
+    pub fn has_downloader(&self) -> bool {
+        self.downloader.is_some()
+    }
+
+    pub fn with_downloader(&mut self, downloader: Box<dyn Downloader + Send + Sync>) -> Self {
+        self.downloader.replace(Arc::new(downloader));
+        self.clone()
+    }
+
+    pub async fn add_progress_listener(&self, listener: ProgressListener) -> &Self {
+        self.progress_listeners.write().await.push(listener);
+        self
+    }
+
+    pub fn speed(&self) -> Option<f64> {
+        self.downloader
+            .clone()
+            .and_then(|downloader| downloader.speed())
     }
 
     pub async fn add_task_to_queue(&mut self, task: DownloadTask) {
@@ -214,7 +227,14 @@ impl DownloadQueue {
     ) -> Result<Row, UpdateTaskError> {
         Ok(self
             .database
-            .update_and_get_row("download_tasks", DatabaseValue::UNumber(task_id), values)
+            .clone()
+            .ok_or(UpdateTaskError::NoDatabase)?
+            .update_and_get_row(
+                "download_tasks",
+                DatabaseValue::UNumber(task_id),
+                values,
+                None,
+            )
             .await?
             .ok_or(UpdateTaskError::NoRow)?)
     }
@@ -229,7 +249,11 @@ impl DownloadQueue {
             .await?;
 
         let mut task_size = None;
-        let database = self.database.clone();
+        let database = self
+            .database
+            .clone()
+            .ok_or(ProcessDownloadQueueError::NoDatabase)?;
+
         let task_id = task.id;
         let on_size = Box::new(move |size| {
             log::debug!("Got size of task: {size:?}");
@@ -242,6 +266,7 @@ impl DownloadQueue {
                             "download_tasks",
                             DatabaseValue::UNumber(task_id),
                             &[("total_bytes", DatabaseValue::UNumber(size))],
+                            None,
                         )
                         .await
                     {
@@ -251,15 +276,19 @@ impl DownloadQueue {
             }
         });
 
+        let downloader = self
+            .downloader
+            .clone()
+            .ok_or(ProcessDownloadQueueError::NoDownloader)?;
+
         match task.item {
             DownloadItem::Track {
                 track_id,
                 quality,
                 source,
             } => {
-                self.downloader
+                downloader
                     .download_track_id(
-                        &self.db,
                         &task.file_path,
                         track_id,
                         quality,
@@ -270,13 +299,13 @@ impl DownloadQueue {
                     .await?
             }
             DownloadItem::AlbumCover(album_id) => {
-                self.downloader
-                    .download_album_cover(&self.db, &task.file_path, album_id, on_size)
+                downloader
+                    .download_album_cover(&task.file_path, album_id, on_size)
                     .await?;
             }
             DownloadItem::ArtistCover(album_id) => {
-                self.downloader
-                    .download_artist_cover(&self.db, &task.file_path, album_id, on_size)
+                downloader
+                    .download_artist_cover(&task.file_path, album_id, on_size)
                     .await?;
             }
         }
@@ -312,7 +341,7 @@ impl Drop for DownloadQueue {
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
-    use moosicbox_database::{DbConnection, Row};
+    use moosicbox_database::{BooleanExpression, Join, Row};
     use moosicbox_files::files::track::TrackAudioQuality;
     use pretty_assertions::assert_eq;
 
@@ -326,7 +355,6 @@ mod tests {
     impl Downloader for TestDownloader {
         async fn download_track_id(
             &self,
-            _db: &Db,
             _path: &str,
             _track_id: u64,
             _quality: moosicbox_files::files::track::TrackAudioQuality,
@@ -339,7 +367,6 @@ mod tests {
 
         async fn download_album_cover(
             &self,
-            _db: &Db,
             _path: &str,
             _album_id: u64,
             _on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
@@ -349,7 +376,6 @@ mod tests {
 
         async fn download_artist_cover(
             &self,
-            _db: &Db,
             _path: &str,
             _album_id: u64,
             _on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
@@ -362,24 +388,81 @@ mod tests {
 
     #[async_trait]
     impl Database for TestDatabase {
-        async fn update_and_get_row<'a>(
+        async fn select(
+            &self,
+            _table_name: &str,
+            _columns: &[&str],
+            _filters: Option<&[Box<dyn BooleanExpression>]>,
+            _joins: Option<&[Join]>,
+            _params: Option<&[DatabaseValue]>,
+        ) -> Result<Vec<Row>, DatabaseError> {
+            Ok(vec![])
+        }
+
+        async fn select_distinct(
+            &self,
+            _table_name: &str,
+            _columns: &[&str],
+            _filters: Option<&[Box<dyn BooleanExpression>]>,
+            _joins: Option<&[Join]>,
+            _params: Option<&[DatabaseValue]>,
+        ) -> Result<Vec<Row>, DatabaseError> {
+            Ok(vec![])
+        }
+
+        async fn select_first(
+            &self,
+            _table_name: &str,
+            _columns: &[&str],
+            _filters: Option<&[Box<dyn BooleanExpression>]>,
+            _joins: Option<&[Join]>,
+            _params: Option<&[DatabaseValue]>,
+        ) -> Result<Option<Row>, DatabaseError> {
+            Ok(Some(Row { columns: vec![] }))
+        }
+
+        async fn delete(
+            &self,
+            _table_name: &str,
+            _filters: Option<&[Box<dyn BooleanExpression>]>,
+            _params: Option<&[DatabaseValue]>,
+        ) -> Result<Vec<Row>, DatabaseError> {
+            Ok(vec![])
+        }
+
+        async fn upsert(
+            &self,
+            _table_name: &str,
+            _values: &[(&str, DatabaseValue)],
+            _filters: Option<&[Box<dyn BooleanExpression>]>,
+            _params: Option<&[DatabaseValue]>,
+        ) -> Result<Row, DatabaseError> {
+            Ok(Row { columns: vec![] })
+        }
+
+        async fn upsert_multi(
+            &self,
+            _table_name: &str,
+            _unique: &[&str],
+            _values: &[Vec<(&str, DatabaseValue)>],
+        ) -> Result<Vec<Row>, DatabaseError> {
+            Ok(vec![])
+        }
+
+        async fn update_and_get_row(
             &self,
             _table_name: &str,
             _id: DatabaseValue,
-            _values: &[(&'a str, DatabaseValue)],
+            _values: &[(&str, DatabaseValue)],
+            _params: Option<&[DatabaseValue]>,
         ) -> Result<Option<Row>, DatabaseError> {
             Ok(Some(Row { columns: vec![] }))
         }
     }
 
     fn new_queue() -> DownloadQueue {
-        let library = ::rusqlite::Connection::open_in_memory().unwrap();
-        let db = Db {
-            library: Arc::new(std::sync::Mutex::new(DbConnection { inner: library })),
-        };
-
-        DownloadQueue::new(db)
-            .with_database(Box::new(TestDatabase {}))
+        DownloadQueue::new()
+            .with_database(Arc::new(Box::new(TestDatabase {})))
             .with_downloader(Box::new(TestDownloader {}))
     }
 

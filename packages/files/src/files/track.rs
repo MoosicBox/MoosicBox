@@ -14,12 +14,15 @@ use log::{debug, error, trace};
 use moosicbox_core::{
     app::Db,
     sqlite::{
-        db::{get_track, get_track_size, get_tracks, set_track_size, DbError, SetTrackSize},
+        db::{
+            get_track, get_track_database, get_track_size, get_tracks, set_track_size, DbError,
+            SetTrackSize,
+        },
         models::{LibraryTrack, TrackApiSource},
     },
     types::{AudioFormat, PlaybackQuality},
 };
-use moosicbox_database::DbConnection;
+use moosicbox_database::{Database, DatabaseValue};
 use moosicbox_json_utils::{MissingValue, ParseError, ToValueType};
 use moosicbox_qobuz::{QobuzAudioQuality, QobuzTrackFileUrlError};
 use moosicbox_stream_utils::{stalled_monitor::StalledReadMonitor, ByteWriter};
@@ -68,6 +71,17 @@ pub enum TrackAudioQuality {
     FlacHiRes,    // FLAC 24 bit <= 96kHz
     #[default]
     FlacHighestRes, // FLAC 24 bit > 96kHz <= 192kHz
+}
+
+impl MissingValue<TrackAudioQuality> for &moosicbox_database::Row {}
+impl ToValueType<TrackAudioQuality> for DatabaseValue {
+    fn to_value_type(self) -> Result<TrackAudioQuality, ParseError> {
+        Ok(TrackAudioQuality::from_str(
+            self.as_str()
+                .ok_or_else(|| ParseError::ConvertType("TrackAudioQuality".into()))?,
+        )
+        .map_err(|_| ParseError::ConvertType("TrackAudioQuality".into()))?)
+    }
 }
 
 impl ToValueType<TrackAudioQuality> for &serde_json::Value {
@@ -127,33 +141,38 @@ pub enum TrackSourceError {
     QobuzTrackUrl(#[from] QobuzTrackFileUrlError),
 }
 
-pub async fn get_track_source(
+pub async fn get_track_id_source(
     track_id: i32,
-    db: &Db,
+    db: Arc<Box<dyn Database>>,
     quality: Option<TrackAudioQuality>,
     source: Option<TrackApiSource>,
 ) -> Result<TrackSource, TrackSourceError> {
     debug!("Getting track audio file {track_id} quality={quality:?} source={source:?}");
 
-    let track = {
-        let library = db.library.lock().unwrap();
-        get_track(&library.inner, track_id)?
-    };
+    let track = get_track_database(&db, track_id as u64)
+        .await?
+        .ok_or(TrackSourceError::NotFound(track_id))?;
 
-    let source = source
-        .or_else(|| track.as_ref().map(|track| track.source))
-        .unwrap_or(TrackApiSource::Local);
+    get_track_source(&track, db, quality, source).await
+}
+
+pub async fn get_track_source(
+    track: &LibraryTrack,
+    db: Arc<Box<dyn Database>>,
+    quality: Option<TrackAudioQuality>,
+    source: Option<TrackApiSource>,
+) -> Result<TrackSource, TrackSourceError> {
+    debug!(
+        "Getting track audio file {} quality={quality:?} source={source:?}",
+        track.id
+    );
+
+    let source = source.unwrap_or(track.source);
 
     debug!("Got track {track:?}. Getting source={source:?}");
 
-    if track.is_none() {
-        return Err(TrackSourceError::NotFound(track_id));
-    }
-
-    let track = track.unwrap();
-
     match source {
-        TrackApiSource::Local => match track.file {
+        TrackApiSource::Local => match &track.file {
             Some(file) => match env::consts::OS {
                 "windows" => Ok(TrackSource::LocalFilePath(
                     Regex::new(r"/mnt/(\w+)")
@@ -163,7 +182,7 @@ pub async fn get_track_source(
                         })
                         .replace('/', "\\"),
                 )),
-                _ => Ok(TrackSource::LocalFilePath(file)),
+                _ => Ok(TrackSource::LocalFilePath(file.to_string())),
             },
             None => Err(TrackSourceError::InvalidSource),
         },
@@ -223,7 +242,7 @@ pub struct TrackBytes {
 }
 
 pub async fn get_track_bytes(
-    db: &Db,
+    db: Arc<Box<dyn Database>>,
     track_id: u64,
     source: TrackSource,
     format: AudioFormat,
@@ -238,18 +257,26 @@ pub async fn get_track_bytes(
             track_id as i32,
             &source,
             PlaybackQuality { format },
-            &db.library.lock().as_ref().unwrap(),
-        ) {
+            db.clone(),
+        )
+        .await
+        {
             Ok(size) => Some(size),
-            Err(err) => match err {
-                TrackInfoError::UnsupportedFormat(_) | TrackInfoError::UnsupportedSource(_) => None,
-                TrackInfoError::NotFound(_) => {
-                    return Err(GetTrackBytesError::NotFound);
+            Err(err) => {
+                log::error!("get_track_bytes error: {err:?}");
+
+                match err {
+                    TrackInfoError::UnsupportedFormat(_) | TrackInfoError::UnsupportedSource(_) => {
+                        None
+                    }
+                    TrackInfoError::NotFound(_) => {
+                        return Err(GetTrackBytesError::NotFound);
+                    }
+                    _ => {
+                        return Err(GetTrackBytesError::TrackInfo(err));
+                    }
                 }
-                _ => {
-                    return Err(GetTrackBytesError::TrackInfo(err));
-                }
-            },
+            }
         }
     } else {
         None
@@ -383,17 +410,15 @@ pub async fn get_track_bytes(
 }
 
 async fn request_track_bytes_from_file(
-    db: &Db,
+    db: Arc<Box<dyn Database>>,
     track_id: u64,
     path: String,
     format: AudioFormat,
     size: Option<u64>,
 ) -> Result<TrackBytes, GetTrackBytesError> {
-    let track = moosicbox_core::sqlite::db::get_track(
-        &db.library.lock().as_ref().unwrap().inner,
-        track_id as i32,
-    )?
-    .ok_or(GetTrackBytesError::NotFound)?;
+    let track = moosicbox_core::sqlite::db::get_track_database(&db, track_id)
+        .await?
+        .ok_or(GetTrackBytesError::NotFound)?;
 
     let format = match format {
         #[cfg(feature = "flac")]
@@ -631,15 +656,15 @@ pub fn get_or_init_track_visualization(
     }
 }
 
-pub fn get_or_init_track_size(
+pub async fn get_or_init_track_size(
     track_id: i32,
     source: &TrackSource,
     quality: PlaybackQuality,
-    connection: &DbConnection,
+    db: Arc<Box<dyn Database>>,
 ) -> Result<u64, TrackInfoError> {
     debug!("Getting track size {track_id}");
 
-    if let Some(size) = get_track_size(&connection.inner, track_id, &quality)? {
+    if let Some(size) = get_track_size(&db, track_id as u64, &quality).await? {
         return Ok(size);
     }
 
@@ -682,7 +707,7 @@ pub fn get_or_init_track_size(
     };
 
     set_track_size(
-        &connection.inner,
+        &db,
         SetTrackSize {
             track_id,
             quality,
@@ -693,7 +718,8 @@ pub fn get_or_init_track_size(
             sample_rate: Some(None),
             channels: Some(None),
         },
-    )?;
+    )
+    .await?;
 
     Ok(bytes)
 }

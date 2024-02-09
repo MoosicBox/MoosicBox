@@ -6,19 +6,19 @@ use std::{
 
 use futures::future::join_all;
 use moosicbox_core::{
-    app::Db,
     sqlite::{
         db::{
-            add_album_maps_and_get_albums, add_artist_maps_and_get_artists, add_tracks, select,
-            set_track_sizes, DbError, InsertTrack, SetTrackSize, SqliteValue,
+            add_album_maps_and_get_albums_database, add_artist_maps_and_get_artists_database,
+            add_tracks_database, set_track_sizes, DbError, InsertTrack, SetTrackSize, SqliteValue,
         },
         models::{
             qobuz::QobuzImageSize, tidal::TidalAlbumImageSize, LibraryAlbum, LibraryArtist,
-            LibraryTrack, NumberId, TrackApiSource,
+            LibraryTrack, TrackApiSource,
         },
     },
     types::{AudioFormat, PlaybackQuality},
 };
+use moosicbox_database::{Database, DatabaseError, DatabaseValue, TryFromError};
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
 use moosicbox_search::data::ReindexFromDbError;
 use once_cell::sync::Lazy;
@@ -261,6 +261,26 @@ impl ScanAlbum {
         }
         values
     }
+
+    pub fn to_database_values<'a>(self, artist_id: u64) -> HashMap<&'a str, DatabaseValue> {
+        let mut values = HashMap::from([
+            ("artist_id", DatabaseValue::Number(artist_id as i64)),
+            ("title", DatabaseValue::String(self.name)),
+            (
+                "date_released",
+                DatabaseValue::StringOpt(self.date_released),
+            ),
+            ("artwork", DatabaseValue::StringOpt(self.cover)),
+            ("directory", DatabaseValue::StringOpt(self.directory)),
+        ]);
+        if let Some(qobuz_id) = self.qobuz_id {
+            values.insert("qobuz_id", DatabaseValue::String(qobuz_id));
+        }
+        if let Some(tidal_id) = self.tidal_id {
+            values.insert("tidal_id", DatabaseValue::Number(tidal_id as i64));
+        }
+        values
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -371,6 +391,20 @@ impl ScanArtist {
         }
         values
     }
+
+    pub fn to_database_values<'a>(self) -> HashMap<&'a str, DatabaseValue> {
+        let mut values = HashMap::from([
+            ("title", DatabaseValue::String(self.name.clone())),
+            ("cover", DatabaseValue::StringOpt(self.cover.clone())),
+        ]);
+        if let Some(qobuz_id) = self.qobuz_id {
+            values.insert("qobuz_id", DatabaseValue::Number(qobuz_id as i64));
+        }
+        if let Some(tidal_id) = self.tidal_id {
+            values.insert("tidal_id", DatabaseValue::Number(tidal_id as i64));
+        }
+        values
+    }
 }
 
 pub struct UpdateDatabaseResults {
@@ -383,6 +417,10 @@ pub struct UpdateDatabaseResults {
 pub enum UpdateDatabaseError {
     #[error(transparent)]
     Db(#[from] DbError),
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+    #[error(transparent)]
+    TryFrom(#[from] TryFromError),
     #[error("Invalid data: {0}")]
     InvalidData(String),
     #[error(transparent)]
@@ -435,7 +473,7 @@ impl ScanOutput {
     #[allow(unused)]
     pub async fn update_database(
         &self,
-        db: &Db,
+        db: Arc<Box<dyn Database>>,
     ) -> Result<UpdateDatabaseResults, UpdateDatabaseError> {
         let artists = join_all(
             self.artists
@@ -486,32 +524,21 @@ impl ScanOutput {
 
         let db_artists_start = std::time::SystemTime::now();
 
-        let existing_artist_ids = select::<NumberId>(
-            &db.library
-                .as_ref()
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .inner,
-            "artists",
-            &vec![],
-            &["id"],
-        )?
-        .iter()
-        .map(|id| id.id)
-        .collect::<HashSet<_>>();
+        let existing_artist_ids = db
+            .select("artists", &["id"], None, None, None)
+            .await?
+            .iter()
+            .map(|id| id.id().unwrap().try_into())
+            .collect::<Result<HashSet<i32>, _>>()?;
 
-        let db_artists = add_artist_maps_and_get_artists(
-            &db.library
-                .as_ref()
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .inner,
+        let db_artists = add_artist_maps_and_get_artists_database(
+            &db,
             artists
                 .iter()
-                .map(|artist| artist.clone().to_sqlite_values())
-                .collect(),
+                .map(|artist| artist.clone().to_database_values())
+                .collect::<Vec<_>>(),
         )
-        .unwrap();
+        .await?;
 
         let db_artists_end = std::time::SystemTime::now();
         log::info!(
@@ -532,25 +559,18 @@ impl ScanOutput {
 
         let db_albums_start = std::time::SystemTime::now();
 
-        let existing_album_ids = select::<NumberId>(
-            &db.library
-                .as_ref()
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .inner,
-            "albums",
-            &vec![],
-            &["id"],
-        )?
-        .iter()
-        .map(|id| id.id)
-        .collect::<HashSet<_>>();
+        let existing_album_ids = db
+            .select("albums", &["id"], None, None, None)
+            .await?
+            .iter()
+            .map(|id| id.id().unwrap().try_into())
+            .collect::<Result<HashSet<i32>, _>>()?;
 
         let album_maps = join_all(artists.iter().zip(db_artists.iter()).map(
             |(artist, db)| async {
                 join_all(artist.albums.read().await.iter().map(|album| async {
                     let album = album.read().await;
-                    album.clone().to_sqlite_values(db.id as u64)
+                    album.clone().to_database_values(db.id as u64)
                 }))
                 .await
             },
@@ -560,15 +580,7 @@ impl ScanOutput {
         .flatten()
         .collect::<Vec<_>>();
 
-        let db_albums = add_album_maps_and_get_albums(
-            &db.library
-                .as_ref()
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .inner,
-            album_maps,
-        )
-        .unwrap();
+        let db_albums = add_album_maps_and_get_albums_database(&db, album_maps).await?;
 
         let db_albums_end = std::time::SystemTime::now();
         log::info!(
@@ -589,19 +601,12 @@ impl ScanOutput {
 
         let db_tracks_start = std::time::SystemTime::now();
 
-        let existing_track_ids = select::<NumberId>(
-            &db.library
-                .as_ref()
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .inner,
-            "tracks",
-            &vec![],
-            &["id"],
-        )?
-        .iter()
-        .map(|id| id.id)
-        .collect::<HashSet<_>>();
+        let existing_track_ids = db
+            .select("tracks", &["id"], None, None, None)
+            .await?
+            .iter()
+            .map(|id| id.id().unwrap().try_into())
+            .collect::<Result<HashSet<i32>, _>>()?;
 
         let insert_tracks = join_all(albums.iter().zip(db_albums.iter()).map(
             |(album, db)| async {
@@ -630,14 +635,7 @@ impl ScanOutput {
         .flatten()
         .collect::<Vec<_>>();
 
-        let db_tracks = add_tracks(
-            &db.library
-                .as_ref()
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .inner,
-            insert_tracks,
-        )?;
+        let db_tracks = add_tracks_database(&db, insert_tracks).await?;
 
         let db_tracks_end = std::time::SystemTime::now();
         log::info!(
@@ -674,15 +672,7 @@ impl ScanOutput {
             })
             .collect::<Vec<_>>();
 
-        set_track_sizes(
-            &db.library
-                .as_ref()
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .inner,
-            &track_sizes,
-        )
-        .unwrap();
+        set_track_sizes(&db, &track_sizes).await?;
 
         let db_track_sizes_end = std::time::SystemTime::now();
         log::info!(
@@ -715,15 +705,13 @@ impl ScanOutput {
         })
     }
 
-    pub fn reindex_global_search_index(&self, db: &Db) -> Result<(), UpdateDatabaseError> {
+    pub async fn reindex_global_search_index(
+        &self,
+        db: &Box<dyn Database>,
+    ) -> Result<(), UpdateDatabaseError> {
         let reindex_start = std::time::SystemTime::now();
 
-        moosicbox_search::data::reindex_global_search_index_from_db(
-            &db.library
-                .as_ref()
-                .lock()
-                .unwrap_or_else(|e| e.into_inner()),
-        )?;
+        moosicbox_search::data::reindex_global_search_index_from_db(db).await?;
 
         let reindex_end = std::time::SystemTime::now();
         log::info!(

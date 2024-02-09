@@ -7,6 +7,9 @@ pub mod db;
 
 use std::sync::Arc;
 
+#[cfg(feature = "db")]
+use moosicbox_database::{Database, DatabaseError, DatabaseValue};
+
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use moosicbox_core::sqlite::models::{
@@ -191,13 +194,13 @@ pub enum TidalDeviceAuthorizationTokenError {
     Reqwest(#[from] reqwest::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    Database(#[from] DatabaseError),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
 
 pub async fn device_authorization_token(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     client_id: String,
     client_secret: String,
     device_code: String,
@@ -231,7 +234,7 @@ pub async fn device_authorization_token(
         let user_id = value.to_value("user_id")?;
 
         db::create_tidal_config(
-            &db.library.lock().as_ref().unwrap().inner,
+            &db,
             &client_id,
             access_token,
             refresh_token,
@@ -241,7 +244,8 @@ pub async fn device_authorization_token(
             token_type,
             &user,
             user_id,
-        )?;
+        )
+        .await?;
     }
 
     Ok(serde_json::json!({
@@ -267,47 +271,44 @@ pub enum FetchCredentialsError {
     NoAccessTokenAvailable,
 }
 
-fn fetch_credentials(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+async fn fetch_credentials(
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     access_token: Option<String>,
 ) -> Result<TidalCredentials, FetchCredentialsError> {
     #[cfg(feature = "db")]
     {
-        access_token
-            .map(|token| {
-                log::debug!("Using passed access_token");
-                Ok(TidalCredentials {
-                    access_token: token.to_string(),
-                    client_id: None,
-                    refresh_token: None,
-                    persist: false,
-                })
-            })
-            .or_else(|| {
-                log::debug!("Fetching db Tidal config");
+        Ok(if let Some(access_token) = access_token {
+            log::debug!("Using passed access_token");
+            Some(Ok(TidalCredentials {
+                access_token: access_token.to_string(),
+                client_id: None,
+                refresh_token: None,
+                persist: false,
+            }))
+        } else {
+            log::debug!("Fetching db Tidal config");
 
-                match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
-                    Ok(Some(config)) => {
-                        log::debug!("Using db Tidal config");
-                        Some(Ok(TidalCredentials {
-                            access_token: config.access_token,
-                            client_id: Some(config.client_id),
-                            refresh_token: Some(config.refresh_token),
-                            persist: true,
-                        }))
-                    }
-                    Ok(None) => {
-                        log::debug!("No Tidal config available");
-                        None
-                    }
-                    Err(err) => {
-                        log::error!("Failed to get Tidal config: {err:?}");
-                        Some(Err(err))
-                    }
+            match db::get_tidal_config(&db).await {
+                Ok(Some(config)) => {
+                    log::debug!("Using db Tidal config");
+                    Some(Ok(TidalCredentials {
+                        access_token: config.access_token,
+                        client_id: Some(config.client_id),
+                        refresh_token: Some(config.refresh_token),
+                        persist: true,
+                    }))
                 }
-            })
-            .transpose()?
-            .ok_or(FetchCredentialsError::NoAccessTokenAvailable)
+                Ok(None) => {
+                    log::debug!("No Tidal config available");
+                    None
+                }
+                Err(err) => {
+                    log::error!("Failed to get Tidal config: {err:?}");
+                    Some(Err(err))
+                }
+            }
+        }
+        .ok_or(FetchCredentialsError::NoAccessTokenAvailable)??)
     }
 
     #[cfg(not(feature = "db"))]
@@ -339,7 +340,7 @@ pub enum AuthenticatedRequestError {
 }
 
 async fn authenticated_request(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     url: &str,
     access_token: Option<String>,
 ) -> Result<Value, AuthenticatedRequestError> {
@@ -358,7 +359,7 @@ async fn authenticated_request(
 }
 
 async fn authenticated_post_request(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     url: &str,
     access_token: Option<String>,
     body: Option<Value>,
@@ -383,7 +384,7 @@ async fn authenticated_post_request(
 }
 
 async fn authenticated_delete_request(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     url: &str,
     access_token: Option<String>,
 ) -> Result<Option<Value>, AuthenticatedRequestError> {
@@ -409,7 +410,7 @@ enum Method {
 
 #[async_recursion]
 async fn authenticated_request_inner(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     method: Method,
     url: &str,
     access_token: Option<String>,
@@ -426,9 +427,10 @@ async fn authenticated_request_inner(
 
     let credentials = fetch_credentials(
         #[cfg(feature = "db")]
-        db,
+        db.clone(),
         access_token,
-    )?;
+    )
+    .await?;
 
     let mut request = match method {
         Method::Get => CLIENT.get(url),
@@ -461,7 +463,7 @@ async fn authenticated_request_inner(
             {
                 return authenticated_request_inner(
                     #[cfg(feature = "db")]
-                    db,
+                    db.clone(),
                     method,
                     url,
                     Some(
@@ -508,13 +510,13 @@ pub enum RefetchAccessTokenError {
     Reqwest(#[from] reqwest::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
+    Database(#[from] DatabaseError),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
 
 async fn refetch_access_token(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     client_id: &str,
     refresh_token: &str,
     #[cfg(feature = "db")] persist: bool,
@@ -543,7 +545,7 @@ async fn refetch_access_token(
         let user_id = value.to_value("user_id")?;
 
         db::create_tidal_config(
-            &db.library.lock().as_ref().unwrap().inner,
+            &db,
             client_id,
             access_token,
             refresh_token,
@@ -553,7 +555,8 @@ async fn refetch_access_token(
             token_type,
             &user,
             user_id,
-        )?;
+        )
+        .await?;
     }
 
     Ok(access_token.to_string())
@@ -588,8 +591,8 @@ pub enum TidalFavoriteArtistsError {
 
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
-pub async fn favorite_artists(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+pub async fn favorite_artists<'a>(
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     offset: Option<u32>,
     limit: Option<u32>,
     order: Option<TidalArtistOrder>,
@@ -604,12 +607,14 @@ pub async fn favorite_artists(
     let limit = limit.unwrap_or(100);
 
     #[cfg(feature = "db")]
-    let user_id = user_id.or_else(|| {
-        match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
+    let user_id = if let Some(user_id) = user_id {
+        Some(user_id)
+    } else {
+        match db::get_tidal_config(&db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
-    });
+    };
 
     let user_id = user_id.ok_or(TidalFavoriteArtistsError::NoUserIdAvailable)?;
 
@@ -637,7 +642,7 @@ pub async fn favorite_artists(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        db,
+        db.clone(),
         &url,
         access_token.clone(),
     )
@@ -675,7 +680,7 @@ pub async fn favorite_artists(
             Box::pin(async move {
                 favorite_artists(
                     #[cfg(feature = "db")]
-                    &db,
+                    db,
                     Some(offset),
                     Some(limit),
                     order,
@@ -706,7 +711,7 @@ pub enum TidalAddFavoriteArtistError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_artist(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     artist_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -715,12 +720,14 @@ pub async fn add_favorite_artist(
     user_id: Option<u64>,
 ) -> Result<(), TidalAddFavoriteArtistError> {
     #[cfg(feature = "db")]
-    let user_id = user_id.or_else(|| {
-        match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
+    let user_id = if let Some(user_id) = user_id {
+        Some(user_id)
+    } else {
+        match db::get_tidal_config(&db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
-    });
+    };
 
     let user_id = user_id.ok_or(TidalAddFavoriteArtistError::NoUserIdAvailable)?;
 
@@ -766,7 +773,7 @@ pub enum TidalRemoveFavoriteArtistError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_artist(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     artist_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -775,12 +782,14 @@ pub async fn remove_favorite_artist(
     user_id: Option<u64>,
 ) -> Result<(), TidalRemoveFavoriteArtistError> {
     #[cfg(feature = "db")]
-    let user_id = user_id.or_else(|| {
-        match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
+    let user_id = if let Some(user_id) = user_id {
+        Some(user_id)
+    } else {
+        match db::get_tidal_config(&db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
-    });
+    };
 
     let user_id = user_id.ok_or(TidalRemoveFavoriteArtistError::NoUserIdAvailable)?;
 
@@ -843,7 +852,7 @@ pub enum TidalFavoriteAlbumsError {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_albums(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     offset: Option<u32>,
     limit: Option<u32>,
     order: Option<TidalAlbumOrder>,
@@ -858,12 +867,14 @@ pub async fn favorite_albums(
     let limit = limit.unwrap_or(100);
 
     #[cfg(feature = "db")]
-    let user_id = user_id.or_else(|| {
-        match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
+    let user_id = if let Some(user_id) = user_id {
+        Some(user_id)
+    } else {
+        match db::get_tidal_config(&db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
-    });
+    };
 
     let user_id = user_id.ok_or(TidalFavoriteAlbumsError::NoUserIdAvailable)?;
 
@@ -891,7 +902,7 @@ pub async fn favorite_albums(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        db,
+        db.clone(),
         &url,
         access_token.clone(),
     )
@@ -929,7 +940,7 @@ pub async fn favorite_albums(
             Box::pin(async move {
                 favorite_albums(
                     #[cfg(feature = "db")]
-                    &db,
+                    db,
                     Some(offset),
                     Some(limit),
                     order,
@@ -948,7 +959,7 @@ pub async fn favorite_albums(
 
 #[allow(clippy::too_many_arguments)]
 pub async fn all_favorite_albums(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     order: Option<TidalAlbumOrder>,
     order_direction: Option<TidalAlbumOrderDirection>,
     country_code: Option<String>,
@@ -965,7 +976,7 @@ pub async fn all_favorite_albums(
     loop {
         let albums = favorite_albums(
             #[cfg(feature = "db")]
-            db,
+            db.clone(),
             Some(offset),
             Some(limit),
             order,
@@ -1004,7 +1015,7 @@ pub enum TidalAddFavoriteAlbumError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_album(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     album_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1013,12 +1024,14 @@ pub async fn add_favorite_album(
     user_id: Option<u64>,
 ) -> Result<(), TidalAddFavoriteAlbumError> {
     #[cfg(feature = "db")]
-    let user_id = user_id.or_else(|| {
-        match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
+    let user_id = if let Some(user_id) = user_id {
+        Some(user_id)
+    } else {
+        match db::get_tidal_config(&db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
-    });
+    };
 
     let user_id = user_id.ok_or(TidalAddFavoriteAlbumError::NoUserIdAvailable)?;
 
@@ -1064,7 +1077,7 @@ pub enum TidalRemoveFavoriteAlbumError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_album(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     album_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1073,12 +1086,14 @@ pub async fn remove_favorite_album(
     user_id: Option<u64>,
 ) -> Result<(), TidalRemoveFavoriteAlbumError> {
     #[cfg(feature = "db")]
-    let user_id = user_id.or_else(|| {
-        match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
+    let user_id = if let Some(user_id) = user_id {
+        Some(user_id)
+    } else {
+        match db::get_tidal_config(&db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
-    });
+    };
 
     let user_id = user_id.ok_or(TidalRemoveFavoriteAlbumError::NoUserIdAvailable)?;
 
@@ -1141,7 +1156,7 @@ pub enum TidalFavoriteTracksError {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_tracks(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     offset: Option<u32>,
     limit: Option<u32>,
     order: Option<TidalTrackOrder>,
@@ -1156,12 +1171,14 @@ pub async fn favorite_tracks(
     let limit = limit.unwrap_or(100);
 
     #[cfg(feature = "db")]
-    let user_id = user_id.or_else(|| {
-        match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
+    let user_id = if let Some(user_id) = user_id {
+        Some(user_id)
+    } else {
+        match db::get_tidal_config(&db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
-    });
+    };
 
     let user_id = user_id.ok_or(TidalFavoriteTracksError::NoUserIdAvailable)?;
 
@@ -1189,7 +1206,7 @@ pub async fn favorite_tracks(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        db,
+        db.clone(),
         &url,
         access_token.clone(),
     )
@@ -1227,7 +1244,7 @@ pub async fn favorite_tracks(
             Box::pin(async move {
                 favorite_tracks(
                     #[cfg(feature = "db")]
-                    &db,
+                    db,
                     Some(offset),
                     Some(limit),
                     order,
@@ -1258,7 +1275,7 @@ pub enum TidalAddFavoriteTrackError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_track(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     track_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1267,12 +1284,14 @@ pub async fn add_favorite_track(
     user_id: Option<u64>,
 ) -> Result<(), TidalAddFavoriteTrackError> {
     #[cfg(feature = "db")]
-    let user_id = user_id.or_else(|| {
-        match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
+    let user_id = if let Some(user_id) = user_id {
+        Some(user_id)
+    } else {
+        match db::get_tidal_config(&db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
-    });
+    };
 
     let user_id = user_id.ok_or(TidalAddFavoriteTrackError::NoUserIdAvailable)?;
 
@@ -1318,7 +1337,7 @@ pub enum TidalRemoveFavoriteTrackError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_track(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     track_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1327,12 +1346,14 @@ pub async fn remove_favorite_track(
     user_id: Option<u64>,
 ) -> Result<(), TidalRemoveFavoriteTrackError> {
     #[cfg(feature = "db")]
-    let user_id = user_id.or_else(|| {
-        match db::get_tidal_config(&db.library.lock().as_ref().unwrap().inner) {
+    let user_id = if let Some(user_id) = user_id {
+        Some(user_id)
+    } else {
+        match db::get_tidal_config(&db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
-    });
+    };
 
     let user_id = user_id.ok_or(TidalRemoveFavoriteTrackError::NoUserIdAvailable)?;
 
@@ -1388,7 +1409,7 @@ pub enum TidalAlbumType {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn artist_albums(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     artist_id: &Id,
     offset: Option<u32>,
     limit: Option<u32>,
@@ -1435,7 +1456,7 @@ pub async fn artist_albums(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        db,
+        db.clone(),
         &url,
         access_token.clone(),
     )
@@ -1471,7 +1492,7 @@ pub async fn artist_albums(
             Box::pin(async move {
                 artist_albums(
                     #[cfg(feature = "db")]
-                    &db,
+                    db,
                     &artist_id,
                     Some(offset),
                     Some(limit),
@@ -1500,7 +1521,7 @@ pub enum TidalAlbumTracksError {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn album_tracks(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     album_id: &Id,
     offset: Option<u32>,
     limit: Option<u32>,
@@ -1529,7 +1550,7 @@ pub async fn album_tracks(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        db,
+        db.clone(),
         &url,
         access_token.clone(),
     )
@@ -1565,7 +1586,7 @@ pub async fn album_tracks(
             Box::pin(async move {
                 album_tracks(
                     #[cfg(feature = "db")]
-                    &db,
+                    db,
                     &album_id,
                     Some(offset),
                     Some(limit),
@@ -1592,7 +1613,7 @@ pub enum TidalAlbumError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn album(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     album_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1633,7 +1654,7 @@ pub enum TidalArtistError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn artist(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     artist_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1674,9 +1695,8 @@ pub enum TidalTrackError {
     Parse(#[from] ParseError),
 }
 
-#[allow(clippy::too_many_arguments)]
 pub async fn track(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     track_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1727,7 +1747,7 @@ pub enum TidalTrackFileUrlError {
 }
 
 pub async fn track_file_url(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     audio_quality: TidalAudioQuality,
     track_id: &Id,
     access_token: Option<String>,
@@ -1784,7 +1804,7 @@ pub enum TidalTrackPlaybackInfoError {
 }
 
 pub async fn track_playback_info(
-    #[cfg(feature = "db")] db: &moosicbox_core::app::Db,
+    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     audio_quality: TidalAudioQuality,
     track_id: &Id,
     access_token: Option<String>,
@@ -1969,7 +1989,7 @@ impl From<TidalRemoveFavoriteTrackError> for RemoveTrackError {
 
 pub struct TidalMusicApi {
     #[cfg(feature = "db")]
-    db: moosicbox_core::app::Db,
+    db: Arc<Box<dyn Database>>,
 }
 
 impl TidalMusicApi {
@@ -1979,7 +1999,7 @@ impl TidalMusicApi {
     }
 
     #[cfg(feature = "db")]
-    pub fn new(db: moosicbox_core::app::Db) -> Self {
+    pub fn new(db: Arc<Box<dyn Database>>) -> Self {
         Self { db }
     }
 }
@@ -1999,7 +2019,7 @@ impl MusicApi for TidalMusicApi {
     ) -> PagingResult<Artist, ArtistsError> {
         Ok(favorite_artists(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             offset,
             limit,
             order.map(|x| x.into()),
@@ -2018,7 +2038,7 @@ impl MusicApi for TidalMusicApi {
         Ok(Some(
             artist(
                 #[cfg(feature = "db")]
-                &self.db,
+                self.db.clone(),
                 artist_id,
                 None,
                 None,
@@ -2033,7 +2053,7 @@ impl MusicApi for TidalMusicApi {
     async fn add_artist(&self, artist_id: &Id) -> Result<(), AddArtistError> {
         Ok(add_favorite_artist(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             artist_id,
             None,
             None,
@@ -2047,7 +2067,7 @@ impl MusicApi for TidalMusicApi {
     async fn remove_artist(&self, artist_id: &Id) -> Result<(), RemoveArtistError> {
         Ok(remove_favorite_artist(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             artist_id,
             None,
             None,
@@ -2067,7 +2087,7 @@ impl MusicApi for TidalMusicApi {
     ) -> PagingResult<Album, AlbumsError> {
         Ok(favorite_albums(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             offset,
             limit,
             order.map(|x| x.into()),
@@ -2086,7 +2106,7 @@ impl MusicApi for TidalMusicApi {
         Ok(Some(
             album(
                 #[cfg(feature = "db")]
-                &self.db,
+                self.db.clone(),
                 album_id,
                 None,
                 None,
@@ -2121,7 +2141,7 @@ impl MusicApi for TidalMusicApi {
                 .map(|album_type| {
                     artist_albums(
                         #[cfg(feature = "db")]
-                        &self.db,
+                        self.db.clone(),
                         artist_id,
                         Some(offset),
                         Some(limit),
@@ -2162,7 +2182,7 @@ impl MusicApi for TidalMusicApi {
                     Box::pin(async move {
                         artist_albums(
                             #[cfg(feature = "db")]
-                            &db,
+                            db,
                             &artist_id,
                             Some(offset),
                             Some(limit),
@@ -2181,7 +2201,7 @@ impl MusicApi for TidalMusicApi {
 
         Ok(artist_albums(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             artist_id,
             Some(offset),
             Some(limit),
@@ -2208,16 +2228,18 @@ impl MusicApi for TidalMusicApi {
         &self,
         album_id: &Id,
     ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
-        Ok(moosicbox_core::sqlite::db::get_tidal_album(
-            &self.db.library.lock().as_ref().unwrap().inner,
-            Into::<u64>::into(album_id) as i32,
-        )?)
+        Ok(moosicbox_core::sqlite::db::get_album_database(
+            &self.db,
+            "tidal_id",
+            DatabaseValue::UNumber(album_id.into()),
+        )
+        .await?)
     }
 
     async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
         Ok(add_favorite_album(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             album_id,
             None,
             None,
@@ -2231,7 +2253,7 @@ impl MusicApi for TidalMusicApi {
     async fn remove_album(&self, album_id: &Id) -> Result<(), RemoveAlbumError> {
         Ok(remove_favorite_album(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             album_id,
             None,
             None,
@@ -2251,7 +2273,7 @@ impl MusicApi for TidalMusicApi {
     ) -> PagingResult<Track, TracksError> {
         Ok(favorite_tracks(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             offset,
             limit,
             order.map(|x| x.into()),
@@ -2270,7 +2292,7 @@ impl MusicApi for TidalMusicApi {
         Ok(Some(
             track(
                 #[cfg(feature = "db")]
-                &self.db,
+                self.db.clone(),
                 track_id,
                 None,
                 None,
@@ -2285,7 +2307,7 @@ impl MusicApi for TidalMusicApi {
     async fn add_track(&self, track_id: &Id) -> Result<(), AddTrackError> {
         Ok(add_favorite_track(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             track_id,
             None,
             None,
@@ -2299,7 +2321,7 @@ impl MusicApi for TidalMusicApi {
     async fn remove_track(&self, track_id: &Id) -> Result<(), RemoveTrackError> {
         Ok(remove_favorite_track(
             #[cfg(feature = "db")]
-            &self.db,
+            self.db.clone(),
             track_id,
             None,
             None,

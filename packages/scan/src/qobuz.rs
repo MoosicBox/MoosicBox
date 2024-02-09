@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use moosicbox_core::{
-    app::Db,
     sqlite::{
         db::DbError,
         models::{
@@ -11,6 +10,7 @@ use moosicbox_core::{
     },
     types::AudioFormat,
 };
+use moosicbox_database::Database;
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
 use moosicbox_qobuz::{QobuzAlbumTracksError, QobuzArtistError, QobuzFavoriteAlbumsError};
 use thiserror::Error;
@@ -35,7 +35,7 @@ pub enum ScanError {
     FetchAndSaveBytesFromRemoteUrl(#[from] FetchAndSaveBytesFromRemoteUrlError),
 }
 
-pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
+pub async fn scan(db: Arc<Box<dyn Database>>, token: CancellationToken) -> Result<(), ScanError> {
     let total_start = std::time::SystemTime::now();
     let start = std::time::SystemTime::now();
     let output = Arc::new(RwLock::new(ScanOutput::new()));
@@ -47,7 +47,7 @@ pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
         log::debug!("Fetching Qobuz albums offset={offset} limit={limit}");
 
         let albums_resp =
-            moosicbox_qobuz::favorite_albums(db, Some(offset), Some(limit), None, None);
+            moosicbox_qobuz::favorite_albums(db.clone(), Some(offset), Some(limit), None, None);
 
         select! {
             resp = albums_resp => {
@@ -58,7 +58,7 @@ pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
 
                         log::debug!("Fetched Qobuz albums offset={offset} limit={limit}: page_count={page_count}, total_count={count}");
 
-                        scan_albums(&page, count, db, output.clone(), Some(token.clone())).await?;
+                        scan_albums(&page, count, db.clone(), output.clone(), Some(token.clone())).await?;
 
                         if page_count < (limit as usize) {
                             break;
@@ -87,8 +87,8 @@ pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
 
     {
         let output = output.read().await;
-        output.update_database(db).await?;
-        output.reindex_global_search_index(db)?;
+        output.update_database(db.clone()).await?;
+        output.reindex_global_search_index(&db).await?;
     }
 
     let end = std::time::SystemTime::now();
@@ -103,7 +103,7 @@ pub async fn scan(db: &Db, token: CancellationToken) -> Result<(), ScanError> {
 pub async fn scan_albums(
     albums: &[QobuzAlbum],
     total: u32,
-    db: &Db,
+    db: Arc<Box<dyn Database>>,
     output: Arc<RwLock<ScanOutput>>,
     token: Option<CancellationToken>,
 ) -> Result<(), ScanError> {
@@ -151,7 +151,9 @@ pub async fn scan_albums(
                 let read_artist = { scan_artist.read().await.clone() };
 
                 if read_artist.cover.is_none() && !read_artist.searched_cover {
-                    match moosicbox_qobuz::artist(db, &album.artist_id.into(), None, None).await {
+                    match moosicbox_qobuz::artist(db.clone(), &album.artist_id.into(), None, None)
+                        .await
+                    {
                         Ok(artist) => {
                             if let Some(url) = artist.cover_url() {
                                 scan_artist.write().await.search_cover(url, "qobuz").await?;
@@ -181,8 +183,14 @@ pub async fn scan_albums(
             );
 
             let album_id = &album.id.clone().into();
-            let tracks_resp =
-                moosicbox_qobuz::album_tracks(db, album_id, Some(offset), Some(limit), None, None);
+            let tracks_resp = moosicbox_qobuz::album_tracks(
+                db.clone(),
+                album_id,
+                Some(offset),
+                Some(limit),
+                None,
+                None,
+            );
 
             select! {
                 resp = tracks_resp => {

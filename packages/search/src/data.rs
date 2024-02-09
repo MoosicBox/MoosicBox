@@ -4,7 +4,7 @@ use moosicbox_core::sqlite::{
     db::DbError,
     models::{LibraryAlbum, LibraryArtist, LibraryTrack},
 };
-use moosicbox_database::DbConnection;
+use moosicbox_database::Database;
 use thiserror::Error;
 
 use crate::{DataValue, PopulateIndexError, RecreateIndexError, GLOBAL_SEARCH_INDEX_PATH};
@@ -175,27 +175,30 @@ pub enum ReindexFromDbError {
     PopulateIndex(#[from] PopulateIndexError),
 }
 
-pub fn reindex_global_search_index_from_db(
-    connection: &DbConnection,
+pub async fn reindex_global_search_index_from_db(
+    db: &Box<dyn Database>,
 ) -> Result<(), ReindexFromDbError> {
     let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
     crate::recreate_global_search_index(path)?;
 
-    let artists = moosicbox_core::sqlite::db::get_artists(&connection.inner)?
+    let artists = moosicbox_core::sqlite::db::get_artists_database(db)
+        .await?
         .into_iter()
         .map(|artist| artist.as_data_values())
         .collect::<Vec<_>>();
 
     crate::populate_global_search_index(artists, false)?;
 
-    let albums = moosicbox_core::sqlite::db::get_albums(&connection.inner)?
+    let albums = moosicbox_core::sqlite::db::get_albums_database(db)
+        .await?
         .into_iter()
         .map(|album| album.as_data_values())
         .collect::<Vec<_>>();
 
     crate::populate_global_search_index(albums, false)?;
 
-    let tracks = moosicbox_core::sqlite::db::get_tracks(&connection.inner, None)?
+    let tracks = moosicbox_core::sqlite::db::get_tracks_database(db, None)
+        .await?
         .into_iter()
         .map(|track| track.as_data_values())
         .collect::<Vec<_>>();

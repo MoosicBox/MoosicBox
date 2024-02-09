@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::sync::OnceLock;
 
 use crate::api::models::to_api_download_task;
 use crate::api::models::ApiDownloadTask;
@@ -11,33 +10,56 @@ use crate::get_create_download_tasks;
 use crate::get_download_path;
 use crate::queue::DownloadQueue;
 use crate::queue::ProcessDownloadQueueError;
+use crate::queue::ProgressListener;
 use crate::CreateDownloadTasksError;
 use crate::DownloadApiSource;
 use crate::GetCreateDownloadTasksError;
 use crate::GetDownloadPathError;
+use crate::MoosicboxDownloader;
 use actix_web::error::ErrorInternalServerError;
 use actix_web::{
     route,
     web::{self, Json},
     Result,
 };
-use moosicbox_core::app::Db;
-use moosicbox_core::sqlite::db::get_albums;
-use moosicbox_core::sqlite::db::get_tracks;
+use moosicbox_core::sqlite::db::get_albums_database;
+use moosicbox_core::sqlite::db::get_tracks_database;
+use moosicbox_database::Database;
 use moosicbox_files::files::track::TrackAudioQuality;
 use moosicbox_paging::Page;
+use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde_json::Value;
 use tokio::sync::RwLock;
 
 pub mod models;
 
-static DOWNLOAD_QUEUE: OnceLock<Arc<RwLock<DownloadQueue>>> = OnceLock::new();
+static DOWNLOAD_QUEUE: Lazy<Arc<RwLock<DownloadQueue>>> =
+    Lazy::new(|| Arc::new(RwLock::new(DownloadQueue::new())));
 
-fn get_default_download_queue(db: Db) -> Arc<RwLock<DownloadQueue>> {
+pub async fn add_progress_listener_to_download_queue(listener: ProgressListener) {
     DOWNLOAD_QUEUE
-        .get_or_init(|| Arc::new(RwLock::new(DownloadQueue::new(db))))
-        .clone()
+        .write()
+        .await
+        .add_progress_listener(listener)
+        .await;
+}
+
+async fn get_default_download_queue(db: Arc<Box<dyn Database>>) -> Arc<RwLock<DownloadQueue>> {
+    let queue = { DOWNLOAD_QUEUE.read().await.clone() };
+
+    if !queue.has_database() {
+        let mut queue = DOWNLOAD_QUEUE.write().await;
+        let output = queue.with_database(db.clone());
+        *queue = output.clone();
+    }
+    if !queue.has_downloader() {
+        let mut queue = DOWNLOAD_QUEUE.write().await;
+        let output = queue.with_downloader(Box::new(MoosicboxDownloader::new(db)));
+        *queue = output.clone();
+    }
+
+    DOWNLOAD_QUEUE.clone()
 }
 
 impl From<GetDownloadPathError> for actix_web::Error {
@@ -87,10 +109,10 @@ pub async fn download_endpoint(
     query: web::Query<DownloadQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<Value>> {
-    let download_path = get_download_path(&data.db.as_ref().unwrap(), query.location_id)?;
+    let download_path = get_download_path(data.database.clone(), query.location_id).await?;
 
     let tasks = get_create_download_tasks(
-        &data.db.as_ref().unwrap(),
+        data.database.clone(),
         &download_path,
         query.track_id,
         query.track_ids.clone(),
@@ -100,12 +122,12 @@ pub async fn download_endpoint(
         query.download_artist_cover.unwrap_or(true),
         query.quality,
         query.source,
-    )?;
+    )
+    .await?;
 
-    let tasks = create_download_tasks(&data.db.as_ref().unwrap(), tasks)?;
+    let tasks = create_download_tasks(data.database.clone(), tasks).await?;
 
-    let db = data.db.clone().unwrap();
-    let queue = get_default_download_queue(db);
+    let queue = get_default_download_queue(data.database.clone()).await;
     let mut download_queue = queue.write().await;
 
     download_queue.add_tasks_to_queue(tasks).await;
@@ -123,23 +145,20 @@ pub async fn download_tasks_endpoint(
     _query: web::Query<GetDownloadTasks>,
     data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<Page<ApiDownloadTask>>> {
-    let tasks = get_download_tasks(&data.db.as_ref().unwrap().library.lock().unwrap().inner)?;
+    let tasks = get_download_tasks(&data.database).await?;
 
     let track_ids = tasks
         .iter()
         .filter_map(|task| {
             if let DownloadItem::Track { track_id, .. } = task.item {
-                Some(track_id as i32)
+                Some(track_id)
             } else {
                 None
             }
         })
         .collect::<Vec<_>>();
 
-    let tracks = get_tracks(
-        &data.db.as_ref().unwrap().library.lock().unwrap().inner,
-        Some(&track_ids),
-    )?;
+    let tracks = get_tracks_database(&data.database, Some(&track_ids)).await?;
 
     let album_ids = tasks
         .iter()
@@ -152,7 +171,8 @@ pub async fn download_tasks_endpoint(
         })
         .collect::<Vec<_>>();
 
-    let albums = get_albums(&data.db.as_ref().unwrap().library.lock().unwrap().inner)?
+    let albums = get_albums_database(&data.database)
+        .await?
         .into_iter()
         .filter(|album| album_ids.contains(&album.id))
         .collect::<Vec<_>>();
@@ -163,11 +183,10 @@ pub async fn download_tasks_endpoint(
         .map(|task| to_api_download_task(task, &tracks, &albums))
         .collect::<Vec<_>>();
 
-    if let Some(queue) = DOWNLOAD_QUEUE.get() {
-        for item in items.iter_mut() {
-            if item.state == ApiDownloadTaskState::Started {
-                item.speed.replace(queue.read().await.speed() as u64);
-            }
+    for item in items.iter_mut() {
+        if item.state == ApiDownloadTaskState::Started {
+            item.speed
+                .replace(DOWNLOAD_QUEUE.read().await.speed().unwrap_or(0.0) as u64);
         }
     }
 

@@ -4,11 +4,11 @@ use std::{
 };
 
 use moosicbox_core::{
-    app::{AppState, Db},
+    app::AppState,
     sqlite::{
         db::{
-            delete, delete_session_playlist_tracks_by_track_id, delete_track_sizes_by_track_id,
-            delete_tracks, get_albums, update_and_get_row, DbError, SqliteValue,
+            delete_session_playlist_tracks_by_track_id_database,
+            delete_track_sizes_by_track_id_database, delete_tracks_database, get_albums, DbError,
         },
         menu::GetAlbumError,
         models::{
@@ -18,6 +18,7 @@ use moosicbox_core::{
     },
     types::AudioFormat,
 };
+use moosicbox_database::{where_eq, Database, DatabaseError, DatabaseValue};
 use moosicbox_music_api::{AlbumType, Id, LibraryAlbumError, MusicApi};
 use moosicbox_scan::output::ScanOutput;
 use moosicbox_search::{
@@ -344,7 +345,7 @@ pub enum AddAlbumError {
 }
 
 pub async fn add_album(
-    db: &Db,
+    db: Arc<Box<dyn Database>>,
     album_id: &Id,
     api: &dyn MusicApi,
 ) -> Result<LibraryAlbum, AddAlbumError> {
@@ -366,16 +367,18 @@ pub async fn add_album(
 
     match album {
         Album::Tidal(album) => {
-            moosicbox_scan::tidal::scan_albums(&[album], 1, db, output.clone(), None).await?;
+            moosicbox_scan::tidal::scan_albums(&[album], 1, db.clone(), output.clone(), None)
+                .await?;
         }
         Album::Qobuz(album) => {
-            moosicbox_scan::qobuz::scan_albums(&[album], 1, db, output.clone(), None).await?;
+            moosicbox_scan::qobuz::scan_albums(&[album], 1, db.clone(), output.clone(), None)
+                .await?;
         }
         _ => {}
     }
 
     let output = output.read().await;
-    let results = output.update_database(db).await?;
+    let results = output.update_database(db.clone()).await?;
 
     moosicbox_core::cache::clear_cache();
 
@@ -388,18 +391,19 @@ pub async fn add_album(
         false,
     )?;
 
-    let albums = results
-        .albums
-        .iter()
-        .map(|album| {
-            moosicbox_core::sqlite::db::get_album(
-                &db.library.lock().as_ref().unwrap().inner,
-                album.id,
-            )
-        })
-        .filter_map(|album| album.ok())
-        .map(|album| album.unwrap())
-        .collect::<Vec<_>>();
+    let mut albums = vec![];
+
+    for album in &results.albums {
+        if let Some(album) = moosicbox_core::sqlite::db::get_album_database(
+            &db,
+            "id",
+            DatabaseValue::UNumber(album.id as u64),
+        )
+        .await?
+        {
+            albums.push(album);
+        }
+    }
 
     moosicbox_search::populate_global_search_index(
         albums
@@ -409,10 +413,17 @@ pub async fn add_album(
         false,
     )?;
 
-    let tracks = moosicbox_core::sqlite::db::get_tracks(
-        &db.library.lock().as_ref().unwrap().inner,
-        Some(&results.tracks.iter().map(|t| t.id).collect::<Vec<_>>()),
-    )?;
+    let tracks = moosicbox_core::sqlite::db::get_tracks_database(
+        &db,
+        Some(
+            &results
+                .tracks
+                .iter()
+                .map(|t| t.id as u64)
+                .collect::<Vec<_>>(),
+        ),
+    )
+    .await?;
     moosicbox_search::populate_global_search_index(
         tracks
             .iter()
@@ -435,6 +446,8 @@ pub enum RemoveAlbumError {
     #[error(transparent)]
     Db(#[from] DbError),
     #[error(transparent)]
+    Database(#[from] DatabaseError),
+    #[error(transparent)]
     GetAlbum(#[from] GetAlbumError),
     #[error(transparent)]
     LibraryAlbum(#[from] LibraryAlbumError),
@@ -451,7 +464,7 @@ pub enum RemoveAlbumError {
 }
 
 pub async fn remove_album(
-    db: &Db,
+    db: Arc<Box<dyn Database>>,
     album_id: &Id,
     api: &dyn MusicApi,
 ) -> Result<LibraryAlbum, RemoveAlbumError> {
@@ -471,10 +484,8 @@ pub async fn remove_album(
         log::error!("Failed to remove album from MusicApi: {err:?}");
     }
 
-    let tracks = moosicbox_core::sqlite::db::get_album_tracks(
-        &db.library.lock().as_ref().unwrap().inner,
-        album.id,
-    )?;
+    let tracks =
+        moosicbox_core::sqlite::db::get_album_tracks_database(&db, album.id as u64).await?;
 
     let has_local_tracks = tracks
         .iter()
@@ -492,34 +503,32 @@ pub async fn remove_album(
     let track_ids = target_tracks.iter().map(|t| t.id).collect::<Vec<_>>();
 
     log::debug!("Deleting track db items: {track_ids:?}");
-    delete_session_playlist_tracks_by_track_id(
-        &db.library.lock().as_ref().unwrap().inner,
-        Some(&track_ids),
-    )?;
-    delete_track_sizes_by_track_id(&db.library.lock().as_ref().unwrap().inner, Some(&track_ids))?;
-    delete_tracks(&db.library.lock().as_ref().unwrap().inner, Some(&track_ids))?;
+    delete_session_playlist_tracks_by_track_id_database(&db, Some(&track_ids)).await?;
+    delete_track_sizes_by_track_id_database(&db, Some(&track_ids)).await?;
+    delete_tracks_database(&db, Some(&track_ids)).await?;
 
     let mut album_field_updates = vec![];
 
     match api.source() {
         ApiSource::Tidal => {
-            album_field_updates.push(("tidal_id", SqliteValue::NumberOpt(None)));
+            album_field_updates.push(("tidal_id", DatabaseValue::NumberOpt(None)));
             album.tidal_id = None;
         }
         ApiSource::Qobuz => {
-            album_field_updates.push(("qobuz_id", SqliteValue::NumberOpt(None)));
+            album_field_updates.push(("qobuz_id", DatabaseValue::NumberOpt(None)));
             album.qobuz_id = None;
         }
         _ => {}
     }
 
     if !album_field_updates.is_empty() {
-        update_and_get_row::<LibraryAlbum>(
-            &db.library.lock().as_ref().unwrap().inner,
+        db.update_and_get_row(
             "albums",
-            SqliteValue::Number(album.id as i64),
+            DatabaseValue::Number(album.id as i64),
             &album_field_updates,
-        )?;
+            None,
+        )
+        .await?;
     }
 
     moosicbox_core::cache::clear_cache();
@@ -543,11 +552,12 @@ pub async fn remove_album(
     }
 
     log::debug!("Deleting album db item: {}", album.id);
-    delete::<LibraryAlbum>(
-        &db.library.lock().as_ref().unwrap().inner,
+    db.delete(
         "albums",
-        &vec![("id", SqliteValue::Number(album.id as i64))],
-    )?;
+        Some(&[where_eq("id", DatabaseValue::Number(album.id as i64))]),
+        None,
+    )
+    .await?;
 
     moosicbox_search::delete_from_global_search_index(vec![album.as_delete_term()])?;
 
@@ -579,7 +589,7 @@ pub enum ReFavoriteAlbumError {
 }
 
 pub async fn refavorite_album(
-    db: &Db,
+    db: Arc<Box<dyn Database>>,
     album_id: &Id,
     api: &dyn MusicApi,
 ) -> Result<LibraryAlbum, ReFavoriteAlbumError> {
@@ -625,7 +635,7 @@ pub async fn refavorite_album(
 
     log::debug!("Re-favoriting with ids album_id={album_id} new_album_id={new_album_id:?}");
 
-    remove_album(db, album_id, api).await?;
+    remove_album(db.clone(), album_id, api).await?;
     let album = add_album(db, &new_album_id.into(), api).await?;
 
     Ok(album)

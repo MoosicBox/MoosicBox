@@ -1,5 +1,5 @@
-use moosicbox_core::sqlite::db::{delete, select, upsert, DbError, SqliteValue};
-use rusqlite::Connection;
+use moosicbox_database::{where_eq, Database, DatabaseError, DatabaseValue};
+use moosicbox_json_utils::ToValueType;
 use thiserror::Error;
 
 pub mod models;
@@ -7,8 +7,8 @@ pub mod models;
 use crate::db::models::TidalConfig;
 
 #[allow(clippy::too_many_arguments)]
-pub fn create_tidal_config(
-    db: &Connection,
+pub async fn create_tidal_config(
+    db: &Box<dyn Database>,
     client_id: &str,
     access_token: &str,
     refresh_token: &str,
@@ -18,45 +18,53 @@ pub fn create_tidal_config(
     token_type: &str,
     user: &str,
     user_id: u32,
-) -> Result<(), DbError> {
-    upsert::<TidalConfig>(
-        db,
+) -> Result<(), DatabaseError> {
+    db.upsert(
         "tidal_config",
-        vec![(
-            "refresh_token",
-            SqliteValue::String(refresh_token.to_string()),
-        )],
-        vec![
-            ("client_id", SqliteValue::String(client_id.to_string())),
+        &[
+            ("client_id", DatabaseValue::String(client_id.to_string())),
             (
                 "access_token",
-                SqliteValue::String(access_token.to_string()),
+                DatabaseValue::String(access_token.to_string()),
             ),
             (
                 "refresh_token",
-                SqliteValue::String(refresh_token.to_string()),
+                DatabaseValue::String(refresh_token.to_string()),
             ),
-            ("client_name", SqliteValue::String(client_name.to_string())),
-            ("expires_in", SqliteValue::Number(expires_in as i64)),
-            ("scope", SqliteValue::String(scope.to_string())),
-            ("token_type", SqliteValue::String(token_type.to_string())),
-            ("user", SqliteValue::String(user.to_string())),
-            ("user_id", SqliteValue::Number(user_id as i64)),
+            (
+                "client_name",
+                DatabaseValue::String(client_name.to_string()),
+            ),
+            ("expires_in", DatabaseValue::Number(expires_in as i64)),
+            ("scope", DatabaseValue::String(scope.to_string())),
+            ("token_type", DatabaseValue::String(token_type.to_string())),
+            ("user", DatabaseValue::String(user.to_string())),
+            ("user_id", DatabaseValue::Number(user_id as i64)),
         ],
-    )?;
+        Some(&[where_eq(
+            "refresh_token",
+            DatabaseValue::String(refresh_token.to_string()),
+        )]),
+        None,
+    )
+    .await?;
 
     Ok(())
 }
 
-pub fn delete_tidal_config(db: &Connection, refresh_token: &str) -> Result<(), DbError> {
-    delete::<TidalConfig>(
-        db,
+pub async fn delete_tidal_config(
+    db: &Box<dyn Database>,
+    refresh_token: &str,
+) -> Result<(), DatabaseError> {
+    db.delete(
         "tidal_config",
-        &vec![(
+        Some(&[where_eq(
             "refresh_token",
-            SqliteValue::String(refresh_token.to_string()),
-        )],
-    )?;
+            DatabaseValue::String(refresh_token.to_string()),
+        )]),
+        None,
+    )
+    .await?;
 
     Ok(())
 }
@@ -64,31 +72,40 @@ pub fn delete_tidal_config(db: &Connection, refresh_token: &str) -> Result<(), D
 #[derive(Debug, Error)]
 pub enum TidalConfigError {
     #[error(transparent)]
-    Db(#[from] DbError),
+    Database(#[from] DatabaseError),
+    #[error(transparent)]
+    Parse(#[from] moosicbox_json_utils::ParseError),
     #[error("No configs available")]
     NoConfigsAvailable,
 }
 
-pub fn get_tidal_config(db: &Connection) -> Result<Option<TidalConfig>, TidalConfigError> {
-    let mut configs = select::<TidalConfig>(db, "tidal_config", &vec![], &["*"])?
-        .into_iter()
-        .collect::<Vec<_>>();
+pub async fn get_tidal_config(
+    db: &Box<dyn Database>,
+) -> Result<Option<TidalConfig>, TidalConfigError> {
+    let mut configs = db
+        .select("tidal_config", &["*"], None, None, None)
+        .await?
+        .to_value_type()?;
 
     if configs.is_empty() {
         return Err(TidalConfigError::NoConfigsAvailable);
     }
 
-    configs.sort_by(|a, b| a.issued_at.cmp(&b.issued_at));
+    configs.sort_by(|a: &TidalConfig, b: &TidalConfig| a.issued_at.cmp(&b.issued_at));
 
     Ok(configs.first().cloned())
 }
 
-pub fn get_tidal_access_tokens(
-    db: &Connection,
+pub async fn get_tidal_access_tokens(
+    db: &Box<dyn Database>,
 ) -> Result<Option<(String, String)>, TidalConfigError> {
-    Ok(get_tidal_config(db)?.map(|c| (c.access_token.clone(), c.refresh_token.clone())))
+    Ok(get_tidal_config(db)
+        .await?
+        .map(|c| (c.access_token.clone(), c.refresh_token.clone())))
 }
 
-pub fn get_tidal_access_token(db: &Connection) -> Result<Option<String>, TidalConfigError> {
-    Ok(get_tidal_access_tokens(db)?.map(|c| c.0))
+pub async fn get_tidal_access_token(
+    db: &Box<dyn Database>,
+) -> Result<Option<String>, TidalConfigError> {
+    Ok(get_tidal_access_tokens(db).await?.map(|c| c.0))
 }

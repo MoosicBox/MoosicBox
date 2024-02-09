@@ -174,6 +174,46 @@ impl ToValueType<usize> for &DatabaseValue {
     }
 }
 
+impl<'a, T> ToValueType<Vec<T>> for Vec<&'a Row>
+where
+    &'a Row: ToValueType<T>,
+{
+    fn to_value_type(self) -> Result<Vec<T>, ParseError> {
+        self.iter()
+            .map(|row| row.to_value_type())
+            .collect::<Result<Vec<_>, _>>()
+    }
+}
+
+impl<T> ToValueType<Vec<T>> for Vec<Row>
+where
+    for<'a> &'a Row: ToValueType<T>,
+{
+    fn to_value_type(self) -> Result<Vec<T>, ParseError> {
+        self.iter()
+            .map(|row| row.to_value_type())
+            .collect::<Result<Vec<_>, _>>()
+    }
+}
+
+impl<'a, T> ToValueType<Option<T>> for Option<&'a Row>
+where
+    &'a Row: ToValueType<T>,
+{
+    fn to_value_type(self) -> Result<Option<T>, ParseError> {
+        self.map(|row| row.to_value_type()).transpose()
+    }
+}
+
+impl<T> ToValueType<Option<T>> for Option<Row>
+where
+    Row: ToValueType<T>,
+{
+    fn to_value_type(self) -> Result<Option<T>, ParseError> {
+        self.map(|row| row.to_value_type()).transpose()
+    }
+}
+
 impl<'a, Type> MissingValue<Option<Type>> for &'a Row
 where
     &'a Row: MissingValue<Type>,
