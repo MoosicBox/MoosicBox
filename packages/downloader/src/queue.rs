@@ -86,18 +86,35 @@ impl DownloadQueueState {
 }
 
 #[derive(Clone)]
-pub enum ProgressEvent {
+pub enum GenericProgressEvent {
     Size { bytes: Option<u64> },
     Speed { bytes_per_second: f64 },
     BytesRead { read: usize, total: usize },
 }
 
-pub type ProgressListener = Box<dyn FnMut(ProgressEvent) + Send + Sync>;
-pub type ProgressListenerRef = Box<dyn FnMut(&ProgressEvent) + Send + Sync>;
+#[derive(Clone)]
+pub enum ProgressEvent {
+    Size {
+        task: DownloadTask,
+        bytes: Option<u64>,
+    },
+    Speed {
+        task: DownloadTask,
+        bytes_per_second: f64,
+    },
+    BytesRead {
+        task: DownloadTask,
+        read: usize,
+        total: usize,
+    },
+}
+
+pub type ProgressListener = Box<dyn FnMut(GenericProgressEvent) + Send + Sync>;
+pub type ProgressListenerRef = Box<dyn Fn(&ProgressEvent) + Send + Sync>;
 
 #[derive(Clone)]
 pub struct DownloadQueue {
-    progress_listeners: Arc<std::sync::Mutex<Vec<ProgressListenerRef>>>,
+    progress_listeners: Vec<Arc<ProgressListenerRef>>,
     database: Option<Arc<Box<dyn Database>>>,
     downloader: Option<Arc<Box<dyn Downloader + Send + Sync>>>,
     state: Arc<RwLock<DownloadQueueState>>,
@@ -107,7 +124,7 @@ pub struct DownloadQueue {
 impl DownloadQueue {
     pub fn new() -> Self {
         Self {
-            progress_listeners: Arc::new(std::sync::Mutex::new(vec![])),
+            progress_listeners: vec![],
             database: None,
             downloader: None,
             state: Arc::new(RwLock::new(DownloadQueueState::new())),
@@ -133,9 +150,9 @@ impl DownloadQueue {
         self.clone()
     }
 
-    pub fn add_progress_listener(&self, listener: ProgressListenerRef) -> &Self {
-        self.progress_listeners.lock().unwrap().push(listener);
-        self
+    pub fn add_progress_listener(&mut self, listener: ProgressListenerRef) -> Self {
+        self.progress_listeners.push(Arc::new(listener));
+        self.clone()
     }
 
     pub fn speed(&self) -> Option<f64> {
@@ -154,7 +171,7 @@ impl DownloadQueue {
 
     pub fn process(&mut self) -> JoinHandle<Result<(), ProcessDownloadQueueError>> {
         let join_handle = self.join_handle.clone();
-        let this = self.clone();
+        let mut this = self.clone();
 
         tokio::task::spawn(async move {
             let mut handle = join_handle.lock().await;
@@ -189,7 +206,7 @@ impl DownloadQueue {
         }
     }
 
-    async fn process_inner(&self) -> Result<(), ProcessDownloadQueueError> {
+    async fn process_inner(&mut self) -> Result<(), ProcessDownloadQueueError> {
         while let Some(mut task) = {
             let state = self.state.as_ref().read().await;
             state.tasks.first().cloned()
@@ -248,7 +265,7 @@ impl DownloadQueue {
     }
 
     async fn process_task(
-        &self,
+        &mut self,
         task: &mut DownloadTask,
     ) -> Result<ProcessDownloadTaskResponse, ProcessDownloadQueueError> {
         log::debug!("Processing task {task:?}");
@@ -262,12 +279,13 @@ impl DownloadQueue {
             .clone()
             .ok_or(ProcessDownloadQueueError::NoDatabase)?;
 
-        let listeners = self.progress_listeners.clone();
-
         let task_id = task.id;
-        let on_progress = Box::new(move |event: ProgressEvent| {
+        let listeners = self.progress_listeners.clone();
+        let send_task = task.clone();
+
+        let on_progress = Box::new(move |event: GenericProgressEvent| {
             match event.clone() {
-                ProgressEvent::Size { bytes } => {
+                GenericProgressEvent::Size { bytes, .. } => {
                     log::debug!("Got size of task: {bytes:?}");
                     if let Some(size) = bytes {
                         task_size.replace(size);
@@ -287,10 +305,26 @@ impl DownloadQueue {
                         });
                     }
                 }
-                ProgressEvent::Speed { .. } => {}
-                ProgressEvent::BytesRead { .. } => {}
+                GenericProgressEvent::Speed { .. } => {}
+                GenericProgressEvent::BytesRead { .. } => {}
             }
-            for listener in listeners.lock().unwrap().iter_mut() {
+
+            let event = match event {
+                GenericProgressEvent::Size { bytes } => ProgressEvent::Size {
+                    task: send_task.clone(),
+                    bytes,
+                },
+                GenericProgressEvent::Speed { bytes_per_second } => ProgressEvent::Speed {
+                    task: send_task.clone(),
+                    bytes_per_second,
+                },
+                GenericProgressEvent::BytesRead { read, total } => ProgressEvent::BytesRead {
+                    task: send_task.clone(),
+                    read,
+                    total,
+                },
+            };
+            for listener in listeners.iter() {
                 listener(&event);
             }
         });

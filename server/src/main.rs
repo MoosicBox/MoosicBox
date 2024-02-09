@@ -12,12 +12,13 @@ use log::{debug, error, info};
 use moosicbox_auth::get_client_id_and_access_token;
 use moosicbox_core::app::{AppState, Db};
 use moosicbox_database::{rusqlite::RusqliteDatabase, Database, DbConnection};
-use moosicbox_downloader::queue::ProgressEvent;
+use moosicbox_downloader::api::models::ApiProgressEvent;
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 use moosicbox_tunnel::{
     sender::{tunnel_sender::TunnelSender, TunnelMessage},
     tunnel::TunnelRequest,
 };
+use moosicbox_ws::api::send_download_event;
 use once_cell::sync::Lazy;
 use std::{
     env,
@@ -76,19 +77,18 @@ fn main() -> std::io::Result<()> {
         let database: Arc<Box<dyn Database>> =
             Arc::new(Box::new(RusqliteDatabase::new(db.library.clone())));
 
-        moosicbox_downloader::api::add_progress_listener_to_download_queue(Box::new(|event| {
-            match event {
-                ProgressEvent::Speed { bytes_per_second } => {
-                    log::debug!("Got speed update event: bytes_per_second={bytes_per_second}");
+        moosicbox_downloader::api::add_progress_listener_to_download_queue(Box::new(
+            move |event| {
+                let binding = CHAT_SERVER_HANDLE.read().unwrap_or_else(|e| e.into_inner());
+                let sender = binding.as_ref().unwrap();
+
+                let api_event: ApiProgressEvent = event.into();
+
+                if let Err(err) = send_download_event(sender, None, api_event) {
+                    log::error!("Failed to broadcast download event: {err:?}");
                 }
-                ProgressEvent::BytesRead { read, total } => {
-                    log::debug!("Got bytes read event: read={read} total={total}");
-                }
-                ProgressEvent::Size { bytes } => {
-                    log::debug!("Got size event: bytes={bytes:?}");
-                }
-            }
-        }))
+            },
+        ))
         .await;
 
         let (mut chat_server, server_tx) = ChatServer::new(Arc::new(db.clone()));

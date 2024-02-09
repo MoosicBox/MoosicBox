@@ -6,7 +6,55 @@ use moosicbox_json_utils::{serde_json::ToValue, ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 
-use crate::db::models::{DownloadApiSource, DownloadItem, DownloadTask, DownloadTaskState};
+use crate::{
+    db::models::{DownloadApiSource, DownloadItem, DownloadTask, DownloadTaskState},
+    queue::ProgressEvent,
+};
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
+pub enum ApiProgressEvent {
+    #[serde(rename_all = "camelCase")]
+    Size { task_id: u64, bytes: Option<u64> },
+    #[serde(rename_all = "camelCase")]
+    Speed { task_id: u64, bytes_per_second: f64 },
+    #[serde(rename_all = "camelCase")]
+    BytesRead {
+        task_id: u64,
+        read: usize,
+        total: usize,
+    },
+}
+
+impl From<ProgressEvent> for ApiProgressEvent {
+    fn from(value: ProgressEvent) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<&ProgressEvent> for ApiProgressEvent {
+    fn from(value: &ProgressEvent) -> Self {
+        match value {
+            ProgressEvent::Size { task, bytes } => Self::Size {
+                task_id: task.id,
+                bytes: *bytes,
+            },
+            ProgressEvent::Speed {
+                task,
+                bytes_per_second,
+            } => Self::Speed {
+                task_id: task.id,
+                bytes_per_second: *bytes_per_second,
+            },
+            ProgressEvent::BytesRead { task, read, total } => Self::BytesRead {
+                task_id: task.id,
+                read: *read,
+                total: *total,
+            },
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -91,6 +139,23 @@ impl ToValueType<ApiDownloadApiSource> for &serde_json::Value {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
+pub enum StrippedApiDownloadItem {
+    #[serde(rename_all = "camelCase")]
+    Track {
+        track_id: u64,
+        source: DownloadApiSource,
+        quality: TrackAudioQuality,
+    },
+    #[serde(rename_all = "camelCase")]
+    AlbumCover { album_id: u64 },
+    #[serde(rename_all = "camelCase")]
+    ArtistCover { album_id: u64 },
+}
+
+#[derive(Debug, Serialize, Deserialize, AsRefStr, Clone, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
 pub enum ApiDownloadItem {
     #[serde(rename_all = "camelCase")]
     Track {
@@ -116,6 +181,51 @@ pub enum ApiDownloadItem {
         album_id: u64,
         title: String,
     },
+}
+
+impl From<DownloadItem> for StrippedApiDownloadItem {
+    fn from(value: DownloadItem) -> Self {
+        match value {
+            DownloadItem::Track {
+                track_id,
+                source,
+                quality,
+            } => StrippedApiDownloadItem::Track {
+                track_id,
+                source,
+                quality,
+            },
+            DownloadItem::AlbumCover(album_id) => StrippedApiDownloadItem::AlbumCover { album_id },
+            DownloadItem::ArtistCover(album_id) => {
+                StrippedApiDownloadItem::ArtistCover { album_id }
+            }
+        }
+    }
+}
+
+impl ToValueType<StrippedApiDownloadItem> for &serde_json::Value {
+    fn to_value_type(self) -> Result<StrippedApiDownloadItem, ParseError> {
+        let item_type: String = self.to_value("type")?;
+
+        Ok(match item_type.as_str() {
+            "TRACK" => StrippedApiDownloadItem::Track {
+                track_id: self.to_value("track_id")?,
+                source: self.to_value("source")?,
+                quality: self.to_value("quality")?,
+            },
+            "ALBUM_COVER" => StrippedApiDownloadItem::AlbumCover {
+                album_id: self.to_value("album_id")?,
+            },
+            "ARTIST_COVER" => StrippedApiDownloadItem::ArtistCover {
+                album_id: self.to_value("album_id")?,
+            },
+            _ => {
+                return Err(ParseError::ConvertType(format!(
+                    "Invalid DownloadItem type '{item_type}'"
+                )));
+            }
+        })
+    }
 }
 
 pub(crate) fn to_api_download_item(
@@ -210,6 +320,16 @@ impl ToValueType<ApiDownloadItem> for &serde_json::Value {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
+pub struct StrippedApiDownloadTask {
+    pub id: u64,
+    pub state: ApiDownloadTaskState,
+    pub item: StrippedApiDownloadItem,
+    pub file_path: String,
+    pub total_bytes: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct ApiDownloadTask {
     pub id: u64,
     pub state: ApiDownloadTaskState,
@@ -219,6 +339,18 @@ pub struct ApiDownloadTask {
     pub bytes: u64,
     pub total_bytes: Option<u64>,
     pub speed: Option<u64>,
+}
+
+impl From<DownloadTask> for StrippedApiDownloadTask {
+    fn from(value: DownloadTask) -> Self {
+        Self {
+            id: value.id,
+            state: value.state.into(),
+            item: value.item.into(),
+            file_path: value.file_path,
+            total_bytes: value.total_bytes,
+        }
+    }
 }
 
 impl ToValueType<ApiDownloadTask> for &serde_json::Value {

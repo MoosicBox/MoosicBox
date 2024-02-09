@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use crate::{db::models::DownloadApiSource, queue::ProgressEvent};
+use crate::{db::models::DownloadApiSource, queue::GenericProgressEvent};
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use atomic_float::AtomicF64;
@@ -530,7 +530,7 @@ async fn download_track_inner(
 
     log::debug!("Got track size: {size:?}");
 
-    (on_progress.lock().unwrap())(ProgressEvent::Size { bytes: size });
+    (on_progress.lock().unwrap())(GenericProgressEvent::Size { bytes: size });
 
     let mut bytes = get_track_bytes(
         db,
@@ -575,14 +575,14 @@ async fn download_track_inner(
                 let speed = speed.clone();
                 let speed_progress = on_progress.clone();
                 move |x| {
-                    (speed_progress.lock().unwrap())(ProgressEvent::Speed {
+                    (speed_progress.lock().unwrap())(GenericProgressEvent::Speed {
                         bytes_per_second: x,
                     });
                     speed.store(x, std::sync::atomic::Ordering::SeqCst)
                 }
             }),
             Some(Box::new(move |read, total| {
-                (on_progress.lock().unwrap())(ProgressEvent::BytesRead { read, total });
+                (on_progress.lock().unwrap())(GenericProgressEvent::BytesRead { read, total });
             })),
         )
         .await;
@@ -753,7 +753,7 @@ pub async fn download_album_cover(
 
     log::debug!("Got album cover size: {:?}", bytes.size);
 
-    (on_progress.lock().unwrap())(ProgressEvent::Size { bytes: bytes.size });
+    (on_progress.lock().unwrap())(GenericProgressEvent::Size { bytes: bytes.size });
 
     log::debug!("Saving album cover to {cover_path:?}");
 
@@ -813,7 +813,7 @@ pub async fn download_artist_cover(
 
     log::debug!("Got artist cover size: {:?}", bytes.size);
 
-    (on_progress.lock().unwrap())(ProgressEvent::Size { bytes: bytes.size });
+    (on_progress.lock().unwrap())(GenericProgressEvent::Size { bytes: bytes.size });
 
     log::debug!("Saving artist cover to {cover_path:?}");
 

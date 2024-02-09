@@ -66,6 +66,7 @@ pub enum OutboundMessageType {
     ConnectionId,
     Sessions,
     SessionUpdated,
+    DownloadEvent,
     Connections,
     SetSeek,
 }
@@ -470,12 +471,32 @@ fn set_session_active_players(
     Ok(())
 }
 
+pub fn send_download_event<ProgressEvent: Serialize>(
+    sender: &impl WebsocketSender,
+    context: Option<&WebsocketContext>,
+    payload: ProgressEvent,
+) -> Result<(), WebsocketSendError> {
+    let session_updated = serde_json::json!({
+        "type": OutboundMessageType::DownloadEvent,
+        "payload": payload,
+    })
+    .to_string();
+
+    if let Some(context) = context {
+        sender.send_all_except(&context.connection_id, &session_updated)?;
+    } else {
+        sender.send_all(&session_updated)?;
+    }
+
+    Ok(())
+}
+
 #[derive(Debug, Error)]
 pub enum UpdateSessionError {
     #[error("No session found")]
     NoSessionFound,
     #[error(transparent)]
-    WebsocketSend(WebsocketSendError),
+    WebsocketSend(#[from] WebsocketSendError),
     #[error(transparent)]
     Db(#[from] DbError),
 }
@@ -525,13 +546,9 @@ pub fn update_session(
     .to_string();
 
     if let Some(context) = context {
-        sender
-            .send_all_except(&context.connection_id, &session_updated)
-            .map_err(UpdateSessionError::WebsocketSend)?;
+        sender.send_all_except(&context.connection_id, &session_updated)?;
     } else {
-        sender
-            .send_all(&session_updated)
-            .map_err(UpdateSessionError::WebsocketSend)?;
+        sender.send_all(&session_updated)?;
     }
 
     Ok(())
