@@ -85,11 +85,19 @@ impl DownloadQueueState {
     }
 }
 
-pub type ProgressListener = Box<dyn Fn() + Send + Sync>;
+#[derive(Clone)]
+pub enum ProgressEvent {
+    Size { bytes: Option<u64> },
+    Speed { bytes_per_second: f64 },
+    BytesRead { read: usize, total: usize },
+}
+
+pub type ProgressListener = Box<dyn FnMut(ProgressEvent) + Send + Sync>;
+pub type ProgressListenerRef = Box<dyn FnMut(&ProgressEvent) + Send + Sync>;
 
 #[derive(Clone)]
 pub struct DownloadQueue {
-    progress_listeners: Arc<RwLock<Vec<ProgressListener>>>,
+    progress_listeners: Arc<std::sync::Mutex<Vec<ProgressListenerRef>>>,
     database: Option<Arc<Box<dyn Database>>>,
     downloader: Option<Arc<Box<dyn Downloader + Send + Sync>>>,
     state: Arc<RwLock<DownloadQueueState>>,
@@ -99,7 +107,7 @@ pub struct DownloadQueue {
 impl DownloadQueue {
     pub fn new() -> Self {
         Self {
-            progress_listeners: Arc::new(RwLock::new(vec![])),
+            progress_listeners: Arc::new(std::sync::Mutex::new(vec![])),
             database: None,
             downloader: None,
             state: Arc::new(RwLock::new(DownloadQueueState::new())),
@@ -125,8 +133,8 @@ impl DownloadQueue {
         self.clone()
     }
 
-    pub async fn add_progress_listener(&self, listener: ProgressListener) -> &Self {
-        self.progress_listeners.write().await.push(listener);
+    pub fn add_progress_listener(&self, listener: ProgressListenerRef) -> &Self {
+        self.progress_listeners.lock().unwrap().push(listener);
         self
     }
 
@@ -254,25 +262,36 @@ impl DownloadQueue {
             .clone()
             .ok_or(ProcessDownloadQueueError::NoDatabase)?;
 
+        let listeners = self.progress_listeners.clone();
+
         let task_id = task.id;
-        let on_size = Box::new(move |size| {
-            log::debug!("Got size of task: {size:?}");
-            if let Some(size) = size {
-                task_size.replace(size);
-                let database = database.clone();
-                tokio::task::spawn(async move {
-                    if let Err(err) = database
-                        .update_and_get_row(
-                            "download_tasks",
-                            DatabaseValue::UNumber(task_id),
-                            &[("total_bytes", DatabaseValue::UNumber(size))],
-                            None,
-                        )
-                        .await
-                    {
-                        log::error!("Failed to set DownloadTask total_bytes: {err:?}");
+        let on_progress = Box::new(move |event: ProgressEvent| {
+            match event.clone() {
+                ProgressEvent::Size { bytes } => {
+                    log::debug!("Got size of task: {bytes:?}");
+                    if let Some(size) = bytes {
+                        task_size.replace(size);
+                        let database = database.clone();
+                        tokio::task::spawn(async move {
+                            if let Err(err) = database
+                                .update_and_get_row(
+                                    "download_tasks",
+                                    DatabaseValue::UNumber(task_id),
+                                    &[("total_bytes", DatabaseValue::UNumber(size))],
+                                    None,
+                                )
+                                .await
+                            {
+                                log::error!("Failed to set DownloadTask total_bytes: {err:?}");
+                            }
+                        });
                     }
-                });
+                }
+                ProgressEvent::Speed { .. } => {}
+                ProgressEvent::BytesRead { .. } => {}
+            }
+            for listener in listeners.lock().unwrap().iter_mut() {
+                listener(&event);
             }
         });
 
@@ -293,19 +312,19 @@ impl DownloadQueue {
                         track_id,
                         quality,
                         source,
-                        on_size,
+                        on_progress,
                         *TIMEOUT_DURATION,
                     )
                     .await?
             }
             DownloadItem::AlbumCover(album_id) => {
                 downloader
-                    .download_album_cover(&task.file_path, album_id, on_size)
+                    .download_album_cover(&task.file_path, album_id, on_progress)
                     .await?;
             }
             DownloadItem::ArtistCover(album_id) => {
                 downloader
-                    .download_artist_cover(&task.file_path, album_id, on_size)
+                    .download_artist_cover(&task.file_path, album_id, on_progress)
                     .await?;
             }
         }
@@ -359,7 +378,7 @@ mod tests {
             _track_id: u64,
             _quality: moosicbox_files::files::track::TrackAudioQuality,
             _source: crate::db::models::DownloadApiSource,
-            _on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
+            _on_size: ProgressListener,
             _timeout_duration: Option<Duration>,
         ) -> Result<(), DownloadTrackError> {
             Ok(())
@@ -369,7 +388,7 @@ mod tests {
             &self,
             _path: &str,
             _album_id: u64,
-            _on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
+            _on_size: ProgressListener,
         ) -> Result<(), DownloadAlbumError> {
             Ok(())
         }
@@ -378,7 +397,7 @@ mod tests {
             &self,
             _path: &str,
             _album_id: u64,
-            _on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
+            _on_size: ProgressListener,
         ) -> Result<(), DownloadAlbumError> {
             Ok(())
         }

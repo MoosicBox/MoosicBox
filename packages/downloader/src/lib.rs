@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use crate::db::models::DownloadApiSource;
+use crate::{db::models::DownloadApiSource, queue::ProgressEvent};
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use atomic_float::AtomicF64;
@@ -43,6 +43,7 @@ use moosicbox_files::{
     get_content_length, sanitize_filename, save_bytes_stream_to_file_with_speed_listener,
     GetContentLengthError, SaveBytesStreamToFileError,
 };
+use queue::ProgressListener;
 use thiserror::Error;
 use tokio::select;
 
@@ -351,7 +352,7 @@ pub async fn download_track_id(
     track_id: u64,
     quality: TrackAudioQuality,
     source: DownloadApiSource,
-    on_size: &mut (impl FnMut(Option<u64>) + Send + Sync),
+    on_progress: Arc<std::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadTrackError> {
@@ -368,7 +369,7 @@ pub async fn download_track_id(
         quality,
         source,
         None,
-        on_size,
+        on_progress,
         speed,
         timeout_duration,
     )
@@ -383,7 +384,7 @@ async fn download_track(
     quality: TrackAudioQuality,
     source: DownloadApiSource,
     start: Option<u64>,
-    on_size: &mut (impl FnMut(Option<u64>) + Send + Sync),
+    on_progress: Arc<std::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadTrackError> {
@@ -394,7 +395,7 @@ async fn download_track(
         quality,
         source,
         start,
-        on_size,
+        on_progress.clone(),
         speed.clone(),
         timeout_duration,
     )
@@ -424,7 +425,7 @@ async fn download_track(
                     quality,
                     source,
                     start,
-                    on_size,
+                    on_progress,
                     speed,
                     timeout_duration,
                 )
@@ -465,7 +466,7 @@ async fn download_track_inner(
     quality: TrackAudioQuality,
     source: DownloadApiSource,
     start: Option<u64>,
-    on_size: &mut (impl FnMut(Option<u64>) + Send + Sync),
+    on_progress: Arc<std::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadTrackInnerError> {
@@ -529,7 +530,7 @@ async fn download_track_inner(
 
     log::debug!("Got track size: {size:?}");
 
-    on_size(size);
+    (on_progress.lock().unwrap())(ProgressEvent::Size { bytes: size });
 
     let mut bytes = get_track_bytes(
         db,
@@ -572,9 +573,17 @@ async fn download_track_inner(
             start,
             Box::new({
                 let speed = speed.clone();
-                move |x| speed.store(x, std::sync::atomic::Ordering::SeqCst)
+                let speed_progress = on_progress.clone();
+                move |x| {
+                    (speed_progress.lock().unwrap())(ProgressEvent::Speed {
+                        bytes_per_second: x,
+                    });
+                    speed.store(x, std::sync::atomic::Ordering::SeqCst)
+                }
             }),
-            None,
+            Some(Box::new(move |read, total| {
+                (on_progress.lock().unwrap())(ProgressEvent::BytesRead { read, total });
+            })),
         )
         .await;
 
@@ -663,7 +672,7 @@ pub async fn download_album_id(
     try_download_artist_cover: bool,
     quality: TrackAudioQuality,
     source: DownloadApiSource,
-    on_size: &mut (impl FnMut(Option<u64>) + Send + Sync),
+    on_progress: Arc<std::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadAlbumError> {
@@ -684,7 +693,7 @@ pub async fn download_album_id(
             quality,
             source,
             None,
-            on_size,
+            on_progress.clone(),
             speed.clone(),
             timeout_duration,
         )
@@ -694,11 +703,18 @@ pub async fn download_album_id(
     log::debug!("Completed album download for {} tracks", tracks.len());
 
     if try_download_album_cover {
-        download_album_cover(db.clone(), path, album_id, on_size, speed.clone()).await?;
+        download_album_cover(
+            db.clone(),
+            path,
+            album_id,
+            on_progress.clone(),
+            speed.clone(),
+        )
+        .await?;
     }
 
     if try_download_artist_cover {
-        download_artist_cover(db, path, album_id, on_size, speed).await?;
+        download_artist_cover(db, path, album_id, on_progress, speed).await?;
     }
 
     Ok(())
@@ -708,7 +724,7 @@ pub async fn download_album_cover(
     db: Arc<Box<dyn Database>>,
     path: &str,
     album_id: u64,
-    on_size: &mut (impl FnMut(Option<u64>) + Send + Sync),
+    on_progress: Arc<std::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
 ) -> Result<(), DownloadAlbumError> {
     log::debug!("Downloading album cover path={path}");
@@ -737,7 +753,7 @@ pub async fn download_album_cover(
 
     log::debug!("Got album cover size: {:?}", bytes.size);
 
-    on_size(bytes.size);
+    (on_progress.lock().unwrap())(ProgressEvent::Size { bytes: bytes.size });
 
     log::debug!("Saving album cover to {cover_path:?}");
 
@@ -766,7 +782,7 @@ pub async fn download_artist_cover(
     db: Arc<Box<dyn Database>>,
     path: &str,
     album_id: u64,
-    on_size: &mut (impl FnMut(Option<u64>) + Send + Sync),
+    on_progress: Arc<std::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
 ) -> Result<(), DownloadAlbumError> {
     log::debug!("Downloading artist cover path={path}");
@@ -797,7 +813,7 @@ pub async fn download_artist_cover(
 
     log::debug!("Got artist cover size: {:?}", bytes.size);
 
-    on_size(bytes.size);
+    (on_progress.lock().unwrap())(ProgressEvent::Size { bytes: bytes.size });
 
     log::debug!("Saving artist cover to {cover_path:?}");
 
@@ -834,7 +850,7 @@ pub trait Downloader {
         track_id: u64,
         quality: TrackAudioQuality,
         source: DownloadApiSource,
-        on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
+        on_progress: ProgressListener,
         timeout_duration: Option<Duration>,
     ) -> Result<(), DownloadTrackError>;
 
@@ -842,14 +858,14 @@ pub trait Downloader {
         &self,
         path: &str,
         album_id: u64,
-        on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
+        on_progress: ProgressListener,
     ) -> Result<(), DownloadAlbumError>;
 
     async fn download_artist_cover(
         &self,
         path: &str,
         album_id: u64,
-        on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
+        on_progress: ProgressListener,
     ) -> Result<(), DownloadAlbumError>;
 }
 
@@ -879,7 +895,7 @@ impl Downloader for MoosicboxDownloader {
         track_id: u64,
         quality: TrackAudioQuality,
         source: DownloadApiSource,
-        mut on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
+        on_progress: ProgressListener,
         timeout_duration: Option<Duration>,
     ) -> Result<(), DownloadTrackError> {
         download_track_id(
@@ -888,7 +904,7 @@ impl Downloader for MoosicboxDownloader {
             track_id,
             quality,
             source,
-            &mut on_size,
+            Arc::new(std::sync::Mutex::new(on_progress)),
             self.speed.clone(),
             timeout_duration,
         )
@@ -899,13 +915,13 @@ impl Downloader for MoosicboxDownloader {
         &self,
         path: &str,
         album_id: u64,
-        mut on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
+        on_progress: ProgressListener,
     ) -> Result<(), DownloadAlbumError> {
         download_album_cover(
             self.db.clone(),
             path,
             album_id,
-            &mut on_size,
+            Arc::new(std::sync::Mutex::new(on_progress)),
             self.speed.clone(),
         )
         .await
@@ -915,13 +931,13 @@ impl Downloader for MoosicboxDownloader {
         &self,
         path: &str,
         album_id: u64,
-        mut on_size: Box<dyn FnMut(Option<u64>) + Send + Sync>,
+        on_progress: ProgressListener,
     ) -> Result<(), DownloadAlbumError> {
         download_artist_cover(
             self.db.clone(),
             path,
             album_id,
-            &mut on_size,
+            Arc::new(std::sync::Mutex::new(on_progress)),
             self.speed.clone(),
         )
         .await

@@ -8,9 +8,7 @@ use crate::db::get_download_tasks;
 use crate::db::models::DownloadItem;
 use crate::get_create_download_tasks;
 use crate::get_download_path;
-use crate::queue::DownloadQueue;
-use crate::queue::ProcessDownloadQueueError;
-use crate::queue::ProgressListener;
+use crate::queue::{DownloadQueue, ProcessDownloadQueueError, ProgressListenerRef};
 use crate::CreateDownloadTasksError;
 use crate::DownloadApiSource;
 use crate::GetCreateDownloadTasksError;
@@ -37,12 +35,8 @@ pub mod models;
 static DOWNLOAD_QUEUE: Lazy<Arc<RwLock<DownloadQueue>>> =
     Lazy::new(|| Arc::new(RwLock::new(DownloadQueue::new())));
 
-pub async fn add_progress_listener_to_download_queue(listener: ProgressListener) {
-    DOWNLOAD_QUEUE
-        .write()
-        .await
-        .add_progress_listener(listener)
-        .await;
+pub async fn add_progress_listener_to_download_queue(listener: ProgressListenerRef) {
+    DOWNLOAD_QUEUE.write().await.add_progress_listener(listener);
 }
 
 async fn get_default_download_queue(db: Arc<Box<dyn Database>>) -> Arc<RwLock<DownloadQueue>> {
