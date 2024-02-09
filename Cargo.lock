@@ -3341,6 +3341,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "throttle",
  "tokio",
  "tokio-util",
  "url",
@@ -5534,6 +5535,12 @@ dependencies = [
  "cfg-if",
  "once_cell",
 ]
+
+[[package]]
+name = "throttle"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b7d2d6a110f96a589b87d0f6c46d4048c84a01a7b81a2dcc97656694ace28b1"
 
 [[package]]
 name = "tiff"

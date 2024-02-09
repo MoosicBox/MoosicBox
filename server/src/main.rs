@@ -12,7 +12,7 @@ use log::{debug, error, info};
 use moosicbox_auth::get_client_id_and_access_token;
 use moosicbox_core::app::{AppState, Db};
 use moosicbox_database::{rusqlite::RusqliteDatabase, Database, DbConnection};
-use moosicbox_downloader::api::models::ApiProgressEvent;
+use moosicbox_downloader::{api::models::ApiProgressEvent, queue::ProgressEvent};
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 use moosicbox_tunnel::{
     sender::{tunnel_sender::TunnelSender, TunnelMessage},
@@ -22,9 +22,10 @@ use moosicbox_ws::api::send_download_event;
 use once_cell::sync::Lazy;
 use std::{
     env,
-    sync::{Arc, Mutex, OnceLock},
+    sync::{atomic::AtomicUsize, Arc, Mutex, OnceLock},
     time::Duration,
 };
+use throttle::Throttle;
 use tokio::{task::spawn, try_join};
 use tokio_util::sync::CancellationToken;
 use url::Url;
@@ -77,10 +78,30 @@ fn main() -> std::io::Result<()> {
         let database: Arc<Box<dyn Database>> =
             Arc::new(Box::new(RusqliteDatabase::new(db.library.clone())));
 
+        let bytes_throttle = Arc::new(Mutex::new(Throttle::new(Duration::from_millis(200), 1)));
+        let bytes_buf = AtomicUsize::new(0);
+
         moosicbox_downloader::api::add_progress_listener_to_download_queue(Box::new(
             move |event| {
                 let binding = CHAT_SERVER_HANDLE.read().unwrap_or_else(|e| e.into_inner());
                 let sender = binding.as_ref().unwrap();
+
+                let event = if let ProgressEvent::BytesRead { task, read, total } = event {
+                    if let Err(_) = bytes_throttle.lock().unwrap().accept() {
+                        bytes_buf.fetch_add(*read, std::sync::atomic::Ordering::SeqCst);
+                        return;
+                    } else {
+                        let bytes = bytes_buf.load(std::sync::atomic::Ordering::SeqCst);
+                        bytes_buf.store(0, std::sync::atomic::Ordering::SeqCst);
+                        ProgressEvent::BytesRead {
+                            task: task.clone(),
+                            read: *read + bytes,
+                            total: *total,
+                        }
+                    }
+                } else {
+                    event.clone()
+                };
 
                 let api_event: ApiProgressEvent = event.into();
 

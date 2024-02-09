@@ -73,6 +73,7 @@ chrono = { version = "0.4.31", default-features = false, features = [
 clap = "3.2.25"
 cpal = "0.15.2"
 crossbeam-channel = "0.5.11"
+debounce = "0.2.2"
 derive_more = "0.99.17"
 dotenv = "0.15"
 enum-as-inner = "0.6.0"
@@ -134,6 +135,7 @@ symphonia = { version = "0.5.3", features = ["all"] }
 tantivy = "0.21.1"
 test-log = "0.2.14"
 thiserror = "1.0.56"
+throttle = "0.1.0"
 tokio = { version = "1.35.1", features = ["sync", "io-util"] }
 tokio-stream = "0.1.14"
 tokio-tungstenite = { version = "0.20.1", features = ["native-tls-vendored"] }
