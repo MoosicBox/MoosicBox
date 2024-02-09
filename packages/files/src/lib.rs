@@ -224,7 +224,7 @@ pub async fn save_bytes_stream_to_file_with_progress_listener<
 
         read += len;
 
-        log::debug!("Writing bytes to {path:?}: {len} ({read} total)");
+        log::trace!("Writing bytes to {path:?}: {len} ({read} total)");
 
         writer
             .write(&bytes)
