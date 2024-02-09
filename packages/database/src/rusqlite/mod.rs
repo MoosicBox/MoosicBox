@@ -5,7 +5,7 @@ use rusqlite::{types::Value, Connection, Row, Rows, Statement};
 use thiserror::Error;
 
 use crate::{
-    BooleanExpression, Database, DatabaseError, DatabaseValue, DbConnection, Expression, Join,
+    BooleanExpression, Database, DatabaseError, DatabaseValue, DbConnection, Expression, Join, Sort,
 };
 
 impl From<Connection> for DbConnection {
@@ -50,7 +50,7 @@ impl Database for RusqliteDatabase {
         columns: &[&str],
         filters: Option<&[Box<dyn BooleanExpression>]>,
         joins: Option<&[Join]>,
-        params: Option<&[DatabaseValue]>,
+        sort: Option<&[Sort]>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(select(
             &self.connection.lock().as_ref().unwrap().inner,
@@ -58,7 +58,7 @@ impl Database for RusqliteDatabase {
             columns,
             filters,
             joins,
-            params,
+            sort,
         )?)
     }
 
@@ -68,7 +68,7 @@ impl Database for RusqliteDatabase {
         columns: &[&str],
         filters: Option<&[Box<dyn BooleanExpression>]>,
         joins: Option<&[Join]>,
-        _params: Option<&[DatabaseValue]>,
+        sort: Option<&[Sort]>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(select_distinct(
             &self.connection.lock().as_ref().unwrap().inner,
@@ -76,6 +76,7 @@ impl Database for RusqliteDatabase {
             columns,
             filters,
             joins,
+            sort,
         )?)
     }
 
@@ -85,7 +86,7 @@ impl Database for RusqliteDatabase {
         columns: &[&str],
         filters: Option<&[Box<dyn BooleanExpression>]>,
         joins: Option<&[Join]>,
-        params: Option<&[DatabaseValue]>,
+        sort: Option<&[Sort]>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
         Ok(find_row(
             &self.connection.lock().as_ref().unwrap().inner,
@@ -93,7 +94,7 @@ impl Database for RusqliteDatabase {
             columns,
             filters,
             joins,
-            params,
+            sort,
         )?)
     }
 
@@ -101,13 +102,11 @@ impl Database for RusqliteDatabase {
         &self,
         table_name: &str,
         filters: Option<&[Box<dyn BooleanExpression>]>,
-        params: Option<&[DatabaseValue]>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(delete(
             &self.connection.lock().as_ref().unwrap().inner,
             table_name,
             filters,
-            params,
         )?)
     }
 
@@ -116,14 +115,12 @@ impl Database for RusqliteDatabase {
         table_name: &str,
         values: &[(&str, DatabaseValue)],
         filters: Option<&[Box<dyn BooleanExpression>]>,
-        params: Option<&[DatabaseValue]>,
     ) -> Result<crate::Row, DatabaseError> {
         Ok(upsert(
             &self.connection.lock().as_ref().unwrap().inner,
             table_name,
             values,
             filters,
-            params,
         )?)
     }
 
@@ -146,14 +143,12 @@ impl Database for RusqliteDatabase {
         table_name: &str,
         id: DatabaseValue,
         values: &[(&str, DatabaseValue)],
-        params: Option<&[DatabaseValue]>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
         Ok(update_and_get_row(
             &self.connection.lock().as_ref().unwrap().inner,
             table_name,
             id,
             values,
-            params,
         )?)
     }
 }
@@ -188,7 +183,6 @@ fn update_and_get_row(
     table_name: &str,
     id: DatabaseValue,
     values: &[(&str, DatabaseValue)],
-    _params: Option<&[DatabaseValue]>,
 ) -> Result<Option<crate::Row>, RusqliteDatabaseError> {
     let variable_count: i32 = values
         .iter()
@@ -261,6 +255,34 @@ fn build_where_clause(filters: Option<&[Box<dyn BooleanExpression>]>) -> String 
 
 fn build_where_props(filters: &[Box<dyn BooleanExpression>]) -> Vec<String> {
     filters.iter().map(|filter| filter.to_sql()).collect()
+}
+
+fn build_sort_clause(sorts: Option<&[Sort]>) -> String {
+    if let Some(sorts) = sorts {
+        if sorts.is_empty() {
+            "".to_string()
+        } else {
+            format!("ORDER BY {}", build_sort_props(sorts).join(", "))
+        }
+    } else {
+        "".to_string()
+    }
+}
+
+fn build_sort_props(sorts: &[Sort]) -> Vec<String> {
+    sorts
+        .iter()
+        .map(|sort| {
+            format!(
+                "{} {}",
+                sort.expression.to_sql(),
+                match sort.direction {
+                    crate::SortDirection::Asc => "ASC",
+                    crate::SortDirection::Desc => "DESC",
+                }
+            )
+        })
+        .collect()
 }
 
 fn build_set_clause(values: &[(&str, DatabaseValue)]) -> String {
@@ -491,12 +513,14 @@ fn select_distinct(
     columns: &[&str],
     filters: Option<&[Box<dyn BooleanExpression>]>,
     joins: Option<&[Join]>,
+    sort: Option<&[Sort]>,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
     let mut statement = connection.prepare_cached(&format!(
-        "SELECT DISTINCT {} FROM {table_name} {} {}",
+        "SELECT DISTINCT {} FROM {table_name} {} {} {}",
         columns.join(", "),
         build_join_clauses(joins),
         build_where_clause(filters),
+        build_sort_clause(sort),
     ))?;
     let column_names = statement
         .column_names()
@@ -520,13 +544,14 @@ fn select(
     columns: &[&str],
     filters: Option<&[Box<dyn BooleanExpression>]>,
     joins: Option<&[Join]>,
-    _params: Option<&[DatabaseValue]>,
+    sort: Option<&[Sort]>,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
     let query = format!(
-        "SELECT {} FROM {table_name} {} {}",
+        "SELECT {} FROM {table_name} {} {} {}",
         columns.join(", "),
         build_join_clauses(joins),
         build_where_clause(filters),
+        build_sort_clause(sort),
     );
 
     let mut statement = connection.prepare_cached(&query)?;
@@ -555,7 +580,6 @@ fn delete(
     connection: &Connection,
     table_name: &str,
     filters: Option<&[Box<dyn BooleanExpression>]>,
-    _params: Option<&[DatabaseValue]>,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
     let mut statement = connection.prepare_cached(&format!(
         "DELETE FROM {table_name} {} RETURNING *",
@@ -583,13 +607,14 @@ fn find_row(
     columns: &[&str],
     filters: Option<&[Box<dyn BooleanExpression>]>,
     joins: Option<&[Join]>,
-    _params: Option<&[DatabaseValue]>,
+    sort: Option<&[Sort]>,
 ) -> Result<Option<crate::Row>, RusqliteDatabaseError> {
     let query = format!(
-        "SELECT {} FROM {table_name} {} {}",
+        "SELECT {} FROM {table_name} {} {} {}",
         columns.join(", "),
         build_join_clauses(joins),
         build_where_clause(filters),
+        build_sort_clause(sort),
     );
 
     let mut statement = connection.prepare_cached(&query)?;
@@ -623,7 +648,6 @@ fn insert_and_get_row(
     connection: &Connection,
     table_name: &str,
     values: &[(&str, DatabaseValue)],
-    _params: Option<&[DatabaseValue]>,
 ) -> Result<crate::Row, RusqliteDatabaseError> {
     let column_names = values
         .into_iter()
@@ -781,18 +805,16 @@ fn upsert(
     table_name: &str,
     values: &[(&str, DatabaseValue)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
-    params: Option<&[DatabaseValue]>,
 ) -> Result<crate::Row, RusqliteDatabaseError> {
-    match find_row(connection, table_name, &["*"], filters, None, params)? {
+    match find_row(connection, table_name, &["*"], filters, None, None)? {
         Some(row) => Ok(update_and_get_row(
             connection,
             table_name,
             row.id().ok_or(RusqliteDatabaseError::NoId)?,
             values,
-            params,
         )?
         .unwrap()),
-        None => insert_and_get_row(connection, table_name, values, params),
+        None => insert_and_get_row(connection, table_name, values),
     }
 }
 
@@ -802,16 +824,14 @@ fn upsert_and_get_row(
     table_name: &str,
     values: &[(&str, DatabaseValue)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
-    params: Option<&[DatabaseValue]>,
 ) -> Result<crate::Row, RusqliteDatabaseError> {
-    match find_row(connection, table_name, &["*"], filters, None, params)? {
+    match find_row(connection, table_name, &["*"], filters, None, None)? {
         Some(row) => {
             let updated = update_and_get_row(
                 connection,
                 table_name,
                 row.id().ok_or(RusqliteDatabaseError::NoId)?,
                 &values,
-                params,
             )?
             .unwrap();
 
@@ -826,6 +846,6 @@ fn upsert_and_get_row(
 
             Ok(updated)
         }
-        None => Ok(insert_and_get_row(connection, table_name, values, params)?),
+        None => Ok(insert_and_get_row(connection, table_name, values)?),
     }
 }

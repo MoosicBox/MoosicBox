@@ -136,7 +136,6 @@ async fn copy_streaming_cover_to_local(
         "artists",
         DatabaseValue::UNumber(artist_id as u64),
         &[("cover", DatabaseValue::String(cover.to_string()))],
-        None,
     )
     .await?;
 

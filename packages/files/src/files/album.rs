@@ -88,7 +88,6 @@ async fn fetch_local_album_cover(
             "albums",
             DatabaseValue::UNumber(album_id as u64),
             &[("artwork", DatabaseValue::String(artwork))],
-            None,
         )
         .await?;
 
@@ -139,7 +138,6 @@ async fn fetch_local_album_cover_bytes(
             "albums",
             DatabaseValue::UNumber(album_id as u64),
             &[("artwork", DatabaseValue::String(artwork))],
-            None,
         )
         .await?;
 
@@ -197,7 +195,6 @@ async fn copy_streaming_cover_to_local(
         "albums",
         DatabaseValue::UNumber(album_id as u64),
         &[("artwork", DatabaseValue::String(cover.clone()))],
-        None,
     )
     .await?;
 

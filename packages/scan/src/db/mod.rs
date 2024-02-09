@@ -26,7 +26,6 @@ pub async fn add_scan_path(db: &Box<dyn Database>, path: &str) -> Result<(), DbE
             ),
             where_eq("path", DatabaseValue::String(path.to_string())),
         ]),
-        None,
     )
     .await?;
 
@@ -44,7 +43,6 @@ pub async fn remove_scan_path(db: &Box<dyn Database>, path: &str) -> Result<(), 
             ),
             where_eq("path", DatabaseValue::String(path.to_string())),
         ]),
-        None,
     )
     .await?;
 
@@ -62,7 +60,6 @@ pub async fn enable_scan_origin(db: &Box<dyn Database>, origin: ScanOrigin) -> R
             where_eq("origin", DatabaseValue::String(origin.as_ref().to_string())),
             where_eq("path", DatabaseValue::StringOpt(None)),
         ]),
-        None,
     )
     .await?;
 
@@ -79,7 +76,6 @@ pub async fn disable_scan_origin(
             where_eq("origin", DatabaseValue::String(origin.as_ref().to_string())),
             where_eq("path", DatabaseValue::StringOpt(None)),
         ]),
-        None,
     )
     .await?;
 

@@ -526,7 +526,6 @@ pub async fn remove_album(
             "albums",
             DatabaseValue::Number(album.id as i64),
             &album_field_updates,
-            None,
         )
         .await?;
     }
@@ -555,7 +554,6 @@ pub async fn remove_album(
     db.delete(
         "albums",
         Some(&[where_eq("id", DatabaseValue::Number(album.id as i64))]),
-        None,
     )
     .await?;
 

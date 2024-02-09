@@ -1,5 +1,5 @@
 use moosicbox_core::sqlite::db::DbError;
-use moosicbox_database::{where_eq, Database, DatabaseValue};
+use moosicbox_database::{sort, where_eq, Database, DatabaseValue, SortDirection};
 use moosicbox_json_utils::ToValueType as _;
 
 pub mod models;
@@ -11,7 +11,6 @@ pub async fn create_download_location(db: &Box<dyn Database>, path: &str) -> Res
         "download_locations",
         &[("path", DatabaseValue::String(path.to_string()))],
         Some(&[where_eq("path", DatabaseValue::String(path.to_string()))]),
-        None,
     )
     .await?;
 
@@ -101,7 +100,6 @@ pub async fn create_download_task(
                     .collect::<Vec<_>>()
                     .as_slice(),
             ),
-            None,
         )
         .await?
         .to_value_type()?)
@@ -109,7 +107,13 @@ pub async fn create_download_task(
 
 pub async fn get_download_tasks(db: &Box<dyn Database>) -> Result<Vec<DownloadTask>, DbError> {
     Ok(db
-        .select("download_tasks", &["*"], None, None, None)
+        .select(
+            "download_tasks",
+            &["*"],
+            None,
+            None,
+            Some(&[sort("id", SortDirection::Desc)]),
+        )
         .await?
         .to_value_type()?)
 }

@@ -1332,7 +1332,7 @@ pub async fn delete_tracks_database(
     };
 
     Ok(db
-        .delete("tracks", where_clause.as_deref(), None)
+        .delete("tracks", where_clause.as_deref())
         .await?
         .to_value_type()?)
 }
@@ -1395,7 +1395,7 @@ pub async fn delete_track_sizes_by_track_id_database(
     };
 
     Ok(db
-        .delete("track_sizes", where_clause.as_deref(), None)
+        .delete("track_sizes", where_clause.as_deref())
         .await?
         .to_value_type()?)
 }
@@ -1463,7 +1463,7 @@ pub async fn delete_session_playlist_tracks_by_track_id_database(
     };
 
     Ok(db
-        .delete("session_playlist_tracks", where_clause.as_deref(), None)
+        .delete("session_playlist_tracks", where_clause.as_deref())
         .await?
         .to_value_type()?)
 }
@@ -2035,7 +2035,6 @@ pub async fn add_artist_maps_and_get_artists_database(
                 "artists",
                 artist.into_iter().collect::<Vec<_>>().as_slice(),
                 Some(filters),
-                None,
             )
             .await?
             .to_value_type()?;
@@ -2153,7 +2152,6 @@ pub async fn add_album_maps_and_get_albums_database(
                 "albums",
                 album.into_iter().collect::<Vec<_>>().as_slice(),
                 Some(filters),
-                None,
             )
             .await?
             .to_value_type()?;

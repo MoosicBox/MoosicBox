@@ -268,12 +268,7 @@ impl DownloadQueue {
             .database
             .clone()
             .ok_or(UpdateTaskError::NoDatabase)?
-            .update_and_get_row(
-                "download_tasks",
-                DatabaseValue::UNumber(task_id),
-                values,
-                None,
-            )
+            .update_and_get_row("download_tasks", DatabaseValue::UNumber(task_id), values)
             .await?
             .ok_or(UpdateTaskError::NoRow)?)
     }
@@ -310,7 +305,6 @@ impl DownloadQueue {
                                     "download_tasks",
                                     DatabaseValue::UNumber(task_id),
                                     &[("total_bytes", DatabaseValue::UNumber(size))],
-                                    None,
                                 )
                                 .await
                             {
@@ -408,7 +402,7 @@ impl Drop for DownloadQueue {
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
-    use moosicbox_database::{BooleanExpression, Join, Row};
+    use moosicbox_database::{BooleanExpression, Join, Row, Sort};
     use moosicbox_files::files::track::TrackAudioQuality;
     use pretty_assertions::assert_eq;
 
@@ -461,7 +455,7 @@ mod tests {
             _columns: &[&str],
             _filters: Option<&[Box<dyn BooleanExpression>]>,
             _joins: Option<&[Join]>,
-            _params: Option<&[DatabaseValue]>,
+            _sort: Option<&[Sort]>,
         ) -> Result<Vec<Row>, DatabaseError> {
             Ok(vec![])
         }
@@ -472,7 +466,7 @@ mod tests {
             _columns: &[&str],
             _filters: Option<&[Box<dyn BooleanExpression>]>,
             _joins: Option<&[Join]>,
-            _params: Option<&[DatabaseValue]>,
+            _sort: Option<&[Sort]>,
         ) -> Result<Vec<Row>, DatabaseError> {
             Ok(vec![])
         }
@@ -483,7 +477,7 @@ mod tests {
             _columns: &[&str],
             _filters: Option<&[Box<dyn BooleanExpression>]>,
             _joins: Option<&[Join]>,
-            _params: Option<&[DatabaseValue]>,
+            _sort: Option<&[Sort]>,
         ) -> Result<Option<Row>, DatabaseError> {
             Ok(Some(Row { columns: vec![] }))
         }
@@ -492,7 +486,6 @@ mod tests {
             &self,
             _table_name: &str,
             _filters: Option<&[Box<dyn BooleanExpression>]>,
-            _params: Option<&[DatabaseValue]>,
         ) -> Result<Vec<Row>, DatabaseError> {
             Ok(vec![])
         }
@@ -502,7 +495,6 @@ mod tests {
             _table_name: &str,
             _values: &[(&str, DatabaseValue)],
             _filters: Option<&[Box<dyn BooleanExpression>]>,
-            _params: Option<&[DatabaseValue]>,
         ) -> Result<Row, DatabaseError> {
             Ok(Row { columns: vec![] })
         }
@@ -521,7 +513,6 @@ mod tests {
             _table_name: &str,
             _id: DatabaseValue,
             _values: &[(&str, DatabaseValue)],
-            _params: Option<&[DatabaseValue]>,
         ) -> Result<Option<Row>, DatabaseError> {
             Ok(Some(Row { columns: vec![] }))
         }

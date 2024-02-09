@@ -45,7 +45,6 @@ pub async fn create_tidal_config(
             "refresh_token",
             DatabaseValue::String(refresh_token.to_string()),
         )]),
-        None,
     )
     .await?;
 
@@ -62,7 +61,6 @@ pub async fn delete_tidal_config(
             "refresh_token",
             DatabaseValue::String(refresh_token.to_string()),
         )]),
-        None,
     )
     .await?;
 

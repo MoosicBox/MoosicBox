@@ -31,7 +31,6 @@ pub async fn create_qobuz_app_secret(
             where_eq("timezone", DatabaseValue::String(timezone.to_string())),
             where_eq("secret", DatabaseValue::String(secret.to_string())),
         ]),
-        None,
     )
     .await?;
 
@@ -57,7 +56,6 @@ pub async fn create_qobuz_app_config(
                 "bundle_version",
                 DatabaseValue::String(bundle_version.to_string()),
             )]),
-            None,
         )
         .await?
         .to_value_type()?)
@@ -85,7 +83,6 @@ pub async fn create_qobuz_config(
                 DatabaseValue::String(user_public_id.to_string()),
             ),
         ]),
-        None,
     )
     .await?;
 

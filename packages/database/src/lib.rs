@@ -98,6 +98,27 @@ impl std::fmt::Debug for DbConnection {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum SortDirection {
+    Asc,
+    Desc,
+}
+
+pub struct Sort {
+    pub expression: Box<dyn Expression>,
+    pub direction: SortDirection,
+}
+
+pub fn sort<T>(expression: T, direction: SortDirection) -> Sort
+where
+    T: Into<Box<dyn Expression>>,
+{
+    Sort {
+        expression: expression.into(),
+        direction,
+    }
+}
+
 #[derive(Debug)]
 pub struct Join<'a> {
     pub table_name: &'a str,
@@ -417,7 +438,7 @@ pub trait Database: Send + Sync {
         columns: &[&str],
         filters: Option<&[Box<dyn BooleanExpression>]>,
         joins: Option<&[Join]>,
-        params: Option<&[DatabaseValue]>,
+        sort: Option<&[Sort]>,
     ) -> Result<Vec<Row>, DatabaseError>;
 
     async fn select_distinct(
@@ -426,7 +447,7 @@ pub trait Database: Send + Sync {
         columns: &[&str],
         filters: Option<&[Box<dyn BooleanExpression>]>,
         joins: Option<&[Join]>,
-        params: Option<&[DatabaseValue]>,
+        sort: Option<&[Sort]>,
     ) -> Result<Vec<Row>, DatabaseError>;
 
     async fn select_first(
@@ -435,14 +456,13 @@ pub trait Database: Send + Sync {
         columns: &[&str],
         filters: Option<&[Box<dyn BooleanExpression>]>,
         joins: Option<&[Join]>,
-        params: Option<&[DatabaseValue]>,
+        sort: Option<&[Sort]>,
     ) -> Result<Option<Row>, DatabaseError>;
 
     async fn delete(
         &self,
         table_name: &str,
         filters: Option<&[Box<dyn BooleanExpression>]>,
-        params: Option<&[DatabaseValue]>,
     ) -> Result<Vec<Row>, DatabaseError>;
 
     async fn upsert(
@@ -450,7 +470,6 @@ pub trait Database: Send + Sync {
         table_name: &str,
         values: &[(&str, DatabaseValue)],
         filters: Option<&[Box<dyn BooleanExpression>]>,
-        params: Option<&[DatabaseValue]>,
     ) -> Result<Row, DatabaseError>;
 
     async fn upsert_multi(
@@ -465,6 +484,5 @@ pub trait Database: Send + Sync {
         table_name: &str,
         id: DatabaseValue,
         values: &[(&str, DatabaseValue)],
-        params: Option<&[DatabaseValue]>,
     ) -> Result<Option<Row>, DatabaseError>;
 }
