@@ -107,6 +107,10 @@ pub enum ProgressEvent {
         read: usize,
         total: usize,
     },
+    State {
+        task: DownloadTask,
+        state: DownloadTaskState,
+    },
 }
 
 pub type ProgressListener = Box<dyn FnMut(GenericProgressEvent) + Send + Sync>;
@@ -235,14 +239,24 @@ impl DownloadQueue {
     ) -> Result<Row, UpdateTaskError> {
         task.state = state;
 
-        self.update_task(
-            task.id,
-            &[(
-                "state",
-                DatabaseValue::String(task.state.as_ref().to_string()),
-            )],
-        )
-        .await
+        let row = self
+            .update_task(
+                task.id,
+                &[(
+                    "state",
+                    DatabaseValue::String(task.state.as_ref().to_string()),
+                )],
+            )
+            .await;
+
+        for listener in self.progress_listeners.iter() {
+            listener(&ProgressEvent::State {
+                task: task.clone(),
+                state,
+            });
+        }
+
+        row
     }
 
     async fn update_task(

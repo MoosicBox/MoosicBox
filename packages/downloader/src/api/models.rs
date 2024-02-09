@@ -25,6 +25,11 @@ pub enum ApiProgressEvent {
         read: usize,
         total: usize,
     },
+    #[serde(rename_all = "camelCase")]
+    State {
+        task_id: u64,
+        state: ApiDownloadTaskState,
+    },
 }
 
 impl From<ProgressEvent> for ApiProgressEvent {
@@ -51,6 +56,10 @@ impl From<&ProgressEvent> for ApiProgressEvent {
                 task_id: task.id,
                 read: *read,
                 total: *total,
+            },
+            ProgressEvent::State { task, state } => Self::State {
+                task_id: task.id,
+                state: state.clone().into(),
             },
         }
     }
