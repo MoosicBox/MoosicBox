@@ -7,6 +7,7 @@ use crate::api::models::ApiDownloadTaskState;
 use crate::create_download_tasks;
 use crate::db::get_download_tasks;
 use crate::db::models::DownloadItem;
+use crate::db::models::DownloadTaskState;
 use crate::get_create_download_tasks;
 use crate::get_download_path;
 use crate::queue::{DownloadQueue, ProcessDownloadQueueError, ProgressListenerRef};
@@ -142,6 +143,20 @@ pub async fn download_tasks_endpoint(
     data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<Page<ApiDownloadTask>>> {
     let tasks = get_download_tasks(&data.database).await?;
+    let (mut current, mut history): (Vec<_>, Vec<_>) =
+        tasks.into_iter().partition(|task| match task.state {
+            DownloadTaskState::Pending | DownloadTaskState::Paused | DownloadTaskState::Started => {
+                true
+            }
+            DownloadTaskState::Cancelled
+            | DownloadTaskState::Finished
+            | DownloadTaskState::Error => false,
+        });
+
+    current.sort_by(|a, b| a.id.cmp(&b.id));
+    history.sort_by(|a, b| b.id.cmp(&a.id));
+
+    let tasks = [current, history].concat();
 
     let track_ids = tasks
         .iter()
