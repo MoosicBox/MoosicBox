@@ -24,7 +24,7 @@ use moosicbox_core::{
     sqlite::{
         db::{
             get_album_database, get_album_tracks_database, get_artist_by_album_id_database,
-            get_track_database, get_tracks_database, DbError,
+            get_artist_database, get_track_database, get_tracks_database, DbError,
         },
         models::{LibraryTrack, TrackApiSource},
     },
@@ -249,6 +249,10 @@ pub async fn get_create_download_tasks_for_album_ids(
             })
             .collect::<Vec<_>>();
 
+        if tracks.is_empty() {
+            continue;
+        }
+
         tasks.extend(get_create_download_tasks_for_tracks(
             &tracks,
             download_path,
@@ -271,23 +275,29 @@ pub async fn get_create_download_tasks_for_album_ids(
                     .join(&sanitize_filename(&album.title))
             };
 
-            if download_album_cover {
+            if download_album_cover && tracks.first().unwrap().artwork.is_some() {
                 tasks.push(CreateDownloadTask {
                     file_path: album_path.join("cover.jpg").to_str().unwrap().to_string(),
                     item: DownloadItem::AlbumCover(*album_id),
                 });
             }
             if download_artist_cover {
-                tasks.push(CreateDownloadTask {
-                    file_path: album_path
-                        .parent()
-                        .unwrap()
-                        .join("artist.jpg")
-                        .to_str()
-                        .unwrap()
-                        .to_string(),
-                    item: DownloadItem::ArtistCover(*album_id),
-                });
+                let artist = get_artist_database(&db, tracks.first().unwrap().artist_id as u64)
+                    .await?
+                    .ok_or(GetCreateDownloadTasksError::NotFound)?;
+
+                if artist.cover.is_some() {
+                    tasks.push(CreateDownloadTask {
+                        file_path: album_path
+                            .parent()
+                            .unwrap()
+                            .join("artist.jpg")
+                            .to_str()
+                            .unwrap()
+                            .to_string(),
+                        item: DownloadItem::ArtistCover(*album_id),
+                    });
+                }
             }
         }
     }
