@@ -30,12 +30,24 @@ pub enum TunnelRequestError {
     InvalidQuery(String),
     #[error("Request error: {0}")]
     Request(String),
+    #[error("Other: {0}")]
+    Other(String),
     #[error("Unsupported Method")]
     UnsupportedMethod,
     #[error("Unsupported Route")]
     UnsupportedRoute,
+    #[error("Internal server error: {0:?}")]
+    InternalServerError(Box<dyn std::error::Error>),
     #[error("Websocket Message Error")]
     WebsocketMessage(#[from] WebsocketMessageError),
+    #[error(transparent)]
+    IO(#[from] std::io::Error),
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[error(transparent)]
+    Regex(#[from] regex::Error),
+    #[error(transparent)]
+    SerdeJson(#[from] serde_json::Error),
 }
 
 #[derive(Debug, Deserialize)]

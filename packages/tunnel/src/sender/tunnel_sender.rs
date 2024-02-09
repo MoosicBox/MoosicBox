@@ -78,6 +78,11 @@ impl TunnelSenderHandle {
     }
 }
 
+#[allow(unused)]
+fn wrap_to_500<E: std::error::Error + 'static>(e: E) -> TunnelRequestError {
+    TunnelRequestError::InternalServerError(Box::new(e))
+}
+
 impl WebsocketSender for TunnelSenderHandle {
     fn send(&self, conn_id: &str, data: &str) -> Result<(), moosicbox_ws::api::WebsocketSendError> {
         if let Some(sender) = self.sender.read().unwrap().as_ref() {
@@ -85,7 +90,7 @@ impl WebsocketSender for TunnelSenderHandle {
                 .unbounded_send(TunnelResponseMessage::Ws(TunnelResponseWs {
                     message: data.into(),
                     exclude_connection_ids: None,
-                    to_connection_ids: Some(vec![conn_id.parse::<usize>().unwrap()]),
+                    to_connection_ids: Some(vec![conn_id.parse::<usize>()?]),
                 }))
                 .map_err(|e| WebsocketSendError::Unknown(e.to_string()))?;
         }
@@ -114,7 +119,7 @@ impl WebsocketSender for TunnelSenderHandle {
             sender
                 .unbounded_send(TunnelResponseMessage::Ws(TunnelResponseWs {
                     message: data.into(),
-                    exclude_connection_ids: Some(vec![conn_id.parse::<usize>().unwrap()]),
+                    exclude_connection_ids: Some(vec![conn_id.parse::<usize>()?]),
                     to_connection_ids: None,
                 }))
                 .map_err(|e| WebsocketSendError::Unknown(e.to_string()))?;
@@ -322,13 +327,17 @@ impl TunnelSender {
                                                 ws.exclude_connection_ids,
                                                 text.len()
                                             );
-                                            let value: Value = serde_json::from_str(&text).unwrap();
-                                            Ok(Message::Text(serde_json::to_string(&TunnelWsResponse {
-                                                request_id: 0,
-                                                body: value,
-                                                exclude_connection_ids: ws.exclude_connection_ids,
-                                                to_connection_ids: ws.to_connection_ids,
-                                            }).unwrap()))
+                                            serde_json::from_str(&text).and_then(|value: Value| {
+                                                serde_json::to_string(&TunnelWsResponse {
+                                                    request_id: 0,
+                                                    body: value,
+                                                    exclude_connection_ids: ws.exclude_connection_ids,
+                                                    to_connection_ids: ws.to_connection_ids,
+                                                }).map(Message::Text)
+                                            }).map_err(|e| {
+                                                log::error!("Serde error occurred: {e:?}");
+                                                tokio_tungstenite::tungstenite::Error::AlreadyClosed
+                                            })
                                         } else {
                                             Ok(ws.message)
                                         }
@@ -363,9 +372,13 @@ impl TunnelSender {
                     }
                     Err(err) => match err {
                         Error::Http(response) => {
-                            let body =
-                                std::str::from_utf8(response.body().as_ref().unwrap()).unwrap();
-                            log::error!("body: {}", body);
+                            if let Ok(body) =
+                                std::str::from_utf8(response.body().as_ref().unwrap_or(&vec![]))
+                            {
+                                log::error!("body: {}", body);
+                            } else {
+                                log::error!("body: (unable to get body)");
+                            }
                         }
                         _ => log::error!("Failed to connect to websocket server: {err:?}"),
                     },
@@ -442,7 +455,7 @@ impl TunnelSender {
         headers: HashMap<String, String>,
         reader: impl std::io::Read,
         encoding: TunnelEncoding,
-    ) {
+    ) -> Result<(), TunnelRequestError> {
         match encoding {
             TunnelEncoding::Binary => self.send_binary(request_id, status, headers, reader),
             #[cfg(feature = "base64")]
@@ -458,7 +471,7 @@ impl TunnelSender {
         ranges: Option<Vec<Range>>,
         stream: impl Stream<Item = Result<Bytes, E>> + std::marker::Unpin,
         encoding: TunnelEncoding,
-    ) {
+    ) -> Result<(), TunnelRequestError> {
         match encoding {
             TunnelEncoding::Binary => {
                 self.send_binary_stream(request_id, status, headers, ranges, stream)
@@ -530,7 +543,7 @@ impl TunnelSender {
         headers: HashMap<String, String>,
         ranges: Option<Vec<Range>>,
         mut stream: impl Stream<Item = Result<Bytes, E>> + std::marker::Unpin,
-    ) {
+    ) -> Result<(), TunnelRequestError> {
         let mut bytes_read = 0_usize;
         let mut bytes_consumed = 0_usize;
         let mut packet_id = 1_u32;
@@ -589,7 +602,7 @@ impl TunnelSender {
                         }
                         Some(Err(err)) => {
                             log::error!("Failed to read bytes: {err:?}");
-                            return;
+                            return Ok(());
                         }
                         None => {
                             log::debug!("Received None");
@@ -641,7 +654,7 @@ impl TunnelSender {
                         .concat(),
                     ) {
                         log::error!("Failed to send bytes: {err:?}");
-                        return;
+                        return Ok(());
                     }
                     packet_id += 1;
 
@@ -658,6 +671,8 @@ impl TunnelSender {
                 packet_id += 1;
             }
         }
+
+        Ok(())
     }
 
     fn does_range_overlap(range: &Range, packet_start: usize, packet_end: usize) -> bool {
@@ -671,7 +686,7 @@ impl TunnelSender {
         status: u16,
         headers: HashMap<String, String>,
         mut reader: impl std::io::Read,
-    ) {
+    ) -> Result<(), TunnelRequestError> {
         let mut bytes_read = 0_usize;
         let mut packet_id = 0_u32;
         let mut last = false;
@@ -712,6 +727,8 @@ impl TunnelSender {
                 break;
             }
         }
+
+        Ok(())
     }
 
     #[cfg(feature = "base64")]
@@ -749,7 +766,7 @@ impl TunnelSender {
         status: u16,
         headers: HashMap<String, String>,
         mut reader: impl std::io::Read,
-    ) {
+    ) -> Result<(), TunnelRequestError> {
         use std::cmp::min;
 
         let buf_size = 1024 * 32;
@@ -761,7 +778,7 @@ impl TunnelSender {
         loop {
             if Self::is_request_aborted(request_id, self.abort_request_tokens.clone()) {
                 log::debug!("Aborting send_base64");
-                break;
+                break Ok(());
             }
             let mut buf = vec![0_u8; buf_size];
             match reader.read(&mut buf) {
@@ -775,8 +792,11 @@ impl TunnelSender {
 
                     if packet_id == 1 {
                         prefix.push_str(&status.to_string());
-                        let mut headers_base64 = general_purpose::STANDARD
-                            .encode(serde_json::to_string(&headers).unwrap().clone());
+                        let mut headers_base64 = general_purpose::STANDARD.encode(
+                            serde_json::to_string(&headers)
+                                .map_err(wrap_to_500)?
+                                .clone(),
+                        );
                         headers_base64.insert(0, '{');
                         headers_base64.push('}');
                         headers_base64.push_str(&base64);
@@ -792,7 +812,7 @@ impl TunnelSender {
                     let data = &base64[..end];
                     overflow_buf.push_str(&base64[end..]);
                     self.send_message(request_id, packet_id, format!("{prefix}{data}"))
-                        .unwrap();
+                        .map_err(wrap_to_500)?;
 
                     if size == 0 {
                         while !overflow_buf.is_empty() {
@@ -804,16 +824,17 @@ impl TunnelSender {
                             packet_id += 1;
                             let prefix = format!("{request_id}|{packet_id}|");
                             self.send_message(request_id, packet_id, format!("{prefix}{data}"))
-                                .unwrap();
+                                .map_err(wrap_to_500)?;
                         }
 
                         packet_id += 1;
                         let prefix = format!("{request_id}|{packet_id}|");
-                        self.send_message(request_id, packet_id, prefix).unwrap();
-                        break;
+                        self.send_message(request_id, packet_id, prefix)
+                            .map_err(wrap_to_500)?;
+                        break Ok(());
                     }
                 }
-                Err(_err) => break,
+                Err(err) => break Err(err.into()),
             }
         }
     }
@@ -826,7 +847,7 @@ impl TunnelSender {
         headers: HashMap<String, String>,
         ranges: Option<Vec<Range>>,
         mut stream: impl Stream<Item = Result<Bytes, E>> + std::marker::Unpin,
-    ) {
+    ) -> Result<(), TunnelRequestError> {
         if ranges.is_some() {
             todo!("Byte ranges for base64 not implemented");
         }
@@ -842,7 +863,7 @@ impl TunnelSender {
         loop {
             if Self::is_request_aborted(request_id, self.abort_request_tokens.clone()) {
                 log::debug!("Aborting send_base64_stream");
-                break;
+                break Ok(());
             }
             packet_id += 1;
 
@@ -878,7 +899,7 @@ impl TunnelSender {
                     }
                     Some(Err(err)) => {
                         log::error!("Failed to read bytes: {err:?}");
-                        return;
+                        return Ok(());
                     }
                     None => {
                         log::debug!("Received None");
@@ -890,12 +911,13 @@ impl TunnelSender {
             let end = min(buf.len(), buf_size - prefix.len());
             let data = &buf[..end];
             self.send_message(request_id, packet_id, format!("{prefix}{data}"))
-                .unwrap();
+                .map_err(wrap_to_500)?;
 
             if buf.is_empty() {
                 let prefix = format!("{request_id}|{packet_id}|");
-                self.send_message(request_id, packet_id, prefix).unwrap();
-                break;
+                self.send_message(request_id, packet_id, prefix)
+                    .map_err(wrap_to_500)?;
+                break Ok(());
             }
         }
     }
@@ -910,7 +932,7 @@ impl TunnelSender {
         query: Value,
         payload: Option<Value>,
         encoding: TunnelEncoding,
-    ) {
+    ) -> Result<(), TunnelRequestError> {
         let host = format!("http://127.0.0.1:{service_port}");
         let mut query_string = query
             .as_object()
@@ -946,8 +968,8 @@ impl TunnelSender {
         method: Method,
         payload: Option<Value>,
         encoding: TunnelEncoding,
-    ) {
-        let response = self.http_request(url, method, payload, true).await;
+    ) -> Result<(), TunnelRequestError> {
+        let response = self.http_request(url, method, payload, true).await?;
 
         let headers = response
             .headers()
@@ -963,7 +985,7 @@ impl TunnelSender {
             response.bytes_stream(),
             encoding,
         )
-        .await;
+        .await
     }
 
     async fn http_request(
@@ -972,7 +994,7 @@ impl TunnelSender {
         method: Method,
         payload: Option<Value>,
         user_agent_header: bool,
-    ) -> reqwest::Response {
+    ) -> Result<reqwest::Response, reqwest::Error> {
         let client = reqwest::Client::new();
 
         let mut builder = match method {
@@ -992,7 +1014,7 @@ impl TunnelSender {
             builder = builder.json(&body);
         }
 
-        builder.send().await.unwrap()
+        builder.send().await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1064,7 +1086,7 @@ impl TunnelSender {
                                             path,
                                         ),
                                         encoding,
-                                    ).await;
+                                    ).await?;
                                 }
                                 #[cfg(feature = "mp3")]
                                 Some(AudioFormat::Mp3) => {
@@ -1075,7 +1097,7 @@ impl TunnelSender {
                                             path,
                                         ),
                                         encoding,
-                                    ).await;
+                                    ).await?;
                                 }
                                 #[cfg(feature = "opus")]
                                 Some(AudioFormat::Opus) => {
@@ -1086,7 +1108,7 @@ impl TunnelSender {
                                             path,
                                         ),
                                         encoding,
-                                    ).await;
+                                    ).await?;
                                 }
                                 _ => {
                                     response_headers
@@ -1095,9 +1117,9 @@ impl TunnelSender {
                                         request_id,
                                         200,
                                         response_headers,
-                                        File::open(path).unwrap(),
+                                        File::open(path)?,
                                         encoding,
-                                    );
+                                    )?;
                                 }
                             }
                         }
@@ -1120,7 +1142,7 @@ impl TunnelSender {
                                     #[cfg(feature = "flac")]
                                     Some(AudioFormat::Flac) => panic!("FLAC audio format is unsupported for Tidal"),
                                     #[allow(unreachable_patterns)]
-                                    _ => query.format.unwrap()
+                                    Some(format) => format
                                 };
 
                                 log::debug!("Sending audio stream with format: {format:?}");
@@ -1184,7 +1206,7 @@ impl TunnelSender {
                                 stream,
                                 encoding,
                             )
-                            .await;
+                            .await?;
                         }
                         Err(err) => {
                             log::error!("Failed to get track source: {err:?}");
@@ -1205,8 +1227,8 @@ impl TunnelSender {
 
                     if let Ok(track_info) = get_track_info(query.track_id, db.clone()).await {
                         let mut bytes: Vec<u8> = Vec::new();
-                        serde_json::to_writer(&mut bytes, &track_info).unwrap();
-                        self.send(request_id, 200, headers, Cursor::new(bytes), encoding);
+                        serde_json::to_writer(&mut bytes, &track_info)?;
+                        self.send(request_id, 200, headers, Cursor::new(bytes), encoding)?;
                     }
 
                     Ok(())
@@ -1214,7 +1236,7 @@ impl TunnelSender {
                 _ => Err(TunnelRequestError::UnsupportedMethod),
             },
             _ => {
-                let re = Regex::new(r"^albums/(\d+)/(\d+)x(\d+)$").unwrap();
+                let re = Regex::new(r"^albums/(\d+)/(\d+)x(\d+)$")?;
                 if let Some(caps) = re.captures(&path) {
                     match method {
                         Method::Get => {
@@ -1266,10 +1288,10 @@ impl TunnelSender {
                                             80,
                                         )
                                         .map_err(|e| {
-                                            AlbumCoverError::File(path.clone(), e.to_string())
-                                        })
-                                        .unwrap()
-                                        {
+                                            TunnelRequestError::InternalServerError(Box::new(
+                                                AlbumCoverError::File(path.clone(), e.to_string()),
+                                            ))
+                                        })? {
                                             headers.insert(
                                                 "content-type".to_string(),
                                                 "image/webp".to_string(),
@@ -1287,9 +1309,22 @@ impl TunnelSender {
                                                 Encoding::Jpeg,
                                                 80,
                                             )
-                                            .map_err(|e| AlbumCoverError::File(path, e.to_string()))
-                                            .unwrap()
-                                            .expect("Failed to resize to jpeg image")
+                                            .map_err(|e| {
+                                                TunnelRequestError::InternalServerError(Box::new(
+                                                    AlbumCoverError::File(
+                                                        path.clone(),
+                                                        e.to_string(),
+                                                    ),
+                                                ))
+                                            })?
+                                            .ok_or_else(|| {
+                                                TunnelRequestError::InternalServerError(Box::new(
+                                                    AlbumCoverError::File(
+                                                        path,
+                                                        "No cover from Option".to_string(),
+                                                    ),
+                                                ))
+                                            })?
                                         }
                                     };
 
@@ -1303,7 +1338,7 @@ impl TunnelSender {
                                         headers,
                                         Cursor::new(resized),
                                         encoding,
-                                    );
+                                    )?;
                                 }
                             }
 
@@ -1321,7 +1356,7 @@ impl TunnelSender {
                         payload,
                         encoding,
                     )
-                    .await;
+                    .await?;
 
                     Ok(())
                 }

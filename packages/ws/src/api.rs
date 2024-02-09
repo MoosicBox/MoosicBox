@@ -1,5 +1,5 @@
 use core::fmt;
-use std::{collections::HashMap, str::FromStr, sync::RwLock};
+use std::{collections::HashMap, num::ParseIntError, str::FromStr, sync::RwLock};
 
 use log::{debug, info, trace};
 use moosicbox_core::{
@@ -80,6 +80,8 @@ pub enum WebsocketSendError {
     Db(#[from] DbError),
     #[error("Unknown: {0}")]
     Unknown(String),
+    #[error(transparent)]
+    ParseInt(#[from] ParseIntError),
 }
 
 #[derive(Serialize, Deserialize)]
