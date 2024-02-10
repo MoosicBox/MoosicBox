@@ -15,7 +15,7 @@ use moosicbox_core::sqlite::{
         AlbumId,
     },
 };
-use moosicbox_database::{Database, DatabaseError, DatabaseValue};
+use moosicbox_database::{query::*, Database, DatabaseError, DatabaseValue};
 use moosicbox_qobuz::QobuzAlbumError;
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use moosicbox_tidal::TidalAlbumError;
@@ -84,12 +84,11 @@ async fn fetch_local_album_cover(
 
         log::debug!("Updating Album {album_id} artwork file from '{cover}' to '{artwork}'");
 
-        db.update_and_get_row(
-            "albums",
-            DatabaseValue::UNumber(album_id as u64),
-            &[("artwork", DatabaseValue::String(artwork))],
-        )
-        .await?;
+        db.update("albums")
+            .filter(where_eq("id", album_id))
+            .value("artwork", artwork)
+            .execute(&db)
+            .await?;
 
         return Ok(path.to_str().unwrap().to_string());
     }
@@ -134,12 +133,11 @@ async fn fetch_local_album_cover_bytes(
 
         log::debug!("Updating Album {album_id} artwork file from '{cover}' to '{artwork}'");
 
-        db.update_and_get_row(
-            "albums",
-            DatabaseValue::UNumber(album_id as u64),
-            &[("artwork", DatabaseValue::String(artwork))],
-        )
-        .await?;
+        db.update("albums")
+            .filter(where_eq("id", album_id))
+            .value("artwork", artwork)
+            .execute(&db)
+            .await?;
 
         let file = tokio::fs::File::open(path).await?;
 
@@ -191,12 +189,11 @@ async fn copy_streaming_cover_to_local(
 ) -> Result<String, AlbumCoverError> {
     log::debug!("Updating Album {album_id} cover file to '{cover}'");
 
-    db.update_and_get_row(
-        "albums",
-        DatabaseValue::UNumber(album_id as u64),
-        &[("artwork", DatabaseValue::String(cover.clone()))],
-    )
-    .await?;
+    db.update("albums")
+        .filter(where_eq("id", album_id))
+        .value("artwork", cover.clone())
+        .execute(&db)
+        .await?;
 
     Ok(cover)
 }

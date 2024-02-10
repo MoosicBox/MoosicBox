@@ -511,23 +511,22 @@ pub async fn remove_album(
 
     match api.source() {
         ApiSource::Tidal => {
-            album_field_updates.push(("tidal_id", DatabaseValue::NumberOpt(None)));
+            album_field_updates.push(("tidal_id", DatabaseValue::Null));
             album.tidal_id = None;
         }
         ApiSource::Qobuz => {
-            album_field_updates.push(("qobuz_id", DatabaseValue::NumberOpt(None)));
+            album_field_updates.push(("qobuz_id", DatabaseValue::Null));
             album.qobuz_id = None;
         }
         _ => {}
     }
 
     if !album_field_updates.is_empty() {
-        db.update_and_get_row(
-            "albums",
-            DatabaseValue::Number(album.id as i64),
-            &album_field_updates,
-        )
-        .await?;
+        db.update("albums")
+            .filter(where_eq("id", album.id))
+            .values(album_field_updates)
+            .execute(&db)
+            .await?;
     }
 
     moosicbox_core::cache::clear_cache();
@@ -551,11 +550,10 @@ pub async fn remove_album(
     }
 
     log::debug!("Deleting album db item: {}", album.id);
-    db.delete(
-        "albums",
-        Some(&[where_eq("id", DatabaseValue::Number(album.id as i64))]),
-    )
-    .await?;
+    db.delete("albums")
+        .filter(where_eq("id", album.id))
+        .execute(&db)
+        .await?;
 
     moosicbox_search::delete_from_global_search_index(vec![album.as_delete_term()])?;
 

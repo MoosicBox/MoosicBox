@@ -525,7 +525,9 @@ impl ScanOutput {
         let db_artists_start = std::time::SystemTime::now();
 
         let existing_artist_ids = db
-            .select("artists", &["id"], None, None, None)
+            .select("artists")
+            .columns(&["id"])
+            .execute(&db)
             .await?
             .iter()
             .map(|id| id.id().unwrap().try_into())
@@ -560,7 +562,9 @@ impl ScanOutput {
         let db_albums_start = std::time::SystemTime::now();
 
         let existing_album_ids = db
-            .select("albums", &["id"], None, None, None)
+            .select("albums")
+            .columns(&["id"])
+            .execute(&db)
             .await?
             .iter()
             .map(|id| id.id().unwrap().try_into())
@@ -602,7 +606,9 @@ impl ScanOutput {
         let db_tracks_start = std::time::SystemTime::now();
 
         let existing_track_ids = db
-            .select("tracks", &["id"], None, None, None)
+            .select("tracks")
+            .columns(&["id"])
+            .execute(&db)
             .await?
             .iter()
             .map(|id| id.id().unwrap().try_into())

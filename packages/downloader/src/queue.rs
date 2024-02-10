@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use lazy_static::lazy_static;
 use moosicbox_core::sqlite::db::DbError;
-use moosicbox_database::{Database, DatabaseError, DatabaseValue, Row};
+use moosicbox_database::{query::*, Database, DatabaseError, DatabaseValue, Row};
 use thiserror::Error;
 use tokio::{
     sync::{Mutex, RwLock},
@@ -264,11 +264,13 @@ impl DownloadQueue {
         task_id: u64,
         values: &[(&str, DatabaseValue)],
     ) -> Result<Row, UpdateTaskError> {
-        Ok(self
-            .database
-            .clone()
-            .ok_or(UpdateTaskError::NoDatabase)?
-            .update_and_get_row("download_tasks", DatabaseValue::UNumber(task_id), values)
+        let db = self.database.clone().ok_or(UpdateTaskError::NoDatabase)?;
+
+        Ok(db
+            .update("download_tasks")
+            .filter(where_eq("id", task_id))
+            .values(values.to_vec())
+            .execute_first(&db)
             .await?
             .ok_or(UpdateTaskError::NoRow)?)
     }
@@ -301,11 +303,10 @@ impl DownloadQueue {
                         let database = database.clone();
                         tokio::task::spawn(async move {
                             if let Err(err) = database
-                                .update_and_get_row(
-                                    "download_tasks",
-                                    DatabaseValue::UNumber(task_id),
-                                    &[("total_bytes", DatabaseValue::UNumber(size))],
-                                )
+                                .update("download_tasks")
+                                .filter(where_eq("id", task_id))
+                                .value("total_bytes", size)
+                                .execute_first(&database)
                                 .await
                             {
                                 log::error!("Failed to set DownloadTask total_bytes: {err:?}");
@@ -402,7 +403,7 @@ impl Drop for DownloadQueue {
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
-    use moosicbox_database::{BooleanExpression, Join, Row, Sort};
+    use moosicbox_database::{query::*, Row};
     use moosicbox_files::files::track::TrackAudioQuality;
     use pretty_assertions::assert_eq;
 
@@ -449,72 +450,57 @@ mod tests {
 
     #[async_trait]
     impl Database for TestDatabase {
-        async fn select(
+        async fn query(&self, _query: &SelectQuery<'_>) -> Result<Vec<Row>, DatabaseError> {
+            Ok(vec![])
+        }
+
+        async fn query_first(
             &self,
-            _table_name: &str,
-            _columns: &[&str],
-            _filters: Option<&[Box<dyn BooleanExpression>]>,
-            _joins: Option<&[Join]>,
-            _sort: Option<&[Sort]>,
+            _query: &SelectQuery<'_>,
+        ) -> Result<Option<Row>, DatabaseError> {
+            Ok(None)
+        }
+
+        async fn exec_delete(
+            &self,
+            _statement: &DeleteStatement<'_>,
         ) -> Result<Vec<Row>, DatabaseError> {
             Ok(vec![])
         }
 
-        async fn select_distinct(
+        async fn exec_update(
             &self,
-            _table_name: &str,
-            _columns: &[&str],
-            _filters: Option<&[Box<dyn BooleanExpression>]>,
-            _joins: Option<&[Join]>,
-            _sort: Option<&[Sort]>,
+            _statement: &UpdateStatement<'_>,
         ) -> Result<Vec<Row>, DatabaseError> {
-            Ok(vec![])
+            Ok(vec![Row { columns: vec![] }])
         }
 
-        async fn select_first(
+        async fn exec_update_multi(
             &self,
-            _table_name: &str,
-            _columns: &[&str],
-            _filters: Option<&[Box<dyn BooleanExpression>]>,
-            _joins: Option<&[Join]>,
-            _sort: Option<&[Sort]>,
+            _statement: &UpdateMultiStatement<'_>,
+        ) -> Result<Vec<Row>, DatabaseError> {
+            Ok(vec![Row { columns: vec![] }])
+        }
+
+        async fn exec_update_first(
+            &self,
+            _statement: &UpdateStatement<'_>,
         ) -> Result<Option<Row>, DatabaseError> {
             Ok(Some(Row { columns: vec![] }))
         }
 
-        async fn delete(
+        async fn exec_upsert(
             &self,
-            _table_name: &str,
-            _filters: Option<&[Box<dyn BooleanExpression>]>,
+            _statement: &UpdateStatement<'_>,
         ) -> Result<Vec<Row>, DatabaseError> {
-            Ok(vec![])
+            Ok(vec![Row { columns: vec![] }])
         }
 
-        async fn upsert(
+        async fn exec_upsert_multi(
             &self,
-            _table_name: &str,
-            _values: &[(&str, DatabaseValue)],
-            _filters: Option<&[Box<dyn BooleanExpression>]>,
-        ) -> Result<Row, DatabaseError> {
-            Ok(Row { columns: vec![] })
-        }
-
-        async fn upsert_multi(
-            &self,
-            _table_name: &str,
-            _unique: &[&str],
-            _values: &[Vec<(&str, DatabaseValue)>],
+            _statement: &UpdateMultiStatement<'_>,
         ) -> Result<Vec<Row>, DatabaseError> {
-            Ok(vec![])
-        }
-
-        async fn update_and_get_row(
-            &self,
-            _table_name: &str,
-            _id: DatabaseValue,
-            _values: &[(&str, DatabaseValue)],
-        ) -> Result<Option<Row>, DatabaseError> {
-            Ok(Some(Row { columns: vec![] }))
+            Ok(vec![Row { columns: vec![] }])
         }
     }
 

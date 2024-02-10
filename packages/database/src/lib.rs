@@ -49,6 +49,102 @@ impl DatabaseValue {
     }
 }
 
+impl<T: Into<DatabaseValue>> Into<DatabaseValue> for Option<T> {
+    fn into(self) -> DatabaseValue {
+        self.map(|x| x.into()).unwrap_or(DatabaseValue::Null)
+    }
+}
+
+impl Into<DatabaseValue> for bool {
+    fn into(self) -> DatabaseValue {
+        DatabaseValue::Bool(self)
+    }
+}
+
+impl Into<DatabaseValue> for &str {
+    fn into(self) -> DatabaseValue {
+        DatabaseValue::String(self.to_string())
+    }
+}
+
+impl Into<DatabaseValue> for String {
+    fn into(self) -> DatabaseValue {
+        DatabaseValue::String(self)
+    }
+}
+
+impl Into<DatabaseValue> for f32 {
+    fn into(self) -> DatabaseValue {
+        DatabaseValue::Real(self as f64)
+    }
+}
+
+impl Into<DatabaseValue> for f64 {
+    fn into(self) -> DatabaseValue {
+        DatabaseValue::Real(self)
+    }
+}
+
+impl Into<DatabaseValue> for i8 {
+    fn into(self) -> DatabaseValue {
+        DatabaseValue::Number(self as i64)
+    }
+}
+
+impl Into<DatabaseValue> for i16 {
+    fn into(self) -> DatabaseValue {
+        DatabaseValue::Number(self as i64)
+    }
+}
+
+impl Into<DatabaseValue> for i32 {
+    fn into(self) -> DatabaseValue {
+        DatabaseValue::Number(self as i64)
+    }
+}
+
+impl Into<DatabaseValue> for i64 {
+    fn into(self) -> DatabaseValue {
+        DatabaseValue::Number(self)
+    }
+}
+
+impl Into<DatabaseValue> for isize {
+    fn into(self) -> DatabaseValue {
+        DatabaseValue::Number(self as i64)
+    }
+}
+
+impl Into<DatabaseValue> for u8 {
+    fn into(self) -> DatabaseValue {
+        DatabaseValue::UNumber(self as u64)
+    }
+}
+
+impl Into<DatabaseValue> for u16 {
+    fn into(self) -> DatabaseValue {
+        DatabaseValue::UNumber(self as u64)
+    }
+}
+
+impl Into<DatabaseValue> for u32 {
+    fn into(self) -> DatabaseValue {
+        DatabaseValue::UNumber(self as u64)
+    }
+}
+
+impl Into<DatabaseValue> for u64 {
+    fn into(self) -> DatabaseValue {
+        DatabaseValue::UNumber(self)
+    }
+}
+
+impl Into<DatabaseValue> for usize {
+    fn into(self) -> DatabaseValue {
+        DatabaseValue::UNumber(self as u64)
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum TryFromError {
     #[error("Could not convert to type '{0}'")]
@@ -121,57 +217,43 @@ impl Row {
 
 #[async_trait]
 pub trait Database: Send + Sync {
-    async fn select(
-        &self,
-        table_name: &str,
-        columns: &[&str],
-        filters: Option<&[Box<dyn BooleanExpression>]>,
-        joins: Option<&[Join]>,
-        sort: Option<&[Sort]>,
-    ) -> Result<Vec<Row>, DatabaseError>;
+    fn select<'a>(&self, table_name: &'a str) -> SelectQuery<'a> {
+        query::select(table_name)
+    }
+    fn update<'a>(&self, table_name: &'a str) -> UpdateStatement<'a> {
+        query::update(table_name)
+    }
+    fn update_multi<'a>(&self, table_name: &'a str) -> UpdateMultiStatement<'a> {
+        query::update_multi(table_name)
+    }
+    fn upsert<'a>(&self, table_name: &'a str) -> UpdateStatement<'a> {
+        query::update(table_name)
+    }
+    fn upsert_multi<'a>(&self, table_name: &'a str) -> UpdateMultiStatement<'a> {
+        query::update_multi(table_name)
+    }
+    fn delete<'a>(&self, table_name: &'a str) -> DeleteStatement<'a> {
+        query::delete(table_name)
+    }
 
-    async fn select_distinct(
+    async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<Row>, DatabaseError>;
+    async fn query_first(&self, query: &SelectQuery<'_>) -> Result<Option<Row>, DatabaseError>;
+    async fn exec_update_multi(
         &self,
-        table_name: &str,
-        columns: &[&str],
-        filters: Option<&[Box<dyn BooleanExpression>]>,
-        joins: Option<&[Join]>,
-        sort: Option<&[Sort]>,
+        statement: &UpdateMultiStatement<'_>,
     ) -> Result<Vec<Row>, DatabaseError>;
-
-    async fn select_first(
+    async fn exec_update(&self, statement: &UpdateStatement<'_>)
+        -> Result<Vec<Row>, DatabaseError>;
+    async fn exec_update_first(
         &self,
-        table_name: &str,
-        columns: &[&str],
-        filters: Option<&[Box<dyn BooleanExpression>]>,
-        joins: Option<&[Join]>,
-        sort: Option<&[Sort]>,
+        statement: &UpdateStatement<'_>,
     ) -> Result<Option<Row>, DatabaseError>;
-
-    async fn delete(
+    async fn exec_upsert(&self, statement: &UpdateStatement<'_>)
+        -> Result<Vec<Row>, DatabaseError>;
+    async fn exec_upsert_multi(
         &self,
-        table_name: &str,
-        filters: Option<&[Box<dyn BooleanExpression>]>,
+        statement: &UpdateMultiStatement<'_>,
     ) -> Result<Vec<Row>, DatabaseError>;
-
-    async fn upsert(
-        &self,
-        table_name: &str,
-        values: &[(&str, DatabaseValue)],
-        filters: Option<&[Box<dyn BooleanExpression>]>,
-    ) -> Result<Row, DatabaseError>;
-
-    async fn upsert_multi(
-        &self,
-        table_name: &str,
-        unique: &[&str],
-        values: &[Vec<(&str, DatabaseValue)>],
-    ) -> Result<Vec<Row>, DatabaseError>;
-
-    async fn update_and_get_row(
-        &self,
-        table_name: &str,
-        id: DatabaseValue,
-        values: &[(&str, DatabaseValue)],
-    ) -> Result<Option<Row>, DatabaseError>;
+    async fn exec_delete(&self, statement: &DeleteStatement<'_>)
+        -> Result<Vec<Row>, DatabaseError>;
 }

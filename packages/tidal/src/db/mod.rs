@@ -1,4 +1,4 @@
-use moosicbox_database::{query::*, Database, DatabaseError, DatabaseValue};
+use moosicbox_database::{query::*, Database, DatabaseError};
 use moosicbox_json_utils::ToValueType;
 use thiserror::Error;
 
@@ -19,34 +19,19 @@ pub async fn create_tidal_config(
     user: &str,
     user_id: u32,
 ) -> Result<(), DatabaseError> {
-    db.upsert(
-        "tidal_config",
-        &[
-            ("client_id", DatabaseValue::String(client_id.to_string())),
-            (
-                "access_token",
-                DatabaseValue::String(access_token.to_string()),
-            ),
-            (
-                "refresh_token",
-                DatabaseValue::String(refresh_token.to_string()),
-            ),
-            (
-                "client_name",
-                DatabaseValue::String(client_name.to_string()),
-            ),
-            ("expires_in", DatabaseValue::Number(expires_in as i64)),
-            ("scope", DatabaseValue::String(scope.to_string())),
-            ("token_type", DatabaseValue::String(token_type.to_string())),
-            ("user", DatabaseValue::String(user.to_string())),
-            ("user_id", DatabaseValue::Number(user_id as i64)),
-        ],
-        Some(&[where_eq(
-            "refresh_token",
-            DatabaseValue::String(refresh_token.to_string()),
-        )]),
-    )
-    .await?;
+    db.upsert("tidal_config")
+        .value("client_id", client_id)
+        .value("access_token", access_token)
+        .value("refresh_token", refresh_token)
+        .value("client_name", client_name)
+        .value("expires_in", expires_in)
+        .value("scope", scope)
+        .value("token_type", token_type)
+        .value("user", user)
+        .value("user_id", user_id)
+        .filter(where_eq("refresh_token", refresh_token))
+        .execute(db)
+        .await?;
 
     Ok(())
 }
@@ -55,14 +40,10 @@ pub async fn delete_tidal_config(
     db: &Box<dyn Database>,
     refresh_token: &str,
 ) -> Result<(), DatabaseError> {
-    db.delete(
-        "tidal_config",
-        Some(&[where_eq(
-            "refresh_token",
-            DatabaseValue::String(refresh_token.to_string()),
-        )]),
-    )
-    .await?;
+    db.delete("tidal_config")
+        .filter(where_eq("refresh_token", refresh_token))
+        .execute(db)
+        .await?;
 
     Ok(())
 }
@@ -81,7 +62,8 @@ pub async fn get_tidal_config(
     db: &Box<dyn Database>,
 ) -> Result<Option<TidalConfig>, TidalConfigError> {
     let mut configs = db
-        .select("tidal_config", &["*"], None, None, None)
+        .select("tidal_config")
+        .execute(db)
         .await?
         .to_value_type()?;
 

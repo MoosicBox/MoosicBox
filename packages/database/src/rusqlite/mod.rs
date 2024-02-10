@@ -5,7 +5,8 @@ use rusqlite::{types::Value, Connection, Row, Rows, Statement};
 use thiserror::Error;
 
 use crate::{
-    BooleanExpression, Database, DatabaseError, DatabaseValue, DbConnection, Expression, Join, Sort,
+    BooleanExpression, Database, DatabaseError, DatabaseValue, DbConnection, DeleteStatement,
+    Expression, Join, SelectQuery, Sort, UpdateMultiStatement, UpdateStatement,
 };
 
 impl From<Connection> for DbConnection {
@@ -34,6 +35,8 @@ pub enum RusqliteDatabaseError {
     NoRow,
     #[error("Invalid request")]
     InvalidRequest,
+    #[error("Missing unique")]
+    MissingUnique,
 }
 
 impl From<RusqliteDatabaseError> for DatabaseError {
@@ -44,111 +47,98 @@ impl From<RusqliteDatabaseError> for DatabaseError {
 
 #[async_trait]
 impl Database for RusqliteDatabase {
-    async fn select(
-        &self,
-        table_name: &str,
-        columns: &[&str],
-        filters: Option<&[Box<dyn BooleanExpression>]>,
-        joins: Option<&[Join]>,
-        sort: Option<&[Sort]>,
-    ) -> Result<Vec<crate::Row>, DatabaseError> {
+    async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(select(
             &self.connection.lock().as_ref().unwrap().inner,
-            table_name,
-            columns,
-            filters,
-            joins,
-            sort,
+            query.table_name,
+            query.distinct,
+            query.columns,
+            query.filters.as_deref(),
+            query.joins.as_deref(),
+            query.sorts.as_deref(),
         )?)
     }
 
-    async fn select_distinct(
+    async fn query_first(
         &self,
-        table_name: &str,
-        columns: &[&str],
-        filters: Option<&[Box<dyn BooleanExpression>]>,
-        joins: Option<&[Join]>,
-        sort: Option<&[Sort]>,
-    ) -> Result<Vec<crate::Row>, DatabaseError> {
-        Ok(select_distinct(
-            &self.connection.lock().as_ref().unwrap().inner,
-            table_name,
-            columns,
-            filters,
-            joins,
-            sort,
-        )?)
-    }
-
-    async fn select_first(
-        &self,
-        table_name: &str,
-        columns: &[&str],
-        filters: Option<&[Box<dyn BooleanExpression>]>,
-        joins: Option<&[Join]>,
-        sort: Option<&[Sort]>,
+        query: &SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
         Ok(find_row(
             &self.connection.lock().as_ref().unwrap().inner,
-            table_name,
-            columns,
-            filters,
-            joins,
-            sort,
+            query.table_name,
+            query.distinct,
+            query.columns,
+            query.filters.as_deref(),
+            query.joins.as_deref(),
+            query.sorts.as_deref(),
         )?)
     }
 
-    async fn delete(
+    async fn exec_delete(
         &self,
-        table_name: &str,
-        filters: Option<&[Box<dyn BooleanExpression>]>,
+        statement: &DeleteStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(delete(
             &self.connection.lock().as_ref().unwrap().inner,
-            table_name,
-            filters,
+            statement.table_name,
+            statement.filters.as_deref(),
         )?)
     }
 
-    async fn upsert(
+    async fn exec_update(
         &self,
-        table_name: &str,
-        values: &[(&str, DatabaseValue)],
-        filters: Option<&[Box<dyn BooleanExpression>]>,
-    ) -> Result<crate::Row, DatabaseError> {
-        Ok(upsert(
-            &self.connection.lock().as_ref().unwrap().inner,
-            table_name,
-            values,
-            filters,
-        )?)
-    }
-
-    async fn upsert_multi(
-        &self,
-        table_name: &str,
-        unique: &[&str],
-        values: &[Vec<(&str, DatabaseValue)>],
+        statement: &UpdateStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        Ok(upsert_multi(
+        Ok(update_and_get_rows(
             &self.connection.lock().as_ref().unwrap().inner,
-            table_name,
-            unique,
-            values,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
         )?)
     }
 
-    async fn update_and_get_row(
+    async fn exec_update_multi(
         &self,
-        table_name: &str,
-        id: DatabaseValue,
-        values: &[(&str, DatabaseValue)],
+        _statement: &UpdateMultiStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        Ok(vec![])
+    }
+
+    async fn exec_update_first(
+        &self,
+        statement: &UpdateStatement<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
         Ok(update_and_get_row(
             &self.connection.lock().as_ref().unwrap().inner,
-            table_name,
-            id,
-            values,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+        )?)
+    }
+
+    async fn exec_upsert(
+        &self,
+        statement: &UpdateStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        Ok(upsert(
+            &self.connection.lock().as_ref().unwrap().inner,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+        )?)
+    }
+
+    async fn exec_upsert_multi(
+        &self,
+        statement: &UpdateMultiStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        Ok(upsert_multi(
+            &self.connection.lock().as_ref().unwrap().inner,
+            statement.table_name,
+            statement
+                .unique
+                .ok_or(RusqliteDatabaseError::MissingUnique)?,
+            &statement.values,
         )?)
     }
 }
@@ -181,34 +171,17 @@ fn from_row(column_names: &[String], row: &Row<'_>) -> Result<crate::Row, Rusqli
 fn update_and_get_row(
     connection: &Connection,
     table_name: &str,
-    id: DatabaseValue,
-    values: &[(&str, DatabaseValue)],
+    values: &[(&str, Box<dyn Expression>)],
+    filters: Option<&[Box<dyn BooleanExpression>]>,
 ) -> Result<Option<crate::Row>, RusqliteDatabaseError> {
-    let variable_count: i32 = values
-        .iter()
-        .map(|v| match v.1 {
-            DatabaseValue::BoolOpt(None) => 0,
-            DatabaseValue::StringOpt(None) => 0,
-            DatabaseValue::NumberOpt(None) => 0,
-            DatabaseValue::UNumberOpt(None) => 0,
-            DatabaseValue::RealOpt(None) => 0,
-            _ => 1,
-        })
-        .sum();
-
     let statement = format!(
-        "UPDATE {table_name} {} WHERE id=?{} RETURNING *",
+        "UPDATE {table_name} {} {} RETURNING *",
         build_set_clause(values),
-        variable_count + 1
+        build_where_clause(filters)
     );
 
     let mut statement = connection.prepare_cached(&statement)?;
-    bind_values(
-        &mut statement,
-        Some(&[to_values(values), vec![id]].concat()),
-        false,
-        0,
-    )?;
+    bind_values(&mut statement, Some(&exprs_to_values(values)), false, 0)?;
     let column_names = statement
         .column_names()
         .iter()
@@ -220,6 +193,29 @@ fn update_and_get_row(
         .next()?
         .map(|row| from_row(&column_names, row))
         .transpose()?)
+}
+
+fn update_and_get_rows(
+    connection: &Connection,
+    table_name: &str,
+    values: &[(&str, Box<dyn Expression>)],
+    filters: Option<&[Box<dyn BooleanExpression>]>,
+) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
+    let statement = format!(
+        "UPDATE {table_name} {} {} RETURNING *",
+        build_set_clause(values),
+        build_where_clause(filters)
+    );
+
+    let mut statement = connection.prepare_cached(&statement)?;
+    bind_values(&mut statement, Some(&exprs_to_values(values)), false, 0)?;
+    let column_names = statement
+        .column_names()
+        .iter()
+        .map(|x| x.to_string())
+        .collect::<Vec<_>>();
+
+    to_rows(&column_names, statement.raw_query())
 }
 
 fn build_join_clauses(joins: Option<&[Join]>) -> String {
@@ -285,7 +281,7 @@ fn build_sort_props(sorts: &[Sort]) -> Vec<String> {
         .collect()
 }
 
-fn build_set_clause(values: &[(&str, DatabaseValue)]) -> String {
+fn build_set_clause(values: &[(&str, Box<dyn Expression>)]) -> String {
     if values.is_empty() {
         "".to_string()
     } else {
@@ -293,32 +289,14 @@ fn build_set_clause(values: &[(&str, DatabaseValue)]) -> String {
     }
 }
 
-fn build_set_props(values: &[(&str, DatabaseValue)]) -> Vec<String> {
-    let mut i = 0;
-    let mut props = Vec::new();
-    for (name, value) in values {
-        props.push(match value {
-            DatabaseValue::Null => format!("{name}=NULL"),
-            DatabaseValue::BoolOpt(None) => format!("{name}=NULL"),
-            DatabaseValue::StringOpt(None) => format!("{name}=NULL"),
-            DatabaseValue::NumberOpt(None) => format!("{name}=NULL"),
-            DatabaseValue::UNumberOpt(None) => format!("{name}=NULL"),
-            DatabaseValue::RealOpt(None) => format!("{name}=NULL"),
-            DatabaseValue::NowAdd(add) => {
-                format!(
-                    "{name}=strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', '{add}'))"
-                )
-            }
-            _ => {
-                i += 1;
-                format!("`{name}`=?{i}").to_string()
-            }
-        });
-    }
-    props
+fn build_set_props(values: &[(&str, Box<dyn Expression>)]) -> Vec<String> {
+    values
+        .into_iter()
+        .map(|(name, value)| format!("{name}={}", value.to_param()))
+        .collect()
 }
 
-fn build_values_clause(values: &[(&str, DatabaseValue)]) -> String {
+fn build_values_clause(values: &[(&str, Box<dyn Expression>)]) -> String {
     if values.is_empty() {
         "".to_string()
     } else {
@@ -326,41 +304,8 @@ fn build_values_clause(values: &[(&str, DatabaseValue)]) -> String {
     }
 }
 
-fn build_values_props(values: &[(&str, DatabaseValue)]) -> Vec<String> {
-    build_values_props_offset(values, 0, false)
-}
-
-#[allow(unused)]
-fn build_values_props_offset(
-    values: &[(&str, DatabaseValue)],
-    offset: u16,
-    constant_inc: bool,
-) -> Vec<String> {
-    let mut i = offset;
-    let mut props = Vec::new();
-    for (_name, value) in values {
-        if constant_inc {
-            i += 1;
-        }
-        props.push(match value {
-            DatabaseValue::Null => "NULL".to_string(),
-            DatabaseValue::BoolOpt(None) => "NULL".to_string(),
-            DatabaseValue::StringOpt(None) => "NULL".to_string(),
-            DatabaseValue::NumberOpt(None) => "NULL".to_string(),
-            DatabaseValue::UNumberOpt(None) => "NULL".to_string(),
-            DatabaseValue::RealOpt(None) => "NULL".to_string(),
-            DatabaseValue::NowAdd(add) => {
-                format!("strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', '{add}'))")
-            }
-            _ => {
-                if !constant_inc {
-                    i += 1;
-                }
-                format!("?{i}").to_string()
-            }
-        });
-    }
-    props
+fn build_values_props(values: &[(&str, Box<dyn Expression>)]) -> Vec<String> {
+    values.iter().map(|(_, value)| value.to_param()).collect()
 }
 
 fn bind_values(
@@ -471,11 +416,10 @@ fn to_values<'a>(values: &'a [(&str, DatabaseValue)]) -> Vec<DatabaseValue> {
         .collect::<Vec<_>>()
 }
 
-#[allow(unused)]
-fn exprs_to_values<'a>(values: &'a [Box<dyn Expression>]) -> Vec<DatabaseValue> {
+fn exprs_to_values<'a>(values: &'a [(&str, Box<dyn Expression>)]) -> Vec<DatabaseValue> {
     values
         .into_iter()
-        .flat_map(|value| value.values().into_iter())
+        .flat_map(|value| value.1.values().into_iter())
         .flatten()
         .cloned()
         .collect::<Vec<_>>()
@@ -496,7 +440,9 @@ fn to_values_opt(values: Option<&[(&str, DatabaseValue)]>) -> Option<Vec<Databas
 }
 
 #[allow(unused)]
-fn exprs_to_values_opt(values: Option<&[Box<dyn Expression>]>) -> Option<Vec<DatabaseValue>> {
+fn exprs_to_values_opt(
+    values: Option<&[(&str, Box<dyn Expression>)]>,
+) -> Option<Vec<DatabaseValue>> {
     values.map(|x| exprs_to_values(x))
 }
 
@@ -541,13 +487,15 @@ fn select_distinct(
 fn select(
     connection: &Connection,
     table_name: &str,
+    distinct: bool,
     columns: &[&str],
     filters: Option<&[Box<dyn BooleanExpression>]>,
     joins: Option<&[Join]>,
     sort: Option<&[Sort]>,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
     let query = format!(
-        "SELECT {} FROM {table_name} {} {} {}",
+        "SELECT {} {} FROM {table_name} {} {} {}",
+        if distinct { "DISTINCT" } else { "" },
         columns.join(", "),
         build_join_clauses(joins),
         build_where_clause(filters),
@@ -604,13 +552,15 @@ fn delete(
 fn find_row(
     connection: &Connection,
     table_name: &str,
+    distinct: bool,
     columns: &[&str],
     filters: Option<&[Box<dyn BooleanExpression>]>,
     joins: Option<&[Join]>,
     sort: Option<&[Sort]>,
 ) -> Result<Option<crate::Row>, RusqliteDatabaseError> {
     let query = format!(
-        "SELECT {} FROM {table_name} {} {} {}",
+        "SELECT {} {} FROM {table_name} {} {} {}",
+        if distinct { "DISTINCT" } else { "" },
         columns.join(", "),
         build_join_clauses(joins),
         build_where_clause(filters),
@@ -647,7 +597,7 @@ fn find_row(
 fn insert_and_get_row(
     connection: &Connection,
     table_name: &str,
-    values: &[(&str, DatabaseValue)],
+    values: &[(&str, Box<dyn Expression>)],
 ) -> Result<crate::Row, RusqliteDatabaseError> {
     let column_names = values
         .into_iter()
@@ -667,7 +617,7 @@ fn insert_and_get_row(
         .map(|x| x.to_string())
         .collect::<Vec<_>>();
 
-    bind_values(&mut statement, Some(&to_values(values)), false, 0)?;
+    bind_values(&mut statement, Some(&exprs_to_values(values)), false, 0)?;
 
     log::trace!(
         "Running insert_and_get_row query: {query} with params: {:?}",
@@ -689,7 +639,7 @@ pub fn upsert_multi(
     connection: &Connection,
     table_name: &str,
     unique: &[&str],
-    values: &[Vec<(&str, DatabaseValue)>],
+    values: &[Vec<(&str, Box<dyn Expression>)>],
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
     let mut results = vec![];
 
@@ -733,7 +683,7 @@ fn upsert_chunk(
     connection: &Connection,
     table_name: &str,
     unique: &[&str],
-    values: &[Vec<(&str, DatabaseValue)>],
+    values: &[Vec<(&str, Box<dyn Expression>)>],
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
     let first = values[0].as_slice();
     let expected_value_size = first.len();
@@ -758,14 +708,8 @@ fn upsert_chunk(
         .join(", ");
 
     let values_str_list = values
-        .iter()
-        .enumerate()
-        .map(|(i, v)| {
-            format!(
-                "({})",
-                build_values_props_offset(v, (i * expected_value_size) as u16, true).join(", ")
-            )
-        })
+        .into_iter()
+        .map(|v| format!("({})", build_values_props(&v).join(", ")))
         .collect::<Vec<_>>();
 
     let values_str = values_str_list.join(", ");
@@ -781,12 +725,11 @@ fn upsert_chunk(
         RETURNING *"
     );
 
-    let all_values = to_values(
-        &values
-            .iter()
-            .flat_map(|f| f.iter().cloned())
-            .collect::<Vec<_>>(),
-    );
+    let all_values = &values
+        .into_iter()
+        .flat_map(|x| x.into_iter())
+        .flat_map(|(_, value)| value.values().unwrap_or(vec![]).into_iter().cloned())
+        .collect::<Vec<_>>();
 
     let mut statement = connection.prepare_cached(&statement)?;
     let column_names = statement
@@ -803,37 +746,28 @@ fn upsert_chunk(
 fn upsert(
     connection: &Connection,
     table_name: &str,
-    values: &[(&str, DatabaseValue)],
+    values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
-) -> Result<crate::Row, RusqliteDatabaseError> {
-    match find_row(connection, table_name, &["*"], filters, None, None)? {
-        Some(row) => Ok(update_and_get_row(
-            connection,
-            table_name,
-            row.id().ok_or(RusqliteDatabaseError::NoId)?,
-            values,
-        )?
-        .unwrap()),
-        None => insert_and_get_row(connection, table_name, values),
-    }
+) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
+    let rows = update_and_get_rows(connection, table_name, values, filters)?;
+
+    Ok(if rows.is_empty() {
+        rows
+    } else {
+        vec![insert_and_get_row(connection, table_name, values)?]
+    })
 }
 
 #[allow(unused)]
 fn upsert_and_get_row(
     connection: &Connection,
     table_name: &str,
-    values: &[(&str, DatabaseValue)],
+    values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
 ) -> Result<crate::Row, RusqliteDatabaseError> {
-    match find_row(connection, table_name, &["*"], filters, None, None)? {
+    match find_row(connection, table_name, false, &["*"], filters, None, None)? {
         Some(row) => {
-            let updated = update_and_get_row(
-                connection,
-                table_name,
-                row.id().ok_or(RusqliteDatabaseError::NoId)?,
-                &values,
-            )?
-            .unwrap();
+            let updated = update_and_get_row(connection, table_name, &values, filters)?.unwrap();
 
             let str1 = format!("{row:?}");
             let str2 = format!("{updated:?}");

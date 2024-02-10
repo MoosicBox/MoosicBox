@@ -15,7 +15,7 @@ use moosicbox_core::sqlite::{
         ArtistId,
     },
 };
-use moosicbox_database::{Database, DatabaseError, DatabaseValue};
+use moosicbox_database::{query::*, Database, DatabaseError};
 use moosicbox_qobuz::QobuzArtistError;
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use moosicbox_tidal::TidalArtistError;
@@ -132,12 +132,11 @@ async fn copy_streaming_cover_to_local(
 ) -> Result<String, ArtistCoverError> {
     log::debug!("Updating Artist {artist_id} cover file to '{cover}'");
 
-    db.update_and_get_row(
-        "artists",
-        DatabaseValue::UNumber(artist_id as u64),
-        &[("cover", DatabaseValue::String(cover.to_string()))],
-    )
-    .await?;
+    db.update("artists")
+        .filter(where_eq("id", artist_id))
+        .value("cover", cover.clone())
+        .execute(&db)
+        .await?;
 
     Ok(cover)
 }
