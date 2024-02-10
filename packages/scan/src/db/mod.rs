@@ -1,5 +1,5 @@
 use moosicbox_core::sqlite::db::DbError;
-use moosicbox_database::{where_eq, Database, DatabaseValue};
+use moosicbox_database::{query::*, Database, DatabaseValue};
 use moosicbox_json_utils::ToValueType;
 
 use crate::ScanOrigin;

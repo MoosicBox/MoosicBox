@@ -18,7 +18,7 @@ use moosicbox_core::{
     },
     types::AudioFormat,
 };
-use moosicbox_database::{where_eq, Database, DatabaseError, DatabaseValue};
+use moosicbox_database::{query::*, Database, DatabaseError, DatabaseValue};
 use moosicbox_music_api::{AlbumType, Id, LibraryAlbumError, MusicApi};
 use moosicbox_scan::output::ScanOutput;
 use moosicbox_search::{
