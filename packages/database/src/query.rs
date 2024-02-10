@@ -504,23 +504,23 @@ impl<'a> SelectQuery<'a> {
     }
 }
 
-pub struct UpdateMultiStatement<'a> {
+pub struct UpsertMultiStatement<'a> {
     pub table_name: &'a str,
     pub values: Vec<Vec<(&'a str, Box<dyn Expression>)>>,
-    pub filters: Option<Vec<Box<dyn BooleanExpression>>>,
+    pub filters: Vec<Vec<Box<dyn BooleanExpression>>>,
     pub unique: Option<&'a [&'a str]>,
 }
 
-pub fn update_multi<'a>(table_name: &'a str) -> UpdateMultiStatement<'a> {
-    UpdateMultiStatement {
+pub fn upsert_multi<'a>(table_name: &'a str) -> UpsertMultiStatement<'a> {
+    UpsertMultiStatement {
         table_name,
         values: vec![],
-        filters: None,
+        filters: vec![],
         unique: None,
     }
 }
 
-impl<'a> UpdateMultiStatement<'a> {
+impl<'a> UpsertMultiStatement<'a> {
     pub fn values<T: Into<Box<dyn Expression>>>(
         &mut self,
         values: Vec<Vec<(&'a str, T)>>,
@@ -534,23 +534,8 @@ impl<'a> UpdateMultiStatement<'a> {
         self
     }
 
-    pub fn filters(&mut self, filters: Vec<Box<dyn BooleanExpression>>) -> &mut Self {
-        for filter in filters.into_iter() {
-            if let Some(filters) = &mut self.filters {
-                filters.push(filter);
-            } else {
-                self.filters.replace(vec![filter]);
-            }
-        }
-        self
-    }
-
-    pub fn filter<T: BooleanExpression + 'static>(&mut self, filter: T) -> &mut Self {
-        if let Some(filters) = &mut self.filters {
-            filters.push(Box::new(filter));
-        } else {
-            self.filters.replace(vec![Box::new(filter)]);
-        }
+    pub fn filters(&mut self, filters: Vec<Vec<Box<dyn BooleanExpression>>>) -> &mut Self {
+        self.filters.extend(filters);
         self
     }
 
@@ -560,7 +545,7 @@ impl<'a> UpdateMultiStatement<'a> {
     }
 
     pub async fn execute(&self, db: &Box<dyn Database>) -> Result<Vec<Row>, DatabaseError> {
-        db.exec_update_multi(self).await
+        db.exec_upsert_multi(self).await
     }
 }
 

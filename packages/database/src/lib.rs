@@ -223,14 +223,11 @@ pub trait Database: Send + Sync {
     fn update<'a>(&self, table_name: &'a str) -> UpdateStatement<'a> {
         query::update(table_name)
     }
-    fn update_multi<'a>(&self, table_name: &'a str) -> UpdateMultiStatement<'a> {
-        query::update_multi(table_name)
-    }
     fn upsert<'a>(&self, table_name: &'a str) -> UpdateStatement<'a> {
         query::update(table_name)
     }
-    fn upsert_multi<'a>(&self, table_name: &'a str) -> UpdateMultiStatement<'a> {
-        query::update_multi(table_name)
+    fn upsert_multi<'a>(&self, table_name: &'a str) -> UpsertMultiStatement<'a> {
+        query::upsert_multi(table_name)
     }
     fn delete<'a>(&self, table_name: &'a str) -> DeleteStatement<'a> {
         query::delete(table_name)
@@ -238,10 +235,6 @@ pub trait Database: Send + Sync {
 
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<Row>, DatabaseError>;
     async fn query_first(&self, query: &SelectQuery<'_>) -> Result<Option<Row>, DatabaseError>;
-    async fn exec_update_multi(
-        &self,
-        statement: &UpdateMultiStatement<'_>,
-    ) -> Result<Vec<Row>, DatabaseError>;
     async fn exec_update(&self, statement: &UpdateStatement<'_>)
         -> Result<Vec<Row>, DatabaseError>;
     async fn exec_update_first(
@@ -252,7 +245,7 @@ pub trait Database: Send + Sync {
         -> Result<Vec<Row>, DatabaseError>;
     async fn exec_upsert_multi(
         &self,
-        statement: &UpdateMultiStatement<'_>,
+        statement: &UpsertMultiStatement<'_>,
     ) -> Result<Vec<Row>, DatabaseError>;
     async fn exec_delete(&self, statement: &DeleteStatement<'_>)
         -> Result<Vec<Row>, DatabaseError>;

@@ -1101,7 +1101,7 @@ pub async fn set_track_size(
     Ok(set_track_sizes(db, &[value])
         .await?
         .first()
-        .unwrap()
+        .ok_or(DbError::NoRow)?
         .clone())
 }
 
@@ -1169,7 +1169,19 @@ pub async fn set_track_sizes(
             "ifnull(`sample_rate`, 0)",
             "ifnull(`channels`, 0)",
         ])
-        .values(values)
+        .values(values.clone())
+        .filters(
+            values
+                .into_iter()
+                .map(|values| {
+                    values
+                        .into_iter()
+                        .map(|(name, value)| Box::new(where_eq(name, value)))
+                        .map(|x| x as Box<dyn BooleanExpression>)
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>(),
+        )
         .execute(db)
         .await?
         .to_value_type()?)

@@ -475,13 +475,6 @@ mod tests {
             Ok(vec![Row { columns: vec![] }])
         }
 
-        async fn exec_update_multi(
-            &self,
-            _statement: &UpdateMultiStatement<'_>,
-        ) -> Result<Vec<Row>, DatabaseError> {
-            Ok(vec![Row { columns: vec![] }])
-        }
-
         async fn exec_update_first(
             &self,
             _statement: &UpdateStatement<'_>,
@@ -498,7 +491,7 @@ mod tests {
 
         async fn exec_upsert_multi(
             &self,
-            _statement: &UpdateMultiStatement<'_>,
+            _statement: &UpsertMultiStatement<'_>,
         ) -> Result<Vec<Row>, DatabaseError> {
             Ok(vec![Row { columns: vec![] }])
         }

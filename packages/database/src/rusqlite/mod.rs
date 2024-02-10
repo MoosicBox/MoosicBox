@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::{
     BooleanExpression, Database, DatabaseError, DatabaseValue, DbConnection, DeleteStatement,
-    Expression, Join, SelectQuery, Sort, UpdateMultiStatement, UpdateStatement,
+    Expression, Join, SelectQuery, Sort, UpdateStatement, UpsertMultiStatement,
 };
 
 impl From<Connection> for DbConnection {
@@ -97,13 +97,6 @@ impl Database for RusqliteDatabase {
         )?)
     }
 
-    async fn exec_update_multi(
-        &self,
-        _statement: &UpdateMultiStatement<'_>,
-    ) -> Result<Vec<crate::Row>, DatabaseError> {
-        Ok(vec![])
-    }
-
     async fn exec_update_first(
         &self,
         statement: &UpdateStatement<'_>,
@@ -130,7 +123,7 @@ impl Database for RusqliteDatabase {
 
     async fn exec_upsert_multi(
         &self,
-        statement: &UpdateMultiStatement<'_>,
+        statement: &UpsertMultiStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(upsert_multi(
             &self.connection.lock().as_ref().unwrap().inner,
@@ -201,19 +194,30 @@ fn update_and_get_rows(
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
-    let statement = format!(
+    let query = format!(
         "UPDATE {table_name} {} {} RETURNING *",
         build_set_clause(values),
         build_where_clause(filters)
     );
 
-    let mut statement = connection.prepare_cached(&statement)?;
-    bind_values(&mut statement, Some(&exprs_to_values(values)), false, 0)?;
+    let mut statement = connection.prepare_cached(&query)?;
+    let offset = bind_values(&mut statement, Some(&exprs_to_values(values)), false, 0)?;
+    bind_values(
+        &mut statement,
+        bexprs_to_values_opt(filters).as_deref(),
+        false,
+        offset,
+    )?;
     let column_names = statement
         .column_names()
         .iter()
         .map(|x| x.to_string())
         .collect::<Vec<_>>();
+
+    log::trace!(
+        "Running delete query: {query} with params: {:?}",
+        filters.map(|f| f.iter().flat_map(|x| x.values()).collect::<Vec<_>>())
+    );
 
     to_rows(&column_names, statement.raw_query())
 }
@@ -529,10 +533,11 @@ fn delete(
     table_name: &str,
     filters: Option<&[Box<dyn BooleanExpression>]>,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
-    let mut statement = connection.prepare_cached(&format!(
+    let query = format!(
         "DELETE FROM {table_name} {} RETURNING *",
         build_where_clause(filters),
-    ))?;
+    );
+    let mut statement = connection.prepare_cached(&query)?;
     let column_names = statement
         .column_names()
         .iter()
@@ -545,6 +550,11 @@ fn delete(
         false,
         0,
     )?;
+
+    log::trace!(
+        "Running delete query: {query} with params: {:?}",
+        filters.map(|f| f.iter().flat_map(|x| x.values()).collect::<Vec<_>>())
+    );
 
     to_rows(&column_names, statement.raw_query())
 }
@@ -633,6 +643,99 @@ fn insert_and_get_row(
         .next()?
         .map(|row| from_row(&column_names, row))
         .ok_or(RusqliteDatabaseError::NoRow)??)
+}
+
+pub fn update_multi(
+    connection: &Connection,
+    table_name: &str,
+    values: &[Vec<(&str, Box<dyn Expression>)>],
+) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
+    let mut results = vec![];
+
+    if values.is_empty() {
+        return Ok(results);
+    }
+
+    let mut pos = 0;
+    let mut i = 0;
+    let mut last_i = i;
+
+    for value in values {
+        let count = value.len();
+        if pos + count >= (i16::MAX - 1) as usize {
+            results.append(&mut update_chunk(
+                connection,
+                table_name,
+                &values[last_i..i],
+            )?);
+            last_i = i;
+            pos = 0;
+        }
+        i += 1;
+        pos += count;
+    }
+
+    if i > last_i {
+        results.append(&mut update_chunk(
+            connection,
+            table_name,
+            &values[last_i..],
+        )?);
+    }
+
+    Ok(results)
+}
+
+fn update_chunk(
+    connection: &Connection,
+    table_name: &str,
+    values: &[Vec<(&str, Box<dyn Expression>)>],
+) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
+    let first = values[0].as_slice();
+    let expected_value_size = first.len();
+
+    if let Some(bad_row) = values.iter().skip(1).find(|v| {
+        v.len() != expected_value_size || v.iter().enumerate().any(|(i, c)| c.0 != first[i].0)
+    }) {
+        log::error!("Bad row: {bad_row:?}. Expected to match schema of first row: {first:?}");
+        return Err(RusqliteDatabaseError::InvalidRequest);
+    }
+
+    let set_clause = values[0]
+        .iter()
+        .map(|(name, _value)| format!("`{name}` = EXCLUDED.`{name}`"))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let column_names = values[0]
+        .iter()
+        .map(|(key, _v)| format!("`{key}`"))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let statement = format!(
+        "
+        UPDATE {table_name} ({column_names})
+        SET {set_clause}
+        RETURNING *"
+    );
+
+    let all_values = &values
+        .into_iter()
+        .flat_map(|x| x.into_iter())
+        .flat_map(|(_, value)| value.values().unwrap_or(vec![]).into_iter().cloned())
+        .collect::<Vec<_>>();
+
+    let mut statement = connection.prepare_cached(&statement)?;
+    let column_names = statement
+        .column_names()
+        .iter()
+        .map(|x| x.to_string())
+        .collect::<Vec<_>>();
+
+    bind_values(&mut statement, Some(&all_values), true, 0)?;
+
+    to_rows(&column_names, statement.raw_query())
 }
 
 pub fn upsert_multi(
