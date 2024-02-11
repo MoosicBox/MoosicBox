@@ -425,6 +425,7 @@ async fn request_track_bytes_from_file(
             format
         }
         AudioFormat::Source => track.format.ok_or(GetTrackBytesError::UnsupportedFormat)?,
+        #[allow(unreachable_patterns)]
         _ => format,
     };
 
