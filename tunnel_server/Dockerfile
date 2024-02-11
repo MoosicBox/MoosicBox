@@ -21,6 +21,14 @@ ADD packages/core/.cargo packages/core/.cargo
 RUN mkdir -p packages/core/src && echo "fn main() {}" > packages/core/src/main.rs
 ADD packages/core/Cargo.toml packages/core/Cargo.toml
 
+ADD packages/database/.cargo packages/database/.cargo
+RUN mkdir -p packages/database/src && echo "fn main() {}" > packages/database/src/main.rs
+ADD packages/database/Cargo.toml packages/database/Cargo.toml
+
+ADD packages/downloader/.cargo packages/downloader/.cargo
+RUN mkdir -p packages/downloader/src && echo "fn main() {}" > packages/downloader/src/main.rs
+ADD packages/downloader/Cargo.toml packages/downloader/Cargo.toml
+
 ADD packages/env_utils/.cargo packages/env_utils/.cargo
 RUN mkdir -p packages/env_utils/src && echo "fn main() {}" > packages/env_utils/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_env_utils\"\nversion = \"0.1.0\"" > packages/env_utils/Cargo.toml
@@ -40,6 +48,14 @@ ADD packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
 ADD packages/menu/.cargo packages/menu/.cargo
 RUN mkdir -p packages/menu/src && echo "fn main() {}" > packages/menu/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_menu\"\nversion = \"0.1.0\"" > packages/menu/Cargo.toml
+
+ADD packages/music_api/.cargo packages/music_api/.cargo
+RUN mkdir -p packages/music_api/src && echo "fn main() {}" > packages/music_api/src/main.rs
+ADD packages/music_api/Cargo.toml packages/music_api/Cargo.toml
+
+ADD packages/paging/.cargo packages/paging/.cargo
+RUN mkdir -p packages/paging/src && echo "fn main() {}" > packages/paging/src/main.rs
+ADD packages/paging/Cargo.toml packages/paging/Cargo.toml
 
 ADD packages/player/.cargo packages/player/.cargo
 RUN mkdir -p packages/player/src && echo "fn main() {}" > packages/player/src/main.rs
