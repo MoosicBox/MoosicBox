@@ -1,9 +1,13 @@
 use crate::{
-    app::{AppState, Db},
+    app::AppState,
     cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
 };
 use actix_web::error::{ErrorInternalServerError, ErrorNotFound};
-use std::{sync::PoisonError, time::Duration};
+use moosicbox_database::Database;
+use std::{
+    sync::{Arc, PoisonError},
+    time::Duration,
+};
 use thiserror::Error;
 
 use super::{
@@ -52,15 +56,8 @@ pub async fn get_artist(
     };
 
     Ok(get_or_set_to_cache(request, || async {
-        let library = data
-            .db
-            .as_ref()
-            .ok_or(GetArtistError::NoDb)?
-            .library
-            .lock()?;
-
         if let Some(artist_id) = artist_id {
-            match db::get_artist(&library.inner, artist_id as i32) {
+            match db::get_artist(&data.database, "id", artist_id as i32).await {
                 Ok(artist) => {
                     if artist.is_none() {
                         return Err(GetArtistError::ArtistNotFound(artist_id));
@@ -73,7 +70,7 @@ pub async fn get_artist(
                 Err(err) => Err(GetArtistError::DbError(err)),
             }
         } else if let Some(tidal_artist_id) = tidal_artist_id {
-            match db::get_tidal_artist(&library.inner, tidal_artist_id as i32) {
+            match db::get_artist(&data.database, "tidal_id", tidal_artist_id as i32).await {
                 Ok(artist) => {
                     if artist.is_none() {
                         return Err(GetArtistError::ArtistNotFound(tidal_artist_id));
@@ -86,7 +83,7 @@ pub async fn get_artist(
                 Err(err) => Err(GetArtistError::DbError(err)),
             }
         } else if let Some(qobuz_artist_id) = qobuz_artist_id {
-            match db::get_qobuz_artist(&library.inner, qobuz_artist_id as i32) {
+            match db::get_artist(&data.database, "qobuz_id", qobuz_artist_id as i32).await {
                 Ok(artist) => {
                     if artist.is_none() {
                         return Err(GetArtistError::ArtistNotFound(qobuz_artist_id));
@@ -99,7 +96,7 @@ pub async fn get_artist(
                 Err(err) => Err(GetArtistError::DbError(err)),
             }
         } else if let Some(album_id) = album_id {
-            match db::get_album_artist(&library.inner, album_id as i32) {
+            match db::get_album_artist(&data.database, album_id as i32).await {
                 Ok(artist) => {
                     if artist.is_none() {
                         return Err(GetArtistError::AlbumArtistNotFound(album_id));
@@ -112,7 +109,7 @@ pub async fn get_artist(
                 Err(err) => Err(GetArtistError::DbError(err)),
             }
         } else if let Some(tidal_album_id) = tidal_album_id {
-            match db::get_tidal_album_artist(&library.inner, tidal_album_id as i32) {
+            match db::get_tidal_album_artist(&data.database, tidal_album_id as i32).await {
                 Ok(artist) => {
                     if artist.is_none() {
                         return Err(GetArtistError::AlbumArtistNotFound(tidal_album_id));
@@ -125,7 +122,7 @@ pub async fn get_artist(
                 Err(err) => Err(GetArtistError::DbError(err)),
             }
         } else if let Some(qobuz_album_id) = qobuz_album_id {
-            match db::get_qobuz_album_artist(&library.inner, qobuz_album_id as i32) {
+            match db::get_qobuz_album_artist(&data.database, qobuz_album_id as i32).await {
                 Ok(artist) => {
                     if artist.is_none() {
                         return Err(GetArtistError::AlbumArtistNotFound(qobuz_album_id));
@@ -187,7 +184,7 @@ pub async fn get_album(
     album_id: Option<u64>,
     tidal_album_id: Option<u64>,
     qobuz_album_id: Option<String>,
-    db: &Db,
+    db: Arc<Box<dyn Database>>,
 ) -> Result<LibraryAlbum, GetAlbumError> {
     let request = CacheRequest {
         key: format!("album|{album_id:?}|{tidal_album_id:?}|{qobuz_album_id:?}"),
@@ -195,10 +192,8 @@ pub async fn get_album(
     };
 
     Ok(get_or_set_to_cache(request, || async {
-        let library = db.library.lock()?;
-
         if let Some(album_id) = album_id {
-            match db::get_album(&library.inner, album_id as i32) {
+            match db::get_album(&db, "id", album_id as i32).await {
                 Ok(album) => {
                     if album.is_none() {
                         return Err(GetAlbumError::AlbumNotFound(album_id.to_string()));
@@ -211,7 +206,7 @@ pub async fn get_album(
                 Err(err) => Err(GetAlbumError::DbError(err)),
             }
         } else if let Some(tidal_album_id) = tidal_album_id {
-            match db::get_tidal_album(&library.inner, tidal_album_id as i32) {
+            match db::get_album(&db, "tidal_id", tidal_album_id as i32).await {
                 Ok(album) => {
                     if album.is_none() {
                         return Err(GetAlbumError::AlbumNotFound(tidal_album_id.to_string()));
@@ -224,7 +219,7 @@ pub async fn get_album(
                 Err(err) => Err(GetAlbumError::DbError(err)),
             }
         } else if let Some(qobuz_album_id) = qobuz_album_id.clone() {
-            match db::get_qobuz_album(&library.inner, &qobuz_album_id) {
+            match db::get_album(&db, "qobuz_id", qobuz_album_id.clone()).await {
                 Ok(album) => {
                     if album.is_none() {
                         return Err(GetAlbumError::AlbumNotFound(qobuz_album_id));
@@ -263,23 +258,21 @@ impl<T> From<PoisonError<T>> for GetAlbumsError {
     }
 }
 
-pub async fn get_albums(data: &AppState) -> Result<Vec<LibraryAlbum>, GetAlbumsError> {
+impl From<GetAlbumsError> for actix_web::Error {
+    fn from(err: GetAlbumsError) -> Self {
+        log::error!("{err:?}");
+        ErrorInternalServerError(err.to_string())
+    }
+}
+
+pub async fn get_albums(db: &Box<dyn Database>) -> Result<Vec<LibraryAlbum>, GetAlbumsError> {
     let request = CacheRequest {
         key: "sqlite|local_albums".to_string(),
         expiration: Duration::from_secs(5 * 60),
     };
 
     Ok(get_or_set_to_cache(request, || async {
-        let library = data
-            .db
-            .as_ref()
-            .ok_or(GetAlbumsError::NoDb)?
-            .library
-            .lock()?;
-
-        Ok::<CacheItemType, GetAlbumsError>(CacheItemType::Albums(super::db::get_albums(
-            &library.inner,
-        )?))
+        Ok::<CacheItemType, GetAlbumsError>(CacheItemType::Albums(super::db::get_albums(db).await?))
     })
     .await?
     .into_albums()
@@ -316,15 +309,8 @@ pub async fn get_artist_albums(
     };
 
     Ok(get_or_set_to_cache(request, || async {
-        let library = data
-            .db
-            .as_ref()
-            .ok_or(GetArtistAlbumsError::NoDb)?
-            .library
-            .lock()?;
-
         Ok::<CacheItemType, GetArtistAlbumsError>(CacheItemType::ArtistAlbums(
-            db::get_artist_albums(&library.inner, artist_id)?,
+            db::get_artist_albums(&data.database, artist_id).await?,
         ))
     })
     .await?

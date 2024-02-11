@@ -1,14 +1,8 @@
 use std::{fmt::Display, path::PathBuf, str::FromStr};
 
-use moosicbox_database::DatabaseValue;
-use moosicbox_json_utils::{
-    database::ToValue as _, rusqlite::ToValue as RusqliteToValue, MissingValue, ParseError,
-    ToValueType,
-};
-use rusqlite::{
-    types::{FromSql, Value},
-    Row, Rows,
-};
+use async_trait::async_trait;
+use moosicbox_database::{Database, DatabaseValue};
+use moosicbox_json_utils::{database::ToValue as _, MissingValue, ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 
@@ -21,7 +15,7 @@ use self::{
 
 use super::db::{
     get_album_version_qualities, get_players, get_session_active_players, get_session_playlist,
-    get_session_playlist_tracks, get_tracks, DbError, SqliteValue,
+    get_session_playlist_tracks, get_tracks, DbError,
 };
 
 pub mod qobuz;
@@ -40,33 +34,32 @@ pub trait AsModelResultMapped<T, E> {
 }
 
 pub trait AsModelResultMappedMut<T, E> {
-    fn as_model_mapped_mut<'a>(&'a mut self) -> Result<Vec<T>, E>
-    where
-        Row<'a>: AsModelResult<T, ParseError>;
+    fn as_model_mapped_mut<'a>(&'a mut self) -> Result<Vec<T>, E>;
 }
 
+#[async_trait]
 pub trait AsModelResultMappedQuery<T, E> {
-    fn as_model_mapped_query(&self, db: &rusqlite::Connection) -> Result<Vec<T>, E>;
+    async fn as_model_mapped_query(&self, db: &Box<dyn Database>) -> Result<Vec<T>, E>;
 }
 
 pub trait AsModelResultMut<T, E> {
     fn as_model_mut<'a>(&'a mut self) -> Result<Vec<T>, E>
     where
-        Row<'a>: AsModelResult<T, ParseError>;
+        for<'b> &'b moosicbox_database::Row: ToValueType<T>;
 }
 
-impl<T, E> AsModelResultMut<T, E> for Rows<'_>
+impl<T, E> AsModelResultMut<T, E> for Vec<moosicbox_database::Row>
 where
     E: From<DbError>,
 {
     fn as_model_mut<'a>(&'a mut self) -> Result<Vec<T>, E>
     where
-        Row<'a>: AsModelResult<T, ParseError>,
+        for<'b> &'b moosicbox_database::Row: ToValueType<T>,
     {
         let mut values = vec![];
 
-        while let Some(row) = self.next().map_err(|e| e.into())? {
-            match AsModelResult::as_model(row) {
+        for row in self {
+            match row.to_value_type() {
                 Ok(value) => values.push(value),
                 Err(err) => {
                     if log::log_enabled!(log::Level::Debug) {
@@ -83,11 +76,12 @@ where
 }
 
 pub trait AsId {
-    fn as_id(&self) -> SqliteValue;
+    fn as_id(&self) -> DatabaseValue;
 }
 
+#[async_trait]
 pub trait AsModelQuery<T> {
-    fn as_model_query(&self, db: &rusqlite::Connection) -> Result<T, DbError>;
+    async fn as_model_query(&self, db: &Box<dyn Database>) -> Result<T, DbError>;
 }
 
 pub trait ToApi<T> {
@@ -109,13 +103,13 @@ pub struct NumberId {
     pub id: i32,
 }
 
-impl AsModel<NumberId> for Row<'_> {
+impl AsModel<NumberId> for &moosicbox_database::Row {
     fn as_model(&self) -> NumberId {
         AsModelResult::as_model(self).unwrap()
     }
 }
 
-impl AsModelResult<NumberId, ParseError> for Row<'_> {
+impl AsModelResult<NumberId, ParseError> for &moosicbox_database::Row {
     fn as_model(&self) -> Result<NumberId, ParseError> {
         Ok(NumberId {
             id: self.to_value("id")?,
@@ -124,8 +118,8 @@ impl AsModelResult<NumberId, ParseError> for Row<'_> {
 }
 
 impl AsId for NumberId {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::Number(self.id as i64)
+    fn as_id(&self) -> DatabaseValue {
+        DatabaseValue::Number(self.id as i64)
     }
 }
 
@@ -135,13 +129,13 @@ pub struct StringId {
     pub id: String,
 }
 
-impl AsModel<StringId> for Row<'_> {
+impl AsModel<StringId> for &moosicbox_database::Row {
     fn as_model(&self) -> StringId {
         AsModelResult::as_model(self).unwrap()
     }
 }
 
-impl AsModelResult<StringId, ParseError> for Row<'_> {
+impl AsModelResult<StringId, ParseError> for &moosicbox_database::Row {
     fn as_model(&self) -> Result<StringId, ParseError> {
         Ok(StringId {
             id: self.to_value("id")?,
@@ -150,8 +144,8 @@ impl AsModelResult<StringId, ParseError> for Row<'_> {
 }
 
 impl AsId for StringId {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::String(self.id.clone())
+    fn as_id(&self) -> DatabaseValue {
+        DatabaseValue::String(self.id.clone())
     }
 }
 
@@ -175,7 +169,7 @@ impl ToValueType<TrackApiSource> for &serde_json::Value {
     }
 }
 
-impl MissingValue<TrackApiSource> for &rusqlite::Row<'_> {}
+impl MissingValue<TrackApiSource> for &moosicbox_database::Row {}
 impl ToValueType<TrackApiSource> for rusqlite::types::Value {
     fn to_value_type(self) -> Result<TrackApiSource, ParseError> {
         match self {
@@ -231,21 +225,9 @@ impl LibraryTrack {
     }
 }
 
-impl AsModel<LibraryTrack> for Row<'_> {
-    fn as_model(&self) -> LibraryTrack {
-        AsModel::as_model(&self)
-    }
-}
-
-impl AsModel<LibraryTrack> for &Row<'_> {
+impl AsModel<LibraryTrack> for &moosicbox_database::Row {
     fn as_model(&self) -> LibraryTrack {
         AsModelResult::as_model(self).unwrap()
-    }
-}
-
-impl AsModelResult<LibraryTrack, ParseError> for Row<'_> {
-    fn as_model(&self) -> Result<LibraryTrack, ParseError> {
-        AsModelResult::as_model(&self)
     }
 }
 
@@ -287,7 +269,7 @@ impl ToValueType<LibraryTrack> for &moosicbox_database::Row {
     }
 }
 
-impl AsModelResult<LibraryTrack, ParseError> for &Row<'_> {
+impl AsModelResult<LibraryTrack, ParseError> for &moosicbox_database::Row {
     fn as_model(&self) -> Result<LibraryTrack, ParseError> {
         Ok(LibraryTrack {
             id: self.to_value("id")?,
@@ -326,8 +308,8 @@ impl AsModelResult<LibraryTrack, ParseError> for &Row<'_> {
 }
 
 impl AsId for LibraryTrack {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::Number(self.id as i64)
+    fn as_id(&self) -> DatabaseValue {
+        DatabaseValue::Number(self.id as i64)
     }
 }
 
@@ -436,7 +418,7 @@ pub struct LibraryArtist {
     pub qobuz_id: Option<u64>,
 }
 
-impl AsModel<LibraryArtist> for Row<'_> {
+impl AsModel<LibraryArtist> for &moosicbox_database::Row {
     fn as_model(&self) -> LibraryArtist {
         AsModelResult::as_model(self).unwrap()
     }
@@ -454,7 +436,7 @@ impl ToValueType<LibraryArtist> for &moosicbox_database::Row {
     }
 }
 
-impl AsModelResult<LibraryArtist, ParseError> for Row<'_> {
+impl AsModelResult<LibraryArtist, ParseError> for &moosicbox_database::Row {
     fn as_model(&self) -> Result<LibraryArtist, ParseError> {
         Ok(LibraryArtist {
             id: self.to_value("id")?,
@@ -467,8 +449,8 @@ impl AsModelResult<LibraryArtist, ParseError> for Row<'_> {
 }
 
 impl AsId for LibraryArtist {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::Number(self.id as i64)
+    fn as_id(&self) -> DatabaseValue {
+        DatabaseValue::Number(self.id as i64)
     }
 }
 
@@ -540,12 +522,13 @@ impl ToApi<ApiAlbumVersionQuality> for AlbumVersionQuality {
     }
 }
 
-impl AsModel<AlbumVersionQuality> for Row<'_> {
+impl AsModel<AlbumVersionQuality> for &moosicbox_database::Row {
     fn as_model(&self) -> AlbumVersionQuality {
         AsModelResult::as_model(self).unwrap()
     }
 }
 
+impl MissingValue<AlbumVersionQuality> for &moosicbox_database::Row {}
 impl ToValueType<AlbumVersionQuality> for &moosicbox_database::Row {
     fn to_value_type(self) -> Result<AlbumVersionQuality, ParseError> {
         Ok(AlbumVersionQuality {
@@ -566,7 +549,7 @@ impl ToValueType<AlbumVersionQuality> for &moosicbox_database::Row {
     }
 }
 
-impl AsModelResult<AlbumVersionQuality, ParseError> for Row<'_> {
+impl AsModelResult<AlbumVersionQuality, ParseError> for &moosicbox_database::Row {
     fn as_model(&self) -> Result<AlbumVersionQuality, ParseError> {
         Ok(AlbumVersionQuality {
             format: self
@@ -648,7 +631,7 @@ pub struct LibraryAlbum {
     pub qobuz_artist_id: Option<u64>,
 }
 
-impl AsModel<LibraryAlbum> for Row<'_> {
+impl AsModel<LibraryAlbum> for &moosicbox_database::Row {
     fn as_model(&self) -> LibraryAlbum {
         AsModelResult::as_model(self).unwrap()
     }
@@ -677,7 +660,7 @@ impl ToValueType<LibraryAlbum> for &moosicbox_database::Row {
     }
 }
 
-impl AsModelResult<LibraryAlbum, ParseError> for Row<'_> {
+impl AsModelResult<LibraryAlbum, ParseError> for &moosicbox_database::Row {
     fn as_model(&self) -> Result<LibraryAlbum, ParseError> {
         Ok(LibraryAlbum {
             id: self.to_value("id")?,
@@ -756,7 +739,7 @@ impl AsModelResultMapped<LibraryAlbum, DbError> for Vec<moosicbox_database::Row>
 
             if let Some(album) = results.last_mut() {
                 if let Some(_source) = row.get("source") {
-                    match ToValueType::<AlbumVersionQuality>::to_value_type(row) {
+                    match row.to_value_type() {
                         Ok(version) => {
                             album.versions.push(version);
                             log::trace!(
@@ -818,104 +801,9 @@ impl AsModelResultMapped<LibraryAlbum, DbError> for Vec<moosicbox_database::Row>
     }
 }
 
-impl AsModelResultMappedMut<LibraryAlbum, DbError> for Rows<'_> {
-    fn as_model_mapped_mut<'a>(&'a mut self) -> Result<Vec<LibraryAlbum>, DbError>
-    where
-        Row<'a>: AsModelResult<LibraryAlbum, ParseError>,
-    {
-        let mut results: Vec<LibraryAlbum> = vec![];
-        let mut last_album_id = 0;
-
-        while let Some(row) = self.next()? {
-            let album_id: i32 = row.get("album_id")?;
-
-            if album_id != last_album_id {
-                if let Some(ref mut album) = results.last_mut() {
-                    log::trace!(
-                        "Sorting versions for album id={} count={}",
-                        album.id,
-                        album.versions.len()
-                    );
-                    sort_album_versions(&mut album.versions);
-                }
-                match AsModelResult::as_model(row) {
-                    Ok(album) => {
-                        results.push(album);
-                    }
-                    Err(err) => {
-                        log::error!("Failed to parse Album for album id={}: {err:?}", album_id);
-                        continue;
-                    }
-                }
-                last_album_id = album_id;
-            }
-
-            if let Some(album) = results.last_mut() {
-                if let Some(_source) = row.get::<_, Option<String>>("source")? {
-                    match AsModelResult::<AlbumVersionQuality, ParseError>::as_model(row) {
-                        Ok(version) => {
-                            album.versions.push(version);
-                            log::trace!(
-                                "Added version to album id={} count={}",
-                                album.id,
-                                album.versions.len()
-                            );
-                        }
-                        Err(err) => {
-                            log::error!(
-                                "Failed to parse AlbumVersionQuality for album id={}: {err:?}",
-                                album.id
-                            );
-                        }
-                    }
-                } else {
-                    if album.tidal_id.is_some() {
-                        album.versions.push(AlbumVersionQuality {
-                            format: None,
-                            bit_depth: None,
-                            sample_rate: None,
-                            channels: None,
-                            source: TrackApiSource::Tidal,
-                        });
-                        log::trace!(
-                            "Added Tidal version to album id={} count={}",
-                            album.id,
-                            album.versions.len()
-                        );
-                    }
-                    if album.qobuz_id.is_some() {
-                        album.versions.push(AlbumVersionQuality {
-                            format: None,
-                            bit_depth: None,
-                            sample_rate: None,
-                            channels: None,
-                            source: TrackApiSource::Qobuz,
-                        });
-                        log::trace!(
-                            "Added Qobuz version to album id={} count={}",
-                            album.id,
-                            album.versions.len()
-                        );
-                    }
-                }
-            }
-        }
-
-        if let Some(ref mut album) = results.last_mut() {
-            log::trace!(
-                "Sorting versions for last album id={} count={}",
-                album.id,
-                album.versions.len()
-            );
-            sort_album_versions(&mut album.versions);
-        }
-
-        Ok(results)
-    }
-}
-
-impl AsModelQuery<LibraryAlbum> for Row<'_> {
-    fn as_model_query(&self, db: &rusqlite::Connection) -> Result<LibraryAlbum, DbError> {
+#[async_trait]
+impl AsModelQuery<LibraryAlbum> for &moosicbox_database::Row {
+    async fn as_model_query(&self, db: &Box<dyn Database>) -> Result<LibraryAlbum, DbError> {
         let id = self.to_value("id")?;
 
         Ok(LibraryAlbum {
@@ -931,7 +819,7 @@ impl AsModelQuery<LibraryAlbum> for Row<'_> {
             directory: self.to_value("directory")?,
             source: AlbumSource::Local,
             blur: self.to_value("blur")?,
-            versions: get_album_version_qualities(db, id)?,
+            versions: get_album_version_qualities(db, id).await?,
             tidal_id: self.to_value("tidal_id")?,
             qobuz_id: self.to_value("qobuz_id")?,
             tidal_artist_id: self.to_value("tidal_artist_id")?,
@@ -941,8 +829,8 @@ impl AsModelQuery<LibraryAlbum> for Row<'_> {
 }
 
 impl AsId for LibraryAlbum {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::Number(self.id as i64)
+    fn as_id(&self) -> DatabaseValue {
+        DatabaseValue::Number(self.id as i64)
     }
 }
 
@@ -1068,7 +956,7 @@ pub struct CreateSession {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionPlaylist {
-    pub tracks: Vec<i32>,
+    pub tracks: Vec<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -1135,17 +1023,6 @@ impl ToValueType<ApiSource> for DatabaseValue {
                 .ok_or_else(|| ParseError::ConvertType("ApiSource".into()))?,
         )
         .map_err(|_| ParseError::ConvertType("ApiSource".into()))?)
-    }
-}
-
-impl MissingValue<ApiSource> for &rusqlite::Row<'_> {}
-impl ToValueType<ApiSource> for Value {
-    fn to_value_type(self) -> Result<ApiSource, ParseError> {
-        match self {
-            Value::Text(str) => ApiSource::from_str(&str)
-                .map_err(|_| ParseError::ConvertType(format!("ApiSource: {str}"))),
-            _ => Err(ParseError::ConvertType(format!("ApiSource: {self:?}"))),
-        }
     }
 }
 
@@ -1290,14 +1167,8 @@ pub struct Session {
     pub playlist: SessionPlaylist,
 }
 
-impl AsModel<Session> for Row<'_> {
-    fn as_model(&self) -> Session {
-        AsModelResult::as_model(self).unwrap()
-    }
-}
-
-impl AsModelResult<Session, ParseError> for Row<'_> {
-    fn as_model(&self) -> Result<Session, ParseError> {
+impl ToValueType<Session> for &moosicbox_database::Row {
+    fn to_value_type(self) -> Result<Session, ParseError> {
         Ok(Session {
             id: self.to_value("id")?,
             name: self.to_value("name")?,
@@ -1311,10 +1182,11 @@ impl AsModelResult<Session, ParseError> for Row<'_> {
     }
 }
 
-impl AsModelQuery<Session> for Row<'_> {
-    fn as_model_query(&self, db: &rusqlite::Connection) -> Result<Session, DbError> {
+#[async_trait]
+impl AsModelQuery<Session> for &moosicbox_database::Row {
+    async fn as_model_query(&self, db: &Box<dyn Database>) -> Result<Session, DbError> {
         let id = self.to_value("id")?;
-        match get_session_playlist(db, id)? {
+        match get_session_playlist(db, id).await? {
             Some(playlist) => Ok(Session {
                 id,
                 name: self.to_value("name")?,
@@ -1323,7 +1195,7 @@ impl AsModelQuery<Session> for Row<'_> {
                 position: self.to_value("position")?,
                 seek: self.to_value("seek")?,
                 volume: self.to_value("volume")?,
-                active_players: get_session_active_players(db, id)?,
+                active_players: get_session_active_players(db, id).await?,
                 playlist,
             }),
             None => Err(DbError::InvalidRequest),
@@ -1332,8 +1204,8 @@ impl AsModelQuery<Session> for Row<'_> {
 }
 
 impl AsId for Session {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::Number(self.id as i64)
+    fn as_id(&self) -> DatabaseValue {
+        DatabaseValue::Number(self.id as i64)
     }
 }
 
@@ -1374,14 +1246,8 @@ pub struct SessionPlaylist {
     pub tracks: Vec<ApiTrack>,
 }
 
-impl AsModel<SessionPlaylist> for Row<'_> {
-    fn as_model(&self) -> SessionPlaylist {
-        AsModelResult::as_model(self).unwrap()
-    }
-}
-
-impl AsModelResult<SessionPlaylist, ParseError> for Row<'_> {
-    fn as_model(&self) -> Result<SessionPlaylist, ParseError> {
+impl ToValueType<SessionPlaylist> for &moosicbox_database::Row {
+    fn to_value_type(self) -> Result<SessionPlaylist, ParseError> {
         Ok(SessionPlaylist {
             id: self.to_value("id")?,
             ..Default::default()
@@ -1389,19 +1255,23 @@ impl AsModelResult<SessionPlaylist, ParseError> for Row<'_> {
     }
 }
 
+#[async_trait]
 impl AsModelResultMappedQuery<ApiTrack, DbError> for Vec<SessionPlaylistTrack> {
-    fn as_model_mapped_query(&self, db: &rusqlite::Connection) -> Result<Vec<ApiTrack>, DbError> {
+    async fn as_model_mapped_query(
+        &self,
+        db: &Box<dyn Database>,
+    ) -> Result<Vec<ApiTrack>, DbError> {
         let tracks = self;
         log::trace!("Mapping tracks to ApiTracks: {tracks:?}");
 
         let library_track_ids = tracks
             .iter()
             .filter(|t| t.r#type == ApiSource::Library)
-            .map(|t| t.id as i32)
+            .map(|t| t.id as u64)
             .collect::<Vec<_>>();
 
         log::trace!("Fetching tracks by ids: {library_track_ids:?}");
-        let library_tracks = get_tracks(db, Some(&library_track_ids))?;
+        let library_tracks = get_tracks(db, Some(&library_track_ids)).await?;
 
         Ok(tracks
             .iter()
@@ -1418,10 +1288,14 @@ impl AsModelResultMappedQuery<ApiTrack, DbError> for Vec<SessionPlaylistTrack> {
     }
 }
 
-impl AsModelQuery<SessionPlaylist> for Row<'_> {
-    fn as_model_query(&self, db: &rusqlite::Connection) -> Result<SessionPlaylist, DbError> {
+#[async_trait]
+impl AsModelQuery<SessionPlaylist> for &moosicbox_database::Row {
+    async fn as_model_query(&self, db: &Box<dyn Database>) -> Result<SessionPlaylist, DbError> {
         let id = self.to_value("id")?;
-        let tracks = get_session_playlist_tracks(db, id)?.as_model_mapped_query(db)?;
+        let tracks = get_session_playlist_tracks(db, id)
+            .await?
+            .as_model_mapped_query(db)
+            .await?;
         log::trace!("Got SessionPlaylistTracks for session_playlist {id}: {tracks:?}");
 
         Ok(SessionPlaylist { id, tracks })
@@ -1429,8 +1303,8 @@ impl AsModelQuery<SessionPlaylist> for Row<'_> {
 }
 
 impl AsId for SessionPlaylist {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::Number(self.id as i64)
+    fn as_id(&self) -> DatabaseValue {
+        DatabaseValue::Number(self.id as i64)
     }
 }
 
@@ -1453,7 +1327,7 @@ impl ToValueType<SessionPlaylistTrack> for &moosicbox_database::Row {
     }
 }
 
-impl AsModelResult<SessionPlaylistTrack, ParseError> for Row<'_> {
+impl AsModelResult<SessionPlaylistTrack, ParseError> for &moosicbox_database::Row {
     fn as_model(&self) -> Result<SessionPlaylistTrack, ParseError> {
         Ok(SessionPlaylistTrack {
             id: self.to_value("track_id")?,
@@ -1516,14 +1390,8 @@ pub struct Connection {
     pub players: Vec<Player>,
 }
 
-impl AsModel<Connection> for Row<'_> {
-    fn as_model(&self) -> Connection {
-        AsModelResult::as_model(self).unwrap()
-    }
-}
-
-impl AsModelResult<Connection, ParseError> for Row<'_> {
-    fn as_model(&self) -> Result<Connection, ParseError> {
+impl ToValueType<Connection> for &moosicbox_database::Row {
+    fn to_value_type(self) -> Result<Connection, ParseError> {
         Ok(Connection {
             id: self.to_value("id")?,
             name: self.to_value("name")?,
@@ -1534,10 +1402,11 @@ impl AsModelResult<Connection, ParseError> for Row<'_> {
     }
 }
 
-impl AsModelQuery<Connection> for Row<'_> {
-    fn as_model_query(&self, db: &rusqlite::Connection) -> Result<Connection, DbError> {
+#[async_trait]
+impl AsModelQuery<Connection> for &moosicbox_database::Row {
+    async fn as_model_query(&self, db: &Box<dyn Database>) -> Result<Connection, DbError> {
         let id = self.to_value::<String>("id")?;
-        let players = get_players(db, &id)?;
+        let players = get_players(db, &id).await?;
         Ok(Connection {
             id,
             name: self.to_value("name")?,
@@ -1549,8 +1418,8 @@ impl AsModelQuery<Connection> for Row<'_> {
 }
 
 impl AsId for Connection {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::String(self.id.clone())
+    fn as_id(&self) -> DatabaseValue {
+        DatabaseValue::String(self.id.clone())
     }
 }
 
@@ -1591,19 +1460,15 @@ pub enum PlayerType {
     Unknown,
 }
 
-impl MissingValue<PlayerType> for &rusqlite::Row<'_> {}
-impl ToValueType<PlayerType> for Value {
+impl MissingValue<PlayerType> for &moosicbox_database::Row {}
+impl ToValueType<PlayerType> for DatabaseValue {
     fn to_value_type(self) -> Result<PlayerType, ParseError> {
         match self {
-            Value::Text(str) => Ok(PlayerType::from_str(&str).unwrap_or(PlayerType::Unknown)),
+            DatabaseValue::String(str) | DatabaseValue::StringOpt(Some(str)) => {
+                Ok(PlayerType::from_str(&str).unwrap_or(PlayerType::Unknown))
+            }
             _ => Err(ParseError::ConvertType("PlayerType".into())),
         }
-    }
-}
-
-impl FromSql for PlayerType {
-    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
-        Ok(PlayerType::from_str(value.as_str()?).unwrap_or(PlayerType::Unknown))
     }
 }
 
@@ -1618,14 +1483,9 @@ pub struct Player {
     pub updated: String,
 }
 
-impl AsModel<Player> for Row<'_> {
-    fn as_model(&self) -> Player {
-        AsModelResult::as_model(self).unwrap()
-    }
-}
-
-impl AsModelResult<Player, ParseError> for Row<'_> {
-    fn as_model(&self) -> Result<Player, ParseError> {
+impl MissingValue<Player> for &moosicbox_database::Row {}
+impl ToValueType<Player> for &moosicbox_database::Row {
+    fn to_value_type(self) -> Result<Player, ParseError> {
         Ok(Player {
             id: self.to_value("id")?,
             name: self.to_value("name")?,
@@ -1638,8 +1498,8 @@ impl AsModelResult<Player, ParseError> for Row<'_> {
 }
 
 impl AsId for Player {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::Number(self.id as i64)
+    fn as_id(&self) -> DatabaseValue {
+        DatabaseValue::Number(self.id as i64)
     }
 }
 
@@ -1653,8 +1513,8 @@ pub struct ActivePlayer {
     pub updated: String,
 }
 
-impl MissingValue<ActivePlayer> for &rusqlite::Row<'_> {}
-impl ToValueType<ActivePlayer> for &Row<'_> {
+impl MissingValue<ActivePlayer> for &moosicbox_database::Row {}
+impl ToValueType<ActivePlayer> for &moosicbox_database::Row {
     fn to_value_type(self) -> Result<ActivePlayer, ParseError> {
         Ok(ActivePlayer {
             id: self.to_value("id")?,
@@ -1666,21 +1526,21 @@ impl ToValueType<ActivePlayer> for &Row<'_> {
     }
 }
 
-impl AsModelResult<ActivePlayer, ParseError> for Row<'_> {
+impl AsModelResult<ActivePlayer, ParseError> for &moosicbox_database::Row {
     fn as_model(&self) -> Result<ActivePlayer, ParseError> {
         self.to_value_type()
     }
 }
 
-impl AsModel<ActivePlayer> for Row<'_> {
+impl AsModel<ActivePlayer> for &moosicbox_database::Row {
     fn as_model(&self) -> ActivePlayer {
         self.to_value_type().unwrap()
     }
 }
 
 impl AsId for ActivePlayer {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::Number(self.id as i64)
+    fn as_id(&self) -> DatabaseValue {
+        DatabaseValue::Number(self.id as i64)
     }
 }
 
@@ -1720,13 +1580,13 @@ pub struct ClientAccessToken {
     pub updated: String,
 }
 
-impl AsModel<ClientAccessToken> for Row<'_> {
+impl AsModel<ClientAccessToken> for &moosicbox_database::Row {
     fn as_model(&self) -> ClientAccessToken {
         AsModelResult::as_model(self).unwrap()
     }
 }
 
-impl AsModelResult<ClientAccessToken, ParseError> for Row<'_> {
+impl AsModelResult<ClientAccessToken, ParseError> for &moosicbox_database::Row {
     fn as_model(&self) -> Result<ClientAccessToken, ParseError> {
         Ok(ClientAccessToken {
             token: self.to_value("token")?,
@@ -1738,8 +1598,8 @@ impl AsModelResult<ClientAccessToken, ParseError> for Row<'_> {
 }
 
 impl AsId for ClientAccessToken {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::String(self.token.clone())
+    fn as_id(&self) -> DatabaseValue {
+        DatabaseValue::String(self.token.clone())
     }
 }
 
@@ -1753,13 +1613,13 @@ pub struct MagicToken {
     pub updated: String,
 }
 
-impl AsModel<MagicToken> for Row<'_> {
+impl AsModel<MagicToken> for &moosicbox_database::Row {
     fn as_model(&self) -> MagicToken {
         AsModelResult::as_model(self).unwrap()
     }
 }
 
-impl AsModelResult<MagicToken, ParseError> for Row<'_> {
+impl AsModelResult<MagicToken, ParseError> for &moosicbox_database::Row {
     fn as_model(&self) -> Result<MagicToken, ParseError> {
         Ok(MagicToken {
             magic_token: self.to_value("magic_token")?,
@@ -1772,8 +1632,8 @@ impl AsModelResult<MagicToken, ParseError> for Row<'_> {
 }
 
 impl AsId for MagicToken {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::String(self.magic_token.clone())
+    fn as_id(&self) -> DatabaseValue {
+        DatabaseValue::String(self.magic_token.clone())
     }
 }
 
@@ -1785,7 +1645,7 @@ pub struct TrackSize {
     pub format: String,
 }
 
-impl AsModel<TrackSize> for Row<'_> {
+impl AsModel<TrackSize> for &moosicbox_database::Row {
     fn as_model(&self) -> TrackSize {
         AsModelResult::as_model(self).unwrap()
     }
@@ -1802,7 +1662,7 @@ impl ToValueType<TrackSize> for &moosicbox_database::Row {
     }
 }
 
-impl AsModelResult<TrackSize, ParseError> for Row<'_> {
+impl AsModelResult<TrackSize, ParseError> for &moosicbox_database::Row {
     fn as_model(&self) -> Result<TrackSize, ParseError> {
         Ok(TrackSize {
             id: self.to_value("id")?,
@@ -1814,7 +1674,7 @@ impl AsModelResult<TrackSize, ParseError> for Row<'_> {
 }
 
 impl AsId for TrackSize {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::Number(self.id as i64)
+    fn as_id(&self) -> DatabaseValue {
+        DatabaseValue::Number(self.id as i64)
     }
 }

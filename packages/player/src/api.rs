@@ -111,7 +111,7 @@ pub async fn play_album_endpoint(
     Ok(Json(
         get_player(query.host.clone())
             .play_album(
-                data.db.clone().expect("No DB bound on AppState"),
+                &data.database,
                 query.session_id,
                 query.album_id,
                 query.position,
@@ -146,7 +146,7 @@ pub async fn play_track_endpoint(
     Ok(Json(
         get_player(query.host.clone())
             .play_track(
-                Some(data.db.clone().expect("No DB bound on AppState")),
+                &data.database,
                 query.session_id,
                 TrackOrId::Id(query.track_id, query.source.unwrap_or(ApiSource::Library)),
                 query.seek,
@@ -181,7 +181,7 @@ pub async fn play_tracks_endpoint(
     Ok(Json(
         get_player(query.host.clone())
             .play_tracks(
-                Some(data.db.clone().expect("No DB bound on AppState")),
+                &data.database,
                 query.session_id,
                 parse_integer_ranges(&query.track_ids)
                     .map_err(|e| match e {
@@ -296,10 +296,7 @@ pub async fn update_playback_endpoint(
                 })?,
             query.quality,
             query.session_id,
-            get_session_playlist_id_from_session_id(
-                data.db.clone().expect("No DB set"),
-                query.session_id,
-            )?,
+            get_session_playlist_id_from_session_id(&data.database, query.session_id).await?,
             Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
         )?,
     ))

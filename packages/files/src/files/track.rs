@@ -12,12 +12,8 @@ use futures_core::Stream;
 use lazy_static::lazy_static;
 use log::{debug, error, trace};
 use moosicbox_core::{
-    app::Db,
     sqlite::{
-        db::{
-            get_track, get_track_database, get_track_size, get_tracks, set_track_size, DbError,
-            SetTrackSize,
-        },
+        db::{get_track, get_track_size, get_tracks, set_track_size, DbError, SetTrackSize},
         models::{LibraryTrack, TrackApiSource},
     },
     types::{AudioFormat, PlaybackQuality},
@@ -149,7 +145,7 @@ pub async fn get_track_id_source(
 ) -> Result<TrackSource, TrackSourceError> {
     debug!("Getting track audio file {track_id} quality={quality:?} source={source:?}");
 
-    let track = get_track_database(&db, track_id as u64)
+    let track = get_track(&db, track_id as u64)
         .await?
         .ok_or(TrackSourceError::NotFound(track_id))?;
 
@@ -416,7 +412,7 @@ async fn request_track_bytes_from_file(
     format: AudioFormat,
     size: Option<u64>,
 ) -> Result<TrackBytes, GetTrackBytesError> {
-    let track = moosicbox_core::sqlite::db::get_track_database(&db, track_id)
+    let track = moosicbox_core::sqlite::db::get_track(&db, track_id)
         .await?
         .ok_or(GetTrackBytesError::NotFound)?;
 
@@ -483,7 +479,7 @@ pub enum TrackInfoError {
     #[error("Source not supported: {0:?}")]
     UnsupportedSource(TrackSource),
     #[error("Track not found: {0}")]
-    NotFound(i32),
+    NotFound(u64),
     #[error(transparent)]
     Playback(#[from] PlaybackError),
     #[error(transparent)]
@@ -523,28 +519,25 @@ impl From<LibraryTrack> for TrackInfo {
 }
 
 pub async fn get_tracks_info(
-    track_ids: Vec<i32>,
-    db: Db,
+    track_ids: Vec<u64>,
+    db: &Box<dyn Database>,
 ) -> Result<Vec<TrackInfo>, TrackInfoError> {
     debug!("Getting tracks info {track_ids:?}");
 
-    let tracks = {
-        let library = db.library.lock().unwrap();
-        get_tracks(&library.inner, Some(&track_ids))?
-    };
+    let tracks = get_tracks(db, Some(&track_ids)).await?;
 
     trace!("Got tracks {tracks:?}");
 
     Ok(tracks.into_iter().map(|t| t.into()).collect())
 }
 
-pub async fn get_track_info(track_id: i32, db: Db) -> Result<TrackInfo, TrackInfoError> {
+pub async fn get_track_info(
+    track_id: u64,
+    db: &Box<dyn Database>,
+) -> Result<TrackInfo, TrackInfoError> {
     debug!("Getting track info {track_id}");
 
-    let track = {
-        let library = db.library.lock().unwrap();
-        get_track(&library.inner, track_id)?
-    };
+    let track = get_track(db, track_id).await?;
 
     trace!("Got track {track:?}");
 

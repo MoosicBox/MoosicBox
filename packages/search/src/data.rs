@@ -181,7 +181,7 @@ pub async fn reindex_global_search_index_from_db(
     let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
     crate::recreate_global_search_index(path)?;
 
-    let artists = moosicbox_core::sqlite::db::get_artists_database(db)
+    let artists = moosicbox_core::sqlite::db::get_artists(db)
         .await?
         .into_iter()
         .map(|artist| artist.as_data_values())
@@ -189,7 +189,7 @@ pub async fn reindex_global_search_index_from_db(
 
     crate::populate_global_search_index(artists, false)?;
 
-    let albums = moosicbox_core::sqlite::db::get_albums_database(db)
+    let albums = moosicbox_core::sqlite::db::get_albums(db)
         .await?
         .into_iter()
         .map(|album| album.as_data_values())
@@ -197,7 +197,7 @@ pub async fn reindex_global_search_index_from_db(
 
     crate::populate_global_search_index(albums, false)?;
 
-    let tracks = moosicbox_core::sqlite::db::get_tracks_database(db, None)
+    let tracks = moosicbox_core::sqlite::db::get_tracks(db, None)
         .await?
         .into_iter()
         .map(|track| track.as_data_values())

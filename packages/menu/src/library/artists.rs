@@ -75,16 +75,7 @@ pub async fn get_all_artists(
     data: &AppState,
     request: &ArtistsRequest,
 ) -> Result<Vec<LibraryArtist>, GetArtistsError> {
-    let artists = get_artists(
-        &data
-            .db
-            .as_ref()
-            .ok_or(GetArtistsError::NoDb)?
-            .library
-            .lock()
-            .unwrap()
-            .inner,
-    )?;
+    let artists = get_artists(&data.database).await?;
 
     Ok(sort_artists(filter_artists(artists, request), request))
 }

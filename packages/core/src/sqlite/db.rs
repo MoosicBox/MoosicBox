@@ -1,23 +1,16 @@
 use actix_web::error::ErrorInternalServerError;
-use log::debug;
 use moosicbox_database::{query::*, Database, DatabaseError, DatabaseValue};
 use moosicbox_json_utils::{ParseError, ToValueType as _};
-use rusqlite::{params, Connection, Row, Statement};
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    fmt::{Debug, Display},
-    sync::PoisonError,
-};
+use std::{collections::HashMap, fmt::Debug, sync::PoisonError};
 use thiserror::Error;
 
 use crate::types::PlaybackQuality;
 
 use super::models::{
-    ActivePlayer, AlbumVersionQuality, AsId, AsModel, AsModelQuery, AsModelResult,
-    AsModelResultMappedMut, AsModelResultMut, ClientAccessToken, CreateSession, LibraryAlbum,
-    LibraryArtist, LibraryTrack, MagicToken, NumberId, Player, Session, SessionPlaylist,
-    SessionPlaylistTrack, TrackSize, UpdateSession,
+    AlbumVersionQuality, AsModelQuery as _, AsModelResultMapped as _, CreateSession, LibraryAlbum,
+    LibraryArtist, LibraryTrack, Player, Session, SessionPlaylist, SessionPlaylistTrack, TrackSize,
+    UpdateSession,
 };
 
 impl<T> From<PoisonError<T>> for DbError {
@@ -51,112 +44,131 @@ impl From<DbError> for actix_web::Error {
     }
 }
 
-pub fn get_session_playlist_tracks(
-    db: &Connection,
+pub async fn get_session_playlist_tracks(
+    db: &Box<dyn Database>,
     session_playlist_id: i32,
 ) -> Result<Vec<SessionPlaylistTrack>, DbError> {
-    AsModelResultMut::as_model_mut(
-        &mut db
-            .prepare_cached(
-                "
-                SELECT session_playlist_tracks.*
-                FROM session_playlist_tracks
-                WHERE session_playlist_tracks.session_playlist_id=?1
-                ORDER BY session_playlist_tracks.id ASC
-            ",
-            )?
-            .query(params![session_playlist_id])?,
-    )
+    Ok(db
+        .select("session_playlist_tracks")
+        .filter(where_eq("session_playlist_id", session_playlist_id))
+        .sort("id", SortDirection::Asc)
+        .execute(db)
+        .await?
+        .to_value_type()?)
 }
 
-pub fn get_client_id(db: &Connection) -> Result<Option<String>, DbError> {
+pub async fn get_client_id(db: &Box<dyn Database>) -> Result<Option<String>, DbError> {
+    let or: Vec<Box<dyn BooleanExpression>> = vec![
+        Box::new(where_eq("expires", DatabaseValue::Null)),
+        Box::new(where_gt(
+            "expires",
+            Box::new(Identifier {
+                value: "date('now')".into(),
+            }) as Box<dyn Expression>,
+        )),
+    ];
+
     Ok(db
-        .prepare_cached(
-            "
-            SELECT client_id
-            FROM client_access_tokens
-            WHERE expires IS NULL OR expires > date('now')
-            ORDER BY updated DESC
-            LIMIT 1
-            ",
-        )?
-        .query_map(params![], |row| Ok(row.get("client_id")))?
-        .find_map(|row| row.ok())
+        .select("client_access_tokens")
+        .filter(where_or(or))
+        .sort("updated", SortDirection::Desc)
+        .execute_first(db)
+        .await?
+        .and_then(|row| row.get("client_id"))
+        .map(|value| value.to_value_type())
         .transpose()?)
 }
 
-pub fn get_client_access_token(db: &Connection) -> Result<Option<(String, String)>, DbError> {
+pub async fn get_client_access_token(
+    db: &Box<dyn Database>,
+) -> Result<Option<(String, String)>, DbError> {
+    let or: Vec<Box<dyn BooleanExpression>> = vec![
+        Box::new(where_eq("expires", DatabaseValue::Null)),
+        Box::new(where_gt(
+            "expires",
+            Box::new(Identifier {
+                value: "date('now')".into(),
+            }) as Box<dyn Expression>,
+        )),
+    ];
+
     Ok(db
-        .prepare_cached(
-            "
-            SELECT client_id, token
-            FROM client_access_tokens
-            WHERE expires IS NULL OR expires > date('now')
-            ORDER BY updated DESC
-            LIMIT 1
-            ",
-        )?
-        .query_map(params![], |row| {
-            Ok((row.get("client_id").unwrap(), row.get("token").unwrap()))
-        })?
-        .find_map(|row| row.ok()))
+        .select("client_access_tokens")
+        .filter(where_or(or))
+        .sort("updated", SortDirection::Desc)
+        .execute_first(db)
+        .await?
+        .and_then(|row| {
+            if let (Some(a), Some(b)) = (row.get("client_id"), row.get("token")) {
+                Some((a, b))
+            } else {
+                None
+            }
+        })
+        .map(|(client_id, token)| {
+            Ok::<_, ParseError>((client_id.to_value_type()?, token.to_value_type()?))
+        })
+        .transpose()?)
 }
 
-pub fn create_client_access_token(
-    db: &Connection,
+pub async fn create_client_access_token(
+    db: &Box<dyn Database>,
     client_id: &str,
     token: &str,
 ) -> Result<(), DbError> {
-    upsert::<ClientAccessToken>(
-        db,
-        "client_access_tokens",
-        vec![
-            ("token", SqliteValue::String(token.to_string())),
-            ("client_id", SqliteValue::String(client_id.to_string())),
-        ],
-        vec![
-            ("token", SqliteValue::String(token.to_string())),
-            ("client_id", SqliteValue::String(client_id.to_string())),
-        ],
-    )?;
+    db.upsert("client_access_tokens")
+        .filter(where_eq("token", token))
+        .filter(where_eq("client_id", client_id))
+        .value("token", token)
+        .value("client_id", client_id)
+        .execute_first(db)
+        .await?;
 
     Ok(())
 }
 
-pub fn delete_magic_token(db: &Connection, magic_token: &str) -> Result<(), DbError> {
-    db.prepare_cached(
-        "
-            DELETE FROM magic_tokens
-            WHERE magic_token=?1
-            ",
-    )?
-    .query(params![magic_token])?
-    .next()?;
+pub async fn delete_magic_token(db: &Box<dyn Database>, magic_token: &str) -> Result<(), DbError> {
+    db.delete("magic_tokens")
+        .filter(where_eq("magic_token", magic_token))
+        .execute(db)
+        .await?;
 
     Ok(())
 }
 
-pub fn get_credentials_from_magic_token(
-    db: &Connection,
+pub async fn get_credentials_from_magic_token(
+    db: &Box<dyn Database>,
     magic_token: &str,
 ) -> Result<Option<(String, String)>, DbError> {
+    let or: Vec<Box<dyn BooleanExpression>> = vec![
+        Box::new(where_eq("expires", DatabaseValue::Null)),
+        Box::new(where_gt(
+            "expires",
+            Box::new(Identifier {
+                value: "date('now')".into(),
+            }) as Box<dyn Expression>,
+        )),
+    ];
+
     if let Some((client_id, access_token)) = db
-        .prepare_cached(
-            "
-            SELECT client_id, access_token
-            FROM magic_tokens
-            WHERE (expires IS NULL OR expires > date('now')) AND magic_token = ?1
-            ",
-        )?
-        .query_map(params![magic_token], |row| {
-            Ok((
-                row.get("client_id").unwrap(),
-                row.get("access_token").unwrap(),
-            ))
-        })?
-        .find_map(|row| row.ok())
+        .select("magic_tokens")
+        .filter(where_or(or))
+        .filter(where_eq("magic_token", magic_token))
+        .execute_first(db)
+        .await?
+        .and_then(|row| {
+            if let (Some(a), Some(b)) = (row.get("client_id"), row.get("access_token")) {
+                Some((a, b))
+            } else {
+                None
+            }
+        })
+        .map(|(client_id, token)| {
+            Ok::<_, ParseError>((client_id.to_value_type()?, token.to_value_type()?))
+        })
+        .transpose()?
     {
-        delete_magic_token(db, magic_token)?;
+        delete_magic_token(db, magic_token).await?;
 
         Ok(Some((client_id, access_token)))
     } else {
@@ -164,154 +176,127 @@ pub fn get_credentials_from_magic_token(
     }
 }
 
-pub fn save_magic_token(
-    db: &Connection,
+pub async fn save_magic_token(
+    db: &Box<dyn Database>,
     magic_token: &str,
     client_id: &str,
     access_token: &str,
 ) -> Result<(), DbError> {
-    upsert::<MagicToken>(
-        db,
-        "magic_tokens",
-        vec![
-            ("magic_token", SqliteValue::String(magic_token.to_string())),
-            ("client_id", SqliteValue::String(client_id.to_string())),
-            (
-                "access_token",
-                SqliteValue::String(access_token.to_string()),
-            ),
-        ],
-        vec![
-            ("magic_token", SqliteValue::String(magic_token.to_string())),
-            ("client_id", SqliteValue::String(client_id.to_string())),
-            (
-                "access_token",
-                SqliteValue::String(access_token.to_string()),
-            ),
-            ("expires", SqliteValue::NowAdd("+1 Day".into())),
-        ],
-    )?;
+    db.upsert("magic_tokens")
+        .filter(where_eq("magic_token", magic_token))
+        .filter(where_eq("access_token", access_token))
+        .filter(where_eq("client_id", client_id))
+        .value("magic_token", magic_token)
+        .value("access_token", access_token)
+        .value("client_id", client_id)
+        .value("client_id", DatabaseValue::NowAdd("+1 Day".into()))
+        .execute_first(db)
+        .await?;
 
     Ok(())
 }
 
-pub fn get_session_playlist(
-    db: &Connection,
+pub async fn get_session_playlist(
+    db: &Box<dyn Database>,
     session_id: i32,
 ) -> Result<Option<SessionPlaylist>, DbError> {
-    db.prepare_cached(
-        "
-            SELECT session_playlists.*
-            FROM session_playlists
-            WHERE id=?1
-            ",
-    )?
-    .query_map(params![session_id], |row| Ok(row.as_model_query(db)))?
-    .find_map(|row| row.ok())
-    .transpose()
+    if let Some(ref playlist) = db
+        .select("session_playlists")
+        .filter(where_eq("id", session_id))
+        .execute_first(db)
+        .await?
+    {
+        Ok(Some(playlist.as_model_query(db).await?))
+    } else {
+        Ok(None)
+    }
 }
 
-pub fn get_session_active_players(
-    db: &Connection,
+pub async fn get_session_active_players(
+    db: &Box<dyn Database>,
     session_id: i32,
 ) -> Result<Vec<Player>, DbError> {
     Ok(db
-        .prepare_cached(
-            "
-            SELECT players.*
-            FROM active_players
-            JOIN players on players.id=active_players.player_id
-            WHERE active_players.session_id=?1
-            ",
-        )?
-        .query_map(params![session_id], |row| Ok(AsModel::as_model(row)))?
-        .filter_map(|row| row.ok())
-        .collect())
+        .select("active_players")
+        .columns(&["players.*"])
+        .join("players", "players.id=active_players.player_id")
+        .filter(where_eq("active_players.session_id", session_id))
+        .execute(db)
+        .await?
+        .to_value_type()?)
 }
 
-pub fn get_session_playing(db: &Connection, id: i32) -> Result<Option<bool>, DbError> {
+pub async fn get_session_playing(db: &Box<dyn Database>, id: i32) -> Result<Option<bool>, DbError> {
     Ok(db
-        .prepare_cached(
-            "
-            SELECT sessions.playing
-            FROM sessions
-            WHERE id=?1
-            ",
-        )?
-        .query_map(params![id], |row| Ok(row.get::<_, bool>("playing")))?
-        .find_map(|row| row.ok())
+        .select("sessions")
+        .columns(&["playing"])
+        .filter(where_eq("id", id))
+        .execute_first(db)
+        .await?
+        .and_then(|row| row.get("playing"))
+        .map(|x| x.to_value_type())
         .transpose()?)
 }
 
-pub fn get_session(db: &Connection, id: i32) -> Result<Option<Session>, DbError> {
-    db.prepare_cached(
-        "
-            SELECT sessions.*
-            FROM sessions
-            WHERE id=?1
-            ",
-    )?
-    .query_map(params![id], |row| Ok(row.as_model_query(db)))?
-    .find_map(|row| row.ok())
-    .transpose()
+pub async fn get_session(db: &Box<dyn Database>, id: i32) -> Result<Option<Session>, DbError> {
+    Ok(
+        if let Some(ref session) = db
+            .select("sessions")
+            .filter(where_eq("id", id))
+            .execute_first(db)
+            .await?
+        {
+            Some(session.as_model_query(db).await?)
+        } else {
+            None
+        },
+    )
 }
 
-pub fn get_sessions(db: &Connection) -> Result<Vec<Session>, DbError> {
-    db.prepare_cached(
-        "
-            SELECT sessions.*
-            FROM sessions
-            ",
-    )?
-    .query_map([], |row| Ok(row.as_model_query(db)))?
-    .filter_map(|row| row.ok())
-    .collect()
+pub async fn get_sessions(db: &Box<dyn Database>) -> Result<Vec<Session>, DbError> {
+    let mut sessions = vec![];
+
+    for ref session in db.select("sessions").execute(db).await? {
+        sessions.push(session.as_model_query(db).await?);
+    }
+
+    Ok(sessions)
 }
 
-pub fn create_session(db: &Connection, session: &CreateSession) -> Result<Session, DbError> {
-    let tracks = get_tracks(db, Some(&session.playlist.tracks))?;
-    let playlist: SessionPlaylist = insert_and_get_row(
-        db,
-        "session_playlists",
-        vec![("id", SqliteValue::StringOpt(None))],
-    )?;
-    tracks
-        .iter()
-        .map(|track| {
-            insert_and_get_row::<NumberId>(
-                db,
-                "session_playlist_tracks",
-                vec![
-                    (
-                        "session_playlist_id",
-                        SqliteValue::Number(playlist.id as i64),
-                    ),
-                    ("track_id", SqliteValue::Number(track.id as i64)),
-                ],
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let new_session: Session = insert_and_get_row(
-        db,
-        "sessions",
-        vec![
-            (
-                "session_playlist_id",
-                SqliteValue::Number(playlist.id as i64),
-            ),
-            ("name", SqliteValue::String(session.name.clone())),
-        ],
-    )?;
+pub async fn create_session(
+    db: &Box<dyn Database>,
+    session: &CreateSession,
+) -> Result<Session, DbError> {
+    let tracks = get_tracks(db, Some(&session.playlist.tracks)).await?;
+    let playlist: SessionPlaylist = db
+        .insert("session_playlists")
+        .value("id", DatabaseValue::Null)
+        .execute(db)
+        .await?
+        .to_value_type()?;
+
+    for track in tracks {
+        db.insert("session_playlist_tracks")
+            .value("session_playlist_id", playlist.id)
+            .value("track_id", track.id)
+            .execute(db)
+            .await?;
+    }
+
+    let new_session: Session = db
+        .insert("sessions")
+        .value("session_playlist_id", playlist.id)
+        .value("name", session.name.clone())
+        .execute(db)
+        .await?
+        .to_value_type()?;
 
     for player_id in &session.active_players {
-        insert_and_get_row::<ActivePlayer>(
-            db,
-            "active_players",
-            vec![
-                ("session_id", SqliteValue::Number(new_session.id as i64)),
-                ("player_id", SqliteValue::Number(*player_id as i64)),
-            ],
-        )?;
+        db.insert("active_players")
+            .value("session_id", new_session.id)
+            .value("player_id", *player_id)
+            .execute(db)
+            .await?;
     }
 
     Ok(Session {
@@ -322,27 +307,39 @@ pub fn create_session(db: &Connection, session: &CreateSession) -> Result<Sessio
         seek: new_session.seek,
         volume: new_session.volume,
         name: new_session.name,
-        active_players: get_session_active_players(db, new_session.id)?,
+        active_players: get_session_active_players(db, new_session.id).await?,
         playlist,
     })
 }
 
-pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<(), DbError> {
+pub async fn update_session(
+    db: &Box<dyn Database>,
+    session: &UpdateSession,
+) -> Result<(), DbError> {
     if session.playlist.is_some() {
-        db
-        .prepare_cached(
-            "
-            DELETE FROM session_playlist_tracks
-            WHERE session_playlist_tracks.id IN (
-                SELECT session_playlist_tracks.id FROM session_playlist_tracks
-                JOIN session_playlists ON session_playlists.id=sessions.session_playlist_id
-                JOIN sessions ON sessions.session_playlist_id=session_playlists.id
-                WHERE sessions.id=? AND session_playlist_tracks.session_playlist_id=session_playlists.id
-            )
-            ",
-        )?
-        .query(params![session.session_id])?
-        .next()?;
+        db.delete("session_playlist_tracks")
+            .filter(where_in(
+                "session_playlist_tracks.id",
+                select("session_playlist_tracks")
+                    .columns(&["session_playlist_tracks.id"])
+                    .join(
+                        "session_playlists",
+                        "session_playlists.id=sessions.session_playlist_id",
+                    )
+                    .join(
+                        "sessions",
+                        "sessions.session_playlist_id=session_playlists.id",
+                    )
+                    .filter(where_eq("sessions.id", session.session_id))
+                    .filter(where_eq(
+                        "session_playlist_tracks.session_playlist_id",
+                        Identifier {
+                            value: "session_playlists.id".into(),
+                        },
+                    )),
+            ))
+            .execute(db)
+            .await?;
     }
 
     let playlist_id = session
@@ -352,127 +349,116 @@ pub fn update_session(db: &Connection, session: &UpdateSession) -> Result<(), Db
 
     if let Some(tracks) = session.playlist.as_ref().map(|p| &p.tracks) {
         for track in tracks {
-            insert_and_get_row::<NumberId>(
-                db,
-                "session_playlist_tracks",
-                vec![
-                    (
-                        "session_playlist_id",
-                        SqliteValue::Number(playlist_id.unwrap()),
-                    ),
-                    ("track_id", SqliteValue::Number(track.id as i64)),
-                    (
-                        "type",
-                        SqliteValue::String(track.r#type.as_ref().to_string()),
-                    ),
-                    ("data", SqliteValue::StringOpt(track.data.clone())),
-                ],
-            )?;
+            db.insert("session_playlist_tracks")
+                .value("session_playlist_id", playlist_id)
+                .value("track_id", track.id)
+                .value("type", track.r#type.as_ref())
+                .value("data", track.data.clone())
+                .execute(db)
+                .await?;
         }
     }
 
     let mut values = Vec::new();
 
     if let Some(name) = &session.name {
-        values.push(("name", SqliteValue::String(name.clone())))
+        values.push(("name", DatabaseValue::String(name.clone())))
     }
     if let Some(active) = session.active {
-        values.push(("active", SqliteValue::Bool(active)))
+        values.push(("active", DatabaseValue::Bool(active)))
     }
     if let Some(playing) = session.playing {
-        values.push(("playing", SqliteValue::Bool(playing)))
+        values.push(("playing", DatabaseValue::Bool(playing)))
     }
     if let Some(position) = session.position {
-        values.push(("position", SqliteValue::Number(position as i64)))
+        values.push(("position", DatabaseValue::Number(position as i64)))
     }
     if let Some(seek) = session.seek {
-        values.push(("seek", SqliteValue::Number(seek as i64)))
+        values.push(("seek", DatabaseValue::Number(seek as i64)))
     }
     if let Some(volume) = session.volume {
-        values.push(("volume", SqliteValue::Real(volume)))
+        values.push(("volume", DatabaseValue::Real(volume)))
     }
 
     if !values.is_empty() {
-        update_and_get_row::<Session>(
-            db,
-            "sessions",
-            SqliteValue::Number(session.session_id as i64),
-            &values,
-        )?
-        .ok_or(DbError::Unknown)?;
+        db.update("sessions")
+            .filter(where_eq("id", session.session_id))
+            .values(values)
+            .execute_first(db)
+            .await?;
     }
 
     Ok(())
 }
 
-pub fn delete_session(db: &Connection, session_id: i32) -> Result<(), DbError> {
-    db
-        .prepare_cached(
-            "
-            DELETE FROM session_playlist_tracks
-            WHERE session_playlist_tracks.id IN (
-                SELECT session_playlist_tracks.id FROM session_playlist_tracks
-                JOIN session_playlists ON session_playlists.id=sessions.session_playlist_id
-                JOIN sessions ON sessions.session_playlist_id=session_playlists.id
-                WHERE sessions.id=?1 AND session_playlist_tracks.session_playlist_id=session_playlists.id
-            )
-            ",
-        )?
-        .query(params![session_id as i64])?
-        .next()?;
+pub async fn delete_session(db: &Box<dyn Database>, session_id: i32) -> Result<(), DbError> {
+    db.delete("session_playlist_tracks")
+        .filter(where_in(
+            "session_playlist_tracks.id",
+            select("session_playlist_tracks")
+                .columns(&["session_playlist_tracks.id"])
+                .join(
+                    "session_playlists",
+                    "session_playlists.id=sessions.session_playlist_id",
+                )
+                .join(
+                    "sessions",
+                    "sessions.session_playlist_id=sessions.session_playlists.id",
+                )
+                .filter(where_eq("sessions.id", session_id))
+                .filter(where_eq(
+                    "session_playlist_id",
+                    Identifier {
+                        value: "session_playlists.id".into(),
+                    },
+                )),
+        ))
+        .execute(db)
+        .await?;
 
-    let mut statement = db.prepare_cached(
-        "
-            DELETE FROM sessions
-            WHERE id=?1
-            RETURNING *
-            ",
-    )?;
+    db.delete("sessions")
+        .filter(where_eq("id", session_id))
+        .execute(db)
+        .await?
+        .into_iter()
+        .next()
+        .ok_or(DbError::NoRow)?;
 
-    let mut query = statement.query(params![session_id as i64])?;
-
-    let session_row = query.next().transpose().ok_or(DbError::InvalidRequest)??;
-
-    db.prepare_cached(
-        "
-            DELETE FROM session_playlists
-            WHERE id=?
-            ",
-    )?
-    .query(params![session_row.get::<&str, i32>("id").unwrap()])?
-    .next()?;
+    db.delete("session_playlists")
+        .filter(where_eq("id", session_id))
+        .execute(db)
+        .await?;
 
     Ok(())
 }
 
-pub fn get_connections(db: &Connection) -> Result<Vec<super::models::Connection>, DbError> {
-    db.prepare_cached(
-        "
-            SELECT connections.*
-            FROM connections
-            ",
-    )?
-    .query_map([], |row| Ok(row.as_model_query(db)))?
-    .filter_map(|c| c.ok())
-    .collect()
+pub async fn get_connections(
+    db: &Box<dyn Database>,
+) -> Result<Vec<super::models::Connection>, DbError> {
+    let mut connections = vec![];
+
+    for ref connection in db.select("connections").execute(db).await? {
+        connections.push(connection.as_model_query(db).await?);
+    }
+
+    Ok(connections)
 }
 
-pub fn register_connection(
-    db: &Connection,
+pub async fn register_connection(
+    db: &Box<dyn Database>,
     connection: &super::models::RegisterConnection,
 ) -> Result<super::models::Connection, DbError> {
-    let row: super::models::Connection = upsert_and_get_row(
-        db,
-        "connections",
-        vec![("id", SqliteValue::String(connection.connection_id.clone()))],
-        vec![
-            ("id", SqliteValue::String(connection.connection_id.clone())),
-            ("name", SqliteValue::String(connection.name.clone())),
-        ],
-    )?;
+    let row: super::models::Connection = db
+        .upsert("connections")
+        .filter(where_eq("id", connection.connection_id.clone()))
+        .value("id", connection.connection_id.clone())
+        .value("name", connection.name.clone())
+        .execute_first(db)
+        .await?
+        .to_value_type()?;
 
     for player in &connection.players {
-        create_player(db, &connection.connection_id, player)?;
+        create_player(db, &connection.connection_id, player).await?;
     }
 
     Ok(super::models::Connection {
@@ -480,136 +466,97 @@ pub fn register_connection(
         name: row.name,
         created: row.created,
         updated: row.updated,
-        players: get_players(db, &row.id)?,
+        players: get_players(db, &row.id).await?,
     })
 }
 
-pub fn delete_connection(db: &Connection, connection_id: &str) -> Result<(), DbError> {
-    db.prepare_cached(
-        "
-            DELETE FROM players
-            WHERE players.id IN (
-                SELECT players.id FROM players
-                JOIN connections ON connections.id=players.connection_id
-                WHERE connections.id=?1
-            )
-            ",
-    )?
-    .query(params![connection_id])?
-    .next()?;
+pub async fn delete_connection(db: &Box<dyn Database>, connection_id: &str) -> Result<(), DbError> {
+    db.delete("players")
+        .filter(where_in(
+            "players.id",
+            select("players")
+                .columns(&["players.id"])
+                .join("connections", "connections.id=players.connection_id")
+                .filter(where_eq("connections.id", connection_id)),
+        ))
+        .execute(db)
+        .await?;
 
-    db.prepare_cached(
-        "
-            DELETE FROM connections
-            WHERE id=?1
-            ",
-    )?
-    .query(params![connection_id])?
-    .next()?;
+    db.delete("connections")
+        .filter(where_eq("id", connection_id))
+        .execute(db)
+        .await?;
 
     Ok(())
 }
 
-pub fn get_players(
-    db: &Connection,
+pub async fn get_players(
+    db: &Box<dyn Database>,
     connection_id: &str,
 ) -> Result<Vec<super::models::Player>, DbError> {
     Ok(db
-        .prepare_cached(
-            "
-            SELECT players.*
-            FROM players
-            WHERE connection_id=?1
-            ",
-        )?
-        .query_map(params![connection_id], |row| Ok(AsModel::as_model(row)))?
-        .filter_map(|c| c.ok())
-        .collect())
+        .select("players")
+        .filter(where_eq("connection_id", connection_id))
+        .execute(db)
+        .await?
+        .to_value_type()?)
 }
 
-pub fn create_player(
-    db: &Connection,
+pub async fn create_player(
+    db: &Box<dyn Database>,
     connection_id: &str,
     player: &super::models::RegisterPlayer,
 ) -> Result<super::models::Player, DbError> {
-    let player: Player = upsert_and_get_row(
-        db,
-        "players",
-        vec![
-            ("connection_id", SqliteValue::String(connection_id.into())),
-            ("name", SqliteValue::String(player.name.clone())),
-            ("type", SqliteValue::String(player.r#type.clone())),
-        ],
-        vec![
-            ("connection_id", SqliteValue::String(connection_id.into())),
-            ("name", SqliteValue::String(player.name.clone())),
-            ("type", SqliteValue::String(player.r#type.clone())),
-        ],
-    )?;
-
-    Ok(player)
+    Ok(db
+        .upsert("players")
+        .filter(where_eq("connection_id", connection_id))
+        .filter(where_eq("name", player.name.clone()))
+        .filter(where_eq("type", player.r#type.clone()))
+        .value("connection_id", connection_id)
+        .value("name", player.name.clone())
+        .value("type", player.r#type.clone())
+        .execute_first(db)
+        .await?
+        .to_value_type()?)
 }
 
-pub fn set_session_active_players(
-    db: &Connection,
+pub async fn set_session_active_players(
+    db: &Box<dyn Database>,
     set_session_active_players: &super::models::SetSessionActivePlayers,
 ) -> Result<(), DbError> {
-    db.prepare_cached(
-        "
-            DELETE FROM active_players
-            WHERE session_id=?1
-            ",
-    )?
-    .query(params![set_session_active_players.session_id])?
-    .next()?;
+    db.delete("active_players")
+        .filter(where_eq(
+            "session_id",
+            set_session_active_players.session_id,
+        ))
+        .execute(db)
+        .await?;
 
     for player_id in &set_session_active_players.players {
-        insert_and_get_row::<ActivePlayer>(
-            db,
-            "active_players",
-            vec![
-                (
-                    "session_id",
-                    SqliteValue::Number(set_session_active_players.session_id as i64),
-                ),
-                ("player_id", SqliteValue::Number(*player_id as i64)),
-            ],
-        )?;
+        db.insert("active_players")
+            .value("session_id", set_session_active_players.session_id)
+            .value("player_id", *player_id)
+            .execute(db)
+            .await?;
     }
 
     Ok(())
 }
 
-pub fn delete_player(db: &Connection, player_id: i32) -> Result<(), DbError> {
-    db.prepare_cached(
-        "
-            DELETE FROM players
-            WHERE id=?1
-            ",
-    )?
-    .query(params![player_id])?
-    .next()?;
+pub async fn delete_player(db: &Box<dyn Database>, player_id: i32) -> Result<(), DbError> {
+    db.delete("players")
+        .filter(where_eq("id", player_id))
+        .execute(db)
+        .await?;
 
     Ok(())
 }
 
-pub async fn get_artists_database(db: &Box<dyn Database>) -> Result<Vec<LibraryArtist>, DbError> {
+pub async fn get_artists(db: &Box<dyn Database>) -> Result<Vec<LibraryArtist>, DbError> {
     Ok(db.select("artists").execute(db).await?.to_value_type()?)
 }
 
-pub fn get_artists(db: &Connection) -> Result<Vec<LibraryArtist>, DbError> {
-    Ok(db
-        .prepare_cached(
-            "
-            SELECT artists.*
-            FROM artists",
-        )?
-        .query_map([], |row| Ok(AsModel::as_model(row)))?
-        .filter_map(|c| c.ok())
-        .collect())
-}
-
-pub async fn get_albums_database(db: &Box<dyn Database>) -> Result<Vec<LibraryAlbum>, DbError> {
+pub async fn get_albums(db: &Box<dyn Database>) -> Result<Vec<LibraryAlbum>, DbError> {
     Ok(db
         .select("albums")
         .distinct()
@@ -631,69 +578,31 @@ pub async fn get_albums_database(db: &Box<dyn Database>) -> Result<Vec<LibraryAl
         .sort("albums.id", SortDirection::Desc)
         .execute(db)
         .await?
-        .to_value_type()?)
+        .as_model_mapped()?)
 }
 
-pub fn get_albums(db: &Connection) -> Result<Vec<LibraryAlbum>, DbError> {
-    db.prepare_cached(
-        "
-            SELECT DISTINCT
-                albums.*,
-                albums.id as album_id,
-                track_sizes.bit_depth,
-                track_sizes.sample_rate,
-                track_sizes.channels,
-                artists.title as artist,
-                artists.tidal_id as tidal_artist_id,
-                artists.qobuz_id as qobuz_artist_id,
-                tracks.format,
-                tracks.source
-            FROM albums
-            LEFT JOIN tracks ON tracks.album_id=albums.id
-            LEFT JOIN track_sizes ON track_sizes.track_id=tracks.id
-            JOIN artists ON artists.id=albums.artist_id
-            ORDER BY albums.id desc
-        ",
-    )?
-    .query([])?
-    .as_model_mapped_mut()
-}
-
-pub fn get_all_album_version_qualities(
-    db: &Connection,
+pub async fn get_all_album_version_qualities(
+    db: &Box<dyn Database>,
     album_ids: Vec<i32>,
 ) -> Result<Vec<AlbumVersionQuality>, DbError> {
-    let ids_str = album_ids
-        .iter()
-        .enumerate()
-        .map(|(i, _id)| format!("?{}", i + 1))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let mut query = db.prepare_cached(&format!(
-        "
-            SELECT DISTINCT
-                albums.id as album_id,
-                track_sizes.bit_depth,
-                track_sizes.sample_rate,
-                track_sizes.channels,
-                tracks.format,
-                tracks.source
-            FROM albums
-            LEFT JOIN tracks ON tracks.album_id=albums.id
-            LEFT JOIN track_sizes ON track_sizes.track_id=tracks.id
-            WHERE albums.id=({ids_str})
-            ORDER BY albums.id desc
-            ",
-    ))?;
-
-    for (i, id) in album_ids.iter().enumerate() {
-        query.raw_bind_parameter(i + 1, id)?;
-    }
-
-    let mut versions = query
-        .query_map([], |row| Ok(AsModel::as_model(row)))?
-        .filter_map(|c| c.ok())
-        .collect::<Vec<_>>();
+    let mut versions: Vec<AlbumVersionQuality> = db
+        .select("albums")
+        .distinct()
+        .columns(&[
+            "albums.id as album_id",
+            "track_sizes.bit_depth",
+            "track_sizes.sample_rate",
+            "track_sizes.channels",
+            "tracks.format",
+            "tracks.source",
+        ])
+        .left_join("tracks", "tracks.album_id=albums.id")
+        .left_join("track_sizes", "track_sizes.track_id=tracks.id")
+        .filter(where_in("albums.id", album_ids))
+        .sort("albums.id", SortDirection::Desc)
+        .execute(db)
+        .await?
+        .to_value_type()?;
 
     versions.sort_by(|a: &AlbumVersionQuality, b: &AlbumVersionQuality| {
         b.sample_rate
@@ -709,27 +618,26 @@ pub fn get_all_album_version_qualities(
     Ok(versions)
 }
 
-pub fn get_album_version_qualities(
-    db: &Connection,
+pub async fn get_album_version_qualities(
+    db: &Box<dyn Database>,
     album_id: i32,
 ) -> Result<Vec<AlbumVersionQuality>, DbError> {
-    let mut versions = AsModelResultMut::<AlbumVersionQuality, DbError>::as_model_mut(
-        &mut db
-            .prepare_cached(
-                "
-            SELECT DISTINCT 
-                track_sizes.bit_depth,
-                track_sizes.sample_rate,
-                track_sizes.channels,
-                tracks.format,
-                tracks.source
-            FROM albums
-            JOIN tracks ON tracks.album_id=albums.id
-            JOIN track_sizes ON track_sizes.track_id=tracks.id
-            WHERE albums.id=?1",
-            )?
-            .query(params![album_id])?,
-    )?;
+    let mut versions: Vec<AlbumVersionQuality> = db
+        .select("albums")
+        .distinct()
+        .columns(&[
+            "track_sizes.bit_depth",
+            "track_sizes.sample_rate",
+            "track_sizes.channels",
+            "tracks.format",
+            "tracks.source",
+        ])
+        .left_join("tracks", "tracks.album_id=albums.id")
+        .left_join("track_sizes", "track_sizes.track_id=tracks.id")
+        .filter(where_eq("albums.id", album_id))
+        .execute(db)
+        .await?
+        .to_value_type()?;
 
     versions.sort_by(|a: &AlbumVersionQuality, b: &AlbumVersionQuality| {
         b.sample_rate
@@ -745,32 +653,21 @@ pub fn get_album_version_qualities(
     Ok(versions)
 }
 
-pub async fn get_artist_database(
+pub async fn get_artist<Id: Into<Box<dyn Expression>>>(
     db: &Box<dyn Database>,
-    id: u64,
+    column: &str,
+    id: Id,
 ) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
         .select("artists")
-        .filter(where_eq("artists.id", id))
+        .filter(where_eq(format!("{column}"), id.into()))
         .execute_first(db)
         .await?
         .as_ref()
         .to_value_type()?)
 }
 
-pub fn get_artist(db: &Connection, id: i32) -> Result<Option<LibraryArtist>, DbError> {
-    Ok(db
-        .prepare_cached(
-            "
-            SELECT *
-            FROM artists
-            WHERE artists.id=?1",
-        )?
-        .query_map(params![id], |row| Ok(AsModel::as_model(row)))?
-        .find_map(|row| row.ok()))
-}
-
-pub async fn get_artist_by_album_id_database(
+pub async fn get_artist_by_album_id(
     db: &Box<dyn Database>,
     id: u64,
 ) -> Result<Option<LibraryArtist>, DbError> {
@@ -784,131 +681,69 @@ pub async fn get_artist_by_album_id_database(
         .to_value_type()?)
 }
 
-pub fn get_artist_by_album_id(db: &Connection, id: i32) -> Result<Option<LibraryArtist>, DbError> {
-    Ok(db
-        .prepare_cached(
-            "
-            SELECT *
-            FROM artists
-            JOIN albums ON albums.artist_id = artists.id
-            WHERE albums.id=?1",
-        )?
-        .query_map(params![id], |row| Ok(AsModel::as_model(row)))?
-        .find_map(|row| row.ok()))
-}
-
-pub fn get_artists_by_album_ids(
-    db: &Connection,
+pub async fn get_artists_by_album_ids(
+    db: &Box<dyn Database>,
     album_ids: &[i32],
 ) -> Result<Vec<LibraryArtist>, DbError> {
-    let mut statement = db.prepare_cached(&format!(
-        "
-            SELECT DISTINCT *
-            FROM artists
-            JOIN albums ON albums.artist_id = artists.id
-            WHERE albums.id IN ({})",
-        album_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ")
-    ))?;
-
-    let mut index = 1;
-    for id in album_ids {
-        statement.raw_bind_parameter(index, *id)?;
-        index += 1;
-    }
-
-    Ok(statement
-        .raw_query()
-        .mapped(|row| Ok(AsModel::as_model(row)))
-        .filter_map(|row| row.ok())
-        .collect())
-}
-
-pub fn get_tidal_artist(db: &Connection, tidal_id: i32) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
-        .prepare_cached(
-            "
-            SELECT *
-            FROM artists
-            WHERE artists.tidal_id=?1",
-        )?
-        .query_map(params![tidal_id], |row| Ok(AsModel::as_model(row)))?
-        .find_map(|row| row.ok()))
+        .select("artists")
+        .distinct()
+        .join("albums", "albums.artist_id = artists.id")
+        .filter(where_in("album.id", album_ids.to_vec()))
+        .execute(db)
+        .await?
+        .to_value_type()?)
 }
 
-pub fn get_qobuz_artist(db: &Connection, qobuz_id: i32) -> Result<Option<LibraryArtist>, DbError> {
+pub async fn get_album_artist(
+    db: &Box<dyn Database>,
+    album_id: i32,
+) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
-        .prepare_cached(
-            "
-            SELECT *
-            FROM artists
-            WHERE artists.qobuz_id=?1",
-        )?
-        .query_map(params![qobuz_id], |row| Ok(AsModel::as_model(row)))?
-        .find_map(|row| row.ok()))
+        .select("artists")
+        .columns(&["artists.*"])
+        .join("albums", "albums.artist_id=artists.id")
+        .filter(where_eq("albums.id", album_id))
+        .execute_first(db)
+        .await?
+        .map(|x| x.to_value_type())
+        .transpose()?)
 }
 
-pub fn get_album_artist(db: &Connection, album_id: i32) -> Result<Option<LibraryArtist>, DbError> {
-    Ok(db
-        .prepare_cached(
-            "
-            SELECT artists.*
-            FROM artists
-            JOIN albums on albums.artist_id=artists.id
-            WHERE albums.id=?1",
-        )?
-        .query_map(params![album_id], |row| Ok(AsModel::as_model(row)))?
-        .find_map(|row| row.ok()))
-}
-
-pub fn get_tidal_album_artist(
-    db: &Connection,
+pub async fn get_tidal_album_artist(
+    db: &Box<dyn Database>,
     tidal_album_id: i32,
 ) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
-        .prepare_cached(
-            "
-            SELECT artists.*
-            FROM artists
-            JOIN albums on albums.artist_id=artists.id
-            WHERE albums.tidal_id=?1",
-        )?
-        .query_map(params![tidal_album_id], |row| Ok(AsModel::as_model(row)))?
-        .find_map(|row| row.ok()))
+        .select("artists")
+        .columns(&["artists.*"])
+        .join("albums", "albums.artist_id=artists.id")
+        .filter(where_eq("albums.tidal_id", tidal_album_id))
+        .execute_first(db)
+        .await?
+        .map(|x| x.to_value_type())
+        .transpose()?)
 }
 
-pub fn get_qobuz_album_artist(
-    db: &Connection,
+pub async fn get_qobuz_album_artist(
+    db: &Box<dyn Database>,
     qobuz_album_id: i32,
 ) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
-        .prepare_cached(
-            "
-            SELECT artists.*
-            FROM artists
-            JOIN albums on albums.artist_id=artists.id
-            WHERE albums.qobuz_id=?1",
-        )?
-        .query_map(params![qobuz_album_id], |row| Ok(AsModel::as_model(row)))?
-        .find_map(|row| row.ok()))
+        .select("artists")
+        .columns(&["artists.*"])
+        .join("albums", "albums.artist_id=artists.id")
+        .filter(where_eq("albums.qobuz_id", qobuz_album_id))
+        .execute_first(db)
+        .await?
+        .map(|x| x.to_value_type())
+        .transpose()?)
 }
 
-pub fn get_album(db: &Connection, id: i32) -> Result<Option<LibraryAlbum>, DbError> {
-    db.prepare_cached(
-        "
-            SELECT albums.*, artists.title as artist, artists.tidal_id as tidal_artist_id, artists.qobuz_id as qobuz_artist_id
-            FROM albums
-            JOIN artists ON artists.id=albums.artist_id
-            WHERE albums.id=?1",
-    )?
-    .query_map(params![id], |row| Ok(row.as_model_query(db)))?
-    .find_map(|row| row.ok())
-    .transpose()
-}
-
-pub async fn get_album_database(
+pub async fn get_album<Id: Into<Box<dyn Expression>>>(
     db: &Box<dyn Database>,
     column: &str,
-    id: DatabaseValue,
+    id: Id,
 ) -> Result<Option<LibraryAlbum>, DbError> {
     Ok(db
         .select("albums")
@@ -918,7 +753,7 @@ pub async fn get_album_database(
             "artists.tidal_id as tidal_artist_id",
             "artists.qobuz_id as qobuz_artist_id",
         ])
-        .filter(where_eq(format!("albums.{column}"), id))
+        .filter(where_eq(format!("albums.{column}"), id.into()))
         .join("artists", "artists.id = albums.artist_id")
         .execute_first(db)
         .await?
@@ -926,68 +761,10 @@ pub async fn get_album_database(
         .to_value_type()?)
 }
 
-pub fn get_tidal_album(db: &Connection, tidal_id: i32) -> Result<Option<LibraryAlbum>, DbError> {
-    db.prepare_cached(
-        "
-            SELECT albums.*, artists.title as artist, artists.tidal_id as tidal_artist_id, artists.qobuz_id as qobuz_artist_id
-            FROM albums
-            JOIN artists ON artists.id=albums.artist_id
-            WHERE albums.tidal_id=?1",
-    )?
-    .query_map(params![tidal_id], |row| Ok(row.as_model_query(db)))?
-    .find_map(|row| row.ok())
-    .transpose()
-}
-
-pub fn get_qobuz_album(db: &Connection, qobuz_id: &str) -> Result<Option<LibraryAlbum>, DbError> {
-    db.prepare_cached(
-        "
-            SELECT albums.*, artists.title as artist, artists.tidal_id as tidal_artist_id, artists.qobuz_id as qobuz_artist_id
-            FROM albums
-            JOIN artists ON artists.id=albums.artist_id
-            WHERE albums.qobuz_id=?1",
-    )?
-    .query_map(params![qobuz_id], |row| Ok(row.as_model_query(db)))?
-    .find_map(|row| row.ok())
-    .transpose()
-}
-
-pub async fn get_album_tracks_database(
+pub async fn get_album_tracks(
     db: &Box<dyn Database>,
     album_id: u64,
 ) -> Result<Vec<LibraryTrack>, DbError> {
-    moosicbox_database::query::select("tracks")
-        .columns(&[
-            "tracks.*",
-            "albums.title as album",
-            "albums.blur as blur",
-            "albums.date_released as date_released",
-            "albums.date_added as date_added",
-            "artists.title as artist",
-            "artists.tidal_id as tidal_artist_id",
-            "artists.qobuz_id as qobuz_artist_id",
-            "artists.id as artist_id",
-            "albums.artwork",
-            "track_sizes.format",
-            "track_sizes.bytes",
-            "track_sizes.bit_depth",
-            "track_sizes.audio_bitrate",
-            "track_sizes.overall_bitrate",
-            "track_sizes.sample_rate",
-            "track_sizes.channels",
-        ])
-        .filter(where_eq(
-            "tracks.album_id",
-            DatabaseValue::UNumber(album_id),
-        ))
-        .join("albums", "albums.id=tracks.album_id")
-        .join("artists", "artists.id=albums.artist_id")
-        .join(
-            "track_sizes",
-            "tracks.id=track_sizes.track_id AND track_sizes.format=tracks.format",
-        )
-        .sort("number", SortDirection::Asc);
-
     Ok(db
         .select("tracks")
         .columns(&[
@@ -1025,61 +802,33 @@ pub async fn get_album_tracks_database(
         .to_value_type()?)
 }
 
-pub fn get_album_tracks(db: &Connection, album_id: i32) -> Result<Vec<LibraryTrack>, DbError> {
-    db.prepare_cached(
-        "
-            SELECT tracks.*,
-                albums.title as album,
-                albums.blur as blur,
-                albums.date_released as date_released,
-                albums.date_added as date_added,
-                artists.title as artist,
-                artists.tidal_id as tidal_artist_id,
-                artists.qobuz_id as qobuz_artist_id,
-                artists.id as artist_id,
-                albums.artwork,
-                track_sizes.format,
-                track_sizes.bytes,
-                track_sizes.bit_depth,
-                track_sizes.audio_bitrate,
-                track_sizes.overall_bitrate,
-                track_sizes.sample_rate,
-                track_sizes.channels
-            FROM tracks
-            JOIN albums ON albums.id=tracks.album_id
-            JOIN artists ON artists.id=albums.artist_id
-            LEFT JOIN track_sizes ON tracks.id=track_sizes.track_id AND track_sizes.format=tracks.format
-            WHERE tracks.album_id=?1
-            ORDER BY number ASC",
-    )?
-    .query(params![album_id])?
-    .as_model_mut()
-}
-
-pub fn get_artist_albums(db: &Connection, artist_id: i32) -> Result<Vec<LibraryAlbum>, DbError> {
-    db.prepare_cached(
-        "
-            SELECT DISTINCT
-                albums.*,
-                albums.id as album_id,
-                track_sizes.bit_depth,
-                track_sizes.sample_rate,
-                track_sizes.channels,
-                artists.title as artist,
-                artists.tidal_id as tidal_artist_id,
-                artists.qobuz_id as qobuz_artist_id,
-                tracks.format,
-                tracks.source
-            FROM albums
-            LEFT JOIN tracks ON tracks.album_id=albums.id
-            LEFT JOIN track_sizes ON track_sizes.track_id=tracks.id
-            JOIN artists ON artists.id=albums.artist_id
-            WHERE albums.artist_id=?1
-            ORDER BY albums.id desc
-        ",
-    )?
-    .query(params![artist_id])?
-    .as_model_mapped_mut()
+pub async fn get_artist_albums(
+    db: &Box<dyn Database>,
+    artist_id: i32,
+) -> Result<Vec<LibraryAlbum>, DbError> {
+    Ok(db
+        .select("albums")
+        .distinct()
+        .columns(&[
+            "albums.*",
+            "albums.id as album_id",
+            "track_sizes.bit_depth",
+            "track_sizes.sample_rate",
+            "track_sizes.channels",
+            "artists.title as artist",
+            "artists.tidal_id as tidal_artist_id",
+            "artists.qobuz_id as qobuz_artist_id",
+            "tracks.format",
+            "tracks.source",
+        ])
+        .left_join("tracks", "tracks.album_id=albums.id")
+        .left_join("track_sizes", "track_sizes.track_id=tracks.id")
+        .join("artists", "artists.id=albums.artist_id")
+        .filter(where_eq("albums.artist_id", artist_id))
+        .sort("albums.id", SortDirection::Desc)
+        .execute(db)
+        .await?
+        .as_model_mapped()?)
 }
 
 #[derive(Debug, Clone)]
@@ -1170,18 +919,6 @@ pub async fn set_track_sizes(
             "ifnull(`channels`, 0)",
         ])
         .values(values.clone())
-        .filters(
-            values
-                .into_iter()
-                .map(|values| {
-                    values
-                        .into_iter()
-                        .map(|(name, value)| Box::new(where_eq(name, value)))
-                        .map(|x| x as Box<dyn BooleanExpression>)
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>(),
-        )
         .execute(db)
         .await?
         .to_value_type()?)
@@ -1203,17 +940,11 @@ pub async fn get_track_size(
         .transpose()?)
 }
 
-pub async fn get_track_database(
-    db: &Box<dyn Database>,
-    id: u64,
-) -> Result<Option<LibraryTrack>, DbError> {
-    Ok(get_tracks_database(db, Some(&vec![id]))
-        .await?
-        .into_iter()
-        .next())
+pub async fn get_track(db: &Box<dyn Database>, id: u64) -> Result<Option<LibraryTrack>, DbError> {
+    Ok(get_tracks(db, Some(&vec![id])).await?.into_iter().next())
 }
 
-pub async fn get_tracks_database(
+pub async fn get_tracks(
     db: &Box<dyn Database>,
     ids: Option<&Vec<u64>>,
 ) -> Result<Vec<LibraryTrack>, DbError> {
@@ -1254,65 +985,14 @@ pub async fn get_tracks_database(
         .to_value_type()?)
 }
 
-pub fn get_track(db: &Connection, id: i32) -> Result<Option<LibraryTrack>, DbError> {
-    Ok(get_tracks(db, Some(&vec![id]))?.into_iter().next())
+pub async fn delete_track(
+    db: &Box<dyn Database>,
+    id: i32,
+) -> Result<Option<LibraryTrack>, DbError> {
+    Ok(delete_tracks(db, Some(&vec![id])).await?.into_iter().next())
 }
 
-pub fn get_tracks(db: &Connection, ids: Option<&Vec<i32>>) -> Result<Vec<LibraryTrack>, DbError> {
-    if ids.is_some_and(|ids| ids.is_empty()) {
-        return Ok(vec![]);
-    }
-    let mut query = db.prepare_cached(&format!(
-        "
-            SELECT tracks.*,
-                albums.title as album,
-                albums.blur as blur,
-                albums.date_released as date_released,
-                albums.date_added as date_added,
-                artists.title as artist,
-                artists.tidal_id as tidal_artist_id,
-                artists.qobuz_id as qobuz_artist_id,
-                artists.id as artist_id,
-                albums.artwork,
-                track_sizes.format,
-                track_sizes.bytes,
-                track_sizes.bit_depth,
-                track_sizes.audio_bitrate,
-                track_sizes.overall_bitrate,
-                track_sizes.sample_rate,
-                track_sizes.channels
-            FROM tracks
-            JOIN albums ON albums.id=tracks.album_id
-            JOIN artists ON artists.id=albums.artist_id
-            LEFT JOIN track_sizes ON tracks.id=track_sizes.track_id AND track_sizes.format=tracks.format
-            {}",
-        ids.map(|ids| {
-            let ids_param = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
-            format!("WHERE tracks.id IN ({ids_param})")
-        })
-        .unwrap_or_default()
-    ))?;
-
-    if let Some(ids) = ids {
-        let mut index = 1;
-        for id in ids {
-            query.raw_bind_parameter(index, *id)?;
-            index += 1;
-        }
-    }
-
-    Ok(query
-        .raw_query()
-        .mapped(|row| Ok(AsModel::as_model(row)))
-        .filter_map(|row| row.ok())
-        .collect())
-}
-
-pub fn delete_track(db: &Connection, id: i32) -> Result<Option<LibraryTrack>, DbError> {
-    Ok(delete_tracks(db, Some(&vec![id]))?.into_iter().next())
-}
-
-pub async fn delete_tracks_database(
+pub async fn delete_tracks(
     db: &Box<dyn Database>,
     ids: Option<&Vec<i32>>,
 ) -> Result<Vec<LibraryTrack>, DbError> {
@@ -1328,45 +1008,17 @@ pub async fn delete_tracks_database(
         .to_value_type()?)
 }
 
-pub fn delete_tracks(
-    db: &Connection,
-    ids: Option<&Vec<i32>>,
-) -> Result<Vec<LibraryTrack>, DbError> {
-    if ids.is_some_and(|ids| ids.is_empty()) {
-        return Ok(vec![]);
-    }
-    let mut query = db.prepare_cached(&format!(
-        "DELETE FROM tracks {} RETURNING *",
-        ids.map(|ids| {
-            let ids_param = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
-            format!("WHERE id IN ({ids_param})")
-        })
-        .unwrap_or_default()
-    ))?;
-
-    if let Some(ids) = ids {
-        let mut index = 1;
-        for id in ids {
-            query.raw_bind_parameter(index, *id)?;
-            index += 1;
-        }
-    }
-
-    let values = AsModelResultMut::<LibraryTrack, DbError>::as_model_mut(&mut query.raw_query())?;
-
-    Ok(values)
-}
-
-pub fn delete_track_size_by_track_id(
-    db: &Connection,
+pub async fn delete_track_size_by_track_id(
+    db: &Box<dyn Database>,
     id: i32,
 ) -> Result<Option<TrackSize>, DbError> {
-    Ok(delete_track_sizes_by_track_id(db, Some(&vec![id]))?
+    Ok(delete_track_sizes_by_track_id(db, Some(&vec![id]))
+        .await?
         .into_iter()
         .next())
 }
 
-pub async fn delete_track_sizes_by_track_id_database(
+pub async fn delete_track_sizes_by_track_id(
     db: &Box<dyn Database>,
     ids: Option<&Vec<i32>>,
 ) -> Result<Vec<TrackSize>, DbError> {
@@ -1375,55 +1027,26 @@ pub async fn delete_track_sizes_by_track_id_database(
     }
 
     Ok(db
-        .exec_delete(
-            db.delete("track_sizes")
-                .filter_some(ids.map(|ids| where_in("track_id", ids.to_vec()))),
-        )
+        .delete("track_sizes")
+        .filter_some(ids.map(|ids| where_in("track_id", ids.to_vec())))
+        .execute(db)
         .await?
         .to_value_type()?)
 }
 
-pub fn delete_track_sizes_by_track_id(
-    db: &Connection,
-    ids: Option<&Vec<i32>>,
-) -> Result<Vec<TrackSize>, DbError> {
-    if ids.is_some_and(|ids| ids.is_empty()) {
-        return Ok(vec![]);
-    }
-    let mut query = db.prepare_cached(&format!(
-        "DELETE FROM track_sizes {} RETURNING *",
-        ids.map(|ids| {
-            let ids_param = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
-            format!("WHERE track_id IN ({ids_param})")
-        })
-        .unwrap_or_default()
-    ))?;
-
-    if let Some(ids) = ids {
-        let mut index = 1;
-        for id in ids {
-            query.raw_bind_parameter(index, *id)?;
-            index += 1;
-        }
-    }
-
-    let values = AsModelResultMut::<TrackSize, DbError>::as_model_mut(&mut query.raw_query())?;
-
-    Ok(values)
-}
-
-pub fn delete_session_playlist_track_by_track_id(
-    db: &Connection,
+pub async fn delete_session_playlist_track_by_track_id(
+    db: &Box<dyn Database>,
     id: i32,
 ) -> Result<Option<SessionPlaylistTrack>, DbError> {
     Ok(
-        delete_session_playlist_tracks_by_track_id(db, Some(&vec![id]))?
+        delete_session_playlist_tracks_by_track_id(db, Some(&vec![id]))
+            .await?
             .into_iter()
             .next(),
     )
 }
 
-pub async fn delete_session_playlist_tracks_by_track_id_database(
+pub async fn delete_session_playlist_tracks_by_track_id(
     db: &Box<dyn Database>,
     ids: Option<&Vec<i32>>,
 ) -> Result<Vec<SessionPlaylistTrack>, DbError> {
@@ -1440,539 +1063,22 @@ pub async fn delete_session_playlist_tracks_by_track_id_database(
         .to_value_type()?)
 }
 
-pub fn delete_session_playlist_tracks_by_track_id(
-    db: &Connection,
-    ids: Option<&Vec<i32>>,
-) -> Result<Vec<SessionPlaylistTrack>, DbError> {
-    if ids.is_some_and(|ids| ids.is_empty()) {
-        return Ok(vec![]);
-    }
-    let mut query = db.prepare_cached(&format!(
-        "DELETE FROM session_playlist_tracks {} RETURNING *",
-        ids.map(|ids| {
-            let ids_param = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
-            format!("WHERE `type` = 'LIBRARY' AND track_id IN ({ids_param})")
-        })
-        .unwrap_or_default()
-    ))?;
-
-    if let Some(ids) = ids {
-        let mut index = 1;
-        for id in ids {
-            query.raw_bind_parameter(index, *id)?;
-            index += 1;
-        }
-    }
-
-    let values =
-        AsModelResultMut::<SessionPlaylistTrack, DbError>::as_model_mut(&mut query.raw_query())?;
-
-    Ok(values)
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum SqliteValue {
-    String(String),
-    StringOpt(Option<String>),
-    Bool(bool),
-    Number(i64),
-    NumberOpt(Option<i64>),
-    Real(f64),
-    NowAdd(String),
-}
-
-impl Display for SqliteValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(
-            match self {
-                SqliteValue::String(str) => str.to_string(),
-                SqliteValue::StringOpt(str_opt) => str_opt.clone().unwrap_or("NULL".to_string()),
-                SqliteValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
-                SqliteValue::Number(num) => num.to_string(),
-                SqliteValue::NumberOpt(num_opt) => {
-                    num_opt.map(|n| n.to_string()).unwrap_or("NULL".to_string())
-                }
-                SqliteValue::Real(num) => num.to_string(),
-                SqliteValue::NowAdd(add) => {
-                    format!("strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', '{add}'))")
-                }
-            }
-            .as_str(),
-        )
-    }
-}
-
-pub fn select_distinct<T>(
-    connection: &Connection,
-    table_name: &str,
-    filters: &Vec<(&str, SqliteValue)>,
-    columns: &[&str],
-) -> Result<Vec<T>, DbError>
-where
-    for<'b> Row<'b>: AsModelResult<T, ParseError>,
-{
-    let mut statement = connection.prepare_cached(&format!(
-        "SELECT DISTINCT {} FROM {table_name} {}",
-        columns.join(", "),
-        build_where_clause(filters),
-    ))?;
-
-    bind_values(&mut statement, filters, false)?;
-
-    let values = AsModelResultMut::<T, DbError>::as_model_mut(&mut statement.raw_query())?;
-
-    Ok(values)
-}
-
-pub fn select<T>(
-    connection: &Connection,
-    table_name: &str,
-    filters: &Vec<(&str, SqliteValue)>,
-    columns: &[&str],
-) -> Result<Vec<T>, DbError>
-where
-    for<'b> Row<'b>: AsModelResult<T, ParseError>,
-{
-    let mut statement = connection.prepare_cached(&format!(
-        "SELECT {} FROM {table_name} {}",
-        columns.join(", "),
-        build_where_clause(filters),
-    ))?;
-
-    bind_values(&mut statement, filters, false)?;
-
-    let values = AsModelResultMut::<T, DbError>::as_model_mut(&mut statement.raw_query())?;
-
-    Ok(values)
-}
-
-pub fn delete<T>(
-    connection: &Connection,
-    table_name: &str,
-    filters: &Vec<(&str, SqliteValue)>,
-) -> Result<Vec<T>, DbError>
-where
-    for<'b> Row<'b>: AsModelResult<T, ParseError>,
-{
-    let mut statement = connection.prepare_cached(&format!(
-        "DELETE FROM {table_name} {} RETURNING *",
-        build_where_clause(filters),
-    ))?;
-
-    bind_values(&mut statement, filters, false)?;
-
-    let values = AsModelResultMut::<T, DbError>::as_model_mut(&mut statement.raw_query())?;
-
-    Ok(values)
-}
-
-fn find_row<'a, T>(
-    connection: &'a Connection,
-    table_name: &str,
-    filters: &Vec<(&'a str, SqliteValue)>,
-) -> Result<Option<T>, DbError>
-where
-    for<'b> Row<'b>: AsModelResult<T, ParseError>,
-{
-    Ok(select(connection, table_name, filters, &["*"])?
-        .into_iter()
-        .next())
-}
-
-fn build_where_clause<'a>(values: &'a Vec<(&'a str, SqliteValue)>) -> String {
-    if values.is_empty() {
-        "".to_string()
-    } else {
-        format!("WHERE {}", build_where_props(values).join(" AND "))
-    }
-}
-
-fn build_where_props<'a>(values: &'a [(&'a str, SqliteValue)]) -> Vec<String> {
-    values
-        .iter()
-        .map(|(name, value)| match value {
-            SqliteValue::StringOpt(None) => format!("{name} IS NULL"),
-            SqliteValue::NumberOpt(None) => format!("{name} IS NULL"),
-            SqliteValue::NowAdd(add) => {
-                format!(
-                    "{name} = strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', '{add}'))"
-                )
-            }
-            _ => format!("{name}=?"),
-        })
-        .collect()
-}
-
-fn build_set_clause<'a>(values: &'a [(&'a str, SqliteValue)]) -> String {
-    if values.is_empty() {
-        "".to_string()
-    } else {
-        format!("SET {}", build_set_props(values).join(", "))
-    }
-}
-
-fn build_set_props<'a>(values: &'a [(&'a str, SqliteValue)]) -> Vec<String> {
-    let mut i = 0;
-    let mut props = Vec::new();
-    for (name, value) in values {
-        props.push(match value {
-            SqliteValue::StringOpt(None) => format!("{name}=NULL"),
-            SqliteValue::NumberOpt(None) => format!("{name}=NULL"),
-            SqliteValue::NowAdd(add) => {
-                format!(
-                    "{name}=strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', '{add}'))"
-                )
-            }
-            _ => {
-                i += 1;
-                format!("`{name}`=?{i}").to_string()
-            }
-        });
-    }
-    props
-}
-
-fn build_values_clause<'a>(values: &'a Vec<(&'a str, SqliteValue)>) -> String {
-    if values.is_empty() {
-        "".to_string()
-    } else {
-        format!("VALUES({})", build_values_props(values).join(", "))
-    }
-}
-
-fn build_values_props<'a>(values: &'a [(&'a str, SqliteValue)]) -> Vec<String> {
-    build_values_props_offset(values, 0, false)
-}
-
-fn build_values_props_offset<'a>(
-    values: &'a [(&'a str, SqliteValue)],
-    offset: u16,
-    constant_inc: bool,
-) -> Vec<String> {
-    let mut i = offset;
-    let mut props = Vec::new();
-    for (_name, value) in values {
-        if constant_inc {
-            i += 1;
-        }
-        props.push(match value {
-            SqliteValue::StringOpt(None) => "NULL".to_string(),
-            SqliteValue::NumberOpt(None) => "NULL".to_string(),
-            SqliteValue::NowAdd(add) => {
-                format!("strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', '{add}'))")
-            }
-            _ => {
-                if !constant_inc {
-                    i += 1;
-                }
-                format!("?{i}").to_string()
-            }
-        });
-    }
-    props
-}
-
-fn bind_values<'a>(
-    statement: &mut Statement<'_>,
-    values: &'a Vec<(&'a str, SqliteValue)>,
-    constant_inc: bool,
-) -> Result<(), DbError> {
-    let mut i = 1;
-    for (_key, value) in values {
-        match value {
-            SqliteValue::String(value) => {
-                statement.raw_bind_parameter(i, value)?;
-                if !constant_inc {
-                    i += 1;
-                }
-            }
-            SqliteValue::StringOpt(Some(value)) => {
-                statement.raw_bind_parameter(i, value)?;
-                if !constant_inc {
-                    i += 1;
-                }
-            }
-            SqliteValue::StringOpt(None) => (),
-            SqliteValue::Bool(value) => {
-                statement.raw_bind_parameter(i, if *value { 1 } else { 0 })?;
-                if !constant_inc {
-                    i += 1;
-                }
-            }
-            SqliteValue::Number(value) => {
-                statement.raw_bind_parameter(i, *value)?;
-                if !constant_inc {
-                    i += 1;
-                }
-            }
-            SqliteValue::NumberOpt(Some(value)) => {
-                statement.raw_bind_parameter(i, *value)?;
-                if !constant_inc {
-                    i += 1;
-                }
-            }
-            SqliteValue::NumberOpt(None) => (),
-            SqliteValue::Real(value) => {
-                statement.raw_bind_parameter(i, *value)?;
-                if !constant_inc {
-                    i += 1;
-                }
-            }
-            SqliteValue::NowAdd(_add) => (),
-        }
-        if constant_inc {
-            i += 1;
-        }
-    }
-
-    Ok(())
-}
-
-fn insert_and_get_row<'a, T>(
-    connection: &'a Connection,
-    table_name: &str,
-    values: Vec<(&'a str, SqliteValue)>,
-) -> Result<T, DbError>
-where
-    for<'b> Row<'b>: AsModelResult<T, ParseError>,
-{
-    let column_names = values
-        .clone()
-        .into_iter()
-        .map(|(key, _v)| format!("`{key}`"))
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    let statement = format!(
-        "INSERT INTO {table_name} ({column_names}) {} RETURNING *",
-        build_values_clause(&values),
-    );
-
-    let mut statement = connection.prepare_cached(&statement)?;
-    bind_values(&mut statement, &values, false)?;
-    let mut query = statement.raw_query();
-
-    let value = query.next().transpose().ok_or(DbError::Unknown)??;
-
-    Ok(AsModelResult::as_model(value)?)
-}
-
-pub fn update_and_get_row<'a, T>(
-    connection: &'a Connection,
-    table_name: &str,
-    id: SqliteValue,
-    values: &[(&'a str, SqliteValue)],
-) -> Result<Option<T>, DbError>
-where
-    for<'b> Row<'b>: AsModelResult<T, ParseError>,
-{
-    let variable_count: i32 = values
-        .iter()
-        .map(|v| match v.1 {
-            SqliteValue::StringOpt(None) => 0,
-            SqliteValue::NumberOpt(None) => 0,
-            _ => 1,
-        })
-        .sum();
-
-    let statement = format!(
-        "UPDATE {table_name} {} WHERE id=?{} RETURNING *",
-        build_set_clause(values),
-        variable_count + 1
-    );
-
-    let mut statement = connection.prepare_cached(&statement)?;
-    bind_values(&mut statement, &[values, &[("id", id)]].concat(), false)?;
-    let mut query = statement.raw_query();
-
-    Ok(query
-        .next()?
-        .map(|row| AsModelResult::as_model(row))
-        .transpose()?)
-}
-
-pub fn upsert_multi<'a, T>(
-    connection: &'a Connection,
-    table_name: &str,
-    unique: &[&str],
-    values: &'a [Vec<(&'a str, SqliteValue)>],
-) -> Result<Vec<T>, DbError>
-where
-    for<'b> Row<'b>: AsModel<T>,
-    T: AsId,
-{
-    let mut results = vec![];
-
-    if values.is_empty() {
-        return Ok(results);
-    }
-
-    let mut pos = 0;
-    let mut i = 0;
-    let mut last_i = i;
-
-    for value in values {
-        let count = value.len();
-        if pos + count >= (i16::MAX - 1) as usize {
-            results.append(&mut upsert_chunk(
-                connection,
-                table_name,
-                unique,
-                &values[last_i..i],
-            )?);
-            last_i = i;
-            pos = 0;
-        }
-        i += 1;
-        pos += count;
-    }
-
-    if i > last_i {
-        results.append(&mut upsert_chunk(
-            connection,
-            table_name,
-            unique,
-            &values[last_i..],
-        )?);
-    }
-
-    Ok(results)
-}
-
-fn upsert_chunk<'a, T>(
-    connection: &'a Connection,
-    table_name: &str,
-    unique: &[&str],
-    values: &'a [Vec<(&'a str, SqliteValue)>],
-) -> Result<Vec<T>, DbError>
-where
-    for<'b> Row<'b>: AsModel<T>,
-    T: AsId,
-{
-    let first = values[0].clone();
-    let expected_value_size = values[0].len();
-
-    if let Some(bad_row) = values.iter().skip(1).find(|v| {
-        v.len() != expected_value_size || v.iter().enumerate().any(|(i, c)| c.0 != first[i].0)
-    }) {
-        log::error!("Bad row: {bad_row:?}. Expected to match schema of first row: {first:?}");
-        return Err(DbError::InvalidRequest);
-    }
-
-    let set_clause = values[0]
-        .iter()
-        .map(|(name, _value)| format!("`{name}` = EXCLUDED.`{name}`"))
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    let column_names = values[0]
-        .iter()
-        .map(|(key, _v)| format!("`{key}`"))
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    let values_str_list = values
-        .iter()
-        .enumerate()
-        .map(|(i, v)| {
-            format!(
-                "({})",
-                build_values_props_offset(v, (i * expected_value_size) as u16, true).join(", ")
-            )
-        })
-        .collect::<Vec<_>>();
-
-    let values_str = values_str_list.join(", ");
-
-    let unique_conflict = unique.join(", ");
-
-    let statement = format!(
-        "
-        INSERT INTO {table_name} ({column_names})
-        VALUES {values_str}
-        ON CONFLICT({unique_conflict}) DO UPDATE
-            SET {set_clause}
-        RETURNING *"
-    );
-
-    let all_values = values
-        .iter()
-        .flat_map(|f| f.iter().cloned())
-        .collect::<Vec<_>>();
-
-    let mut statement = connection.prepare_cached(&statement)?;
-    bind_values(&mut statement, &all_values, true)?;
-
-    Ok(statement
-        .raw_query()
-        .mapped(|row| Ok(AsModel::as_model(row)))
-        .filter_map(|row| row.ok())
-        .collect())
-}
-
-pub fn upsert<'a, T>(
-    connection: &'a Connection,
-    table_name: &str,
-    filters: Vec<(&'a str, SqliteValue)>,
-    values: Vec<(&'a str, SqliteValue)>,
-) -> Result<T, DbError>
-where
-    for<'b> Row<'b>: AsModelResult<T, ParseError>,
-    T: AsId,
-{
-    match find_row(connection, table_name, &filters)? {
-        Some(row) => Ok(update_and_get_row(connection, table_name, row.as_id(), &values)?.unwrap()),
-        None => insert_and_get_row(connection, table_name, values),
-    }
-}
-
-pub fn upsert_and_get_row<'a, T>(
-    connection: &'a Connection,
-    table_name: &str,
-    filters: Vec<(&'a str, SqliteValue)>,
-    values: Vec<(&'a str, SqliteValue)>,
-) -> Result<T, DbError>
-where
-    for<'b> Row<'b>: AsModelResult<T, ParseError>,
-    T: AsId,
-    T: Debug,
-{
-    match find_row(connection, table_name, &filters)? {
-        Some(row) => {
-            let updated =
-                update_and_get_row(connection, table_name, row.as_id(), &values)?.unwrap();
-
-            let str1 = format!("{row:?}");
-            let str2 = format!("{updated:?}");
-
-            if str1 == str2 {
-                log::trace!("No updates to {table_name}");
-            } else {
-                debug!("Changed {table_name} from {str1} to {str2}");
-            }
-
-            Ok(updated)
-        }
-        None => Ok(insert_and_get_row(connection, table_name, values)?),
-    }
-}
-
-pub fn add_artist_and_get_artist(
-    db: &Connection,
+pub async fn add_artist_and_get_artist(
+    db: &Box<dyn Database>,
     artist: LibraryArtist,
 ) -> Result<LibraryArtist, DbError> {
-    Ok(add_artists_and_get_artists(db, vec![artist])?[0].clone())
+    Ok(add_artists_and_get_artists(db, vec![artist]).await?[0].clone())
 }
 
-pub fn add_artist_map_and_get_artist(
-    db: &Connection,
-    artist: HashMap<&str, SqliteValue>,
+pub async fn add_artist_map_and_get_artist(
+    db: &Box<dyn Database>,
+    artist: HashMap<&str, DatabaseValue>,
 ) -> Result<LibraryArtist, DbError> {
-    Ok(add_artist_maps_and_get_artists(db, vec![artist])?[0].clone())
+    Ok(add_artist_maps_and_get_artists(db, vec![artist]).await?[0].clone())
 }
 
-pub fn add_artists_and_get_artists(
-    db: &Connection,
+pub async fn add_artists_and_get_artists(
+    db: &Box<dyn Database>,
     artists: Vec<LibraryArtist>,
 ) -> Result<Vec<LibraryArtist>, DbError> {
     add_artist_maps_and_get_artists(
@@ -1981,15 +1087,16 @@ pub fn add_artists_and_get_artists(
             .into_iter()
             .map(|artist| {
                 HashMap::from([
-                    ("title", SqliteValue::String(artist.title)),
-                    ("cover", SqliteValue::StringOpt(artist.cover)),
+                    ("title", DatabaseValue::String(artist.title)),
+                    ("cover", DatabaseValue::StringOpt(artist.cover)),
                 ])
             })
             .collect(),
     )
+    .await
 }
 
-pub async fn add_artist_maps_and_get_artists_database(
+pub async fn add_artist_maps_and_get_artists(
     db: &Box<dyn Database>,
     artists: Vec<HashMap<&str, DatabaseValue>>,
 ) -> Result<Vec<LibraryArtist>, DbError> {
@@ -2006,7 +1113,6 @@ pub async fn add_artist_maps_and_get_artists_database(
             .values(artist.into_iter().collect::<Vec<_>>())
             .execute_first(db)
             .await?
-            .ok_or(DbError::NoRow)?
             .to_value_type()?;
 
         results.push(row);
@@ -2015,73 +1121,48 @@ pub async fn add_artist_maps_and_get_artists_database(
     Ok(results)
 }
 
-pub fn add_artist_maps_and_get_artists(
-    db: &Connection,
-    artists: Vec<HashMap<&str, SqliteValue>>,
-) -> Result<Vec<LibraryArtist>, DbError> {
-    Ok(artists
-        .into_iter()
-        .map(|artist| {
-            if !artist.contains_key("title") {
-                return Err(DbError::InvalidRequest);
-            }
-            let row: LibraryArtist = upsert_and_get_row(
-                db,
-                "artists",
-                vec![("title", artist.get("title").unwrap().clone())],
-                artist.into_iter().collect::<Vec<_>>(),
-            )?;
-
-            Ok::<_, DbError>(row)
-        })
-        .filter_map(|artist| artist.ok())
-        .collect())
-}
-
-pub fn add_albums(
-    db: &Connection,
+pub async fn add_albums(
+    db: &Box<dyn Database>,
     albums: Vec<LibraryAlbum>,
 ) -> Result<Vec<LibraryAlbum>, DbError> {
     let mut data: Vec<LibraryAlbum> = Vec::new();
 
     for album in albums {
-        data.push(upsert::<LibraryAlbum>(
-            db,
-            "albums",
-            vec![
-                ("artist_id", SqliteValue::Number(album.artist_id as i64)),
-                ("title", SqliteValue::String(album.title.clone())),
-                ("directory", SqliteValue::StringOpt(album.directory.clone())),
-            ],
-            vec![
-                ("artist_id", SqliteValue::Number(album.artist_id as i64)),
-                ("title", SqliteValue::String(album.title)),
-                ("date_released", SqliteValue::StringOpt(album.date_released)),
-                ("artwork", SqliteValue::StringOpt(album.artwork)),
-                ("directory", SqliteValue::StringOpt(album.directory)),
-            ],
-        )?);
+        data.push(
+            db.upsert("albums")
+                .filter(where_eq("artist_id", album.artist_id))
+                .filter(where_eq("title", album.title.clone()))
+                .filter(where_eq("directory", album.directory.clone()))
+                .value("artist_id", album.artist_id)
+                .value("title", album.title)
+                .value("directory", album.directory)
+                .value("date_released", album.date_released)
+                .value("artwork", album.artwork)
+                .execute_first(db)
+                .await?
+                .to_value_type()?,
+        );
     }
 
     Ok(data)
 }
 
-pub fn add_album_and_get_album(
-    db: &Connection,
+pub async fn add_album_and_get_album(
+    db: &Box<dyn Database>,
     album: LibraryAlbum,
 ) -> Result<LibraryAlbum, DbError> {
-    Ok(add_albums_and_get_albums(db, vec![album])?[0].clone())
+    Ok(add_albums_and_get_albums(db, vec![album]).await?[0].clone())
 }
 
-pub fn add_album_map_and_get_album(
-    db: &Connection,
-    album: HashMap<&str, SqliteValue>,
+pub async fn add_album_map_and_get_album(
+    db: &Box<dyn Database>,
+    album: HashMap<&str, DatabaseValue>,
 ) -> Result<LibraryAlbum, DbError> {
-    Ok(add_album_maps_and_get_albums(db, vec![album])?[0].clone())
+    Ok(add_album_maps_and_get_albums(db, vec![album]).await?[0].clone())
 }
 
-pub fn add_albums_and_get_albums(
-    db: &Connection,
+pub async fn add_albums_and_get_albums(
+    db: &Box<dyn Database>,
     albums: Vec<LibraryAlbum>,
 ) -> Result<Vec<LibraryAlbum>, DbError> {
     add_album_maps_and_get_albums(
@@ -2090,18 +1171,22 @@ pub fn add_albums_and_get_albums(
             .into_iter()
             .map(|album| {
                 HashMap::from([
-                    ("artist_id", SqliteValue::Number(album.artist_id as i64)),
-                    ("title", SqliteValue::String(album.title)),
-                    ("date_released", SqliteValue::StringOpt(album.date_released)),
-                    ("artwork", SqliteValue::StringOpt(album.artwork)),
-                    ("directory", SqliteValue::StringOpt(album.directory)),
+                    ("artist_id", DatabaseValue::Number(album.artist_id as i64)),
+                    ("title", DatabaseValue::String(album.title)),
+                    (
+                        "date_released",
+                        DatabaseValue::StringOpt(album.date_released),
+                    ),
+                    ("artwork", DatabaseValue::StringOpt(album.artwork)),
+                    ("directory", DatabaseValue::StringOpt(album.directory)),
                 ])
             })
             .collect(),
     )
+    .await
 }
 
-pub async fn add_album_maps_and_get_albums_database(
+pub async fn add_album_maps_and_get_albums(
     db: &Box<dyn Database>,
     albums: Vec<HashMap<&str, DatabaseValue>>,
 ) -> Result<Vec<LibraryAlbum>, DbError> {
@@ -2127,43 +1212,12 @@ pub async fn add_album_maps_and_get_albums_database(
             .values(album.into_iter().collect::<Vec<_>>())
             .execute_first(db)
             .await?
-            .ok_or(DbError::NoRow)?
             .to_value_type()?;
 
         results.push(row);
     }
 
     Ok(results)
-}
-
-pub fn add_album_maps_and_get_albums(
-    db: &Connection,
-    albums: Vec<HashMap<&str, SqliteValue>>,
-) -> Result<Vec<LibraryAlbum>, DbError> {
-    Ok(albums
-        .into_iter()
-        .map(|album| {
-            if !album.contains_key("artist_id") || !album.contains_key("title") {
-                return Err(DbError::InvalidRequest);
-            }
-            let filters = vec![
-                ("artist_id", album.get("artist_id").unwrap().clone()),
-                ("title", album.get("title").unwrap().clone()),
-            ];
-            let row =
-                upsert_and_get_row(db, "albums", filters, album.into_iter().collect::<Vec<_>>())?;
-
-            Ok::<_, DbError>(row)
-        })
-        .filter_map(|album| {
-            album
-                .map_err(|e| {
-                    log::error!("Failed to get Album: {e:?}");
-                    e
-                })
-                .ok()
-        })
-        .collect())
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -2176,7 +1230,7 @@ pub struct InsertTrack {
     pub tidal_id: Option<u64>,
 }
 
-pub async fn add_tracks_database(
+pub async fn add_tracks(
     db: &Box<dyn Database>,
     tracks: Vec<InsertTrack>,
 ) -> Result<Vec<LibraryTrack>, DbError> {
@@ -2233,59 +1287,4 @@ pub async fn add_tracks_database(
         .execute(db)
         .await?
         .to_value_type()?)
-}
-
-pub fn add_tracks(db: &Connection, tracks: Vec<InsertTrack>) -> Result<Vec<LibraryTrack>, DbError> {
-    let values = tracks
-        .iter()
-        .map(|insert| {
-            let mut values = vec![
-                ("number", SqliteValue::Number(insert.track.number as i64)),
-                ("duration", SqliteValue::Real(insert.track.duration)),
-                ("album_id", SqliteValue::Number(insert.album_id as i64)),
-                ("title", SqliteValue::String(insert.track.title.clone())),
-                (
-                    "format",
-                    SqliteValue::String(
-                        insert.track.format.unwrap_or_default().as_ref().to_string(),
-                    ),
-                ),
-                (
-                    "source",
-                    SqliteValue::String(insert.track.source.as_ref().to_string()),
-                ),
-            ];
-
-            if let Some(file) = &insert.file {
-                values.push(("file", SqliteValue::String(file.clone())));
-            }
-
-            if let Some(qobuz_id) = &insert.qobuz_id {
-                values.push(("qobuz_id", SqliteValue::Number(*qobuz_id as i64)));
-            }
-
-            if let Some(tidal_id) = &insert.tidal_id {
-                values.push(("tidal_id", SqliteValue::Number(*tidal_id as i64)));
-            }
-
-            values
-        })
-        .collect::<Vec<_>>();
-
-    upsert_multi(
-        db,
-        "tracks",
-        &[
-            "ifnull(`file`, '')",
-            "`album_id`",
-            "`title`",
-            "`duration`",
-            "`number`",
-            "ifnull(`format`, '')",
-            "`source`",
-            "ifnull(`tidal_id`, 0)",
-            "ifnull(`qobuz_id`, 0)",
-        ],
-        values.as_slice(),
-    )
 }

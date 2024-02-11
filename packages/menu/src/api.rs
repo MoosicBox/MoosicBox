@@ -215,25 +215,16 @@ pub async fn get_tracks_endpoint(
             }
         })?
         .into_iter()
-        .map(|id| id as i32)
+        .map(|id| id as u64)
         .collect::<Vec<_>>();
 
     Ok(Json(
-        get_tracks(
-            &data
-                .db
-                .as_ref()
-                .expect("DB not set")
-                .library
-                .lock()
-                .unwrap()
-                .inner,
-            Some(&ids),
-        )
-        .map_err(|_e| ErrorInternalServerError("Failed to fetch tracks"))?
-        .into_iter()
-        .map(|t| t.to_api())
-        .collect(),
+        get_tracks(&data.database, Some(&ids))
+            .await
+            .map_err(|_e| ErrorInternalServerError("Failed to fetch tracks"))?
+            .into_iter()
+            .map(|t| t.to_api())
+            .collect(),
     ))
 }
 
@@ -250,6 +241,7 @@ pub async fn get_album_tracks_endpoint(
 ) -> Result<Json<Vec<ApiTrack>>> {
     Ok(Json(
         get_album_tracks(query.album_id, &data)
+            .await
             .map_err(|_e| ErrorInternalServerError("Failed to fetch tracks"))?
             .into_iter()
             .map(|t| t.to_api())
@@ -270,6 +262,7 @@ pub async fn get_album_versions_endpoint(
 ) -> Result<Json<Vec<ApiAlbumVersion>>> {
     Ok(Json(
         get_album_versions(query.album_id, &data)
+            .await
             .map_err(|_e| ErrorInternalServerError("Failed to fetch album versions"))?
             .into_iter()
             .map(|t| t.to_api())
@@ -348,7 +341,7 @@ pub async fn get_album_endpoint(
             query.album_id,
             query.tidal_album_id,
             query.qobuz_album_id.clone(),
-            data.db.as_ref().expect("No DB set"),
+            data.database.clone(),
         )
         .await?
         .to_api(),

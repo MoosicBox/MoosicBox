@@ -7,10 +7,10 @@ use moosicbox_core::{
     app::AppState,
     sqlite::{
         db::{
-            delete_session_playlist_tracks_by_track_id_database,
-            delete_track_sizes_by_track_id_database, delete_tracks_database, get_albums, DbError,
+            delete_session_playlist_tracks_by_track_id, delete_track_sizes_by_track_id,
+            delete_tracks, DbError,
         },
-        menu::GetAlbumError,
+        menu::{get_albums, GetAlbumError},
         models::{
             track_source_to_u8, Album, AlbumSort, AlbumSource, ApiSource, ApiTrack, LibraryAlbum,
             LibraryTrack, ToApi, TrackApiSource,
@@ -157,6 +157,8 @@ pub fn sort_albums(mut albums: Vec<LibraryAlbum>, request: &AlbumsRequest) -> Ve
 pub enum GetAlbumsError {
     #[error(transparent)]
     Db(#[from] DbError),
+    #[error(transparent)]
+    GetAlbums(#[from] moosicbox_core::sqlite::menu::GetAlbumsError),
     #[error("No DB set")]
     NoDb,
 }
@@ -165,16 +167,7 @@ pub async fn get_all_albums(
     data: &AppState,
     request: &AlbumsRequest,
 ) -> Result<Vec<LibraryAlbum>, GetAlbumsError> {
-    let albums = get_albums(
-        &data
-            .db
-            .as_ref()
-            .ok_or(GetAlbumsError::NoDb)?
-            .library
-            .lock()
-            .unwrap()
-            .inner,
-    )?;
+    let albums = get_albums(&data.database).await?;
 
     Ok(sort_albums(filter_albums(albums, request), request))
 }
@@ -197,21 +190,11 @@ impl<T> From<PoisonError<T>> for GetAlbumTracksError {
     }
 }
 
-pub fn get_album_tracks(
+pub async fn get_album_tracks(
     album_id: i32,
     data: &AppState,
 ) -> Result<Vec<LibraryTrack>, GetAlbumTracksError> {
-    let library = data
-        .db
-        .as_ref()
-        .ok_or(GetAlbumTracksError::NoDb)?
-        .library
-        .lock()?;
-
-    Ok(moosicbox_core::sqlite::db::get_album_tracks(
-        &library.inner,
-        album_id,
-    )?)
+    Ok(moosicbox_core::sqlite::db::get_album_tracks(&data.database, album_id as u64).await?)
 }
 
 #[derive(Clone)]
@@ -268,11 +251,11 @@ pub enum GetAlbumVersionsError {
     GetAlbumTracks(#[from] GetAlbumTracksError),
 }
 
-pub fn get_album_versions(
+pub async fn get_album_versions(
     album_id: i32,
     data: &AppState,
 ) -> Result<Vec<AlbumVersion>, GetAlbumVersionsError> {
-    let tracks = get_album_tracks(album_id, data)?;
+    let tracks = get_album_tracks(album_id, data).await?;
     log::trace!("Got {} album id={album_id} tracks", tracks.len());
 
     let mut versions = vec![];
@@ -394,7 +377,7 @@ pub async fn add_album(
     let mut albums = vec![];
 
     for album in &results.albums {
-        if let Some(album) = moosicbox_core::sqlite::db::get_album_database(
+        if let Some(album) = moosicbox_core::sqlite::db::get_album(
             &db,
             "id",
             DatabaseValue::UNumber(album.id as u64),
@@ -413,7 +396,7 @@ pub async fn add_album(
         false,
     )?;
 
-    let tracks = moosicbox_core::sqlite::db::get_tracks_database(
+    let tracks = moosicbox_core::sqlite::db::get_tracks(
         &db,
         Some(
             &results
@@ -484,8 +467,7 @@ pub async fn remove_album(
         log::error!("Failed to remove album from MusicApi: {err:?}");
     }
 
-    let tracks =
-        moosicbox_core::sqlite::db::get_album_tracks_database(&db, album.id as u64).await?;
+    let tracks = moosicbox_core::sqlite::db::get_album_tracks(&db, album.id as u64).await?;
 
     let has_local_tracks = tracks
         .iter()
@@ -503,9 +485,9 @@ pub async fn remove_album(
     let track_ids = target_tracks.iter().map(|t| t.id).collect::<Vec<_>>();
 
     log::debug!("Deleting track db items: {track_ids:?}");
-    delete_session_playlist_tracks_by_track_id_database(&db, Some(&track_ids)).await?;
-    delete_track_sizes_by_track_id_database(&db, Some(&track_ids)).await?;
-    delete_tracks_database(&db, Some(&track_ids)).await?;
+    delete_session_playlist_tracks_by_track_id(&db, Some(&track_ids)).await?;
+    delete_track_sizes_by_track_id(&db, Some(&track_ids)).await?;
+    delete_tracks(&db, Some(&track_ids)).await?;
 
     let mut album_field_updates = vec![];
 

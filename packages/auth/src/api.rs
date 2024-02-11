@@ -22,18 +22,10 @@ pub async fn get_magic_token_endpoint(
     query: web::Query<MagicTokenQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<Value>> {
-    if let Some((client_id, access_token)) = get_credentials_from_magic_token(
-        &data
-            .db
-            .clone()
-            .ok_or(ErrorInternalServerError("No DB set"))?
-            .library
-            .as_ref()
-            .lock()
-            .unwrap(),
-        &query.magic_token,
-    )
-    .map_err(|e| ErrorInternalServerError(format!("Failed to get magic token: {e:?}")))?
+    if let Some((client_id, access_token)) =
+        get_credentials_from_magic_token(&data.database, &query.magic_token)
+            .await
+            .map_err(|e| ErrorInternalServerError(format!("Failed to get magic token: {e:?}")))?
     {
         Ok(Json(
             json!({"clientId": client_id, "accessToken": access_token}),
@@ -55,7 +47,7 @@ pub async fn create_magic_token_endpoint(
     data: web::Data<AppState>,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    let token = create_magic_token(data.db.as_ref().unwrap(), data.tunnel_host.clone())
+    let token = create_magic_token(&data.database, data.tunnel_host.clone())
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to create magic token: {e:?}")))?;
 

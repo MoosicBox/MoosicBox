@@ -82,7 +82,6 @@ pub async fn create_download_task(
         .value("album_id", album_id)
         .execute_first(db)
         .await?
-        .ok_or(DbError::NoRow)?
         .to_value_type()?)
 }
 

@@ -152,13 +152,7 @@ pub async fn track_info_endpoint(
     data: web::Data<AppState>,
 ) -> Result<Json<TrackInfo>> {
     Ok(Json(
-        get_track_info(
-            query.track_id as i32,
-            data.db
-                .clone()
-                .ok_or(ErrorInternalServerError("No DB set"))?,
-        )
-        .await?,
+        get_track_info(query.track_id as u64, &data.database).await?,
     ))
 }
 
@@ -186,18 +180,10 @@ pub async fn tracks_info_endpoint(
             }
         })?
         .into_iter()
-        .map(|id| id as i32)
+        .map(|id| id as u64)
         .collect::<Vec<_>>();
 
-    Ok(Json(
-        get_tracks_info(
-            ids,
-            data.db
-                .clone()
-                .ok_or(ErrorInternalServerError("No DB set"))?,
-        )
-        .await?,
-    ))
+    Ok(Json(get_tracks_info(ids, &data.database).await?))
 }
 
 impl From<ArtistCoverError> for actix_web::Error {

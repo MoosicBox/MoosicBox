@@ -446,6 +446,7 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
     struct TestDatabase {}
 
     #[async_trait]
@@ -468,6 +469,13 @@ mod tests {
             Ok(vec![])
         }
 
+        async fn exec_insert(
+            &self,
+            _statement: &InsertStatement<'_>,
+        ) -> Result<Row, DatabaseError> {
+            Ok(Row { columns: vec![] })
+        }
+
         async fn exec_update(
             &self,
             _statement: &UpdateStatement<'_>,
@@ -484,9 +492,16 @@ mod tests {
 
         async fn exec_upsert(
             &self,
-            _statement: &UpdateStatement<'_>,
+            _statement: &UpsertStatement<'_>,
         ) -> Result<Vec<Row>, DatabaseError> {
             Ok(vec![Row { columns: vec![] }])
+        }
+
+        async fn exec_upsert_first(
+            &self,
+            _statement: &UpsertStatement<'_>,
+        ) -> Result<Row, DatabaseError> {
+            Ok(Row { columns: vec![] })
         }
 
         async fn exec_upsert_multi(

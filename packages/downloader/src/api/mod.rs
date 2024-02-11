@@ -22,9 +22,8 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
-use moosicbox_core::sqlite::db::get_albums_database;
-use moosicbox_core::sqlite::db::get_artists_database;
-use moosicbox_core::sqlite::db::get_tracks_database;
+use moosicbox_core::sqlite::db::{get_artists, get_tracks};
+use moosicbox_core::sqlite::menu::get_albums;
 use moosicbox_database::Database;
 use moosicbox_files::files::track::TrackAudioQuality;
 use moosicbox_paging::Page;
@@ -169,7 +168,7 @@ pub async fn download_tasks_endpoint(
         })
         .collect::<Vec<_>>();
 
-    let tracks = get_tracks_database(&data.database, Some(&track_ids)).await?;
+    let tracks = get_tracks(&data.database, Some(&track_ids)).await?;
 
     let album_ids = tasks
         .iter()
@@ -182,7 +181,7 @@ pub async fn download_tasks_endpoint(
         })
         .collect::<Vec<_>>();
 
-    let albums = get_albums_database(&data.database)
+    let albums = get_albums(&data.database)
         .await?
         .into_iter()
         .filter(|album| album_ids.contains(&album.id))
@@ -193,7 +192,7 @@ pub async fn download_tasks_endpoint(
         .map(|album| album.artist_id)
         .collect::<HashSet<_>>();
 
-    let artists = get_artists_database(&data.database)
+    let artists = get_artists(&data.database)
         .await?
         .into_iter()
         .filter(|artist| artist_ids.contains(&artist.id))

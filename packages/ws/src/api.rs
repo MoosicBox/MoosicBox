@@ -1,18 +1,20 @@
 use core::fmt;
-use std::{collections::HashMap, num::ParseIntError, str::FromStr, sync::RwLock};
+use std::{
+    collections::HashMap,
+    num::ParseIntError,
+    str::FromStr,
+    sync::{Arc, RwLock},
+};
 
 use log::{debug, info, trace};
-use moosicbox_core::{
-    app::Db,
-    sqlite::{
-        db::{get_session_playlist, DbError},
-        models::{
-            ApiUpdateSession, ApiUpdateSessionPlaylist, Connection, CreateSession, DeleteSession,
-            RegisterConnection, RegisterPlayer, SetSeek, SetSessionActivePlayers, ToApi,
-            UpdateSession,
-        },
+use moosicbox_core::sqlite::{
+    db::{get_session_playlist, DbError},
+    models::{
+        ApiUpdateSession, ApiUpdateSessionPlaylist, Connection, CreateSession, DeleteSession,
+        RegisterConnection, RegisterPlayer, SetSeek, SetSessionActivePlayers, ToApi, UpdateSession,
     },
 };
+use moosicbox_database::Database;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -91,7 +93,7 @@ pub struct WebsocketConnectionData {
     pub playing: bool,
 }
 
-pub trait WebsocketSender: Send {
+pub trait WebsocketSender: Send + Sync {
     fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError>;
     fn send_all(&self, data: &str) -> Result<(), WebsocketSendError>;
     fn send_all_except(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError>;
@@ -103,8 +105,8 @@ impl core::fmt::Debug for dyn WebsocketSender {
     }
 }
 
-static CONNECTION_DATA: Lazy<RwLock<HashMap<String, Connection>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
+static CONNECTION_DATA: Lazy<Arc<RwLock<HashMap<String, Connection>>>> =
+    Lazy::new(|| Arc::new(RwLock::new(HashMap::new())));
 
 #[derive(Debug, Error)]
 pub enum WebsocketConnectError {
@@ -113,7 +115,7 @@ pub enum WebsocketConnectError {
 }
 
 pub fn connect(
-    _db: &Db,
+    _db: &Box<dyn Database>,
     _sender: &impl WebsocketSender,
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketConnectError> {
@@ -131,8 +133,8 @@ pub enum WebsocketDisconnectError {
     Unknown,
 }
 
-pub fn disconnect(
-    db: &Db,
+pub async fn disconnect(
+    db: &Box<dyn Database>,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketDisconnectError> {
@@ -149,7 +151,11 @@ pub fn disconnect(
         .map_err(|_e| WebsocketDisconnectError::Unknown)?;
 
     sender
-        .send_all(&get_connections(db).map_err(|_e| WebsocketDisconnectError::Unknown)?)
+        .send_all(
+            &get_connections(db)
+                .await
+                .map_err(|_e| WebsocketDisconnectError::Unknown)?,
+        )
         .map_err(|_e| WebsocketDisconnectError::Unknown)?;
 
     info!("Disconnected {}", context.connection_id);
@@ -160,8 +166,8 @@ pub fn disconnect(
     })
 }
 
-pub fn process_message(
-    db: &Db,
+pub async fn process_message(
+    db: &Box<dyn Database>,
     body: Value,
     context: WebsocketContext,
     sender: &impl WebsocketSender,
@@ -176,7 +182,7 @@ pub fn process_message(
 
     let payload = body.get("payload");
 
-    message(db, sender, payload, message_type, &context)
+    message(db, sender, payload, message_type, &context).await
 }
 
 #[derive(Debug, Error)]
@@ -199,8 +205,8 @@ pub enum WebsocketMessageError {
     Unknown { message: String },
 }
 
-pub fn message(
-    db: &Db,
+pub async fn message(
+    db: &Box<dyn Database>,
     sender: &impl WebsocketSender,
     payload: Option<&Value>,
     message_type: InboundMessageType,
@@ -216,7 +222,7 @@ pub fn message(
             Ok::<_, WebsocketMessageError>(())
         }
         InboundMessageType::GetSessions => {
-            get_sessions(db, sender, context, false)?;
+            get_sessions(db, sender, context, false).await?;
             Ok(())
         }
         InboundMessageType::RegisterConnection => {
@@ -228,9 +234,9 @@ pub fn message(
                     }
                 })?;
 
-            register_connection(db, sender, context, &payload)?;
+            register_connection(db, sender, context, &payload).await?;
 
-            sender.send_all(&get_connections(db)?)?;
+            sender.send_all(&get_connections(db).await?)?;
 
             Ok(())
         }
@@ -243,18 +249,18 @@ pub fn message(
                     }
                 })?;
 
-            register_players(db, sender, context, &payload).map_err(|e| {
-                WebsocketMessageError::Unknown {
+            register_players(db, sender, context, &payload)
+                .await
+                .map_err(|e| WebsocketMessageError::Unknown {
                     message: e.to_string(),
-                }
-            })?;
+                })?;
 
             sender
-                .send_all(
-                    &get_connections(db).map_err(|e| WebsocketMessageError::Unknown {
+                .send_all(&get_connections(db).await.map_err(|e| {
+                    WebsocketMessageError::Unknown {
                         message: e.to_string(),
-                    })?,
-                )
+                    }
+                })?)
                 .map_err(|e| WebsocketMessageError::Unknown {
                     message: e.to_string(),
                 })?;
@@ -268,9 +274,9 @@ pub fn message(
                     message: e.to_string(),
                 })?;
 
-            set_session_active_players(db, sender, context, &payload)?;
+            set_session_active_players(db, sender, context, &payload).await?;
 
-            sender.send_all_except(&context.connection_id, &get_connections(db)?)?;
+            sender.send_all_except(&context.connection_id, &get_connections(db).await?)?;
 
             Ok(())
         }
@@ -283,7 +289,7 @@ pub fn message(
                     }
                 })?;
 
-            create_session(db, sender, context, &payload)?;
+            create_session(db, sender, context, &payload).await?;
             Ok(())
         }
         InboundMessageType::UpdateSession => {
@@ -295,7 +301,7 @@ pub fn message(
                     }
                 })?;
 
-            update_session(db, sender, Some(context), &payload)?;
+            update_session(db, sender, Some(context), &payload).await?;
             Ok(())
         }
         InboundMessageType::DeleteSession => {
@@ -307,7 +313,7 @@ pub fn message(
                     }
                 })?;
 
-            delete_session(db, sender, context, &payload)?;
+            delete_session(db, sender, context, &payload).await?;
             Ok(())
         }
         InboundMessageType::Ping => {
@@ -350,15 +356,15 @@ pub fn message(
     })
 }
 
-fn get_sessions(
-    db: &Db,
+async fn get_sessions(
+    db: &Box<dyn Database>,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
     send_all: bool,
 ) -> Result<(), WebsocketSendError> {
     let sessions = {
-        let library = db.library.lock().unwrap();
-        moosicbox_core::sqlite::db::get_sessions(&library.inner)?
+        moosicbox_core::sqlite::db::get_sessions(db)
+            .await?
             .iter()
             .map(|session| session.to_api())
             .collect::<Vec<_>>()
@@ -377,25 +383,22 @@ fn get_sessions(
     }
 }
 
-fn create_session(
-    db: &Db,
+async fn create_session(
+    db: &Box<dyn Database>,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &CreateSession,
 ) -> Result<(), WebsocketSendError> {
-    {
-        let library = db.library.lock().unwrap();
-        moosicbox_core::sqlite::db::create_session(&library.inner, payload)?;
-    }
-    get_sessions(db, sender, context, true)?;
+    moosicbox_core::sqlite::db::create_session(db, payload).await?;
+    get_sessions(db, sender, context, true).await?;
     Ok(())
 }
 
-fn get_connections(db: &Db) -> Result<String, WebsocketSendError> {
+async fn get_connections(db: &Box<dyn Database>) -> Result<String, WebsocketSendError> {
+    let connection_data = CONNECTION_DATA.as_ref().read().unwrap().clone();
     let connections = {
-        let library = db.library.lock().unwrap();
-        let connection_data = CONNECTION_DATA.read().unwrap();
-        moosicbox_core::sqlite::db::get_connections(&library.inner)?
+        moosicbox_core::sqlite::db::get_connections(db)
+            .await?
             .iter()
             .map(|connection| {
                 let mut api = connection.to_api();
@@ -416,17 +419,13 @@ fn get_connections(db: &Db) -> Result<String, WebsocketSendError> {
     Ok(connections_json)
 }
 
-fn register_connection(
-    db: &Db,
+async fn register_connection(
+    db: &Box<dyn Database>,
     _sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &RegisterConnection,
 ) -> Result<(), WebsocketSendError> {
-    let connection = {
-        let library = db.library.lock().unwrap();
-
-        moosicbox_core::sqlite::db::register_connection(&library.inner, payload)?
-    };
+    let connection = moosicbox_core::sqlite::db::register_connection(db, payload).await?;
 
     let mut connection_data = CONNECTION_DATA.write().unwrap();
 
@@ -435,39 +434,29 @@ fn register_connection(
     Ok(())
 }
 
-fn register_players(
-    db: &Db,
+async fn register_players(
+    db: &Box<dyn Database>,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &Vec<RegisterPlayer>,
 ) -> Result<(), WebsocketSendError> {
-    {
-        let library = db.library.lock().unwrap();
-
-        for player in payload {
-            moosicbox_core::sqlite::db::create_player(
-                &library.inner,
-                &context.connection_id,
-                player,
-            )?;
-        }
+    for player in payload {
+        moosicbox_core::sqlite::db::create_player(db, &context.connection_id, player).await?;
     }
-    get_sessions(db, sender, context, true)?;
+
+    get_sessions(db, sender, context, true).await?;
+
     Ok(())
 }
 
-fn set_session_active_players(
-    db: &Db,
+async fn set_session_active_players(
+    db: &Box<dyn Database>,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &SetSessionActivePlayers,
 ) -> Result<(), WebsocketMessageError> {
-    {
-        let library = db.library.lock().unwrap();
-
-        moosicbox_core::sqlite::db::set_session_active_players(&library.inner, payload)?;
-    }
-    get_sessions(db, sender, context, true)?;
+    moosicbox_core::sqlite::db::set_session_active_players(db, payload).await?;
+    get_sessions(db, sender, context, true).await?;
     Ok(())
 }
 
@@ -501,27 +490,22 @@ pub enum UpdateSessionError {
     Db(#[from] DbError),
 }
 
-pub fn update_session(
-    db: &Db,
+pub async fn update_session(
+    db: &Box<dyn Database>,
     sender: &impl WebsocketSender,
     context: Option<&WebsocketContext>,
     payload: &UpdateSession,
 ) -> Result<(), UpdateSessionError> {
-    moosicbox_core::sqlite::db::update_session(
-        &db.library.lock().as_ref().unwrap().inner,
-        payload,
-    )?;
+    moosicbox_core::sqlite::db::update_session(db, payload).await?;
 
     let playlist = if payload.playlist.is_some() {
-        get_session_playlist(
-            &db.library.lock().as_ref().unwrap().inner,
-            payload.session_id,
-        )?
-        .map(|playlist| playlist.to_api())
-        .map(|playlist| ApiUpdateSessionPlaylist {
-            session_playlist_id: playlist.session_playlist_id,
-            tracks: playlist.tracks,
-        })
+        get_session_playlist(db, payload.session_id)
+            .await?
+            .map(|playlist| playlist.to_api())
+            .map(|playlist| ApiUpdateSessionPlaylist {
+                session_playlist_id: playlist.session_playlist_id,
+                tracks: playlist.tracks,
+            })
     } else {
         None
     };
@@ -554,18 +538,15 @@ pub fn update_session(
     Ok(())
 }
 
-fn delete_session(
-    db: &Db,
+async fn delete_session(
+    db: &Box<dyn Database>,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &DeleteSession,
 ) -> Result<(), WebsocketSendError> {
-    {
-        let library = db.library.lock().unwrap();
-        moosicbox_core::sqlite::db::delete_session(&library.inner, payload.session_id)?;
-    }
+    moosicbox_core::sqlite::db::delete_session(db, payload.session_id).await?;
 
-    get_sessions(db, sender, context, true)?;
+    get_sessions(db, sender, context, true).await?;
 
     Ok(())
 }

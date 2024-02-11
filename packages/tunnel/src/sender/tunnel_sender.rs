@@ -11,7 +11,6 @@ use futures_channel::mpsc::UnboundedSender;
 use futures_util::future::ready;
 use futures_util::{future, pin_mut, Future, Stream, StreamExt};
 use lazy_static::lazy_static;
-use moosicbox_core::app::Db;
 use moosicbox_core::sqlite::models::{AlbumId, ApiSource};
 use moosicbox_core::types::AudioFormat;
 use moosicbox_database::Database;
@@ -1022,7 +1021,6 @@ impl TunnelSender {
     #[allow(clippy::too_many_arguments)]
     pub async fn tunnel_request(
         &self,
-        db: &Db,
         database: Arc<Box<dyn Database>>,
         service_port: u16,
         request_id: usize,
@@ -1235,7 +1233,7 @@ impl TunnelSender {
                     let mut headers = HashMap::new();
                     headers.insert("content-type".to_string(), "application/json".to_string());
 
-                    if let Ok(track_info) = get_track_info(query.track_id, db.clone()).await {
+                    if let Ok(track_info) = get_track_info(query.track_id as u64, &database).await {
                         let mut bytes: Vec<u8> = Vec::new();
                         serde_json::to_writer(&mut bytes, &track_info)?;
                         self.send(request_id, 200, headers, Cursor::new(bytes), encoding)?;
@@ -1382,9 +1380,9 @@ impl TunnelSender {
         }
     }
 
-    pub fn ws_request(
+    pub async fn ws_request(
         &self,
-        db: &Db,
+        db: &Box<dyn Database>,
         request_id: usize,
         value: Value,
         sender: impl WebsocketSender + Send + Sync,
@@ -1401,7 +1399,7 @@ impl TunnelSender {
             root_sender: sender,
             tunnel_sender: self.sender.read().unwrap().clone().unwrap(),
         };
-        moosicbox_ws::api::process_message(db, value, context, &sender)?;
+        moosicbox_ws::api::process_message(db, value, context, &sender).await?;
         log::debug!("Processed tunnel ws request {request_id} {packet_id}");
         Ok(())
     }

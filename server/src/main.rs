@@ -10,7 +10,7 @@ use actix_cors::Cors;
 use actix_web::{http, middleware, web, App};
 use log::{debug, error, info};
 use moosicbox_auth::get_client_id_and_access_token;
-use moosicbox_core::app::{AppState, Db};
+use moosicbox_core::app::AppState;
 use moosicbox_database::{rusqlite::RusqliteDatabase, Database, DbConnection};
 use moosicbox_downloader::{api::models::ApiProgressEvent, queue::ProgressEvent};
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
@@ -36,7 +36,7 @@ static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken
 static CHAT_SERVER_HANDLE: Lazy<std::sync::RwLock<Option<ws::server::ChatServerHandle>>> =
     Lazy::new(|| std::sync::RwLock::new(None));
 
-static DB: OnceLock<Db> = OnceLock::new();
+static DB: OnceLock<Arc<Box<dyn Database>>> = OnceLock::new();
 
 fn main() -> std::io::Result<()> {
     env_logger::init();
@@ -65,18 +65,17 @@ fn main() -> std::io::Result<()> {
             .unwrap()
     })
     .block_on(async move {
-        let db = DB.get_or_init(|| {
-            let library = ::rusqlite::Connection::open("library.db").unwrap();
-            library
-                .busy_timeout(Duration::from_millis(10))
-                .expect("Failed to set busy timeout");
-            let library = Arc::new(Mutex::new(DbConnection { inner: library }));
+        let library = ::rusqlite::Connection::open("library.db").unwrap();
+        library
+            .busy_timeout(Duration::from_millis(10))
+            .expect("Failed to set busy timeout");
+        let library = Arc::new(Mutex::new(DbConnection { inner: library }));
 
-            Db { library }
-        });
+        let db = Box::new(RusqliteDatabase::new(library));
+        let database: Arc<Box<dyn Database>> = Arc::new(db);
+        let database_once: Arc<Box<dyn Database>> = database.clone();
 
-        let database: Arc<Box<dyn Database>> =
-            Arc::new(Box::new(RusqliteDatabase::new(db.library.clone())));
+        let db = DB.get_or_init(move || database_once.clone());
 
         let bytes_throttle = Arc::new(Mutex::new(Throttle::new(Duration::from_millis(200), 1)));
         let bytes_buf = AtomicUsize::new(0);
@@ -112,7 +111,7 @@ fn main() -> std::io::Result<()> {
         ))
         .await;
 
-        let (mut chat_server, server_tx) = ChatServer::new(Arc::new(db.clone()));
+        let (mut chat_server, server_tx) = ChatServer::new(database.clone());
         CHAT_SERVER_HANDLE.write().unwrap().replace(server_tx);
 
         let (tunnel_host, tunnel_join_handle, tunnel_handle) = if let Ok(url) = env::var("WS_HOST")
@@ -137,9 +136,7 @@ fn main() -> std::io::Result<()> {
                 }
             );
             let (client_id, access_token) = {
-                let lock = db.library.lock();
-                let db = lock.as_ref().unwrap();
-                get_client_id_and_access_token(db, &host)
+                get_client_id_and_access_token(&db, &host)
                     .await
                     .map_err(|e| {
                         std::io::Error::new(
@@ -168,7 +165,6 @@ fn main() -> std::io::Result<()> {
                                         TunnelRequest::Http(request) => {
                                             if let Err(err) = tunnel
                                                 .tunnel_request(
-                                                    db,
                                                     database_send.clone(),
                                                     service_port,
                                                     request.request_id,
@@ -191,12 +187,15 @@ fn main() -> std::io::Result<()> {
                                                 .as_ref()
                                                 .ok_or("Failed to get chat server handle")?
                                                 .clone();
-                                            if let Err(err) = tunnel.ws_request(
-                                                db,
-                                                request.request_id,
-                                                request.body.clone(),
-                                                sender,
-                                            ) {
+                                            if let Err(err) = tunnel
+                                                .ws_request(
+                                                    &database_send,
+                                                    request.request_id,
+                                                    request.body.clone(),
+                                                    sender,
+                                                )
+                                                .await
+                                            {
                                                 error!(
                                                     "Failed to propagate ws request {}: {err:?}",
                                                     request.request_id
@@ -232,14 +231,12 @@ fn main() -> std::io::Result<()> {
             chat_server.add_sender(Box::new(tunnel_handle.clone()));
         }
 
-        let chat_server_handle = spawn(async move { chat_server.run() });
+        let chat_server_handle = spawn(async move { chat_server.run().await });
 
-        let database = database.clone();
         let app = move || {
             let app_data = AppState {
                 tunnel_host: tunnel_host.clone(),
                 service_port,
-                db: Some(db.clone()),
                 database: database.clone(),
             };
 

@@ -11,7 +11,7 @@ use std::{
 
 use kanal::OneshotSender;
 use log::{debug, error, info};
-use moosicbox_core::app::Db;
+use moosicbox_database::Database;
 use moosicbox_ws::api::{
     WebsocketConnectError, WebsocketContext, WebsocketDisconnectError, WebsocketMessageError,
     WebsocketSendError, WebsocketSender,
@@ -113,7 +113,7 @@ pub struct ChatServer {
     /// Map of room name to participant IDs in that room.
     rooms: HashMap<RoomId, HashSet<ConnId>>,
 
-    db: Arc<Db>,
+    db: Arc<Box<dyn Database>>,
 
     /// Tracks total number of historical connections established.
     visitor_count: Arc<AtomicUsize>,
@@ -125,7 +125,7 @@ pub struct ChatServer {
 }
 
 impl ChatServer {
-    pub fn new(db: Arc<Db>) -> (Self, ChatServerHandle) {
+    pub fn new(db: Arc<Box<dyn Database>>) -> (Self, ChatServerHandle) {
         // create empty server
         let mut rooms = HashMap::with_capacity(4);
 
@@ -184,7 +184,7 @@ impl ChatServer {
         Ok(())
     }
 
-    fn on_message(
+    async fn on_message(
         &mut self,
         id: ConnId,
         msg: impl Into<String>,
@@ -195,7 +195,7 @@ impl ChatServer {
         let body = serde_json::from_str::<Value>(&payload)
             .map_err(|e| WebsocketMessageError::InvalidPayload(payload, e.to_string()))?;
 
-        moosicbox_ws::api::process_message(&self.db.clone(), body, context, self)?;
+        moosicbox_ws::api::process_message(&self.db.clone(), body, context, self).await?;
 
         Ok(())
     }
@@ -224,7 +224,7 @@ impl ChatServer {
     }
 
     /// Unregister connection from room map and invoke ws api disconnect.
-    fn disconnect(&mut self, conn_id: ConnId) -> Result<(), WebsocketDisconnectError> {
+    async fn disconnect(&mut self, conn_id: ConnId) -> Result<(), WebsocketDisconnectError> {
         info!("Someone disconnected {conn_id}");
         let count = self.visitor_count.fetch_sub(1, Ordering::SeqCst);
         debug!("Visitor count: {}", count - 1);
@@ -244,7 +244,7 @@ impl ChatServer {
         let connection_id = conn_id.to_string();
         let context = WebsocketContext { connection_id };
 
-        moosicbox_ws::api::disconnect(&self.db.clone(), self, &context)?;
+        moosicbox_ws::api::disconnect(&self.db.clone(), self, &context).await?;
 
         Ok(())
     }
@@ -274,7 +274,7 @@ impl ChatServer {
         self.send_system_message(&room, conn_id, "Someone connected");
     }
 
-    pub fn process_command(&mut self, cmd: Command) -> io::Result<()> {
+    pub async fn process_command(&mut self, cmd: Command) -> io::Result<()> {
         match cmd {
             Command::Connect { conn_tx, res_tx } => {
                 if let Err(error) = self.connect(conn_tx).map(|conn_id| res_tx.send(conn_id)) {
@@ -283,7 +283,7 @@ impl ChatServer {
             }
 
             Command::Disconnect { conn } => {
-                if let Err(error) = self.disconnect(conn) {
+                if let Err(error) = self.disconnect(conn).await {
                     error!("Failed to disconnect connection {conn}: {:?}", error);
                 }
             }
@@ -319,11 +319,18 @@ impl ChatServer {
             }
 
             Command::Message { conn, msg, res_tx } => {
-                if let Err(error) = self.on_message(conn, msg.clone()) {
-                    error!(
-                        "Failed to process message from {}: {msg:?}: {error:?}",
-                        conn
-                    );
+                if let Err(error) = self.on_message(conn, msg.clone()).await {
+                    if log::log_enabled!(log::Level::Debug) {
+                        error!(
+                            "Failed to process message from {}: {msg:?}: {error:?}",
+                            conn
+                        );
+                    } else {
+                        error!(
+                            "Failed to process message from {}: {msg:?}: {error:?} ({:?})",
+                            conn, msg
+                        );
+                    }
                 }
                 let _ = res_tx.send(());
             }
@@ -332,9 +339,9 @@ impl ChatServer {
         Ok(())
     }
 
-    pub fn run(mut self) -> io::Result<()> {
+    pub async fn run(mut self) -> io::Result<()> {
         while let Ok(cmd) = self.cmd_rx.recv() {
-            self.process_command(cmd)?;
+            self.process_command(cmd).await?;
         }
 
         Ok(())

@@ -11,7 +11,6 @@ use crossbeam_channel::{bounded, Receiver, SendError};
 use lazy_static::lazy_static;
 use log::{debug, error, info, trace, warn};
 use moosicbox_core::{
-    app::Db,
     sqlite::{
         db::{get_album_tracks, get_session_playlist, get_tracks, DbError},
         models::{
@@ -21,6 +20,7 @@ use moosicbox_core::{
     },
     types::{AudioFormat, PlaybackQuality},
 };
+use moosicbox_database::Database;
 use moosicbox_json_utils::{serde_json::ToValue, ParseError};
 use moosicbox_symphonia_player::{
     media_sources::remote_bytestream::RemoteByteStream,
@@ -241,18 +241,16 @@ impl From<TrackOrId> for UpdateSessionPlaylistTrack {
     }
 }
 
-pub fn get_session_playlist_id_from_session_id(
-    db: Db,
+pub async fn get_session_playlist_id_from_session_id(
+    db: &Box<dyn Database>,
     session_id: Option<usize>,
 ) -> Result<Option<usize>, PlayerError> {
     Ok(if let Some(session_id) = session_id {
         Some(
-            get_session_playlist(
-                &db.library.lock().as_ref().unwrap().inner,
-                session_id as i32,
-            )?
-            .ok_or(PlayerError::Db(DbError::InvalidRequest))?
-            .id as usize,
+            get_session_playlist(db, session_id as i32)
+                .await?
+                .ok_or(PlayerError::Db(DbError::InvalidRequest))?
+                .id as usize,
         )
     } else {
         None
@@ -313,7 +311,7 @@ impl Player {
     #[allow(clippy::too_many_arguments)]
     pub async fn play_album(
         &self,
-        db: Db,
+        db: &Box<dyn Database>,
         session_id: Option<usize>,
         album_id: i32,
         position: Option<u16>,
@@ -323,8 +321,8 @@ impl Player {
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
         let tracks = {
-            let library = db.library.lock().unwrap();
-            get_album_tracks(&library.inner, album_id)
+            get_album_tracks(db, album_id as u64)
+                .await
                 .map_err(|e| {
                     error!("Failed to fetch album tracks: {e:?}");
                     PlayerError::AlbumFetchFailed(album_id)
@@ -337,7 +335,7 @@ impl Player {
         };
 
         self.play_tracks(
-            Some(db),
+            db,
             session_id,
             tracks,
             position,
@@ -352,7 +350,7 @@ impl Player {
     #[allow(clippy::too_many_arguments)]
     pub async fn play_track(
         &self,
-        db: Option<Db>,
+        db: &Box<dyn Database>,
         session_id: Option<usize>,
         track: TrackOrId,
         seek: Option<f64>,
@@ -376,7 +374,7 @@ impl Player {
     #[allow(clippy::too_many_arguments)]
     pub async fn play_tracks(
         &self,
-        db: Option<Db>,
+        db: &Box<dyn Database>,
         session_id: Option<usize>,
         tracks: Vec<TrackOrId>,
         position: Option<u16>,
@@ -390,20 +388,19 @@ impl Player {
             self.stop()?;
         }
 
-        let db = db.expect("No DB set");
-
         let tracks = {
             let library_tracks = {
                 get_tracks(
-                    &db.library.lock().as_ref().unwrap().inner,
+                    db,
                     Some(
                         &tracks
                             .iter()
                             .filter(|t| t.api_source() == ApiSource::Library)
-                            .map(|t| t.id())
+                            .map(|t| t.id() as u64)
                             .collect::<Vec<_>>(),
                     ),
-                )?
+                )
+                .await?
             };
 
             tracks
@@ -439,7 +436,7 @@ impl Player {
             AtomicF64::new(volume.unwrap_or(1.0)),
             quality,
             session_id,
-            get_session_playlist_id_from_session_id(db, session_id)?,
+            get_session_playlist_id_from_session_id(db, session_id).await?,
         );
 
         self.play_playback(playback, seek, retry_options)

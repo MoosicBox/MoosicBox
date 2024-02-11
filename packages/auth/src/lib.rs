@@ -5,7 +5,7 @@ pub mod api;
 
 use actix::fut::{err, ok, Ready};
 use actix_web::{dev::Payload, error::ErrorUnauthorized, http, FromRequest, HttpRequest};
-use moosicbox_database::DbConnection;
+use moosicbox_database::Database;
 use moosicbox_json_utils::{serde_json::ToValue, ParseError};
 use serde_json::Value;
 use thiserror::Error;
@@ -14,12 +14,12 @@ use uuid::Uuid;
 use moosicbox_core::sqlite::db::{create_client_access_token, get_client_access_token, DbError};
 
 #[cfg(feature = "api")]
-pub(crate) fn get_credentials_from_magic_token(
-    db: &DbConnection,
+pub(crate) async fn get_credentials_from_magic_token(
+    db: &Box<dyn Database>,
     magic_token: &str,
 ) -> Result<Option<(String, String)>, DbError> {
     if let Some((client_id, access_token)) =
-        moosicbox_core::sqlite::db::get_credentials_from_magic_token(&db.inner, magic_token)?
+        moosicbox_core::sqlite::db::get_credentials_from_magic_token(db, magic_token).await?
     {
         Ok(Some((client_id, access_token)))
     } else {
@@ -53,16 +53,12 @@ async fn tunnel_magic_token(
 
 #[cfg(feature = "api")]
 pub(crate) async fn create_magic_token(
-    db: &moosicbox_core::app::Db,
+    db: &Box<dyn Database>,
     tunnel_host: Option<String>,
 ) -> Result<String, DbError> {
     let magic_token = Uuid::new_v4().to_string();
 
-    if let Some((client_id, access_token)) = {
-        let lock = db.library.lock();
-        let db = lock.as_ref().unwrap();
-        get_client_access_token(&db.inner)?
-    } {
+    if let Some((client_id, access_token)) = { get_client_access_token(db).await? } {
         if let Some(tunnel_host) = tunnel_host {
             if let Err(err) =
                 tunnel_magic_token(&tunnel_host, &client_id, &access_token, &magic_token).await
@@ -71,12 +67,8 @@ pub(crate) async fn create_magic_token(
                 return Err(DbError::Unknown);
             }
         }
-        moosicbox_core::sqlite::db::save_magic_token(
-            &db.library.lock().as_ref().unwrap().inner,
-            &magic_token,
-            &client_id,
-            &access_token,
-        )?;
+        moosicbox_core::sqlite::db::save_magic_token(db, &magic_token, &client_id, &access_token)
+            .await?;
     }
 
     Ok(magic_token)
@@ -87,10 +79,10 @@ fn create_client_id() -> String {
 }
 
 pub async fn get_client_id_and_access_token(
-    db: &DbConnection,
+    db: &Box<dyn Database>,
     host: &str,
 ) -> Result<(String, String), DbError> {
-    if let Ok(Some((client_id, token))) = get_client_access_token(&db.inner) {
+    if let Ok(Some((client_id, token))) = get_client_access_token(db).await {
         Ok((client_id, token))
     } else {
         let client_id = create_client_id();
@@ -103,7 +95,7 @@ pub async fn get_client_id_and_access_token(
             None => Err(DbError::Unknown),
         }?;
 
-        create_client_access_token(&db.inner, &client_id, &token)?;
+        create_client_access_token(db, &client_id, &token).await?;
 
         Ok((client_id, token))
     }

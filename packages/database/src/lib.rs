@@ -216,15 +216,21 @@ impl Row {
 }
 
 #[async_trait]
-pub trait Database: Send + Sync {
-    fn select<'a>(&self, table_name: &'a str) -> SelectQuery<'a> {
+pub trait Database: Send + Sync + std::fmt::Debug {
+    fn select(&self, table_name: &'static str) -> SelectQuery<'static> {
         query::select(table_name)
     }
     fn update<'a>(&self, table_name: &'a str) -> UpdateStatement<'a> {
         query::update(table_name)
     }
-    fn upsert<'a>(&self, table_name: &'a str) -> UpdateStatement<'a> {
-        query::update(table_name)
+    fn insert<'a>(&self, table_name: &'a str) -> InsertStatement<'a> {
+        query::insert(table_name)
+    }
+    fn upsert<'a>(&self, table_name: &'a str) -> UpsertStatement<'a> {
+        query::upsert(table_name)
+    }
+    fn upsert_first<'a>(&self, table_name: &'a str) -> UpsertStatement<'a> {
+        query::upsert(table_name)
     }
     fn upsert_multi<'a>(&self, table_name: &'a str) -> UpsertMultiStatement<'a> {
         query::upsert_multi(table_name)
@@ -241,8 +247,13 @@ pub trait Database: Send + Sync {
         &self,
         statement: &UpdateStatement<'_>,
     ) -> Result<Option<Row>, DatabaseError>;
-    async fn exec_upsert(&self, statement: &UpdateStatement<'_>)
+    async fn exec_insert(&self, statement: &InsertStatement<'_>) -> Result<Row, DatabaseError>;
+    async fn exec_upsert(&self, statement: &UpsertStatement<'_>)
         -> Result<Vec<Row>, DatabaseError>;
+    async fn exec_upsert_first(
+        &self,
+        statement: &UpsertStatement<'_>,
+    ) -> Result<Row, DatabaseError>;
     async fn exec_upsert_multi(
         &self,
         statement: &UpsertMultiStatement<'_>,

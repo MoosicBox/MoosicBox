@@ -8,8 +8,8 @@ use futures::future::join_all;
 use moosicbox_core::{
     sqlite::{
         db::{
-            add_album_maps_and_get_albums_database, add_artist_maps_and_get_artists_database,
-            add_tracks_database, set_track_sizes, DbError, InsertTrack, SetTrackSize, SqliteValue,
+            add_album_maps_and_get_albums, add_artist_maps_and_get_artists, add_tracks,
+            set_track_sizes, DbError, InsertTrack, SetTrackSize,
         },
         models::{
             qobuz::QobuzImageSize, tidal::TidalAlbumImageSize, LibraryAlbum, LibraryArtist,
@@ -245,19 +245,22 @@ impl ScanAlbum {
         Ok(self.cover.clone())
     }
 
-    pub fn to_sqlite_values<'a>(self, artist_id: u64) -> HashMap<&'a str, SqliteValue> {
+    pub fn to_sqlite_values<'a>(self, artist_id: u64) -> HashMap<&'a str, DatabaseValue> {
         let mut values = HashMap::from([
-            ("artist_id", SqliteValue::Number(artist_id as i64)),
-            ("title", SqliteValue::String(self.name)),
-            ("date_released", SqliteValue::StringOpt(self.date_released)),
-            ("artwork", SqliteValue::StringOpt(self.cover)),
-            ("directory", SqliteValue::StringOpt(self.directory)),
+            ("artist_id", DatabaseValue::Number(artist_id as i64)),
+            ("title", DatabaseValue::String(self.name)),
+            (
+                "date_released",
+                DatabaseValue::StringOpt(self.date_released),
+            ),
+            ("artwork", DatabaseValue::StringOpt(self.cover)),
+            ("directory", DatabaseValue::StringOpt(self.directory)),
         ]);
         if let Some(qobuz_id) = self.qobuz_id {
-            values.insert("qobuz_id", SqliteValue::String(qobuz_id));
+            values.insert("qobuz_id", DatabaseValue::String(qobuz_id));
         }
         if let Some(tidal_id) = self.tidal_id {
-            values.insert("tidal_id", SqliteValue::Number(tidal_id as i64));
+            values.insert("tidal_id", DatabaseValue::Number(tidal_id as i64));
         }
         values
     }
@@ -378,16 +381,16 @@ impl ScanArtist {
         Ok(self.cover.clone())
     }
 
-    pub fn to_sqlite_values<'a>(self) -> HashMap<&'a str, SqliteValue> {
+    pub fn to_sqlite_values<'a>(self) -> HashMap<&'a str, DatabaseValue> {
         let mut values = HashMap::from([
-            ("title", SqliteValue::String(self.name.clone())),
-            ("cover", SqliteValue::StringOpt(self.cover.clone())),
+            ("title", DatabaseValue::String(self.name.clone())),
+            ("cover", DatabaseValue::StringOpt(self.cover.clone())),
         ]);
         if let Some(qobuz_id) = self.qobuz_id {
-            values.insert("qobuz_id", SqliteValue::Number(qobuz_id as i64));
+            values.insert("qobuz_id", DatabaseValue::Number(qobuz_id as i64));
         }
         if let Some(tidal_id) = self.tidal_id {
-            values.insert("tidal_id", SqliteValue::Number(tidal_id as i64));
+            values.insert("tidal_id", DatabaseValue::Number(tidal_id as i64));
         }
         values
     }
@@ -533,7 +536,7 @@ impl ScanOutput {
             .map(|id| id.id().unwrap().try_into())
             .collect::<Result<HashSet<i32>, _>>()?;
 
-        let db_artists = add_artist_maps_and_get_artists_database(
+        let db_artists = add_artist_maps_and_get_artists(
             &db,
             artists
                 .iter()
@@ -584,7 +587,7 @@ impl ScanOutput {
         .flatten()
         .collect::<Vec<_>>();
 
-        let db_albums = add_album_maps_and_get_albums_database(&db, album_maps).await?;
+        let db_albums = add_album_maps_and_get_albums(&db, album_maps).await?;
 
         let db_albums_end = std::time::SystemTime::now();
         log::info!(
@@ -641,7 +644,7 @@ impl ScanOutput {
         .flatten()
         .collect::<Vec<_>>();
 
-        let db_tracks = add_tracks_database(&db, insert_tracks).await?;
+        let db_tracks = add_tracks(&db, insert_tracks).await?;
 
         let db_tracks_end = std::time::SystemTime::now();
         log::info!(

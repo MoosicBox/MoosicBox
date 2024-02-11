@@ -1902,7 +1902,7 @@ impl MusicApi for QobuzMusicApi {
         &self,
         album_id: &Id,
     ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
-        Ok(moosicbox_core::sqlite::db::get_album_database(
+        Ok(moosicbox_core::sqlite::db::get_album(
             &self.db,
             "qobuz_id",
             DatabaseValue::String(album_id.into()),

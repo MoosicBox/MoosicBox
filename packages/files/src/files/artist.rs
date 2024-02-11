@@ -8,7 +8,7 @@ use async_recursion::async_recursion;
 use bytes::BytesMut;
 use futures::{StreamExt, TryStreamExt};
 use moosicbox_core::sqlite::{
-    db::{get_artist_database, DbError},
+    db::{get_artist, DbError},
     models::{
         qobuz::{QobuzArtist, QobuzImageSize},
         tidal::{TidalArtist, TidalArtistImageSize},
@@ -186,7 +186,7 @@ pub async fn get_library_artist_cover(
     library_artist_id: i32,
     db: Arc<Box<dyn Database>>,
 ) -> Result<String, ArtistCoverError> {
-    let artist = get_artist_database(&db, library_artist_id as u64)
+    let artist = get_artist(&db, "id", library_artist_id as u64)
         .await?
         .ok_or(ArtistCoverError::NotFound(ArtistId::Library(
             library_artist_id,
@@ -229,7 +229,7 @@ pub async fn get_library_artist_cover_bytes(
     db: Arc<Box<dyn Database>>,
     try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, ArtistCoverError> {
-    let artist = get_artist_database(&db, library_artist_id as u64)
+    let artist = get_artist(&db, "id", library_artist_id as u64)
         .await?
         .ok_or(ArtistCoverError::NotFound(ArtistId::Library(
             library_artist_id,

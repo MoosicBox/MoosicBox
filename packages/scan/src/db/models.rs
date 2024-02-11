@@ -1,9 +1,6 @@
 use std::str::FromStr;
 
-use moosicbox_core::sqlite::{
-    db::SqliteValue,
-    models::{AsId, AsModel, AsModelResult},
-};
+use moosicbox_core::sqlite::models::{AsId, AsModel, AsModelResult};
 use moosicbox_database::DatabaseValue;
 use moosicbox_json_utils::{
     database::ToValue as _, rusqlite::ToValue, MissingValue, ParseError, ToValueType,
@@ -83,8 +80,8 @@ impl AsModel<ScanLocation> for Row<'_> {
 }
 
 impl AsId for ScanLocation {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::Number(self.id as i64)
+    fn as_id(&self) -> DatabaseValue {
+        DatabaseValue::Number(self.id as i64)
     }
 }
 
@@ -101,7 +98,7 @@ impl AsModel<ScanOrigin> for Row<'_> {
 }
 
 impl AsId for ScanOrigin {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::String(self.as_ref().to_string())
+    fn as_id(&self) -> DatabaseValue {
+        DatabaseValue::String(self.as_ref().to_string())
     }
 }

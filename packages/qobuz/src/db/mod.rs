@@ -38,7 +38,6 @@ pub async fn create_qobuz_app_config(
         .filter(where_eq("bundle_version", bundle_version))
         .execute_first(db)
         .await?
-        .ok_or(DbError::NoRow)?
         .to_value_type()?)
 }
 

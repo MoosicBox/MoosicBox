@@ -1,9 +1,6 @@
 use std::str::FromStr;
 
-use moosicbox_core::sqlite::{
-    db::SqliteValue,
-    models::{AsId, TrackApiSource},
-};
+use moosicbox_core::sqlite::models::{AsId, TrackApiSource};
 use moosicbox_database::DatabaseValue;
 use moosicbox_files::files::track::TrackAudioQuality;
 use moosicbox_json_utils::{
@@ -45,8 +42,8 @@ impl ToValueType<DownloadLocation> for &serde_json::Value {
 }
 
 impl AsId for DownloadLocation {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::Number(self.id as i64)
+    fn as_id(&self) -> DatabaseValue {
+        DatabaseValue::Number(self.id as i64)
     }
 }
 
@@ -259,7 +256,7 @@ impl ToValueType<DownloadTask> for &serde_json::Value {
 }
 
 impl AsId for DownloadTask {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::Number(self.id as i64)
+    fn as_id(&self) -> DatabaseValue {
+        DatabaseValue::Number(self.id as i64)
     }
 }

@@ -1,8 +1,5 @@
-use moosicbox_core::sqlite::{
-    db::SqliteValue,
-    models::{AsId, AsModel, AsModelResult},
-};
-use moosicbox_database::Row;
+use moosicbox_core::sqlite::models::{AsId, AsModel, AsModelResult};
+use moosicbox_database::{DatabaseValue, Row};
 use moosicbox_json_utils::{database::ToValue, MissingValue, ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
 
@@ -58,7 +55,7 @@ impl AsModel<TidalConfig> for Row {
 }
 
 impl AsId for TidalConfig {
-    fn as_id(&self) -> SqliteValue {
-        SqliteValue::Number(self.id as i64)
+    fn as_id(&self) -> DatabaseValue {
+        DatabaseValue::Number(self.id as i64)
     }
 }

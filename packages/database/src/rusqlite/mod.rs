@@ -6,7 +6,8 @@ use thiserror::Error;
 
 use crate::{
     BooleanExpression, Database, DatabaseError, DatabaseValue, DbConnection, DeleteStatement,
-    Expression, Join, SelectQuery, Sort, UpdateStatement, UpsertMultiStatement,
+    Expression, InsertStatement, Join, SelectQuery, Sort, UpdateStatement, UpsertMultiStatement,
+    UpsertStatement,
 };
 
 impl From<Connection> for DbConnection {
@@ -15,6 +16,7 @@ impl From<Connection> for DbConnection {
     }
 }
 
+#[derive(Debug)]
 pub struct RusqliteDatabase {
     connection: Arc<Mutex<DbConnection>>,
 }
@@ -56,6 +58,7 @@ impl Database for RusqliteDatabase {
             query.filters.as_deref(),
             query.joins.as_deref(),
             query.sorts.as_deref(),
+            query.limit,
         )?)
     }
 
@@ -82,6 +85,18 @@ impl Database for RusqliteDatabase {
             &self.connection.lock().as_ref().unwrap().inner,
             statement.table_name,
             statement.filters.as_deref(),
+            statement.limit,
+        )?)
+    }
+
+    async fn exec_insert(
+        &self,
+        statement: &InsertStatement<'_>,
+    ) -> Result<crate::Row, DatabaseError> {
+        Ok(insert_and_get_row(
+            &self.connection.lock().as_ref().unwrap().inner,
+            statement.table_name,
+            &statement.values,
         )?)
     }
 
@@ -94,6 +109,7 @@ impl Database for RusqliteDatabase {
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
+            statement.limit,
         )?)
     }
 
@@ -106,18 +122,33 @@ impl Database for RusqliteDatabase {
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
+            statement.limit,
         )?)
     }
 
     async fn exec_upsert(
         &self,
-        statement: &UpdateStatement<'_>,
+        statement: &UpsertStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(upsert(
             &self.connection.lock().as_ref().unwrap().inner,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
+            statement.limit,
+        )?)
+    }
+
+    async fn exec_upsert_first(
+        &self,
+        statement: &UpsertStatement<'_>,
+    ) -> Result<crate::Row, DatabaseError> {
+        Ok(upsert_and_get_row(
+            &self.connection.lock().as_ref().unwrap().inner,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
         )?)
     }
 
@@ -166,20 +197,55 @@ fn update_and_get_row(
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
+    limit: Option<usize>,
 ) -> Result<Option<crate::Row>, RusqliteDatabaseError> {
-    let statement = format!(
+    let select_query = limit.map(|_| {
+        format!(
+            "SELECT rowid FROM {table_name} {}",
+            build_where_clause(filters),
+        )
+    });
+
+    let query = format!(
         "UPDATE {table_name} {} {} RETURNING *",
         build_set_clause(values),
-        build_where_clause(filters)
+        build_update_where_clause(filters, limit, select_query.as_deref()),
     );
 
-    let mut statement = connection.prepare_cached(&statement)?;
-    bind_values(&mut statement, Some(&exprs_to_values(values)), false, 0)?;
+    let all_values = values
+        .into_iter()
+        .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
+        .collect::<Vec<_>>();
+    let mut all_filter_values = filters
+        .map(|filters| {
+            filters
+                .into_iter()
+                .flat_map(|value| value.params().unwrap_or(vec![]).into_iter().cloned())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or(vec![]);
+
+    if limit.is_some() {
+        all_filter_values.extend(all_filter_values.clone());
+    }
+
+    let all_values = [all_values, all_filter_values].concat();
+
+    log::trace!(
+        "Running update query: {query} with params: {:?}",
+        all_values
+    );
+
+    let mut statement = connection.prepare_cached(&query)?;
+
+    bind_values(&mut statement, Some(&all_values), false, 0)?;
+
     let column_names = statement
         .column_names()
         .iter()
         .map(|x| x.to_string())
         .collect::<Vec<_>>();
+
     let mut query = statement.raw_query();
 
     Ok(query
@@ -193,31 +259,52 @@ fn update_and_get_rows(
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
+    limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
+    let select_query = limit.map(|_| {
+        format!(
+            "SELECT rowid FROM {table_name} {}",
+            build_where_clause(filters),
+        )
+    });
+
     let query = format!(
         "UPDATE {table_name} {} {} RETURNING *",
         build_set_clause(values),
-        build_where_clause(filters)
+        build_update_where_clause(filters, limit, select_query.as_deref()),
+    );
+
+    let all_values = values
+        .into_iter()
+        .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
+        .collect::<Vec<_>>();
+    let mut all_filter_values = filters
+        .map(|filters| {
+            filters
+                .into_iter()
+                .flat_map(|value| value.params().unwrap_or(vec![]).into_iter().cloned())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or(vec![]);
+
+    if limit.is_some() {
+        all_filter_values.extend(all_filter_values.clone());
+    }
+
+    let all_values = [all_values, all_filter_values].concat();
+
+    log::trace!(
+        "Running delete query: {query} with params: {:?}",
+        all_values
     );
 
     let mut statement = connection.prepare_cached(&query)?;
-    let offset = bind_values(&mut statement, Some(&exprs_to_values(values)), false, 0)?;
-    bind_values(
-        &mut statement,
-        bexprs_to_values_opt(filters).as_deref(),
-        false,
-        offset,
-    )?;
+    bind_values(&mut statement, Some(&all_values), false, 0)?;
     let column_names = statement
         .column_names()
         .iter()
         .map(|x| x.to_string())
         .collect::<Vec<_>>();
-
-    log::trace!(
-        "Running delete query: {query} with params: {:?}",
-        filters.map(|f| f.iter().flat_map(|x| x.values()).collect::<Vec<_>>())
-    );
 
     to_rows(&column_names, statement.raw_query())
 }
@@ -270,19 +357,38 @@ fn build_sort_clause(sorts: Option<&[Sort]>) -> String {
 }
 
 fn build_sort_props(sorts: &[Sort]) -> Vec<String> {
-    sorts
-        .iter()
-        .map(|sort| {
-            format!(
-                "{} {}",
-                sort.expression.to_sql(),
-                match sort.direction {
-                    crate::SortDirection::Asc => "ASC",
-                    crate::SortDirection::Desc => "DESC",
-                }
-            )
-        })
-        .collect()
+    sorts.iter().map(|sort| sort.to_sql()).collect()
+}
+
+fn build_update_where_clause(
+    filters: Option<&[Box<dyn BooleanExpression>]>,
+    limit: Option<usize>,
+    query: Option<&str>,
+) -> String {
+    let clause = build_where_clause(filters);
+    let limit_clause = build_update_limit_clause(limit, query);
+
+    let clause = if limit_clause.is_empty() {
+        clause
+    } else if clause.is_empty() {
+        "WHERE".into()
+    } else {
+        clause + " AND"
+    };
+
+    format!("{clause} {limit_clause}").trim().to_string()
+}
+
+fn build_update_limit_clause(limit: Option<usize>, query: Option<&str>) -> String {
+    if let Some(limit) = limit {
+        if let Some(query) = query {
+            format!("rowid IN ({query} LIMIT {limit})")
+        } else {
+            "".into()
+        }
+    } else {
+        "".into()
+    }
 }
 
 fn build_set_clause(values: &[(&str, Box<dyn Expression>)]) -> String {
@@ -410,6 +516,12 @@ fn to_rows(
         results.push(from_row(column_names, row)?);
     }
 
+    log::trace!(
+        "Got {} row{}",
+        results.len(),
+        if results.len() == 1 { "" } else { "s" }
+    );
+
     Ok(results)
 }
 
@@ -456,38 +568,6 @@ fn bexprs_to_values_opt(
     values.map(|x| bexprs_to_values(x))
 }
 
-#[allow(unused)]
-fn select_distinct(
-    connection: &Connection,
-    table_name: &str,
-    columns: &[&str],
-    filters: Option<&[Box<dyn BooleanExpression>]>,
-    joins: Option<&[Join]>,
-    sort: Option<&[Sort]>,
-) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
-    let mut statement = connection.prepare_cached(&format!(
-        "SELECT DISTINCT {} FROM {table_name} {} {} {}",
-        columns.join(", "),
-        build_join_clauses(joins),
-        build_where_clause(filters),
-        build_sort_clause(sort),
-    ))?;
-    let column_names = statement
-        .column_names()
-        .iter()
-        .map(|x| x.to_string())
-        .collect::<Vec<_>>();
-
-    bind_values(
-        &mut statement,
-        bexprs_to_values_opt(filters).as_deref(),
-        false,
-        0,
-    )?;
-
-    to_rows(&column_names, statement.raw_query())
-}
-
 fn select(
     connection: &Connection,
     table_name: &str,
@@ -496,14 +576,25 @@ fn select(
     filters: Option<&[Box<dyn BooleanExpression>]>,
     joins: Option<&[Join]>,
     sort: Option<&[Sort]>,
+    limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
     let query = format!(
-        "SELECT {} {} FROM {table_name} {} {} {}",
+        "SELECT {} {} FROM {table_name} {} {} {} {}",
         if distinct { "DISTINCT" } else { "" },
         columns.join(", "),
         build_join_clauses(joins),
         build_where_clause(filters),
         build_sort_clause(sort),
+        if let Some(limit) = limit {
+            format!("LIMIT {limit}")
+        } else {
+            "".to_string()
+        }
+    );
+
+    log::trace!(
+        "Running select query: {query} with params: {:?}",
+        filters.map(|f| f.iter().flat_map(|x| x.params()).collect::<Vec<_>>())
     );
 
     let mut statement = connection.prepare_cached(&query)?;
@@ -512,11 +603,6 @@ fn select(
         .iter()
         .map(|x| x.to_string())
         .collect::<Vec<_>>();
-
-    log::trace!(
-        "Running select query: {query} with params: {:?}",
-        filters.map(|f| f.iter().flat_map(|x| x.values()).collect::<Vec<_>>())
-    );
 
     bind_values(
         &mut statement,
@@ -532,11 +618,23 @@ fn delete(
     connection: &Connection,
     table_name: &str,
     filters: Option<&[Box<dyn BooleanExpression>]>,
+    limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
     let query = format!(
-        "DELETE FROM {table_name} {} RETURNING *",
+        "DELETE FROM {table_name} {} RETURNING * {}",
         build_where_clause(filters),
+        if let Some(limit) = limit {
+            format!("LIMIT {limit}")
+        } else {
+            "".to_string()
+        }
     );
+
+    log::trace!(
+        "Running delete query: {query} with params: {:?}",
+        filters.map(|f| f.iter().flat_map(|x| x.params()).collect::<Vec<_>>())
+    );
+
     let mut statement = connection.prepare_cached(&query)?;
     let column_names = statement
         .column_names()
@@ -551,11 +649,6 @@ fn delete(
         0,
     )?;
 
-    log::trace!(
-        "Running delete query: {query} with params: {:?}",
-        filters.map(|f| f.iter().flat_map(|x| x.values()).collect::<Vec<_>>())
-    );
-
     to_rows(&column_names, statement.raw_query())
 }
 
@@ -569,7 +662,7 @@ fn find_row(
     sort: Option<&[Sort]>,
 ) -> Result<Option<crate::Row>, RusqliteDatabaseError> {
     let query = format!(
-        "SELECT {} {} FROM {table_name} {} {} {}",
+        "SELECT {} {} FROM {table_name} {} {} {} LIMIT 1",
         if distinct { "DISTINCT" } else { "" },
         columns.join(", "),
         build_join_clauses(joins),
@@ -593,7 +686,7 @@ fn find_row(
 
     log::trace!(
         "Running find_row query: {query} with params: {:?}",
-        filters.map(|f| f.iter().flat_map(|x| x.values()).collect::<Vec<_>>())
+        filters.map(|f| f.iter().flat_map(|x| x.params()).collect::<Vec<_>>())
     );
 
     let mut query = statement.raw_query();
@@ -633,7 +726,7 @@ fn insert_and_get_row(
         "Running insert_and_get_row query: {query} with params: {:?}",
         values
             .iter()
-            .flat_map(|(_, x)| x.values())
+            .flat_map(|(_, x)| x.params())
             .collect::<Vec<_>>()
     );
 
@@ -649,6 +742,8 @@ pub fn update_multi(
     connection: &Connection,
     table_name: &str,
     values: &[Vec<(&str, Box<dyn Expression>)>],
+    filters: Option<Vec<Box<dyn BooleanExpression>>>,
+    mut limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
     let mut results = vec![];
 
@@ -667,12 +762,22 @@ pub fn update_multi(
                 connection,
                 table_name,
                 &values[last_i..i],
+                &filters,
+                limit,
             )?);
             last_i = i;
             pos = 0;
         }
         i += 1;
         pos += count;
+
+        if let Some(value) = limit {
+            if count >= value {
+                return Ok(results);
+            }
+
+            limit.replace(value - count);
+        }
     }
 
     if i > last_i {
@@ -680,6 +785,8 @@ pub fn update_multi(
             connection,
             table_name,
             &values[last_i..],
+            &filters,
+            limit,
         )?);
     }
 
@@ -690,6 +797,8 @@ fn update_chunk(
     connection: &Connection,
     table_name: &str,
     values: &[Vec<(&str, Box<dyn Expression>)>],
+    filters: &Option<Vec<Box<dyn BooleanExpression>>>,
+    limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
     let first = values[0].as_slice();
     let expected_value_size = first.len();
@@ -713,20 +822,56 @@ fn update_chunk(
         .collect::<Vec<_>>()
         .join(", ");
 
-    let statement = format!(
+    let select_query = limit.map(|_| {
+        format!(
+            "SELECT rowid FROM {table_name} {}",
+            build_where_clause(filters.as_deref()),
+        )
+    });
+
+    let query = format!(
         "
         UPDATE {table_name} ({column_names})
+        {}
         SET {set_clause}
-        RETURNING *"
+        RETURNING *",
+        build_update_where_clause(filters.as_deref(), limit, select_query.as_deref()),
     );
 
-    let all_values = &values
+    let all_values = values
         .into_iter()
         .flat_map(|x| x.into_iter())
-        .flat_map(|(_, value)| value.values().unwrap_or(vec![]).into_iter().cloned())
+        .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
         .collect::<Vec<_>>();
+    let mut all_filter_values = filters
+        .as_ref()
+        .map(|filters| {
+            filters
+                .into_iter()
+                .flat_map(|value| {
+                    value
+                        .params()
+                        .unwrap_or(vec![])
+                        .into_iter()
+                        .cloned()
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or(vec![]);
 
-    let mut statement = connection.prepare_cached(&statement)?;
+    if limit.is_some() {
+        all_filter_values.extend(all_filter_values.clone());
+    }
+
+    let all_values = [all_values, all_filter_values].concat();
+
+    log::trace!(
+        "Running update chunk query: {query} with params: {:?}",
+        all_values
+    );
+
+    let mut statement = connection.prepare_cached(&query)?;
     let column_names = statement
         .column_names()
         .iter()
@@ -819,7 +964,7 @@ fn upsert_chunk(
 
     let unique_conflict = unique.join(", ");
 
-    let statement = format!(
+    let query = format!(
         "
         INSERT INTO {table_name} ({column_names})
         VALUES {values_str}
@@ -831,10 +976,15 @@ fn upsert_chunk(
     let all_values = &values
         .into_iter()
         .flat_map(|x| x.into_iter())
-        .flat_map(|(_, value)| value.values().unwrap_or(vec![]).into_iter().cloned())
+        .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
         .collect::<Vec<_>>();
 
-    let mut statement = connection.prepare_cached(&statement)?;
+    log::trace!(
+        "Running upsert chunk query: {query} with params: {:?}",
+        all_values
+    );
+
+    let mut statement = connection.prepare_cached(&query)?;
     let column_names = statement
         .column_names()
         .iter()
@@ -851,8 +1001,9 @@ fn upsert(
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
+    limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
-    let rows = update_and_get_rows(connection, table_name, values, filters)?;
+    let rows = update_and_get_rows(connection, table_name, values, filters, limit)?;
 
     Ok(if rows.is_empty() {
         rows
@@ -867,10 +1018,12 @@ fn upsert_and_get_row(
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
+    limit: Option<usize>,
 ) -> Result<crate::Row, RusqliteDatabaseError> {
     match find_row(connection, table_name, false, &["*"], filters, None, None)? {
         Some(row) => {
-            let updated = update_and_get_row(connection, table_name, &values, filters)?.unwrap();
+            let updated =
+                update_and_get_row(connection, table_name, &values, filters, limit)?.unwrap();
 
             let str1 = format!("{row:?}");
             let str2 = format!("{updated:?}");
