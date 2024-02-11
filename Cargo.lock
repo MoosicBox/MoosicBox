@@ -508,7 +508,7 @@ dependencies = [
 [[package]]
 name = "audiotags"
 version = "0.5.0"
-source = "git+https://github.com/BSteffaniak/audiotags.git?branch=master#09c0212d0ac7b523d00609627b075a5db91405df"
+source = "git+https://github.com/BSteffaniak/audiotags.git?branch=master-shallow#866880fcf98203d364d216ee7f27444ce3a06836"
 dependencies = [
  "audiotags-dev-macro",
  "id3",
@@ -521,7 +521,7 @@ dependencies = [
 [[package]]
 name = "audiotags-dev-macro"
 version = "0.2.0"
-source = "git+https://github.com/BSteffaniak/audiotags.git?branch=master#09c0212d0ac7b523d00609627b075a5db91405df"
+source = "git+https://github.com/BSteffaniak/audiotags.git?branch=master-shallow#866880fcf98203d364d216ee7f27444ce3a06836"
 
 [[package]]
 name = "autocfg"
@@ -2713,7 +2713,7 @@ dependencies = [
 [[package]]
 name = "libvips"
 version = "1.6.1"
-source = "git+https://github.com/BSteffaniak/libvips-rust-bindings.git?branch=support-windows#3ff35cf057ceb1755eb59e556893c415d8f91744"
+source = "git+https://github.com/BSteffaniak/libvips-rust-bindings.git?branch=support-windows-shallow#319676322a6586331bc480f499a732adb646718d"
 dependencies = [
  "num-derive 0.4.1",
  "num-traits",
@@ -2765,7 +2765,7 @@ dependencies = [
 [[package]]
 name = "lofty"
 version = "0.17.1"
-source = "git+https://github.com/BSteffaniak/lofty-rs.git?branch=master#d5005881e0d753605cac2cd88e93276d9c2e75d1"
+source = "git+https://github.com/BSteffaniak/lofty-rs.git?branch=master-shallow#bc1512eefaa016e818fa76e4481d4294f5306110"
 dependencies = [
  "base64",
  "byteorder",
