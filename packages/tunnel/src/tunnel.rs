@@ -52,6 +52,7 @@ pub enum Method {
     Put,
     Patch,
     Delete,
+    Options,
 }
 
 impl Display for Method {
@@ -63,6 +64,7 @@ impl Display for Method {
             Method::Put => "PUT",
             Method::Patch => "PATCH",
             Method::Delete => "DELETE",
+            Method::Options => "OPTIONS",
         })
     }
 }

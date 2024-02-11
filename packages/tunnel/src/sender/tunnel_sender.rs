@@ -1005,6 +1005,7 @@ impl TunnelSender {
             Method::Put => client.put(url),
             Method::Patch => client.patch(url),
             Method::Delete => client.delete(url),
+            Method::Options => client.request(reqwest::Method::OPTIONS, url),
         };
 
         if user_agent_header {

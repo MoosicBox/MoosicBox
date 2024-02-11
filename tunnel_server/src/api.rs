@@ -206,7 +206,12 @@ fn get_headers_for_request(req: &HttpRequest) -> Option<Value> {
 }
 
 async fn proxy_request(body: Option<Bytes>, req: HttpRequest) -> Result<HttpResponse> {
-    let method = Method::from_str(&req.method().to_string().to_uppercase()).unwrap();
+    let method = Method::from_str(&req.method().to_string().to_uppercase()).map_err(|e| {
+        ErrorInternalServerError(format!(
+            "Failed to parse method: '{:?}': {e:?}",
+            req.method()
+        ))
+    })?;
     let path = req.path().strip_prefix('/').expect("Failed to get path");
     let query: Vec<_> = QString::from(req.query_string()).into();
     let query: HashMap<_, _> = query.into_iter().collect();
