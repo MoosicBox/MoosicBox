@@ -11,7 +11,7 @@ use std::{
 
 use atomic_float::AtomicF64;
 use audiotags::AudioTag;
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use futures::{StreamExt, TryStreamExt};
 use futures_core::Stream;
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
@@ -21,7 +21,6 @@ use tokio::{
     io::{AsyncSeekExt, AsyncWriteExt, BufWriter},
     pin,
 };
-use tokio_util::codec::{BytesCodec, FramedRead};
 
 #[cfg(feature = "api")]
 pub mod api;
@@ -263,11 +262,14 @@ pub struct CoverBytes {
     pub size: Option<u64>,
 }
 
+#[cfg(feature = "files")]
 async fn get_or_fetch_cover_bytes_from_remote_url(
     url: &str,
     file_path: &Path,
     try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, FetchCoverError> {
+    use tokio_util::codec::{BytesCodec, FramedRead};
+
     static IMAGE_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
 
     if Path::exists(file_path) {
@@ -282,7 +284,7 @@ async fn get_or_fetch_cover_bytes_from_remote_url(
         return Ok(CoverBytes {
             stream: StalledReadMonitor::new(
                 FramedRead::new(file, BytesCodec::new())
-                    .map_ok(BytesMut::freeze)
+                    .map_ok(bytes::BytesMut::freeze)
                     .boxed(),
             ),
             size,
@@ -301,6 +303,7 @@ async fn get_or_fetch_cover_bytes_from_remote_url(
     }
 }
 
+#[cfg(feature = "files")]
 async fn get_or_fetch_cover_from_remote_url(
     url: &str,
     file_path: &Path,
