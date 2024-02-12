@@ -533,6 +533,103 @@ where
     }
 }
 
+#[macro_export]
+macro_rules! boxed {
+    () => (
+        Vec::new()
+    );
+    ($($x:expr),+ $(,)?) => (
+        vec![$(Box::new($x)),+]
+    );
+}
+
+pub trait FilterableQuery
+where
+    Self: Sized,
+{
+    fn filters(self, filters: Vec<Box<dyn BooleanExpression>>) -> Self {
+        let mut this = self;
+        for filter in filters.into_iter() {
+            this = this.filter(filter)
+        }
+        this
+    }
+
+    fn filter(self, filter: Box<dyn BooleanExpression>) -> Self;
+
+    fn filter_if_some<T: BooleanExpression + 'static>(self, filter: Option<T>) -> Self {
+        if let Some(filter) = filter {
+            self.filter(Box::new(filter))
+        } else {
+            self
+        }
+    }
+
+    fn where_in<L, V>(self, left: L, values: V) -> Self
+    where
+        L: Into<Identifier>,
+        V: Into<Box<dyn List>>,
+    {
+        self.filter(Box::new(where_in(left, values)))
+    }
+
+    fn where_and(self, conditions: Vec<Box<dyn BooleanExpression>>) -> Self {
+        self.filter(Box::new(where_and(conditions)))
+    }
+
+    fn where_or(self, conditions: Vec<Box<dyn BooleanExpression>>) -> Self {
+        self.filter(Box::new(where_or(conditions)))
+    }
+
+    fn where_eq<L, R>(self, left: L, right: R) -> Self
+    where
+        L: Into<Identifier>,
+        R: Into<Box<dyn Expression>>,
+    {
+        self.filter(Box::new(where_eq(left, right)))
+    }
+
+    fn where_not_eq<L, R>(self, left: L, right: R) -> Self
+    where
+        L: Into<Identifier>,
+        R: Into<Box<dyn Expression>>,
+    {
+        self.filter(Box::new(where_not_eq(left, right)))
+    }
+
+    fn where_gt<L, R>(self, left: L, right: R) -> Self
+    where
+        L: Into<Identifier>,
+        R: Into<Box<dyn Expression>>,
+    {
+        self.filter(Box::new(where_gt(left, right)))
+    }
+
+    fn where_gte<L, R>(self, left: L, right: R) -> Self
+    where
+        L: Into<Identifier>,
+        R: Into<Box<dyn Expression>>,
+    {
+        self.filter(Box::new(where_gte(left, right)))
+    }
+
+    fn where_lt<L, R>(self, left: L, right: R) -> Self
+    where
+        L: Into<Identifier>,
+        R: Into<Box<dyn Expression>>,
+    {
+        self.filter(Box::new(where_lt(left, right)))
+    }
+
+    fn where_lte<L, R>(self, left: L, right: R) -> Self
+    where
+        L: Into<Identifier>,
+        R: Into<Box<dyn Expression>>,
+    {
+        self.filter(Box::new(where_lte(left, right)))
+    }
+}
+
 impl<'a> Into<Box<dyn List + 'a>> for SelectQuery<'a> {
     fn into(self) -> Box<dyn List + 'a> {
         Box::new(self)
@@ -666,6 +763,17 @@ pub fn select<'a>(table_name: &'a str) -> SelectQuery<'a> {
     }
 }
 
+impl FilterableQuery for SelectQuery<'_> {
+    fn filter(mut self, filter: Box<dyn BooleanExpression>) -> Self {
+        if let Some(ref mut filters) = self.filters {
+            filters.push(filter);
+        } else {
+            self.filters.replace(vec![filter]);
+        }
+        self
+    }
+}
+
 impl<'a> SelectQuery<'a> {
     pub fn distinct(mut self) -> Self {
         self.distinct = true;
@@ -674,37 +782,6 @@ impl<'a> SelectQuery<'a> {
 
     pub fn columns(mut self, columns: &'a [&'a str]) -> Self {
         self.columns = columns;
-        self
-    }
-
-    pub fn filters(mut self, filters: Vec<Box<dyn BooleanExpression>>) -> Self {
-        for filter in filters.into_iter() {
-            if let Some(ref mut filters) = self.filters {
-                filters.push(filter);
-            } else {
-                self.filters.replace(vec![filter]);
-            }
-        }
-        self
-    }
-
-    pub fn filter<T: BooleanExpression + 'static>(mut self, filter: T) -> Self {
-        if let Some(ref mut filters) = self.filters {
-            filters.push(Box::new(filter));
-        } else {
-            self.filters.replace(vec![Box::new(filter)]);
-        }
-        self
-    }
-
-    pub fn filter_some<T: BooleanExpression + 'static>(mut self, filter: Option<T>) -> Self {
-        if let Some(filter) = filter {
-            if let Some(ref mut filters) = self.filters {
-                filters.push(Box::new(filter));
-            } else {
-                self.filters.replace(vec![Box::new(filter)]);
-            }
-        }
         self
     }
 
@@ -877,6 +954,17 @@ pub fn update<'a>(table_name: &'a str) -> UpdateStatement<'a> {
     }
 }
 
+impl FilterableQuery for UpdateStatement<'_> {
+    fn filter(mut self, filter: Box<dyn BooleanExpression>) -> Self {
+        if let Some(ref mut filters) = self.filters {
+            filters.push(filter);
+        } else {
+            self.filters.replace(vec![filter]);
+        }
+        self
+    }
+}
+
 impl<'a> UpdateStatement<'a> {
     pub fn values<T: Into<Box<dyn Expression>>>(mut self, values: Vec<(&'a str, T)>) -> Self {
         for value in values.into_iter() {
@@ -887,37 +975,6 @@ impl<'a> UpdateStatement<'a> {
 
     pub fn value<T: Into<Box<dyn Expression>>>(mut self, name: &'a str, value: T) -> Self {
         self.values.push((name, value.into()));
-        self
-    }
-
-    pub fn filters(mut self, filters: Vec<Box<dyn BooleanExpression>>) -> Self {
-        for filter in filters.into_iter() {
-            if let Some(ref mut filters) = self.filters {
-                filters.push(filter);
-            } else {
-                self.filters.replace(vec![filter]);
-            }
-        }
-        self
-    }
-
-    pub fn filter<T: BooleanExpression + 'static>(mut self, filter: T) -> Self {
-        if let Some(ref mut filters) = self.filters {
-            filters.push(Box::new(filter));
-        } else {
-            self.filters.replace(vec![Box::new(filter)]);
-        }
-        self
-    }
-
-    pub fn filter_some<T: BooleanExpression + 'static>(mut self, filter: Option<T>) -> Self {
-        if let Some(filter) = filter {
-            if let Some(ref mut filters) = self.filters {
-                filters.push(Box::new(filter));
-            } else {
-                self.filters.replace(vec![Box::new(filter)]);
-            }
-        }
         self
     }
 
@@ -961,6 +1018,17 @@ pub fn upsert<'a>(table_name: &'a str) -> UpsertStatement<'a> {
     }
 }
 
+impl FilterableQuery for UpsertStatement<'_> {
+    fn filter(mut self, filter: Box<dyn BooleanExpression>) -> Self {
+        if let Some(ref mut filters) = self.filters {
+            filters.push(filter);
+        } else {
+            self.filters.replace(vec![filter]);
+        }
+        self
+    }
+}
+
 impl<'a> UpsertStatement<'a> {
     pub fn values<T: Into<Box<dyn Expression>>>(mut self, values: Vec<(&'a str, T)>) -> Self {
         for value in values.into_iter() {
@@ -971,37 +1039,6 @@ impl<'a> UpsertStatement<'a> {
 
     pub fn value<T: Into<Box<dyn Expression>>>(mut self, name: &'a str, value: T) -> Self {
         self.values.push((name, value.into()));
-        self
-    }
-
-    pub fn filters(mut self, filters: Vec<Box<dyn BooleanExpression>>) -> Self {
-        for filter in filters.into_iter() {
-            if let Some(ref mut filters) = self.filters {
-                filters.push(filter);
-            } else {
-                self.filters.replace(vec![filter]);
-            }
-        }
-        self
-    }
-
-    pub fn filter<T: BooleanExpression + 'static>(mut self, filter: T) -> Self {
-        if let Some(ref mut filters) = self.filters {
-            filters.push(Box::new(filter));
-        } else {
-            self.filters.replace(vec![Box::new(filter)]);
-        }
-        self
-    }
-
-    pub fn filter_some<T: BooleanExpression + 'static>(mut self, filter: Option<T>) -> Self {
-        if let Some(filter) = filter {
-            if let Some(ref mut filters) = self.filters {
-                filters.push(Box::new(filter));
-            } else {
-                self.filters.replace(vec![Box::new(filter)]);
-            }
-        }
         self
     }
 
@@ -1038,38 +1075,18 @@ pub fn delete<'a>(table_name: &'a str) -> DeleteStatement<'a> {
     }
 }
 
-impl<'a> DeleteStatement<'a> {
-    pub fn filters(mut self, filters: Vec<Box<dyn BooleanExpression>>) -> Self {
-        for filter in filters.into_iter() {
-            if let Some(ref mut filters) = self.filters {
-                filters.push(filter);
-            } else {
-                self.filters.replace(vec![filter]);
-            }
-        }
-        self
-    }
-
-    pub fn filter_some<T: BooleanExpression + 'static>(mut self, filter: Option<T>) -> Self {
-        if let Some(filter) = filter {
-            if let Some(ref mut filters) = self.filters {
-                filters.push(Box::new(filter));
-            } else {
-                self.filters.replace(vec![Box::new(filter)]);
-            }
-        }
-        self
-    }
-
-    pub fn filter<T: BooleanExpression + 'static>(mut self, filter: T) -> Self {
+impl FilterableQuery for DeleteStatement<'_> {
+    fn filter(mut self, filter: Box<dyn BooleanExpression>) -> Self {
         if let Some(ref mut filters) = self.filters {
-            filters.push(Box::new(filter));
+            filters.push(filter);
         } else {
-            self.filters.replace(vec![Box::new(filter)]);
+            self.filters.replace(vec![filter]);
         }
         self
     }
+}
 
+impl<'a> DeleteStatement<'a> {
     pub fn limit(mut self, limit: usize) -> Self {
         self.limit.replace(limit);
         self

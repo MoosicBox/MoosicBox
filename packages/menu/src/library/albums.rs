@@ -501,7 +501,7 @@ pub async fn remove_album(
 
     if !album_field_updates.is_empty() {
         db.update("albums")
-            .filter(where_eq("id", album.id))
+            .where_eq("id", album.id)
             .values(album_field_updates)
             .execute(&db)
             .await?;
@@ -529,7 +529,7 @@ pub async fn remove_album(
 
     log::debug!("Deleting album db item: {}", album.id);
     db.delete("albums")
-        .filter(where_eq("id", album.id))
+        .where_eq("id", album.id)
         .execute(&db)
         .await?;
 

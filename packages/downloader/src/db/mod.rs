@@ -8,7 +8,7 @@ use self::models::{CreateDownloadTask, DownloadItem, DownloadLocation, DownloadT
 
 pub async fn create_download_location(db: &Box<dyn Database>, path: &str) -> Result<(), DbError> {
     db.upsert("download_locations")
-        .filter(where_eq("path", path))
+        .where_eq("path", path)
         .value("path", path)
         .execute(db)
         .await?;
@@ -22,7 +22,7 @@ pub async fn get_download_location(
 ) -> Result<Option<DownloadLocation>, DbError> {
     Ok(db
         .select("download_locations")
-        .filter(where_eq("id", id))
+        .where_eq("id", id)
         .execute_first(db)
         .await?
         .as_ref()
@@ -68,12 +68,12 @@ pub async fn create_download_task(
 
     Ok(db
         .upsert("download_tasks")
-        .filter(where_eq("file_path", task.file_path.clone()))
-        .filter(where_eq("type", task.item.as_ref()))
-        .filter_some(track_id.map(|x| where_eq("track_id", x)))
-        .filter_some(source.clone().map(|x| where_eq("source", x)))
-        .filter_some(quality.clone().map(|x| where_eq("quality", x)))
-        .filter_some(album_id.map(|x| where_eq("album_id", x)))
+        .where_eq("file_path", task.file_path.clone())
+        .where_eq("type", task.item.as_ref())
+        .filter_if_some(track_id.map(|x| where_eq("track_id", x)))
+        .filter_if_some(source.clone().map(|x| where_eq("source", x)))
+        .filter_if_some(quality.clone().map(|x| where_eq("quality", x)))
+        .filter_if_some(album_id.map(|x| where_eq("album_id", x)))
         .value("file_path", task.file_path.clone())
         .value("type", task.item.as_ref())
         .value("track_id", track_id)

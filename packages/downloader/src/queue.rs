@@ -268,7 +268,7 @@ impl DownloadQueue {
 
         Ok(db
             .update("download_tasks")
-            .filter(where_eq("id", task_id))
+            .where_eq("id", task_id)
             .values(values.to_vec())
             .execute_first(&db)
             .await?
@@ -304,7 +304,7 @@ impl DownloadQueue {
                         tokio::task::spawn(async move {
                             if let Err(err) = database
                                 .update("download_tasks")
-                                .filter(where_eq("id", task_id))
+                                .where_eq("id", task_id)
                                 .value("total_bytes", size)
                                 .execute_first(&database)
                                 .await

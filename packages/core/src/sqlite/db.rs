@@ -1,5 +1,5 @@
 use actix_web::error::ErrorInternalServerError;
-use moosicbox_database::{query::*, Database, DatabaseError, DatabaseValue};
+use moosicbox_database::{boxed, query::*, Database, DatabaseError, DatabaseValue};
 use moosicbox_json_utils::{ParseError, ToValueType as _};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt::Debug, sync::PoisonError};
@@ -50,7 +50,7 @@ pub async fn get_session_playlist_tracks(
 ) -> Result<Vec<SessionPlaylistTrack>, DbError> {
     Ok(db
         .select("session_playlist_tracks")
-        .filter(where_eq("session_playlist_id", session_playlist_id))
+        .where_eq("session_playlist_id", session_playlist_id)
         .sort("id", SortDirection::Asc)
         .execute(db)
         .await?
@@ -58,19 +58,17 @@ pub async fn get_session_playlist_tracks(
 }
 
 pub async fn get_client_id(db: &Box<dyn Database>) -> Result<Option<String>, DbError> {
-    let or: Vec<Box<dyn BooleanExpression>> = vec![
-        Box::new(where_eq("expires", DatabaseValue::Null)),
-        Box::new(where_gt(
-            "expires",
-            Box::new(Identifier {
-                value: "date('now')".into(),
-            }) as Box<dyn Expression>,
-        )),
-    ];
-
     Ok(db
         .select("client_access_tokens")
-        .filter(where_or(or))
+        .where_or(boxed![
+            where_eq("expires", DatabaseValue::Null),
+            where_gt(
+                "expires",
+                Identifier {
+                    value: "date('now')".into(),
+                }
+            ),
+        ])
         .sort("updated", SortDirection::Desc)
         .execute_first(db)
         .await?
@@ -82,19 +80,17 @@ pub async fn get_client_id(db: &Box<dyn Database>) -> Result<Option<String>, DbE
 pub async fn get_client_access_token(
     db: &Box<dyn Database>,
 ) -> Result<Option<(String, String)>, DbError> {
-    let or: Vec<Box<dyn BooleanExpression>> = vec![
-        Box::new(where_eq("expires", DatabaseValue::Null)),
-        Box::new(where_gt(
-            "expires",
-            Box::new(Identifier {
-                value: "date('now')".into(),
-            }) as Box<dyn Expression>,
-        )),
-    ];
-
     Ok(db
         .select("client_access_tokens")
-        .filter(where_or(or))
+        .where_or(boxed![
+            where_eq("expires", DatabaseValue::Null),
+            where_gt(
+                "expires",
+                Identifier {
+                    value: "date('now')".into(),
+                }
+            ),
+        ])
         .sort("updated", SortDirection::Desc)
         .execute_first(db)
         .await?
@@ -117,8 +113,8 @@ pub async fn create_client_access_token(
     token: &str,
 ) -> Result<(), DbError> {
     db.upsert("client_access_tokens")
-        .filter(where_eq("token", token))
-        .filter(where_eq("client_id", client_id))
+        .where_eq("token", token)
+        .where_eq("client_id", client_id)
         .value("token", token)
         .value("client_id", client_id)
         .execute_first(db)
@@ -129,7 +125,7 @@ pub async fn create_client_access_token(
 
 pub async fn delete_magic_token(db: &Box<dyn Database>, magic_token: &str) -> Result<(), DbError> {
     db.delete("magic_tokens")
-        .filter(where_eq("magic_token", magic_token))
+        .where_eq("magic_token", magic_token)
         .execute(db)
         .await?;
 
@@ -140,20 +136,18 @@ pub async fn get_credentials_from_magic_token(
     db: &Box<dyn Database>,
     magic_token: &str,
 ) -> Result<Option<(String, String)>, DbError> {
-    let or: Vec<Box<dyn BooleanExpression>> = vec![
-        Box::new(where_eq("expires", DatabaseValue::Null)),
-        Box::new(where_gt(
-            "expires",
-            Box::new(Identifier {
-                value: "date('now')".into(),
-            }) as Box<dyn Expression>,
-        )),
-    ];
-
     if let Some((client_id, access_token)) = db
         .select("magic_tokens")
-        .filter(where_or(or))
-        .filter(where_eq("magic_token", magic_token))
+        .where_or(vec![
+            Box::new(where_eq("expires", DatabaseValue::Null)),
+            Box::new(where_gt(
+                "expires",
+                Box::new(Identifier {
+                    value: "date('now')".into(),
+                }) as Box<dyn Expression>,
+            )),
+        ])
+        .where_eq("magic_token", magic_token)
         .execute_first(db)
         .await?
         .and_then(|row| {
@@ -183,9 +177,9 @@ pub async fn save_magic_token(
     access_token: &str,
 ) -> Result<(), DbError> {
     db.upsert("magic_tokens")
-        .filter(where_eq("magic_token", magic_token))
-        .filter(where_eq("access_token", access_token))
-        .filter(where_eq("client_id", client_id))
+        .where_eq("magic_token", magic_token)
+        .where_eq("access_token", access_token)
+        .where_eq("client_id", client_id)
         .value("magic_token", magic_token)
         .value("access_token", access_token)
         .value("client_id", client_id)
@@ -202,7 +196,7 @@ pub async fn get_session_playlist(
 ) -> Result<Option<SessionPlaylist>, DbError> {
     if let Some(ref playlist) = db
         .select("session_playlists")
-        .filter(where_eq("id", session_id))
+        .where_eq("id", session_id)
         .execute_first(db)
         .await?
     {
@@ -220,7 +214,7 @@ pub async fn get_session_active_players(
         .select("active_players")
         .columns(&["players.*"])
         .join("players", "players.id=active_players.player_id")
-        .filter(where_eq("active_players.session_id", session_id))
+        .where_eq("active_players.session_id", session_id)
         .execute(db)
         .await?
         .to_value_type()?)
@@ -230,7 +224,7 @@ pub async fn get_session_playing(db: &Box<dyn Database>, id: i32) -> Result<Opti
     Ok(db
         .select("sessions")
         .columns(&["playing"])
-        .filter(where_eq("id", id))
+        .where_eq("id", id)
         .execute_first(db)
         .await?
         .and_then(|row| row.get("playing"))
@@ -243,7 +237,7 @@ pub async fn get_session(db: &Box<dyn Database>, id: i32) -> Result<Option<Sessi
     Ok(
         if let Some(ref session) = db
             .select("sessions")
-            .filter(where_eq("id", id))
+            .where_eq("id", id)
             .execute_first(db)
             .await?
         {
@@ -319,7 +313,7 @@ pub async fn update_session(
 ) -> Result<(), DbError> {
     if session.playlist.is_some() {
         db.delete("session_playlist_tracks")
-            .filter(where_in(
+            .where_in(
                 "session_playlist_tracks.id",
                 select("session_playlist_tracks")
                     .columns(&["session_playlist_tracks.id"])
@@ -331,14 +325,14 @@ pub async fn update_session(
                         "sessions",
                         "sessions.session_playlist_id=session_playlists.id",
                     )
-                    .filter(where_eq("sessions.id", session.session_id))
-                    .filter(where_eq(
+                    .where_eq("sessions.id", session.session_id)
+                    .where_eq(
                         "session_playlist_tracks.session_playlist_id",
                         Identifier {
                             value: "session_playlists.id".into(),
                         },
-                    )),
-            ))
+                    ),
+            )
             .execute(db)
             .await?;
     }
@@ -383,7 +377,7 @@ pub async fn update_session(
 
     if !values.is_empty() {
         db.update("sessions")
-            .filter(where_eq("id", session.session_id))
+            .where_eq("id", session.session_id)
             .values(values)
             .execute_first(db)
             .await?;
@@ -394,7 +388,7 @@ pub async fn update_session(
 
 pub async fn delete_session(db: &Box<dyn Database>, session_id: i32) -> Result<(), DbError> {
     db.delete("session_playlist_tracks")
-        .filter(where_in(
+        .where_in(
             "session_playlist_tracks.id",
             select("session_playlist_tracks")
                 .columns(&["session_playlist_tracks.id"])
@@ -406,19 +400,19 @@ pub async fn delete_session(db: &Box<dyn Database>, session_id: i32) -> Result<(
                     "sessions",
                     "sessions.session_playlist_id=sessions.session_playlists.id",
                 )
-                .filter(where_eq("sessions.id", session_id))
-                .filter(where_eq(
+                .where_eq("sessions.id", session_id)
+                .where_eq(
                     "session_playlist_id",
                     Identifier {
                         value: "session_playlists.id".into(),
                     },
-                )),
-        ))
+                ),
+        )
         .execute(db)
         .await?;
 
     db.delete("sessions")
-        .filter(where_eq("id", session_id))
+        .where_eq("id", session_id)
         .execute(db)
         .await?
         .into_iter()
@@ -426,7 +420,7 @@ pub async fn delete_session(db: &Box<dyn Database>, session_id: i32) -> Result<(
         .ok_or(DbError::NoRow)?;
 
     db.delete("session_playlists")
-        .filter(where_eq("id", session_id))
+        .where_eq("id", session_id)
         .execute(db)
         .await?;
 
@@ -451,7 +445,7 @@ pub async fn register_connection(
 ) -> Result<super::models::Connection, DbError> {
     let row: super::models::Connection = db
         .upsert("connections")
-        .filter(where_eq("id", connection.connection_id.clone()))
+        .where_eq("id", connection.connection_id.clone())
         .value("id", connection.connection_id.clone())
         .value("name", connection.name.clone())
         .execute_first(db)
@@ -473,18 +467,18 @@ pub async fn register_connection(
 
 pub async fn delete_connection(db: &Box<dyn Database>, connection_id: &str) -> Result<(), DbError> {
     db.delete("players")
-        .filter(where_in(
+        .where_in(
             "players.id",
             select("players")
                 .columns(&["players.id"])
                 .join("connections", "connections.id=players.connection_id")
-                .filter(where_eq("connections.id", connection_id)),
-        ))
+                .where_eq("connections.id", connection_id),
+        )
         .execute(db)
         .await?;
 
     db.delete("connections")
-        .filter(where_eq("id", connection_id))
+        .where_eq("id", connection_id)
         .execute(db)
         .await?;
 
@@ -497,7 +491,7 @@ pub async fn get_players(
 ) -> Result<Vec<super::models::Player>, DbError> {
     Ok(db
         .select("players")
-        .filter(where_eq("connection_id", connection_id))
+        .where_eq("connection_id", connection_id)
         .execute(db)
         .await?
         .to_value_type()?)
@@ -510,9 +504,9 @@ pub async fn create_player(
 ) -> Result<super::models::Player, DbError> {
     Ok(db
         .upsert("players")
-        .filter(where_eq("connection_id", connection_id))
-        .filter(where_eq("name", player.name.clone()))
-        .filter(where_eq("type", player.r#type.clone()))
+        .where_eq("connection_id", connection_id)
+        .where_eq("name", player.name.clone())
+        .where_eq("type", player.r#type.clone())
         .value("connection_id", connection_id)
         .value("name", player.name.clone())
         .value("type", player.r#type.clone())
@@ -526,10 +520,7 @@ pub async fn set_session_active_players(
     set_session_active_players: &super::models::SetSessionActivePlayers,
 ) -> Result<(), DbError> {
     db.delete("active_players")
-        .filter(where_eq(
-            "session_id",
-            set_session_active_players.session_id,
-        ))
+        .where_eq("session_id", set_session_active_players.session_id)
         .execute(db)
         .await?;
 
@@ -546,7 +537,7 @@ pub async fn set_session_active_players(
 
 pub async fn delete_player(db: &Box<dyn Database>, player_id: i32) -> Result<(), DbError> {
     db.delete("players")
-        .filter(where_eq("id", player_id))
+        .where_eq("id", player_id)
         .execute(db)
         .await?;
 
@@ -599,7 +590,7 @@ pub async fn get_all_album_version_qualities(
         ])
         .left_join("tracks", "tracks.album_id=albums.id")
         .left_join("track_sizes", "track_sizes.track_id=tracks.id")
-        .filter(where_in("albums.id", album_ids))
+        .where_in("albums.id", album_ids)
         .sort("albums.id", SortDirection::Desc)
         .execute(db)
         .await?
@@ -635,7 +626,7 @@ pub async fn get_album_version_qualities(
         ])
         .left_join("tracks", "tracks.album_id=albums.id")
         .left_join("track_sizes", "track_sizes.track_id=tracks.id")
-        .filter(where_eq("albums.id", album_id))
+        .where_eq("albums.id", album_id)
         .execute(db)
         .await?
         .to_value_type()?;
@@ -661,7 +652,7 @@ pub async fn get_artist<Id: Into<Box<dyn Expression>>>(
 ) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
         .select("artists")
-        .filter(where_eq(format!("{column}"), id.into()))
+        .where_eq(format!("{column}"), id.into())
         .execute_first(db)
         .await?
         .as_ref()
@@ -674,7 +665,7 @@ pub async fn get_artist_by_album_id(
 ) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
         .select("artists")
-        .filter(where_eq("albums.id", id))
+        .where_eq("albums.id", id)
         .join("albums", "albums.artist_id = artists.id")
         .execute_first(db)
         .await?
@@ -690,7 +681,7 @@ pub async fn get_artists_by_album_ids(
         .select("artists")
         .distinct()
         .join("albums", "albums.artist_id = artists.id")
-        .filter(where_in("album.id", album_ids.to_vec()))
+        .where_in("album.id", album_ids.to_vec())
         .execute(db)
         .await?
         .to_value_type()?)
@@ -704,7 +695,7 @@ pub async fn get_album_artist(
         .select("artists")
         .columns(&["artists.*"])
         .join("albums", "albums.artist_id=artists.id")
-        .filter(where_eq("albums.id", album_id))
+        .where_eq("albums.id", album_id)
         .execute_first(db)
         .await?
         .map(|x| x.to_value_type())
@@ -719,7 +710,7 @@ pub async fn get_tidal_album_artist(
         .select("artists")
         .columns(&["artists.*"])
         .join("albums", "albums.artist_id=artists.id")
-        .filter(where_eq("albums.tidal_id", tidal_album_id))
+        .where_eq("albums.tidal_id", tidal_album_id)
         .execute_first(db)
         .await?
         .map(|x| x.to_value_type())
@@ -734,7 +725,7 @@ pub async fn get_qobuz_album_artist(
         .select("artists")
         .columns(&["artists.*"])
         .join("albums", "albums.artist_id=artists.id")
-        .filter(where_eq("albums.qobuz_id", qobuz_album_id))
+        .where_eq("albums.qobuz_id", qobuz_album_id)
         .execute_first(db)
         .await?
         .map(|x| x.to_value_type())
@@ -754,7 +745,7 @@ pub async fn get_album<Id: Into<Box<dyn Expression>>>(
             "artists.tidal_id as tidal_artist_id",
             "artists.qobuz_id as qobuz_artist_id",
         ])
-        .filter(where_eq(format!("albums.{column}"), id.into()))
+        .where_eq(format!("albums.{column}"), id.into())
         .join("artists", "artists.id = albums.artist_id")
         .execute_first(db)
         .await?
@@ -787,10 +778,7 @@ pub async fn get_album_tracks(
             "track_sizes.sample_rate",
             "track_sizes.channels",
         ])
-        .filter(where_eq(
-            "tracks.album_id",
-            DatabaseValue::UNumber(album_id),
-        ))
+        .where_eq("tracks.album_id", DatabaseValue::UNumber(album_id))
         .join("albums", "albums.id=tracks.album_id")
         .join("artists", "artists.id=albums.artist_id")
         .left_join(
@@ -825,7 +813,7 @@ pub async fn get_artist_albums(
         .left_join("tracks", "tracks.album_id=albums.id")
         .left_join("track_sizes", "track_sizes.track_id=tracks.id")
         .join("artists", "artists.id=albums.artist_id")
-        .filter(where_eq("albums.artist_id", artist_id))
+        .where_eq("albums.artist_id", artist_id)
         .sort("albums.id", SortDirection::Desc)
         .execute(db)
         .await?
@@ -933,8 +921,8 @@ pub async fn get_track_size(
     Ok(db
         .select("track_sizes")
         .columns(&["bytes"])
-        .filter(where_eq("track_id", id))
-        .filter(where_eq("format", quality.format.as_ref()))
+        .where_eq("track_id", id)
+        .where_eq("format", quality.format.as_ref())
         .execute_first(db)
         .await?
         .and_then(|x| x.columns.first().cloned())
@@ -977,7 +965,7 @@ pub async fn get_tracks(
             "track_sizes.sample_rate",
             "track_sizes.channels",
         ])
-        .filter_some(ids.map(|ids| where_in("tracks.id", ids.to_vec())))
+        .filter_if_some(ids.map(|ids| where_in("tracks.id", ids.to_vec())))
         .join("albums", "albums.id=tracks.album_id")
         .join("artists", "artists.id=albums.artist_id")
         .left_join(
@@ -1006,7 +994,7 @@ pub async fn delete_tracks(
 
     Ok(db
         .delete("tracks")
-        .filter_some(ids.map(|ids| where_in("id", ids.to_vec())))
+        .filter_if_some(ids.map(|ids| where_in("id", ids.to_vec())))
         .execute(db)
         .await?
         .to_value_type()?)
@@ -1032,7 +1020,7 @@ pub async fn delete_track_sizes_by_track_id(
 
     Ok(db
         .delete("track_sizes")
-        .filter_some(ids.map(|ids| where_in("track_id", ids.to_vec())))
+        .filter_if_some(ids.map(|ids| where_in("track_id", ids.to_vec())))
         .execute(db)
         .await?
         .to_value_type()?)
@@ -1060,8 +1048,8 @@ pub async fn delete_session_playlist_tracks_by_track_id(
 
     Ok(db
         .delete("session_playlist_tracks")
-        .filter(where_eq("`type`", "'LIBRARY'"))
-        .filter_some(ids.map(|ids| where_in("track_id", ids.to_vec())))
+        .where_eq("`type`", "'LIBRARY'")
+        .filter_if_some(ids.map(|ids| where_in("track_id", ids.to_vec())))
         .execute(db)
         .await?
         .to_value_type()?)
@@ -1113,7 +1101,7 @@ pub async fn add_artist_maps_and_get_artists(
 
         let row: LibraryArtist = db
             .upsert("artists")
-            .filter(where_eq("title", artist.get("title").unwrap().clone()))
+            .where_eq("title", artist.get("title").unwrap().clone())
             .values(artist.into_iter().collect::<Vec<_>>())
             .execute_first(db)
             .await?
@@ -1134,9 +1122,9 @@ pub async fn add_albums(
     for album in albums {
         data.push(
             db.upsert("albums")
-                .filter(where_eq("artist_id", album.artist_id))
-                .filter(where_eq("title", album.title.clone()))
-                .filter(where_eq("directory", album.directory.clone()))
+                .where_eq("artist_id", album.artist_id)
+                .where_eq("title", album.title.clone())
+                .where_eq("directory", album.directory.clone())
                 .value("artist_id", album.artist_id)
                 .value("title", album.title)
                 .value("directory", album.directory)
@@ -1208,11 +1196,8 @@ pub async fn add_album_maps_and_get_albums(
 
         let row: LibraryAlbum = db
             .upsert("albums")
-            .filter(where_eq(
-                "artist_id",
-                album.get("artist_id").unwrap().clone(),
-            ))
-            .filter(where_eq("title", album.get("title").unwrap().clone()))
+            .where_eq("artist_id", album.get("artist_id").unwrap().clone())
+            .where_eq("title", album.get("title").unwrap().clone())
             .values(album.into_iter().collect::<Vec<_>>())
             .execute_first(db)
             .await?

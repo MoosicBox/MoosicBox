@@ -85,7 +85,7 @@ async fn fetch_local_album_cover(
         log::debug!("Updating Album {album_id} artwork file from '{cover}' to '{artwork}'");
 
         db.update("albums")
-            .filter(where_eq("id", album_id))
+            .where_eq("id", album_id)
             .value("artwork", artwork)
             .execute(&db)
             .await?;
@@ -134,7 +134,7 @@ async fn fetch_local_album_cover_bytes(
         log::debug!("Updating Album {album_id} artwork file from '{cover}' to '{artwork}'");
 
         db.update("albums")
-            .filter(where_eq("id", album_id))
+            .where_eq("id", album_id)
             .value("artwork", artwork)
             .execute(&db)
             .await?;
@@ -190,7 +190,7 @@ async fn copy_streaming_cover_to_local(
     log::debug!("Updating Album {album_id} cover file to '{cover}'");
 
     db.update("albums")
-        .filter(where_eq("id", album_id))
+        .where_eq("id", album_id)
         .value("artwork", cover.clone())
         .execute(&db)
         .await?;

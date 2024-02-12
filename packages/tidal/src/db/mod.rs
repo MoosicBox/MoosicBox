@@ -29,7 +29,7 @@ pub async fn create_tidal_config(
         .value("token_type", token_type)
         .value("user", user)
         .value("user_id", user_id)
-        .filter(where_eq("refresh_token", refresh_token))
+        .where_eq("refresh_token", refresh_token)
         .execute(db)
         .await?;
 
@@ -41,7 +41,7 @@ pub async fn delete_tidal_config(
     refresh_token: &str,
 ) -> Result<(), DatabaseError> {
     db.delete("tidal_config")
-        .filter(where_eq("refresh_token", refresh_token))
+        .where_eq("refresh_token", refresh_token)
         .execute(db)
         .await?;
 

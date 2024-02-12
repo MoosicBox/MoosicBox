@@ -15,8 +15,8 @@ pub async fn create_qobuz_app_secret(
     secret: &str,
 ) -> Result<(), DbError> {
     db.upsert("qobuz_bundle_secrets")
-        .filter(where_eq("qobuz_bundle_id", qobuz_bundle_id))
-        .filter(where_eq("timezone", timezone))
+        .where_eq("qobuz_bundle_id", qobuz_bundle_id)
+        .where_eq("timezone", timezone)
         .value("qobuz_bundle_id", qobuz_bundle_id)
         .value("timezone", timezone)
         .value("secret", secret)
@@ -35,7 +35,7 @@ pub async fn create_qobuz_app_config(
         .upsert("qobuz_bundles")
         .value("bundle_version", bundle_version)
         .value("app_id", app_id)
-        .filter(where_eq("bundle_version", bundle_version))
+        .where_eq("bundle_version", bundle_version)
         .execute_first(db)
         .await?
         .to_value_type()?)
@@ -49,7 +49,7 @@ pub async fn create_qobuz_config(
     user_public_id: &str,
 ) -> Result<(), DbError> {
     db.upsert("qobuz_config")
-        .filter(where_eq("user_id", user_id))
+        .where_eq("user_id", user_id)
         .value("access_token", access_token)
         .value("user_id", user_id)
         .value("user_email", user_email)

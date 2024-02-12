@@ -133,7 +133,7 @@ async fn copy_streaming_cover_to_local(
     log::debug!("Updating Artist {artist_id} cover file to '{cover}'");
 
     db.update("artists")
-        .filter(where_eq("id", artist_id))
+        .where_eq("id", artist_id)
         .value("cover", cover.clone())
         .execute(&db)
         .await?;
