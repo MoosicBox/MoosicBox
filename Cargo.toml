@@ -1,7 +1,5 @@
 [workspace]
 members = [
-    "server",
-    "tunnel_server",
     "packages/auth",
     "packages/config",
     "packages/converter",
@@ -19,11 +17,13 @@ members = [
     "packages/qobuz",
     "packages/scan",
     "packages/search",
+    "packages/server",
     "packages/stream_utils",
+    "packages/symphonia_player",
     "packages/tidal",
     "packages/tunnel",
+    "packages/tunnel_server",
     "packages/ws",
-    "players/symphonia_player",
 ]
 
 resolver = "2"

@@ -20,7 +20,7 @@ moosicbox_image = { path = "../image", default-features = false, features = [
     "image",
 ], optional = true }
 moosicbox_stream_utils = { path = "../stream_utils", optional = true }
-moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false, optional = true }
+moosicbox_symphonia_player = { path = "../symphonia_player", default-features = false, optional = true }
 moosicbox_ws = { path = "../ws", optional = true }
 
 base64            = { workspace = true, optional = true }

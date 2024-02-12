@@ -13,7 +13,7 @@ moosicbox_database = { path = "../database", default-features = false, features 
 moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
     "serde_json",
 ] }
-moosicbox_symphonia_player = { path = "../../players/symphonia_player", default-features = false }
+moosicbox_symphonia_player = { path = "../symphonia_player", default-features = false }
 
 actix-cors        = { workspace = true }
 actix-files       = { workspace = true }

@@ -178,24 +178,24 @@ jobs:
                       os: ubuntu-latest
 
                     - name: tunnel_server
-                      path: tunnel_server
+                      path: packages/tunnel_server
                       os: ubuntu-latest
                       env: TUNNEL_ACCESS_TOKEN=123
 
                     - name: tunnel_server-base64
-                      path: tunnel_server
+                      path: packages/tunnel_server
                       os: ubuntu-latest
                       env: TUNNEL_ACCESS_TOKEN=123
                       features: base64
 
                     - name: tunnel_server-base
-                      path: tunnel_server
+                      path: packages/tunnel_server
                       os: ubuntu-latest
                       env: TUNNEL_ACCESS_TOKEN=123
                       cargo: --no-default-features
 
                     - name: server-static-token-auth
-                      path: server
+                      path: packages/server
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
                       cargo: --no-default-features
@@ -203,58 +203,58 @@ jobs:
                       env: STATIC_TOKEN=123
 
                     - name: server-cpal
-                      path: server
+                      path: packages/server
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
                       cargo: --no-default-features
                       features: cpal
 
                     - name: server-pulseaudio-standard
-                      path: server
+                      path: packages/server
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install pulseaudio
                       cargo: --no-default-features
                       features: pulseaudio-standard
 
                     - name: server-pulseaudio-simple
-                      path: server
+                      path: packages/server
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install pulseaudio
                       cargo: --no-default-features
                       features: pulseaudio-simple
 
                     - name: server-all
-                      path: server
+                      path: packages/server
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
                       cargo: --no-default-features
                       features: cpal
 
                     - name: server-no-default-features
-                      path: server
+                      path: packages/server
                       os: ubuntu-latest
                       cargo: --no-default-features
 
                     - name: server-aac
-                      path: server
+                      path: packages/server
                       os: ubuntu-latest
                       cargo: --no-default-features
                       features: aac
 
                     - name: server-flac
-                      path: server
+                      path: packages/server
                       os: ubuntu-latest
                       cargo: --no-default-features
                       features: flac
 
                     - name: server-mp3
-                      path: server
+                      path: packages/server
                       os: ubuntu-latest
                       cargo: --no-default-features
                       features: mp3
 
                     - name: server-opus
-                      path: server
+                      path: packages/server
                       os: ubuntu-latest
                       cargo: --no-default-features
                       features: opus
@@ -306,63 +306,63 @@ jobs:
                       os: ubuntu-latest
 
                     - name: symphonia_player-cpal-windows
-                      path: players/symphonia_player
+                      path: packages/symphonia_player
                       os: windows-latest
                       cargo: --no-default-features
                       features: cpal
 
                     - name: symphonia_player-all-windows
-                      path: players/symphonia_player
+                      path: packages/symphonia_player
                       os: windows-latest
 
                     - name: symphonia_player-cpal-ubuntu
-                      path: players/symphonia_player
+                      path: packages/symphonia_player
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
                       cargo: --no-default-features
                       features: cpal
 
                     - name: symphonia_player-pulseaudio-standard-ubuntu
-                      path: players/symphonia_player
+                      path: packages/symphonia_player
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install pulseaudio
                       cargo: --no-default-features
                       features: pulseaudio-standard
 
                     - name: symphonia_player-pulseaudio-simple-ubuntu
-                      path: players/symphonia_player
+                      path: packages/symphonia_player
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install pulseaudio
                       cargo: --no-default-features
                       features: pulseaudio-simple
 
                     - name: symphonia_player-all-ubuntu
-                      path: players/symphonia_player
+                      path: packages/symphonia_player
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev
 
                     - name: symphonia_player-cpal-macos
-                      path: players/symphonia_player
+                      path: packages/symphonia_player
                       os: macos-latest
                       cargo: --no-default-features
                       features: cpal
 
                     - name: symphonia_player-pulseaudio-standard-macos
-                      path: players/symphonia_player
+                      path: packages/symphonia_player
                       os: macos-latest
                       dependencies: brew install pulseaudio
                       cargo: --no-default-features
                       features: pulseaudio-standard
 
                     - name: symphonia_player-pulseaudio-simple-macos
-                      path: players/symphonia_player
+                      path: packages/symphonia_player
                       os: macos-latest
                       dependencies: brew install pulseaudio
                       cargo: --no-default-features
                       features: pulseaudio-simple
 
                     - name: symphonia_player-all-macos
-                      path: players/symphonia_player
+                      path: packages/symphonia_player
                       os: macos-latest
                       dependencies: brew install pulseaudio
 

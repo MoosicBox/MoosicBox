@@ -93,9 +93,9 @@ ADD packages/ws/.cargo packages/ws/.cargo
 RUN mkdir -p packages/ws/src && echo "fn main() {}" > packages/ws/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_ws\"\nversion = \"0.1.0\"" > packages/ws/Cargo.toml
 
-ADD players/symphonia_player/.cargo players/symphonia_player/.cargo
-RUN mkdir -p players/symphonia_player/src && echo "fn main() {}" > players/symphonia_player/src/main.rs
-ADD players/symphonia_player/Cargo.toml players/symphonia_player/Cargo.toml
+ADD packages/symphonia_player/.cargo packages/symphonia_player/.cargo
+RUN mkdir -p packages/symphonia_player/src && echo "fn main() {}" > packages/symphonia_player/src/main.rs
+ADD packages/symphonia_player/Cargo.toml packages/symphonia_player/Cargo.toml
 
 ADD server/.cargo server/.cargo
 RUN mkdir -p server/src && echo "fn main() {}" > server/src/main.rs

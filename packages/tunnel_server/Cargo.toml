@@ -10,8 +10,8 @@ name = "moosicbox_tunnel_server"
 path = "src/main.rs"
 
 [dependencies]
-moosicbox_env_utils = { path = "../packages/env_utils" }
-moosicbox_tunnel    = { path = "../packages/tunnel", default-features = false }
+moosicbox_env_utils = { path = "../env_utils" }
+moosicbox_tunnel    = { path = "../tunnel", default-features = false }
 
 actix-cors        = { workspace = true }
 actix-web         = { workspace = true }

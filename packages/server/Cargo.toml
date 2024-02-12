@@ -5,36 +5,36 @@ name    = "moosicbox_server"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_auth = { path = "../packages/auth" }
-moosicbox_core = { path = "../packages/core", default-features = false }
-moosicbox_database = { path = "../packages/database", default-features = false, features = [
+moosicbox_auth = { path = "../auth" }
+moosicbox_core = { path = "../core", default-features = false }
+moosicbox_database = { path = "../database", default-features = false, features = [
     "rusqlite",
 ] }
-moosicbox_downloader = { path = "../packages/downloader", default-features = false, features = [
+moosicbox_downloader = { path = "../downloader", default-features = false, features = [
     "api",
 ] }
-moosicbox_env_utils = { path = "../packages/env_utils" }
-moosicbox_files = { path = "../packages/files", default-features = false, features = [
+moosicbox_env_utils = { path = "../env_utils" }
+moosicbox_files = { path = "../files", default-features = false, features = [
     "api",
     "files",
     "range",
     "image",
 ] }
-moosicbox_menu = { path = "../packages/menu" }
-moosicbox_player = { path = "../packages/player", default-features = false }
-moosicbox_qobuz = { path = "../packages/qobuz" }
-moosicbox_scan = { path = "../packages/scan", default-features = false, features = [
+moosicbox_menu = { path = "../menu" }
+moosicbox_player = { path = "../player", default-features = false }
+moosicbox_qobuz = { path = "../qobuz" }
+moosicbox_scan = { path = "../scan", default-features = false, features = [
     "api",
     "local",
     "tidal",
     "qobuz",
 ] }
-moosicbox_search = { path = "../packages/search" }
-moosicbox_tidal = { path = "../packages/tidal" }
-moosicbox_tunnel = { path = "../packages/tunnel", default-features = false, features = [
+moosicbox_search = { path = "../search" }
+moosicbox_tidal = { path = "../tidal" }
+moosicbox_tunnel = { path = "../tunnel", default-features = false, features = [
     "sender",
 ] }
-moosicbox_ws = { path = "../packages/ws" }
+moosicbox_ws = { path = "../ws" }
 
 actix-cors    = { workspace = true }
 actix-files   = { workspace = true }

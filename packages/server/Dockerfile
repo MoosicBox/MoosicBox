@@ -14,7 +14,6 @@ RUN mkdir -p server/src && echo "fn main() {}" > server/src/main.rs
 RUN echo "[package]\nname = \"moosicbox_server\"\nversion = \"0.1.0\"" > server/Cargo.toml
 
 COPY packages packages
-COPY players players
 
 RUN cargo build --manifest-path=packages/env_utils/Cargo.toml --release
 RUN cargo build --manifest-path=packages/database/Cargo.toml --release
@@ -23,7 +22,7 @@ RUN cargo build --manifest-path=packages/core/Cargo.toml --release
 RUN cargo build --manifest-path=packages/auth/Cargo.toml --release
 RUN cargo build --manifest-path=packages/image/Cargo.toml --release
 RUN apt-get update && apt-get -y install libasound2-dev cmake
-RUN cargo build --manifest-path=players/symphonia_player/Cargo.toml --release --no-default-features --features=cpal
+RUN cargo build --manifest-path=packages/symphonia_player/Cargo.toml --release --no-default-features --features=cpal
 RUN cargo build --manifest-path=packages/converter/Cargo.toml --release
 RUN cargo build --manifest-path=packages/stream_utils/Cargo.toml --release
 RUN cargo build --manifest-path=packages/paging/Cargo.toml --release
