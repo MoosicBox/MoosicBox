@@ -159,8 +159,6 @@ pub enum GetAlbumsError {
     Db(#[from] DbError),
     #[error(transparent)]
     GetAlbums(#[from] moosicbox_core::sqlite::menu::GetAlbumsError),
-    #[error("No DB set")]
-    NoDb,
 }
 
 pub async fn get_all_albums(
@@ -180,8 +178,6 @@ pub enum GetAlbumTracksError {
     Json(#[from] awc::error::JsonPayloadError),
     #[error(transparent)]
     Db(#[from] DbError),
-    #[error("No DB set")]
-    NoDb,
 }
 
 impl<T> From<PoisonError<T>> for GetAlbumTracksError {

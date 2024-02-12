@@ -67,8 +67,6 @@ pub fn sort_artists(
 pub enum GetArtistsError {
     #[error(transparent)]
     DbError(#[from] DbError),
-    #[error("No DB set")]
-    NoDb,
 }
 
 pub async fn get_all_artists(

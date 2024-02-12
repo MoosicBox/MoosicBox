@@ -32,8 +32,6 @@ use crate::{
 pub enum ScanError {
     #[error(transparent)]
     Db(#[from] DbError),
-    #[error("No DB set")]
-    NoDb,
     #[error(transparent)]
     ParseInt(#[from] ParseIntError),
     #[error(transparent)]

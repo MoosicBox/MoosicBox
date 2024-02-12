@@ -29,8 +29,6 @@ pub enum GetArtistError {
     SqliteError(#[from] rusqlite::Error),
     #[error(transparent)]
     DbError(#[from] db::DbError),
-    #[error("No DB set")]
-    NoDb,
     #[error("Invalid request")]
     InvalidRequest,
 }
@@ -157,8 +155,6 @@ pub enum GetAlbumError {
     SqliteError(#[from] rusqlite::Error),
     #[error(transparent)]
     DbError(#[from] db::DbError),
-    #[error("No DB set")]
-    NoDb,
     #[error("Invalid request")]
     InvalidRequest,
 }
@@ -248,8 +244,6 @@ pub enum GetAlbumsError {
     Json(#[from] awc::error::JsonPayloadError),
     #[error(transparent)]
     Db(#[from] DbError),
-    #[error("No DB set")]
-    NoDb,
 }
 
 impl<T> From<PoisonError<T>> for GetAlbumsError {
@@ -289,8 +283,6 @@ pub enum GetArtistAlbumsError {
     Sqlite(#[from] rusqlite::Error),
     #[error(transparent)]
     Db(#[from] DbError),
-    #[error("No DB set")]
-    NoDb,
 }
 
 impl<T> From<PoisonError<T>> for GetArtistAlbumsError {
