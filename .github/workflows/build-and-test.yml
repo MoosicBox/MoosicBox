@@ -367,13 +367,6 @@ jobs:
                       dependencies: brew install pulseaudio
 
         steps:
-            - name: Checkout audiotags
-              uses: actions/checkout@v4
-              with:
-                  repository: BSteffaniak/audiotags
-                  ref: feat/add-full-date-capabilities
-                  path: audiotags
-
             - uses: actions/checkout@v4
               with:
                   path: MoosicBoxServer
