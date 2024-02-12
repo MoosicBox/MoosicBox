@@ -234,8 +234,9 @@ pub async fn get_session_playing(db: &Box<dyn Database>, id: i32) -> Result<Opti
         .execute_first(db)
         .await?
         .and_then(|row| row.get("playing"))
-        .map(|x| x.to_value_type())
-        .transpose()?)
+        .map(|x| x.to_value_type() as Result<Option<bool>, _>)
+        .transpose()?
+        .flatten())
 }
 
 pub async fn get_session(db: &Box<dyn Database>, id: i32) -> Result<Option<Session>, DbError> {
@@ -936,8 +937,11 @@ pub async fn get_track_size(
         .filter(where_eq("format", quality.format.as_ref()))
         .execute_first(db)
         .await?
-        .and_then(|x| x.columns.first().map(|(_, c)| c.to_value_type()))
-        .transpose()?)
+        .and_then(|x| x.columns.first().cloned())
+        .map(|(_, value)| value)
+        .map(|col| col.to_value_type() as Result<Option<u64>, _>)
+        .transpose()?
+        .flatten())
 }
 
 pub async fn get_track(db: &Box<dyn Database>, id: u64) -> Result<Option<LibraryTrack>, DbError> {
