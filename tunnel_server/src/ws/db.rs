@@ -1,5 +1,6 @@
 use std::{collections::HashMap, str::from_utf8, sync::Mutex};
 
+use actix_web::error::ErrorInternalServerError;
 use aws_config::BehaviorVersion;
 use aws_sdk_ssm::{config::Region, Client};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
@@ -10,6 +11,13 @@ use mysql::{
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+impl From<DatabaseError> for actix_web::Error {
+    fn from(value: DatabaseError) -> Self {
+        log::error!("{value:?}");
+        ErrorInternalServerError(value)
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum DatabaseError {
