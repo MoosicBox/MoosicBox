@@ -3,7 +3,7 @@ use moosicbox_ws::api::{WebsocketSendError, WebsocketSender};
 use serde_json::{json, Value};
 use tokio_tungstenite::tungstenite::Message;
 
-use super::tunnel_sender::{TunnelResponseMessage, TunnelResponsePacket};
+use crate::sender::{TunnelResponseMessage, TunnelResponsePacket};
 
 pub struct TunnelWebsocketSender<T>
 where

@@ -6,7 +6,7 @@ use futures_util::{
     StreamExt as _,
 };
 use log::{debug, error};
-use moosicbox_tunnel::tunnel::TunnelWsResponse;
+use moosicbox_tunnel::TunnelWsResponse;
 use tokio::{pin, sync::mpsc, time::interval};
 
 use crate::ws::server::ChatServerHandle;

@@ -1,0 +1,73 @@
+[package]
+authors = ["Braden Steffaniak"]
+edition = "2021"
+name    = "moosicbox_tunnel_sender"
+version = "0.1.0"
+
+[dependencies]
+moosicbox_auth = { path = "../auth" }
+moosicbox_core = { path = "../core", default-features = false }
+moosicbox_database = { path = "../database", default-features = false, features = [
+    "rusqlite",
+] }
+moosicbox_env_utils = { path = "../env_utils" }
+moosicbox_files = { path = "../files", default-features = false, features = [
+    "files",
+    "range",
+    "api",
+] }
+moosicbox_image = { path = "../image", default-features = false, features = [
+    "image",
+] }
+moosicbox_stream_utils = { path = "../stream_utils" }
+moosicbox_symphonia_player = { path = "../symphonia_player", default-features = false }
+moosicbox_ws = { path = "../ws" }
+moosicbox_tunnel = { path = "../tunnel", default-features = false }
+
+# Base64 dependencies
+base64 = { workspace = true, optional = true }
+
+bytes             = { workspace = true }
+crossbeam-channel = { workspace = true }
+futures-channel   = { workspace = true }
+futures-util      = { workspace = true }
+lazy_static       = { workspace = true }
+log               = { workspace = true }
+once_cell         = { workspace = true }
+rand              = { workspace = true }
+regex             = { workspace = true }
+reqwest           = { workspace = true, features = ["json"] }
+serde             = { workspace = true, features = ["derive"] }
+serde-aux         = { workspace = true }
+serde_json        = { workspace = true }
+strum             = { workspace = true }
+strum_macros      = { workspace = true }
+symphonia         = { workspace = true }
+thiserror         = { workspace = true }
+tokio             = { workspace = true }
+tokio-tungstenite = { workspace = true }
+tokio-util        = { workspace = true }
+
+[features]
+default = ["base64", "aac", "flac", "mp3", "opus"]
+
+fail-on-warnings = []
+
+base64 = ["dep:base64", "moosicbox_tunnel/base64"]
+
+aac = [
+    "moosicbox_symphonia_player/aac",
+    "moosicbox_files/aac",
+    "moosicbox_core/aac",
+]
+flac = ["moosicbox_files/flac", "moosicbox_core/flac"]
+mp3 = [
+    "moosicbox_symphonia_player/mp3",
+    "moosicbox_files/mp3",
+    "moosicbox_core/mp3",
+]
+opus = [
+    "moosicbox_symphonia_player/opus",
+    "moosicbox_files/opus",
+    "moosicbox_core/opus",
+]

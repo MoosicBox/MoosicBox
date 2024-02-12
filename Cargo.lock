@@ -3335,6 +3335,7 @@ dependencies = [
  "moosicbox_search",
  "moosicbox_tidal",
  "moosicbox_tunnel",
+ "moosicbox_tunnel_sender",
  "moosicbox_ws",
  "once_cell",
  "rand",
@@ -3428,6 +3429,27 @@ dependencies = [
  "base64",
  "bytes",
  "crossbeam-channel",
+ "futures-util",
+ "log",
+ "rand",
+ "regex",
+ "serde",
+ "serde_json",
+ "strum",
+ "strum_macros",
+ "symphonia",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "moosicbox_tunnel_sender"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "bytes",
+ "crossbeam-channel",
  "futures-channel",
  "futures-util",
  "lazy_static",
@@ -3440,6 +3462,7 @@ dependencies = [
  "moosicbox_image",
  "moosicbox_stream_utils",
  "moosicbox_symphonia_player",
+ "moosicbox_tunnel",
  "moosicbox_ws",
  "once_cell",
  "rand",

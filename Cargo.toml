@@ -22,6 +22,7 @@ members = [
     "packages/symphonia_player",
     "packages/tidal",
     "packages/tunnel",
+    "packages/tunnel_sender",
     "packages/tunnel_server",
     "packages/ws",
 ]

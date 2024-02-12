@@ -6,7 +6,7 @@ use actix_web::{HttpRequest, Result};
 use bytes::Bytes;
 use futures_util::StreamExt;
 use log::{debug, info};
-use moosicbox_tunnel::tunnel::{
+use moosicbox_tunnel::{
     Method, TunnelEncoding, TunnelHttpRequest, TunnelRequest, TunnelResponse, TunnelStream,
 };
 use qstring::QString;

@@ -10,7 +10,7 @@ use std::{
 };
 
 use log::{debug, error, info, warn};
-use moosicbox_tunnel::tunnel::{
+use moosicbox_tunnel::{
     TunnelAbortRequest, TunnelRequest, TunnelResponse, TunnelWsRequest, TunnelWsResponse,
 };
 use rand::{thread_rng, Rng as _};

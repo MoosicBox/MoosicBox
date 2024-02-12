@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+
 use bytes::Bytes;
 use moosicbox_core::{sqlite::models::TrackApiSource, types::AudioFormat};
 use moosicbox_files::files::track::TrackAudioQuality;
@@ -7,8 +9,8 @@ use serde_aux::prelude::*;
 use thiserror::Error;
 use tokio_tungstenite::tungstenite::protocol::frame::Frame;
 
-pub mod tunnel_sender;
-pub mod tunnel_websocket_sender;
+pub mod sender;
+pub mod websocket_sender;
 
 #[derive(Debug, Error)]
 pub enum SendBytesError {

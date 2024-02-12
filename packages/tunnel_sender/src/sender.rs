@@ -23,6 +23,7 @@ use moosicbox_stream_utils::ByteWriter;
 use moosicbox_symphonia_player::media_sources::remote_bytestream::RemoteByteStream;
 use moosicbox_symphonia_player::output::AudioOutputHandler;
 use moosicbox_symphonia_player::play_media_source;
+use moosicbox_tunnel::{Method, TunnelEncoding, TunnelWsResponse};
 use moosicbox_ws::api::{WebsocketContext, WebsocketSendError, WebsocketSender};
 use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng as _};
@@ -42,13 +43,11 @@ use tokio_tungstenite::{
 };
 use tokio_util::sync::CancellationToken;
 
-use crate::sender::tunnel_websocket_sender::TunnelWebsocketSender;
-use crate::tunnel::{Method, TunnelEncoding, TunnelWsResponse};
-
 use super::{
     GetTrackInfoQuery, GetTrackQuery, SendBytesError, SendMessageError, TunnelMessage,
     TunnelRequestError,
 };
+use crate::websocket_sender::TunnelWebsocketSender;
 
 lazy_static! {
     static ref RT: Runtime = runtime::Builder::new_multi_thread()

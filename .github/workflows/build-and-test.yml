@@ -177,6 +177,34 @@ jobs:
                       path: packages/ws
                       os: ubuntu-latest
 
+                    - name: tunnel
+                      path: packages/tunnel
+                      os: ubuntu-latest
+
+                    - name: tunnel-base64
+                      path: packages/tunnel
+                      os: ubuntu-latest
+                      features: base64
+
+                    - name: tunnel-base
+                      path: packages/tunnel
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+
+                    - name: tunnel_sender
+                      path: packages/tunnel_sender
+                      os: ubuntu-latest
+
+                    - name: tunnel_sender-base64
+                      path: packages/tunnel_sender
+                      os: ubuntu-latest
+                      features: base64
+
+                    - name: tunnel_sender-base
+                      path: packages/tunnel_sender
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+
                     - name: tunnel_server
                       path: packages/tunnel_server
                       os: ubuntu-latest

@@ -14,10 +14,8 @@ use moosicbox_core::app::AppState;
 use moosicbox_database::{rusqlite::RusqliteDatabase, Database, DbConnection};
 use moosicbox_downloader::{api::models::ApiProgressEvent, queue::ProgressEvent};
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
-use moosicbox_tunnel::{
-    sender::{tunnel_sender::TunnelSender, TunnelMessage},
-    tunnel::TunnelRequest,
-};
+use moosicbox_tunnel::TunnelRequest;
+use moosicbox_tunnel_sender::{sender::TunnelSender, TunnelMessage};
 use moosicbox_ws::api::send_download_event;
 use once_cell::sync::Lazy;
 use std::{
