@@ -3,7 +3,7 @@ services:
         image: moosicbox_server
         build:
             context: .
-            dockerfile: server/Dockerfile
+            dockerfile: packages/server/Server.Dockerfile
             args:
                 WS_HOST: "${WS_HOST}"
                 TUNNEL_ACCESS_TOKEN: "${TUNNEL_ACCESS_TOKEN}"
