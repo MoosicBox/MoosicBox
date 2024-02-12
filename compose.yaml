@@ -14,7 +14,7 @@ services:
         image: moosicbox_tunnel_server
         build:
             context: .
-            dockerfile: tunnel_server/Dockerfile
+            dockerfile: packages/tunnel_server/TunnelServer.Dockerfile
             args:
                 TUNNEL_ACCESS_TOKEN: "${TUNNEL_ACCESS_TOKEN}"
         ports:
