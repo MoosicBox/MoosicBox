@@ -48,10 +48,7 @@ pub async fn auth_get_magic_token_endpoint(
     let token = &query.magic_token;
     let token_hash = &hash_token(token);
 
-    if let Some(magic_token) = select_magic_token(token_hash)
-        .await
-        .map_err(|e| ErrorInternalServerError(format!("Error: {e:?}")))?
-    {
+    if let Some(magic_token) = select_magic_token(token_hash).await? {
         handle_request(
             &magic_token.client_id,
             &Method::Get,
@@ -82,9 +79,7 @@ pub async fn auth_magic_token_endpoint(
         .map(|(_, value)| value)
         .ok_or(ErrorBadRequest("Missing clientId"))?;
 
-    insert_magic_token(client_id, token_hash)
-        .await
-        .map_err(|e| ErrorInternalServerError(format!("Error: {e:?}")))?;
+    insert_magic_token(client_id, token_hash).await?;
 
     Ok(Json(json!({"success": true})))
 }
@@ -103,9 +98,7 @@ pub async fn auth_register_client_endpoint(
     let token = &Uuid::new_v4().to_string();
     let token_hash = &hash_token(token);
 
-    insert_client_access_token(&query.client_id, token_hash)
-        .await
-        .map_err(|e| ErrorInternalServerError(format!("Error: {e:?}")))?;
+    insert_client_access_token(&query.client_id, token_hash).await?;
 
     Ok(Json(json!({"token": token})))
 }
@@ -124,9 +117,7 @@ pub async fn auth_signature_token_endpoint(
     let token = &Uuid::new_v4().to_string();
     let token_hash = &hash_token(token);
 
-    insert_signature_token(&query.client_id, token_hash)
-        .await
-        .map_err(|e| ErrorInternalServerError(format!("Error: {e:?}")))?;
+    insert_signature_token(&query.client_id, token_hash).await?;
 
     Ok(Json(json!({"token": token})))
 }
