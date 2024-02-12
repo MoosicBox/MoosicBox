@@ -21,6 +21,13 @@ pub struct ScanLocation {
 }
 
 impl MissingValue<ScanOrigin> for &moosicbox_database::Row {}
+impl ToValueType<ScanOrigin> for &moosicbox_database::Row {
+    fn to_value_type(self) -> Result<ScanOrigin, ParseError> {
+        self.get("origin")
+            .ok_or(ParseError::MissingValue("origin".into()))?
+            .to_value_type()
+    }
+}
 impl ToValueType<ScanOrigin> for DatabaseValue {
     fn to_value_type(self) -> Result<ScanOrigin, ParseError> {
         Ok(ScanOrigin::from_str(

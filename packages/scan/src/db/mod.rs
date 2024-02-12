@@ -61,9 +61,7 @@ pub async fn get_enabled_scan_origins(db: &Box<dyn Database>) -> Result<Vec<Scan
         .columns(&["origin"])
         .execute(db)
         .await?
-        .iter()
-        .map(|x| x.get("origin").unwrap().to_value_type())
-        .collect::<Result<Vec<_>, _>>()?)
+        .to_value_type()?)
 }
 
 pub async fn get_scan_locations(db: &Box<dyn Database>) -> Result<Vec<ScanLocation>, DbError> {
