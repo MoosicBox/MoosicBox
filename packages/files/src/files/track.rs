@@ -258,21 +258,17 @@ pub async fn get_track_bytes(
         .await
         {
             Ok(size) => Some(size),
-            Err(err) => {
-                log::error!("get_track_bytes error: {err:?}");
-
-                match err {
-                    TrackInfoError::UnsupportedFormat(_) | TrackInfoError::UnsupportedSource(_) => {
-                        None
-                    }
-                    TrackInfoError::NotFound(_) => {
-                        return Err(GetTrackBytesError::NotFound);
-                    }
-                    _ => {
-                        return Err(GetTrackBytesError::TrackInfo(err));
-                    }
+            Err(err) => match err {
+                TrackInfoError::UnsupportedFormat(_) | TrackInfoError::UnsupportedSource(_) => None,
+                TrackInfoError::NotFound(_) => {
+                    log::error!("get_track_bytes error: {err:?}");
+                    return Err(GetTrackBytesError::NotFound);
                 }
-            }
+                _ => {
+                    log::error!("get_track_bytes error: {err:?}");
+                    return Err(GetTrackBytesError::TrackInfo(err));
+                }
+            },
         }
     } else {
         None
