@@ -258,10 +258,24 @@ async fn handle_request(
 
     let mut builder = HttpResponse::Ok();
 
-    let headers = headers_rx.await.unwrap();
+    let headers = match headers_rx.await {
+        Ok(headers) => headers,
+        Err(_) => {
+            log::error!(
+                "Failed to receive headers for request_id={request_id} client_id={client_id}"
+            );
+            return Err(ErrorUnauthorized("Unauthorized"));
+        }
+    };
+
     let response_type = ResponseType::Stream;
 
-    builder.status(StatusCode::from_u16(headers.status).unwrap());
+    builder.status(StatusCode::from_u16(headers.status).map_err(|e| {
+        ErrorInternalServerError(format!(
+            "Received invalid status code {}: {e:?}",
+            headers.status
+        ))
+    })?);
 
     for (key, value) in &headers.headers {
         builder.insert_header((key.clone(), value.clone()));
@@ -319,7 +333,14 @@ async fn request(
         let chat_server = CHAT_SERVER_HANDLE.read().unwrap().as_ref().unwrap().clone();
         chat_server.request_start(request_id, tx, headers_tx, abort_token);
 
-        let conn_id = chat_server.get_connection_id(&client_id).await?;
+        let conn_id = match chat_server.get_connection_id(&client_id).await {
+            Ok(conn_id) => conn_id,
+            Err(err) => {
+                log::error!("Failed to get connection id for request_id={request_id} client_id={client_id}: {err:?}");
+                chat_server.request_end(request_id);
+                return Err(err);
+            }
+        };
 
         debug!("Sending server request {request_id} to {conn_id}");
         chat_server
