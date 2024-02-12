@@ -207,7 +207,7 @@ fn get_headers_for_request(req: &HttpRequest) -> Option<Value> {
 
 async fn proxy_request(body: Option<Bytes>, req: HttpRequest) -> Result<HttpResponse> {
     let method = Method::from_str(&req.method().to_string().to_uppercase()).map_err(|e| {
-        ErrorInternalServerError(format!(
+        ErrorBadRequest(format!(
             "Failed to parse method: '{:?}': {e:?}",
             req.method()
         ))
