@@ -1,0 +1,30 @@
+name: Deploy Server
+
+on: workflow_dispatch
+
+env:
+    CARGO_TERM_COLOR: always
+    AWS_REGION: us-east-1
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - id: install-aws-cli
+              uses: unfor19/install-aws-cli-action@v1
+              with:
+                  arch: amd64
+
+            - name: Deploy
+              shell: bash
+              env:
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  WS_HOST: ${{ secrets.WS_HOST }}
+                  TUNNEL_ACCESS_TOKEN: ${{ secrets.TUNNEL_ACCESS_TOKEN }}
+                  STATIC_TOKEN: ${{ secrets.STATIC_TOKEN }}
+              run: |
+                  ./aws-deploy.sh moosicbox_server moosicbox-server
