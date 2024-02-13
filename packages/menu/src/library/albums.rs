@@ -102,7 +102,10 @@ pub fn filter_albums<'a>(
         })
 }
 
-pub fn sort_albums(mut albums: Vec<LibraryAlbum>, request: &AlbumsRequest) -> Vec<LibraryAlbum> {
+pub fn sort_albums<'a>(
+    mut albums: Vec<&'a LibraryAlbum>,
+    request: &'a AlbumsRequest,
+) -> Vec<&'a LibraryAlbum> {
     match request.sort {
         Some(AlbumSort::ArtistAsc) => albums.sort_by(|a, b| a.artist.cmp(&b.artist)),
         Some(AlbumSort::NameAsc) => albums.sort_by(|a, b| a.title.cmp(&b.title)),
@@ -131,7 +134,7 @@ pub fn sort_albums(mut albums: Vec<LibraryAlbum>, request: &AlbumsRequest) -> Ve
                 return Ordering::Less;
             }
 
-            a.clone().date_released.cmp(&b.clone().date_released)
+            a.date_released.cmp(&b.date_released)
         }),
         Some(AlbumSort::ReleaseDateDesc) => albums.sort_by(|a, b| {
             if a.date_released.is_none() {
@@ -141,14 +144,10 @@ pub fn sort_albums(mut albums: Vec<LibraryAlbum>, request: &AlbumsRequest) -> Ve
                 return Ordering::Less;
             }
 
-            b.clone().date_released.cmp(&a.clone().date_released)
+            b.date_released.cmp(&a.date_released)
         }),
-        Some(AlbumSort::DateAddedAsc) => {
-            albums.sort_by(|a, b| a.clone().date_added.cmp(&b.clone().date_added))
-        }
-        Some(AlbumSort::DateAddedDesc) => {
-            albums.sort_by(|b, a| a.clone().date_added.cmp(&b.clone().date_added))
-        }
+        Some(AlbumSort::DateAddedAsc) => albums.sort_by(|a, b| a.date_added.cmp(&b.date_added)),
+        Some(AlbumSort::DateAddedDesc) => albums.sort_by(|b, a| a.date_added.cmp(&b.date_added)),
         None => (),
     }
 
@@ -169,10 +168,12 @@ pub async fn get_all_albums(
 ) -> Result<Vec<LibraryAlbum>, GetAlbumsError> {
     let albums = get_albums(&data.database).await?;
 
-    Ok(sort_albums(
-        filter_albums(&albums, request).cloned().collect::<Vec<_>>(),
-        request,
-    ))
+    Ok(
+        sort_albums(filter_albums(&albums, request).collect::<Vec<_>>(), request)
+            .into_iter()
+            .cloned()
+            .collect(),
+    )
 }
 
 #[derive(Debug, Error)]
