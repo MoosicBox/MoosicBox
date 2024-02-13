@@ -1,4 +1,4 @@
-use std::{fmt::Display, path::PathBuf, str::FromStr};
+use std::{fmt::Display, path::PathBuf, str::FromStr, sync::Arc};
 
 use async_trait::async_trait;
 use moosicbox_database::{Database, DatabaseValue};
@@ -86,6 +86,15 @@ pub trait AsModelQuery<T> {
 
 pub trait ToApi<T> {
     fn to_api(self) -> T;
+}
+
+impl<T, X> ToApi<T> for Arc<X>
+where
+    X: ToApi<T> + Clone,
+{
+    fn to_api(self) -> T {
+        self.as_ref().clone().to_api()
+    }
 }
 
 impl<'a, T, X> ToApi<T> for &'a X
