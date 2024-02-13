@@ -7,7 +7,7 @@ use futures::Future;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(untagged)]
 pub enum Page<T> {
@@ -17,12 +17,71 @@ pub enum Page<T> {
         limit: u32,
         total: u32,
     },
+    #[serde(rename_all = "camelCase")]
     WithHasMore {
         items: Vec<T>,
         offset: u32,
         limit: u32,
         has_more: bool,
     },
+}
+
+impl<T: Serialize> ::serde::Serialize for Page<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Page::WithTotal {
+                items,
+                offset,
+                limit,
+                total,
+            } => {
+                #[derive(Serialize)]
+                #[serde(rename_all = "camelCase")]
+                struct Extended<'a, T> {
+                    items: &'a Vec<T>,
+                    offset: &'a u32,
+                    limit: &'a u32,
+                    total: &'a u32,
+                    has_more: bool,
+                }
+
+                let ext = Extended {
+                    items,
+                    offset,
+                    limit,
+                    total,
+                    has_more: (items.len() as u32) + offset < *total,
+                };
+
+                Ok(ext.serialize(serializer)?)
+            }
+            Page::WithHasMore {
+                items,
+                offset,
+                limit,
+                has_more,
+            } => {
+                #[derive(Serialize)]
+                #[serde(rename_all = "camelCase")]
+                struct Copy<'a, T> {
+                    items: &'a Vec<T>,
+                    offset: &'a u32,
+                    limit: &'a u32,
+                    has_more: &'a bool,
+                }
+                let copy = Copy {
+                    items,
+                    offset,
+                    limit,
+                    has_more,
+                };
+                Ok(copy.serialize(serializer)?)
+            }
+        }
+    }
 }
 
 impl<T> Page<T> {
@@ -65,6 +124,12 @@ impl<T> Page<T> {
             Self::WithHasMore { items, .. } => items,
         }
     }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PagingRequest {
+    pub offset: u32,
+    pub limit: u32,
 }
 
 type FuturePagingResponse<T, E> = Pin<Box<dyn Future<Output = PagingResult<T, E>> + Send>>;

@@ -24,6 +24,7 @@ use moosicbox_core::{
 };
 use moosicbox_database::Database;
 use moosicbox_music_api::MusicApi;
+use moosicbox_paging::{Page, PagingRequest};
 use moosicbox_qobuz::QobuzMusicApi;
 use moosicbox_tidal::TidalMusicApi;
 use serde::{Deserialize, Serialize};
@@ -141,14 +142,20 @@ pub struct GetAlbumsQuery {
     artist_id: Option<i32>,
     tidal_artist_id: Option<u64>,
     qobuz_artist_id: Option<u64>,
+    offset: Option<u32>,
+    limit: Option<u32>,
 }
 
 #[get("/albums")]
 pub async fn get_albums_endpoint(
     query: web::Query<GetAlbumsQuery>,
     data: web::Data<AppState>,
-) -> Result<Json<Vec<ApiAlbum>>> {
+) -> Result<Json<Page<ApiAlbum>>> {
     let request = AlbumsRequest {
+        page: PagingRequest {
+            offset: query.offset.unwrap_or(0),
+            limit: query.limit.unwrap_or(100),
+        },
         sources: query
             .sources
             .as_ref()
@@ -182,12 +189,11 @@ pub async fn get_albums_endpoint(
     };
 
     Ok(Json(
-        get_all_albums(&data, &request)
+        get_all_albums(data.database.clone(), &request)
             .await
             .map_err(|e| ErrorInternalServerError(format!("Failed to fetch albums: {e}")))?
-            .into_iter()
-            .map(|t| t.to_api())
-            .collect(),
+            .to_api()
+            .into(),
     ))
 }
 

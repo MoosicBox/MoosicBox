@@ -1,8 +1,10 @@
 use std::{
     cmp::Ordering,
     sync::{Arc, PoisonError},
+    usize,
 };
 
+use async_recursion::async_recursion;
 use moosicbox_core::{
     app::AppState,
     sqlite::{
@@ -20,6 +22,7 @@ use moosicbox_core::{
 };
 use moosicbox_database::{query::*, Database, DatabaseError, DatabaseValue};
 use moosicbox_music_api::{AlbumType, Id, LibraryAlbumError, MusicApi};
+use moosicbox_paging::{PagingRequest, PagingResponse, PagingResult};
 use moosicbox_scan::output::ScanOutput;
 use moosicbox_search::{
     data::{AsDataValues, AsDeleteTerm},
@@ -27,7 +30,7 @@ use moosicbox_search::{
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -35,6 +38,7 @@ pub struct AlbumsRequest {
     pub sources: Option<Vec<AlbumSource>>,
     pub sort: Option<AlbumSort>,
     pub filters: AlbumFilters,
+    pub page: PagingRequest,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -162,18 +166,41 @@ pub enum GetAlbumsError {
     GetAlbums(#[from] moosicbox_core::sqlite::menu::GetAlbumsError),
 }
 
+#[async_recursion]
 pub async fn get_all_albums(
-    data: &AppState,
+    db: Arc<Box<dyn Database>>,
     request: &AlbumsRequest,
-) -> Result<Vec<LibraryAlbum>, GetAlbumsError> {
-    let albums = get_albums(&data.database).await?;
+) -> PagingResult<LibraryAlbum, GetAlbumsError> {
+    let albums = get_albums(&db).await?;
+    let total = albums.len() as u32;
+    let items = sort_albums(filter_albums(&albums, request).collect::<Vec<_>>(), request)
+        .into_iter()
+        .skip(request.page.offset as usize)
+        .take(request.page.limit as usize)
+        .cloned()
+        .collect();
 
-    Ok(
-        sort_albums(filter_albums(&albums, request).collect::<Vec<_>>(), request)
-            .into_iter()
-            .cloned()
-            .collect(),
-    )
+    Ok(PagingResponse {
+        page: moosicbox_paging::Page::WithTotal {
+            items,
+            offset: request.page.offset,
+            limit: request.page.limit,
+            total,
+        },
+        fetch: Arc::new(Mutex::new(Box::new({
+            let db = db.clone();
+            let request = request.clone();
+
+            move |offset, limit| {
+                let mut request = request.clone();
+                request.page.offset = offset;
+                request.page.limit = limit;
+                let db = db.clone();
+
+                Box::pin(async move { get_all_albums(db, &request).await })
+            }
+        }))),
+    })
 }
 
 #[derive(Debug, Error)]
@@ -637,6 +664,10 @@ mod test {
                     tidal_artist_id: None,
                     qobuz_artist_id: None,
                 },
+                page: PagingRequest {
+                    offset: 0,
+                    limit: 10,
+                },
             },
         )
         .cloned()
@@ -683,6 +714,10 @@ mod test {
                     artist_id: None,
                     tidal_artist_id: None,
                     qobuz_artist_id: None,
+                },
+                page: PagingRequest {
+                    offset: 0,
+                    limit: 10,
                 },
             },
         )
@@ -731,6 +766,10 @@ mod test {
                     tidal_artist_id: None,
                     qobuz_artist_id: None,
                 },
+                page: PagingRequest {
+                    offset: 0,
+                    limit: 10,
+                },
             },
         )
         .cloned()
@@ -777,6 +816,10 @@ mod test {
                     artist_id: None,
                     tidal_artist_id: None,
                     qobuz_artist_id: None,
+                },
+                page: PagingRequest {
+                    offset: 0,
+                    limit: 10,
                 },
             },
         )
@@ -825,6 +868,10 @@ mod test {
                     tidal_artist_id: None,
                     qobuz_artist_id: None,
                 },
+                page: PagingRequest {
+                    offset: 0,
+                    limit: 10,
+                },
             },
         )
         .cloned()
@@ -871,6 +918,10 @@ mod test {
                     artist_id: None,
                     tidal_artist_id: None,
                     qobuz_artist_id: None,
+                },
+                page: PagingRequest {
+                    offset: 0,
+                    limit: 10,
                 },
             },
         )
@@ -919,6 +970,10 @@ mod test {
                     tidal_artist_id: None,
                     qobuz_artist_id: None,
                 },
+                page: PagingRequest {
+                    offset: 0,
+                    limit: 10,
+                },
             },
         )
         .cloned()
@@ -965,6 +1020,10 @@ mod test {
                     artist_id: None,
                     tidal_artist_id: None,
                     qobuz_artist_id: None,
+                },
+                page: PagingRequest {
+                    offset: 0,
+                    limit: 10,
                 },
             },
         )
@@ -1013,6 +1072,10 @@ mod test {
                     tidal_artist_id: None,
                     qobuz_artist_id: None,
                 },
+                page: PagingRequest {
+                    offset: 0,
+                    limit: 10,
+                },
             },
         )
         .cloned()
@@ -1060,6 +1123,10 @@ mod test {
                     tidal_artist_id: None,
                     qobuz_artist_id: None,
                 },
+                page: PagingRequest {
+                    offset: 0,
+                    limit: 10,
+                },
             },
         )
         .cloned()
@@ -1106,6 +1173,10 @@ mod test {
                     artist_id: None,
                     tidal_artist_id: None,
                     qobuz_artist_id: None,
+                },
+                page: PagingRequest {
+                    offset: 0,
+                    limit: 10,
                 },
             },
         )

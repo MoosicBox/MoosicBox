@@ -10,21 +10,23 @@ moosicbox_database = { path = "../database", default-features = false, features 
     "rusqlite",
 ] }
 moosicbox_music_api = { path = "../music_api", features = ["db"] }
+moosicbox_paging = { path = "../paging", default-features = false }
 moosicbox_qobuz = { path = "../qobuz", default-features = false }
 moosicbox_scan = { path = "../scan", default-features = false }
 moosicbox_search = { path = "../search", default-features = false }
 moosicbox_tidal = { path = "../tidal", default-features = false }
 
-actix-cors  = { workspace = true }
-actix-files = { workspace = true }
-actix-web   = { workspace = true }
-awc         = { workspace = true }
-futures     = { workspace = true }
-log         = { workspace = true }
-serde       = { workspace = true, features = ["derive"] }
-serde_json  = { workspace = true }
-thiserror   = { workspace = true }
-tokio       = { workspace = true }
+actix-cors      = { workspace = true }
+actix-files     = { workspace = true }
+actix-web       = { workspace = true }
+async-recursion = { workspace = true }
+awc             = { workspace = true }
+futures         = { workspace = true }
+log             = { workspace = true }
+serde           = { workspace = true, features = ["derive"] }
+serde_json      = { workspace = true }
+thiserror       = { workspace = true }
+tokio           = { workspace = true }
 
 [features]
 default = ["local", "qobuz", "tidal"]
