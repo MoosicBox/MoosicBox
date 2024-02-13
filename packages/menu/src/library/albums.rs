@@ -48,9 +48,9 @@ pub struct AlbumFilters {
     pub qobuz_artist_id: Option<u64>,
 }
 
-pub fn filter_albums(albums: Vec<LibraryAlbum>, request: &AlbumsRequest) -> Vec<LibraryAlbum> {
+pub fn filter_albums(albums: &Vec<LibraryAlbum>, request: &AlbumsRequest) -> Vec<LibraryAlbum> {
     albums
-        .into_iter()
+        .iter()
         .filter(|album| {
             !request
                 .filters
@@ -97,6 +97,7 @@ pub fn filter_albums(albums: Vec<LibraryAlbum>, request: &AlbumsRequest) -> Vec<
                 !(album.title.to_lowercase().contains(s) || album.artist.to_lowercase().contains(s))
             })
         })
+        .cloned()
         .collect()
 }
 
@@ -165,9 +166,9 @@ pub async fn get_all_albums(
     data: &AppState,
     request: &AlbumsRequest,
 ) -> Result<Vec<LibraryAlbum>, GetAlbumsError> {
-    let albums = get_albums(&data.database).await?.as_ref().clone();
+    let albums = get_albums(&data.database).await?;
 
-    Ok(sort_albums(filter_albums(albums, request), request))
+    Ok(sort_albums(filter_albums(&albums, request), request))
 }
 
 #[derive(Debug, Error)]
@@ -619,7 +620,7 @@ mod test {
     fn filter_albums_empty_albums_returns_empty_albums() {
         let albums = vec![];
         let result = filter_albums(
-            albums,
+            &albums,
             &AlbumsRequest {
                 sources: None,
                 sort: None,
@@ -664,7 +665,7 @@ mod test {
         };
         let albums = vec![local.clone(), tidal, qobuz];
         let result = filter_albums(
-            albums,
+            &albums,
             &AlbumsRequest {
                 sources: Some(vec![AlbumSource::Local]),
                 sort: None,
@@ -709,7 +710,7 @@ mod test {
         };
         let albums = vec![bob, sally, test.clone()];
         let result = filter_albums(
-            albums,
+            &albums,
             &AlbumsRequest {
                 sources: None,
                 sort: None,
@@ -754,7 +755,7 @@ mod test {
         };
         let albums = vec![bob, sally, test.clone()];
         let result = filter_albums(
-            albums,
+            &albums,
             &AlbumsRequest {
                 sources: None,
                 sort: None,
@@ -799,7 +800,7 @@ mod test {
         };
         let albums = vec![bob, sally, test.clone()];
         let result = filter_albums(
-            albums,
+            &albums,
             &AlbumsRequest {
                 sources: None,
                 sort: None,
@@ -844,7 +845,7 @@ mod test {
         };
         let albums = vec![bob, sally, test.clone()];
         let result = filter_albums(
-            albums,
+            &albums,
             &AlbumsRequest {
                 sources: None,
                 sort: None,
@@ -889,7 +890,7 @@ mod test {
         };
         let albums = vec![bob, sally, test.clone()];
         let result = filter_albums(
-            albums,
+            &albums,
             &AlbumsRequest {
                 sources: None,
                 sort: None,
@@ -934,7 +935,7 @@ mod test {
         };
         let albums = vec![bob, sally, test.clone()];
         let result = filter_albums(
-            albums,
+            &albums,
             &AlbumsRequest {
                 sources: None,
                 sort: None,
@@ -979,7 +980,7 @@ mod test {
         };
         let albums = vec![bob, sally, test.clone()];
         let result = filter_albums(
-            albums,
+            &albums,
             &AlbumsRequest {
                 sources: None,
                 sort: None,
@@ -1024,7 +1025,7 @@ mod test {
         };
         let albums = vec![bob, sally, test.clone()];
         let result = filter_albums(
-            albums,
+            &albums,
             &AlbumsRequest {
                 sources: None,
                 sort: None,
@@ -1069,7 +1070,7 @@ mod test {
         };
         let albums = vec![bob.clone(), sally, test.clone()];
         let result = filter_albums(
-            albums,
+            &albums,
             &AlbumsRequest {
                 sources: None,
                 sort: None,
