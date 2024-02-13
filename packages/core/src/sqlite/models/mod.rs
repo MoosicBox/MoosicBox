@@ -881,17 +881,17 @@ impl ToApi<ApiAlbum> for LibraryAlbum {
     fn to_api(self) -> ApiAlbum {
         ApiAlbum::Library(ApiLibraryAlbum {
             album_id: self.id,
-            title: self.title.clone(),
-            artist: self.artist.clone(),
+            title: self.title,
+            artist: self.artist,
             artist_id: self.artist_id,
             contains_cover: self.artwork.is_some(),
-            date_released: self.date_released.clone(),
-            date_added: self.date_added.clone(),
-            source: self.source.clone(),
+            date_released: self.date_released,
+            date_added: self.date_added,
+            source: self.source,
             blur: self.blur,
             versions: self.versions.iter().map(|v| v.to_api()).collect(),
             tidal_id: self.tidal_id,
-            qobuz_id: self.qobuz_id.clone(),
+            qobuz_id: self.qobuz_id,
         })
     }
 }
@@ -998,7 +998,7 @@ impl ToApi<ApiUpdateSession> for UpdateSession {
             session_id: self.session_id,
             play: self.play,
             stop: self.stop,
-            name: self.name.clone(),
+            name: self.name,
             active: self.active,
             playing: self.playing,
             position: self.position,
@@ -1106,7 +1106,7 @@ impl ToApi<ApiUpdateSessionPlaylistTrack> for UpdateSessionPlaylistTrack {
         ApiUpdateSessionPlaylistTrack {
             id: self.id,
             r#type: self.r#type,
-            data: self.data.clone(),
+            data: self.data,
         }
     }
 }
@@ -1117,8 +1117,8 @@ impl ToApi<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
             session_playlist_id: self.session_playlist_id,
             tracks: self
                 .tracks
-                .iter()
-                .map(|t| From::<UpdateSessionPlaylistTrack>::from(t.clone()))
+                .into_iter()
+                .map(|t| From::<UpdateSessionPlaylistTrack>::from(t))
                 .map(|track: SessionPlaylistTrack| track.to_api())
                 .collect(),
         }
@@ -1236,7 +1236,7 @@ impl ToApi<ApiSession> for Session {
     fn to_api(self) -> ApiSession {
         ApiSession {
             session_id: self.id,
-            name: self.name.clone(),
+            name: self.name,
             active: self.active,
             playing: self.playing,
             position: self.position,
@@ -1360,7 +1360,7 @@ impl ToApi<ApiSessionPlaylistTrack> for SessionPlaylistTrack {
         ApiSessionPlaylistTrack {
             id: self.id,
             r#type: self.r#type,
-            data: self.data.clone(),
+            data: self.data,
         }
     }
 }
@@ -1376,7 +1376,7 @@ impl ToApi<ApiSessionPlaylist> for SessionPlaylist {
     fn to_api(self) -> ApiSessionPlaylist {
         ApiSessionPlaylist {
             session_playlist_id: self.id,
-            tracks: self.tracks.clone(),
+            tracks: self.tracks,
         }
     }
 }
@@ -1444,8 +1444,8 @@ pub struct ApiConnection {
 impl ToApi<ApiConnection> for Connection {
     fn to_api(self) -> ApiConnection {
         ApiConnection {
-            connection_id: self.id.clone(),
-            name: self.name.clone(),
+            connection_id: self.id,
+            name: self.name,
             alive: false,
             players: self.players.iter().map(|p| p.to_api()).collect(),
         }
