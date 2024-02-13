@@ -165,7 +165,7 @@ pub async fn get_all_albums(
     data: &AppState,
     request: &AlbumsRequest,
 ) -> Result<Vec<LibraryAlbum>, GetAlbumsError> {
-    let albums = get_albums(&data.database).await?;
+    let albums = get_albums(&data.database).await?.as_ref().clone();
 
     Ok(sort_albums(filter_albums(albums, request), request))
 }
@@ -373,12 +373,8 @@ pub async fn add_album(
     let mut albums = vec![];
 
     for album in &results.albums {
-        if let Some(album) = moosicbox_core::sqlite::db::get_album(
-            &db,
-            "id",
-            DatabaseValue::UNumber(album.id as u64),
-        )
-        .await?
+        if let Some(album) =
+            moosicbox_core::sqlite::menu::get_album(&db, Some(album.id as u64), None, None).await?
         {
             albums.push(album);
         }

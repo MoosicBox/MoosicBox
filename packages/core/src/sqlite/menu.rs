@@ -6,7 +6,7 @@ use actix_web::error::{ErrorInternalServerError, ErrorNotFound};
 use moosicbox_database::Database;
 use std::{
     sync::{Arc, PoisonError},
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 use thiserror::Error;
 
@@ -47,9 +47,9 @@ pub async fn get_artist(
     tidal_album_id: Option<u64>,
     qobuz_album_id: Option<u64>,
     data: &AppState,
-) -> Result<LibraryArtist, GetArtistError> {
+) -> Result<Arc<LibraryArtist>, GetArtistError> {
     let request = CacheRequest {
-        key: format!("artist|{artist_id:?}|{tidal_artist_id:?}|{qobuz_artist_id:?}|{album_id:?}|{tidal_album_id:?}|{qobuz_album_id:?}"),
+        key: &format!("artist|{artist_id:?}|{tidal_artist_id:?}|{qobuz_artist_id:?}|{album_id:?}|{tidal_album_id:?}|{qobuz_album_id:?}"),
         expiration: Duration::from_secs(5 * 60),
     };
 
@@ -63,7 +63,7 @@ pub async fn get_artist(
 
                     let artist = artist.unwrap();
 
-                    Ok(CacheItemType::Artist(artist))
+                    Ok(CacheItemType::Artist(Arc::new(artist)))
                 }
                 Err(err) => Err(GetArtistError::DbError(err)),
             }
@@ -76,7 +76,7 @@ pub async fn get_artist(
 
                     let artist = artist.unwrap();
 
-                    Ok(CacheItemType::Artist(artist))
+                    Ok(CacheItemType::Artist(Arc::new(artist)))
                 }
                 Err(err) => Err(GetArtistError::DbError(err)),
             }
@@ -89,7 +89,7 @@ pub async fn get_artist(
 
                     let artist = artist.unwrap();
 
-                    Ok(CacheItemType::Artist(artist))
+                    Ok(CacheItemType::Artist(Arc::new(artist)))
                 }
                 Err(err) => Err(GetArtistError::DbError(err)),
             }
@@ -102,7 +102,7 @@ pub async fn get_artist(
 
                     let artist = artist.unwrap();
 
-                    Ok(CacheItemType::Artist(artist))
+                    Ok(CacheItemType::Artist(Arc::new(artist)))
                 }
                 Err(err) => Err(GetArtistError::DbError(err)),
             }
@@ -115,7 +115,7 @@ pub async fn get_artist(
 
                     let artist = artist.unwrap();
 
-                    Ok(CacheItemType::Artist(artist))
+                    Ok(CacheItemType::Artist(Arc::new(artist)))
                 }
                 Err(err) => Err(GetArtistError::DbError(err)),
             }
@@ -128,7 +128,7 @@ pub async fn get_artist(
 
                     let artist = artist.unwrap();
 
-                    Ok(CacheItemType::Artist(artist))
+                    Ok(CacheItemType::Artist(Arc::new(artist)))
                 }
                 Err(err) => Err(GetArtistError::DbError(err)),
             }
@@ -151,6 +151,8 @@ pub enum GetAlbumError {
     UnknownSource { album_source: String },
     #[error("Poison error")]
     PoisonError,
+    #[error(transparent)]
+    GetAlbums(#[from] GetAlbumsError),
     #[error(transparent)]
     SqliteError(#[from] rusqlite::Error),
     #[error(transparent)]
@@ -177,12 +179,12 @@ impl From<GetAlbumError> for actix_web::Error {
 }
 
 pub async fn get_album(
+    db: &Box<dyn Database>,
     album_id: Option<u64>,
     tidal_album_id: Option<u64>,
     qobuz_album_id: Option<String>,
-    db: Arc<Box<dyn Database>>,
-) -> Result<LibraryAlbum, GetAlbumError> {
-    let request = CacheRequest {
+) -> Result<Option<LibraryAlbum>, GetAlbumError> {
+    /*let request = CacheRequest {
         key: format!("album|{album_id:?}|{tidal_album_id:?}|{qobuz_album_id:?}"),
         expiration: Duration::from_secs(5 * 60),
     };
@@ -233,7 +235,49 @@ pub async fn get_album(
     })
     .await?
     .into_album()
-    .unwrap())
+    .unwrap())*/
+    let albums = get_albums(db).await?;
+
+    Ok(if let Some(album_id) = album_id {
+        let album = albums.iter().find(|album| album.id as u64 == album_id);
+
+        if album.is_none() {
+            return Err(GetAlbumError::AlbumNotFound(album_id.to_string()));
+        }
+
+        let album = album.unwrap().clone();
+
+        Some(album)
+    } else if let Some(tidal_album_id) = tidal_album_id {
+        let album = albums
+            .iter()
+            .find(|album| album.tidal_id.is_some_and(|id| id == tidal_album_id));
+
+        if album.is_none() {
+            return Err(GetAlbumError::AlbumNotFound(tidal_album_id.to_string()));
+        }
+
+        let album = album.unwrap().clone();
+
+        Some(album)
+    } else if let Some(qobuz_album_id) = qobuz_album_id {
+        let album = albums.iter().find(|album| {
+            album
+                .qobuz_id
+                .as_ref()
+                .is_some_and(|id| id == &qobuz_album_id)
+        });
+
+        if album.is_none() {
+            return Err(GetAlbumError::AlbumNotFound(qobuz_album_id));
+        }
+
+        let album = album.unwrap().clone();
+
+        Some(album)
+    } else {
+        None
+    })
 }
 
 #[derive(Debug, Error)]
@@ -259,18 +303,25 @@ impl From<GetAlbumsError> for actix_web::Error {
     }
 }
 
-pub async fn get_albums(db: &Box<dyn Database>) -> Result<Vec<LibraryAlbum>, GetAlbumsError> {
+pub async fn get_albums(db: &Box<dyn Database>) -> Result<Arc<Vec<LibraryAlbum>>, GetAlbumsError> {
     let request = CacheRequest {
-        key: "sqlite|local_albums".to_string(),
+        key: "sqlite|local_albums",
         expiration: Duration::from_secs(5 * 60),
     };
 
-    Ok(get_or_set_to_cache(request, || async {
-        Ok::<CacheItemType, GetAlbumsError>(CacheItemType::Albums(super::db::get_albums(db).await?))
+    let start = SystemTime::now();
+    let albums = get_or_set_to_cache(request, || async {
+        Ok::<CacheItemType, GetAlbumsError>(CacheItemType::Albums(Arc::new(
+            super::db::get_albums(db).await?,
+        )))
     })
     .await?
     .into_albums()
-    .unwrap())
+    .unwrap();
+    let elapsed = SystemTime::now().duration_since(start).unwrap().as_millis();
+    log::debug!("Took {elapsed}ms to get albums");
+
+    Ok(albums)
 }
 
 #[derive(Debug, Error)]
@@ -294,16 +345,16 @@ impl<T> From<PoisonError<T>> for GetArtistAlbumsError {
 pub async fn get_artist_albums(
     artist_id: i32,
     data: &AppState,
-) -> Result<Vec<LibraryAlbum>, GetArtistAlbumsError> {
+) -> Result<Arc<Vec<LibraryAlbum>>, GetArtistAlbumsError> {
     let request = CacheRequest {
-        key: format!("sqlite|local_artist_albums|{artist_id}"),
+        key: &format!("sqlite|local_artist_albums|{artist_id}"),
         expiration: Duration::from_secs(5 * 60),
     };
 
     Ok(get_or_set_to_cache(request, || async {
-        Ok::<CacheItemType, GetArtistAlbumsError>(CacheItemType::ArtistAlbums(
+        Ok::<CacheItemType, GetArtistAlbumsError>(CacheItemType::ArtistAlbums(Arc::new(
             db::get_artist_albums(&data.database, artist_id).await?,
-        ))
+        )))
     })
     .await?
     .into_artist_albums()

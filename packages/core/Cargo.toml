@@ -23,7 +23,7 @@ futures       = { workspace = true }
 log           = { workspace = true }
 once_cell     = { workspace = true }
 rusqlite      = { workspace = true }
-serde         = { workspace = true, features = ["derive"] }
+serde         = { workspace = true, features = ["derive", "rc"] }
 serde_json    = { workspace = true }
 strum         = { workspace = true }
 strum_macros  = { workspace = true }

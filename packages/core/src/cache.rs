@@ -5,7 +5,7 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
-use std::sync::Mutex;
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -17,11 +17,11 @@ struct CacheItem {
 #[derive(Debug, Serialize, Deserialize, Clone, EnumAsInner)]
 #[serde(untagged)]
 pub enum CacheItemType {
-    Albums(Vec<LibraryAlbum>),
-    AlbumTracks(Vec<LibraryTrack>),
-    ArtistAlbums(Vec<LibraryAlbum>),
-    Artist(LibraryArtist),
-    Album(LibraryAlbum),
+    Albums(Arc<Vec<LibraryAlbum>>),
+    AlbumTracks(Arc<Vec<LibraryTrack>>),
+    ArtistAlbums(Arc<Vec<LibraryAlbum>>),
+    Artist(Arc<LibraryArtist>),
+    Album(Arc<LibraryAlbum>),
 }
 
 pub fn current_time_nanos() -> u128 {
@@ -32,26 +32,26 @@ pub fn current_time_nanos() -> u128 {
     since_the_epoch.as_nanos()
 }
 
-pub struct CacheRequest {
-    pub key: String,
+pub struct CacheRequest<'a> {
+    pub key: &'a str,
     pub expiration: Duration,
 }
-static CACHE_MAP: Lazy<Mutex<HashMap<String, CacheItem>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+static CACHE_MAP: Lazy<RwLock<HashMap<String, CacheItem>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
 
 pub fn clear_cache() {
-    CACHE_MAP.lock().unwrap().clear();
+    CACHE_MAP.write().unwrap().clear();
 }
 
 pub async fn get_or_set_to_cache<Fut, Err>(
-    request: CacheRequest,
+    request: CacheRequest<'_>,
     compute: impl Fn() -> Fut,
 ) -> Result<CacheItemType, Err>
 where
     Err: Error,
     Fut: Future<Output = Result<CacheItemType, Err>>,
 {
-    if let Some(entry) = CACHE_MAP.lock().unwrap().get(&request.key) {
+    if let Some(entry) = CACHE_MAP.read().unwrap().get(request.key) {
         if entry.expiration > current_time_nanos() {
             return Ok(entry.data.clone());
         }
@@ -62,8 +62,8 @@ where
         Err(error) => return Err(error),
     };
 
-    CACHE_MAP.lock().unwrap().insert(
-        request.key,
+    CACHE_MAP.write().unwrap().insert(
+        request.key.to_string(),
         CacheItem {
             expiration: current_time_nanos() + request.expiration.as_nanos(),
             data: value.clone(),

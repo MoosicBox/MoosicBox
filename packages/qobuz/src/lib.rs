@@ -8,7 +8,7 @@ pub mod db;
 #[cfg(feature = "db")]
 use moosicbox_core::sqlite::db::DbError;
 #[cfg(feature = "db")]
-use moosicbox_database::{Database, DatabaseError, DatabaseValue};
+use moosicbox_database::{Database, DatabaseError};
 
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use std::{collections::HashMap, str::Utf8Error, sync::Arc};
@@ -1902,12 +1902,11 @@ impl MusicApi for QobuzMusicApi {
         &self,
         album_id: &Id,
     ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
-        Ok(moosicbox_core::sqlite::db::get_album(
-            &self.db,
-            "qobuz_id",
-            DatabaseValue::String(album_id.into()),
+        Ok(
+            moosicbox_core::sqlite::menu::get_album(&self.db, None, None, Some(album_id.into()))
+                .await
+                .map_err(|err| LibraryAlbumError::Other(Box::new(err)))?,
         )
-        .await?)
     }
 
     async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {

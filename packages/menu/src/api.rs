@@ -2,7 +2,7 @@ use std::{str::FromStr, sync::Arc};
 
 use actix_web::{
     delete,
-    error::{ErrorBadRequest, ErrorInternalServerError},
+    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     get, post,
     web::{self, Json},
     Result,
@@ -285,7 +285,7 @@ pub async fn get_artist_albums_endpoint(
         get_artist_albums(query.artist_id, &data)
             .await
             .map_err(|_e| ErrorInternalServerError("Failed to fetch albums"))?
-            .into_iter()
+            .iter()
             .map(|t| t.to_api())
             .collect(),
     ))
@@ -338,12 +338,13 @@ pub async fn get_album_endpoint(
 ) -> Result<Json<ApiAlbum>> {
     Ok(Json(
         get_album(
+            &data.database,
             query.album_id,
             query.tidal_album_id,
             query.qobuz_album_id.clone(),
-            data.database.clone(),
         )
         .await?
+        .ok_or(ErrorNotFound("Album not found"))?
         .to_api(),
     ))
 }

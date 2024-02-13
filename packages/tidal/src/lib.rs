@@ -8,7 +8,7 @@ pub mod db;
 use std::sync::Arc;
 
 #[cfg(feature = "db")]
-use moosicbox_database::{Database, DatabaseError, DatabaseValue};
+use moosicbox_database::{Database, DatabaseError};
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
@@ -2228,12 +2228,11 @@ impl MusicApi for TidalMusicApi {
         &self,
         album_id: &Id,
     ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
-        Ok(moosicbox_core::sqlite::db::get_album(
-            &self.db,
-            "tidal_id",
-            DatabaseValue::UNumber(album_id.into()),
+        Ok(
+            moosicbox_core::sqlite::menu::get_album(&self.db, None, Some(album_id.into()), None)
+                .await
+                .map_err(|err| LibraryAlbumError::Other(Box::new(err)))?,
         )
-        .await?)
     }
 
     async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {

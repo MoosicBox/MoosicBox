@@ -23,14 +23,14 @@ use moosicbox_core::{
     integer_range::{parse_integer_ranges, ParseIntegersError},
     sqlite::{
         db::{
-            get_album, get_album_tracks, get_artist, get_artist_by_album_id, get_track, get_tracks,
-            DbError,
+            get_album_tracks, get_artist, get_artist_by_album_id, get_track, get_tracks, DbError,
         },
+        menu::{get_album, GetAlbumError},
         models::{LibraryTrack, TrackApiSource},
     },
     types::AudioFormat,
 };
-use moosicbox_database::{Database, DatabaseValue};
+use moosicbox_database::Database;
 use moosicbox_files::{
     files::{
         album::{get_library_album_cover_bytes, AlbumCoverError},
@@ -86,6 +86,8 @@ pub async fn get_download_path(
 pub enum GetCreateDownloadTasksError {
     #[error(transparent)]
     Db(#[from] DbError),
+    #[error(transparent)]
+    GetAlbum(#[from] GetAlbumError),
     #[error(transparent)]
     ParseIntegers(#[from] ParseIntegersError),
     #[error("Invalid source")]
@@ -266,7 +268,7 @@ pub async fn get_create_download_tasks_for_album_ids(
                     .join(&sanitize_filename(&track.artist))
                     .join(&sanitize_filename(&track.album))
             } else {
-                let album = get_album(&db, "id", DatabaseValue::UNumber(*album_id))
+                let album = get_album(&db, Some(*album_id), None, None)
                     .await?
                     .ok_or(GetCreateDownloadTasksError::NotFound)?;
 

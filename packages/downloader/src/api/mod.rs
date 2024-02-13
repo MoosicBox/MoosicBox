@@ -183,8 +183,9 @@ pub async fn download_tasks_endpoint(
 
     let albums = get_albums(&data.database)
         .await?
-        .into_iter()
+        .iter()
         .filter(|album| album_ids.contains(&album.id))
+        .cloned()
         .collect::<Vec<_>>();
 
     let artist_ids = albums
@@ -194,8 +195,9 @@ pub async fn download_tasks_endpoint(
 
     let artists = get_artists(&data.database)
         .await?
-        .into_iter()
+        .iter()
         .filter(|artist| artist_ids.contains(&artist.id))
+        .cloned()
         .collect::<Vec<_>>();
 
     let len = tasks.len() as u32;
