@@ -2,7 +2,7 @@ use crate::{
     app::AppState,
     cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
 };
-use actix_web::error::{ErrorInternalServerError, ErrorNotFound};
+use actix_web::error::ErrorInternalServerError;
 use moosicbox_database::Database;
 use std::{
     sync::{Arc, PoisonError},
@@ -143,8 +143,6 @@ pub async fn get_artist(
 
 #[derive(Debug, Error)]
 pub enum GetAlbumError {
-    #[error("Album not found with ID {0}")]
-    AlbumNotFound(String),
     #[error("Too many albums found with ID {album_id:?}")]
     TooManyAlbumsFound { album_id: i32 },
     #[error("Unknown source: {album_source:?}")]
@@ -170,10 +168,6 @@ impl<T> From<PoisonError<T>> for GetAlbumError {
 impl From<GetAlbumError> for actix_web::Error {
     fn from(err: GetAlbumError) -> Self {
         log::error!("{err:?}");
-        if let GetAlbumError::AlbumNotFound(_) = err {
-            return ErrorNotFound("Album not found");
-        }
-
         ErrorInternalServerError(err.to_string())
     }
 }
@@ -184,100 +178,33 @@ pub async fn get_album(
     tidal_album_id: Option<u64>,
     qobuz_album_id: Option<String>,
 ) -> Result<Option<LibraryAlbum>, GetAlbumError> {
-    /*let request = CacheRequest {
-        key: format!("album|{album_id:?}|{tidal_album_id:?}|{qobuz_album_id:?}"),
-        expiration: Duration::from_secs(5 * 60),
-    };
-
-    Ok(get_or_set_to_cache(request, || async {
-        if let Some(album_id) = album_id {
-            match db::get_album(&db, "id", album_id as i32).await {
-                Ok(album) => {
-                    if album.is_none() {
-                        return Err(GetAlbumError::AlbumNotFound(album_id.to_string()));
-                    }
-
-                    let album = album.unwrap();
-
-                    Ok(CacheItemType::Album(album))
-                }
-                Err(err) => Err(GetAlbumError::DbError(err)),
-            }
-        } else if let Some(tidal_album_id) = tidal_album_id {
-            match db::get_album(&db, "tidal_id", tidal_album_id as i32).await {
-                Ok(album) => {
-                    if album.is_none() {
-                        return Err(GetAlbumError::AlbumNotFound(tidal_album_id.to_string()));
-                    }
-
-                    let album = album.unwrap();
-
-                    Ok(CacheItemType::Album(album))
-                }
-                Err(err) => Err(GetAlbumError::DbError(err)),
-            }
-        } else if let Some(qobuz_album_id) = qobuz_album_id.clone() {
-            match db::get_album(&db, "qobuz_id", qobuz_album_id.clone()).await {
-                Ok(album) => {
-                    if album.is_none() {
-                        return Err(GetAlbumError::AlbumNotFound(qobuz_album_id));
-                    }
-
-                    let album = album.unwrap();
-
-                    Ok(CacheItemType::Album(album))
-                }
-                Err(err) => Err(GetAlbumError::DbError(err)),
-            }
-        } else {
-            Err(GetAlbumError::InvalidRequest)
-        }
-    })
-    .await?
-    .into_album()
-    .unwrap())*/
     let albums = get_albums(db).await?;
 
-    Ok(if let Some(album_id) = album_id {
-        let album = albums.iter().find(|album| album.id as u64 == album_id);
-
-        if album.is_none() {
-            return Err(GetAlbumError::AlbumNotFound(album_id.to_string()));
-        }
-
-        let album = album.unwrap().clone();
-
-        Some(album)
-    } else if let Some(tidal_album_id) = tidal_album_id {
-        let album = albums
+    if let Some(album_id) = album_id {
+        return Ok(albums
             .iter()
-            .find(|album| album.tidal_id.is_some_and(|id| id == tidal_album_id));
+            .find(|album| album.id as u64 == album_id)
+            .cloned());
+    }
+    if let Some(tidal_album_id) = tidal_album_id {
+        return Ok(albums
+            .iter()
+            .find(|album| album.tidal_id.is_some_and(|id| id == tidal_album_id))
+            .cloned());
+    }
+    if let Some(qobuz_album_id) = qobuz_album_id {
+        return Ok(albums
+            .iter()
+            .find(|album| {
+                album
+                    .qobuz_id
+                    .as_ref()
+                    .is_some_and(|id| id == &qobuz_album_id)
+            })
+            .cloned());
+    }
 
-        if album.is_none() {
-            return Err(GetAlbumError::AlbumNotFound(tidal_album_id.to_string()));
-        }
-
-        let album = album.unwrap().clone();
-
-        Some(album)
-    } else if let Some(qobuz_album_id) = qobuz_album_id {
-        let album = albums.iter().find(|album| {
-            album
-                .qobuz_id
-                .as_ref()
-                .is_some_and(|id| id == &qobuz_album_id)
-        });
-
-        if album.is_none() {
-            return Err(GetAlbumError::AlbumNotFound(qobuz_album_id));
-        }
-
-        let album = album.unwrap().clone();
-
-        Some(album)
-    } else {
-        None
-    })
+    Ok(None)
 }
 
 #[derive(Debug, Error)]
