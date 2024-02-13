@@ -48,7 +48,10 @@ pub struct AlbumFilters {
     pub qobuz_artist_id: Option<u64>,
 }
 
-pub fn filter_albums(albums: &Vec<LibraryAlbum>, request: &AlbumsRequest) -> Vec<LibraryAlbum> {
+pub fn filter_albums<'a>(
+    albums: &'a Vec<LibraryAlbum>,
+    request: &'a AlbumsRequest,
+) -> impl Iterator<Item = &'a LibraryAlbum> {
     albums
         .iter()
         .filter(|album| {
@@ -97,8 +100,6 @@ pub fn filter_albums(albums: &Vec<LibraryAlbum>, request: &AlbumsRequest) -> Vec
                 !(album.title.to_lowercase().contains(s) || album.artist.to_lowercase().contains(s))
             })
         })
-        .cloned()
-        .collect()
 }
 
 pub fn sort_albums(mut albums: Vec<LibraryAlbum>, request: &AlbumsRequest) -> Vec<LibraryAlbum> {
@@ -168,7 +169,10 @@ pub async fn get_all_albums(
 ) -> Result<Vec<LibraryAlbum>, GetAlbumsError> {
     let albums = get_albums(&data.database).await?;
 
-    Ok(sort_albums(filter_albums(&albums, request), request))
+    Ok(sort_albums(
+        filter_albums(&albums, request).cloned().collect::<Vec<_>>(),
+        request,
+    ))
 }
 
 #[derive(Debug, Error)]
@@ -633,7 +637,9 @@ mod test {
                     qobuz_artist_id: None,
                 },
             },
-        );
+        )
+        .cloned()
+        .collect::<Vec<_>>();
         assert_eq!(result, vec![]);
     }
 
@@ -678,7 +684,9 @@ mod test {
                     qobuz_artist_id: None,
                 },
             },
-        );
+        )
+        .cloned()
+        .collect::<Vec<_>>();
         assert_eq!(result, vec![local]);
     }
 
@@ -723,7 +731,9 @@ mod test {
                     qobuz_artist_id: None,
                 },
             },
-        );
+        )
+        .cloned()
+        .collect::<Vec<_>>();
         assert_eq!(result, vec![test]);
     }
 
@@ -768,7 +778,9 @@ mod test {
                     qobuz_artist_id: None,
                 },
             },
-        );
+        )
+        .cloned()
+        .collect::<Vec<_>>();
         assert_eq!(result, vec![test]);
     }
 
@@ -813,7 +825,9 @@ mod test {
                     qobuz_artist_id: None,
                 },
             },
-        );
+        )
+        .cloned()
+        .collect::<Vec<_>>();
         assert_eq!(result, vec![test]);
     }
 
@@ -858,7 +872,9 @@ mod test {
                     qobuz_artist_id: None,
                 },
             },
-        );
+        )
+        .cloned()
+        .collect::<Vec<_>>();
         assert_eq!(result, vec![test]);
     }
 
@@ -903,7 +919,9 @@ mod test {
                     qobuz_artist_id: None,
                 },
             },
-        );
+        )
+        .cloned()
+        .collect::<Vec<_>>();
         assert_eq!(result, vec![test]);
     }
 
@@ -948,7 +966,9 @@ mod test {
                     qobuz_artist_id: None,
                 },
             },
-        );
+        )
+        .cloned()
+        .collect::<Vec<_>>();
         assert_eq!(result, vec![test]);
     }
 
@@ -993,7 +1013,9 @@ mod test {
                     qobuz_artist_id: None,
                 },
             },
-        );
+        )
+        .cloned()
+        .collect::<Vec<_>>();
         assert_eq!(result, vec![test]);
     }
 
@@ -1038,7 +1060,9 @@ mod test {
                     qobuz_artist_id: None,
                 },
             },
-        );
+        )
+        .cloned()
+        .collect::<Vec<_>>();
         assert_eq!(result, vec![test]);
     }
 
@@ -1083,7 +1107,9 @@ mod test {
                     qobuz_artist_id: None,
                 },
             },
-        );
+        )
+        .cloned()
+        .collect::<Vec<_>>();
         assert_eq!(result, vec![bob, test]);
     }
 }
