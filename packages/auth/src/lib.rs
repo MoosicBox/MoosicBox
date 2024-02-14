@@ -177,8 +177,7 @@ pub async fn fetch_signature_token(
         .post(url)
         .header(reqwest::header::AUTHORIZATION, access_token)
         .send()
-        .await
-        .unwrap()
+        .await?
         .json::<Value>()
         .await?
         .to_value("token")?)
