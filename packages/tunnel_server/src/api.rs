@@ -251,9 +251,9 @@ async fn handle_request(
 
     let headers = match headers_rx.await {
         Ok(headers) => headers,
-        Err(_) => {
+        Err(err) => {
             log::error!(
-                "Failed to receive headers for request_id={request_id} client_id={client_id}"
+                "Failed to receive headers for request_id={request_id} client_id={client_id} ({err:?})"
             );
             return Err(ErrorGone("Client with ID is gone"));
         }
