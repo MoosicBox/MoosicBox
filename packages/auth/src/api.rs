@@ -51,16 +51,20 @@ pub async fn create_magic_token_endpoint(
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to create magic token: {e:?}")))?;
 
-    let api_url_param = data.tunnel_host.as_ref().map(|tunnel_host| {
-        form_urlencoded::Serializer::new(String::new())
-            .append_pair("apiUrl", tunnel_host)
-            .finish()
-    });
+    let mut query_string = form_urlencoded::Serializer::new(String::new());
+
+    query_string.append_pair("magicToken", &token);
+
+    if let Some(tunnel_host) = &data.tunnel_host {
+        query_string.append_pair("apiUrl", tunnel_host);
+    }
+
+    let query_string = query_string.finish();
 
     if let Some(host) = &query.host {
         Ok(Json(json!({
             "token": token,
-            "url": format!("{host}/auth/{token}{}", api_url_param.map(|p| format!("?{p}")).unwrap_or_default())
+            "url": format!("{host}/auth?{query_string}")
         })))
     } else {
         Ok(Json(json!({
