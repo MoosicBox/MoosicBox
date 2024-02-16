@@ -245,8 +245,8 @@ pub(crate) fn to_api_download_item(
     tracks: &[LibraryTrack],
     albums: &[LibraryAlbum],
     artists: &[LibraryArtist],
-) -> ApiDownloadItem {
-    match item {
+) -> Result<ApiDownloadItem, ParseError> {
+    Ok(match item {
         DownloadItem::Track {
             track_id,
             source,
@@ -255,7 +255,9 @@ pub(crate) fn to_api_download_item(
             let track = tracks
                 .iter()
                 .find(|track| track.id == track_id as i32)
-                .unwrap_or_else(|| panic!("No Track for id {track_id}"));
+                .ok_or(ParseError::MissingValue(format!(
+                    "No Track for id {track_id}"
+                )))?;
 
             ApiDownloadItem::Track {
                 track_id,
@@ -273,7 +275,9 @@ pub(crate) fn to_api_download_item(
             let album = albums
                 .iter()
                 .find(|album| album.id == album_id as i32)
-                .unwrap_or_else(|| panic!("No Album for id {album_id}"));
+                .ok_or(ParseError::MissingValue(format!(
+                    "No Album for id {album_id}"
+                )))?;
 
             ApiDownloadItem::AlbumCover {
                 artist_id: album.artist_id as u64,
@@ -287,12 +291,17 @@ pub(crate) fn to_api_download_item(
             let album = albums
                 .iter()
                 .find(|album| album.id == album_id as i32)
-                .unwrap_or_else(|| panic!("No Album for id {album_id}"));
+                .ok_or(ParseError::MissingValue(format!(
+                    "No Album for id {album_id}"
+                )))?;
 
             let artist = artists
                 .iter()
                 .find(|artist| artist.id == album.artist_id)
-                .unwrap_or_else(|| panic!("No Artist for id {}", album.artist_id));
+                .ok_or(ParseError::MissingValue(format!(
+                    "No Artist for id {}",
+                    album.artist_id
+                )))?;
 
             ApiDownloadItem::ArtistCover {
                 artist_id: album.artist_id as u64,
@@ -301,7 +310,7 @@ pub(crate) fn to_api_download_item(
                 contains_cover: artist.cover.is_some(),
             }
         }
-    }
+    })
 }
 
 impl ToValueType<ApiDownloadItem> for &serde_json::Value {
@@ -417,15 +426,15 @@ pub(crate) fn to_api_download_task(
     tracks: &[LibraryTrack],
     albums: &[LibraryAlbum],
     artists: &[LibraryArtist],
-) -> ApiDownloadTask {
-    calc_progress_for_task(ApiDownloadTask {
+) -> Result<ApiDownloadTask, ParseError> {
+    Ok(calc_progress_for_task(ApiDownloadTask {
         id: task.id,
         state: task.state.into(),
-        item: to_api_download_item(task.item, tracks, albums, artists),
+        item: to_api_download_item(task.item, tracks, albums, artists)?,
         file_path: task.file_path,
         progress: 0.0,
         bytes: 0,
         total_bytes: task.total_bytes,
         speed: None,
-    })
+    }))
 }
