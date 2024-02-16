@@ -5,12 +5,12 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt::Debug, sync::PoisonError};
 use thiserror::Error;
 
-use crate::types::PlaybackQuality;
+use crate::types::{AudioFormat, PlaybackQuality};
 
 use super::models::{
     AlbumVersionQuality, AsModelQuery as _, AsModelResultMapped as _, CreateSession, LibraryAlbum,
-    LibraryArtist, LibraryTrack, Player, Session, SessionPlaylist, SessionPlaylistTrack, TrackSize,
-    UpdateSession,
+    LibraryArtist, LibraryTrack, Player, Session, SessionPlaylist, SessionPlaylistTrack,
+    TrackApiSource, TrackSize, UpdateSession,
 };
 
 impl<T> From<PoisonError<T>> for DbError {
@@ -558,16 +558,20 @@ pub async fn get_albums(db: &Box<dyn Database>) -> Result<Vec<LibraryAlbum>, DbE
             "track_sizes.bit_depth",
             "track_sizes.sample_rate",
             "track_sizes.channels",
+            "track_sizes.format",
             "artists.title as artist",
             "artists.tidal_id as tidal_artist_id",
             "artists.qobuz_id as qobuz_artist_id",
-            "tracks.format",
             "tracks.source",
         ])
         .left_join("tracks", "tracks.album_id=albums.id")
         .left_join("track_sizes", "track_sizes.track_id=tracks.id")
         .join("artists", "artists.id=albums.artist_id")
         .sort("albums.id", SortDirection::Desc)
+        .where_or(boxed![
+            where_not_eq("track_sizes.format", AudioFormat::Source.as_ref()),
+            where_not_eq("tracks.source", TrackApiSource::Local.as_ref())
+        ])
         .execute(db)
         .await?
         .as_model_mapped()?)
@@ -585,13 +589,17 @@ pub async fn get_all_album_version_qualities(
             "track_sizes.bit_depth",
             "track_sizes.sample_rate",
             "track_sizes.channels",
-            "tracks.format",
+            "track_sizes.format",
             "tracks.source",
         ])
         .left_join("tracks", "tracks.album_id=albums.id")
         .left_join("track_sizes", "track_sizes.track_id=tracks.id")
         .where_in("albums.id", album_ids)
         .sort("albums.id", SortDirection::Desc)
+        .where_or(boxed![
+            where_not_eq("track_sizes.format", AudioFormat::Source.as_ref()),
+            where_not_eq("tracks.source", TrackApiSource::Local.as_ref())
+        ])
         .execute(db)
         .await?
         .to_value_type()?;
