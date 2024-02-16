@@ -693,6 +693,7 @@ impl Player {
     }
 
     pub fn stop_track(&self) -> Result<PlaybackStatus, PlayerError> {
+        log::debug!("stop_track called");
         let playback = self.stop()?;
 
         Ok(PlaybackStatus {
@@ -702,7 +703,7 @@ impl Player {
     }
 
     pub fn stop(&self) -> Result<Playback, PlayerError> {
-        info!("Stopping playback for playback_id");
+        info!("Stopping playback");
         let playback = self.get_playback()?;
 
         debug!("Aborting playback {playback:?} for stop");
@@ -739,6 +740,7 @@ impl Player {
         seek: f64,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
+        log::debug!("seek_track seek={seek}");
         let playback = self.stop()?;
         let playback_id = playback.id;
         self.play_playback(playback, Some(seek), retry_options)?;
