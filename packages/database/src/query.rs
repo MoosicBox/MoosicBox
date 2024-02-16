@@ -233,9 +233,9 @@ impl BooleanExpression for NotEq {}
 impl Expression for NotEq {
     fn to_sql(&self) -> String {
         if self.right.is_null() {
-            format!("({} is {})", self.left.to_sql(), self.right.to_sql())
+            format!("({} IS NOT {})", self.left.to_sql(), self.right.to_sql())
         } else {
-            format!("({} = {})", self.left.to_sql(), self.right.to_sql())
+            format!("({} != {})", self.left.to_sql(), self.right.to_sql())
         }
     }
 
@@ -254,7 +254,7 @@ impl BooleanExpression for Eq {}
 impl Expression for Eq {
     fn to_sql(&self) -> String {
         if self.right.is_null() {
-            format!("({} is {})", self.left.to_sql(), self.right.to_sql())
+            format!("({} IS {})", self.left.to_sql(), self.right.to_sql())
         } else {
             format!("({} = {})", self.left.to_sql(), self.right.to_sql())
         }
