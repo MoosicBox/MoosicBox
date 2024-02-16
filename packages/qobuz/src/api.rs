@@ -19,6 +19,14 @@ use crate::{
     QobuzTrackFileUrlError, QobuzUserLoginError,
 };
 
+fn format_title(title: &str, version: Option<&str>) -> String {
+    if let Some(version) = &version {
+        format!("{} - {version}", title)
+    } else {
+        title.to_string()
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
@@ -34,7 +42,7 @@ impl ToApi<ApiAlbum> for QobuzAlbum {
             artist_id: self.artist_id,
             contains_cover: self.cover_url().is_some(),
             duration: self.duration,
-            title: self.title.clone(),
+            title: format_title(&self.title, self.version.as_deref()),
             parental_warning: self.parental_warning,
             number_of_tracks: self.tracks_count,
             date_released: self.release_date_original.clone(),
@@ -122,7 +130,7 @@ impl ToApi<ApiRelease> for QobuzRelease {
             artist_id: self.artist_id,
             contains_cover: self.cover_url().is_some(),
             duration: self.duration,
-            title: self.title.clone(),
+            title: format_title(&self.title, self.version.as_deref()),
             parental_warning: self.parental_warning,
             number_of_tracks: self.tracks_count,
             date_released: self.release_date_original.clone(),
@@ -150,7 +158,7 @@ impl ToApi<ApiTrack> for QobuzTrack {
             duration: self.duration,
             parental_warning: self.parental_warning,
             isrc: self.isrc.clone(),
-            title: self.title.clone(),
+            title: format_title(&self.title, self.version.as_deref()),
         })
     }
 }

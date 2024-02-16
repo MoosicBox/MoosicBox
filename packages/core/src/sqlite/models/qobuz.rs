@@ -177,6 +177,7 @@ pub struct QobuzAlbum {
     pub maximum_bit_depth: u16,
     pub image: Option<QobuzImage>,
     pub title: String,
+    pub version: Option<String>,
     pub qobuz_id: u64,
     pub released_at: u64,
     pub release_date_original: String,
@@ -214,6 +215,7 @@ impl AsModelResult<QobuzAlbum, ParseError> for Value {
                 .or_else(|_| self.to_nested_value(&["audio_info", "maximum_bit_depth"]))?,
             image: self.to_value("image")?,
             title: self.to_value("title")?,
+            version: self.to_value("version")?,
             qobuz_id: self.to_value("qobuz_id")?,
             released_at: self.to_value("released_at")?,
             release_date_original: self.to_value("release_date_original")?,
@@ -241,6 +243,7 @@ pub struct QobuzRelease {
     pub maximum_bit_depth: u16,
     pub image: Option<QobuzImage>,
     pub title: String,
+    pub version: Option<String>,
     pub release_date_original: String,
     pub duration: u32,
     pub parental_warning: bool,
@@ -271,6 +274,7 @@ impl AsModelResult<QobuzRelease, ParseError> for Value {
             maximum_bit_depth: self.to_nested_value(&["audio_info", "maximum_bit_depth"])?,
             image: self.to_value("image")?,
             title: self.to_value("title")?,
+            version: self.to_value("version")?,
             release_date_original: self.to_nested_value(&["dates", "original"])?,
             duration: self.to_value("duration")?,
             parental_warning: self.to_value("parental_warning")?,
@@ -299,6 +303,7 @@ pub struct QobuzTrack {
     pub parental_warning: bool,
     pub isrc: String,
     pub title: String,
+    pub version: Option<String>,
 }
 
 impl QobuzTrack {
@@ -335,6 +340,7 @@ impl QobuzTrack {
             parental_warning: value.to_value("parental_warning")?,
             isrc: value.to_value("isrc")?,
             title: value.to_value("title")?,
+            version: value.to_value("version")?,
         })
     }
 }
@@ -354,6 +360,7 @@ impl AsModelResult<QobuzTrack, ParseError> for Value {
             parental_warning: self.to_value("parental_warning")?,
             isrc: self.to_value("isrc")?,
             title: self.to_value("title")?,
+            version: self.to_value("version")?,
         })
     }
 }
