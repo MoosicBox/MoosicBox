@@ -1,0 +1,21 @@
+name: Deploy TunnelServer
+
+on: workflow_dispatch
+
+env:
+    CARGO_TERM_COLOR: always
+    AWS_REGION: us-east-1
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Deploy
+              shell: bash
+              run: |
+                  cargo install -f cargo-edit
+                  cargo upgrade
+                  
