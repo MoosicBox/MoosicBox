@@ -120,7 +120,11 @@ rand = "0.8"
 rangemap = "1.4.0"
 rb = "0.4.1"
 regex = "1.10.2"
-reqwest = { version = "0.11.23", features = ["blocking", "stream"] }
+reqwest = { version = "0.11.23", default-features = false, features = [
+    "blocking",
+    "stream",
+    "rustls-tls",
+] }
 rubato = "0.12.0"
 rusqlite = { version = "0.29.0", features = ["bundled"] }
 rustls = "0.21"
