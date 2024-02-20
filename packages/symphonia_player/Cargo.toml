@@ -14,14 +14,14 @@ bytes                   = { workspace = true }
 clap                    = { workspace = true }
 cpal                    = { workspace = true, optional = true }
 crossbeam-channel       = { workspace = true }
-fdk-aac                 = { workspace = true }
+fdk-aac                 = { workspace = true, optional = true }
 futures                 = { workspace = true }
 lazy_static             = { workspace = true }
 libpulse-binding        = { workspace = true, optional = true }
 libpulse-simple-binding = { workspace = true, optional = true }
 log                     = { workspace = true }
-mp3lame-encoder         = { workspace = true }
-opus                    = { workspace = true }
+mp3lame-encoder         = { workspace = true, optional = true }
+opus                    = { workspace = true, optional = true }
 pretty_env_logger       = { workspace = true }
 rangemap                = { workspace = true }
 rb                      = { workspace = true, optional = true }
@@ -47,6 +47,6 @@ pulseaudio-simple   = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
 pulseaudio-standard = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
 resampler           = ["dep:arrayvec", "dep:rb", "dep:rubato"]
 
-aac  = ["resampler", "moosicbox_converter/aac"]
-mp3  = ["moosicbox_converter/mp3"]
-opus = ["resampler", "moosicbox_converter/opus"]
+aac  = ["resampler", "moosicbox_converter/aac", "dep:fdk-aac"]
+mp3  = ["dep:mp3lame-encoder", "moosicbox_converter/mp3"]
+opus = ["resampler", "dep:opus", "moosicbox_converter/opus"]
