@@ -49,7 +49,9 @@ impl<T, R: futures::Stream<Item = Result<T>>> futures::Stream for StalledReadMon
         let response = this.inner.poll_next(cx);
 
         match response {
-            Poll::Ready(Some(_)) => {
+            Poll::Ready(Some(ref resp)) => {
+                log::trace!("Received stream poll response ok={}", resp.is_ok());
+
                 if let Some(sleeper) = this.sleeper {
                     sleeper.reset();
                 }
