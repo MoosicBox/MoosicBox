@@ -33,16 +33,15 @@ resolver = "2"
 codegen-units = 1
 lto           = false
 opt-level     = 3
-panic         = "abort"
 strip         = "symbols"
 
 [profile.release-lto]
-codegen-units = 1
-inherits      = "release"
-lto           = "fat"
-opt-level     = 3
-panic         = "abort"
-strip         = "symbols"
+inherits = "release"
+lto      = "fat"
+
+[profile.release-lto-no-panic]
+inherits = "release-lto"
+panic    = "abort"
 
 [workspace.package]
 edition = "2021"
