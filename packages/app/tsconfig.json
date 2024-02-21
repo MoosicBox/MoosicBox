@@ -1,0 +1,33 @@
+{
+    "compilerOptions": {
+        "allowSyntheticDefaultImports": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "target": "ESNext",
+        "module": "ESNext",
+        "moduleResolution": "node",
+        "jsxImportSource": "solid-js",
+        "jsx": "preserve",
+        "strict": true,
+        "baseUrl": "./",
+        "paths": {
+            "~/*": [
+                "./src/*"
+            ]
+        }
+    },
+    "types": [
+        "vitest"
+    ],
+    "exclude": [
+        "src-tauri"
+    ],
+    "include": [
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.js",
+        "**/*.jsx",
+        "**/*.cjs",
+        "**/*.mjs"
+    ]
+}

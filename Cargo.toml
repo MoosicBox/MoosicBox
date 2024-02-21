@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "packages/app/src-tauri",
     "packages/auth",
     "packages/config",
     "packages/converter",
@@ -147,3 +148,9 @@ tokio-util = "0.7.10"
 url = "2.5.0"
 uuid = { version = "1.6.1", features = ["v4"] }
 webp = "0.2.6"
+
+[workspace.metadata.cross.target.aarch64-linux-android]
+pre-build = [
+    "apt-get update",
+    "apt-get --assume-yes install wget",
+]

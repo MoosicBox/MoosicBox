@@ -1,0 +1,112 @@
+name: Build and Test
+
+on:
+    push:
+        branches: ['master']
+    pull_request:
+        branches: ['master']
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    build:
+        runs-on: ${{ matrix.os }}
+
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ubuntu-latest, windows-latest, macos-latest]
+
+        steps:
+            - name: Checkout audiotags
+              uses: actions/checkout@v4
+              with:
+                  repository: BSteffaniak/audiotags
+                  ref: feat/add-full-date-capabilities
+                  path: audiotags
+
+            - name: Checkout MoosicBoxServer
+              uses: actions/checkout@v4
+              with:
+                  repository: MoosicBox/MoosicBoxServer
+                  path: MoosicBoxServer
+
+            - uses: actions/checkout@v4
+              with:
+                  path: MoosicBoxApp
+
+            - name: ⚡ Cache cargo
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.cargo/registry
+                      ~/.cargo/git
+                      target
+                  key: ${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+            - name: Install Dependencies
+              if: ${{ matrix.os == 'ubuntu-latest' }}
+              run: |
+                  sudo apt update
+                  sudo apt install libwebkit2gtk-4.1-dev \
+                      build-essential \
+                      curl \
+                      wget \
+                      file \
+                      libssl-dev \
+                      libayatana-appindicator3-dev \
+                      librsvg2-dev
+
+            - name: Build
+              working-directory: MoosicBoxApp/src-tauri
+              env:
+                  APTABASE_APP_KEY: ${{ secrets.APTABASE_APP_KEY }}
+              run: cargo build --verbose
+
+            - name: Run tests
+              working-directory: MoosicBoxApp/src-tauri
+              env:
+                  APTABASE_APP_KEY: ${{ secrets.APTABASE_APP_KEY }}
+              run: cargo test --verbose
+
+            - name: Checkout MoosicBoxUI
+              uses: actions/checkout@v4
+              with:
+                  repository: MoosicBox/MoosicBoxUI
+                  path: MoosicBoxUI
+
+            - name: Copy Files
+              working-directory: MoosicBoxApp
+              shell: bash
+              run: |
+                  ./copy-files.sh
+
+            - uses: pnpm/action-setup@v3
+              name: Install pnpm
+              with:
+                  version: 8
+                  run_install: false
+
+            - name: Get pnpm store directory
+              shell: bash
+              run: |
+                  echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+            - name: ⚡ Cache pnpm
+              uses: actions/cache@v4
+              with:
+                  path: ${{ env.STORE_PATH }}
+                  key: ${{ matrix.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+                  restore-keys: |
+                      ${{ matrix.os }}-pnpm-store-
+
+            - name: pnpm install
+              working-directory: MoosicBoxApp
+              run: pnpm install
+
+            - name: Build Tauri App
+              working-directory: MoosicBoxApp
+              env:
+                  APTABASE_APP_KEY: ${{ secrets.APTABASE_APP_KEY }}
+              run: pnpm tauri build
