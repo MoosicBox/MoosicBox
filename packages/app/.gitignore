@@ -1,7 +1,0 @@
-node_modules
-dist/
-.solid/
-/src/*
-!/src/startup.ts
-!/src/symphonia-player.ts
-/public/
