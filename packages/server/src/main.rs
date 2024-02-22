@@ -188,6 +188,7 @@ fn main() -> std::io::Result<()> {
                                             if let Err(err) = tunnel
                                                 .ws_request(
                                                     &database_send,
+                                                    request.conn_id,
                                                     request.request_id,
                                                     request.body.clone(),
                                                     sender,
@@ -195,8 +196,9 @@ fn main() -> std::io::Result<()> {
                                                 .await
                                             {
                                                 error!(
-                                                    "Failed to propagate ws request {}: {err:?}",
-                                                    request.request_id
+                                                    "Failed to propagate ws request {} from conn_id {}: {err:?}",
+                                                    request.request_id,
+                                                    request.conn_id
                                                 );
                                             }
                                         }

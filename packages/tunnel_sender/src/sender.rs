@@ -136,6 +136,9 @@ pub struct TunnelResponsePacket {
     pub request_id: usize,
     pub packet_id: u32,
     pub message: Message,
+    pub broadcast: bool,
+    pub except_id: Option<usize>,
+    pub only_id: Option<usize>,
 }
 
 pub struct TunnelResponseWs {
@@ -410,6 +413,9 @@ impl TunnelSender {
                 .unbounded_send(TunnelResponseMessage::Packet(TunnelResponsePacket {
                     request_id,
                     packet_id,
+                    broadcast: true,
+                    except_id: None,
+                    only_id: None,
                     message: Message::Binary(bytes.into()),
                 }))
                 .map_err(|err| SendBytesError::Unknown(format!("Failed to send_bytes: {err:?}")))?;
@@ -433,6 +439,9 @@ impl TunnelSender {
                 .unbounded_send(TunnelResponseMessage::Packet(TunnelResponsePacket {
                     request_id,
                     packet_id,
+                    broadcast: true,
+                    except_id: None,
+                    only_id: None,
                     message: Message::Text(message.into()),
                 }))
                 .map_err(|err| {
@@ -1394,17 +1403,19 @@ impl TunnelSender {
     pub async fn ws_request(
         &self,
         db: &Box<dyn Database>,
+        conn_id: usize,
         request_id: usize,
         value: Value,
         sender: impl WebsocketSender + Send + Sync,
     ) -> Result<(), TunnelRequestError> {
         let context = WebsocketContext {
-            connection_id: self.id.to_string(),
+            connection_id: conn_id.to_string(),
         };
         let packet_id = 1_u32;
-        log::debug!("Processing tunnel ws request {request_id} {packet_id}");
+        log::debug!("Processing tunnel ws request request_id={request_id} packet_id={packet_id} conn_id={conn_id}");
         let sender = TunnelWebsocketSender {
             id: self.id,
+            propagate_id: conn_id,
             packet_id,
             request_id,
             root_sender: sender,

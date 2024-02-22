@@ -10,6 +10,7 @@ where
     T: WebsocketSender + Send + Sync,
 {
     pub id: usize,
+    pub propagate_id: usize,
     pub request_id: usize,
     pub packet_id: u32,
     pub root_sender: T,
@@ -20,7 +21,13 @@ impl<T> TunnelWebsocketSender<T>
 where
     T: WebsocketSender + Send + Sync,
 {
-    fn send_tunnel(&self, data: &str) {
+    fn send_tunnel(
+        &self,
+        data: &str,
+        broadcast: bool,
+        except_id: Option<usize>,
+        only_id: Option<usize>,
+    ) {
         let body: Value = serde_json::from_str(data).unwrap();
         let request_id = self.request_id;
         let packet_id = self.packet_id;
@@ -30,6 +37,9 @@ where
             .unbounded_send(TunnelResponseMessage::Packet(TunnelResponsePacket {
                 request_id,
                 packet_id,
+                broadcast,
+                except_id,
+                only_id,
                 message: Message::Text(value.to_string()),
             }))
             .unwrap();
@@ -44,7 +54,7 @@ where
         let id = connection_id.parse::<usize>().unwrap();
 
         if id == self.id {
-            self.send_tunnel(data);
+            self.send_tunnel(data, false, None, Some(self.propagate_id));
         } else {
             self.root_sender.send(connection_id, data)?;
         }
@@ -53,7 +63,7 @@ where
     }
 
     fn send_all(&self, data: &str) -> Result<(), WebsocketSendError> {
-        self.send_tunnel(data);
+        self.send_tunnel(data, true, None, None);
 
         self.root_sender.send_all(data)?;
 
@@ -63,8 +73,8 @@ where
     fn send_all_except(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
         let id = connection_id.parse::<usize>().unwrap();
 
-        if id != self.id {
-            self.send_tunnel(data);
+        if id != self.propagate_id {
+            self.send_tunnel(data, true, Some(self.propagate_id), None);
         }
 
         self.root_sender.send_all_except(connection_id, data)?;

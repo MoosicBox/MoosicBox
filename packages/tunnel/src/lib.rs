@@ -95,6 +95,7 @@ pub struct TunnelHttpRequest {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TunnelWsRequest {
+    pub conn_id: usize,
     pub request_id: usize,
     pub body: Value,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -78,22 +78,24 @@ pub async fn chat_ws(
 
                     if !finished {
                         if sender {
-                            let response: TunnelWsResponse =
-                                serde_json::from_str(text).expect("Invalid TunnelWsResponse");
-                            if response.request_id == 0 {
-                                debug!("Propagating ws message {text}");
-                                if let Err(err) = chat_server.ws_message(response).await {
-                                    error!(
+                            if let Ok(response) = serde_json::from_str::<TunnelWsResponse>(text) {
+                                if response.request_id == 0 {
+                                    debug!("Propagating ws message {text}");
+                                    if let Err(err) = chat_server.ws_message(response).await {
+                                        error!(
                                         "Failed to propagate ws message from tunnel_server: {err:?}"
                                     );
-                                }
-                            } else {
-                                debug!("Propagating ws response");
-                                if let Err(err) = chat_server.ws_response(response).await {
-                                    error!(
+                                    }
+                                } else {
+                                    debug!("Propagating ws response");
+                                    if let Err(err) = chat_server.ws_response(response).await {
+                                        error!(
                                         "Failed to propagate ws response from tunnel_server: {err:?}"
                                     );
+                                    }
                                 }
+                            } else {
+                                log::error!("Invalid TunnelWsResponse: {text}");
                             }
                         } else if let Err(err) =
                             chat_server.ws_request(conn_id, &client_id, text).await

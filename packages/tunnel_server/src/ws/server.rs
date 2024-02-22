@@ -357,6 +357,7 @@ impl ChatServer {
                     Ok(client_conn_id) => {
                         let value: Value = serde_json::from_str(&body).unwrap();
                         let body = TunnelRequest::Ws(TunnelWsRequest {
+                            conn_id,
                             request_id,
                             body: value,
                             connection_id: None,
