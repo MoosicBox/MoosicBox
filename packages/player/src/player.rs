@@ -1082,13 +1082,11 @@ impl Player {
             serializer.append_pair("trackId", &track_id.to_string());
 
             match source {
-                ApiSource::Library => match quality.format {
-                    AudioFormat::Source => {}
-                    #[allow(unreachable_patterns)]
-                    _ => {
+                ApiSource::Library => {
+                    if quality.format != AudioFormat::Source {
                         serializer.append_pair("format", quality.format.as_ref());
                     }
-                },
+                }
                 ApiSource::Tidal => {
                     serializer.append_pair("audioQuality", "HIGH");
                 }
