@@ -34,7 +34,15 @@ tokio-stream            = { workspace = true }
 tokio-util              = { workspace = true }
 
 [features]
-default = ["cpal", "pulseaudio", "resampler", "aac", "mp3", "opus"]
+default = [
+    "oboe-shared-stdcxx",
+    "cpal",
+    "pulseaudio",
+    "resampler",
+    "aac",
+    "mp3",
+    "opus",
+]
 
 fail-on-warnings = []
 
@@ -42,6 +50,7 @@ fail-on-warnings = []
 asio                = ["cpal/asio"]
 cpal                = ["resampler", "dep:cpal"]
 jack                = ["cpal/jack"]
+oboe-shared-stdcxx  = ["cpal/oboe-shared-stdcxx"]
 pulseaudio          = ["pulseaudio-standard", "pulseaudio-simple"]
 pulseaudio-simple   = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
 pulseaudio-standard = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]

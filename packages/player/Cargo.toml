@@ -38,7 +38,15 @@ tokio-util        = { workspace = true }
 url               = { workspace = true }
 
 [features]
-default = ["cpal", "aac", "flac", "mp3", "opus", "pulseaudio"]
+default = [
+    "oboe-shared-stdcxx",
+    "cpal",
+    "aac",
+    "flac",
+    "mp3",
+    "opus",
+    "pulseaudio",
+]
 
 fail-on-warnings = []
 
@@ -46,6 +54,7 @@ fail-on-warnings = []
 asio                = ["moosicbox_symphonia_player/asio"]
 cpal                = ["moosicbox_symphonia_player/cpal"]
 jack                = ["moosicbox_symphonia_player/jack"]
+oboe-shared-stdcxx  = ["moosicbox_symphonia_player/oboe-shared-stdcxx"]
 pulseaudio          = ["pulseaudio-standard", "pulseaudio-simple"]
 pulseaudio-simple   = ["moosicbox_symphonia_player/pulseaudio-simple"]
 pulseaudio-standard = ["moosicbox_symphonia_player/pulseaudio-standard"]
