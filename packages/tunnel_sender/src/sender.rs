@@ -1222,6 +1222,18 @@ impl TunnelSender {
 
                     Ok(())
                 }
+                Method::Head => {
+                    self.proxy_localhost_request(
+                        service_port,
+                        request_id,
+                        method,
+                        path,
+                        query,
+                        payload,
+                        encoding,
+                    )
+                    .await
+                }
                 _ => Err(TunnelRequestError::UnsupportedMethod),
             },
             "track/info" => match method {
