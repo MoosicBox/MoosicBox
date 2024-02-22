@@ -1083,23 +1083,10 @@ impl Player {
 
             match source {
                 ApiSource::Library => match quality.format {
-                    #[cfg(feature = "aac")]
-                    AudioFormat::Aac => {
-                        serializer.append_pair("format", "AAC");
-                    }
-                    #[cfg(feature = "flac")]
-                    AudioFormat::Flac => {
-                        serializer.append_pair("format", "FLAC");
-                    }
-                    #[cfg(feature = "mp3")]
-                    AudioFormat::Mp3 => {
-                        serializer.append_pair("format", "MP3");
-                    }
-                    #[cfg(feature = "opus")]
-                    AudioFormat::Opus => {
-                        serializer.append_pair("format", "OPUS");
-                    }
                     AudioFormat::Source => {}
+                    _ => {
+                        serializer.append_pair("format", quality.format.as_ref());
+                    }
                 },
                 ApiSource::Tidal => {
                     serializer.append_pair("audioQuality", "HIGH");
