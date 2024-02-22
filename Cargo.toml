@@ -135,7 +135,9 @@ sha2 = "0.10.8"
 static_init = "1.0.3"
 strum = "0.25.0"
 strum_macros = "0.25.3"
-symphonia = { version = "0.5.3", features = ["all"] }
+symphonia = { git = "https://github.com/dedobbin/Symphonia", branch = "bug/aac-missing-timeline", features = [
+    "all",
+] }
 tantivy = "0.21.1"
 test-log = "0.2.14"
 thiserror = "1.0.56"
