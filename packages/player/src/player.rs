@@ -1084,6 +1084,7 @@ impl Player {
             match source {
                 ApiSource::Library => match quality.format {
                     AudioFormat::Source => {}
+                    #[allow(unreachable_patterns)]
                     _ => {
                         serializer.append_pair("format", quality.format.as_ref());
                     }
