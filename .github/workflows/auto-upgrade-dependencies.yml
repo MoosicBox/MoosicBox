@@ -41,6 +41,7 @@ jobs:
               if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
               shell: bash
               run: |
+                  sudo apt-get update && sudo apt-get install libasound2-dev pulseaudio libvips-dev
                   STATIC_TOKEN=123 TUNNEL_ACCESS_TOKEN=123 cargo build
 
             - name: Test
