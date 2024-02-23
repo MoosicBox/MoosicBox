@@ -18,7 +18,10 @@ jobs:
             - name: Install cargo-edit
               shell: bash
               run: |
-                  cargo install -f cargo-edit
+                  cargo install \
+                      -f cargo-edit \
+                      --git https://github.com/killercup/cargo-edit \
+                      --features "vendored-libgit2"
 
             - name: Upgrade
               id: upgrade
