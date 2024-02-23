@@ -20,17 +20,14 @@ jobs:
               run: |
                   cargo install \
                       -f cargo-edit \
-                      --git https://github.com/killercup/cargo-edit
+                      --git https://github.com/BSteffaniak/cargo-edit \
+                      --branch add-skip-git-dependencies
 
             - name: Upgrade
               id: upgrade
               shell: bash
               run: |
-                  cargo upgrade \
-                      --exclude https://github.com/BSteffaniak/audiotags.git?branch=master-shallow \
-                      --exclude libvips \
-                      --exclude lofty \
-                      --exclude symphonia
+                  cargo upgrade --skip-git-dependencies
                   cargo update
                   if [ -n "$(git status --porcelain)" ]; then
                       echo "Found upgrades"
