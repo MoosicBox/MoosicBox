@@ -7,14 +7,52 @@ env:
     AWS_REGION: us-east-1
 
 jobs:
-    deploy:
+    upgrade:
         runs-on: ubuntu-latest
 
         steps:
             - uses: actions/checkout@v4
+              with:
+                  token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
 
-            - name: Deploy
+            - name: Install cargo-edit
               shell: bash
               run: |
                   cargo install -f cargo-edit
+
+            - name: Upgrade
+              id: upgrade
+              shell: bash
+              run: |
                   cargo upgrade
+                  if [ -n "$(git status --porcelain)" ]; then
+                      echo "Found upgrades"
+                      echo "upgraded=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "No upgrades"
+                      echo "upgraded=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Build
+              if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
+              shell: bash
+              run: |
+                  cargo build
+
+            - name: Test
+              if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
+              shell: bash
+              run: |
+                  cargo test
+
+            - name: Commit
+              if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
+              shell: bash
+              run: |
+                  echo "Found upgrades"
+                  git config user.name "MoosicBoxBot"
+                  git config user.email "MoosicBoxBot@gmail.com"
+                  git add .
+                  git commit --message "Upgrade Dependencies"
+                  echo "Pushing upgrades"
+                  git push origin master
