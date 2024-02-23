@@ -41,13 +41,13 @@ jobs:
               if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
               shell: bash
               run: |
-                  cargo build
+                  STATIC_TOKEN=123 TUNNEL_ACCESS_TOKEN=123 cargo build
 
             - name: Test
               if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
               shell: bash
               run: |
-                  cargo test
+                  STATIC_TOKEN=123 TUNNEL_ACCESS_TOKEN=123 cargo test
 
             - name: Commit
               if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
