@@ -20,14 +20,18 @@ jobs:
               run: |
                   cargo install \
                       -f cargo-edit \
-                      --git https://github.com/killercup/cargo-edit \
-                      --features "vendored-libgit2"
+                      --git https://github.com/killercup/cargo-edit
 
             - name: Upgrade
               id: upgrade
               shell: bash
               run: |
-                  cargo upgrade
+                  cargo upgrade \
+                      --exclude https://github.com/BSteffaniak/audiotags.git?branch=master-shallow \
+                      --exclude libvips \
+                      --exclude lofty \
+                      --exclude symphonia
+                  cargo update
                   if [ -n "$(git status --porcelain)" ]; then
                       echo "Found upgrades"
                       echo "upgraded=true" >> "$GITHUB_OUTPUT"
@@ -52,7 +56,6 @@ jobs:
               if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
               shell: bash
               run: |
-                  echo "Found upgrades"
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
                   git add .
