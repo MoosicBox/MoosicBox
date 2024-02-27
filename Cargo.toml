@@ -87,7 +87,7 @@ futures-util = { version = "0.3.30", default-features = false, features = [
 ] }
 hex = "0.4.3"
 home = "0.5.9"
-id3 = "1.13.0"
+id3 = "1.13.1"
 image = "0.24.9"
 io-streams = "0.15.0"
 itertools = "0.12.1"
@@ -116,7 +116,7 @@ pretty_assertions = "1.4.0"
 pretty_env_logger = "0.4"
 qstring = "0.7.2"
 rand = "0.8"
-rangemap = "1.5.0"
+rangemap = "1.5.1"
 rb = "0.4.1"
 regex = "1.10.3"
 reqwest = { version = "0.11.24", default-features = false, features = [
@@ -139,7 +139,7 @@ symphonia = { git = "https://github.com/dedobbin/Symphonia", branch = "bug/aac-m
     "all",
 ] }
 tantivy = "0.21.1"
-test-log = "0.2.14"
+test-log = "0.2.15"
 thiserror = "1.0.57"
 throttle = "0.1.0"
 tokio = { version = "1.36.0", features = ["sync", "io-util"] }
