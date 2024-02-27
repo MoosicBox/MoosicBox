@@ -104,7 +104,7 @@ pub fn default_env_usize(name: &str, default: usize) -> Result<usize, DefaultEnv
 
 #[macro_export]
 macro_rules! default_env_usize {
-    ($name:expr, $default:expr) => {
+    ($name:expr, $default:expr $(,)?) => {
         match $crate::option_env_usize!($name) {
             Some(v) => v,
             None => $default,
@@ -147,7 +147,7 @@ pub fn default_env(name: &str, default: &str) -> String {
 
 #[macro_export]
 macro_rules! default_env {
-    ($name:expr, $default:expr) => {
+    ($name:expr, $default:expr $(,)?) => {
         match option_env!($name) {
             Some(v) => v,
             None => $default,
