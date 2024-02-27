@@ -37,7 +37,22 @@ static CHAT_SERVER_HANDLE: Lazy<std::sync::RwLock<Option<ws::server::ChatServerH
 static DB: OnceLock<Arc<Box<dyn Database>>> = OnceLock::new();
 
 fn main() -> std::io::Result<()> {
-    env_logger::init();
+    #[cfg(debug_assertions)]
+    const DEFAULT_LOG_LEVEL: &str = "moosicbox=trace";
+    #[cfg(not(debug_assertions))]
+    const DEFAULT_LOG_LEVEL: &str = "moosicbox=info";
+
+    free_log_client::init(
+        free_log_client::LogsConfig::builder()
+            .user_agent("moosicbox_server")
+            .log_writer_api_url("https://logs.moosicbox.com")
+            .log_level(free_log_client::Level::Warn)
+            .env_filter(default_env!(
+                "MOOSICBOX_LOG",
+                default_env!("RUST_LOG", DEFAULT_LOG_LEVEL)
+            )),
+    )
+    .expect("Failed to initialize FreeLog client");
 
     let args: Vec<String> = env::args().collect();
 

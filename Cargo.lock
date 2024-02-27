@@ -1822,6 +1822,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "free_log_client"
+version = "0.1.0"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#3e6251ca1b51c975ecbdae39b4c3961ff0c0c8d2"
+dependencies = [
+ "futures-util",
+ "once_cell",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "strum",
+ "strum_macros",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-log",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "frunk"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3317,7 +3336,7 @@ dependencies = [
  "actix-ws",
  "awc",
  "enum-as-inner",
- "env_logger 0.10.2",
+ "free_log_client",
  "futures",
  "futures-util",
  "kanal",

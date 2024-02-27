@@ -35,29 +35,29 @@ moosicbox_tunnel = { path = "../tunnel", default-features = false }
 moosicbox_tunnel_sender = { path = "../tunnel_sender", default-features = false }
 moosicbox_ws = { path = "../ws" }
 
-actix-cors    = { workspace = true }
-actix-files   = { workspace = true }
-actix-web     = { workspace = true }
-actix-ws      = { workspace = true }
-awc           = { workspace = true }
-enum-as-inner = { workspace = true }
-env_logger    = { workspace = true }
-futures       = { workspace = true }
-futures-util  = { workspace = true }
-kanal         = { workspace = true }
-lazy_static   = { workspace = true }
-log           = { workspace = true }
-once_cell     = { workspace = true }
-rand          = { workspace = true }
-regex         = { workspace = true }
-rusqlite      = { workspace = true }
-serde         = { workspace = true, features = ["derive"] }
-serde_json    = { workspace = true }
-thiserror     = { workspace = true }
-throttle      = { workspace = true }
-tokio         = { workspace = true, features = ["rt", "time", "macros"] }
-tokio-util    = { workspace = true }
-url           = { workspace = true }
+actix-cors      = { workspace = true }
+actix-files     = { workspace = true }
+actix-web       = { workspace = true }
+actix-ws        = { workspace = true }
+awc             = { workspace = true }
+enum-as-inner   = { workspace = true }
+free_log_client = { workspace = true }
+futures         = { workspace = true }
+futures-util    = { workspace = true }
+kanal           = { workspace = true }
+lazy_static     = { workspace = true }
+log             = { workspace = true }
+once_cell       = { workspace = true }
+rand            = { workspace = true }
+regex           = { workspace = true }
+rusqlite        = { workspace = true }
+serde           = { workspace = true, features = ["derive"] }
+serde_json      = { workspace = true }
+thiserror       = { workspace = true }
+throttle        = { workspace = true }
+tokio           = { workspace = true, features = ["rt", "time", "macros"] }
+tokio-util      = { workspace = true }
+url             = { workspace = true }
 
 [features]
 default = [
