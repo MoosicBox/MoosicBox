@@ -7,19 +7,19 @@ pub enum ParseIntError {
     InvalidDigit,
 }
 
-const fn parse_byte(b: u8, pow10: usize) -> Result<usize, ParseIntError> {
+const fn parse_byte(b: u8, pow10: u128) -> Result<u128, ParseIntError> {
     let r = b.wrapping_sub(48);
 
     if r > 9 {
         Err(ParseIntError::InvalidDigit)
     } else {
-        Ok((r as usize) * pow10)
+        Ok((r as u128) * pow10)
     }
 }
 
-pub(crate) const POW10: [usize; 20] = {
+pub(crate) const POW10: [u128; 20] = {
     let mut array = [0; 20];
-    let mut current = 1;
+    let mut current: u128 = 1;
 
     let mut index = 20;
 
@@ -58,7 +58,7 @@ pub const fn parse(b: &str) -> Result<usize, ParseIntError> {
             Ok(d) => d,
         };
 
-        result = result.wrapping_add(r);
+        result = result.wrapping_add(r as usize);
 
         index += 1;
         index_const_table += 1;
