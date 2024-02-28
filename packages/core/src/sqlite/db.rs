@@ -1190,31 +1190,25 @@ pub async fn add_album_maps_and_get_albums(
     db: &Box<dyn Database>,
     albums: Vec<HashMap<&str, DatabaseValue>>,
 ) -> Result<Vec<LibraryAlbum>, DbError> {
-    let mut results = vec![];
+    let mut values = vec![];
 
     for album in albums {
         if !album.contains_key("artist_id") || !album.contains_key("title") {
             return Err(DbError::InvalidRequest);
         }
 
-        let _filters = &[
-            where_eq("artist_id", album.get("artist_id").unwrap().clone()),
-            where_eq("title", album.get("title").unwrap().clone()),
-        ];
-
-        let row: LibraryAlbum = db
-            .upsert("albums")
-            .where_eq("artist_id", album.get("artist_id").unwrap().clone())
-            .where_eq("title", album.get("title").unwrap().clone())
-            .values(album.into_iter().collect::<Vec<_>>())
-            .execute_first(db)
-            .await?
-            .to_value_type()?;
-
-        results.push(row);
+        let mut album_values = album.into_iter().collect::<Vec<_>>();
+        album_values.sort_by(|a, b| a.0.cmp(b.0));
+        values.push(album_values);
     }
 
-    Ok(results)
+    Ok(db
+        .upsert_multi("albums")
+        .unique(&["`artist_id`", "`title`"])
+        .values(values)
+        .execute(db)
+        .await?
+        .to_value_type()?)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
