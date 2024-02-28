@@ -35,6 +35,11 @@ lto           = false
 opt-level     = 3
 strip         = "symbols"
 
+[profile.debug-release]
+debug    = true
+inherits = "release"
+strip    = "none"
+
 [profile.release-lto]
 inherits = "release"
 lto      = "fat"
