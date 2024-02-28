@@ -1,4 +1,6 @@
-use actix_web::error::{ErrorBadRequest, ErrorGone, ErrorInternalServerError, ErrorUnauthorized};
+use actix_web::error::{
+    ErrorBadRequest, ErrorFailedDependency, ErrorInternalServerError, ErrorUnauthorized,
+};
 use actix_web::http::{header, StatusCode};
 use actix_web::web::{self, Json};
 use actix_web::{route, HttpResponse};
@@ -255,7 +257,7 @@ async fn handle_request(
             log::error!(
                 "Failed to receive headers for request_id={request_id} client_id={client_id} ({err:?})"
             );
-            return Err(ErrorGone("Client with ID is gone"));
+            return Err(ErrorFailedDependency("Client with ID is not connected"));
         }
     };
 
