@@ -77,7 +77,7 @@ chrono = { version = "0.4.34", default-features = false, features = [
 ] }
 clap = "3.2.25"
 cpal = "0.15.2"
-crossbeam-channel = "0.5.11"
+crossbeam-channel = "0.5.12"
 debounce = "0.2.2"
 derive_more = "0.99.17"
 dotenv = "0.15"
@@ -114,7 +114,7 @@ mysql = { version = "24.0.0", features = [
 mysql_common = { version = "0.30", default-features = false }
 ogg = "0.9.1"
 once_cell = { version = "1.19.0" }
-open = "5.0.1"
+open = "5.0.2"
 openssl = { version = "0.10.64", features = ["v110"] }
 opus = "0.3.0"
 pin-project = "1.1.4"
