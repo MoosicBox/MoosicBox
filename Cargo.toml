@@ -111,7 +111,7 @@ mysql = { version = "24.0.0", features = [
     "default-rustls",
     "rustls-tls",
 ], default-features = false }
-mysql_common = { version = "0.32", default-features = false }
+mysql_common = { version = "0.30.6", default-features = false }
 ogg = "0.9.1"
 once_cell = { version = "1.19.0" }
 open = "5.1.1"

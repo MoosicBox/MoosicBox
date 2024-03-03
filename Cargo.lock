@@ -453,9 +453,9 @@ dependencies = [
 
 [[package]]
 name = "arc-swap"
-version = "1.6.0"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bddcadddf5e9015d310179a59bb28c4d4b9920ad0f11e8e14dbadf654890c9a6"
+checksum = "7b3d0060af21e8d11a926981cc00c6c1541aa91dd64b9f881985c3da1094425f"
 
 [[package]]
 name = "arrayvec"
@@ -1139,15 +1139,6 @@ checksum = "4e2e4afe60d7dd600fdd3de8d0f08c2b7ec039712e3b6137ff98b7004e82de4f"
 dependencies = [
  "alloc-no-stdlib",
  "alloc-stdlib",
-]
-
-[[package]]
-name = "btoi"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9dd6407f73a9b8b6162d8a2ef999fe6afd7cc15902ebf42c5cd296addf17e0ad"
-dependencies = [
- "num-traits",
 ]
 
 [[package]]
@@ -3566,7 +3557,7 @@ dependencies = [
  "moosicbox_env_utils",
  "moosicbox_tunnel",
  "mysql",
- "mysql_common 0.32.0",
+ "mysql_common",
  "once_cell",
  "qstring",
  "rand",
@@ -3672,7 +3663,7 @@ dependencies = [
  "io-enum",
  "libc",
  "lru 0.10.1",
- "mysql_common 0.30.6",
+ "mysql_common",
  "named_pipe",
  "once_cell",
  "pem",
@@ -3742,39 +3733,6 @@ dependencies = [
  "thiserror",
  "time",
  "uuid",
-]
-
-[[package]]
-name = "mysql_common"
-version = "0.32.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b73aacd01475af6d2efbdf489efd60fc519515ffe94edfd74236f954d521e31b"
-dependencies = [
- "base64 0.21.7",
- "bindgen 0.69.4",
- "bitflags 2.4.2",
- "btoi",
- "byteorder",
- "bytes",
- "cc",
- "cmake",
- "crc32fast",
- "flate2",
- "lazy_static",
- "num-bigint",
- "num-traits",
- "rand",
- "regex",
- "saturating",
- "serde",
- "serde_json",
- "sha1",
- "sha2",
- "smallvec",
- "subprocess",
- "thiserror",
- "uuid",
- "zstd 0.13.0",
 ]
 
 [[package]]
