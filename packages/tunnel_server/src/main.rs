@@ -87,7 +87,7 @@ fn main() -> Result<(), std::io::Error> {
             .bind((default_env("BIND_ADDR", "0.0.0.0"), service_port))?
             .run();
 
-        try_join!(
+        if let Err(err) = try_join!(
             async move {
                 let resp = http_server.await;
                 CHAT_SERVER_HANDLE
@@ -104,7 +104,12 @@ fn main() -> Result<(), std::io::Error> {
                     }
                 }
             }
-        )?;
+        ) {
+            log::error!("Error on shutdown: {err:?}");
+            return Err(err);
+        }
+
+        log::info!("Server shut down");
 
         Ok(())
     })
