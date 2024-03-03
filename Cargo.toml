@@ -53,7 +53,7 @@ edition = "2021"
 
 [workspace.dependencies]
 actix = "0.13.3"
-actix-cors = "0.6.5"
+actix-cors = "0.7.0"
 actix-files = "0.6.5"
 actix-rt = "2.9.0"
 actix-web = "4.5.1"
@@ -66,24 +66,24 @@ atomic_float = "0.1.0"
 audiopus = "0.2.0"
 audiotags = { git = "https://github.com/BSteffaniak/audiotags.git", branch = "master-shallow" }
 awc = "3.4.0"
-aws-config = "0.101.0"
-aws-sdk-apigatewaymanagement = "0.38.0"
-aws-sdk-ssm = "0.38.0"
-base64 = "0.21.7"
+aws-config = "1.1.7"
+aws-sdk-apigatewaymanagement = "1.15.0"
+aws-sdk-ssm = "1.17.0"
+base64 = "0.22.0"
 bytes = "1.5.0"
 chrono = { version = "0.4.34", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = "3.2.25"
+clap = "4.5.1"
 cpal = "0.15.2"
 crossbeam-channel = "0.5.12"
 debounce = "0.2.2"
 derive_more = "0.99.17"
 dotenv = "0.15"
 enum-as-inner = "0.6.0"
-env_logger = "0.10"
-fdk-aac = "0.5.0"
+env_logger = "0.11"
+fdk-aac = "0.6.0"
 free_log_client = { git = "https://github.com/BSteffaniak/FreeLog.git" }
 futures = "0.3"
 futures-channel = "0.3.30"
@@ -95,7 +95,7 @@ hex = "0.4.3"
 home = "0.5.9"
 id3 = "1.13.1"
 image = "0.24.9"
-io-streams = "0.15.0"
+io-streams = "0.16.0"
 itertools = "0.12.1"
 kanal = "0.1.0-pre8"
 lazy_static = "1.4.0"
@@ -111,7 +111,7 @@ mysql = { version = "24.0.0", features = [
     "default-rustls",
     "rustls-tls",
 ], default-features = false }
-mysql_common = { version = "0.30", default-features = false }
+mysql_common = { version = "0.32", default-features = false }
 ogg = "0.9.1"
 once_cell = { version = "1.19.0" }
 open = "5.1.1"
@@ -119,7 +119,7 @@ openssl = { version = "0.10.64", features = ["v110"] }
 opus = "0.3.0"
 pin-project = "1.1.4"
 pretty_assertions = "1.4.0"
-pretty_env_logger = "0.4"
+pretty_env_logger = "0.5"
 qstring = "0.7.2"
 rand = "0.8"
 rangemap = "1.5.1"
@@ -130,17 +130,17 @@ reqwest = { version = "0.11.24", default-features = false, features = [
     "stream",
     "rustls-tls",
 ] }
-rubato = "0.12.0"
-rusqlite = { version = "0.29.0", features = ["bundled"] }
-rustls = "0.21"
+rubato = "0.14.1"
+rusqlite = { version = "0.31.0", features = ["bundled"] }
+rustls = "0.23"
 serde = { version = "1", features = ["derive"] }
 serde-aux = "4.5.0"
 serde_json = "1.0.114"
 serial_test = "3.0.0"
 sha2 = "0.10.8"
 static_init = "1.0.3"
-strum = "0.25.0"
-strum_macros = "0.25.3"
+strum = "0.26.1"
+strum_macros = "0.26.1"
 symphonia = { git = "https://github.com/dedobbin/Symphonia", branch = "bug/aac-missing-timeline", features = [
     "all",
 ] }
@@ -150,7 +150,7 @@ thiserror = "1.0.57"
 throttle = "0.1.0"
 tokio = { version = "1.36.0", features = ["sync", "io-util"] }
 tokio-stream = "0.1.14"
-tokio-tungstenite = { version = "0.20.1", features = ["native-tls-vendored"] }
+tokio-tungstenite = { version = "0.21.0", features = ["native-tls-vendored"] }
 tokio-util = "0.7.10"
 url = "2.5.0"
 uuid = { version = "1.7.0", features = ["v4"] }

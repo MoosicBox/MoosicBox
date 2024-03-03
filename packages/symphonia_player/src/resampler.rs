@@ -70,7 +70,7 @@ where
         )
         .unwrap();
 
-        let output = rubato::Resampler::output_buffer_allocate(&resampler);
+        let output = rubato::Resampler::output_buffer_allocate(&resampler, false);
 
         let input = vec![Vec::with_capacity(duration); num_channels];
 
