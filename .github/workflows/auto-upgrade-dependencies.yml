@@ -18,6 +18,8 @@ jobs:
               with:
                   token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
 
+            - uses: dtolnay/rust-toolchain@stable
+
             - name: Install cargo-edit
               shell: bash
               run: |

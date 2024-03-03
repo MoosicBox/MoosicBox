@@ -13,6 +13,8 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - uses: dtolnay/rust-toolchain@stable
+
             - id: install-aws-cli
               uses: unfor19/install-aws-cli-action@v1
               with:
