@@ -83,15 +83,15 @@ pub async fn chat_ws(
                                     debug!("Propagating ws message {text}");
                                     if let Err(err) = chat_server.ws_message(response).await {
                                         error!(
-                                        "Failed to propagate ws message from tunnel_server: {err:?}"
-                                    );
+                                            "Failed to propagate ws message from tunnel_server: {err:?}"
+                                        );
                                     }
                                 } else {
                                     debug!("Propagating ws response");
                                     if let Err(err) = chat_server.ws_response(response).await {
                                         error!(
-                                        "Failed to propagate ws response from tunnel_server: {err:?}"
-                                    );
+                                            "Failed to propagate ws response from tunnel_server: {err:?}"
+                                        );
                                     }
                                 }
                             } else {
