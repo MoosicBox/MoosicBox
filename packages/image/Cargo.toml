@@ -4,18 +4,32 @@ edition = "2021"
 name    = "moosicbox_image"
 version = "0.1.0"
 
+[[bin]]
+name              = "image_helper"
+path              = "src/main.rs"
+required-features = ["build-binary"]
+
 [dependencies]
-bytes     = { workspace = true }
-image     = { workspace = true, optional = true }
-libvips   = { workspace = true, optional = true }
-log       = { workspace = true }
+bytes = { workspace = true }
+clap = { workspace = true }
+image = { workspace = true, optional = true }
+libvips = { workspace = true, optional = true }
+log = { workspace = true }
 once_cell = { workspace = true, optional = true }
-webp      = { workspace = true, optional = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, optional = true, features = [
+    "macros",
+    "rt-multi-thread",
+] }
+webp = { workspace = true, optional = true }
 
 [features]
 default = ["image", "libvips"]
 
 fail-on-warnings = []
 
-image   = ["dep:image", "dep:webp"]
-libvips = ["dep:libvips", "dep:once_cell"]
+build-binary = ["dep:tokio", "image"]
+image        = ["dep:image", "dep:webp"]
+libvips      = ["dep:libvips", "dep:once_cell"]

@@ -91,6 +91,12 @@ jobs:
                       path: packages/files
                       os: ubuntu-latest
 
+                    - name: image-bin
+                      path: packages/image
+                      os: ubuntu-latest
+                      cargo: --no-default-features --bin image_helper
+                      features: build-binary
+
                     - name: image
                       path: packages/image
                       os: ubuntu-latest

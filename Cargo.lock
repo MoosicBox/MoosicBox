@@ -1245,6 +1245,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c918d541ef2913577a0f9566e9ce27cb35b6df072075769e0b26cb5a554520da"
 dependencies = [
  "clap_builder",
+ "clap_derive",
 ]
 
 [[package]]
@@ -1257,6 +1258,18 @@ dependencies = [
  "anstyle",
  "clap_lex",
  "strsim 0.11.0",
+]
+
+[[package]]
+name = "clap_derive"
+version = "4.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "307bc0538d5f0f83b8248db3087aa92fe504e4691294d0c96c0eabc33f47ba47"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -3072,10 +3085,15 @@ name = "moosicbox_image"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "clap",
  "image",
  "libvips",
  "log",
  "once_cell",
+ "strum 0.26.1",
+ "strum_macros 0.26.1",
+ "thiserror",
+ "tokio",
  "webp",
 ]
 
