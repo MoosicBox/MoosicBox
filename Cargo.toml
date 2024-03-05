@@ -75,7 +75,7 @@ chrono = { version = "0.4.34", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = "4.5.1"
+clap = { version = "4.5.1", features = ["derive"] }
 cpal = "0.15.3"
 crossbeam-channel = "0.5.12"
 debounce = "0.2.2"
