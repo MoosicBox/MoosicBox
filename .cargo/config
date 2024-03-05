@@ -13,9 +13,10 @@ server                                     = "server:release"
 "server:pulseaudio-standard"               = "run --package moosicbox_server --release --no-default-features --features=pulseaudio-standard,aac,flac,mp3,opus"
 "server:release"                           = "server:cpal"
 
-tunnel-server           = "tunnel-server:release"
-"tunnel-server:debug"   = "run --package moosicbox_tunnel_server"
-"tunnel-server:release" = "run --package moosicbox_tunnel_server --release"
+tunnel-server                 = "tunnel-server:release"
+"tunnel-server:debug"         = "run --package moosicbox_tunnel_server"
+"tunnel-server:debug-release" = "run --package moosicbox_tunnel_server --profile debug-release"
+"tunnel-server:release"       = "run --package moosicbox_tunnel_server --release"
 
 [env]
 RUST_LOG = "info"
