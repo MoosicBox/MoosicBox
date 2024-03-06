@@ -80,10 +80,22 @@ fn try_resize_local_file(
         let reader = ::image::io::Reader::open(file_path)?;
         let dimensions = reader.into_dimensions()?;
 
-        (
-            width.unwrap_or(dimensions.0),
-            height.unwrap_or(dimensions.1),
-        )
+        if let Some(width) = width {
+            (
+                width,
+                ((dimensions.1 as f64) * ((width as f64) / (dimensions.0 as f64))).round() as u32,
+            )
+        } else if let Some(height) = height {
+            (
+                ((dimensions.0 as f64) * ((height as f64) / (dimensions.1 as f64))).round() as u32,
+                height,
+            )
+        } else {
+            (
+                width.unwrap_or(dimensions.0),
+                height.unwrap_or(dimensions.1),
+            )
+        }
     };
 
     let output = Path::new(output);
