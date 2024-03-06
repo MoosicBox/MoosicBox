@@ -117,7 +117,7 @@ once_cell = { version = "1.19.0" }
 open = "5.1.1"
 openssl = { version = "0.10.64", features = ["v110"] }
 opus = "0.3.0"
-pin-project = "1.1.4"
+pin-project = "1.1.5"
 pretty_assertions = "1.4.0"
 pretty_env_logger = "0.5"
 qstring = "0.7.2"
