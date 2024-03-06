@@ -150,6 +150,8 @@ fn play(
         _ => return Ok(0),
     };
 
+    log::debug!("Playing track_id={track_id}");
+
     // If there is a seek time, seek the reader to the time specified and get the timestamp of the
     // seeked position. All packets with a timestamp < the seeked position will not be played.
     //
