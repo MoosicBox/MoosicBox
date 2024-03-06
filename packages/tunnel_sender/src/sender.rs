@@ -286,8 +286,12 @@ impl TunnelSender {
                 .await
                 {
                     Ok((ws_stream, _)) => {
-                        just_retried = false;
                         log::debug!("WebSocket handshake has been successfully completed");
+
+                        if just_retried {
+                            log::info!("WebSocket successfully reconnected");
+                            just_retried = false;
+                        }
 
                         let (write, read) = ws_stream.split();
 
@@ -370,7 +374,7 @@ impl TunnelSender {
                             _ = cancellation_token.cancelled() => {}
                             _ = future::select(ws_writer, ws_reader) => {}
                         );
-                        log::info!("Websocket connection closed");
+                        log::info!("WebSocket connection closed");
                     }
                     Err(err) => match err {
                         Error::Http(response) => {
