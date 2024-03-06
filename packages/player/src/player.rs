@@ -9,7 +9,6 @@ use std::{
 use atomic_float::AtomicF64;
 use crossbeam_channel::{bounded, Receiver, SendError};
 use lazy_static::lazy_static;
-use log::{debug, error, info, trace, warn};
 use moosicbox_core::{
     sqlite::{
         db::{get_album_tracks, get_session_playlist, get_tracks, DbError},
@@ -324,7 +323,7 @@ impl Player {
             get_album_tracks(db, album_id as u64)
                 .await
                 .map_err(|e| {
-                    error!("Failed to fetch album tracks: {e:?}");
+                    log::error!("Failed to fetch album tracks: {e:?}");
                     PlayerError::AlbumFetchFailed(album_id)
                 })?
                 .into_iter()
@@ -384,7 +383,7 @@ impl Player {
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
         if let Ok(playback) = self.get_playback() {
-            debug!("Stopping existing playback {}", playback.id);
+            log::debug!("Stopping existing playback {}", playback.id);
             self.stop()?;
         }
 
@@ -408,12 +407,12 @@ impl Player {
                 .map(|track| match track {
                     TrackOrId::Id(track_id, source) => match *source {
                         ApiSource::Library => {
-                            debug!("Fetching track {track_id}",);
+                            log::debug!("Fetching track {track_id}",);
                             let track = library_tracks
                                 .iter()
                                 .find(|t| t.id == *track_id)
                                 .expect("Track doesn't exist");
-                            debug!("Got track {track:?}");
+                            log::debug!("Got track {track:?}");
                             TrackOrId::Track(Box::new(Track::Library(track.clone())))
                         }
                         ApiSource::Tidal => TrackOrId::Track(Box::new(Track::Tidal(TidalTrack {
@@ -448,9 +447,9 @@ impl Player {
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
-        info!("Playing playback...");
+        log::info!("Playing playback...");
         if let Ok(playback) = self.get_playback() {
-            debug!("Stopping existing playback {}", playback.id);
+            log::debug!("Stopping existing playback {}", playback.id);
             self.stop()?;
         }
 
@@ -500,7 +499,7 @@ impl Player {
                 && (playback.position as usize) < playback.tracks.len()
             {
                 let track_or_id = &playback.tracks[playback.position as usize];
-                debug!("track {track_or_id:?} {seek:?}");
+                log::debug!("track {track_or_id:?} {seek:?}");
 
                 let seek = if seek.is_some() { seek.take() } else { None };
 
@@ -598,7 +597,7 @@ impl Player {
                 )
             };
             let track_id = track_or_id.id();
-            info!(
+            log::info!(
                 "Playing track with Symphonia: {} {abort:?} {track_or_id:?}",
                 track_id
             );
@@ -666,7 +665,7 @@ impl Player {
                 current_seek,
             ) {
                 if retry_options.is_none() {
-                    error!("Track playback failed and no retry options: {err:?}");
+                    log::error!("Track playback failed and no retry options: {err:?}");
                     return Err(PlayerError::PlaybackError(err));
                 }
 
@@ -675,17 +674,19 @@ impl Player {
                 if let PlaybackError::AudioOutput(AudioOutputError::Interrupt) = err {
                     retry_count += 1;
                     if retry_count > retry_options.max_retry_count {
-                        error!("Playback retry failed after {retry_count} attempts. Not retrying");
+                        log::error!(
+                            "Playback retry failed after {retry_count} attempts. Not retrying"
+                        );
                         break;
                     }
                     let binding = self.active_playback.read().unwrap();
                     let playback = binding.as_ref().unwrap();
                     current_seek = Some(playback.progress);
-                    warn!("Playback interrupted. Trying again at position {current_seek:?} (attempt {retry_count}/{})", retry_options.max_retry_count);
+                    log::warn!("Playback interrupted. Trying again at position {current_seek:?} (attempt {retry_count}/{})", retry_options.max_retry_count);
                     continue;
                 }
             }
-            info!("Finished playback for track {}", track_id);
+            log::info!("Finished playback for track {}", track_id);
             break;
         }
 
@@ -703,18 +704,18 @@ impl Player {
     }
 
     pub fn stop(&self) -> Result<Playback, PlayerError> {
-        info!("Stopping playback");
+        log::info!("Stopping playback");
         let playback = self.get_playback()?;
 
-        debug!("Aborting playback {playback:?} for stop");
+        log::debug!("Aborting playback {playback:?} for stop");
         playback.abort.cancel();
 
         if !playback.playing {
-            debug!("Playback not playing: {playback:?}");
+            log::debug!("Playback not playing: {playback:?}");
             return Ok(playback);
         }
 
-        trace!("Waiting for playback completion response");
+        log::trace!("Waiting for playback completion response");
         if let Some(receiver) = self.receiver.write().unwrap().take() {
             if let Err(err) = receiver.recv_timeout(std::time::Duration::from_secs(5)) {
                 match err {
@@ -722,11 +723,11 @@ impl Player {
                         log::error!("Playback timed out waiting for abort completion")
                     }
                     crossbeam_channel::RecvTimeoutError::Disconnected => {
-                        log::error!("Sender associated with playback disconnected")
+                        log::info!("Sender associated with playback disconnected")
                     }
                 }
             } else {
-                trace!("Playback successfully stopped");
+                log::trace!("Playback successfully stopped");
             }
         } else {
             log::debug!("No receiver to wait for completion response with");
@@ -756,7 +757,7 @@ impl Player {
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
-        info!("Playing next track seek {seek:?}");
+        log::info!("Playing next track seek {seek:?}");
         let playback = self.get_playback()?;
 
         if playback.position + 1 >= playback.tracks.len() as u16 {
@@ -785,7 +786,7 @@ impl Player {
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
-        info!("Playing next track seek {seek:?}");
+        log::info!("Playing next track seek {seek:?}");
         let playback = self.get_playback()?;
 
         if playback.position == 0 {
@@ -928,27 +929,27 @@ impl Player {
     }
 
     pub fn pause_playback(&self) -> Result<PlaybackStatus, PlayerError> {
-        info!("Pausing playback id");
+        log::info!("Pausing playback id");
         let mut playback = self.get_playback()?;
 
         let id = playback.id;
 
-        info!("Aborting playback id {id} for pause");
+        log::info!("Aborting playback id {id} for pause");
         playback.abort.cancel();
 
         if !playback.playing {
             return Err(PlayerError::PlaybackNotPlaying(id));
         }
 
-        trace!("Waiting for playback completion response");
+        log::trace!("Waiting for playback completion response");
         if let Some(receiver) = self.receiver.write().unwrap().take() {
             if let Err(err) = receiver.recv() {
-                error!("Sender correlated with receiver has dropped: {err:?}");
+                log::error!("Sender correlated with receiver has dropped: {err:?}");
             }
         } else {
             log::debug!("No receiver to wait for completion response with");
         }
-        trace!("Playback successfully stopped");
+        log::trace!("Playback successfully stopped");
 
         playback.playing = false;
         playback.abort = CancellationToken::new();
@@ -969,7 +970,7 @@ impl Player {
         &self,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
-        info!("Resuming playback");
+        log::info!("Resuming playback");
         let mut playback = self.get_playback()?;
 
         let id = playback.id;
@@ -1224,7 +1225,7 @@ impl Player {
     }
 
     pub fn get_playback(&self) -> Result<Playback, PlayerError> {
-        trace!("Getting Playback");
+        log::trace!("Getting Playback");
         if let Some(playback) = self.active_playback.read().unwrap().clone() {
             Ok(playback.clone())
         } else {

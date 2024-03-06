@@ -5,7 +5,6 @@ use bytes::Bytes;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use futures::StreamExt;
 use lazy_static::lazy_static;
-use log::{debug, info};
 use reqwest::Client;
 use symphonia::core::io::MediaSource;
 use tokio::runtime::{self, Runtime};
@@ -88,10 +87,10 @@ impl RemoteByteStreamFetcher {
             start,
             end.map(|n| n.to_string()).unwrap_or("".into())
         );
-        debug!("Starting fetch for byte stream with range {bytes_range}");
+        log::debug!("Starting fetch for byte stream with range {bytes_range}");
 
         self.abort_handle = Some(RT.spawn(async move {
-            debug!("Fetching byte stream with range {bytes_range}");
+            log::debug!("Fetching byte stream with range {bytes_range}");
 
             let mut stream = Client::new()
                 .get(url.clone())
@@ -103,26 +102,26 @@ impl RemoteByteStreamFetcher {
 
             while let Some(item) = stream.next().await {
                 if abort.is_cancelled() || stream_abort.is_cancelled() {
-                    debug!("ABORTING");
+                    log::debug!("ABORTING");
                     break;
                 }
-                debug!("Received more bytes from stream");
+                log::trace!("Received more bytes from stream");
                 let bytes = item.unwrap();
-                if sender.send(bytes).is_err() {
-                    info!("Aborted byte stream read");
+                if let Err(err) = sender.send(bytes) {
+                    log::info!("Aborted byte stream read: {err:?}");
                     return;
                 }
             }
 
             if abort.is_cancelled() || stream_abort.is_cancelled() {
-                debug!("ABORTED");
+                log::debug!("ABORTED");
                 if let Err(err) = sender.send(Bytes::new()) {
                     log::warn!("Failed to send empty bytes: {err:?}");
                 }
             } else {
-                debug!("Finished reading from stream");
+                log::debug!("Finished reading from stream");
                 if sender.send(Bytes::new()).is_ok() && ready_receiver.recv().is_err() {
-                    info!("Byte stream read has been aborted");
+                    log::info!("Byte stream read has been aborted");
                 }
             }
         }));
@@ -132,11 +131,11 @@ impl RemoteByteStreamFetcher {
         self.abort.cancel();
 
         if let Some(handle) = &self.abort_handle {
-            debug!("Aborting request");
+            log::debug!("Aborting request");
             handle.abort();
             self.abort_handle = None;
         } else {
-            debug!("No join handle for request");
+            log::debug!("No join handle for request");
         }
         self.abort = CancellationToken::new();
     }
@@ -182,26 +181,32 @@ impl Read for RemoteByteStream {
             let buffer_len = fetcher.buffer.len();
             let fetcher_start = fetcher.start as usize;
 
-            debug!(
+            log::debug!(
                 "Read: read_pos[{}] write_max[{}] fetcher_start[{}] buffer_len[{}] written[{}]",
-                read_position, write_max, fetcher_start, buffer_len, written
+                read_position,
+                write_max,
+                fetcher_start,
+                buffer_len,
+                written
             );
 
             let bytes_written = if fetcher_start + buffer_len > read_position {
                 let fetcher_buf_start = read_position - fetcher_start;
                 let bytes_to_read_from_buf = buffer_len - fetcher_buf_start;
-                debug!("Reading bytes from buffer: {bytes_to_read_from_buf} (max {write_max})");
+                log::trace!(
+                    "Reading bytes from buffer: {bytes_to_read_from_buf} (max {write_max})"
+                );
                 let bytes_to_write = min(bytes_to_read_from_buf, write_max);
                 buf[written..written + bytes_to_write].copy_from_slice(
                     &fetcher.buffer[fetcher_buf_start..fetcher_buf_start + bytes_to_write],
                 );
                 bytes_to_write
             } else {
-                debug!("Waiting for bytes...");
+                log::trace!("Waiting for bytes...");
                 let new_bytes = receiver.recv().unwrap();
                 fetcher.buffer.extend_from_slice(&new_bytes);
                 let len = new_bytes.len();
-                debug!("Received bytes {len}");
+                log::trace!("Received bytes {len}");
 
                 if len == 0 {
                     self.finished = true;
@@ -249,7 +254,7 @@ impl Seek for RemoteByteStream {
             }
         };
 
-        info!("Seeking: pos[{seek_position}] type[{pos:?}]");
+        log::info!("Seeking: pos[{seek_position}] type[{pos:?}]");
 
         self.read_position = seek_position;
         self.fetcher = RemoteByteStreamFetcher::new(
