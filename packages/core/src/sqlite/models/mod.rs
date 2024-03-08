@@ -197,6 +197,12 @@ pub enum Track {
     Qobuz(QobuzTrack),
 }
 
+impl From<LibraryTrack> for Track {
+    fn from(value: LibraryTrack) -> Self {
+        Track::Library(value)
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryTrack {
