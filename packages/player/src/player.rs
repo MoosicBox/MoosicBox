@@ -277,7 +277,7 @@ pub struct PlaybackRetryOptions {
     pub retry_delay: std::time::Duration,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum PlayerSource {
     Local,
     Remote {
