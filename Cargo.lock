@@ -1108,9 +1108,9 @@ checksum = "40e38929add23cdf8a366df9b0e088953150724bcbe5fc330b0d8eb3b328eec8"
 
 [[package]]
 name = "bumpalo"
-version = "3.15.3"
+version = "3.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ea184aa71bb362a1157c896979544cc23974e08fd265f29ea96b59f0b4a555b"
+checksum = "7ff69b9dd49fd426c69a0db9fc04dd934cdb6645ff000864d98f7e2af8830eaa"
 
 [[package]]
 name = "bytecheck"
@@ -3901,9 +3901,9 @@ dependencies = [
 
 [[package]]
 name = "open"
-version = "5.1.1"
+version = "5.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68b3fbb0d52bf0cbb5225ba3d2c303aa136031d43abff98284332a9981ecddec"
+checksum = "449f0ff855d85ddbf1edd5b646d65249ead3f5e422aaa86b7d2d0b049b103e32"
 dependencies = [
  "is-wsl",
  "libc",
@@ -5090,8 +5090,8 @@ checksum = "81cdd64d312baedb58e21336b31bc043b77e01cc99033ce76ef539f78e965ebc"
 
 [[package]]
 name = "symphonia"
-version = "0.5.2"
-source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#eef52c3f983c8a05b018407e61fa975c2562a2c8"
+version = "0.5.4"
+source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#7af45717e5686da7f16ca4289411f7176bd49bd1"
 dependencies = [
  "lazy_static",
  "symphonia-bundle-flac",
@@ -5102,18 +5102,18 @@ dependencies = [
  "symphonia-codec-pcm",
  "symphonia-codec-vorbis",
  "symphonia-core",
+ "symphonia-format-caf",
  "symphonia-format-isomp4",
  "symphonia-format-mkv",
  "symphonia-format-ogg",
  "symphonia-format-riff",
- "symphonia-format-wav",
  "symphonia-metadata",
 ]
 
 [[package]]
 name = "symphonia-bundle-flac"
-version = "0.5.2"
-source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#eef52c3f983c8a05b018407e61fa975c2562a2c8"
+version = "0.5.4"
+source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#7af45717e5686da7f16ca4289411f7176bd49bd1"
 dependencies = [
  "log",
  "symphonia-core",
@@ -5123,10 +5123,9 @@ dependencies = [
 
 [[package]]
 name = "symphonia-bundle-mp3"
-version = "0.5.2"
-source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#eef52c3f983c8a05b018407e61fa975c2562a2c8"
+version = "0.5.4"
+source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#7af45717e5686da7f16ca4289411f7176bd49bd1"
 dependencies = [
- "bitflags 1.3.2",
  "lazy_static",
  "log",
  "symphonia-core",
@@ -5135,8 +5134,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-codec-aac"
-version = "0.5.2"
-source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#eef52c3f983c8a05b018407e61fa975c2562a2c8"
+version = "0.5.4"
+source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#7af45717e5686da7f16ca4289411f7176bd49bd1"
 dependencies = [
  "lazy_static",
  "log",
@@ -5145,8 +5144,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-codec-adpcm"
-version = "0.5.2"
-source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#eef52c3f983c8a05b018407e61fa975c2562a2c8"
+version = "0.5.4"
+source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#7af45717e5686da7f16ca4289411f7176bd49bd1"
 dependencies = [
  "log",
  "symphonia-core",
@@ -5154,8 +5153,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-codec-alac"
-version = "0.5.2"
-source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#eef52c3f983c8a05b018407e61fa975c2562a2c8"
+version = "0.5.4"
+source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#7af45717e5686da7f16ca4289411f7176bd49bd1"
 dependencies = [
  "log",
  "symphonia-core",
@@ -5163,8 +5162,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-codec-pcm"
-version = "0.5.2"
-source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#eef52c3f983c8a05b018407e61fa975c2562a2c8"
+version = "0.5.4"
+source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#7af45717e5686da7f16ca4289411f7176bd49bd1"
 dependencies = [
  "log",
  "symphonia-core",
@@ -5172,8 +5171,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-codec-vorbis"
-version = "0.5.2"
-source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#eef52c3f983c8a05b018407e61fa975c2562a2c8"
+version = "0.5.4"
+source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#7af45717e5686da7f16ca4289411f7176bd49bd1"
 dependencies = [
  "log",
  "symphonia-core",
@@ -5182,21 +5181,30 @@ dependencies = [
 
 [[package]]
 name = "symphonia-core"
-version = "0.5.2"
-source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#eef52c3f983c8a05b018407e61fa975c2562a2c8"
+version = "0.5.4"
+source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#7af45717e5686da7f16ca4289411f7176bd49bd1"
 dependencies = [
  "arrayvec",
  "bitflags 1.3.2",
  "bytemuck",
  "lazy_static",
  "log",
- "rustfft",
+]
+
+[[package]]
+name = "symphonia-format-caf"
+version = "0.5.4"
+source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#7af45717e5686da7f16ca4289411f7176bd49bd1"
+dependencies = [
+ "log",
+ "symphonia-core",
+ "symphonia-metadata",
 ]
 
 [[package]]
 name = "symphonia-format-isomp4"
-version = "0.5.2"
-source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#eef52c3f983c8a05b018407e61fa975c2562a2c8"
+version = "0.5.4"
+source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#7af45717e5686da7f16ca4289411f7176bd49bd1"
 dependencies = [
  "encoding_rs",
  "log",
@@ -5207,8 +5215,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-format-mkv"
-version = "0.5.2"
-source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#eef52c3f983c8a05b018407e61fa975c2562a2c8"
+version = "0.5.4"
+source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#7af45717e5686da7f16ca4289411f7176bd49bd1"
 dependencies = [
  "lazy_static",
  "log",
@@ -5219,8 +5227,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-format-ogg"
-version = "0.5.2"
-source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#eef52c3f983c8a05b018407e61fa975c2562a2c8"
+version = "0.5.4"
+source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#7af45717e5686da7f16ca4289411f7176bd49bd1"
 dependencies = [
  "log",
  "symphonia-core",
@@ -5230,8 +5238,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-format-riff"
-version = "0.5.2"
-source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#eef52c3f983c8a05b018407e61fa975c2562a2c8"
+version = "0.5.4"
+source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#7af45717e5686da7f16ca4289411f7176bd49bd1"
 dependencies = [
  "extended",
  "log",
@@ -5240,19 +5248,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "symphonia-format-wav"
-version = "0.5.2"
-source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#eef52c3f983c8a05b018407e61fa975c2562a2c8"
-dependencies = [
- "log",
- "symphonia-core",
- "symphonia-metadata",
-]
-
-[[package]]
 name = "symphonia-metadata"
-version = "0.5.2"
-source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#eef52c3f983c8a05b018407e61fa975c2562a2c8"
+version = "0.5.4"
+source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#7af45717e5686da7f16ca4289411f7176bd49bd1"
 dependencies = [
  "encoding_rs",
  "lazy_static",
@@ -5262,8 +5260,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-utils-xiph"
-version = "0.5.2"
-source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#eef52c3f983c8a05b018407e61fa975c2562a2c8"
+version = "0.5.4"
+source = "git+https://github.com/dedobbin/Symphonia?branch=bug/aac-missing-timeline#7af45717e5686da7f16ca4289411f7176bd49bd1"
 dependencies = [
  "symphonia-core",
  "symphonia-metadata",
