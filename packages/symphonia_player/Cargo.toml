@@ -29,7 +29,7 @@ reqwest                 = { workspace = true }
 rubato                  = { workspace = true, optional = true }
 symphonia               = { workspace = true }
 thiserror               = { workspace = true }
-tokio                   = { workspace = true }
+tokio                   = { workspace = true, features = ["rt-multi-thread"] }
 tokio-stream            = { workspace = true }
 tokio-util              = { workspace = true }
 
