@@ -125,7 +125,7 @@ rand = "0.8"
 rangemap = "1.5.1"
 rb = "0.4.1"
 regex = "1.10.3"
-reqwest = { version = "0.11.24", default-features = false, features = [
+reqwest = { version = "0.11.25", default-features = false, features = [
     "blocking",
     "stream",
     "rustls-tls",
