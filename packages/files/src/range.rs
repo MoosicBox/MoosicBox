@@ -1,5 +1,6 @@
 use thiserror::Error;
 
+#[derive(Debug, Clone)]
 pub struct Range {
     pub start: Option<usize>,
     pub end: Option<usize>,
