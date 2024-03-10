@@ -294,7 +294,7 @@ fn update_and_get_rows(
     let all_values = [all_values, all_filter_values].concat();
 
     log::trace!(
-        "Running delete query: {query} with params: {:?}",
+        "Running update query: {query} with params: {:?}",
         all_values
     );
 
