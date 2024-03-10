@@ -1006,9 +1006,9 @@ fn upsert(
     let rows = update_and_get_rows(connection, table_name, values, filters, limit)?;
 
     Ok(if rows.is_empty() {
-        rows
-    } else {
         vec![insert_and_get_row(connection, table_name, values)?]
+    } else {
+        rows
     })
 }
 
