@@ -53,9 +53,35 @@ lazy_static! {
 
 #[derive(Clone, Debug)]
 pub enum TrackSource {
-    LocalFilePath(String),
-    Tidal(String),
-    Qobuz(String),
+    LocalFilePath { path: String, format: AudioFormat },
+    Tidal { url: String, format: AudioFormat },
+    Qobuz { url: String, format: AudioFormat },
+}
+
+pub fn track_source_to_audio_format(source: &TrackSource) -> &AudioFormat {
+    match source {
+        TrackSource::LocalFilePath { format, .. } => format,
+        TrackSource::Tidal { format, .. } => format,
+        TrackSource::Qobuz { format, .. } => format,
+    }
+}
+
+pub fn track_source_to_content_type(source: &TrackSource) -> Option<String> {
+    audio_format_to_content_type(track_source_to_audio_format(source))
+}
+
+pub fn audio_format_to_content_type(format: &AudioFormat) -> Option<String> {
+    match format {
+        #[cfg(feature = "aac")]
+        AudioFormat::Aac => Some("audio/m4a".into()),
+        #[cfg(feature = "flac")]
+        AudioFormat::Flac => Some("audio/flac".into()),
+        #[cfg(feature = "mp3")]
+        AudioFormat::Mp3 => Some("audio/mp3".into()),
+        #[cfg(feature = "opus")]
+        AudioFormat::Opus => Some("audio/opus".into()),
+        AudioFormat::Source => None,
+    }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
@@ -170,15 +196,19 @@ pub async fn get_track_source(
     match source {
         TrackApiSource::Local => match &track.file {
             Some(file) => match env::consts::OS {
-                "windows" => Ok(TrackSource::LocalFilePath(
-                    Regex::new(r"/mnt/(\w+)")
+                "windows" => Ok(TrackSource::LocalFilePath {
+                    path: Regex::new(r"/mnt/(\w+)")
                         .unwrap()
                         .replace(&file, |caps: &Captures| {
                             format!("{}:", caps[1].to_uppercase())
                         })
                         .replace('/', "\\"),
-                )),
-                _ => Ok(TrackSource::LocalFilePath(file.to_string())),
+                    format: track.format.unwrap_or(AudioFormat::Source),
+                }),
+                _ => Ok(TrackSource::LocalFilePath {
+                    path: file.to_string(),
+                    format: track.format.unwrap_or(AudioFormat::Source),
+                }),
             },
             None => Err(TrackSourceError::InvalidSource),
         },
@@ -188,13 +218,14 @@ pub async fn get_track_source(
                 .tidal_id
                 .ok_or(TrackSourceError::InvalidSource)?
                 .into();
-            Ok(TrackSource::Tidal(
-                moosicbox_tidal::track_file_url(db, quality, &track_id, None)
+            Ok(TrackSource::Tidal {
+                url: moosicbox_tidal::track_file_url(db, quality, &track_id, None)
                     .await?
                     .first()
                     .unwrap()
                     .to_string(),
-            ))
+                format: track.format.unwrap_or(AudioFormat::Source),
+            })
         }
         TrackApiSource::Qobuz => {
             let quality = quality.map(|q| q.into()).unwrap_or(QobuzAudioQuality::Low);
@@ -202,9 +233,11 @@ pub async fn get_track_source(
                 .qobuz_id
                 .ok_or(TrackSourceError::InvalidSource)?
                 .into();
-            Ok(TrackSource::Qobuz(
-                moosicbox_qobuz::track_file_url(db, &track_id, quality, None, None, None).await?,
-            ))
+            Ok(TrackSource::Qobuz {
+                url: moosicbox_qobuz::track_file_url(db, &track_id, quality, None, None, None)
+                    .await?,
+                format: track.format.unwrap_or(AudioFormat::Source),
+            })
         }
     }
 }
@@ -329,7 +362,7 @@ pub async fn get_track_bytes(
 
             if let Some(mut audio_output_handler) = audio_output_handler {
                 match source {
-                    TrackSource::LocalFilePath(ref path) => {
+                    TrackSource::LocalFilePath { ref path, .. } => {
                         if let Err(err) = play_file_path_str(
                             path,
                             &mut audio_output_handler,
@@ -341,7 +374,7 @@ pub async fn get_track_bytes(
                             log::error!("Failed to encode to aac: {err:?}");
                         }
                     }
-                    TrackSource::Tidal(url) | TrackSource::Qobuz(url) => {
+                    TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } => {
                         let source = Box::new(RemoteByteStream::new(
                             url,
                             size,
@@ -366,7 +399,7 @@ pub async fn get_track_bytes(
     }
 
     let track_bytes = match source {
-        TrackSource::LocalFilePath(path) => match format {
+        TrackSource::LocalFilePath { path, .. } => match format {
             AudioFormat::Source => {
                 request_track_bytes_from_file(db, track_id, path, format, size).await?
             }
@@ -381,7 +414,7 @@ pub async fn get_track_bytes(
                 format,
             },
         },
-        TrackSource::Tidal(url) | TrackSource::Qobuz(url) => match format {
+        TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } => match format {
             AudioFormat::Source => {
                 request_track_bytes_from_url(&url, start, end, format, size).await?
             }
@@ -600,7 +633,7 @@ pub fn get_or_init_track_visualization(
     debug!("Getting track visualization {track_id}");
 
     match source {
-        TrackSource::LocalFilePath(ref path) => {
+        TrackSource::LocalFilePath { ref path, .. } => {
             let mut audio_output_handler = AudioOutputHandler::new();
             let viz = Arc::new(RwLock::new(vec![]));
 
@@ -642,7 +675,7 @@ pub fn get_or_init_track_visualization(
 
             Ok(ret_viz)
         }
-        TrackSource::Tidal(_url) | TrackSource::Qobuz(_url) => unimplemented!(),
+        TrackSource::Tidal { .. } | TrackSource::Qobuz { .. } => unimplemented!(),
     }
 }
 
@@ -659,7 +692,7 @@ pub async fn get_or_init_track_size(
     }
 
     let bytes = match source {
-        TrackSource::LocalFilePath(ref path) => match quality.format {
+        TrackSource::LocalFilePath { ref path, .. } => match quality.format {
             #[cfg(feature = "aac")]
             AudioFormat::Aac => {
                 let writer = moosicbox_stream_utils::ByteWriter::default();
@@ -691,7 +724,7 @@ pub async fn get_or_init_track_size(
             }
             AudioFormat::Source => File::open(path).unwrap().metadata().unwrap().len(),
         },
-        TrackSource::Tidal(_) | TrackSource::Qobuz(_) => {
+        TrackSource::Tidal { .. } | TrackSource::Qobuz { .. } => {
             return Err(TrackInfoError::UnsupportedSource(source.clone()))
         }
     };

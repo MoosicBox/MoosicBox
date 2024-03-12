@@ -17,7 +17,9 @@ use moosicbox_database::Database;
 use moosicbox_env_utils::default_env_usize;
 use moosicbox_files::api::AlbumCoverQuery;
 use moosicbox_files::files::album::{get_album_cover, AlbumCoverError, AlbumCoverSource};
-use moosicbox_files::files::track::{get_track_id_source, get_track_info, TrackSource};
+use moosicbox_files::files::track::{
+    audio_format_to_content_type, get_track_id_source, get_track_info, TrackSource,
+};
 use moosicbox_files::range::{parse_ranges, Range};
 use moosicbox_stream_utils::ByteWriter;
 use moosicbox_symphonia_player::media_sources::remote_bytestream::RemoteByteStream;
@@ -1094,13 +1096,17 @@ impl TunnelSender {
                     )
                     .await
                     {
-                        Ok(TrackSource::LocalFilePath(path)) => {
+                        Ok(TrackSource::LocalFilePath { path, .. }) => {
                             static CONTENT_TYPE: &str = "content-type";
+                            let content_type = audio_format_to_content_type(
+                                &query.format.unwrap_or(AudioFormat::Source),
+                            );
+                            if let Some(content_type) = content_type {
+                                response_headers.insert(CONTENT_TYPE.to_string(), content_type);
+                            }
                             match query.format {
                                 #[cfg(feature = "aac")]
                                 Some(AudioFormat::Aac) => {
-                                    response_headers
-                                        .insert(CONTENT_TYPE.to_string(), "audio/mp4".to_string());
                                     self.send_stream(request_id, 200, response_headers, ranges,
                                         moosicbox_symphonia_player::output::encoder::aac::encoder::encode_aac_stream(
                                             path,
@@ -1110,8 +1116,6 @@ impl TunnelSender {
                                 }
                                 #[cfg(feature = "mp3")]
                                 Some(AudioFormat::Mp3) => {
-                                    response_headers
-                                        .insert(CONTENT_TYPE.to_string(), "audio/mp3".to_string());
                                     self.send_stream(request_id, 200, response_headers, ranges,
                                         moosicbox_symphonia_player::output::encoder::mp3::encoder::encode_mp3_stream(
                                             path,
@@ -1121,8 +1125,6 @@ impl TunnelSender {
                                 }
                                 #[cfg(feature = "opus")]
                                 Some(AudioFormat::Opus) => {
-                                    response_headers
-                                        .insert(CONTENT_TYPE.to_string(), "audio/opus".to_string());
                                     self.send_stream(request_id, 200, response_headers, ranges,
                                         moosicbox_symphonia_player::output::encoder::opus::encoder::encode_opus_stream(
                                             path,
@@ -1131,8 +1133,6 @@ impl TunnelSender {
                                     ).await?;
                                 }
                                 _ => {
-                                    response_headers
-                                        .insert(CONTENT_TYPE.to_string(), "audio/flac".to_string());
                                     self.send(
                                         request_id,
                                         200,
@@ -1143,7 +1143,7 @@ impl TunnelSender {
                                 }
                             }
                         }
-                        Ok(TrackSource::Tidal(path)) | Ok(TrackSource::Qobuz(path)) => {
+                        Ok(TrackSource::Tidal { url, .. }) | Ok(TrackSource::Qobuz { url, .. }) => {
                             let writer = ByteWriter::default();
                             let stream = writer.stream();
 
@@ -1198,8 +1198,9 @@ impl TunnelSender {
                                     _ => {}
                                 }
 
+                                log::debug!("Creating RemoteByteStream with url={url}");
                                 let source = Box::new(RemoteByteStream::new(
-                                    path,
+                                    url,
                                     None,
                                     true,
                                     CancellationToken::new(),

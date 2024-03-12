@@ -523,7 +523,7 @@ async fn download_track_inner(
     };
 
     let size = match &source {
-        moosicbox_files::files::track::TrackSource::LocalFilePath(path) => {
+        moosicbox_files::files::track::TrackSource::LocalFilePath { path, .. } => {
             if let Ok(file) = tokio::fs::File::open(path).await {
                 if let Ok(metadata) = file.metadata().await {
                     Some(metadata.len())
@@ -534,8 +534,8 @@ async fn download_track_inner(
                 None
             }
         }
-        moosicbox_files::files::track::TrackSource::Tidal(url)
-        | moosicbox_files::files::track::TrackSource::Qobuz(url) => {
+        moosicbox_files::files::track::TrackSource::Tidal { url, .. }
+        | moosicbox_files::files::track::TrackSource::Qobuz { url, .. } => {
             get_content_length(&url, start, None).await?
         }
     };
