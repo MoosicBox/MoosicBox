@@ -14,8 +14,6 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::core::units::Time;
-
-use log::{debug, error, info, trace, warn};
 use thiserror::Error;
 
 pub mod media_sources;
@@ -120,7 +118,7 @@ pub fn play_media_source(
         }
         Err(err) => {
             // The input was not supported by any format reader.
-            info!("the input is not supported: {err:?}");
+            log::info!("the input is not supported: {err:?}");
             Err(PlaybackError::Symphonia(err))
         }
     }
@@ -174,7 +172,7 @@ fn play(
             }
             Err(err) => {
                 // Don't give-up on a seek error.
-                warn!("seek error: {}", err);
+                log::warn!("seek error: {}", err);
                 0
             }
         }
@@ -208,17 +206,17 @@ fn play(
 
     match result {
         Ok(code) => match code {
-            2 => debug!("Aborted"),
+            2 => log::debug!("Aborted"),
             _ => {
-                debug!("Attempting to get audio_output to flush");
+                log::debug!("Attempting to get audio_output to flush");
                 audio_output_handler.flush()?;
             }
         },
         Err(PlaybackError::AudioOutput(AudioOutputError::Interrupt)) => {
-            info!("Audio interrupt detected. Not flushing");
+            log::info!("Audio interrupt detected. Not flushing");
         }
         Err(ref err) => {
-            error!("Encountered error {err:?}");
+            log::error!("Encountered error {err:?}");
         }
     };
 
@@ -265,14 +263,14 @@ fn play_track(
             continue;
         }
 
-        trace!("Decoding packet");
+        log::trace!("Decoding packet");
         // Decode the packet into audio samples.
         match decoder.decode(&packet) {
             Ok(decoded) => {
-                trace!("Decoded packet");
+                log::trace!("Decoded packet");
 
                 if audio_output_handler.contains_outputs_to_open() {
-                    trace!("Getting audio spec");
+                    log::trace!("Getting audio spec");
                     // Get the audio buffer specification. This is a description of the decoded
                     // audio buffer's sample format and sample rate.
                     let spec = *decoded.spec();
@@ -290,21 +288,21 @@ fn play_track(
                 // Write the decoded audio samples to the audio output if the presentation timestamp
                 // for the packet is >= the seeked position (0 if not seeking).
                 if ts >= play_opts.seek_ts {
-                    trace!("Writing decoded to audio output");
+                    log::trace!("Writing decoded to audio output");
                     audio_output_handler.write(decoded, &packet, &track)?;
-                    trace!("Wrote decoded to audio output");
+                    log::trace!("Wrote decoded to audio output");
                 } else {
-                    trace!("Not to seeked position yet. Continuing decode");
+                    log::trace!("Not to seeked position yet. Continuing decode");
                 }
             }
             Err(Error::DecodeError(err)) => {
                 // Decode errors are not fatal. Print the error message and try to decode the next
                 // packet as usual.
-                warn!("decode error: {}", err);
+                log::warn!("decode error: {}", err);
             }
             Err(err) => break Err(PlaybackError::Symphonia(err)),
         }
-        trace!("Finished processing packet");
+        log::trace!("Finished processing packet");
     };
 
     // Return if a fatal error occurred.
@@ -338,7 +336,7 @@ fn do_verification(finalization: FinalizeResult) -> Result<i32, PlaybackError> {
     match finalization.verify_ok {
         Some(is_ok) => {
             // Got a verification result.
-            debug!("verification: {}", if is_ok { "passed" } else { "failed" });
+            log::debug!("verification: {}", if is_ok { "passed" } else { "failed" });
 
             Ok(i32::from(!is_ok))
         }
