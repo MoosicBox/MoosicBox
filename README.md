@@ -108,12 +108,12 @@ The MySQL database stores the tunnel server configurations:
 
 ##### Run
 
-`diesel migration run --migration-dir migrations/mysql --database-url mysql://username:password@host/dbname`
+`diesel migration run --migration-dir migrations/tunnel/mysql --database-url mysql://username:password@host/dbname`
 
 ##### Revert
 
-`diesel migration revert --migration-dir migrations/mysql --database-url mysql://username:password@host/dbname`
+`diesel migration revert --migration-dir migrations/tunnel/mysql --database-url mysql://username:password@host/dbname`
 
 ##### New Migration
 
-`diesel migration generate --migration-dir migrations/mysql migration_name`
+`diesel migration generate --migration-dir migrations/tunnel/mysql migration_name`
