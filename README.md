@@ -97,6 +97,27 @@ The SQLite database stores the music library data:
 
 `diesel migration generate --migration-dir migrations/sqlite migration_name`
 
+### Postgres
+
+The Postgres database stores the tunnel server configurations:
+
+- WebSocket connection mappings
+  - Enables the tunnel server to know which WebSocket connection to tunnel data from
+
+#### Migrations
+
+##### Run
+
+`diesel migration run --migration-dir migrations/tunnel/postgres --database-url postgres://username:password@host/dbname`
+
+##### Revert
+
+`diesel migration revert --migration-dir migrations/tunnel/postgres --database-url postgres://username:password@host/dbname`
+
+##### New Migration
+
+`diesel migration generate --migration-dir migrations/tunnel/postgres migration_name`
+
 ### MySQL
 
 The MySQL database stores the tunnel server configurations:
