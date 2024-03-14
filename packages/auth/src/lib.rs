@@ -122,8 +122,7 @@ async fn register_client(
             std::env::var("TUNNEL_ACCESS_TOKEN").expect("TUNNEL_ACCESS_TOKEN not set"),
         )
         .send()
-        .await
-        .unwrap()
+        .await?
         .json::<Value>()
         .await?
         .to_value("token")?)
@@ -164,6 +163,8 @@ pub enum FetchSignatureError {
     Reqwest(#[from] reqwest::Error),
     #[error(transparent)]
     Parse(#[from] ParseError),
+    #[error("Unauthorized")]
+    Unauthorized,
 }
 
 pub async fn fetch_signature_token(
@@ -173,12 +174,17 @@ pub async fn fetch_signature_token(
 ) -> Result<Option<String>, FetchSignatureError> {
     let url = format!("{host}/auth/signature-token?clientId={client_id}");
 
-    Ok(reqwest::Client::new()
+    log::debug!("Fetching signature token for client_id={client_id}");
+    let response = reqwest::Client::new()
         .post(url)
         .header(reqwest::header::AUTHORIZATION, access_token)
         .send()
-        .await?
-        .json::<Value>()
-        .await?
-        .to_value("token")?)
+        .await?;
+
+    match response.status() {
+        reqwest::StatusCode::UNAUTHORIZED => return Err(FetchSignatureError::Unauthorized),
+        _ => {}
+    }
+
+    Ok(response.json::<Value>().await?.to_value("token")?)
 }

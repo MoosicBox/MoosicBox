@@ -11,6 +11,7 @@ use futures_channel::mpsc::UnboundedSender;
 use futures_util::future::ready;
 use futures_util::{future, pin_mut, Future, Stream, StreamExt};
 use lazy_static::lazy_static;
+use moosicbox_auth::FetchSignatureError;
 use moosicbox_core::sqlite::models::{AlbumId, ApiSource};
 use moosicbox_core::types::AudioFormat;
 use moosicbox_database::Database;
@@ -257,6 +258,9 @@ impl TunnelSender {
                 match moosicbox_auth::fetch_signature_token(&host, &client_id, &access_token).await
                 {
                     Ok(Some(token)) => break token,
+                    Err(FetchSignatureError::Unauthorized) => {
+                        panic!("Unauthorized response from fetch_signature_token");
+                    }
                     _ => {
                         log::error!("Failed to fetch signature token");
                         select!(

@@ -825,6 +825,7 @@ impl Player {
     ) -> Result<PlaybackStatus, PlayerError> {
         log::debug!(
             "\
+            source={:?}\n\t\
             update_playback:\n\t\
             play={play:?}\n\t\
             stop={stop:?}\n\t\
@@ -835,7 +836,8 @@ impl Player {
             tracks={tracks:?}\n\t\
             quality={quality:?}\n\t\
             session_id={session_id:?}\
-            "
+            ",
+            self.source
         );
 
         if stop.unwrap_or(false) {
@@ -1050,8 +1052,6 @@ impl Player {
         source: ApiSource,
         quality: &PlaybackQuality,
     ) -> Result<PlayableTrack, PlayerError> {
-        let hint = Hint::new();
-
         let (host, query, headers) = match &self.source {
             PlayerSource::Remote {
                 host,
@@ -1143,8 +1143,8 @@ impl Player {
         }
 
         let res = client.send().await.unwrap();
-        let size = res
-            .headers()
+        let headers = res.headers();
+        let size = headers
             .get("content-length")
             .map(|length| length.to_str().unwrap().parse::<u64>().unwrap());
 
@@ -1159,6 +1159,20 @@ impl Player {
                 .map(|p| p.abort.clone())
                 .unwrap_or_default(),
         ));
+
+        let mut hint = Hint::new();
+
+        if let Some(Ok(content_type)) = headers
+            .get(actix_web::http::header::CONTENT_TYPE)
+            .map(|x| x.to_str())
+        {
+            if let Some(audio_type) = content_type.strip_prefix("audio/") {
+                log::debug!("Setting hint extension to {audio_type}");
+                hint.with_extension(audio_type);
+            } else {
+                log::warn!("Invalid audio content_type: {content_type}");
+            }
+        }
 
         Ok(PlayableTrack {
             track_id,

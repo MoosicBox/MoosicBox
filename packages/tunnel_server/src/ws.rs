@@ -1,5 +1,4 @@
 pub mod api;
-pub mod db;
 pub mod handler;
 pub mod server;
 

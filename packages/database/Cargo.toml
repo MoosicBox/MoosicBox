@@ -8,8 +8,17 @@ version = "0.1.0"
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }
 
+# sqlx dependencies
+sqlx = { workspace = true, optional = true, features = [
+    "runtime-tokio",
+    "tls-rustls",
+] }
+sqlx-mysql = { workspace = true, optional = true }
+sqlx-postgres = { workspace = true, optional = true }
+
 async-recursion = { workspace = true }
 async-trait     = { workspace = true }
+chrono          = { workspace = true }
 futures         = { workspace = true }
 log             = { workspace = true }
 once_cell       = { workspace = true }
@@ -22,8 +31,25 @@ tokio           = { workspace = true, features = ["macros"] }
 tokio-util      = { workspace = true }
 
 [features]
-default = ["rusqlite"]
+default = ["rusqlite", "postgres", "mysql"]
 
 fail-on-warnings = []
 
+mysql = ["mysql-sqlx", "sqlx"]
+mysql-sqlx = [
+    "dep:sqlx",
+    "sqlx",
+    "sqlx/mysql",
+    "dep:sqlx-mysql",
+    "sqlx-mysql/chrono",
+]
+postgres = ["postgres-sqlx", "sqlx"]
+postgres-sqlx = [
+    "dep:sqlx",
+    "sqlx",
+    "sqlx/postgres",
+    "dep:sqlx-postgres",
+    "sqlx-postgres/chrono",
+]
 rusqlite = ["dep:rusqlite"]
+sqlx = []

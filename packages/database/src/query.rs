@@ -15,15 +15,8 @@ pub struct Sort {
 }
 
 impl Expression for Sort {
-    fn to_sql(&self) -> String {
-        format!(
-            "({}) {}",
-            self.expression.to_sql(),
-            match self.direction {
-                SortDirection::Asc => "ASC",
-                SortDirection::Desc => "DESC",
-            }
-        )
+    fn expression_type(&self) -> ExpressionType {
+        ExpressionType::Sort(self)
     }
 }
 
@@ -35,30 +28,31 @@ pub struct Join<'a> {
 }
 
 impl Expression for Join<'_> {
-    fn to_sql(&self) -> String {
-        format!(
-            "{} JOIN {} ON {}",
-            if self.left { "LEFT" } else { "" },
-            self.table_name,
-            self.on
-        )
+    fn expression_type(&self) -> ExpressionType {
+        ExpressionType::Join(self)
     }
 }
 
-pub trait Expression: Send + Sync + Debug {
-    fn to_sql(&self) -> String;
-    fn to_param(&self) -> String {
-        self.to_sql()
-    }
-    fn to_param_offset(&self, offset: u16) -> String {
-        let param = self.to_param();
+pub enum ExpressionType<'a> {
+    Eq(&'a Eq),
+    Gt(&'a Gt),
+    In(&'a In<'a>),
+    Lt(&'a Lt),
+    Or(&'a Or),
+    And(&'a And),
+    Gte(&'a Gte),
+    Lte(&'a Lte),
+    Join(&'a Join<'a>),
+    Sort(&'a Sort),
+    NotEq(&'a NotEq),
+    InList(&'a InList),
+    Identifier(&'a Identifier),
+    SelectQuery(&'a SelectQuery<'a>),
+    DatabaseValue(&'a DatabaseValue),
+}
 
-        if param == "?" {
-            format!("{param}{offset}")
-        } else {
-            param
-        }
-    }
+pub trait Expression: Send + Sync + Debug {
+    fn expression_type(&self) -> ExpressionType;
 
     fn params(&self) -> Option<Vec<&DatabaseValue>> {
         self.values().map(|x| {
@@ -105,29 +99,14 @@ impl Into<Box<dyn Expression>> for Identifier {
 }
 
 impl Expression for Identifier {
-    fn to_sql(&self) -> String {
-        self.value.clone()
+    fn expression_type(&self) -> ExpressionType {
+        ExpressionType::Identifier(self)
     }
 }
 
 impl Expression for DatabaseValue {
-    fn to_sql(&self) -> String {
-        self.to_sql()
-    }
-
-    fn to_param(&self) -> String {
-        match self {
-            DatabaseValue::Null => "NULL".to_string(),
-            DatabaseValue::BoolOpt(None) => "NULL".to_string(),
-            DatabaseValue::StringOpt(None) => "NULL".to_string(),
-            DatabaseValue::NumberOpt(None) => "NULL".to_string(),
-            DatabaseValue::UNumberOpt(None) => "NULL".to_string(),
-            DatabaseValue::RealOpt(None) => "NULL".to_string(),
-            DatabaseValue::NowAdd(add) => {
-                format!("strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', '{add}'))")
-            }
-            _ => "?".to_string(),
-        }
+    fn expression_type(&self) -> ExpressionType {
+        ExpressionType::DatabaseValue(self)
     }
 
     fn values(&self) -> Option<Vec<&DatabaseValue>> {
@@ -157,20 +136,13 @@ pub trait BooleanExpression: Expression {}
 
 #[derive(Debug)]
 pub struct And {
-    conditions: Vec<Box<dyn BooleanExpression>>,
+    pub(crate) conditions: Vec<Box<dyn BooleanExpression>>,
 }
 
 impl BooleanExpression for And {}
 impl Expression for And {
-    fn to_sql(&self) -> String {
-        format!(
-            "({})",
-            self.conditions
-                .iter()
-                .map(|x| x.to_sql())
-                .collect::<Vec<_>>()
-                .join(" AND ")
-        )
+    fn expression_type(&self) -> ExpressionType {
+        ExpressionType::And(self)
     }
 
     fn values(&self) -> Option<Vec<&DatabaseValue>> {
@@ -191,20 +163,13 @@ impl Expression for And {
 
 #[derive(Debug)]
 pub struct Or {
-    conditions: Vec<Box<dyn BooleanExpression>>,
+    pub(crate) conditions: Vec<Box<dyn BooleanExpression>>,
 }
 
 impl BooleanExpression for Or {}
 impl Expression for Or {
-    fn to_sql(&self) -> String {
-        format!(
-            "({})",
-            self.conditions
-                .iter()
-                .map(|x| x.to_sql())
-                .collect::<Vec<_>>()
-                .join(" OR ")
-        )
+    fn expression_type(&self) -> ExpressionType {
+        ExpressionType::Or(self)
     }
 
     fn values(&self) -> Option<Vec<&DatabaseValue>> {
@@ -225,18 +190,14 @@ impl Expression for Or {
 
 #[derive(Debug)]
 pub struct NotEq {
-    left: Identifier,
-    right: Box<dyn Expression>,
+    pub(crate) left: Identifier,
+    pub(crate) right: Box<dyn Expression>,
 }
 
 impl BooleanExpression for NotEq {}
 impl Expression for NotEq {
-    fn to_sql(&self) -> String {
-        if self.right.is_null() {
-            format!("({} IS NOT {})", self.left.to_sql(), self.right.to_sql())
-        } else {
-            format!("({} != {})", self.left.to_sql(), self.right.to_sql())
-        }
+    fn expression_type(&self) -> ExpressionType {
+        ExpressionType::NotEq(self)
     }
 
     fn values(&self) -> Option<Vec<&DatabaseValue>> {
@@ -246,18 +207,14 @@ impl Expression for NotEq {
 
 #[derive(Debug)]
 pub struct Eq {
-    left: Identifier,
-    right: Box<dyn Expression>,
+    pub(crate) left: Identifier,
+    pub(crate) right: Box<dyn Expression>,
 }
 
 impl BooleanExpression for Eq {}
 impl Expression for Eq {
-    fn to_sql(&self) -> String {
-        if self.right.is_null() {
-            format!("({} IS {})", self.left.to_sql(), self.right.to_sql())
-        } else {
-            format!("({} = {})", self.left.to_sql(), self.right.to_sql())
-        }
+    fn expression_type(&self) -> ExpressionType {
+        ExpressionType::Eq(self)
     }
 
     fn values(&self) -> Option<Vec<&DatabaseValue>> {
@@ -267,18 +224,14 @@ impl Expression for Eq {
 
 #[derive(Debug)]
 pub struct Gt {
-    left: Identifier,
-    right: Box<dyn Expression>,
+    pub(crate) left: Identifier,
+    pub(crate) right: Box<dyn Expression>,
 }
 
 impl BooleanExpression for Gt {}
 impl Expression for Gt {
-    fn to_sql(&self) -> String {
-        if self.right.is_null() {
-            panic!("Invalid > comparison with NULL");
-        } else {
-            format!("({} > {})", self.left.to_sql(), self.right.to_sql())
-        }
+    fn expression_type(&self) -> ExpressionType {
+        ExpressionType::Gt(self)
     }
 
     fn values(&self) -> Option<Vec<&DatabaseValue>> {
@@ -288,18 +241,14 @@ impl Expression for Gt {
 
 #[derive(Debug)]
 pub struct Gte {
-    left: Identifier,
-    right: Box<dyn Expression>,
+    pub(crate) left: Identifier,
+    pub(crate) right: Box<dyn Expression>,
 }
 
 impl BooleanExpression for Gte {}
 impl Expression for Gte {
-    fn to_sql(&self) -> String {
-        if self.right.is_null() {
-            panic!("Invalid >= comparison with NULL");
-        } else {
-            format!("({} >= {})", self.left.to_sql(), self.right.to_sql())
-        }
+    fn expression_type(&self) -> ExpressionType {
+        ExpressionType::Gte(self)
     }
 
     fn values(&self) -> Option<Vec<&DatabaseValue>> {
@@ -309,18 +258,14 @@ impl Expression for Gte {
 
 #[derive(Debug)]
 pub struct Lt {
-    left: Identifier,
-    right: Box<dyn Expression>,
+    pub(crate) left: Identifier,
+    pub(crate) right: Box<dyn Expression>,
 }
 
 impl BooleanExpression for Lt {}
 impl Expression for Lt {
-    fn to_sql(&self) -> String {
-        if self.right.is_null() {
-            panic!("Invalid < comparison with NULL");
-        } else {
-            format!("({} < {})", self.left.to_sql(), self.right.to_sql())
-        }
+    fn expression_type(&self) -> ExpressionType {
+        ExpressionType::Lt(self)
     }
 
     fn values(&self) -> Option<Vec<&DatabaseValue>> {
@@ -330,18 +275,14 @@ impl Expression for Lt {
 
 #[derive(Debug)]
 pub struct Lte {
-    left: Identifier,
-    right: Box<dyn Expression>,
+    pub(crate) left: Identifier,
+    pub(crate) right: Box<dyn Expression>,
 }
 
 impl BooleanExpression for Lte {}
 impl Expression for Lte {
-    fn to_sql(&self) -> String {
-        if self.right.is_null() {
-            panic!("Invalid <= comparison with NULL");
-        } else {
-            format!("({} <= {})", self.left.to_sql(), self.right.to_sql())
-        }
+    fn expression_type(&self) -> ExpressionType {
+        ExpressionType::Lte(self)
     }
 
     fn values(&self) -> Option<Vec<&DatabaseValue>> {
@@ -351,14 +292,14 @@ impl Expression for Lte {
 
 #[derive(Debug)]
 pub struct In<'a> {
-    left: Identifier,
-    values: Box<dyn List + 'a>,
+    pub(crate) left: Identifier,
+    pub(crate) values: Box<dyn List + 'a>,
 }
 
 impl BooleanExpression for In<'_> {}
 impl Expression for In<'_> {
-    fn to_sql(&self) -> String {
-        format!("{} IN ({})", self.left.to_sql(), self.values.to_sql())
+    fn expression_type(&self) -> ExpressionType {
+        ExpressionType::In(self)
     }
 
     fn values(&self) -> Option<Vec<&DatabaseValue>> {
@@ -483,15 +424,8 @@ pub struct InList {
 
 impl List for InList {}
 impl Expression for InList {
-    fn to_sql(&self) -> String {
-        format!(
-            "{}",
-            self.values
-                .iter()
-                .map(|value| value.to_sql())
-                .collect::<Vec<_>>()
-                .join(",")
-        )
+    fn expression_type(&self) -> ExpressionType {
+        ExpressionType::InList(self)
     }
 
     fn values(&self) -> Option<Vec<&DatabaseValue>> {
@@ -649,67 +583,8 @@ pub struct SelectQuery<'a> {
 
 impl List for SelectQuery<'_> {}
 impl Expression for SelectQuery<'_> {
-    fn to_sql(&self) -> String {
-        let joins = if let Some(joins) = &self.joins {
-            joins
-                .iter()
-                .map(|x| x.to_sql())
-                .collect::<Vec<_>>()
-                .join(" ")
-        } else {
-            "".to_string()
-        };
-
-        let where_clause = if let Some(filters) = &self.filters {
-            if filters.is_empty() {
-                "".to_string()
-            } else {
-                format!(
-                    "WHERE {}",
-                    filters
-                        .iter()
-                        .map(|x| format!("({})", x.to_sql()))
-                        .collect::<Vec<_>>()
-                        .join(" AND ")
-                )
-            }
-        } else {
-            "".to_string()
-        };
-
-        let sort_clause = if let Some(sorts) = &self.sorts {
-            if sorts.is_empty() {
-                "".to_string()
-            } else {
-                format!(
-                    "ORDER BY {}",
-                    sorts
-                        .iter()
-                        .map(|x| x.to_sql())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
-        } else {
-            "".to_string()
-        };
-
-        let limit = if let Some(limit) = self.limit {
-            format!("LIMIT {}", limit)
-        } else {
-            "".to_string()
-        };
-
-        format!(
-            "SELECT {} {} FROM {} {} {} {} {}",
-            if self.distinct { "DISTINCT" } else { "" },
-            self.columns.join(", "),
-            self.table_name,
-            joins,
-            where_clause,
-            sort_clause,
-            limit
-        )
+    fn expression_type(&self) -> ExpressionType {
+        ExpressionType::SelectQuery(self)
     }
 
     fn values(&self) -> Option<Vec<&DatabaseValue>> {

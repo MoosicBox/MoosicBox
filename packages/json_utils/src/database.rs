@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 use moosicbox_database::{DatabaseValue, Row};
 
 use crate::{MissingValue, ParseError, ToValueType};
@@ -238,6 +239,7 @@ impl MissingValue<String> for &Row {}
 impl MissingValue<&str> for &Row {}
 impl MissingValue<f32> for &Row {}
 impl MissingValue<f64> for &Row {}
+impl MissingValue<NaiveDateTime> for &Row {}
 
 pub trait ToValue<Type> {
     fn to_value<T>(self, index: &str) -> Result<T, ParseError>
@@ -477,6 +479,15 @@ impl ToValueType<usize> for DatabaseValue {
             DatabaseValue::Number(num) => Ok(num as usize),
             DatabaseValue::UNumber(num) => Ok(num as usize),
             _ => Err(ParseError::ConvertType("usize".into())),
+        }
+    }
+}
+
+impl ToValueType<NaiveDateTime> for DatabaseValue {
+    fn to_value_type(self) -> Result<NaiveDateTime, ParseError> {
+        match self {
+            DatabaseValue::DateTime(value) => Ok(value),
+            _ => Err(ParseError::ConvertType("NaiveDateTime".into())),
         }
     }
 }

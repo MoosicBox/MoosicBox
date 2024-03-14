@@ -24,12 +24,8 @@ use tokio::sync::{
 };
 use tokio_util::sync::CancellationToken;
 
-use crate::ws::{
-    db::{delete_connection, upsert_connection},
-    ConnId, Msg,
-};
-
-use super::db::{select_connection, DatabaseError};
+use crate::db::{delete_connection, select_connection, upsert_connection, DatabaseError};
+use crate::ws::{ConnId, Msg};
 
 /// A command received by the [`ChatServer`].
 #[derive(Debug)]

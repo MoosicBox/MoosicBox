@@ -2,6 +2,7 @@
 
 mod api;
 mod auth;
+mod db;
 mod ws;
 
 use actix_cors::Cors;
@@ -41,7 +42,7 @@ fn main() -> Result<(), std::io::Error> {
             .unwrap()
     })
     .block_on(async move {
-        ws::db::init().await.expect("Failed to initialize database");
+        db::init().await.expect("Failed to initialize database");
 
         let (chat_server, server_tx) = ws::server::ChatServer::new();
         let chat_server = tokio::task::spawn(chat_server.run());

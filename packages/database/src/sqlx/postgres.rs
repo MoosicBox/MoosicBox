@@ -1,11 +1,18 @@
 use std::{
     ops::Deref,
-    sync::{Arc, Mutex},
+    pin::Pin,
+    sync::{atomic::AtomicU16, Arc},
 };
 
 use async_trait::async_trait;
-use rusqlite::{types::Value, Connection, Row, Rows, Statement};
+use futures::{Stream, StreamExt};
+use sqlx::{
+    postgres::{PgArguments, PgRow, PgValueRef},
+    query::Query,
+    Column, Executor, PgPool, Postgres, Row, Statement, TypeInfo, Value, ValueRef,
+};
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 use crate::{
     BooleanExpression, Database, DatabaseError, DatabaseValue, DeleteStatement, Expression,
@@ -13,46 +20,55 @@ use crate::{
     UpsertMultiStatement, UpsertStatement,
 };
 
-#[derive(Debug)]
-pub struct RusqliteDatabase {
-    connection: Arc<Mutex<Connection>>,
-}
-
-impl RusqliteDatabase {
-    pub fn new(connection: Arc<Mutex<Connection>>) -> Self {
-        Self { connection }
-    }
-}
-
 trait ToSql {
-    fn to_sql(&self) -> String;
+    fn to_sql(&self, index: &AtomicU16) -> String;
 }
 
 impl<T: Expression + ?Sized> ToSql for T {
-    fn to_sql(&self) -> String {
+    fn to_sql(&self, index: &AtomicU16) -> String {
         match self.expression_type() {
             ExpressionType::Eq(value) => {
                 if value.right.is_null() {
-                    format!("({} IS {})", value.left.to_sql(), value.right.to_sql())
+                    format!(
+                        "({} IS {})",
+                        value.left.to_sql(index),
+                        value.right.to_sql(index)
+                    )
                 } else {
-                    format!("({} = {})", value.left.to_sql(), value.right.to_sql())
+                    format!(
+                        "({} = {})",
+                        value.left.to_sql(index),
+                        value.right.to_sql(index)
+                    )
                 }
             }
             ExpressionType::Gt(value) => {
                 if value.right.is_null() {
                     panic!("Invalid > comparison with NULL");
                 } else {
-                    format!("({} > {})", value.left.to_sql(), value.right.to_sql())
+                    format!(
+                        "({} > {})",
+                        value.left.to_sql(index),
+                        value.right.to_sql(index)
+                    )
                 }
             }
             ExpressionType::In(value) => {
-                format!("{} IN ({})", value.left.to_sql(), value.values.to_sql())
+                format!(
+                    "{} IN ({})",
+                    value.left.to_sql(index),
+                    value.values.to_sql(index)
+                )
             }
             ExpressionType::Lt(value) => {
                 if value.right.is_null() {
                     panic!("Invalid < comparison with NULL");
                 } else {
-                    format!("({} < {})", value.left.to_sql(), value.right.to_sql())
+                    format!(
+                        "({} < {})",
+                        value.left.to_sql(index),
+                        value.right.to_sql(index)
+                    )
                 }
             }
             ExpressionType::Or(value) => format!(
@@ -60,7 +76,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 value
                     .conditions
                     .iter()
-                    .map(|x| x.to_sql())
+                    .map(|x| x.to_sql(index))
                     .collect::<Vec<_>>()
                     .join(" OR ")
             ),
@@ -69,7 +85,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 value
                     .conditions
                     .iter()
-                    .map(|x| x.to_sql())
+                    .map(|x| x.to_sql(index))
                     .collect::<Vec<_>>()
                     .join(" AND ")
             ),
@@ -77,14 +93,22 @@ impl<T: Expression + ?Sized> ToSql for T {
                 if value.right.is_null() {
                     panic!("Invalid >= comparison with NULL");
                 } else {
-                    format!("({} >= {})", value.left.to_sql(), value.right.to_sql())
+                    format!(
+                        "({} >= {})",
+                        value.left.to_sql(index),
+                        value.right.to_sql(index)
+                    )
                 }
             }
             ExpressionType::Lte(value) => {
                 if value.right.is_null() {
                     panic!("Invalid <= comparison with NULL");
                 } else {
-                    format!("({} <= {})", value.left.to_sql(), value.right.to_sql())
+                    format!(
+                        "({} <= {})",
+                        value.left.to_sql(index),
+                        value.right.to_sql(index)
+                    )
                 }
             }
             ExpressionType::Join(value) => format!(
@@ -95,7 +119,7 @@ impl<T: Expression + ?Sized> ToSql for T {
             ),
             ExpressionType::Sort(value) => format!(
                 "({}) {}",
-                value.expression.to_sql(),
+                value.expression.to_sql(index),
                 match value.direction {
                     SortDirection::Asc => "ASC",
                     SortDirection::Desc => "DESC",
@@ -103,9 +127,17 @@ impl<T: Expression + ?Sized> ToSql for T {
             ),
             ExpressionType::NotEq(value) => {
                 if value.right.is_null() {
-                    format!("({} IS NOT {})", value.left.to_sql(), value.right.to_sql())
+                    format!(
+                        "({} IS NOT {})",
+                        value.left.to_sql(index),
+                        value.right.to_sql(index)
+                    )
                 } else {
-                    format!("({} != {})", value.left.to_sql(), value.right.to_sql())
+                    format!(
+                        "({} != {})",
+                        value.left.to_sql(index),
+                        value.right.to_sql(index)
+                    )
                 }
             }
             ExpressionType::InList(value) => format!(
@@ -113,7 +145,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 value
                     .values
                     .iter()
-                    .map(|value| value.to_sql())
+                    .map(|value| value.to_sql(index))
                     .collect::<Vec<_>>()
                     .join(",")
             ),
@@ -122,7 +154,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 let joins = if let Some(joins) = &value.joins {
                     joins
                         .iter()
-                        .map(|x| x.to_sql())
+                        .map(|x| x.to_sql(index))
                         .collect::<Vec<_>>()
                         .join(" ")
                 } else {
@@ -137,7 +169,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                             "WHERE {}",
                             filters
                                 .iter()
-                                .map(|x| format!("({})", x.to_sql()))
+                                .map(|x| format!("({})", x.to_sql(index)))
                                 .collect::<Vec<_>>()
                                 .join(" AND ")
                         )
@@ -154,7 +186,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                             "ORDER BY {}",
                             sorts
                                 .iter()
-                                .map(|x| x.to_sql())
+                                .map(|x| x.to_sql(index))
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         )
@@ -187,20 +219,32 @@ impl<T: Expression + ?Sized> ToSql for T {
                 DatabaseValue::NumberOpt(None) => format!("NULL"),
                 DatabaseValue::UNumberOpt(None) => format!("NULL"),
                 DatabaseValue::RealOpt(None) => format!("NULL"),
-                DatabaseValue::Now => format!("strftime('%Y-%m-%dT%H:%M:%f', 'now')"),
-                DatabaseValue::NowAdd(ref add) => {
-                    format!("strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', '{add}'))")
+                DatabaseValue::Now => format!("NOW()"),
+                DatabaseValue::NowAdd(ref add) => format!("NOW() + {add}"),
+                _ => {
+                    let pos = index.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+                    format!("${pos}")
                 }
-                _ => format!("?"),
             },
         }
     }
 }
 
+#[derive(Debug)]
+pub struct PostgresSqlxDatabase {
+    connection: Arc<Mutex<PgPool>>,
+}
+
+impl PostgresSqlxDatabase {
+    pub fn new(connection: Arc<Mutex<PgPool>>) -> Self {
+        Self { connection }
+    }
+}
+
 #[derive(Debug, Error)]
-pub enum RusqliteDatabaseError {
+pub enum SqlxDatabaseError {
     #[error(transparent)]
-    Rusqlite(#[from] rusqlite::Error),
+    Sqlx(#[from] sqlx::Error),
     #[error("No ID")]
     NoId,
     #[error("No row")]
@@ -211,17 +255,17 @@ pub enum RusqliteDatabaseError {
     MissingUnique,
 }
 
-impl From<RusqliteDatabaseError> for DatabaseError {
-    fn from(value: RusqliteDatabaseError) -> Self {
-        DatabaseError::Rusqlite(value)
+impl From<SqlxDatabaseError> for DatabaseError {
+    fn from(value: SqlxDatabaseError) -> Self {
+        DatabaseError::PostgresSqlx(value)
     }
 }
 
 #[async_trait]
-impl Database for RusqliteDatabase {
+impl Database for PostgresSqlxDatabase {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(select(
-            &self.connection.lock().as_ref().unwrap(),
+            &*self.connection.lock().await,
             query.table_name,
             query.distinct,
             query.columns,
@@ -229,7 +273,8 @@ impl Database for RusqliteDatabase {
             query.joins.as_deref(),
             query.sorts.as_deref(),
             query.limit,
-        )?)
+        )
+        .await?)
     }
 
     async fn query_first(
@@ -237,14 +282,15 @@ impl Database for RusqliteDatabase {
         query: &SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
         Ok(find_row(
-            &self.connection.lock().as_ref().unwrap(),
+            &*self.connection.lock().await,
             query.table_name,
             query.distinct,
             query.columns,
             query.filters.as_deref(),
             query.joins.as_deref(),
             query.sorts.as_deref(),
-        )?)
+        )
+        .await?)
     }
 
     async fn exec_delete(
@@ -252,11 +298,12 @@ impl Database for RusqliteDatabase {
         statement: &DeleteStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(delete(
-            &self.connection.lock().as_ref().unwrap(),
+            &*self.connection.lock().await,
             statement.table_name,
             statement.filters.as_deref(),
             statement.limit,
-        )?)
+        )
+        .await?)
     }
 
     async fn exec_insert(
@@ -264,10 +311,11 @@ impl Database for RusqliteDatabase {
         statement: &InsertStatement<'_>,
     ) -> Result<crate::Row, DatabaseError> {
         Ok(insert_and_get_row(
-            &self.connection.lock().as_ref().unwrap(),
+            &*self.connection.lock().await,
             statement.table_name,
             &statement.values,
-        )?)
+        )
+        .await?)
     }
 
     async fn exec_update(
@@ -275,12 +323,13 @@ impl Database for RusqliteDatabase {
         statement: &UpdateStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(update_and_get_rows(
-            &self.connection.lock().as_ref().unwrap(),
+            &*self.connection.lock().await,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
             statement.limit,
-        )?)
+        )
+        .await?)
     }
 
     async fn exec_update_first(
@@ -288,12 +337,13 @@ impl Database for RusqliteDatabase {
         statement: &UpdateStatement<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
         Ok(update_and_get_row(
-            &self.connection.lock().as_ref().unwrap(),
+            &*self.connection.lock().await,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
             statement.limit,
-        )?)
+        )
+        .await?)
     }
 
     async fn exec_upsert(
@@ -301,12 +351,13 @@ impl Database for RusqliteDatabase {
         statement: &UpsertStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(upsert(
-            &self.connection.lock().as_ref().unwrap(),
+            &*self.connection.lock().await,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
             statement.limit,
-        )?)
+        )
+        .await?)
     }
 
     async fn exec_upsert_first(
@@ -314,86 +365,117 @@ impl Database for RusqliteDatabase {
         statement: &UpsertStatement<'_>,
     ) -> Result<crate::Row, DatabaseError> {
         Ok(upsert_and_get_row(
-            &self.connection.lock().as_ref().unwrap(),
+            &*self.connection.lock().await,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
             statement.limit,
-        )?)
+        )
+        .await?)
     }
 
     async fn exec_upsert_multi(
         &self,
         statement: &UpsertMultiStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        Ok(upsert_multi(
-            &self.connection.lock().as_ref().unwrap(),
-            statement.table_name,
-            statement
-                .unique
-                .ok_or(RusqliteDatabaseError::MissingUnique)?,
-            &statement.values,
-        )?)
+        let rows = {
+            upsert_multi(
+                &*self.connection.lock().await,
+                statement.table_name,
+                statement.unique.ok_or(SqlxDatabaseError::MissingUnique)?,
+                &statement.values,
+            )
+            .await?
+        };
+        Ok(rows)
     }
 }
 
-impl From<Value> for DatabaseValue {
-    fn from(value: Value) -> Self {
-        match value {
-            Value::Null => DatabaseValue::Null,
-            Value::Integer(value) => DatabaseValue::Number(value),
-            Value::Real(value) => DatabaseValue::Real(value),
-            Value::Text(value) => DatabaseValue::String(value),
-            Value::Blob(_value) => unimplemented!("Blob types are not supported yet"),
+fn column_value(value: PgValueRef<'_>) -> Result<DatabaseValue, sqlx::Error> {
+    if value.is_null() {
+        return Ok(DatabaseValue::Null);
+    }
+    let owned = sqlx::ValueRef::to_owned(&value);
+    match value.type_info().name() {
+        "BOOL" => Ok(DatabaseValue::Bool(owned.try_decode()?)),
+        "CHAR" | "SMALLINT" | "SMALLSERIAL" | "INT2" | "INT" | "SERIAL" | "INT4" | "BIGINT"
+        | "BIGSERIAL" | "INT8" => Ok(DatabaseValue::Number(owned.try_decode()?)),
+        "REAL" | "FLOAT4" | "DOUBLE PRECISION" | "FLOAT8" => {
+            Ok(DatabaseValue::Real(owned.try_decode()?))
         }
+        "VARCHAR" | "CHAR(N)" | "TEXT" | "NAME" | "CITEXT" => {
+            Ok(DatabaseValue::String(owned.try_decode()?))
+        }
+        "TIMESTAMP" => Ok(DatabaseValue::DateTime(owned.try_decode()?)),
+        _ => Err(sqlx::Error::TypeNotFound {
+            type_name: value.type_info().name().to_string(),
+        }),
     }
 }
 
-fn from_row(column_names: &[String], row: &Row<'_>) -> Result<crate::Row, RusqliteDatabaseError> {
+fn from_row(column_names: &[String], row: PgRow) -> Result<crate::Row, SqlxDatabaseError> {
     let mut columns = vec![];
 
     for column in column_names {
         columns.push((
             column.to_string(),
-            row.get::<_, Value>(column.as_str())?.into(),
+            column_value(row.try_get_raw(column.as_str())?)?,
         ));
     }
 
     Ok(crate::Row { columns })
 }
 
-fn update_and_get_row(
-    connection: &Connection,
+async fn update_and_get_row(
+    connection: &PgPool,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
-) -> Result<Option<crate::Row>, RusqliteDatabaseError> {
-    let select_query = limit.map(|_| {
-        format!(
-            "SELECT rowid FROM {table_name} {}",
-            build_where_clause(filters),
-        )
-    });
-
+) -> Result<Option<crate::Row>, SqlxDatabaseError> {
+    let index = AtomicU16::new(0);
     let query = format!(
         "UPDATE {table_name} {} {} RETURNING *",
-        build_set_clause(values),
-        build_update_where_clause(filters, limit, select_query.as_deref()),
+        build_set_clause(values, &index),
+        build_update_where_clause(
+            filters,
+            limit,
+            limit
+                .map(|_| {
+                    format!(
+                        "SELECT CTID FROM {table_name} {}",
+                        build_where_clause(filters, &index),
+                    )
+                })
+                .as_deref(),
+            &index
+        ),
     );
 
     let all_values = values
         .into_iter()
-        .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
-        .map(|x| x.into())
-        .collect::<Vec<_>>();
+        .flat_map(|(_, value)| {
+            value
+                .params()
+                .unwrap_or(vec![])
+                .into_iter()
+                .cloned()
+                .map(|x| x.into())
+        })
+        .collect::<Vec<PgDatabaseValue>>();
     let mut all_filter_values = filters
         .map(|filters| {
             filters
                 .into_iter()
-                .flat_map(|value| value.params().unwrap_or(vec![]).into_iter().cloned())
-                .map(|x| x.into())
-                .collect::<Vec<_>>()
+                .flat_map(|value| {
+                    value
+                        .params()
+                        .unwrap_or(vec![])
+                        .into_iter()
+                        .cloned()
+                        .map(|x| x.into())
+                })
+                .collect::<Vec<PgDatabaseValue>>()
         })
         .unwrap_or(vec![]);
 
@@ -408,56 +490,72 @@ fn update_and_get_row(
         all_values
     );
 
-    let mut statement = connection.prepare_cached(&query)?;
-
-    bind_values(&mut statement, Some(&all_values), false, 0)?;
+    let statement = connection.prepare(&query).await?;
 
     let column_names = statement
-        .column_names()
+        .columns()
         .iter()
-        .map(|x| x.to_string())
+        .map(|x| x.name().to_string())
         .collect::<Vec<_>>();
 
-    let mut query = statement.raw_query();
+    let query = bind_values(statement.query(), Some(&all_values))?;
 
-    Ok(query
-        .next()?
-        .map(|row| from_row(&column_names, row))
-        .transpose()?)
+    let mut stream = query.fetch(connection);
+    let pg_row: Option<PgRow> = stream.next().await.transpose()?;
+
+    Ok(pg_row.map(|row| from_row(&column_names, row)).transpose()?)
 }
 
-fn update_and_get_rows(
-    connection: &Connection,
+async fn update_and_get_rows(
+    connection: &PgPool,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
-) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
-    let select_query = limit.map(|_| {
-        format!(
-            "SELECT rowid FROM {table_name} {}",
-            build_where_clause(filters),
-        )
-    });
-
+) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
+    let index = AtomicU16::new(0);
     let query = format!(
         "UPDATE {table_name} {} {} RETURNING *",
-        build_set_clause(values),
-        build_update_where_clause(filters, limit, select_query.as_deref()),
+        build_set_clause(values, &index),
+        build_update_where_clause(
+            filters,
+            limit,
+            limit
+                .map(|_| {
+                    format!(
+                        "SELECT CTID FROM {table_name} {}",
+                        build_where_clause(filters, &index),
+                    )
+                })
+                .as_deref(),
+            &index
+        ),
     );
 
     let all_values = values
         .into_iter()
-        .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
-        .map(|x| x.into())
-        .collect::<Vec<_>>();
+        .flat_map(|(_, value)| {
+            value
+                .params()
+                .unwrap_or(vec![])
+                .into_iter()
+                .cloned()
+                .map(|x| x.into())
+        })
+        .collect::<Vec<PgDatabaseValue>>();
     let mut all_filter_values = filters
         .map(|filters| {
             filters
                 .into_iter()
-                .flat_map(|value| value.params().unwrap_or(vec![]).into_iter().cloned())
-                .map(|x| x.into())
-                .collect::<Vec<_>>()
+                .flat_map(|value| {
+                    value
+                        .params()
+                        .unwrap_or(vec![])
+                        .into_iter()
+                        .cloned()
+                        .map(|x| x.into())
+                })
+                .collect::<Vec<PgDatabaseValue>>()
         })
         .unwrap_or(vec![]);
 
@@ -472,15 +570,17 @@ fn update_and_get_rows(
         all_values
     );
 
-    let mut statement = connection.prepare_cached(&query)?;
-    bind_values(&mut statement, Some(&all_values), false, 0)?;
+    let statement = connection.prepare(&query).await?;
+
     let column_names = statement
-        .column_names()
+        .columns()
         .iter()
-        .map(|x| x.to_string())
+        .map(|x| x.name().to_string())
         .collect::<Vec<_>>();
 
-    to_rows(&column_names, statement.raw_query())
+    let query = bind_values(statement.query(), Some(&all_values))?;
+
+    to_rows(&column_names, query.fetch(connection)).await
 }
 
 fn build_join_clauses(joins: Option<&[Join]>) -> String {
@@ -502,47 +602,49 @@ fn build_join_clauses(joins: Option<&[Join]>) -> String {
     }
 }
 
-fn build_where_clause(filters: Option<&[Box<dyn BooleanExpression>]>) -> String {
+fn build_where_clause(filters: Option<&[Box<dyn BooleanExpression>]>, index: &AtomicU16) -> String {
     if let Some(filters) = filters {
         if filters.is_empty() {
             "".to_string()
         } else {
-            format!("WHERE {}", build_where_props(filters).join(" AND "))
+            let filters = build_where_props(filters, index);
+            format!("WHERE {}", filters.join(" AND "))
         }
     } else {
         "".to_string()
     }
 }
 
-fn build_where_props(filters: &[Box<dyn BooleanExpression>]) -> Vec<String> {
+fn build_where_props(filters: &[Box<dyn BooleanExpression>], index: &AtomicU16) -> Vec<String> {
     filters
         .iter()
-        .map(|filter| filter.deref().to_sql())
+        .map(|filter| filter.deref().to_sql(index))
         .collect()
 }
 
-fn build_sort_clause(sorts: Option<&[Sort]>) -> String {
+fn build_sort_clause(sorts: Option<&[Sort]>, index: &AtomicU16) -> String {
     if let Some(sorts) = sorts {
         if sorts.is_empty() {
             "".to_string()
         } else {
-            format!("ORDER BY {}", build_sort_props(sorts).join(", "))
+            format!("ORDER BY {}", build_sort_props(sorts, index).join(", "))
         }
     } else {
         "".to_string()
     }
 }
 
-fn build_sort_props(sorts: &[Sort]) -> Vec<String> {
-    sorts.iter().map(|sort| sort.to_sql()).collect()
+fn build_sort_props(sorts: &[Sort], index: &AtomicU16) -> Vec<String> {
+    sorts.iter().map(|sort| sort.to_sql(index)).collect()
 }
 
 fn build_update_where_clause(
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
     query: Option<&str>,
+    index: &AtomicU16,
 ) -> String {
-    let clause = build_where_clause(filters);
+    let clause = build_where_clause(filters, index);
     let limit_clause = build_update_limit_clause(limit, query);
 
     let clause = if limit_clause.is_empty() {
@@ -559,7 +661,7 @@ fn build_update_where_clause(
 fn build_update_limit_clause(limit: Option<usize>, query: Option<&str>) -> String {
     if let Some(limit) = limit {
         if let Some(query) = query {
-            format!("rowid IN ({query} LIMIT {limit})")
+            format!("CTID IN ({query} LIMIT {limit})")
         } else {
             "".into()
         }
@@ -568,139 +670,102 @@ fn build_update_limit_clause(limit: Option<usize>, query: Option<&str>) -> Strin
     }
 }
 
-fn build_set_clause(values: &[(&str, Box<dyn Expression>)]) -> String {
+fn build_set_clause(values: &[(&str, Box<dyn Expression>)], index: &AtomicU16) -> String {
     if values.is_empty() {
         "".to_string()
     } else {
-        format!("SET {}", build_set_props(values).join(", "))
+        format!("SET {}", build_set_props(values, index).join(", "))
     }
 }
 
-fn build_set_props(values: &[(&str, Box<dyn Expression>)]) -> Vec<String> {
+fn build_set_props(values: &[(&str, Box<dyn Expression>)], index: &AtomicU16) -> Vec<String> {
     values
         .into_iter()
-        .map(|(name, value)| format!("{name}={}", value.deref().to_sql()))
+        .map(|(name, value)| format!("{name}={}", value.deref().to_sql(index)))
         .collect()
 }
 
-fn build_values_clause(values: &[(&str, Box<dyn Expression>)]) -> String {
+fn build_values_clause(values: &[(&str, Box<dyn Expression>)], index: &AtomicU16) -> String {
     if values.is_empty() {
         "".to_string()
     } else {
-        format!("VALUES({})", build_values_props(values).join(", "))
+        let filters = build_values_props(values, index).join(", ");
+
+        format!("VALUES({filters})")
     }
 }
 
-fn build_values_props(values: &[(&str, Box<dyn Expression>)]) -> Vec<String> {
+fn build_values_props(values: &[(&str, Box<dyn Expression>)], index: &AtomicU16) -> Vec<String> {
     values
         .iter()
-        .map(|(_, value)| value.deref().to_sql())
+        .map(|(_, value)| value.deref().to_sql(index))
         .collect()
 }
 
-fn bind_values(
-    statement: &mut Statement<'_>,
-    values: Option<&[RusqliteDatabaseValue]>,
-    constant_inc: bool,
-    offset: usize,
-) -> Result<usize, RusqliteDatabaseError> {
+fn bind_values<'a, 'b>(
+    mut query: Query<'a, Postgres, PgArguments>,
+    values: Option<&'b [PgDatabaseValue]>,
+) -> Result<Query<'a, Postgres, PgArguments>, SqlxDatabaseError>
+where
+    'b: 'a,
+{
     if let Some(values) = values {
-        let mut i = 1 + offset;
         for value in values {
             match value.deref() {
                 DatabaseValue::String(value) => {
-                    statement.raw_bind_parameter(i, value)?;
-                    if !constant_inc {
-                        i += 1;
-                    }
+                    query = query.bind(value);
                 }
                 DatabaseValue::StringOpt(Some(value)) => {
-                    statement.raw_bind_parameter(i, value)?;
-                    if !constant_inc {
-                        i += 1;
-                    }
+                    query = query.bind(value);
                 }
                 DatabaseValue::StringOpt(None) => (),
                 DatabaseValue::Bool(value) => {
-                    statement.raw_bind_parameter(i, if *value { 1 } else { 0 })?;
-                    if !constant_inc {
-                        i += 1;
-                    }
+                    query = query.bind(value);
                 }
                 DatabaseValue::BoolOpt(Some(value)) => {
-                    statement.raw_bind_parameter(i, value)?;
-                    if !constant_inc {
-                        i += 1;
-                    }
+                    query = query.bind(value);
                 }
                 DatabaseValue::BoolOpt(None) => (),
                 DatabaseValue::Number(value) => {
-                    statement.raw_bind_parameter(i, *value)?;
-                    if !constant_inc {
-                        i += 1;
-                    }
+                    query = query.bind(*value);
                 }
                 DatabaseValue::NumberOpt(Some(value)) => {
-                    statement.raw_bind_parameter(i, *value)?;
-                    if !constant_inc {
-                        i += 1;
-                    }
+                    query = query.bind(*value);
                 }
                 DatabaseValue::NumberOpt(None) => (),
                 DatabaseValue::UNumber(value) => {
-                    statement.raw_bind_parameter(i, *value)?;
-                    if !constant_inc {
-                        i += 1;
-                    }
+                    query = query.bind(*value as i64);
                 }
                 DatabaseValue::UNumberOpt(Some(value)) => {
-                    statement.raw_bind_parameter(i, *value)?;
-                    if !constant_inc {
-                        i += 1;
-                    }
+                    query = query.bind(*value as i64);
                 }
                 DatabaseValue::UNumberOpt(None) => (),
                 DatabaseValue::Real(value) => {
-                    statement.raw_bind_parameter(i, *value)?;
-                    if !constant_inc {
-                        i += 1;
-                    }
+                    query = query.bind(*value);
                 }
                 DatabaseValue::RealOpt(Some(value)) => {
-                    statement.raw_bind_parameter(i, *value)?;
-                    if !constant_inc {
-                        i += 1;
-                    }
+                    query = query.bind(*value);
                 }
                 DatabaseValue::RealOpt(None) => (),
                 DatabaseValue::NowAdd(_add) => (),
                 DatabaseValue::Now => (),
                 DatabaseValue::DateTime(value) => {
-                    // FIXME: Actually format the date
-                    statement.raw_bind_parameter(i, value.to_string())?;
-                    if !constant_inc {
-                        i += 1;
-                    }
+                    query = query.bind(value);
                 }
                 DatabaseValue::Null => (),
             }
-            if constant_inc {
-                i += 1;
-            }
         }
-        Ok(i - 1)
-    } else {
-        Ok(0)
     }
+    Ok(query)
 }
 
-fn to_rows(
+async fn to_rows<'a>(
     column_names: &[String],
-    mut rows: Rows<'_>,
-) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
+    mut rows: Pin<Box<(dyn Stream<Item = Result<PgRow, sqlx::Error>> + Send + 'a)>>,
+) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
     let mut results = vec![];
 
-    while let Some(row) = rows.next()? {
+    while let Some(row) = rows.next().await.transpose()? {
         results.push(from_row(column_names, row)?);
     }
 
@@ -713,69 +778,69 @@ fn to_rows(
     Ok(results)
 }
 
-fn to_values<'a>(values: &'a [(&str, DatabaseValue)]) -> Vec<RusqliteDatabaseValue> {
+fn to_values<'a>(values: &'a [(&str, DatabaseValue)]) -> Vec<PgDatabaseValue> {
     values
         .into_iter()
-        .map(|(_key, value)| value.clone())
-        .map(|x| x.into())
+        .map(|(_key, value)| value.clone().into())
         .collect::<Vec<_>>()
 }
 
-fn exprs_to_values<'a>(values: &'a [(&str, Box<dyn Expression>)]) -> Vec<RusqliteDatabaseValue> {
+fn exprs_to_values<'a>(values: &'a [(&str, Box<dyn Expression>)]) -> Vec<PgDatabaseValue> {
     values
         .into_iter()
         .flat_map(|value| value.1.values().into_iter())
         .flatten()
         .cloned()
-        .map(|x| x.into())
+        .map(|value| value.into())
         .collect::<Vec<_>>()
 }
 
-fn bexprs_to_values<'a>(values: &'a [Box<dyn BooleanExpression>]) -> Vec<RusqliteDatabaseValue> {
+fn bexprs_to_values<'a>(values: &'a [Box<dyn BooleanExpression>]) -> Vec<PgDatabaseValue> {
     values
         .into_iter()
         .flat_map(|value| value.values().into_iter())
         .flatten()
         .cloned()
-        .map(|x| x.into())
+        .map(|value| value.into())
         .collect::<Vec<_>>()
 }
 
 #[allow(unused)]
-fn to_values_opt(values: Option<&[(&str, DatabaseValue)]>) -> Option<Vec<RusqliteDatabaseValue>> {
+fn to_values_opt(values: Option<&[(&str, DatabaseValue)]>) -> Option<Vec<PgDatabaseValue>> {
     values.map(|x| to_values(x))
 }
 
 #[allow(unused)]
 fn exprs_to_values_opt(
     values: Option<&[(&str, Box<dyn Expression>)]>,
-) -> Option<Vec<RusqliteDatabaseValue>> {
+) -> Option<Vec<PgDatabaseValue>> {
     values.map(|x| exprs_to_values(x))
 }
 
 fn bexprs_to_values_opt(
     values: Option<&[Box<dyn BooleanExpression>]>,
-) -> Option<Vec<RusqliteDatabaseValue>> {
+) -> Option<Vec<PgDatabaseValue>> {
     values.map(|x| bexprs_to_values(x))
 }
 
-fn select(
-    connection: &Connection,
+async fn select(
+    connection: &PgPool,
     table_name: &str,
     distinct: bool,
     columns: &[&str],
     filters: Option<&[Box<dyn BooleanExpression>]>,
-    joins: Option<&[Join]>,
+    joins: Option<&[Join<'_>]>,
     sort: Option<&[Sort]>,
     limit: Option<usize>,
-) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
+) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
+    let index = AtomicU16::new(0);
     let query = format!(
         "SELECT {} {} FROM {table_name} {} {} {} {}",
         if distinct { "DISTINCT" } else { "" },
         columns.join(", "),
         build_join_clauses(joins),
-        build_where_clause(filters),
-        build_sort_clause(sort),
+        build_where_clause(filters, &index),
+        build_sort_clause(sort, &index),
         if let Some(limit) = limit {
             format!("LIMIT {limit}")
         } else {
@@ -788,32 +853,29 @@ fn select(
         filters.map(|f| f.iter().flat_map(|x| x.params()).collect::<Vec<_>>())
     );
 
-    let mut statement = connection.prepare_cached(&query)?;
+    let statement = connection.prepare(&query).await?;
     let column_names = statement
-        .column_names()
+        .columns()
         .iter()
-        .map(|x| x.to_string())
+        .map(|x| x.name().to_string())
         .collect::<Vec<_>>();
 
-    bind_values(
-        &mut statement,
-        bexprs_to_values_opt(filters).as_deref(),
-        false,
-        0,
-    )?;
+    let filters = bexprs_to_values_opt(filters);
+    let query = bind_values(statement.query(), filters.as_deref())?;
 
-    to_rows(&column_names, statement.raw_query())
+    to_rows(&column_names, query.fetch(connection)).await
 }
 
-fn delete(
-    connection: &Connection,
+async fn delete(
+    connection: &PgPool,
     table_name: &str,
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
-) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
+) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
+    let index = AtomicU16::new(0);
     let query = format!(
         "DELETE FROM {table_name} {} RETURNING * {}",
-        build_where_clause(filters),
+        build_where_clause(filters, &index),
         if let Some(limit) = limit {
             format!("LIMIT {limit}")
         } else {
@@ -826,116 +888,115 @@ fn delete(
         filters.map(|f| f.iter().flat_map(|x| x.params()).collect::<Vec<_>>())
     );
 
-    let mut statement = connection.prepare_cached(&query)?;
+    let statement = connection.prepare(&query).await?;
     let column_names = statement
-        .column_names()
+        .columns()
         .iter()
-        .map(|x| x.to_string())
+        .map(|x| x.name().to_string())
         .collect::<Vec<_>>();
 
-    bind_values(
-        &mut statement,
-        bexprs_to_values_opt(filters).as_deref(),
-        false,
-        0,
-    )?;
+    let filters = bexprs_to_values_opt(filters);
+    let query = bind_values(statement.query(), filters.as_deref())?;
 
-    to_rows(&column_names, statement.raw_query())
+    to_rows(&column_names, query.fetch(connection)).await
 }
 
-fn find_row(
-    connection: &Connection,
+async fn find_row(
+    connection: &PgPool,
     table_name: &str,
     distinct: bool,
     columns: &[&str],
     filters: Option<&[Box<dyn BooleanExpression>]>,
-    joins: Option<&[Join]>,
+    joins: Option<&[Join<'_>]>,
     sort: Option<&[Sort]>,
-) -> Result<Option<crate::Row>, RusqliteDatabaseError> {
+) -> Result<Option<crate::Row>, SqlxDatabaseError> {
+    let index = AtomicU16::new(0);
     let query = format!(
         "SELECT {} {} FROM {table_name} {} {} {} LIMIT 1",
         if distinct { "DISTINCT" } else { "" },
         columns.join(", "),
         build_join_clauses(joins),
-        build_where_clause(filters),
-        build_sort_clause(sort),
+        build_where_clause(filters, &index),
+        build_sort_clause(sort, &index),
     );
-
-    let mut statement = connection.prepare_cached(&query)?;
-    let column_names = statement
-        .column_names()
-        .iter()
-        .map(|x| x.to_string())
-        .collect::<Vec<_>>();
-
-    bind_values(
-        &mut statement,
-        bexprs_to_values_opt(filters).as_deref(),
-        false,
-        0,
-    )?;
 
     log::trace!(
         "Running find_row query: {query} with params: {:?}",
         filters.map(|f| f.iter().flat_map(|x| x.params()).collect::<Vec<_>>())
     );
 
-    let mut query = statement.raw_query();
+    let statement = connection.prepare(&query).await?;
+    let column_names = statement
+        .columns()
+        .iter()
+        .map(|x| x.name().to_string())
+        .collect::<Vec<_>>();
+
+    let filters = bexprs_to_values_opt(filters);
+    let query = bind_values(statement.query(), filters.as_deref())?;
+
+    let mut query = query.fetch(connection);
 
     Ok(query
-        .next()?
+        .next()
+        .await
+        .transpose()?
         .map(|row| from_row(&column_names, row))
         .transpose()?)
 }
 
-fn insert_and_get_row(
-    connection: &Connection,
+async fn insert_and_get_row(
+    connection: &PgPool,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
-) -> Result<crate::Row, RusqliteDatabaseError> {
+) -> Result<crate::Row, SqlxDatabaseError> {
     let column_names = values
         .into_iter()
-        .map(|(key, _v)| format!("`{key}`"))
+        .map(|(key, _v)| format!("{key}"))
         .collect::<Vec<_>>()
         .join(", ");
 
+    let index = AtomicU16::new(0);
     let query = format!(
         "INSERT INTO {table_name} ({column_names}) {} RETURNING *",
-        build_values_clause(values),
+        build_values_clause(values, &index),
     );
 
-    let mut statement = connection.prepare_cached(&query)?;
-    let column_names = statement
-        .column_names()
-        .iter()
-        .map(|x| x.to_string())
-        .collect::<Vec<_>>();
-
-    bind_values(&mut statement, Some(&exprs_to_values(values)), false, 0)?;
-
     log::trace!(
-        "Running insert_and_get_row query: {query} with params: {:?}",
+        "Running insert_and_get_row query: '{query}' with params: {:?}",
         values
             .iter()
             .flat_map(|(_, x)| x.params())
             .collect::<Vec<_>>()
     );
 
-    let mut query = statement.raw_query();
+    let statement = connection.prepare(&query).await?;
+    let column_names = statement
+        .columns()
+        .iter()
+        .map(|x| x.name().to_string())
+        .collect::<Vec<_>>();
 
-    Ok(query
-        .next()?
+    let values = exprs_to_values(values);
+    let query = bind_values(statement.query(), Some(&values))?;
+
+    let mut stream = query.fetch(connection);
+
+    Ok(stream
+        .next()
+        .await
+        .transpose()?
         .map(|row| from_row(&column_names, row))
-        .ok_or(RusqliteDatabaseError::NoRow)??)
+        .ok_or(SqlxDatabaseError::NoRow)??)
 }
 
-pub fn update_multi(
-    connection: &Connection,
+pub async fn update_multi(
+    connection: &PgPool,
     table_name: &str,
     values: &[Vec<(&str, Box<dyn Expression>)>],
     filters: Option<Vec<Box<dyn BooleanExpression>>>,
     mut limit: Option<usize>,
-) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
+) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
     let mut results = vec![];
 
     if values.is_empty() {
@@ -949,13 +1010,10 @@ pub fn update_multi(
     for value in values {
         let count = value.len();
         if pos + count >= (i16::MAX - 1) as usize {
-            results.append(&mut update_chunk(
-                connection,
-                table_name,
-                &values[last_i..i],
-                &filters,
-                limit,
-            )?);
+            results.append(
+                &mut update_chunk(connection, table_name, &values[last_i..i], &filters, limit)
+                    .await?,
+            );
             last_i = i;
             pos = 0;
         }
@@ -972,25 +1030,21 @@ pub fn update_multi(
     }
 
     if i > last_i {
-        results.append(&mut update_chunk(
-            connection,
-            table_name,
-            &values[last_i..],
-            &filters,
-            limit,
-        )?);
+        results.append(
+            &mut update_chunk(connection, table_name, &values[last_i..], &filters, limit).await?,
+        );
     }
 
     Ok(results)
 }
 
-fn update_chunk(
-    connection: &Connection,
+async fn update_chunk(
+    connection: &PgPool,
     table_name: &str,
     values: &[Vec<(&str, Box<dyn Expression>)>],
     filters: &Option<Vec<Box<dyn BooleanExpression>>>,
     limit: Option<usize>,
-) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
+) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
     let first = values[0].as_slice();
     let expected_value_size = first.len();
 
@@ -998,42 +1052,54 @@ fn update_chunk(
         v.len() != expected_value_size || v.iter().enumerate().any(|(i, c)| c.0 != first[i].0)
     }) {
         log::error!("Bad row: {bad_row:?}. Expected to match schema of first row: {first:?}");
-        return Err(RusqliteDatabaseError::InvalidRequest);
+        return Err(SqlxDatabaseError::InvalidRequest);
     }
 
     let set_clause = values[0]
         .iter()
-        .map(|(name, _value)| format!("`{name}` = EXCLUDED.`{name}`"))
+        .map(|(name, _value)| format!("{name} = EXCLUDED.{name}"))
         .collect::<Vec<_>>()
         .join(", ");
 
     let column_names = values[0]
         .iter()
-        .map(|(key, _v)| format!("`{key}`"))
+        .map(|(key, _v)| format!("{key}"))
         .collect::<Vec<_>>()
         .join(", ");
 
-    let select_query = limit.map(|_| {
-        format!(
-            "SELECT rowid FROM {table_name} {}",
-            build_where_clause(filters.as_deref()),
-        )
-    });
-
+    let index = AtomicU16::new(0);
     let query = format!(
         "
         UPDATE {table_name} ({column_names})
         {}
         SET {set_clause}
         RETURNING *",
-        build_update_where_clause(filters.as_deref(), limit, select_query.as_deref()),
+        build_update_where_clause(
+            filters.as_deref(),
+            limit,
+            limit
+                .map(|_| {
+                    format!(
+                        "SELECT CTID FROM {table_name} {}",
+                        build_where_clause(filters.as_deref(), &index),
+                    )
+                })
+                .as_deref(),
+            &index
+        ),
     );
 
     let all_values = values
         .into_iter()
         .flat_map(|x| x.into_iter())
-        .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
-        .map(|x| x.into())
+        .flat_map(|(_, value)| {
+            value
+                .params()
+                .unwrap_or(vec![])
+                .into_iter()
+                .cloned()
+                .map(|x| x.into())
+        })
         .collect::<Vec<_>>();
     let mut all_filter_values = filters
         .as_ref()
@@ -1064,24 +1130,24 @@ fn update_chunk(
         all_values
     );
 
-    let mut statement = connection.prepare_cached(&query)?;
+    let statement = connection.prepare(&query).await?;
     let column_names = statement
-        .column_names()
+        .columns()
         .iter()
-        .map(|x| x.to_string())
+        .map(|x| x.name().to_string())
         .collect::<Vec<_>>();
 
-    bind_values(&mut statement, Some(&all_values), true, 0)?;
+    let query = bind_values(statement.query(), Some(&all_values))?;
 
-    to_rows(&column_names, statement.raw_query())
+    to_rows(&column_names, query.fetch(connection)).await
 }
 
-pub fn upsert_multi(
-    connection: &Connection,
+pub async fn upsert_multi(
+    connection: &PgPool,
     table_name: &str,
     unique: &[&str],
     values: &[Vec<(&str, Box<dyn Expression>)>],
-) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
+) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
     let mut results = vec![];
 
     if values.is_empty() {
@@ -1095,12 +1161,9 @@ pub fn upsert_multi(
     for value in values {
         let count = value.len();
         if pos + count >= (i16::MAX - 1) as usize {
-            results.append(&mut upsert_chunk(
-                connection,
-                table_name,
-                unique,
-                &values[last_i..i],
-            )?);
+            results.append(
+                &mut upsert_chunk(connection, table_name, unique, &values[last_i..i]).await?,
+            );
             last_i = i;
             pos = 0;
         }
@@ -1109,23 +1172,18 @@ pub fn upsert_multi(
     }
 
     if i > last_i {
-        results.append(&mut upsert_chunk(
-            connection,
-            table_name,
-            unique,
-            &values[last_i..],
-        )?);
+        results.append(&mut upsert_chunk(connection, table_name, unique, &values[last_i..]).await?);
     }
 
     Ok(results)
 }
 
-fn upsert_chunk(
-    connection: &Connection,
+async fn upsert_chunk(
+    connection: &PgPool,
     table_name: &str,
     unique: &[&str],
     values: &[Vec<(&str, Box<dyn Expression>)>],
-) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
+) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
     let first = values[0].as_slice();
     let expected_value_size = first.len();
 
@@ -1133,24 +1191,25 @@ fn upsert_chunk(
         v.len() != expected_value_size || v.iter().enumerate().any(|(i, c)| c.0 != first[i].0)
     }) {
         log::error!("Bad row: {bad_row:?}. Expected to match schema of first row: {first:?}");
-        return Err(RusqliteDatabaseError::InvalidRequest);
+        return Err(SqlxDatabaseError::InvalidRequest);
     }
 
     let set_clause = values[0]
         .iter()
-        .map(|(name, _value)| format!("`{name}` = EXCLUDED.`{name}`"))
+        .map(|(name, _value)| format!("{name} = EXCLUDED.{name}"))
         .collect::<Vec<_>>()
         .join(", ");
 
     let column_names = values[0]
         .iter()
-        .map(|(key, _v)| format!("`{key}`"))
+        .map(|(key, _v)| format!("{key}"))
         .collect::<Vec<_>>()
         .join(", ");
 
+    let index = AtomicU16::new(0);
     let values_str_list = values
         .into_iter()
-        .map(|v| format!("({})", build_values_props(&v).join(", ")))
+        .map(|v| format!("({})", build_values_props(&v, &index).join(", ")))
         .collect::<Vec<_>>();
 
     let values_str = values_str_list.join(", ");
@@ -1169,8 +1228,14 @@ fn upsert_chunk(
     let all_values = &values
         .into_iter()
         .flat_map(|x| x.into_iter())
-        .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
-        .map(|x| x.into())
+        .flat_map(|(_, value)| {
+            value
+                .params()
+                .unwrap_or(vec![])
+                .into_iter()
+                .cloned()
+                .map(|x| x.into())
+        })
         .collect::<Vec<_>>();
 
     log::trace!(
@@ -1178,46 +1243,47 @@ fn upsert_chunk(
         all_values
     );
 
-    let mut statement = connection.prepare_cached(&query)?;
+    let statement = connection.prepare(&query).await?;
     let column_names = statement
-        .column_names()
+        .columns()
         .iter()
-        .map(|x| x.to_string())
+        .map(|x| x.name().to_string())
         .collect::<Vec<_>>();
 
-    bind_values(&mut statement, Some(&all_values), true, 0)?;
+    let query = bind_values(statement.query(), Some(&all_values))?;
 
-    to_rows(&column_names, statement.raw_query())
+    to_rows(&column_names, query.fetch(connection)).await
 }
 
-fn upsert(
-    connection: &Connection,
+async fn upsert(
+    connection: &PgPool,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
-) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
-    let rows = update_and_get_rows(connection, table_name, values, filters, limit)?;
+) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
+    let rows = update_and_get_rows(connection, table_name, values, filters, limit).await?;
 
     Ok(if rows.is_empty() {
-        vec![insert_and_get_row(connection, table_name, values)?]
+        vec![insert_and_get_row(connection, table_name, values).await?]
     } else {
         rows
     })
 }
 
 #[allow(unused)]
-fn upsert_and_get_row(
-    connection: &Connection,
+async fn upsert_and_get_row(
+    connection: &PgPool,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
-) -> Result<crate::Row, RusqliteDatabaseError> {
-    match find_row(connection, table_name, false, &["*"], filters, None, None)? {
+) -> Result<crate::Row, SqlxDatabaseError> {
+    match find_row(connection, table_name, false, &["*"], filters, None, None).await? {
         Some(row) => {
-            let updated =
-                update_and_get_row(connection, table_name, &values, filters, limit)?.unwrap();
+            let updated = update_and_get_row(connection, table_name, &values, filters, limit)
+                .await?
+                .unwrap();
 
             let str1 = format!("{row:?}");
             let str2 = format!("{updated:?}");
@@ -1230,20 +1296,20 @@ fn upsert_and_get_row(
 
             Ok(updated)
         }
-        None => Ok(insert_and_get_row(connection, table_name, values)?),
+        None => Ok(insert_and_get_row(connection, table_name, values).await?),
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct RusqliteDatabaseValue(DatabaseValue);
+pub struct PgDatabaseValue(DatabaseValue);
 
-impl From<DatabaseValue> for RusqliteDatabaseValue {
+impl From<DatabaseValue> for PgDatabaseValue {
     fn from(value: DatabaseValue) -> Self {
-        RusqliteDatabaseValue(value)
+        PgDatabaseValue(value)
     }
 }
 
-impl Deref for RusqliteDatabaseValue {
+impl Deref for PgDatabaseValue {
     type Target = DatabaseValue;
 
     fn deref(&self) -> &Self::Target {
@@ -1251,21 +1317,13 @@ impl Deref for RusqliteDatabaseValue {
     }
 }
 
-impl Expression for RusqliteDatabaseValue {
+impl Expression for PgDatabaseValue {
     fn values(&self) -> Option<Vec<&DatabaseValue>> {
         Some(vec![self])
     }
 
     fn is_null(&self) -> bool {
-        match self.0 {
-            DatabaseValue::Null => true,
-            DatabaseValue::BoolOpt(None) => true,
-            DatabaseValue::RealOpt(None) => true,
-            DatabaseValue::StringOpt(None) => true,
-            DatabaseValue::NumberOpt(None) => true,
-            DatabaseValue::UNumberOpt(None) => true,
-            _ => false,
-        }
+        self.0.is_null()
     }
 
     fn expression_type(&self) -> crate::ExpressionType {

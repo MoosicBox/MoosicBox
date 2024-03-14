@@ -12,7 +12,7 @@ use once_cell::sync::Lazy;
 use qstring::QString;
 use sha2::{Digest, Sha256};
 
-use crate::ws::db::{valid_client_access_token, valid_signature_token, DatabaseError};
+use crate::db::{valid_client_access_token, valid_signature_token, DatabaseError};
 
 static TUNNEL_ACCESS_TOKEN: &str = std::env!("TUNNEL_ACCESS_TOKEN");
 
@@ -23,6 +23,7 @@ impl FromRequest for GeneralHeaderAuthorized {
     type Future = Ready<Result<Self, actix_web::Error>>;
 
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
+        log::trace!("GeneralHeaderAuthorized from_request {}", req.path());
         if is_authorized(req) {
             ok(GeneralHeaderAuthorized)
         } else {
@@ -58,6 +59,7 @@ impl FromRequest for ClientHeaderAuthorized {
     type Future = Pin<Box<dyn Future<Output = Result<Self, actix_web::Error>>>>;
 
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
+        log::trace!("ClientHeaderAuthorized from_request {}", req.path());
         let path = req.path().to_owned();
         let query_string = req.query_string().to_owned();
         let auth_header = req.headers().get(http::header::AUTHORIZATION).cloned();
@@ -96,8 +98,14 @@ async fn client_is_authorized(
 
                 let token_hash = &hash_token(token);
                 return valid_client_access_token(client_id, token_hash).await;
+            } else {
+                log::debug!("UNAUTHORIZED: Invalid auth header");
             }
+        } else {
+            log::debug!("UNAUTHORIZED: No auth header");
         }
+    } else {
+        log::debug!("UNAUTHORIZED: No client_id in query params");
     }
 
     Ok(false)
@@ -110,6 +118,7 @@ impl FromRequest for QueryAuthorized {
     type Future = Ready<Result<Self, actix_web::Error>>;
 
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
+        log::trace!("QueryAuthorized from_request {}", req.path());
         if is_query_authorized(req) {
             ok(QueryAuthorized)
         } else {
@@ -141,6 +150,7 @@ impl FromRequest for SignatureAuthorized {
     type Future = Pin<Box<dyn Future<Output = Result<Self, actix_web::Error>>>>;
 
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
+        log::trace!("SignatureAuthorized from_request {}", req.path());
         let path = req.path().to_owned();
         let query_string = req.query_string().to_owned();
         Box::pin(async move {

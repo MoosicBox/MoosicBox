@@ -25,7 +25,7 @@ use uuid::Uuid;
 use crate::auth::{
     hash_token, ClientHeaderAuthorized, GeneralHeaderAuthorized, SignatureAuthorized,
 };
-use crate::ws::db::{
+use crate::db::{
     insert_client_access_token, insert_magic_token, insert_signature_token, select_magic_token,
 };
 use crate::ws::server::{ConnectionIdError, RequestHeaders};

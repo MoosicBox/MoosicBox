@@ -11,7 +11,7 @@ use actix_web::{http, middleware, web, App};
 use log::{debug, error, info};
 use moosicbox_auth::get_client_id_and_access_token;
 use moosicbox_core::app::AppState;
-use moosicbox_database::{rusqlite::RusqliteDatabase, Database, DbConnection};
+use moosicbox_database::{rusqlite::RusqliteDatabase, Database};
 use moosicbox_downloader::{api::models::ApiProgressEvent, queue::ProgressEvent};
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 use moosicbox_tunnel::TunnelRequest;
@@ -82,7 +82,7 @@ fn main() -> std::io::Result<()> {
         library
             .busy_timeout(Duration::from_millis(10))
             .expect("Failed to set busy timeout");
-        let library = Arc::new(Mutex::new(DbConnection { inner: library }));
+        let library = Arc::new(Mutex::new(library));
 
         let db = Box::new(RusqliteDatabase::new(library));
         let database: Arc<Box<dyn Database>> = Arc::new(db);
@@ -148,6 +148,7 @@ fn main() -> std::io::Result<()> {
                     "".to_string()
                 }
             );
+            // FIXME: Handle retry
             let (client_id, access_token) = {
                 get_client_id_and_access_token(&db, &host)
                     .await

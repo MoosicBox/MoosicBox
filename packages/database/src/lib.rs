@@ -2,10 +2,13 @@
 
 #[cfg(feature = "rusqlite")]
 pub mod rusqlite;
+#[cfg(feature = "sqlx")]
+pub mod sqlx;
 
 pub mod query;
 
 use async_trait::async_trait;
+use chrono::NaiveDateTime;
 use query::*;
 use thiserror::Error;
 
@@ -23,24 +26,11 @@ pub enum DatabaseValue {
     Real(f64),
     RealOpt(Option<f64>),
     NowAdd(String),
+    Now,
+    DateTime(NaiveDateTime),
 }
 
 impl DatabaseValue {
-    fn to_sql(&self) -> String {
-        match self {
-            DatabaseValue::Null => format!("NULL"),
-            DatabaseValue::BoolOpt(None) => format!("NULL"),
-            DatabaseValue::StringOpt(None) => format!("NULL"),
-            DatabaseValue::NumberOpt(None) => format!("NULL"),
-            DatabaseValue::UNumberOpt(None) => format!("NULL"),
-            DatabaseValue::RealOpt(None) => format!("NULL"),
-            DatabaseValue::NowAdd(add) => {
-                format!("strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', '{add}'))")
-            }
-            _ => format!("?"),
-        }
-    }
-
     pub fn as_str(&self) -> Option<&str> {
         match self {
             DatabaseValue::String(value) | DatabaseValue::StringOpt(Some(value)) => Some(value),
@@ -184,17 +174,12 @@ pub enum DatabaseError {
     #[cfg(feature = "rusqlite")]
     #[error(transparent)]
     Rusqlite(rusqlite::RusqliteDatabaseError),
-}
-
-pub struct DbConnection {
-    #[cfg(feature = "rusqlite")]
-    pub inner: ::rusqlite::Connection,
-}
-
-impl std::fmt::Debug for DbConnection {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DbConnection")
-    }
+    #[cfg(feature = "mysql-sqlx")]
+    #[error(transparent)]
+    MysqlSqlx(sqlx::mysql::SqlxDatabaseError),
+    #[cfg(feature = "postgres-sqlx")]
+    #[error(transparent)]
+    PostgresSqlx(sqlx::postgres::SqlxDatabaseError),
 }
 
 #[derive(Debug)]
