@@ -1,5 +1,7 @@
 /packages/*
 
+!/packages/database
+!/packages/json_utils
 !/packages/env_utils
 !/packages/tunnel
 !/packages/tunnel_server
