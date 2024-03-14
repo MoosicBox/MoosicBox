@@ -1,4 +1,4 @@
-use std::{collections::HashMap, pin::Pin, sync::Arc};
+use std::{collections::HashMap, pin::Pin};
 
 use actix_web::error::ErrorInternalServerError;
 use aws_config::BehaviorVersion;
@@ -8,13 +8,11 @@ use futures_util::Future;
 use moosicbox_database::{
     boxed,
     query::{where_eq, where_gte, FilterableQuery},
-    sqlx::postgres::PostgresSqlxDatabase,
     Database, DatabaseValue, Row,
 };
 use moosicbox_json_utils::{database::ToValue, MissingValue, ParseError, ToValueType};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use thiserror::Error;
 use tokio::sync::Mutex;
 
@@ -144,48 +142,57 @@ pub async fn init() -> Result<(), DatabaseError> {
     };
 
     let params = params.parameters.expect("Failed to get params");
+    #[allow(unused)]
     let params: HashMap<&str, &str> = params
         .iter()
         .map(|param| (param.name().unwrap(), param.value().unwrap()))
         .collect();
 
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect_with(
-            PgConnectOptions::new()
-                .host(
-                    params
-                        .get("moosicbox_db_hostname")
-                        .cloned()
-                        .expect("No hostname"),
-                )
-                .database(
-                    params
-                        .get("moosicbox_db_name")
-                        .cloned()
-                        .expect("No db_name"),
-                )
-                .username(
-                    params
-                        .get("moosicbox_db_user")
-                        .cloned()
-                        .expect("No db_user"),
-                )
-                .password(
-                    params
-                        .get("moosicbox_db_password")
-                        .cloned()
-                        .expect("No db_password"),
-                ),
-        )
-        .await
-        .map_err(|e| moosicbox_database::DatabaseError::PostgresSqlx(e.into()))?;
+    #[cfg(feature = "postgres")]
+    {
+        use std::sync::Arc;
 
-    DB.lock()
-        .await
-        .replace(Box::new(PostgresSqlxDatabase::new(Arc::new(
-            tokio::sync::Mutex::new(pool),
-        ))));
+        use moosicbox_database::sqlx::postgres::PostgresSqlxDatabase;
+        use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+
+        let pool = PgPoolOptions::new()
+            .max_connections(5)
+            .connect_with(
+                PgConnectOptions::new()
+                    .host(
+                        params
+                            .get("moosicbox_db_hostname")
+                            .cloned()
+                            .expect("No hostname"),
+                    )
+                    .database(
+                        params
+                            .get("moosicbox_db_name")
+                            .cloned()
+                            .expect("No db_name"),
+                    )
+                    .username(
+                        params
+                            .get("moosicbox_db_user")
+                            .cloned()
+                            .expect("No db_user"),
+                    )
+                    .password(
+                        params
+                            .get("moosicbox_db_password")
+                            .cloned()
+                            .expect("No db_password"),
+                    ),
+            )
+            .await
+            .map_err(|e| moosicbox_database::DatabaseError::PostgresSqlx(e.into()))?;
+
+        DB.lock()
+            .await
+            .replace(Box::new(PostgresSqlxDatabase::new(Arc::new(
+                tokio::sync::Mutex::new(pool),
+            ))));
+    }
 
     Ok(())
 }
@@ -196,36 +203,41 @@ async fn resilient_exec<T, F>(
 where
     F: Future<Output = Result<T, DatabaseError>> + Send + 'static,
 {
+    #[allow(unused)]
     static MAX_RETRY: u8 = 3;
+    #[allow(unused)]
     let mut retries = 0;
     loop {
         match exec().await {
             Ok(value) => return Ok(value),
             Err(err) => {
-                match err {
-                    DatabaseError::Db(moosicbox_database::DatabaseError::PostgresSqlx(
-                        ref postgres_err,
-                    )) => match postgres_err {
-                        moosicbox_database::sqlx::postgres::SqlxDatabaseError::Sqlx(
-                            sqlx::Error::Io(_io_err),
-                        ) => {
-                            if retries >= MAX_RETRY {
-                                return Err(err);
+                #[cfg(feature = "postgres")]
+                {
+                    match err {
+                        DatabaseError::Db(moosicbox_database::DatabaseError::PostgresSqlx(
+                            ref postgres_err,
+                        )) => match postgres_err {
+                            moosicbox_database::sqlx::postgres::SqlxDatabaseError::Sqlx(
+                                sqlx::Error::Io(_io_err),
+                            ) => {
+                                if retries >= MAX_RETRY {
+                                    return Err(err);
+                                }
+                                log::info!(
+                                    "Database IO error. Attempting reconnect... {}/{MAX_RETRY}",
+                                    retries + 1
+                                );
+                                if let Err(init_err) = init().await {
+                                    log::error!("Failed to reinitialize: {init_err:?}");
+                                    return Err(init_err);
+                                }
+                                retries += 1;
+                                continue;
                             }
-                            log::info!(
-                                "Database IO error. Attempting reconnect... {}/{MAX_RETRY}",
-                                retries + 1
-                            );
-                            if let Err(init_err) = init().await {
-                                log::error!("Failed to reinitialize: {init_err:?}");
-                                return Err(init_err);
-                            }
-                            retries += 1;
-                            continue;
-                        }
+                            _ => {}
+                        },
                         _ => {}
-                    },
-                    _ => {}
+                    }
                 }
                 return Err(err);
             }
