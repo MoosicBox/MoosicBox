@@ -93,13 +93,39 @@ impl RemoteByteStreamFetcher {
         self.abort_handle = Some(RT.spawn(async move {
             log::debug!("Fetching byte stream with range {bytes_range}");
 
-            let mut stream = Client::new()
+            let response = Client::new()
                 .get(url.clone())
                 .header("Range", bytes_range)
                 .send()
-                .await
-                .unwrap()
-                .bytes_stream();
+                .await;
+
+            let response = match response {
+                Ok(response) => response,
+                Err(err) => {
+                    log::error!("Failed to get stream response: {err:?}");
+                    if let Err(err) = sender.send(Bytes::new()) {
+                        log::warn!("Failed to send empty bytes: {err:?}");
+                    }
+                    return;
+                }
+            };
+
+            match response.status() {
+                reqwest::StatusCode::OK | reqwest::StatusCode::PARTIAL_CONTENT => {}
+                _ => {
+                    log::error!(
+                        "Received error response ({}): {:?}",
+                        response.status(),
+                        response.text().await
+                    );
+                    if let Err(err) = sender.send(Bytes::new()) {
+                        log::warn!("Failed to send empty bytes: {err:?}");
+                    }
+                    return;
+                }
+            }
+
+            let mut stream = response.bytes_stream();
 
             while let Some(item) = stream.next().await {
                 if abort.is_cancelled() || stream_abort.is_cancelled() {
