@@ -286,16 +286,24 @@ impl Seek for RemoteByteStream {
             }
         };
 
-        log::info!("Seeking: pos[{seek_position}] type[{pos:?}]");
+        log::info!(
+            "Seeking: pos[{seek_position}] current=[{}] type[{pos:?}]",
+            self.read_position
+        );
 
         self.read_position = seek_position;
-        self.fetcher = RemoteByteStreamFetcher::new(
-            self.url.clone(),
-            seek_position as u64,
-            self.size,
-            true,
-            self.abort.clone(),
-        );
+
+        if self.size.is_some_and(|size| seek_position >= size as usize) {
+            self.fetcher.abort();
+        } else {
+            self.fetcher = RemoteByteStreamFetcher::new(
+                self.url.clone(),
+                seek_position as u64,
+                self.size,
+                true,
+                self.abort.clone(),
+            );
+        }
 
         Ok(seek_position as u64)
     }
