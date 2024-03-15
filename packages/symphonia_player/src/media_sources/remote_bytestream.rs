@@ -22,6 +22,7 @@ lazy_static! {
 pub struct RemoteByteStream {
     url: String,
     finished: bool,
+    seekable: bool,
     size: Option<u64>,
     read_position: usize,
     fetcher: RemoteByteStreamFetcher,
@@ -152,11 +153,13 @@ impl RemoteByteStream {
         url: String,
         size: Option<u64>,
         autostart_fetch: bool,
+        seekable: bool,
         abort: CancellationToken,
     ) -> Self {
         RemoteByteStream {
             url: url.clone(),
             finished: false,
+            seekable,
             size,
             read_position: 0,
             fetcher: RemoteByteStreamFetcher::new(url, 0, size, autostart_fetch, abort.clone()),
@@ -271,10 +274,12 @@ impl Seek for RemoteByteStream {
 
 impl MediaSource for RemoteByteStream {
     fn is_seekable(&self) -> bool {
-        self.size.is_some()
+        log::debug!("seekable={} size={:?}", self.seekable, self.size);
+        self.seekable && self.size.is_some()
     }
 
     fn byte_len(&self) -> Option<u64> {
+        log::debug!("byte_len={:?}", self.size);
         self.size
     }
 }

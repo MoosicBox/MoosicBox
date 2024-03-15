@@ -1152,6 +1152,12 @@ impl Player {
             url,
             size,
             true,
+            #[cfg(feature = "flac")]
+            {
+                quality.format == AudioFormat::Flac
+            },
+            #[cfg(not(feature = "flac"))]
+            false,
             self.active_playback
                 .read()
                 .unwrap()

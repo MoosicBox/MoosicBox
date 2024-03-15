@@ -1207,6 +1207,11 @@ impl TunnelSender {
                                     url,
                                     None,
                                     true,
+                                    #[cfg(feature = "flac")]
+                                    query.format.is_some_and(|format|
+                                        format == AudioFormat::Flac),
+                                    #[cfg(not(feature = "flac"))]
+                                    false,
                                     CancellationToken::new(),
                                 ));
 

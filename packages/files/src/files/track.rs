@@ -379,6 +379,12 @@ pub async fn get_track_bytes(
                             url,
                             size,
                             true,
+                            #[cfg(feature = "flac")]
+                            {
+                                format == AudioFormat::Flac
+                            },
+                            #[cfg(not(feature = "flac"))]
+                            false,
                             CancellationToken::new(),
                         ));
                         if let Err(err) = play_media_source(
