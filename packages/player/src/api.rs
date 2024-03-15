@@ -263,7 +263,7 @@ pub struct UpdatePlaybackQuery {
     pub volume: Option<f64>,
     pub host: Option<String>,
     pub track_ids: Option<String>,
-    pub quality: Option<PlaybackQuality>,
+    pub format: Option<AudioFormat>,
     pub session_id: Option<usize>,
     pub source: Option<ApiSource>,
 }
@@ -295,7 +295,7 @@ pub async fn update_playback_endpoint(
         query.seek,
         query.volume,
         track_ids,
-        query.quality,
+        query.format.map(|format| PlaybackQuality { format }),
         query.session_id,
         get_session_playlist_id_from_session_id(&data.database, query.session_id).await?,
         Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
