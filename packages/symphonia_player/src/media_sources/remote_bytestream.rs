@@ -233,6 +233,9 @@ impl Read for RemoteByteStream {
             } else {
                 log::trace!("Waiting for bytes...");
                 let new_bytes = receiver.recv().unwrap();
+                if fetcher.abort.is_cancelled() {
+                    return Ok(written);
+                }
                 fetcher.buffer.extend_from_slice(&new_bytes);
                 let len = new_bytes.len();
                 log::trace!("Received bytes {len}");
