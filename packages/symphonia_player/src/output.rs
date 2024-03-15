@@ -21,6 +21,8 @@ pub enum AudioOutputError {
     StreamClosed,
     #[error("StreamEndError")]
     StreamEnd,
+    #[error("ResampleError")]
+    Resample,
     #[error("InterruptError")]
     Interrupt,
 }

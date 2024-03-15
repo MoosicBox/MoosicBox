@@ -106,7 +106,7 @@ where
         if let Some(resampler) = binding.as_mut() {
             let decoded = resampler
                 .resample(decoded)
-                .ok_or(AudioOutputError::StreamEnd)?;
+                .ok_or(AudioOutputError::Resample)?;
 
             Ok(self.write_output(decoded))
         } else {
