@@ -151,7 +151,7 @@ sqlx-postgres = { version = "0.7", default-features = false, features = [
 static_init = "1.0.3"
 strum = "0.26.2"
 strum_macros = "0.26.2"
-symphonia = { git = "https://github.com/dedobbin/Symphonia", branch = "bug/aac-missing-timeline", features = [
+symphonia = { git = "https://github.com/pdeljanov/Symphonia", branch = "master", features = [
     "all",
 ] }
 tantivy = "0.21.1"
