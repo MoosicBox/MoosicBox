@@ -662,9 +662,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-apigatewaymanagement"
-version = "1.16.0"
+version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0cf2dd8fd91d046955d2ba867d0746a5acd7a1696911ef8b007b8b5f639dfe03"
+checksum = "628931f7511d311413c1b1c45f14adbfcee9b188949a83c7686b040075c43451"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -684,9 +684,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ssm"
-version = "1.18.0"
+version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d84be797be9a41b998eba93a7dfd3c265584c17105d50d4dfc9cea0064853c6"
+checksum = "80d267445106e176d8f6a9039f30d38f800da653c5ec9d05db0a3f8315de8157"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -707,9 +707,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-sso"
-version = "1.16.0"
+version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6729c96a2bc5acdbc0d6f406415678c24de30a9999f33084a34e64fc415cc365"
+checksum = "c5cc34f5925899739a3f125bd3f7d37d081234a3df218feb9c9d337fd4c70e72"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -729,9 +729,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ssooidc"
-version = "1.16.0"
+version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ccdd38f35f089c16fe0641cda34f2d06e3ab7b99a884407bce350a9fa70b1a9"
+checksum = "7327cddd32b1a6f2aaeaadb1336b671a7975e96a999d3b1bcf5aa47932dc6ddb"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -751,9 +751,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-sts"
-version = "1.16.0"
+version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "396e8064892a3c08b25b60fe3abda7ff5afa74efee500572cae65122ba5afd0d"
+checksum = "6c11981cdb80e8e205e22beb6630a8bdec380a1256bd29efaab34aaebd07cfb9"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -5466,9 +5466,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-stream"
-version = "0.1.14"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "397c988d37662c7dda6d2208364a706264bf3d6138b11d436cbac0ad38832842"
+checksum = "267ac89e0bec6e691e5813911606935d77c476ff49024f98abcea3e7b15e37af"
 dependencies = [
  "futures-core",
  "pin-project-lite",
