@@ -17,8 +17,9 @@ use crate::files::{
     artist::{get_artist_cover, ArtistCoverError, ArtistCoverSource},
     resize_image_path,
     track::{
-        get_or_init_track_visualization, get_track_bytes, get_track_id_source, get_track_info,
-        get_tracks_info, GetTrackBytesError, TrackAudioQuality, TrackInfo, TrackInfoError,
+        audio_format_to_content_type, get_or_init_track_visualization, get_track_bytes,
+        get_track_id_source, get_track_info, get_tracks_info, track_source_to_content_type,
+        GetTrackBytesError, TrackAudioQuality, TrackInfo, TrackInfoError, TrackSource,
         TrackSourceError,
     },
 };
@@ -83,6 +84,7 @@ impl From<GetTrackBytesError> for actix_web::Error {
 
 #[route("/track", method = "GET", method = "HEAD")]
 pub async fn track_endpoint(
+    #[cfg(feature = "track-range")] req: HttpRequest,
     query: web::Query<GetTrackQuery>,
     data: web::Data<AppState>,
 ) -> Result<HttpResponse> {
@@ -94,7 +96,63 @@ pub async fn track_endpoint(
     )
     .await?;
 
+    let content_type = query
+        .format
+        .as_ref()
+        .and_then(|format| audio_format_to_content_type(format))
+        .or(track_source_to_content_type(&source));
+
     let format = query.format.unwrap_or_default();
+
+    #[cfg(feature = "track-range")]
+    let range = req
+        .headers()
+        .get(actix_web::http::header::RANGE)
+        .and_then(|x| x.to_str().ok())
+        .map(|range| {
+            log::debug!("Got range request {:?}", range);
+
+            range
+                .strip_prefix("bytes=")
+                .map(|s| s.to_string())
+                .ok_or(ErrorBadRequest(format!("Invalid range: {range}")))
+        })
+        .transpose()?
+        .map(|range| {
+            crate::range::parse_range(&range)
+                .map_err(|e| ErrorBadRequest(format!("Invalid bytes range: {range} ({e:?})")))
+        })
+        .transpose()?;
+
+    #[cfg(not(feature = "track-range"))]
+    let range: Option<crate::range::Range> = None;
+
+    let mut response = HttpResponse::Ok();
+
+    if let Some(content_type) = content_type {
+        response.insert_header((actix_web::http::header::CONTENT_TYPE, content_type));
+    } else {
+        match &source {
+            TrackSource::Tidal { .. } | TrackSource::Qobuz { .. } => {
+                #[cfg(feature = "flac")]
+                {
+                    response.insert_header((
+                        actix_web::http::header::CONTENT_TYPE,
+                        audio_format_to_content_type(&AudioFormat::Flac).unwrap(),
+                    ));
+                }
+                #[cfg(not(feature = "flac"))]
+                {
+                    log::warn!("No valid CONTENT_TYPE available for audio format {format:?}");
+                }
+            }
+            _ => {
+                log::warn!("Failed to get CONTENT_TYPE for track source");
+            }
+        }
+    }
+
+    log::debug!("Fetching track bytes with range range={range:?}");
 
     let bytes = get_track_bytes(
         data.database.clone(),
@@ -102,38 +160,34 @@ pub async fn track_endpoint(
         source,
         format,
         true,
-        None,
-        None,
+        range.as_ref().and_then(|r| r.start.map(|x| x as u64)),
+        range.as_ref().and_then(|r| r.end.map(|x| x as u64)),
     )
     .await?;
 
     log::debug!("Got bytes with size={:?}", bytes.size);
 
-    let mut response = HttpResponse::Ok();
+    if let Some(mut size) = bytes.size {
+        if let Some(range) = range {
+            if let Some(end) = range.end {
+                if end > size as usize {
+                    let error = format!("Range end out of bounds: {end}");
+                    log::error!("{}", error);
+                    return Err(ErrorBadRequest(error));
+                }
+                size = end as u64;
+            }
+            if let Some(start) = range.start {
+                if start > size as usize {
+                    let error = format!("Range start out of bounds: {start}");
+                    log::error!("{}", error);
+                    return Err(ErrorBadRequest(error));
+                }
+                size -= start as u64;
+            }
+        }
 
-    match format {
-        #[cfg(feature = "aac")]
-        AudioFormat::Aac => {
-            response.insert_header((actix_web::http::header::CONTENT_TYPE, "audio/mp4"))
-        }
-        #[cfg(feature = "flac")]
-        AudioFormat::Flac => {
-            response.insert_header((actix_web::http::header::CONTENT_TYPE, "audio/flac"))
-        }
-        #[cfg(feature = "mp3")]
-        AudioFormat::Mp3 => {
-            response.insert_header((actix_web::http::header::CONTENT_TYPE, "audio/mp3"))
-        }
-        #[cfg(feature = "opus")]
-        AudioFormat::Opus => {
-            response.insert_header((actix_web::http::header::CONTENT_TYPE, "audio/opus"))
-        }
-        AudioFormat::Source => {
-            response.insert_header((actix_web::http::header::CONTENT_TYPE, "audio/flac"))
-        }
-    };
-
-    if let Some(size) = bytes.size {
+        log::debug!("Returning stream body with size={:?}", size);
         Ok(response.body(actix_web::body::SizedStream::new(size, bytes.stream)))
     } else {
         Ok(response.streaming(bytes.stream))
