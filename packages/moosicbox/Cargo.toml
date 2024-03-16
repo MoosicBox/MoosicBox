@@ -5,31 +5,31 @@ name    = "moosicbox"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_auth             = { version = "0.1.0", path = "../auth" }
-moosicbox_config           = { version = "0.1.0", path = "../config" }
-moosicbox_converter        = { version = "0.1.0", path = "../converter" }
-moosicbox_core             = { version = "0.1.0", path = "../core" }
-moosicbox_database         = { version = "0.1.0", path = "../database" }
-moosicbox_downloader       = { version = "0.1.0", path = "../downloader" }
-moosicbox_env_utils        = { version = "0.1.0", path = "../env_utils" }
-moosicbox_files            = { version = "0.1.0", path = "../files" }
-moosicbox_image            = { version = "0.1.0", path = "../image" }
-moosicbox_json_utils       = { version = "0.1.0", path = "../json_utils" }
-moosicbox_menu             = { version = "0.1.0", path = "../menu" }
-moosicbox_music_api        = { version = "0.1.0", path = "../music_api" }
-moosicbox_paging           = { version = "0.1.0", path = "../paging" }
-moosicbox_player           = { version = "0.1.0", path = "../player" }
-moosicbox_qobuz            = { version = "0.1.0", path = "../qobuz" }
-moosicbox_scan             = { version = "0.1.0", path = "../scan" }
-moosicbox_search           = { version = "0.1.0", path = "../search" }
-moosicbox_server           = { version = "0.1.0", path = "../server" }
-moosicbox_stream_utils     = { version = "0.1.0", path = "../stream_utils" }
-moosicbox_symphonia_player = { version = "0.1.0", path = "../symphonia_player" }
-moosicbox_tidal            = { version = "0.1.0", path = "../tidal" }
-moosicbox_tunnel           = { version = "0.1.0", path = "../tunnel" }
-moosicbox_tunnel_sender    = { version = "0.1.0", path = "../tunnel_sender" }
-moosicbox_tunnel_server    = { version = "0.1.0", path = "../tunnel_server" }
-moosicbox_ws               = { version = "0.1.0", path = "../ws" }
+moosicbox_auth             = { version = "0.1.0", path = "../auth", default-features = false }
+moosicbox_config           = { version = "0.1.0", path = "../config", default-features = false }
+moosicbox_converter        = { version = "0.1.0", path = "../converter", default-features = false }
+moosicbox_core             = { version = "0.1.0", path = "../core", default-features = false }
+moosicbox_database         = { version = "0.1.0", path = "../database", default-features = false }
+moosicbox_downloader       = { version = "0.1.0", path = "../downloader", default-features = false }
+moosicbox_env_utils        = { version = "0.1.0", path = "../env_utils", default-features = false }
+moosicbox_files            = { version = "0.1.0", path = "../files", default-features = false }
+moosicbox_image            = { version = "0.1.0", path = "../image", default-features = false }
+moosicbox_json_utils       = { version = "0.1.0", path = "../json_utils", default-features = false }
+moosicbox_menu             = { version = "0.1.0", path = "../menu", default-features = false }
+moosicbox_music_api        = { version = "0.1.0", path = "../music_api", default-features = false }
+moosicbox_paging           = { version = "0.1.0", path = "../paging", default-features = false }
+moosicbox_player           = { version = "0.1.0", path = "../player", default-features = false }
+moosicbox_qobuz            = { version = "0.1.0", path = "../qobuz", default-features = false }
+moosicbox_scan             = { version = "0.1.0", path = "../scan", default-features = false }
+moosicbox_search           = { version = "0.1.0", path = "../search", default-features = false }
+moosicbox_server           = { version = "0.1.0", path = "../server", default-features = false }
+moosicbox_stream_utils     = { version = "0.1.0", path = "../stream_utils", default-features = false }
+moosicbox_symphonia_player = { version = "0.1.0", path = "../symphonia_player", default-features = false }
+moosicbox_tidal            = { version = "0.1.0", path = "../tidal", default-features = false }
+moosicbox_tunnel           = { version = "0.1.0", path = "../tunnel", default-features = false }
+moosicbox_tunnel_sender    = { version = "0.1.0", path = "../tunnel_sender", default-features = false }
+moosicbox_tunnel_server    = { version = "0.1.0", path = "../tunnel_server", default-features = false }
+moosicbox_ws               = { version = "0.1.0", path = "../ws", default-features = false }
 
 [features]
 fail-on-warnings = []
