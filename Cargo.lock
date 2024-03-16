@@ -2734,6 +2734,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_auth",
+ "moosicbox_config",
+ "moosicbox_converter",
+ "moosicbox_core",
+ "moosicbox_database",
+ "moosicbox_downloader",
+ "moosicbox_env_utils",
+ "moosicbox_files",
+ "moosicbox_image",
+ "moosicbox_json_utils",
+ "moosicbox_menu",
+ "moosicbox_music_api",
+ "moosicbox_paging",
+ "moosicbox_player",
+ "moosicbox_qobuz",
+ "moosicbox_scan",
+ "moosicbox_search",
+ "moosicbox_server",
+ "moosicbox_stream_utils",
+ "moosicbox_symphonia_player",
+ "moosicbox_tidal",
+ "moosicbox_tunnel",
+ "moosicbox_tunnel_sender",
+ "moosicbox_tunnel_server",
+ "moosicbox_ws",
+]
+
+[[package]]
 name = "moosicbox_auth"
 version = "0.1.0"
 dependencies = [

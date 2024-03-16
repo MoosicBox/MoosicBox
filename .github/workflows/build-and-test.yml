@@ -122,6 +122,10 @@ jobs:
                       path: packages/menu
                       os: ubuntu-latest
 
+                    - name: moosicbox
+                      path: packages/moosicbox
+                      os: ubuntu-latest
+
                     - name: music_api
                       path: packages/music_api
                       os: ubuntu-latest
