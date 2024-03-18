@@ -61,7 +61,7 @@ actix-web = "4.5.1"
 actix-ws = "0.2.5"
 arrayvec = "0.7.4"
 async-once-cell = "0.5.3"
-async-recursion = "1.0.5"
+async-recursion = "1.1.0"
 async-trait = "0.1.78"
 atomic_float = "0.1.0"
 audiopus = "0.2.0"
@@ -107,7 +107,7 @@ lofty = { git = "https://github.com/BSteffaniak/lofty-rs.git", branch = "master-
 log = { version = "0.4", features = ["release_max_level_trace"] }
 md5 = "0.7.0"
 mp3-duration = "0.1.10"
-mp3lame-encoder = "0.1.4"
+mp3lame-encoder = "0.1.5"
 mysql = { version = "24.0.0", features = [
     "default-rustls",
     "rustls-tls",
