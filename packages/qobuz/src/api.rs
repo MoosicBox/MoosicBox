@@ -12,20 +12,12 @@ use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
     album, album_tracks, artist, artist_albums, favorite_albums, favorite_artists, favorite_tracks,
-    track, track_file_url, user_login, QobuzAlbum, QobuzAlbumError, QobuzAlbumOrder,
+    format_title, track, track_file_url, user_login, QobuzAlbum, QobuzAlbumError, QobuzAlbumOrder,
     QobuzAlbumReleaseType, QobuzAlbumSort, QobuzAlbumTracksError, QobuzArtist,
     QobuzArtistAlbumsError, QobuzArtistError, QobuzAudioQuality, QobuzFavoriteAlbumsError,
     QobuzFavoriteArtistsError, QobuzFavoriteTracksError, QobuzRelease, QobuzTrack, QobuzTrackError,
     QobuzTrackFileUrlError, QobuzUserLoginError,
 };
-
-fn format_title(title: &str, version: Option<&str>) -> String {
-    if let Some(version) = &version {
-        format!("{} - {version}", title)
-    } else {
-        title.to_string()
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]

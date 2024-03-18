@@ -57,6 +57,14 @@ static QOBUZ_API_BASE_URL: &str = "https://www.qobuz.com/api.json/0.2";
 
 static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| reqwest::Client::builder().build().unwrap());
 
+pub fn format_title(title: &str, version: Option<&str>) -> String {
+    if let Some(version) = &version {
+        format!("{} - {version}", title)
+    } else {
+        title.to_string()
+    }
+}
+
 #[derive(Clone)]
 struct QobuzCredentials {
     access_token: String,

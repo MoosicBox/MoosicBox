@@ -12,7 +12,9 @@ use moosicbox_core::{
 };
 use moosicbox_database::Database;
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
-use moosicbox_qobuz::{QobuzAlbumTracksError, QobuzArtistError, QobuzFavoriteAlbumsError};
+use moosicbox_qobuz::{
+    format_title, QobuzAlbumTracksError, QobuzArtistError, QobuzFavoriteAlbumsError,
+};
 use thiserror::Error;
 use tokio::{select, sync::RwLock};
 use tokio_util::sync::CancellationToken;
@@ -136,7 +138,7 @@ pub async fn scan_albums(
                 .write()
                 .await
                 .add_album(
-                    &album.title,
+                    &format_title(album.title.as_str(), album.version.as_deref()),
                     &Some(album.release_date_original.clone()),
                     None,
                     &Some(album.id.clone()),
@@ -239,7 +241,7 @@ async fn scan_tracks(
             .add_track(
                 &None,
                 track.track_number,
-                &track.title,
+                &format_title(track.title.as_str(), track.version.as_deref()),
                 track.duration as f64,
                 &None,
                 AudioFormat::Source,
