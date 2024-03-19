@@ -164,5 +164,5 @@ tokio-stream = "0.1.15"
 tokio-tungstenite = { version = "0.21.0", features = ["native-tls-vendored"] }
 tokio-util = "0.7.10"
 url = "2.5.0"
-uuid = { version = "1.7.0", features = ["v4"] }
+uuid = { version = "1.8.0", features = ["v4"] }
 webp = "0.2.6"
