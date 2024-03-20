@@ -129,116 +129,121 @@ fn main() -> std::io::Result<()> {
 
         let (tunnel_host, tunnel_join_handle, tunnel_handle) = if let Ok(url) = env::var("WS_HOST")
         {
-            let ws_url = url.clone();
-            let url = Url::parse(&url).expect("Invalid WS_HOST");
-            let hostname = url
-                .host_str()
-                .map(|s| s.to_string())
-                .expect("Invalid WS_HOST");
-            let host = format!(
-                "{}://{hostname}{}",
-                if url.scheme() == "wss" {
-                    "https"
-                } else {
-                    "http"
-                },
-                if let Some(port) = url.port() {
-                    format!(":{port}")
-                } else {
-                    "".to_string()
-                }
-            );
-            // FIXME: Handle retry
-            let (client_id, access_token) = {
-                get_client_id_and_access_token(&db, &host)
-                    .await
-                    .map_err(|e| {
-                        std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("Could not get access token: {e:?}"),
-                        )
-                    })?
-            };
-            let (mut tunnel, handle) =
-                TunnelSender::new(host.clone(), ws_url, client_id, access_token);
-
-            let database_send = database.clone();
-            (
-                Some(host),
-                Some(spawn(async move {
-                    let mut rx = tunnel.start();
-
-                    while let Some(m) = rx.recv().await {
-                        match m {
-                            TunnelMessage::Text(m) => {
-                                debug!("Received text TunnelMessage {}", &m);
-                                let tunnel = tunnel.clone();
-                                let database_send = database_send.clone();
-                                spawn(async move {
-                                    match serde_json::from_str(&m).unwrap() {
-                                        TunnelRequest::Http(request) => {
-                                            if let Err(err) = tunnel
-                                                .tunnel_request(
-                                                    database_send.clone(),
-                                                    service_port,
-                                                    request.request_id,
-                                                    request.method,
-                                                    request.path,
-                                                    request.query,
-                                                    request.payload,
-                                                    request.headers,
-                                                    request.encoding,
-                                                )
-                                                .await
-                                            {
-                                                log::error!("Tunnel request failed: {err:?}");
-                                            }
-                                        }
-                                        TunnelRequest::Ws(request) => {
-                                            let sender = CHAT_SERVER_HANDLE
-                                                .read()
-                                                .unwrap_or_else(|e| e.into_inner())
-                                                .as_ref()
-                                                .ok_or("Failed to get chat server handle")?
-                                                .clone();
-                                            if let Err(err) = tunnel
-                                                .ws_request(
-                                                    &database_send,
-                                                    request.conn_id,
-                                                    request.request_id,
-                                                    request.body.clone(),
-                                                    sender,
-                                                )
-                                                .await
-                                            {
-                                                error!(
-                                                    "Failed to propagate ws request {} from conn_id {}: {err:?}",
-                                                    request.request_id,
-                                                    request.conn_id
-                                                );
-                                            }
-                                        }
-                                        TunnelRequest::Abort(request) => {
-                                            log::debug!("Aborting request {}", request.request_id);
-                                            tunnel.abort_request(request.request_id);
-                                        }
-                                    }
-                                    Ok::<_, String>(())
-                                });
-                            }
-                            TunnelMessage::Binary(_) => todo!(),
-                            TunnelMessage::Ping(_) => {}
-                            TunnelMessage::Pong(_) => todo!(),
-                            TunnelMessage::Close => {
-                                info!("Tunnel connection was closed");
-                            }
-                            TunnelMessage::Frame(_) => todo!(),
-                        }
+            if !url.is_empty() {
+                log::debug!("Using WS_URL: {url}");
+                let ws_url = url.clone();
+                let url = Url::parse(&url).expect("Invalid WS_HOST");
+                let hostname = url
+                    .host_str()
+                    .map(|s| s.to_string())
+                    .expect("Invalid WS_HOST");
+                let host = format!(
+                    "{}://{hostname}{}",
+                    if url.scheme() == "wss" {
+                        "https"
+                    } else {
+                        "http"
+                    },
+                    if let Some(port) = url.port() {
+                        format!(":{port}")
+                    } else {
+                        "".to_string()
                     }
-                    debug!("Exiting tunnel message loop");
-                })),
-                Some(handle),
-            )
+                );
+                // FIXME: Handle retry
+                let (client_id, access_token) = {
+                    get_client_id_and_access_token(&db, &host)
+                        .await
+                        .map_err(|e| {
+                            std::io::Error::new(
+                                std::io::ErrorKind::Other,
+                                format!("Could not get access token: {e:?}"),
+                            )
+                        })?
+                };
+                let (mut tunnel, handle) =
+                    TunnelSender::new(host.clone(), ws_url, client_id, access_token);
+
+                let database_send = database.clone();
+                (
+                    Some(host),
+                    Some(spawn(async move {
+                        let mut rx = tunnel.start();
+
+                        while let Some(m) = rx.recv().await {
+                            match m {
+                                TunnelMessage::Text(m) => {
+                                    debug!("Received text TunnelMessage {}", &m);
+                                    let tunnel = tunnel.clone();
+                                    let database_send = database_send.clone();
+                                    spawn(async move {
+                                        match serde_json::from_str(&m).unwrap() {
+                                            TunnelRequest::Http(request) => {
+                                                if let Err(err) = tunnel
+                                                    .tunnel_request(
+                                                        database_send.clone(),
+                                                        service_port,
+                                                        request.request_id,
+                                                        request.method,
+                                                        request.path,
+                                                        request.query,
+                                                        request.payload,
+                                                        request.headers,
+                                                        request.encoding,
+                                                    )
+                                                    .await
+                                                {
+                                                    log::error!("Tunnel request failed: {err:?}");
+                                                }
+                                            }
+                                            TunnelRequest::Ws(request) => {
+                                                let sender = CHAT_SERVER_HANDLE
+                                                    .read()
+                                                    .unwrap_or_else(|e| e.into_inner())
+                                                    .as_ref()
+                                                    .ok_or("Failed to get chat server handle")?
+                                                    .clone();
+                                                if let Err(err) = tunnel
+                                                    .ws_request(
+                                                        &database_send,
+                                                        request.conn_id,
+                                                        request.request_id,
+                                                        request.body.clone(),
+                                                        sender,
+                                                    )
+                                                    .await
+                                                {
+                                                    error!(
+                                                        "Failed to propagate ws request {} from conn_id {}: {err:?}",
+                                                        request.request_id,
+                                                        request.conn_id
+                                                    );
+                                                }
+                                            }
+                                            TunnelRequest::Abort(request) => {
+                                                log::debug!("Aborting request {}", request.request_id);
+                                                tunnel.abort_request(request.request_id);
+                                            }
+                                        }
+                                        Ok::<_, String>(())
+                                    });
+                                }
+                                TunnelMessage::Binary(_) => todo!(),
+                                TunnelMessage::Ping(_) => {}
+                                TunnelMessage::Pong(_) => todo!(),
+                                TunnelMessage::Close => {
+                                    info!("Tunnel connection was closed");
+                                }
+                                TunnelMessage::Frame(_) => todo!(),
+                            }
+                        }
+                        debug!("Exiting tunnel message loop");
+                    })),
+                    Some(handle),
+                )
+            } else {
+                (None, None, None)
+            }
         } else {
             (None, None, None)
         };
