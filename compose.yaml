@@ -7,6 +7,7 @@ services:
             args:
                 WS_HOST: "${WS_HOST}"
                 TUNNEL_ACCESS_TOKEN: "${TUNNEL_ACCESS_TOKEN}"
+                STATIC_TOKEN: "${STATIC_TOKEN}"
         ports:
             - "8010:8010"
 
