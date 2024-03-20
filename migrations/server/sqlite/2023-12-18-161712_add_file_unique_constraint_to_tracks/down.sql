@@ -1,1 +1,1 @@
-DROP INDEX ux_tracks_file;
+DROP INDEX IF EXISTS ux_tracks_file;
