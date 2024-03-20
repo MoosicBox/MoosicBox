@@ -17,14 +17,18 @@ RUN cat Cargo.toml | \
     > Cargo2.toml && \
     mv Cargo2.toml Cargo.toml
 
-COPY packages packages
+COPY packages/database/Cargo.toml packages/database/Cargo.toml
+COPY packages/env_utils/Cargo.toml packages/env_utils/Cargo.toml
+COPY packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
+COPY packages/tunnel/Cargo.toml packages/tunnel/Cargo.toml
+COPY packages/tunnel_server/Cargo.toml packages/tunnel_server/Cargo.toml
 
 RUN touch temp_lib.rs
 
 RUN for file in $(\
     for file in packages/*/Cargo.toml; \
       do printf "$file\n"; \
-    done | grep -v -E "^(\
+    done | grep -E "^(\
 packages/database|\
 packages/env_utils|\
 packages/json_utils|\
@@ -34,13 +38,23 @@ packages/tunnel_server|\
     do printf "\n\n[lib]\npath=\"../../temp_lib.rs\"" >> "$file"; \
   done
 
+RUN mkdir packages/tunnel_server/src && \
+  echo 'fn main() {}' >packages/tunnel_server/src/main.rs
+
 ARG TUNNEL_ACCESS_TOKEN
 ENV TUNNEL_ACCESS_TOKEN=${TUNNEL_ACCESS_TOKEN}
+RUN cargo build --package moosicbox_tunnel_server --release
+
+COPY packages packages
+
+RUN rm target/release/deps/moosicbox*
 RUN cargo build --package moosicbox_tunnel_server --release
 
 # Final
 FROM debian:bookworm-slim
 
+RUN echo 'Acquire::http::Timeout "10";' >>/etc/apt/apt.conf.d/httpproxy && \
+  echo 'Acquire::ftp::Timeout "10";' >>/etc/apt/apt.conf.d/httpproxy
 RUN apt-get update && apt-get install -y ca-certificates curl
 
 COPY --from=builder /app/target/release/moosicbox_tunnel_server /
@@ -48,4 +62,8 @@ EXPOSE 8004
 ENV RUST_LOG=info,moosicbox=debug
 ENV MAX_THREADS=64
 ENV ACTIX_WORKERS=32
+ARG AWS_ACCESS_KEY_ID
+ENV AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+ARG AWS_SECRET_ACCESS_KEY
+ENV AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
 CMD ["./moosicbox_tunnel_server", "8004"]
