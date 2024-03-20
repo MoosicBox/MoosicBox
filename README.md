@@ -72,7 +72,7 @@ To-do (in no particular order):
 
 ## Database
 
-### SQLite
+### Server
 
 The SQLite database stores the music library data:
 
@@ -85,56 +85,74 @@ The SQLite database stores the music library data:
 
 #### Migrations
 
-##### Run
+##### SQLite
 
-`diesel migration run --migration-dir migrations/sqlite --database-url library.db`
+###### Run
 
-##### Revert
+`diesel migration run --migration-dir migrations/server/sqlite --database-url library.db`
 
-`diesel migration revert --migration-dir migrations/sqlite --database-url library.db`
+###### Revert
 
-##### New Migration
+`diesel migration revert --migration-dir migrations/server/sqlite --database-url library.db`
 
-`diesel migration generate --migration-dir migrations/sqlite migration_name`
+###### New Migration
 
-### Postgres
+`diesel migration generate --migration-dir migrations/server/sqlite migration_name`
+
+##### Postgres
+
+###### Run
+
+`diesel migration run --migration-dir migrations/server/postgres --database-url postgres://username:password@host/dbname`
+
+###### Revert
+
+`diesel migration revert --migration-dir migrations/server/postgres --database-url postgres://username:password@host/dbname`
+
+###### New Migration
+
+`diesel migration generate --migration-dir migrations/server/postgres migration_name`
+
+### Tunnel
+
+#### Postgres
 
 The Postgres database stores the tunnel server configurations:
 
 - WebSocket connection mappings
   - Enables the tunnel server to know which WebSocket connection to tunnel data from
 
-#### Migrations
+##### Migrations
 
-##### Run
+###### Run
 
 `diesel migration run --migration-dir migrations/tunnel/postgres --database-url postgres://username:password@host/dbname`
 
-##### Revert
+###### Revert
 
 `diesel migration revert --migration-dir migrations/tunnel/postgres --database-url postgres://username:password@host/dbname`
 
-##### New Migration
+###### New Migration
 
 `diesel migration generate --migration-dir migrations/tunnel/postgres migration_name`
 
-### MySQL
+#### MySQL
 
 The MySQL database stores the tunnel server configurations:
 
 - WebSocket connection mappings
   - Enables the tunnel server to know which WebSocket connection to tunnel data from
 
-#### Migrations
+##### Migrations
 
-##### Run
+###### Run
 
 `diesel migration run --migration-dir migrations/tunnel/mysql --database-url mysql://username:password@host/dbname`
 
-##### Revert
+###### Revert
 
 `diesel migration revert --migration-dir migrations/tunnel/mysql --database-url mysql://username:password@host/dbname`
 
-##### New Migration
+###### New Migration
 
 `diesel migration generate --migration-dir migrations/tunnel/mysql migration_name`

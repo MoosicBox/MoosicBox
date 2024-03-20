@@ -1,0 +1,1 @@
+ALTER TABLE tidal_config ADD COLUMN client_id VARCHAR(64) NOT NULL DEFAULT '';

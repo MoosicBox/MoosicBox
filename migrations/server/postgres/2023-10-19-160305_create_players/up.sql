@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS players (
+    id INTEGER PRIMARY KEY NOT NULL,
+    connection_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    playing INTEGER NOT NULL DEFAULT 0,
+    created TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated TIMESTAMP NOT NULL DEFAULT NOW()
+);

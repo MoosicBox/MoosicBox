@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS active_players (
+    id INTEGER PRIMARY KEY NOT NULL,
+    session_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,
+    created TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated TIMESTAMP NOT NULL DEFAULT NOW()
+);

@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS qobuz_bundles (
+    "id" INTEGER PRIMARY KEY NOT NULL,
+    "bundle_version" VARCHAR(32) NOT NULL,
+    "app_id" VARCHAR(32) NOT NULL,
+    created TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated TIMESTAMP NOT NULL DEFAULT NOW()
+);
