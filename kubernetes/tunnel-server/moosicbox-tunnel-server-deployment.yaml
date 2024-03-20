@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    annotations:
+        kompose.cmd: kompose convert -f compose.yaml
+        kompose.version: 1.32.0 (765fde254)
+    labels:
+        io.kompose.service: moosicbox-tunnel-server
+    name: moosicbox-tunnel-server
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            io.kompose.service: moosicbox-tunnel-server
+    template:
+        metadata:
+            annotations:
+                kompose.cmd: kompose convert -f compose.yaml
+                kompose.version: 1.32.0 (765fde254)
+            labels:
+                io.kompose.network/moosicboxserver-default: "true"
+                io.kompose.service: moosicbox-tunnel-server
+        spec:
+            containers:
+                - image: registry.digitalocean.com/moosicbox/moosicbox-tunnel-server
+                  imagePullPolicy: Always
+                  name: moosicbox-tunnel-server
+                  ports:
+                      - containerPort: 8004
+                        hostPort: 8004
+                        protocol: TCP
+            restartPolicy: Always

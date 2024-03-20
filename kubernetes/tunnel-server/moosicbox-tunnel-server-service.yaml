@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Service
+metadata:
+    annotations:
+        kompose.cmd: kompose convert -f compose.yaml
+        kompose.version: 1.32.0 (765fde254)
+        service.beta.kubernetes.io/do-loadbalancer-certificate-id: "f257a1f3-e2ac-4479-9d9e-bc8f4970f572"
+        service.beta.kubernetes.io/do-loadbalancer-protocol: "http"
+        service.beta.kubernetes.io/do-loadbalancer-tls-ports: "443"
+        service.beta.kubernetes.io/do-loadbalancer-redirect-http-to-https: "true"
+    labels:
+        io.kompose.service: moosicbox-tunnel-service
+    name: moosicbox-tunnel-service
+spec:
+    type: LoadBalancer
+    ports:
+        - name: http
+          protocol: TCP
+          port: 80
+          targetPort: 8004
+        - name: https
+          protocol: TCP
+          port: 443
+          targetPort: 8004
+    selector:
+        io.kompose.service: moosicbox-tunnel-server
