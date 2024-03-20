@@ -18,5 +18,7 @@ services:
             dockerfile: packages/tunnel_server/TunnelServer.Dockerfile
             args:
                 TUNNEL_ACCESS_TOKEN: "${TUNNEL_ACCESS_TOKEN}"
+                AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+                AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
         ports:
             - "8004:8004"
