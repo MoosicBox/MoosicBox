@@ -1,6 +1,6 @@
 services:
-    moosicbox_server:
-        image: moosicbox_server
+    moosicbox-server:
+        image: moosicbox-server
         build:
             context: .
             dockerfile: packages/server/Server.Dockerfile
@@ -10,8 +10,8 @@ services:
         ports:
             - "8010:8010"
 
-    moosicbox_tunnel_server:
-        image: moosicbox_tunnel_server
+    moosicbox-tunnel-server:
+        image: moosicbox-tunnel-server
         build:
             context: .
             dockerfile: packages/tunnel_server/TunnelServer.Dockerfile
