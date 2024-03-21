@@ -1271,7 +1271,6 @@ async fn upsert(
     })
 }
 
-#[allow(unused)]
 async fn upsert_and_get_row(
     connection: &PgPool,
     table_name: &str,
