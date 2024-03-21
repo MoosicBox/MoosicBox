@@ -462,7 +462,7 @@ async fn update_and_get_row(
                 .cloned()
                 .map(|x| x.into())
         })
-        .collect::<Vec<PgDatabaseValue>>();
+        .collect::<Vec<_>>();
     let mut all_filter_values = filters
         .map(|filters| {
             filters
@@ -475,7 +475,7 @@ async fn update_and_get_row(
                         .cloned()
                         .map(|x| x.into())
                 })
-                .collect::<Vec<PgDatabaseValue>>()
+                .collect::<Vec<_>>()
         })
         .unwrap_or(vec![]);
 
