@@ -43,6 +43,9 @@ impl ToValueType<String> for &DatabaseValue {
     fn to_value_type(self) -> Result<String, ParseError> {
         match self {
             DatabaseValue::String(ref str) => Ok(str.to_string()),
+            DatabaseValue::DateTime(ref datetime) => {
+                Ok(format!("{}", datetime.and_utc().to_rfc3339()))
+            }
             _ => Err(ParseError::ConvertType("String".into())),
         }
     }
@@ -351,6 +354,9 @@ impl ToValueType<String> for DatabaseValue {
     fn to_value_type(self) -> Result<String, ParseError> {
         match self {
             DatabaseValue::String(ref str) => Ok(str.to_string()),
+            DatabaseValue::DateTime(ref datetime) => {
+                Ok(format!("{}", datetime.and_utc().to_rfc3339()))
+            }
             _ => Err(ParseError::ConvertType("String".into())),
         }
     }
