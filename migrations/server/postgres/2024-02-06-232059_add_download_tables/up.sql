@@ -1,13 +1,13 @@
 CREATE TABLE IF NOT EXISTS download_tasks (
-    "id" INTEGER PRIMARY KEY NOT NULL,
+    "id" BIGSERIAL PRIMARY KEY NOT NULL,
     "state" VARCHAR(32) NOT NULL DEFAULT 'PENDING',
     "type" VARCHAR(32) NOT NULL,
-    "track_id" INTEGER DEFAULT NULL,
-    "album_id" INTEGER DEFAULT NULL,
+    "track_id" BIGINT DEFAULT NULL,
+    "album_id" BIGINT DEFAULT NULL,
     "source" VARCHAR(32) DEFAULT NULL,
     "quality" VARCHAR(32) DEFAULT NULL,
     "file_path" VARCHAR(1024) NOT NULL,
-    "total_bytes" INTEGER DEFAULT NULL,
+    "total_bytes" BIGINT DEFAULT NULL,
     created TIMESTAMP NOT NULL DEFAULT NOW(),
     updated TIMESTAMP NOT NULL DEFAULT NOW()
 );
