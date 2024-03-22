@@ -1290,16 +1290,18 @@ impl AsModelResultMappedQuery<ApiTrack, DbError> for Vec<SessionPlaylistTrack> {
 
         Ok(tracks
             .iter()
-            .map(|t| match t.r#type {
-                ApiSource::Library => library_tracks
-                    .iter()
-                    .find(|lib| (lib.id as u64) == t.id)
-                    .expect("Missing Library track")
-                    .to_api(),
-                ApiSource::Tidal => t.to_api(),
-                ApiSource::Qobuz => t.to_api(),
+            .map(|t| {
+                Ok(match t.r#type {
+                    ApiSource::Library => library_tracks
+                        .iter()
+                        .find(|lib| (lib.id as u64) == t.id)
+                        .ok_or(DbError::Unknown)?
+                        .to_api(),
+                    ApiSource::Tidal => t.to_api(),
+                    ApiSource::Qobuz => t.to_api(),
+                })
             })
-            .collect::<Vec<_>>())
+            .collect::<Result<Vec<_>, DbError>>()?)
     }
 }
 
