@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS tracks (
     album_id BIGINT NOT NULL,
     "number" BIGINT NOT NULL,
     title TEXT NOT NULL,
-    duration REAL NOT NULL,
+    duration DOUBLE PRECISION NOT NULL,
     "file" TEXT,
     FOREIGN KEY (album_id) REFERENCES albums(id)
 )
