@@ -6,11 +6,14 @@ use std::{
 
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
+use once_cell::sync::Lazy;
 use sqlx::{
+    pool::PoolConnection,
     postgres::{PgArguments, PgRow, PgValueRef},
     query::Query,
     Column, Executor, PgPool, Postgres, Row, Statement, TypeInfo, Value, ValueRef,
 };
+use sqlx_postgres::PgConnection;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
@@ -247,12 +250,32 @@ impl<T: Expression + ?Sized> ToSql for T {
 
 #[derive(Debug)]
 pub struct PostgresSqlxDatabase {
-    connection: Arc<Mutex<PgPool>>,
+    pool: Arc<Mutex<PgPool>>,
+    connection: Arc<Mutex<Option<Arc<Mutex<PoolConnection<Postgres>>>>>>,
 }
 
 impl PostgresSqlxDatabase {
-    pub fn new(connection: Arc<Mutex<PgPool>>) -> Self {
-        Self { connection }
+    pub fn new(pool: Arc<Mutex<PgPool>>) -> Self {
+        Self {
+            pool,
+            connection: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    pub async fn get_connection(
+        &self,
+    ) -> Result<Arc<Mutex<PoolConnection<Postgres>>>, SqlxDatabaseError> {
+        let mut lock = self.connection.lock().await;
+
+        if let Some(connection) = lock.as_ref() {
+            log::trace!("Returning existing connection from postgres db pool");
+            return Ok(connection.clone());
+        }
+
+        log::debug!("Fetching new connection from postgres db pool");
+        let connection = Arc::new(Mutex::new(self.pool.lock().await.acquire().await?));
+        lock.replace(connection.clone());
+        Ok(connection)
     }
 }
 
@@ -280,7 +303,7 @@ impl From<SqlxDatabaseError> for DatabaseError {
 impl Database for PostgresSqlxDatabase {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(select(
-            &*self.connection.lock().await,
+            self.get_connection().await?.lock().await.as_mut(),
             query.table_name,
             query.distinct,
             query.columns,
@@ -297,7 +320,7 @@ impl Database for PostgresSqlxDatabase {
         query: &SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
         Ok(find_row(
-            &*self.connection.lock().await,
+            self.get_connection().await?.lock().await.as_mut(),
             query.table_name,
             query.distinct,
             query.columns,
@@ -313,7 +336,7 @@ impl Database for PostgresSqlxDatabase {
         statement: &DeleteStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(delete(
-            &*self.connection.lock().await,
+            self.get_connection().await?.lock().await.as_mut(),
             statement.table_name,
             statement.filters.as_deref(),
             statement.limit,
@@ -326,7 +349,7 @@ impl Database for PostgresSqlxDatabase {
         statement: &InsertStatement<'_>,
     ) -> Result<crate::Row, DatabaseError> {
         Ok(insert_and_get_row(
-            &*self.connection.lock().await,
+            self.get_connection().await?.lock().await.as_mut(),
             statement.table_name,
             &statement.values,
         )
@@ -338,7 +361,7 @@ impl Database for PostgresSqlxDatabase {
         statement: &UpdateStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(update_and_get_rows(
-            &*self.connection.lock().await,
+            self.get_connection().await?.lock().await.as_mut(),
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -352,7 +375,7 @@ impl Database for PostgresSqlxDatabase {
         statement: &UpdateStatement<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
         Ok(update_and_get_row(
-            &*self.connection.lock().await,
+            self.get_connection().await?.lock().await.as_mut(),
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -366,7 +389,7 @@ impl Database for PostgresSqlxDatabase {
         statement: &UpsertStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(upsert(
-            &*self.connection.lock().await,
+            self.get_connection().await?.lock().await.as_mut(),
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -380,7 +403,7 @@ impl Database for PostgresSqlxDatabase {
         statement: &UpsertStatement<'_>,
     ) -> Result<crate::Row, DatabaseError> {
         Ok(upsert_and_get_row(
-            &*self.connection.lock().await,
+            self.get_connection().await?.lock().await.as_mut(),
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -395,7 +418,7 @@ impl Database for PostgresSqlxDatabase {
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         let rows = {
             upsert_multi(
-                &*self.connection.lock().await,
+                self.get_connection().await?.lock().await.as_mut(),
                 statement.table_name,
                 statement
                     .unique
@@ -445,7 +468,7 @@ fn from_row(column_names: &[String], row: PgRow) -> Result<crate::Row, SqlxDatab
 }
 
 async fn update_and_get_row(
-    connection: &PgPool,
+    connection: &mut PgConnection,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
@@ -525,7 +548,7 @@ async fn update_and_get_row(
 }
 
 async fn update_and_get_rows(
-    connection: &PgPool,
+    connection: &mut PgConnection,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
@@ -859,7 +882,7 @@ fn bexprs_to_values_opt(
 }
 
 async fn select(
-    connection: &PgPool,
+    connection: &mut PgConnection,
     table_name: &str,
     distinct: bool,
     columns: &[&str],
@@ -906,7 +929,7 @@ async fn select(
 }
 
 async fn delete(
-    connection: &PgPool,
+    connection: &mut PgConnection,
     table_name: &str,
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
@@ -941,7 +964,7 @@ async fn delete(
 }
 
 async fn find_row(
-    connection: &PgPool,
+    connection: &mut PgConnection,
     table_name: &str,
     distinct: bool,
     columns: &[&str],
@@ -989,7 +1012,7 @@ async fn find_row(
 }
 
 async fn insert_and_get_row(
-    connection: &PgPool,
+    connection: &mut PgConnection,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
 ) -> Result<crate::Row, SqlxDatabaseError> {
@@ -1034,7 +1057,7 @@ async fn insert_and_get_row(
 }
 
 pub async fn update_multi(
-    connection: &PgPool,
+    connection: &mut PgConnection,
     table_name: &str,
     values: &[Vec<(&str, Box<dyn Expression>)>],
     filters: Option<Vec<Box<dyn BooleanExpression>>>,
@@ -1082,7 +1105,7 @@ pub async fn update_multi(
 }
 
 async fn update_chunk(
-    connection: &PgPool,
+    connection: &mut PgConnection,
     table_name: &str,
     values: &[Vec<(&str, Box<dyn Expression>)>],
     filters: &Option<Vec<Box<dyn BooleanExpression>>>,
@@ -1192,7 +1215,7 @@ async fn update_chunk(
 }
 
 pub async fn upsert_multi(
-    connection: &PgPool,
+    connection: &mut PgConnection,
     table_name: &str,
     unique: &[Box<dyn Expression>],
     values: &[Vec<(&str, Box<dyn Expression>)>],
@@ -1228,7 +1251,7 @@ pub async fn upsert_multi(
 }
 
 async fn upsert_chunk(
-    connection: &PgPool,
+    connection: &mut PgConnection,
     table_name: &str,
     unique: &[Box<dyn Expression>],
     values: &[Vec<(&str, Box<dyn Expression>)>],
@@ -1315,7 +1338,7 @@ async fn upsert_chunk(
 }
 
 async fn upsert(
-    connection: &PgPool,
+    connection: &mut PgConnection,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
@@ -1331,7 +1354,7 @@ async fn upsert(
 }
 
 async fn upsert_and_get_row(
-    connection: &PgPool,
+    connection: &mut PgConnection,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
