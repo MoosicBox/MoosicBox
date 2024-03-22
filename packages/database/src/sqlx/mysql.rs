@@ -122,6 +122,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                     .collect::<Vec<_>>()
                     .join(",")
             ),
+            ExpressionType::Literal(value) => value.value.to_string(),
             ExpressionType::Identifier(value) => value.value.clone(),
             ExpressionType::SelectQuery(value) => {
                 let joins = if let Some(joins) = &value.joins {

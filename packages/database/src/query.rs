@@ -46,6 +46,7 @@ pub enum ExpressionType<'a> {
     Sort(&'a Sort),
     NotEq(&'a NotEq),
     InList(&'a InList),
+    Literal(&'a Literal),
     Coalesce(&'a Coalesce),
     Identifier(&'a Identifier),
     SelectQuery(&'a SelectQuery<'a>),
@@ -69,6 +70,45 @@ pub trait Expression: Send + Sync + Debug {
 
     fn is_null(&self) -> bool {
         false
+    }
+}
+
+#[derive(Debug)]
+pub struct Literal {
+    pub value: String,
+}
+
+impl Into<Literal> for &str {
+    fn into(self) -> Literal {
+        Literal {
+            value: self.to_string(),
+        }
+    }
+}
+
+impl Into<Literal> for String {
+    fn into(self) -> Literal {
+        Literal {
+            value: self.clone(),
+        }
+    }
+}
+
+impl Into<Box<dyn Expression>> for Literal {
+    fn into(self) -> Box<dyn Expression> {
+        Box::new(self)
+    }
+}
+
+impl Expression for Literal {
+    fn expression_type(&self) -> ExpressionType {
+        ExpressionType::Literal(self)
+    }
+}
+
+pub fn literal(value: &str) -> Literal {
+    Literal {
+        value: value.to_string(),
     }
 }
 

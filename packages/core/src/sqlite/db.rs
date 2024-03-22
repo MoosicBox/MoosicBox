@@ -908,12 +908,12 @@ pub async fn set_track_sizes(
         .upsert_multi("track_sizes")
         .unique(boxed![
             identifier("track_id"),
-            coalesce(boxed![identifier("format"), identifier("''")]),
-            coalesce(boxed![identifier("audio_bitrate"), identifier("0")]),
-            coalesce(boxed![identifier("overall_bitrate"), identifier("0")]),
-            coalesce(boxed![identifier("bit_depth"), identifier("0")]),
-            coalesce(boxed![identifier("sample_rate"), identifier("0")]),
-            coalesce(boxed![identifier("channels"), identifier("0")]),
+            coalesce(boxed![identifier("format"), literal("''")]),
+            coalesce(boxed![identifier("audio_bitrate"), literal("0")]),
+            coalesce(boxed![identifier("overall_bitrate"), literal("0")]),
+            coalesce(boxed![identifier("bit_depth"), literal("0")]),
+            coalesce(boxed![identifier("sample_rate"), literal("0")]),
+            coalesce(boxed![identifier("channels"), literal("0")]),
         ])
         .values(values.clone())
         .execute(db)
@@ -1264,15 +1264,15 @@ pub async fn add_tracks(
     Ok(db
         .upsert_multi("tracks")
         .unique(boxed![
-            coalesce(boxed![identifier("file"), identifier("''")]),
+            coalesce(boxed![identifier("file"), literal("''")]),
             identifier("album_id"),
             identifier("title"),
             identifier("duration"),
             identifier("number"),
-            coalesce(boxed![identifier("format"), identifier("''")]),
+            coalesce(boxed![identifier("format"), literal("''")]),
             identifier("source"),
-            coalesce(boxed![identifier("tidal_id"), identifier("0")]),
-            coalesce(boxed![identifier("qobuz_id"), identifier("0")]),
+            coalesce(boxed![identifier("tidal_id"), literal("0")]),
+            coalesce(boxed![identifier("qobuz_id"), literal("0")]),
         ])
         .values(values)
         .execute(db)
