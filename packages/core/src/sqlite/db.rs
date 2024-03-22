@@ -906,14 +906,14 @@ pub async fn set_track_sizes(
 
     Ok(db
         .upsert_multi("track_sizes")
-        .unique(&[
-            "track_id",
-            "ifnull(`format`, '')",
-            "ifnull(`audio_bitrate`, 0)",
-            "ifnull(`overall_bitrate`, 0)",
-            "ifnull(`bit_depth`, 0)",
-            "ifnull(`sample_rate`, 0)",
-            "ifnull(`channels`, 0)",
+        .unique(boxed![
+            identifier("track_id"),
+            coalesce(boxed![identifier("format"), identifier("''")]),
+            coalesce(boxed![identifier("audio_bitrate"), identifier("0")]),
+            coalesce(boxed![identifier("overall_bitrate"), identifier("0")]),
+            coalesce(boxed![identifier("bit_depth"), identifier("0")]),
+            coalesce(boxed![identifier("sample_rate"), identifier("0")]),
+            coalesce(boxed![identifier("channels"), identifier("0")]),
         ])
         .values(values.clone())
         .execute(db)
@@ -1056,7 +1056,7 @@ pub async fn delete_session_playlist_tracks_by_track_id(
 
     Ok(db
         .delete("session_playlist_tracks")
-        .where_eq("`type`", "'LIBRARY'")
+        .where_eq("type", "'LIBRARY'")
         .filter_if_some(ids.map(|ids| where_in("track_id", ids.to_vec())))
         .execute(db)
         .await?
@@ -1204,7 +1204,7 @@ pub async fn add_album_maps_and_get_albums(
 
     Ok(db
         .upsert_multi("albums")
-        .unique(&["`artist_id`", "`title`"])
+        .unique(boxed![identifier("artist_id"), identifier("title"),])
         .values(values)
         .execute(db)
         .await?
@@ -1263,16 +1263,16 @@ pub async fn add_tracks(
 
     Ok(db
         .upsert_multi("tracks")
-        .unique(&[
-            "ifnull(`file`, '')",
-            "`album_id`",
-            "`title`",
-            "`duration`",
-            "`number`",
-            "ifnull(`format`, '')",
-            "`source`",
-            "ifnull(`tidal_id`, 0)",
-            "ifnull(`qobuz_id`, 0)",
+        .unique(boxed![
+            coalesce(boxed![identifier("file"), identifier("''")]),
+            identifier("album_id"),
+            identifier("title"),
+            identifier("duration"),
+            identifier("number"),
+            coalesce(boxed![identifier("format"), identifier("''")]),
+            identifier("source"),
+            coalesce(boxed![identifier("tidal_id"), identifier("0")]),
+            coalesce(boxed![identifier("qobuz_id"), identifier("0")]),
         ])
         .values(values)
         .execute(db)

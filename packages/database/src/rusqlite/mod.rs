@@ -117,6 +117,15 @@ impl<T: Expression + ?Sized> ToSql for T {
                     .collect::<Vec<_>>()
                     .join(",")
             ),
+            ExpressionType::Coalesce(value) => format!(
+                "IFNULL({})",
+                value
+                    .values
+                    .iter()
+                    .map(|value| value.to_sql())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
             ExpressionType::Identifier(value) => value.value.clone(),
             ExpressionType::SelectQuery(value) => {
                 let joins = if let Some(joins) = &value.joins {
@@ -331,6 +340,7 @@ impl Database for RusqliteDatabase {
             statement.table_name,
             statement
                 .unique
+                .as_ref()
                 .ok_or(RusqliteDatabaseError::MissingUnique)?,
             &statement.values,
         )?)
@@ -1079,7 +1089,7 @@ fn update_chunk(
 pub fn upsert_multi(
     connection: &Connection,
     table_name: &str,
-    unique: &[&str],
+    unique: &[Box<dyn Expression>],
     values: &[Vec<(&str, Box<dyn Expression>)>],
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
     let mut results = vec![];
@@ -1123,7 +1133,7 @@ pub fn upsert_multi(
 fn upsert_chunk(
     connection: &Connection,
     table_name: &str,
-    unique: &[&str],
+    unique: &[Box<dyn Expression>],
     values: &[Vec<(&str, Box<dyn Expression>)>],
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
     let first = values[0].as_slice();
@@ -1155,7 +1165,11 @@ fn upsert_chunk(
 
     let values_str = values_str_list.join(", ");
 
-    let unique_conflict = unique.join(", ");
+    let unique_conflict = unique
+        .iter()
+        .map(|x| x.to_sql())
+        .collect::<Vec<_>>()
+        .join(", ");
 
     let query = format!(
         "

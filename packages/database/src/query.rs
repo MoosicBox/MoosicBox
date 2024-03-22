@@ -46,6 +46,7 @@ pub enum ExpressionType<'a> {
     Sort(&'a Sort),
     NotEq(&'a NotEq),
     InList(&'a InList),
+    Coalesce(&'a Coalesce),
     Identifier(&'a Identifier),
     SelectQuery(&'a SelectQuery<'a>),
     DatabaseValue(&'a DatabaseValue),
@@ -101,6 +102,12 @@ impl Into<Box<dyn Expression>> for Identifier {
 impl Expression for Identifier {
     fn expression_type(&self) -> ExpressionType {
         ExpressionType::Identifier(self)
+    }
+}
+
+pub fn identifier(value: &str) -> Identifier {
+    Identifier {
+        value: value.to_string(),
     }
 }
 
@@ -415,6 +422,36 @@ pub fn left_join<'a>(table_name: &'a str, on: &'a str) -> Join<'a> {
         on,
         left: true,
     }
+}
+
+#[derive(Debug)]
+pub struct Coalesce {
+    pub values: Vec<Box<dyn Expression>>,
+}
+
+impl List for Coalesce {}
+impl Expression for Coalesce {
+    fn expression_type(&self) -> ExpressionType {
+        ExpressionType::Coalesce(self)
+    }
+
+    fn values(&self) -> Option<Vec<&DatabaseValue>> {
+        let values = self
+            .values
+            .iter()
+            .flat_map(|x| x.values().unwrap_or(vec![]))
+            .collect::<Vec<_>>();
+
+        if values.is_empty() {
+            None
+        } else {
+            Some(values)
+        }
+    }
+}
+
+pub fn coalesce<'a>(values: Vec<Box<dyn Expression>>) -> Coalesce {
+    Coalesce { values }
 }
 
 #[derive(Debug)]
@@ -746,7 +783,7 @@ impl<'a> SelectQuery<'a> {
 pub struct UpsertMultiStatement<'a> {
     pub table_name: &'a str,
     pub values: Vec<Vec<(&'a str, Box<dyn Expression>)>>,
-    pub unique: Option<&'a [&'a str]>,
+    pub unique: Option<Vec<Box<dyn Expression>>>,
 }
 
 pub fn upsert_multi<'a>(table_name: &'a str) -> UpsertMultiStatement<'a> {
@@ -771,8 +808,9 @@ impl<'a> UpsertMultiStatement<'a> {
         self
     }
 
-    pub fn unique(&mut self, unique: &'a [&'a str]) -> &mut Self {
-        self.unique.replace(unique);
+    pub fn unique(&mut self, unique: Vec<Box<dyn Expression>>) -> &mut Self {
+        self.unique
+            .replace(unique.into_iter().map(|x| x.into()).collect::<Vec<_>>());
         self
     }
 

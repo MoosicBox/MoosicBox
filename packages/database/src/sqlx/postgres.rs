@@ -149,6 +149,15 @@ impl<T: Expression + ?Sized> ToSql for T {
                     .collect::<Vec<_>>()
                     .join(",")
             ),
+            ExpressionType::Coalesce(value) => format!(
+                "COALESCE({})",
+                value
+                    .values
+                    .iter()
+                    .map(|value| value.to_sql(index))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
             ExpressionType::Identifier(value) => value.value.clone(),
             ExpressionType::SelectQuery(value) => {
                 let joins = if let Some(joins) = &value.joins {
@@ -382,7 +391,10 @@ impl Database for PostgresSqlxDatabase {
             upsert_multi(
                 &*self.connection.lock().await,
                 statement.table_name,
-                statement.unique.ok_or(SqlxDatabaseError::MissingUnique)?,
+                statement
+                    .unique
+                    .as_ref()
+                    .ok_or(SqlxDatabaseError::MissingUnique)?,
                 &statement.values,
             )
             .await?
@@ -1145,7 +1157,7 @@ async fn update_chunk(
 pub async fn upsert_multi(
     connection: &PgPool,
     table_name: &str,
-    unique: &[&str],
+    unique: &[Box<dyn Expression>],
     values: &[Vec<(&str, Box<dyn Expression>)>],
 ) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
     let mut results = vec![];
@@ -1181,7 +1193,7 @@ pub async fn upsert_multi(
 async fn upsert_chunk(
     connection: &PgPool,
     table_name: &str,
-    unique: &[&str],
+    unique: &[Box<dyn Expression>],
     values: &[Vec<(&str, Box<dyn Expression>)>],
 ) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
     let first = values[0].as_slice();
@@ -1214,7 +1226,11 @@ async fn upsert_chunk(
 
     let values_str = values_str_list.join(", ");
 
-    let unique_conflict = unique.join(", ");
+    let unique_conflict = unique
+        .iter()
+        .map(|x| x.to_sql(&index))
+        .collect::<Vec<_>>()
+        .join(", ");
 
     let query = format!(
         "
