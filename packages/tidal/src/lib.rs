@@ -221,6 +221,8 @@ pub async fn device_authorization_token(
 
     let value: Value = CLIENT.post(url).form(&params).send().await?.json().await?;
 
+    log::trace!("Received value {value:?}");
+
     let access_token = value.to_value::<&str>("access_token")?;
     let refresh_token = value.to_value::<&str>("refresh_token")?;
 
