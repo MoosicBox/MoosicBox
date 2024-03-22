@@ -158,7 +158,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                     .collect::<Vec<_>>()
                     .join(",")
             ),
-            ExpressionType::Identifier(value) => value.value.clone(),
+            ExpressionType::Identifier(value) => format_identifier(&value.value),
             ExpressionType::SelectQuery(value) => {
                 let joins = if let Some(joins) = &value.joins {
                     joins
@@ -213,7 +213,12 @@ impl<T: Expression + ?Sized> ToSql for T {
                 format!(
                     "SELECT {} {} FROM {} {} {} {} {}",
                     if value.distinct { "DISTINCT" } else { "" },
-                    value.columns.join(", "),
+                    value
+                        .columns
+                        .iter()
+                        .map(|x| format_identifier(x))
+                        .collect::<Vec<_>>()
+                        .join(", "),
                     value.table_name,
                     joins,
                     where_clause,
@@ -693,7 +698,13 @@ fn build_set_clause(values: &[(&str, Box<dyn Expression>)], index: &AtomicU16) -
 fn build_set_props(values: &[(&str, Box<dyn Expression>)], index: &AtomicU16) -> Vec<String> {
     values
         .into_iter()
-        .map(|(name, value)| format!("{name}={}", value.deref().to_sql(index)))
+        .map(|(name, value)| {
+            format!(
+                "{}={}",
+                format_identifier(name),
+                value.deref().to_sql(index)
+            )
+        })
         .collect()
 }
 
@@ -712,6 +723,17 @@ fn build_values_props(values: &[(&str, Box<dyn Expression>)], index: &AtomicU16)
         .iter()
         .map(|(_, value)| value.deref().to_sql(index))
         .collect()
+}
+
+fn format_identifier(identifier: &str) -> String {
+    static NON_ALPHA_NUMERIC_REGEX: Lazy<regex::Regex> =
+        Lazy::new(|| regex::Regex::new(r"[^A-Za-z0-9_]").expect("Invalid Regex"));
+
+    if NON_ALPHA_NUMERIC_REGEX.is_match(identifier) {
+        identifier.to_string()
+    } else {
+        format!("\"{identifier}\"")
+    }
 }
 
 fn bind_values<'a, 'b>(
@@ -849,7 +871,11 @@ async fn select(
     let query = format!(
         "SELECT {} {} FROM {table_name} {} {} {} {}",
         if distinct { "DISTINCT" } else { "" },
-        columns.join(", "),
+        columns
+            .iter()
+            .map(|x| format_identifier(x))
+            .collect::<Vec<_>>()
+            .join(", "),
         build_join_clauses(joins),
         build_where_clause(filters, &index),
         build_sort_clause(sort, &index),
@@ -926,7 +952,11 @@ async fn find_row(
     let query = format!(
         "SELECT {} {} FROM {table_name} {} {} {} LIMIT 1",
         if distinct { "DISTINCT" } else { "" },
-        columns.join(", "),
+        columns
+            .iter()
+            .map(|x| format_identifier(x))
+            .collect::<Vec<_>>()
+            .join(", "),
         build_join_clauses(joins),
         build_where_clause(filters, &index),
         build_sort_clause(sort, &index),
@@ -964,7 +994,7 @@ async fn insert_and_get_row(
 ) -> Result<crate::Row, SqlxDatabaseError> {
     let column_names = values
         .into_iter()
-        .map(|(key, _v)| format!("{key}"))
+        .map(|(key, _v)| format_identifier(key))
         .collect::<Vec<_>>()
         .join(", ");
 
@@ -1069,13 +1099,19 @@ async fn update_chunk(
 
     let set_clause = values[0]
         .iter()
-        .map(|(name, _value)| format!("{name} = EXCLUDED.{name}"))
+        .map(|(name, _value)| {
+            format!(
+                "{} = EXCLUDED.{}",
+                format_identifier(name),
+                format_identifier(name)
+            )
+        })
         .collect::<Vec<_>>()
         .join(", ");
 
     let column_names = values[0]
         .iter()
-        .map(|(key, _v)| format!("{key}"))
+        .map(|(key, _v)| format_identifier(key))
         .collect::<Vec<_>>()
         .join(", ");
 
@@ -1208,13 +1244,19 @@ async fn upsert_chunk(
 
     let set_clause = values[0]
         .iter()
-        .map(|(name, _value)| format!("{name} = EXCLUDED.{name}"))
+        .map(|(name, _value)| {
+            format!(
+                "{} = EXCLUDED.{}",
+                format_identifier(name),
+                format_identifier(name)
+            )
+        })
         .collect::<Vec<_>>()
         .join(", ");
 
     let column_names = values[0]
         .iter()
-        .map(|(key, _v)| format!("{key}"))
+        .map(|(key, _v)| format_identifier(key))
         .collect::<Vec<_>>()
         .join(", ");
 
