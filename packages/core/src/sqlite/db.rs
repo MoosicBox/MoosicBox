@@ -250,7 +250,6 @@ pub async fn create_session(
     let tracks = get_tracks(db, Some(&session.playlist.tracks)).await?;
     let playlist: SessionPlaylist = db
         .insert("session_playlists")
-        .value("id", DatabaseValue::Null)
         .execute(db)
         .await?
         .to_value_type()?;
