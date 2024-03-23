@@ -379,7 +379,7 @@ fn main() -> std::io::Result<()> {
             .bind((default_env("BIND_ADDR", "0.0.0.0"), service_port))?
             .run();
 
-        try_join!(
+        if let Err(err) = try_join!(
             async move {
                 let resp = http_server.await;
                 log::debug!("Shutting down ws server...");
@@ -412,7 +412,10 @@ fn main() -> std::io::Result<()> {
                 log::debug!("Ws server connection closed");
                 resp
             },
-        )?;
+        ) {
+            log::error!("Error on shutdown: {err:?}");
+            return Err(err);
+        }
 
         log::debug!("Server shut down");
 
