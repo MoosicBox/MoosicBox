@@ -1,9 +1,10 @@
 use std::{ops::Deref, sync::atomic::AtomicU16};
 
 use async_trait::async_trait;
-use chrono::Utc;
+use chrono::{NaiveDateTime, Utc};
 use futures::StreamExt;
 use once_cell::sync::Lazy;
+use postgres_protocol::types::{bool_from_sql, float8_from_sql, int8_from_sql, text_from_sql};
 use thiserror::Error;
 use tokio::pin;
 use tokio_postgres::{types::IsNull, Client, Row, RowStream};
@@ -405,34 +406,13 @@ fn column_value(row: &Row, index: &str) -> Result<DatabaseValue, PostgresDatabas
         .columns()
         .iter()
         .find(|x| x.name() == index)
-        .map(|c| c.type_().name())
+        .map(|c| c.type_())
         .unwrap();
 
-    Ok(match column_type {
-        "bool" => row
-            .try_get::<_, Option<bool>>(index)?
-            .map(|x| DatabaseValue::Bool(x))
-            .unwrap_or(DatabaseValue::BoolOpt(None)),
-        "char" | "smallint" | "smallserial" | "int2" | "int" | "serial" | "int4" | "bigint"
-        | "bigserial" | "int8" => row
-            .try_get::<_, Option<i64>>(index)?
-            .map(|x| DatabaseValue::Number(x))
-            .unwrap_or(DatabaseValue::NumberOpt(None)),
-        "real" | "float4" | "double precision" | "float8" => row
-            .try_get::<_, Option<f64>>(index)?
-            .map(|x| DatabaseValue::Real(x))
-            .unwrap_or(DatabaseValue::RealOpt(None)),
-        "varchar" | "char(n)" | "text" | "name" | "citext" => row
-            .try_get::<_, Option<String>>(index)?
-            .map(|x| DatabaseValue::String(x))
-            .unwrap_or(DatabaseValue::StringOpt(None)),
-        "timestamp" => DatabaseValue::DateTime(row.try_get(index)?),
-        _ => {
-            return Err(PostgresDatabaseError::TypeNotFound {
-                type_name: column_type.to_string(),
-            })
-        }
-    })
+    row.try_get(index)
+        .map_err(|_| PostgresDatabaseError::TypeNotFound {
+            type_name: column_type.name().to_string(),
+        })
 }
 
 fn from_row(column_names: &[String], row: &Row) -> Result<crate::Row, PostgresDatabaseError> {
@@ -1329,6 +1309,97 @@ impl Expression for PgDatabaseValue {
 
     fn expression_type(&self) -> crate::ExpressionType {
         ExpressionType::DatabaseValue(self.deref())
+    }
+}
+
+impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
+    fn from_sql(
+        ty: &tokio_postgres::types::Type,
+        raw: &'a [u8],
+    ) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+        Ok(match ty.name() {
+            "bool" => DatabaseValue::Bool(bool_from_sql(raw)?),
+            "char" | "smallint" | "smallserial" | "int2" | "int" | "serial" | "int4" | "bigint"
+            | "bigserial" | "int8" => DatabaseValue::Number(int8_from_sql(raw)?),
+            "real" | "float4" | "double precision" | "float8" => {
+                DatabaseValue::Real(float8_from_sql(raw)?)
+            }
+            "varchar" | "char(n)" | "text" | "name" | "citext" => {
+                DatabaseValue::String(text_from_sql(raw)?.to_string())
+            }
+            "timestamp" => DatabaseValue::DateTime(NaiveDateTime::from_sql(ty, raw)?),
+            _ => {
+                return Err(Box::new(PostgresDatabaseError::TypeNotFound {
+                    type_name: ty.to_string(),
+                }))
+            }
+        })
+    }
+
+    fn from_sql_nullable(
+        ty: &tokio_postgres::types::Type,
+        raw: Option<&'a [u8]>,
+    ) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+        Ok(match ty.name() {
+            "bool" => raw
+                .map(|raw| {
+                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(DatabaseValue::Bool(
+                        bool_from_sql(raw)?,
+                    ))
+                })
+                .transpose()?
+                .unwrap_or(DatabaseValue::BoolOpt(None)),
+            "char" | "smallint" | "smallserial" | "int2" | "int" | "serial" | "int4" | "bigint"
+            | "bigserial" | "int8" => raw
+                .map(|raw| {
+                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(DatabaseValue::Number(
+                        int8_from_sql(raw)?,
+                    ))
+                })
+                .transpose()?
+                .unwrap_or(DatabaseValue::NumberOpt(None)),
+            "real" | "float4" | "double precision" | "float8" => raw
+                .map(|raw| {
+                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(DatabaseValue::Real(
+                        float8_from_sql(raw)?,
+                    ))
+                })
+                .transpose()?
+                .unwrap_or(DatabaseValue::RealOpt(None)),
+            "varchar" | "char(n)" | "text" | "name" | "citext" => raw
+                .map(|raw| {
+                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(DatabaseValue::String(
+                        text_from_sql(raw)?.to_string(),
+                    ))
+                })
+                .transpose()?
+                .unwrap_or(DatabaseValue::StringOpt(None)),
+            "timestamp" => raw
+                .map(|raw| {
+                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(DatabaseValue::DateTime(
+                        NaiveDateTime::from_sql(ty, raw)?,
+                    ))
+                })
+                .transpose()?
+                .unwrap_or(DatabaseValue::Null),
+            _ => {
+                return Err(Box::new(PostgresDatabaseError::TypeNotFound {
+                    type_name: ty.to_string(),
+                }))
+            }
+        })
+    }
+
+    fn from_sql_null(
+        ty: &tokio_postgres::types::Type,
+    ) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+        log::trace!("FromSql from_sql_null: ty={}, {ty:?}", ty.name());
+        Ok(DatabaseValue::Null)
+    }
+
+    fn accepts(ty: &tokio_postgres::types::Type) -> bool {
+        log::trace!("FromSql accepts: ty={}, {ty:?}", ty.name());
+        true
     }
 }
 

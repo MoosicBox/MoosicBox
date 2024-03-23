@@ -17,7 +17,8 @@ sqlx-mysql = { workspace = true, optional = true }
 sqlx-postgres = { workspace = true, optional = true }
 
 # tokio-postgres dependencies
-tokio-postgres = { workspace = true, optional = true, features = [] }
+postgres-protocol = { workspace = true, optional = true, features = [] }
+tokio-postgres    = { workspace = true, optional = true, features = [] }
 
 # Postgres dependencies
 regex = { workspace = true, optional = true }
@@ -50,7 +51,7 @@ mysql-sqlx = [
     "sqlx/mysql",
 ]
 postgres = ["dep:regex", "postgres-raw"]
-postgres-raw = ["dep:tokio-postgres", "postgres"]
+postgres-raw = ["dep:postgres-protocol", "dep:tokio-postgres", "postgres"]
 postgres-sqlx = [
     "dep:sqlx",
     "dep:sqlx-postgres",
