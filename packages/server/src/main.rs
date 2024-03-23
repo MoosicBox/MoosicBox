@@ -80,8 +80,11 @@ fn main() -> std::io::Result<()> {
             .unwrap()
     })
     .block_on(async move {
-        #[cfg(feature = "postgres")]
-        let (db, db_connection) = db::init_postgres().await.expect("Failed to init postgres DB");
+        #[cfg(feature = "postgres-raw")]
+        #[allow(unused)]
+        let (db, db_connection) = db::init_postgres_raw().await.expect("Failed to init postgres DB");
+        #[cfg(feature = "postgres-sqlx")]
+        let db = db::init_postgres_sqlx().await.expect("Failed to init postgres DB");
         #[cfg(not(feature = "postgres"))]
         #[allow(unused_variables)]
         let db = db::init_sqlite().await.expect("Failed to init sqlite DB");
@@ -375,7 +378,7 @@ fn main() -> std::io::Result<()> {
                 resp
             },
             async move {
-                #[cfg(feature = "postgres")]
+                #[cfg(feature = "postgres-raw")]
                 if let Err(err) = db_connection.await{
                     log::error!("Database failed to close: {err:?}");
                 }

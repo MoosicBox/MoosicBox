@@ -23,6 +23,7 @@ impl From<DatabaseError> for actix_web::Error {
 
 #[derive(Debug, Error)]
 pub enum DatabaseError {
+    #[cfg(feature = "postgres")]
     #[error(transparent)]
     InitDatabase(#[from] InitDatabaseError),
     #[error(transparent)]
@@ -121,7 +122,7 @@ static DB: Lazy<Mutex<Option<Box<dyn Database>>>> = Lazy::new(|| Mutex::new(None
 
 #[cfg(feature = "postgres-raw")]
 #[allow(unused)]
-static DB_CONNECTION: Lazy<
+pub(crate) static DB_CONNECTION: Lazy<
     Mutex<
         Option<
             tokio_postgres::Connection<tokio_postgres::Socket, tokio_postgres::tls::NoTlsStream>,
@@ -142,14 +143,15 @@ pub enum InitDatabaseError {
     InvalidConnectionOptions,
 }
 
-pub async fn init() -> Result<(), InitDatabaseError> {
+#[cfg(feature = "postgres")]
+#[allow(unused)]
+async fn get_db_config() -> Result<(String, String, String, Option<String>), InitDatabaseError> {
     let env_db_host = std::env::var("DB_HOST").ok();
     let env_db_name = std::env::var("DB_NAME").ok();
     let env_db_user = std::env::var("DB_USER").ok();
     let env_db_password = std::env::var("DB_PASSWORD").ok();
 
-    #[allow(unused)]
-    let (db_host, db_name, db_user, db_password) =
+    Ok(
         if env_db_host.is_some() || env_db_name.is_some() || env_db_user.is_some() {
             (
                 env_db_host.ok_or(InitDatabaseError::InvalidConnectionOptions)?,
@@ -237,32 +239,19 @@ pub async fn init() -> Result<(), InitDatabaseError> {
                     .to_string(),
                 password,
             )
-        };
-
-    #[cfg(all(feature = "postgres-sqlx", not(feature = "postgres-raw")))]
-    return init_postgres_sqlx(&db_host, &db_name, &db_user, db_password.as_deref()).await;
-    #[cfg(all(feature = "postgres-raw", not(feature = "postgres-sqlx")))]
-    return init_postgres_raw(&db_host, &db_name, &db_user, db_password.as_deref()).await;
-
-    #[cfg(any(
-        all(feature = "postgres-raw", feature = "postgres-sqlx"),
-        all(not(feature = "postgres-raw"), not(feature = "postgres-sqlx"))
-    ))]
-    Ok(())
+        },
+    )
 }
 
 #[cfg(feature = "postgres-sqlx")]
 #[allow(unused)]
-pub async fn init_postgres_sqlx(
-    db_host: &str,
-    db_name: &str,
-    db_user: &str,
-    db_password: Option<&str>,
-) -> Result<(), InitDatabaseError> {
+pub async fn init_postgres_sqlx() -> Result<(), InitDatabaseError> {
     use std::sync::Arc;
 
     use moosicbox_database::sqlx::postgres::PostgresSqlxDatabase;
     use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+
+    let (db_host, db_name, db_user, db_password) = get_db_config().await?;
 
     let connect_options = PgConnectOptions::new();
     let mut connect_options = connect_options
@@ -290,13 +279,13 @@ pub async fn init_postgres_sqlx(
 
 #[cfg(feature = "postgres-raw")]
 #[allow(unused)]
-pub async fn init_postgres_raw(
-    db_host: &str,
-    db_name: &str,
-    db_user: &str,
-    db_password: Option<&str>,
-) -> Result<(), InitDatabaseError> {
+pub async fn init_postgres_raw() -> Result<
+    tokio_postgres::Connection<tokio_postgres::Socket, tokio_postgres::tls::NoTlsStream>,
+    InitDatabaseError,
+> {
     use moosicbox_database::postgres::postgres::PostgresDatabase;
+
+    let (db_host, db_name, db_user, db_password) = get_db_config().await?;
 
     let mut config = tokio_postgres::Config::new();
     let mut config = config.host(&db_host).dbname(&db_name).user(&db_user);
@@ -311,9 +300,7 @@ pub async fn init_postgres_raw(
         .await
         .replace(Box::new(PostgresDatabase::new(client)));
 
-    DB_CONNECTION.lock().await.replace(connection);
-
-    Ok(())
+    Ok(connection)
 }
 
 async fn resilient_exec<T, F>(
@@ -332,7 +319,7 @@ where
             match exec().await {
                 Ok(value) => return Ok(value),
                 Err(err) => {
-                    #[cfg(feature = "postgres")]
+                    #[cfg(feature = "postgres-sqlx")]
                     {
                         match err {
                             DatabaseError::Db(moosicbox_database::DatabaseError::PostgresSqlx(
@@ -348,7 +335,7 @@ where
                                         "Database IO error. Attempting reconnect... {}/{MAX_RETRY}",
                                         retries + 1
                                     );
-                                    if let Err(init_err) = init().await {
+                                    if let Err(init_err) = init_postgres_sqlx().await {
                                         log::error!("Failed to reinitialize: {init_err:?}");
                                         return Err(init_err.into());
                                     }

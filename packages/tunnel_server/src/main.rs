@@ -42,7 +42,15 @@ fn main() -> Result<(), std::io::Error> {
             .unwrap()
     })
     .block_on(async move {
-        db::init().await.expect("Failed to initialize database");
+        #[cfg(feature = "postgres-raw")]
+        #[allow(unused)]
+        let db_connection = db::init_postgres_raw()
+            .await
+            .expect("Failed to init postgres DB");
+        #[cfg(feature = "postgres-sqlx")]
+        db::init_postgres_sqlx()
+            .await
+            .expect("Failed to init postgres DB");
 
         let (chat_server, server_tx) = ws::server::ChatServer::new();
         let chat_server = tokio::task::spawn(chat_server.run());
@@ -96,6 +104,13 @@ fn main() -> Result<(), std::io::Error> {
                     .unwrap_or_else(|e| e.into_inner())
                     .take();
                 resp
+            },
+            async move {
+                #[cfg(feature = "postgres-raw")]
+                if let Err(err) = db_connection.await {
+                    log::error!("Database failed to close: {err:?}");
+                }
+                Ok(())
             },
             async move {
                 match chat_server.await {

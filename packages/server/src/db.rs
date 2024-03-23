@@ -24,34 +24,28 @@ pub async fn init_sqlite() -> Result<Box<dyn Database>, InitSqliteError> {
 #[cfg(feature = "postgres")]
 #[derive(Debug, Error)]
 pub enum InitPostgresError {
+    #[cfg(feature = "postgres-raw")]
     #[error(transparent)]
     Postgres(#[from] tokio_postgres::Error),
-    #[error("Invalid Connection Options")]
-    InvalidConnectionOptions,
+    #[cfg(feature = "postgres-sqlx")]
+    #[error(transparent)]
+    PostgresSqlx(#[from] sqlx::Error),
 }
 
 #[cfg(feature = "postgres")]
-pub async fn init_postgres() -> Result<
-    (
-        Box<dyn Database>,
-        tokio_postgres::Connection<tokio_postgres::Socket, tokio_postgres::tls::NoTlsStream>,
-    ),
-    InitPostgresError,
-> {
-    use moosicbox_database::postgres::postgres::PostgresDatabase;
-    use tokio_postgres::NoTls;
-
+#[allow(unused)]
+async fn get_db_config() -> Result<(String, String, String, Option<String>), InitDatabaseError> {
     let env_db_host = std::env::var("DB_HOST").ok();
     let env_db_name = std::env::var("DB_NAME").ok();
     let env_db_user = std::env::var("DB_USER").ok();
     let env_db_password = std::env::var("DB_PASSWORD").ok();
 
-    let (db_host, db_name, db_user, db_password) =
+    Ok(
         if env_db_host.is_some() || env_db_name.is_some() || env_db_user.is_some() {
             (
-                env_db_host.ok_or(InitPostgresError::InvalidConnectionOptions)?,
-                env_db_name.ok_or(InitPostgresError::InvalidConnectionOptions)?,
-                env_db_user.ok_or(InitPostgresError::InvalidConnectionOptions)?,
+                env_db_host.ok_or(InitDatabaseError::InvalidConnectionOptions)?,
+                env_db_name.ok_or(InitDatabaseError::InvalidConnectionOptions)?,
+                env_db_user.ok_or(InitDatabaseError::InvalidConnectionOptions)?,
                 env_db_password,
             )
         } else {
@@ -134,16 +128,74 @@ pub async fn init_postgres() -> Result<
                     .to_string(),
                 password,
             )
-        };
+        },
+    )
+}
+
+#[cfg(feature = "postgres")]
+#[derive(Debug, Error)]
+pub enum InitDatabaseError {
+    #[cfg(feature = "postgres-raw")]
+    #[error(transparent)]
+    Postgres(#[from] tokio_postgres::Error),
+    #[cfg(feature = "postgres-sqlx")]
+    #[error(transparent)]
+    PostgresSqlx(#[from] sqlx::Error),
+    #[error("Invalid Connection Options")]
+    InvalidConnectionOptions,
+}
+
+#[cfg(feature = "postgres-sqlx")]
+#[allow(unused)]
+pub async fn init_postgres_sqlx() -> Result<Box<dyn Database>, InitDatabaseError> {
+    use std::sync::Arc;
+
+    use moosicbox_database::sqlx::postgres::PostgresSqlxDatabase;
+    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+
+    let (db_host, db_name, db_user, db_password) = get_db_config().await?;
+
+    let connect_options = PgConnectOptions::new();
+    let mut connect_options = connect_options
+        .host(&db_host)
+        .database(&db_name)
+        .username(&db_user);
+
+    if let Some(ref db_password) = db_password {
+        connect_options = connect_options.password(db_password);
+    }
+
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect_with(connect_options)
+        .await?;
+
+    Ok(Box::new(PostgresSqlxDatabase::new(Arc::new(
+        tokio::sync::Mutex::new(pool),
+    ))))
+}
+
+#[cfg(feature = "postgres-raw")]
+#[allow(unused)]
+pub async fn init_postgres_raw() -> Result<
+    (
+        Box<dyn Database>,
+        tokio_postgres::Connection<tokio_postgres::Socket, tokio_postgres::tls::NoTlsStream>,
+    ),
+    InitDatabaseError,
+> {
+    use moosicbox_database::postgres::postgres::PostgresDatabase;
+
+    let (db_host, db_name, db_user, db_password) = get_db_config().await?;
 
     let mut config = tokio_postgres::Config::new();
     let mut config = config.host(&db_host).dbname(&db_name).user(&db_user);
 
-    if let Some(db_password) = db_password {
-        config = config.password(&db_password);
+    if let Some(ref db_password) = db_password {
+        config = config.password(db_password);
     }
 
-    let (client, connection) = config.connect(NoTls).await?;
+    let (client, connection) = config.connect(tokio_postgres::NoTls).await?;
 
     Ok((Box::new(PostgresDatabase::new(client)), connection))
 }

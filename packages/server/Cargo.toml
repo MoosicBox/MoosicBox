@@ -36,8 +36,13 @@ moosicbox_tunnel_sender = { path = "../tunnel_sender", default-features = false 
 moosicbox_ws = { path = "../ws" }
 
 # Postgres
-aws-config     = { workspace = true, optional = true }
-aws-sdk-ssm    = { workspace = true, optional = true }
+aws-config = { workspace = true, optional = true }
+aws-sdk-ssm = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true, features = [
+    "postgres",
+    "runtime-tokio",
+    "tls-rustls",
+] }
 tokio-postgres = { workspace = true, optional = true, features = [] }
 
 actix-cors      = { workspace = true }
@@ -72,7 +77,8 @@ default = [
     "flac",
     "mp3",
     "opus",
-    "postgres",
+    "postgres-raw",
+    "postgres-sqlx",
     "pulseaudio",
     "sqlite",
     "static-token-auth",
@@ -126,12 +132,11 @@ opus = [
     "moosicbox_tunnel_sender/opus",
 ]
 
-postgres = [
-    "dep:aws-config",
-    "dep:aws-sdk-ssm",
+postgres = ["dep:aws-config", "dep:aws-sdk-ssm", "moosicbox_database/postgres"]
+postgres-raw = [
     "dep:tokio-postgres",
-    "moosicbox_database/postgres",
+    "moosicbox_database/postgres-raw",
+    "postgres",
 ]
-sqlite = [
-    "moosicbox_database/rusqlite",
-]
+postgres-sqlx = ["dep:sqlx", "moosicbox_database/postgres-sqlx", "postgres"]
+sqlite = ["moosicbox_database/rusqlite"]

@@ -232,6 +232,20 @@ jobs:
                       env: TUNNEL_ACCESS_TOKEN=123
                       cargo: --no-default-features
 
+                    - name: tunnel_server-postgres-raw
+                      path: packages/tunnel_server
+                      os: ubuntu-latest
+                      env: TUNNEL_ACCESS_TOKEN=123
+                      features: postgres-raw
+                      cargo: --no-default-features
+
+                    - name: tunnel_server-postgres-sqlx
+                      path: packages/tunnel_server
+                      os: ubuntu-latest
+                      env: TUNNEL_ACCESS_TOKEN=123
+                      features: postgres-sqlx
+                      cargo: --no-default-features
+
                     - name: server-static-token-auth
                       path: packages/server
                       os: ubuntu-latest
@@ -260,6 +274,20 @@ jobs:
                       dependencies: sudo apt-get update && sudo apt-get install pulseaudio
                       cargo: --no-default-features
                       features: pulseaudio-simple
+
+                    - name: server-postgres-raw
+                      path: packages/server
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
+                      cargo: --no-default-features
+                      features: cpal,aac,flac,mp3,opus,postgres-raw
+
+                    - name: server-postgres-sqlx
+                      path: packages/server
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
+                      cargo: --no-default-features
+                      features: cpal,aac,flac,mp3,opus,postgres-sqlx
 
                     - name: server-all
                       path: packages/server
