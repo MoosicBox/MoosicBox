@@ -16,10 +16,12 @@ moosicbox_json_utils = { path = "../json_utils" }
 moosicbox_tunnel     = { path = "../tunnel", default-features = false }
 
 sqlx = { workspace = true, optional = true, features = [
+    "postgres",
     "runtime-tokio",
     "tls-rustls",
-    "postgres",
 ] }
+
+tokio-postgres = { workspace = true, optional = true }
 
 actix-cors        = { workspace = true }
 actix-web         = { workspace = true }
@@ -43,15 +45,21 @@ sha2              = { workspace = true }
 strum             = { workspace = true }
 strum_macros      = { workspace = true }
 thiserror         = { workspace = true }
-tokio             = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tokio             = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tokio-util        = { workspace = true }
 uuid              = { workspace = true }
 
 [features]
-default = ["base64", "postgres"]
+default = ["base64", "postgres", "postgres-raw", "postgres-sqlx"]
 
 fail-on-warnings = []
 
 base64 = ["moosicbox_tunnel/base64"]
 
-postgres = ["dep:sqlx", "moosicbox_database/postgres"]
+postgres = ["moosicbox_database/postgres"]
+postgres-raw = [
+    "dep:tokio-postgres",
+    "moosicbox_database/postgres-raw",
+    "postgres",
+]
+postgres-sqlx = ["dep:sqlx", "moosicbox_database/postgres-sqlx", "postgres"]

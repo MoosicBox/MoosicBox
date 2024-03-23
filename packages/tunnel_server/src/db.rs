@@ -1,8 +1,6 @@
-use std::{collections::HashMap, pin::Pin};
+use std::pin::Pin;
 
 use actix_web::error::ErrorInternalServerError;
-use aws_config::BehaviorVersion;
-use aws_sdk_ssm::{config::Region, Client};
 use chrono::NaiveDateTime;
 use futures_util::Future;
 use moosicbox_database::{
@@ -25,6 +23,8 @@ impl From<DatabaseError> for actix_web::Error {
 
 #[derive(Debug, Error)]
 pub enum DatabaseError {
+    #[error(transparent)]
+    InitDatabase(#[from] InitDatabaseError),
     #[error(transparent)]
     Db(#[from] moosicbox_database::DatabaseError),
     #[error(transparent)]
@@ -119,80 +119,199 @@ impl ToValueType<MagicToken> for &Row {
 
 static DB: Lazy<Mutex<Option<Box<dyn Database>>>> = Lazy::new(|| Mutex::new(None));
 
-pub async fn init() -> Result<(), DatabaseError> {
-    let config = aws_config::defaults(BehaviorVersion::v2023_11_09())
-        .region(Region::new("us-east-1"))
-        .load()
-        .await;
+#[cfg(feature = "postgres-raw")]
+#[allow(unused)]
+static DB_CONNECTION: Lazy<
+    Mutex<
+        Option<
+            tokio_postgres::Connection<tokio_postgres::Socket, tokio_postgres::tls::NoTlsStream>,
+        >,
+    >,
+> = Lazy::new(|| Mutex::new(None));
 
-    let client = Client::new(&config);
+#[cfg(feature = "postgres")]
+#[derive(Debug, Error)]
+pub enum InitDatabaseError {
+    #[cfg(feature = "postgres-raw")]
+    #[error(transparent)]
+    Postgres(#[from] tokio_postgres::Error),
+    #[cfg(feature = "postgres-sqlx")]
+    #[error(transparent)]
+    PostgresSqlx(#[from] sqlx::Error),
+    #[error("Invalid Connection Options")]
+    InvalidConnectionOptions,
+}
 
-    let params = match client
-        .get_parameters()
-        .set_with_decryption(Some(true))
-        .names("moosicbox_db_name")
-        .names("moosicbox_db_hostname")
-        .names("moosicbox_db_password")
-        .names("moosicbox_db_user")
-        .send()
-        .await
-    {
-        Ok(params) => params,
-        Err(err) => panic!("Failed to get parameters {err:?}"),
-    };
+pub async fn init() -> Result<(), InitDatabaseError> {
+    let env_db_host = std::env::var("DB_HOST").ok();
+    let env_db_name = std::env::var("DB_NAME").ok();
+    let env_db_user = std::env::var("DB_USER").ok();
+    let env_db_password = std::env::var("DB_PASSWORD").ok();
 
-    let params = params.parameters.expect("Failed to get params");
     #[allow(unused)]
-    let params: HashMap<&str, &str> = params
-        .iter()
-        .map(|param| (param.name().unwrap(), param.value().unwrap()))
-        .collect();
-
-    #[cfg(feature = "postgres")]
-    {
-        use std::sync::Arc;
-
-        use moosicbox_database::sqlx::postgres::PostgresSqlxDatabase;
-        use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-
-        let pool = PgPoolOptions::new()
-            .max_connections(5)
-            .connect_with(
-                PgConnectOptions::new()
-                    .host(
-                        params
-                            .get("moosicbox_db_hostname")
-                            .cloned()
-                            .expect("No hostname"),
-                    )
-                    .database(
-                        params
-                            .get("moosicbox_db_name")
-                            .cloned()
-                            .expect("No db_name"),
-                    )
-                    .username(
-                        params
-                            .get("moosicbox_db_user")
-                            .cloned()
-                            .expect("No db_user"),
-                    )
-                    .password(
-                        params
-                            .get("moosicbox_db_password")
-                            .cloned()
-                            .expect("No db_password"),
-                    ),
+    let (db_host, db_name, db_user, db_password) =
+        if env_db_host.is_some() || env_db_name.is_some() || env_db_user.is_some() {
+            (
+                env_db_host.ok_or(InitDatabaseError::InvalidConnectionOptions)?,
+                env_db_name.ok_or(InitDatabaseError::InvalidConnectionOptions)?,
+                env_db_user.ok_or(InitDatabaseError::InvalidConnectionOptions)?,
+                env_db_password,
             )
-            .await
-            .map_err(|e| moosicbox_database::DatabaseError::PostgresSqlx(e.into()))?;
+        } else {
+            use aws_config::{BehaviorVersion, Region};
+            use aws_sdk_ssm::Client;
+            use std::collections::HashMap;
 
-        DB.lock()
-            .await
-            .replace(Box::new(PostgresSqlxDatabase::new(Arc::new(
-                tokio::sync::Mutex::new(pool),
-            ))));
+            let config = aws_config::defaults(BehaviorVersion::v2023_11_09())
+                .region(Region::new("us-east-1"))
+                .load()
+                .await;
+
+            let client = Client::new(&config);
+
+            let ssm_db_name_param_name =
+                std::env::var("SSM_DB_NAME_PARAM_NAME").unwrap_or("moosicbox_db_name".to_string());
+            let ssm_db_host_param_name = std::env::var("SSM_DB_HOST_PARAM_NAME")
+                .unwrap_or("moosicbox_db_hostname".to_string());
+            let ssm_db_user_param_name =
+                std::env::var("SSM_DB_USER_PARAM_NAME").unwrap_or("moosicbox_db_user".to_string());
+            let ssm_db_password_param_name = std::env::var("SSM_DB_PASSWORD_PARAM_NAME")
+                .unwrap_or("moosicbox_db_password".to_string());
+
+            let ssm_db_name_param_name = ssm_db_name_param_name.as_str();
+            let ssm_db_host_param_name = ssm_db_host_param_name.as_str();
+            let ssm_db_user_param_name = ssm_db_user_param_name.as_str();
+            let ssm_db_password_param_name = ssm_db_password_param_name.as_str();
+
+            let params = match client
+                .get_parameters()
+                .set_with_decryption(Some(true))
+                .names(ssm_db_name_param_name)
+                .names(ssm_db_host_param_name)
+                .names(ssm_db_password_param_name)
+                .names(ssm_db_user_param_name)
+                .send()
+                .await
+            {
+                Ok(params) => params,
+                Err(err) => panic!("Failed to get parameters {err:?}"),
+            };
+            let params = params.parameters.expect("Failed to get params");
+            let params: HashMap<String, String> = params
+                .iter()
+                .map(|param| {
+                    (
+                        param.name().unwrap().to_string(),
+                        param.value().unwrap().to_string(),
+                    )
+                })
+                .collect();
+
+            let password = params
+                .get(ssm_db_password_param_name)
+                .cloned()
+                .expect("No db_password")
+                .to_string();
+
+            let password = if password.is_empty() {
+                None
+            } else {
+                Some(password)
+            };
+
+            (
+                params
+                    .get(ssm_db_host_param_name)
+                    .cloned()
+                    .expect("No hostname")
+                    .to_string(),
+                params
+                    .get(ssm_db_name_param_name)
+                    .cloned()
+                    .expect("No db_name")
+                    .to_string(),
+                params
+                    .get(ssm_db_user_param_name)
+                    .cloned()
+                    .expect("No db_user")
+                    .to_string(),
+                password,
+            )
+        };
+
+    #[cfg(all(feature = "postgres-sqlx", not(feature = "postgres-raw")))]
+    return init_postgres_sqlx(&db_host, &db_name, &db_user, db_password.as_deref()).await;
+    #[cfg(all(feature = "postgres-raw", not(feature = "postgres-sqlx")))]
+    return init_postgres_raw(&db_host, &db_name, &db_user, db_password.as_deref()).await;
+
+    #[cfg(any(
+        all(feature = "postgres-raw", feature = "postgres-sqlx"),
+        all(not(feature = "postgres-raw"), not(feature = "postgres-sqlx"))
+    ))]
+    Ok(())
+}
+
+#[cfg(feature = "postgres-sqlx")]
+#[allow(unused)]
+pub async fn init_postgres_sqlx(
+    db_host: &str,
+    db_name: &str,
+    db_user: &str,
+    db_password: Option<&str>,
+) -> Result<(), InitDatabaseError> {
+    use std::sync::Arc;
+
+    use moosicbox_database::sqlx::postgres::PostgresSqlxDatabase;
+    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+
+    let connect_options = PgConnectOptions::new();
+    let mut connect_options = connect_options
+        .host(&db_host)
+        .database(&db_name)
+        .username(&db_user);
+
+    if let Some(ref db_password) = db_password {
+        connect_options = connect_options.password(db_password);
     }
+
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect_with(connect_options)
+        .await?;
+
+    DB.lock()
+        .await
+        .replace(Box::new(PostgresSqlxDatabase::new(Arc::new(
+            tokio::sync::Mutex::new(pool),
+        ))));
+
+    Ok(())
+}
+
+#[cfg(feature = "postgres-raw")]
+#[allow(unused)]
+pub async fn init_postgres_raw(
+    db_host: &str,
+    db_name: &str,
+    db_user: &str,
+    db_password: Option<&str>,
+) -> Result<(), InitDatabaseError> {
+    use moosicbox_database::postgres::postgres::PostgresDatabase;
+
+    let mut config = tokio_postgres::Config::new();
+    let mut config = config.host(&db_host).dbname(&db_name).user(&db_user);
+
+    if let Some(ref db_password) = db_password {
+        config = config.password(db_password);
+    }
+
+    let (client, connection) = config.connect(tokio_postgres::NoTls).await?;
+
+    DB.lock()
+        .await
+        .replace(Box::new(PostgresDatabase::new(client)));
+
+    DB_CONNECTION.lock().await.replace(connection);
 
     Ok(())
 }
@@ -203,46 +322,51 @@ async fn resilient_exec<T, F>(
 where
     F: Future<Output = Result<T, DatabaseError>> + Send + 'static,
 {
-    #[allow(unused)]
-    static MAX_RETRY: u8 = 3;
-    #[allow(unused)]
-    let mut retries = 0;
-    loop {
-        match exec().await {
-            Ok(value) => return Ok(value),
-            Err(err) => {
-                #[cfg(feature = "postgres")]
-                {
-                    match err {
-                        DatabaseError::Db(moosicbox_database::DatabaseError::PostgresSqlx(
-                            ref postgres_err,
-                        )) => match postgres_err {
-                            moosicbox_database::sqlx::postgres::SqlxDatabaseError::Sqlx(
-                                sqlx::Error::Io(_io_err),
-                            ) => {
-                                if retries >= MAX_RETRY {
-                                    return Err(err);
+    #[cfg(feature = "postgres-sqlx")]
+    {
+        #[allow(unused)]
+        static MAX_RETRY: u8 = 3;
+        #[allow(unused)]
+        let mut retries = 0;
+        loop {
+            match exec().await {
+                Ok(value) => return Ok(value),
+                Err(err) => {
+                    #[cfg(feature = "postgres")]
+                    {
+                        match err {
+                            DatabaseError::Db(moosicbox_database::DatabaseError::PostgresSqlx(
+                                ref postgres_err,
+                            )) => match postgres_err {
+                                moosicbox_database::sqlx::postgres::SqlxDatabaseError::Sqlx(
+                                    sqlx::Error::Io(_io_err),
+                                ) => {
+                                    if retries >= MAX_RETRY {
+                                        return Err(err);
+                                    }
+                                    log::info!(
+                                        "Database IO error. Attempting reconnect... {}/{MAX_RETRY}",
+                                        retries + 1
+                                    );
+                                    if let Err(init_err) = init().await {
+                                        log::error!("Failed to reinitialize: {init_err:?}");
+                                        return Err(init_err.into());
+                                    }
+                                    retries += 1;
+                                    continue;
                                 }
-                                log::info!(
-                                    "Database IO error. Attempting reconnect... {}/{MAX_RETRY}",
-                                    retries + 1
-                                );
-                                if let Err(init_err) = init().await {
-                                    log::error!("Failed to reinitialize: {init_err:?}");
-                                    return Err(init_err);
-                                }
-                                retries += 1;
-                                continue;
-                            }
+                                _ => {}
+                            },
                             _ => {}
-                        },
-                        _ => {}
+                        }
                     }
+                    return Err(err);
                 }
-                return Err(err);
             }
         }
     }
+    #[cfg(not(feature = "postgres-sqlx"))]
+    exec().await
 }
 
 pub async fn upsert_connection(client_id: &str, tunnel_ws_id: &str) -> Result<(), DatabaseError> {

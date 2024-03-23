@@ -17,8 +17,8 @@ moosicbox_env_utils = { path = "../env_utils" }
 moosicbox_files = { path = "../files", default-features = false, features = [
     "api",
     "files",
-    "range",
     "image",
+    "range",
 ] }
 moosicbox_menu = { path = "../menu" }
 moosicbox_player = { path = "../player", default-features = false }
@@ -26,14 +26,19 @@ moosicbox_qobuz = { path = "../qobuz" }
 moosicbox_scan = { path = "../scan", default-features = false, features = [
     "api",
     "local",
-    "tidal",
     "qobuz",
+    "tidal",
 ] }
 moosicbox_search = { path = "../search" }
 moosicbox_tidal = { path = "../tidal" }
 moosicbox_tunnel = { path = "../tunnel", default-features = false }
 moosicbox_tunnel_sender = { path = "../tunnel_sender", default-features = false }
 moosicbox_ws = { path = "../ws" }
+
+# Postgres
+aws-config     = { workspace = true, optional = true }
+aws-sdk-ssm    = { workspace = true, optional = true }
+tokio-postgres = { workspace = true, optional = true, features = [] }
 
 actix-cors      = { workspace = true }
 actix-files     = { workspace = true }
@@ -55,20 +60,22 @@ serde           = { workspace = true, features = ["derive"] }
 serde_json      = { workspace = true }
 thiserror       = { workspace = true }
 throttle        = { workspace = true }
-tokio           = { workspace = true, features = ["rt", "time", "macros"] }
+tokio           = { workspace = true, features = ["macros", "rt", "time"] }
 tokio-util      = { workspace = true }
 url             = { workspace = true }
 
 [features]
 default = [
-    "cpal",
-    "pulseaudio",
-    "static-token-auth",
-    "base64",
     "aac",
+    "base64",
+    "cpal",
     "flac",
     "mp3",
     "opus",
+    "postgres",
+    "pulseaudio",
+    "sqlite",
+    "static-token-auth",
 ]
 
 fail-on-warnings = []
@@ -87,34 +94,44 @@ resampler           = ["moosicbox_player/resampler"]
 static-token-auth = []
 
 aac = [
-    "moosicbox_tunnel_sender/aac",
-    "moosicbox_player/aac",
+    "moosicbox_core/aac",
     "moosicbox_downloader/aac",
     "moosicbox_files/aac",
-    "moosicbox_core/aac",
+    "moosicbox_player/aac",
     "moosicbox_scan/aac",
+    "moosicbox_tunnel_sender/aac",
 ]
 flac = [
-    "moosicbox_tunnel_sender/flac",
-    "moosicbox_player/flac",
+    "moosicbox_core/flac",
     "moosicbox_downloader/flac",
     "moosicbox_files/flac",
-    "moosicbox_core/flac",
+    "moosicbox_player/flac",
     "moosicbox_scan/flac",
+    "moosicbox_tunnel_sender/flac",
 ]
 mp3 = [
-    "moosicbox_tunnel_sender/mp3",
-    "moosicbox_player/mp3",
+    "moosicbox_core/mp3",
     "moosicbox_downloader/mp3",
     "moosicbox_files/mp3",
-    "moosicbox_core/mp3",
+    "moosicbox_player/mp3",
     "moosicbox_scan/mp3",
+    "moosicbox_tunnel_sender/mp3",
 ]
 opus = [
-    "moosicbox_tunnel_sender/opus",
-    "moosicbox_player/opus",
+    "moosicbox_core/opus",
     "moosicbox_downloader/opus",
     "moosicbox_files/opus",
-    "moosicbox_core/opus",
+    "moosicbox_player/opus",
     "moosicbox_scan/opus",
+    "moosicbox_tunnel_sender/opus",
+]
+
+postgres = [
+    "dep:aws-config",
+    "dep:aws-sdk-ssm",
+    "dep:tokio-postgres",
+    "moosicbox_database/postgres",
+]
+sqlite = [
+    "moosicbox_database/rusqlite",
 ]

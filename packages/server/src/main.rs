@@ -1,8 +1,10 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 mod api;
 #[cfg(feature = "static-token-auth")]
 mod auth;
+mod db;
 mod playback_session;
 mod ws;
 
@@ -11,7 +13,7 @@ use actix_web::{http, middleware, web, App};
 use log::{debug, error, info};
 use moosicbox_auth::get_client_id_and_access_token;
 use moosicbox_core::app::AppState;
-use moosicbox_database::{rusqlite::RusqliteDatabase, Database};
+use moosicbox_database::Database;
 use moosicbox_downloader::{api::models::ApiProgressEvent, queue::ProgressEvent};
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 use moosicbox_tunnel::TunnelRequest;
@@ -78,13 +80,11 @@ fn main() -> std::io::Result<()> {
             .unwrap()
     })
     .block_on(async move {
-        let library = ::rusqlite::Connection::open("library.db").unwrap();
-        library
-            .busy_timeout(Duration::from_millis(10))
-            .expect("Failed to set busy timeout");
-        let library = Arc::new(Mutex::new(library));
-
-        let db = Box::new(RusqliteDatabase::new(library));
+        #[cfg(feature = "postgres")]
+        let (db, db_connection) = db::init_postgres().await.expect("Failed to init postgres DB");
+        #[cfg(not(feature = "postgres"))]
+        #[allow(unused_variables)]
+        let db = db::init_sqlite().await.expect("Failed to init sqlite DB");
         let database: Arc<Box<dyn Database>> = Arc::new(db);
         let database_once: Arc<Box<dyn Database>> = database.clone();
 
@@ -373,6 +373,13 @@ fn main() -> std::io::Result<()> {
                     let _ = handle.close().await;
                 }
                 resp
+            },
+            async move {
+                #[cfg(feature = "postgres")]
+                if let Err(err) = db_connection.await{
+                    log::error!("Database failed to close: {err:?}");
+                }
+                Ok(())
             },
             async move { chat_server_handle.await.unwrap() },
             async move {
