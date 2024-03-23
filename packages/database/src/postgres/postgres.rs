@@ -713,7 +713,7 @@ fn build_set_props(values: &[(&str, Box<dyn Expression>)], index: &AtomicU16) ->
 
 fn build_values_clause(values: &[(&str, Box<dyn Expression>)], index: &AtomicU16) -> String {
     if values.is_empty() {
-        "".to_string()
+        "DEFAULT VALUES".to_string()
     } else {
         let filters = build_values_props(values, index).join(", ");
 
@@ -943,8 +943,13 @@ async fn insert_and_get_row(
         .join(", ");
 
     let index = AtomicU16::new(0);
+    let insert_columns = if values.is_empty() {
+        "".into()
+    } else {
+        format!("({column_names})")
+    };
     let query = format!(
-        "INSERT INTO {table_name} ({column_names}) {} RETURNING *",
+        "INSERT INTO {table_name} {insert_columns} {} RETURNING *",
         build_values_clause(values, &index),
     );
 
