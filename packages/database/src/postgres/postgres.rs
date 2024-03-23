@@ -439,6 +439,7 @@ fn from_row(column_names: &[String], row: &Row) -> Result<crate::Row, PostgresDa
     let mut columns = vec![];
 
     for column in column_names {
+        log::trace!("Mapping column {column:?}");
         columns.push((column.to_string(), column_value(row, column)?));
     }
 
@@ -1336,7 +1337,7 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
     where
         Self: Sized,
     {
-        log::debug!("accepts: ty={}, {ty:?}", ty.name());
+        log::trace!("ToSql accepts: ty={}, {ty:?}", ty.name());
         true
     }
 
@@ -1345,7 +1346,7 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
         ty: &tokio_postgres::types::Type,
         out: &mut tokio_util::bytes::BytesMut,
     ) -> Result<IsNull, Box<dyn std::error::Error + Sync + Send>> {
-        log::debug!("to_sql_checked: ty={}, {ty:?}", ty.name());
+        log::trace!("to_sql_checked: ty={}, {ty:?}", ty.name());
         Ok(match &self.0 {
             DatabaseValue::Null => IsNull::Yes,
             DatabaseValue::String(value) => value.to_sql(ty, out)?,
@@ -1372,7 +1373,7 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
     where
         Self: Sized,
     {
-        log::debug!("to_sql: ty={}, {ty:?}", ty.name());
+        log::trace!("to_sql: ty={}, {ty:?}", ty.name());
         self.to_sql_checked(ty, out)
     }
 }
