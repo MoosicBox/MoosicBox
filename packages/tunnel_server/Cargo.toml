@@ -21,7 +21,9 @@ sqlx = { workspace = true, optional = true, features = [
     "tls-rustls",
 ] }
 
-tokio-postgres = { workspace = true, optional = true }
+openssl          = { workspace = true, optional = true }
+postgres-openssl = { workspace = true, optional = true }
+tokio-postgres   = { workspace = true, optional = true }
 
 actix-cors        = { workspace = true }
 actix-web         = { workspace = true }
@@ -58,6 +60,8 @@ base64 = ["moosicbox_tunnel/base64"]
 
 postgres = ["moosicbox_database/postgres"]
 postgres-raw = [
+    "dep:openssl",
+    "dep:postgres-openssl",
     "dep:tokio-postgres",
     "moosicbox_database/postgres-raw",
     "postgres",

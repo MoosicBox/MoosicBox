@@ -38,6 +38,8 @@ moosicbox_ws = { path = "../ws" }
 # Postgres
 aws-config = { workspace = true, optional = true }
 aws-sdk-ssm = { workspace = true, optional = true }
+openssl = { workspace = true, optional = true }
+postgres-openssl = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true, features = [
     "postgres",
     "runtime-tokio",
@@ -134,6 +136,8 @@ opus = [
 
 postgres = ["dep:aws-config", "dep:aws-sdk-ssm", "moosicbox_database/postgres"]
 postgres-raw = [
+    "dep:openssl",
+    "dep:postgres-openssl",
     "dep:tokio-postgres",
     "moosicbox_database/postgres-raw",
     "postgres",

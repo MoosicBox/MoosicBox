@@ -137,6 +137,9 @@ async fn get_db_config() -> Result<(String, String, String, Option<String>), Ini
 pub enum InitDatabaseError {
     #[cfg(feature = "postgres-raw")]
     #[error(transparent)]
+    OpenSsl(#[from] openssl::error::ErrorStack),
+    #[cfg(feature = "postgres-raw")]
+    #[error(transparent)]
     Postgres(#[from] tokio_postgres::Error),
     #[cfg(feature = "postgres-sqlx")]
     #[error(transparent)]
@@ -180,11 +183,16 @@ pub async fn init_postgres_sqlx() -> Result<Box<dyn Database>, InitDatabaseError
 pub async fn init_postgres_raw() -> Result<
     (
         Box<dyn Database>,
-        tokio_postgres::Connection<tokio_postgres::Socket, tokio_postgres::tls::NoTlsStream>,
+        tokio_postgres::Connection<
+            tokio_postgres::Socket,
+            postgres_openssl::TlsStream<tokio_postgres::Socket>,
+        >,
     ),
     InitDatabaseError,
 > {
     use moosicbox_database::postgres::postgres::PostgresDatabase;
+    use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
+    use postgres_openssl::MakeTlsConnector;
 
     let (db_host, db_name, db_user, db_password) = get_db_config().await?;
 
@@ -195,7 +203,18 @@ pub async fn init_postgres_raw() -> Result<
         config = config.password(db_password);
     }
 
-    let (client, connection) = config.connect(tokio_postgres::NoTls).await?;
+    let mut builder = SslConnector::builder(SslMethod::tls())?;
+
+    match db_host.to_lowercase().as_str() {
+        "localhost" | "127.0.0.1" | "0.0.0.0" => {
+            builder.set_verify(SslVerifyMode::NONE);
+        }
+        _ => {}
+    }
+
+    let connector = MakeTlsConnector::new(builder.build());
+
+    let (client, connection) = config.connect(connector).await?;
 
     Ok((Box::new(PostgresDatabase::new(client)), connection))
 }
