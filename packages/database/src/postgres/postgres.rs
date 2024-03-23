@@ -1422,8 +1422,10 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
             DatabaseValue::Null => IsNull::Yes,
             DatabaseValue::String(value) => value.to_sql(ty, out)?,
             DatabaseValue::StringOpt(value) => value.to_sql(ty, out)?,
-            DatabaseValue::Bool(value) => value.to_sql(ty, out)?,
-            DatabaseValue::BoolOpt(value) => value.to_sql(ty, out)?,
+            DatabaseValue::Bool(value) => (if *value { 1_i64 } else { 0_i64 }).to_sql(ty, out)?,
+            DatabaseValue::BoolOpt(value) => value
+                .map(|x| if x { 1_i64 } else { 0_i64 })
+                .to_sql(ty, out)?,
             DatabaseValue::Number(value) => value.to_sql(ty, out)?,
             DatabaseValue::NumberOpt(value) => value.to_sql(ty, out)?,
             DatabaseValue::UNumber(value) => (*value as i64).to_sql(ty, out)?,
