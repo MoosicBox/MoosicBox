@@ -168,7 +168,7 @@ pub async fn save_magic_token(
         .value("magic_token", magic_token)
         .value("access_token", access_token)
         .value("client_id", client_id)
-        .value("client_id", DatabaseValue::NowAdd("+1 Day".into()))
+        .value("expires", DatabaseValue::NowAdd("'+1 Day'".into()))
         .execute_first(db)
         .await?;
 
