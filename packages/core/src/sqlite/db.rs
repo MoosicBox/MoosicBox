@@ -62,12 +62,7 @@ pub async fn get_client_id(db: &Box<dyn Database>) -> Result<Option<String>, DbE
         .select("client_access_tokens")
         .where_or(boxed![
             where_eq("expires", DatabaseValue::Null),
-            where_gt(
-                "expires",
-                Identifier {
-                    value: "date('now')".into(),
-                }
-            ),
+            where_gt("expires", DatabaseValue::Now),
         ])
         .sort("updated", SortDirection::Desc)
         .execute_first(db)
@@ -84,12 +79,7 @@ pub async fn get_client_access_token(
         .select("client_access_tokens")
         .where_or(boxed![
             where_eq("expires", DatabaseValue::Null),
-            where_gt(
-                "expires",
-                Identifier {
-                    value: "date('now')".into(),
-                }
-            ),
+            where_gt("expires", DatabaseValue::Now),
         ])
         .sort("updated", SortDirection::Desc)
         .execute_first(db)
@@ -138,14 +128,9 @@ pub async fn get_credentials_from_magic_token(
 ) -> Result<Option<(String, String)>, DbError> {
     if let Some((client_id, access_token)) = db
         .select("magic_tokens")
-        .where_or(vec![
-            Box::new(where_eq("expires", DatabaseValue::Null)),
-            Box::new(where_gt(
-                "expires",
-                Box::new(Identifier {
-                    value: "date('now')".into(),
-                }) as Box<dyn Expression>,
-            )),
+        .where_or(boxed![
+            where_eq("expires", DatabaseValue::Null),
+            where_gt("expires", DatabaseValue::Now),
         ])
         .where_eq("magic_token", magic_token)
         .execute_first(db)
