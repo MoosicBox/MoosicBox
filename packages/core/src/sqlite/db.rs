@@ -304,19 +304,13 @@ pub async fn update_session(
                     .columns(&["session_playlist_tracks.id"])
                     .join(
                         "session_playlists",
-                        "session_playlists.id=sessions.session_playlist_id",
+                        "session_playlist_tracks.session_playlist_id=session_playlists.id",
                     )
                     .join(
                         "sessions",
                         "sessions.session_playlist_id=session_playlists.id",
                     )
-                    .where_eq("sessions.id", session.session_id)
-                    .where_eq(
-                        "session_playlist_tracks.session_playlist_id",
-                        Identifier {
-                            value: "session_playlists.id".into(),
-                        },
-                    ),
+                    .where_eq("sessions.id", session.session_id),
             )
             .execute(db)
             .await?;
@@ -379,19 +373,13 @@ pub async fn delete_session(db: &Box<dyn Database>, session_id: i32) -> Result<(
                 .columns(&["session_playlist_tracks.id"])
                 .join(
                     "session_playlists",
-                    "session_playlists.id=sessions.session_playlist_id",
+                    "session_playlist_tracks.session_playlist_id=session_playlists.id",
                 )
                 .join(
                     "sessions",
-                    "sessions.session_playlist_id=sessions.session_playlists.id",
+                    "sessions.session_playlist_id=session_playlists.id",
                 )
-                .where_eq("sessions.id", session_id)
-                .where_eq(
-                    "session_playlist_id",
-                    Identifier {
-                        value: "session_playlists.id".into(),
-                    },
-                ),
+                .where_eq("sessions.id", session_id),
         )
         .execute(db)
         .await?;
