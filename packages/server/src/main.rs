@@ -369,6 +369,12 @@ fn main() -> std::io::Result<()> {
             http_server = http_server.workers(workers);
         }
 
+        tokio::spawn(async move {
+            tokio::signal::ctrl_c().await?;
+            log::debug!("Received ctrl-c");
+            Ok::<_, std::io::Error>(())
+        });
+
         let http_server = http_server
             .bind((default_env("BIND_ADDR", "0.0.0.0"), service_port))?
             .run();
