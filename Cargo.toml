@@ -71,7 +71,7 @@ aws-config = "1.1.8"
 aws-sdk-apigatewaymanagement = "1.17.0"
 aws-sdk-ssm = "1.19.0"
 base64 = "0.22.0"
-bytes = "1.5.0"
+bytes = "1.6.0"
 chrono = { version = "0.4.35", default-features = false, features = [
     "clock",
     "serde",
@@ -125,7 +125,7 @@ qstring = "0.7.2"
 rand = "0.8"
 rangemap = "1.5.1"
 rb = "0.4.1"
-regex = "1.10.3"
+regex = "1.10.4"
 reqwest = { version = "0.11.27", default-features = false, features = [
     "blocking",
     "rustls-tls",
