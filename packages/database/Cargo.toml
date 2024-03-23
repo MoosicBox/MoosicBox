@@ -16,6 +16,12 @@ sqlx = { workspace = true, optional = true, features = [
 sqlx-mysql = { workspace = true, optional = true }
 sqlx-postgres = { workspace = true, optional = true }
 
+# tokio-postgres dependencies
+tokio-postgres = { workspace = true, optional = true, features = [] }
+
+# Postgres dependencies
+regex = { workspace = true, optional = true }
+
 async-recursion = { workspace = true }
 async-trait     = { workspace = true }
 chrono          = { workspace = true }
@@ -31,25 +37,27 @@ tokio           = { workspace = true, features = ["macros"] }
 tokio-util      = { workspace = true }
 
 [features]
-default = ["rusqlite", "postgres", "mysql"]
+default = ["mysql", "postgres", "rusqlite"]
 
 fail-on-warnings = []
 
 mysql = ["mysql-sqlx", "sqlx"]
 mysql-sqlx = [
     "dep:sqlx",
-    "sqlx",
-    "sqlx/mysql",
     "dep:sqlx-mysql",
+    "sqlx",
     "sqlx-mysql/chrono",
+    "sqlx/mysql",
 ]
-postgres = ["postgres-sqlx", "sqlx"]
+postgres = ["dep:regex", "postgres-raw"]
+postgres-raw = ["dep:tokio-postgres", "postgres"]
 postgres-sqlx = [
     "dep:sqlx",
-    "sqlx",
-    "sqlx/postgres",
     "dep:sqlx-postgres",
+    "postgres",
+    "sqlx",
     "sqlx-postgres/chrono",
+    "sqlx/postgres",
 ]
 rusqlite = ["dep:rusqlite"]
 sqlx = []

@@ -1,5 +1,8 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
+#[cfg(feature = "postgres-raw")]
+pub mod postgres;
 #[cfg(feature = "rusqlite")]
 pub mod rusqlite;
 #[cfg(feature = "sqlx")]
@@ -177,6 +180,9 @@ pub enum DatabaseError {
     #[cfg(feature = "mysql-sqlx")]
     #[error(transparent)]
     MysqlSqlx(sqlx::mysql::SqlxDatabaseError),
+    #[cfg(feature = "postgres-raw")]
+    #[error(transparent)]
+    Postgres(postgres::postgres::PostgresDatabaseError),
     #[cfg(feature = "postgres-sqlx")]
     #[error(transparent)]
     PostgresSqlx(sqlx::postgres::SqlxDatabaseError),
