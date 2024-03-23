@@ -22,7 +22,7 @@ use moosicbox_ws::api::send_download_event;
 use once_cell::sync::Lazy;
 use std::{
     env,
-    sync::{atomic::AtomicUsize, Arc, Mutex, OnceLock},
+    sync::{atomic::AtomicUsize, Arc, Mutex},
     time::Duration,
 };
 use throttle::Throttle;
@@ -36,7 +36,8 @@ static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken
 static CHAT_SERVER_HANDLE: Lazy<std::sync::RwLock<Option<ws::server::ChatServerHandle>>> =
     Lazy::new(|| std::sync::RwLock::new(None));
 
-static DB: OnceLock<Arc<Box<dyn Database>>> = OnceLock::new();
+static DB: Lazy<std::sync::RwLock<Option<Arc<Box<dyn Database>>>>> =
+    Lazy::new(|| std::sync::RwLock::new(None));
 
 fn main() -> std::io::Result<()> {
     #[cfg(debug_assertions)]
@@ -82,16 +83,19 @@ fn main() -> std::io::Result<()> {
     .block_on(async move {
         #[cfg(feature = "postgres-raw")]
         #[allow(unused)]
-        let (db, db_connection) = db::init_postgres_raw().await.expect("Failed to init postgres DB");
+        let (db, db_connection) = db::init_postgres_raw()
+            .await
+            .expect("Failed to init postgres DB");
         #[cfg(feature = "postgres-sqlx")]
-        let db = db::init_postgres_sqlx().await.expect("Failed to init postgres DB");
+        let db = db::init_postgres_sqlx()
+            .await
+            .expect("Failed to init postgres DB");
         #[cfg(not(feature = "postgres"))]
         #[allow(unused_variables)]
         let db = db::init_sqlite().await.expect("Failed to init sqlite DB");
-        let database: Arc<Box<dyn Database>> = Arc::new(db);
-        let database_once: Arc<Box<dyn Database>> = database.clone();
 
-        let db = DB.get_or_init(move || database_once.clone());
+        let database: Arc<Box<dyn Database>> = Arc::new(db);
+        DB.write().unwrap().replace(database.clone());
 
         let bytes_throttle = Arc::new(Mutex::new(Throttle::new(Duration::from_millis(200), 1)));
         let bytes_buf = AtomicUsize::new(0);
@@ -130,10 +134,13 @@ fn main() -> std::io::Result<()> {
         let (mut chat_server, server_tx) = ChatServer::new(database.clone());
         CHAT_SERVER_HANDLE.write().unwrap().replace(server_tx);
 
+        #[cfg(feature = "postgres-raw")]
+        let db_connection_handle = tokio::spawn(async { db_connection.await });
+
         let (tunnel_host, tunnel_join_handle, tunnel_handle) = if let Ok(url) = env::var("WS_HOST")
         {
             if !url.is_empty() {
-                log::debug!("Using WS_URL: {url}");
+                log::debug!("Using WS_HOST: {url}");
                 let ws_url = url.clone();
                 let url = Url::parse(&url).expect("Invalid WS_HOST");
                 let hostname = url
@@ -155,7 +162,7 @@ fn main() -> std::io::Result<()> {
                 );
                 // FIXME: Handle retry
                 let (client_id, access_token) = {
-                    get_client_id_and_access_token(&db, &host)
+                    get_client_id_and_access_token(&database, &host)
                         .await
                         .map_err(|e| {
                             std::io::Error::new(
@@ -369,29 +376,39 @@ fn main() -> std::io::Result<()> {
         try_join!(
             async move {
                 let resp = http_server.await;
+                log::debug!("Shutting down ws server...");
                 CHAT_SERVER_HANDLE.write().unwrap().take();
+                log::debug!("Shutting down db client...");
+                DB.write().unwrap().take();
+                log::debug!("Cancelling scan...");
                 moosicbox_scan::cancel();
                 CANCELLATION_TOKEN.cancel();
                 if let Some(handle) = tunnel_handle {
+                    log::debug!("Closing tunnel connection...");
                     let _ = handle.close().await;
                 }
+                if let Some(handle) = tunnel_join_handle {
+                    log::debug!("Closing tunnel join handle connection...");
+                    handle.await.unwrap();
+                } else {
+                    log::trace!("No tunnel handle connection to close");
+                }
+                #[cfg(feature = "postgres-raw")]
+                {
+                    log::debug!("Aborting database connection...");
+                    db_connection_handle.abort();
+                }
+                log::trace!("Connections closed");
                 resp
             },
             async move {
-                #[cfg(feature = "postgres-raw")]
-                if let Err(err) = db_connection.await{
-                    log::error!("Database failed to close: {err:?}");
-                }
-                Ok(())
+                let resp = chat_server_handle.await.unwrap();
+                log::debug!("Ws server connection closed");
+                resp
             },
-            async move { chat_server_handle.await.unwrap() },
-            async move {
-                if let Some(handle) = tunnel_join_handle {
-                    handle.await.unwrap();
-                }
-                Ok(())
-            }
         )?;
+
+        log::debug!("Server shut down");
 
         Ok(())
     })

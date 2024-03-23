@@ -18,7 +18,14 @@ pub fn on_playback_event(update: &UpdateSession, _current: &Playback) {
     let sender = binding.as_ref().unwrap();
 
     RT.block_on(async move {
-        if let Err(err) = update_session(DB.get().unwrap(), sender, None, update).await {
+        let db = match DB.read().unwrap().as_ref() {
+            Some(db) => db.clone(),
+            None => {
+                log::error!("No DB connection");
+                return;
+            }
+        };
+        if let Err(err) = update_session(&db, sender, None, update).await {
             log::error!("Failed to broadcast update_session: {err:?}");
         }
     })
