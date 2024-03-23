@@ -59,7 +59,14 @@ pub trait Expression: Send + Sync + Debug {
     fn params(&self) -> Option<Vec<&DatabaseValue>> {
         self.values().map(|x| {
             x.into_iter()
-                .filter(|value| !value.is_null())
+                .filter(|value| {
+                    !value.is_null()
+                        && match value {
+                            DatabaseValue::Now => false,
+                            DatabaseValue::NowAdd(_) => false,
+                            _ => true,
+                        }
+                })
                 .collect::<Vec<_>>()
         })
     }
