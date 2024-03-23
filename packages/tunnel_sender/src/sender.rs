@@ -259,18 +259,18 @@ impl TunnelSender {
                 {
                     Ok(Some(token)) => break token,
                     Err(FetchSignatureError::Unauthorized) => {
-                        panic!("Unauthorized response from fetch_signature_token");
-                    }
-                    _ => {
-                        log::error!("Failed to fetch signature token");
-                        select!(
-                            _ = sleep(Duration::from_millis(5000)) => {}
-                            _ = cancellation_token.cancelled() => {
-                                log::debug!("Cancelling retry")
-                            }
-                        );
-                    }
+                        log::error!("Unauthorized response from fetch_signature_token");
+                    },
+                    _ => {}
                 }
+
+                log::error!("Failed to fetch signature token");
+                select!(
+                    _ = sleep(Duration::from_millis(5000)) => {}
+                    _ = cancellation_token.cancelled() => {
+                        log::debug!("Cancelling retry")
+                    }
+                );
             };
 
             loop {
