@@ -64,15 +64,13 @@ impl FromRequest for ClientHeaderAuthorized {
         let query_string = req.query_string().to_owned();
         let auth_header = req.headers().get(http::header::AUTHORIZATION).cloned();
         Box::pin(async move {
-            if client_is_authorized(&query_string, auth_header)
-                .await
-                .is_ok_and(|auth| auth)
-            {
-                Ok(ClientHeaderAuthorized)
-            } else {
-                log::warn!("Unauthorized ClientHeaderAuthorized request to '{path}'");
-                Err(ErrorUnauthorized("Unauthorized"))
+            match client_is_authorized(&query_string, auth_header).await {
+                Ok(true) => return Ok(ClientHeaderAuthorized),
+                Ok(false) => log::warn!("Unauthorized ClientHeaderAuthorized request to '{path}'"),
+                Err(err) => log::error!("ClientHeaderAuthorized Database error: {err:?}"),
             }
+
+            Err(ErrorUnauthorized("Unauthorized"))
         })
     }
 }
