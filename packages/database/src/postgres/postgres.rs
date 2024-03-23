@@ -836,7 +836,6 @@ async fn select(
     );
 
     let statement = connection.prepare(&query).await?;
-    log::debug!("prepared!");
     let column_names = statement
         .columns()
         .iter()
@@ -844,9 +843,7 @@ async fn select(
         .collect::<Vec<_>>();
 
     let filters = bexprs_to_params_opt(filters);
-    log::debug!("binding...");
     let rows = connection.query_raw(&statement, filters).await?;
-    log::debug!("to_rows...");
 
     to_rows(&column_names, rows).await
 }
