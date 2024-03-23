@@ -118,7 +118,7 @@ impl ToValueType<MagicToken> for &Row {
     }
 }
 
-static DB: Lazy<Mutex<Option<Box<dyn Database>>>> = Lazy::new(|| Mutex::new(None));
+pub(crate) static DB: Lazy<Mutex<Option<Box<dyn Database>>>> = Lazy::new(|| Mutex::new(None));
 
 #[cfg(feature = "postgres-raw")]
 #[allow(unused)]

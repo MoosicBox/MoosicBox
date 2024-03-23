@@ -99,16 +99,22 @@ fn main() -> Result<(), std::io::Error> {
         if let Err(err) = try_join!(
             async move {
                 let resp = http_server.await;
+                log::debug!("Shutting down ws server...");
                 CHAT_SERVER_HANDLE
                     .write()
                     .unwrap_or_else(|e| e.into_inner())
                     .take();
+                log::debug!("Shutting down db client...");
+                db::DB.lock().await.take();
+                log::trace!("Connections closed");
                 resp
             },
             async move {
                 #[cfg(feature = "postgres-raw")]
                 if let Err(err) = db_connection.await {
                     log::error!("Database failed to close: {err:?}");
+                } else {
+                    log::debug!("Database connection closed");
                 }
                 Ok(())
             },
@@ -125,7 +131,7 @@ fn main() -> Result<(), std::io::Error> {
             return Err(err);
         }
 
-        log::info!("Server shut down");
+        log::debug!("Server shut down");
 
         Ok(())
     })
