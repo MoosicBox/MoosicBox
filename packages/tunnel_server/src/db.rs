@@ -329,50 +329,103 @@ where
     F: Future<Output = Result<T, DatabaseError>> + Send + 'static,
 {
     #[cfg(feature = "postgres-sqlx")]
-    {
-        #[allow(unused)]
-        static MAX_RETRY: u8 = 3;
-        #[allow(unused)]
-        let mut retries = 0;
-        loop {
-            match exec().await {
-                Ok(value) => return Ok(value),
-                Err(err) => {
-                    #[cfg(feature = "postgres-sqlx")]
-                    {
-                        match err {
-                            DatabaseError::Db(moosicbox_database::DatabaseError::PostgresSqlx(
-                                ref postgres_err,
-                            )) => match postgres_err {
-                                moosicbox_database::sqlx::postgres::SqlxDatabaseError::Sqlx(
-                                    sqlx::Error::Io(_io_err),
-                                ) => {
-                                    if retries >= MAX_RETRY {
-                                        return Err(err);
-                                    }
-                                    log::info!(
-                                        "Database IO error. Attempting reconnect... {}/{MAX_RETRY}",
-                                        retries + 1
-                                    );
-                                    if let Err(init_err) = init_postgres_sqlx().await {
-                                        log::error!("Failed to reinitialize: {init_err:?}");
-                                        return Err(init_err.into());
-                                    }
-                                    retries += 1;
-                                    continue;
-                                }
-                                _ => {}
-                            },
-                            _ => {}
+    return resilient_exec_postgres_sqlx(exec).await;
+    #[cfg(all(not(feature = "postgres-sqlx"), feature = "postgres-raw"))]
+    return resilient_exec_postgres_raw(exec).await;
+    #[cfg(all(not(feature = "postgres-sqlx"), not(feature = "postgres-raw")))]
+    exec().await
+}
+
+#[cfg(feature = "postgres-sqlx")]
+async fn resilient_exec_postgres_sqlx<T, F>(
+    exec: Box<dyn Fn() -> Pin<Box<F>> + Send + Sync>,
+) -> Result<T, DatabaseError>
+where
+    F: Future<Output = Result<T, DatabaseError>> + Send + 'static,
+{
+    #[allow(unused)]
+    static MAX_RETRY: u8 = 3;
+    #[allow(unused)]
+    let mut retries = 0;
+    loop {
+        match exec().await {
+            Ok(value) => return Ok(value),
+            Err(err) => {
+                match err {
+                    DatabaseError::Db(moosicbox_database::DatabaseError::PostgresSqlx(
+                        ref postgres_err,
+                    )) => match postgres_err {
+                        moosicbox_database::sqlx::postgres::SqlxDatabaseError::Sqlx(
+                            sqlx::Error::Io(_io_err),
+                        ) => {
+                            if retries >= MAX_RETRY {
+                                return Err(err);
+                            }
+                            log::info!(
+                                "Database IO error. Attempting reconnect... {}/{MAX_RETRY}",
+                                retries + 1
+                            );
+                            if let Err(init_err) = init_postgres_sqlx().await {
+                                log::error!("Failed to reinitialize: {init_err:?}");
+                                return Err(init_err.into());
+                            }
+                            retries += 1;
+                            continue;
                         }
-                    }
-                    return Err(err);
+                        _ => {}
+                    },
+                    _ => {}
                 }
+                return Err(err);
             }
         }
     }
-    #[cfg(not(feature = "postgres-sqlx"))]
-    exec().await
+}
+
+#[cfg(all(not(feature = "postgres-sqlx"), feature = "postgres-raw"))]
+async fn resilient_exec_postgres_raw<T, F>(
+    exec: Box<dyn Fn() -> Pin<Box<F>> + Send + Sync>,
+) -> Result<T, DatabaseError>
+where
+    F: Future<Output = Result<T, DatabaseError>> + Send + 'static,
+{
+    static MAX_RETRY: u8 = 3;
+    let mut retries = 0;
+    loop {
+        match exec().await {
+            Ok(value) => return Ok(value),
+            Err(err) => {
+                match err {
+                    DatabaseError::Db(moosicbox_database::DatabaseError::Postgres(
+                        ref postgres_err,
+                    )) => match postgres_err {
+                        moosicbox_database::postgres::postgres::PostgresDatabaseError::Postgres(
+                            pg_err,
+                        ) => {
+                            if pg_err.to_string().as_str() == "connection closed" {
+                                if retries >= MAX_RETRY {
+                                    return Err(err);
+                                }
+                                log::info!(
+                                        "Database connection closed. Attempting reconnect... {}/{MAX_RETRY}",
+                                        retries + 1
+                                    );
+                                if let Err(init_err) = init_postgres_raw().await {
+                                    log::error!("Failed to reinitialize: {init_err:?}");
+                                    return Err(init_err.into());
+                                }
+                                retries += 1;
+                                continue;
+                            }
+                        }
+                        _ => {}
+                    },
+                    _ => {}
+                }
+                return Err(err);
+            }
+        }
+    }
 }
 
 pub async fn upsert_connection(client_id: &str, tunnel_ws_id: &str) -> Result<(), DatabaseError> {
