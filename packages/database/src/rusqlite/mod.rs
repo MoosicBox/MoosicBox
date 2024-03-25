@@ -199,7 +199,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 DatabaseValue::RealOpt(None) => format!("NULL"),
                 DatabaseValue::Now => format!("strftime('%Y-%m-%dT%H:%M:%f', 'now')"),
                 DatabaseValue::NowAdd(ref add) => {
-                    format!("strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', '{add}'))")
+                    format!("strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', {add}))")
                 }
                 _ => format!("?"),
             },
