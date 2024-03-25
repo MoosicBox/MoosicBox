@@ -43,12 +43,12 @@ RUN mkdir packages/tunnel_server/src && \
 
 ARG TUNNEL_ACCESS_TOKEN
 ENV TUNNEL_ACCESS_TOKEN=${TUNNEL_ACCESS_TOKEN}
-RUN cargo build --package moosicbox_tunnel_server --release --no-default-features --features postgres-raw
+RUN cargo build --package moosicbox_tunnel_server --release --no-default-features --features postgres-raw,postgres-native-tls
 
 COPY packages packages
 
 RUN rm target/release/deps/moosicbox*
-RUN cargo build --package moosicbox_tunnel_server --release --no-default-features --features postgres-raw
+RUN cargo build --package moosicbox_tunnel_server --release --no-default-features --features postgres-raw,postgres-native-tls
 
 # Final
 FROM debian:bookworm-slim

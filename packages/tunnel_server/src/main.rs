@@ -43,8 +43,7 @@ fn main() -> Result<(), std::io::Error> {
     })
     .block_on(async move {
         #[cfg(feature = "postgres-raw")]
-        #[allow(unused)]
-        let db_connection = db::init_postgres_raw()
+        db::init_postgres_raw()
             .await
             .expect("Failed to init postgres DB");
         #[cfg(feature = "postgres-sqlx")]
@@ -99,24 +98,28 @@ fn main() -> Result<(), std::io::Error> {
         if let Err(err) = try_join!(
             async move {
                 let resp = http_server.await;
+
                 log::debug!("Shutting down ws server...");
                 CHAT_SERVER_HANDLE
                     .write()
                     .unwrap_or_else(|e| e.into_inner())
                     .take();
+
                 log::debug!("Shutting down db client...");
                 db::DB.lock().await.take();
-                log::trace!("Connections closed");
-                resp
-            },
-            async move {
+
                 #[cfg(feature = "postgres-raw")]
-                if let Err(err) = db_connection.await {
-                    log::error!("Database failed to close: {err:?}");
-                } else {
+                if let Some(db_connection_handle) = db::DB_CONNECTION.lock().await.as_mut() {
+                    log::debug!("Shutting down db connection...");
+                    db_connection_handle.abort();
                     log::debug!("Database connection closed");
+                } else {
+                    log::debug!("No database connection");
                 }
-                Ok(())
+
+                log::trace!("Connections closed");
+
+                resp
             },
             async move {
                 match chat_server.await {

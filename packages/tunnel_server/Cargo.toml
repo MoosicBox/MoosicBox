@@ -21,9 +21,11 @@ sqlx = { workspace = true, optional = true, features = [
     "tls-rustls",
 ] }
 
-openssl          = { workspace = true, optional = true }
-postgres-openssl = { workspace = true, optional = true }
-tokio-postgres   = { workspace = true, optional = true }
+native-tls          = { workspace = true, optional = true }
+openssl             = { workspace = true, optional = true }
+postgres-native-tls = { workspace = true, optional = true }
+postgres-openssl    = { workspace = true, optional = true }
+tokio-postgres      = { workspace = true, optional = true }
 
 actix-cors        = { workspace = true }
 actix-web         = { workspace = true }
@@ -52,16 +54,23 @@ tokio-util        = { workspace = true }
 uuid              = { workspace = true }
 
 [features]
-default = ["base64", "postgres", "postgres-raw", "postgres-sqlx"]
+default = [
+    "base64",
+    "postgres",
+    "postgres-native-tls",
+    "postgres-openssl",
+    "postgres-raw",
+    "postgres-sqlx",
+]
 
 fail-on-warnings = []
 
 base64 = ["moosicbox_tunnel/base64"]
 
 postgres = ["moosicbox_database/postgres"]
+postgres-native-tls = ["dep:native-tls", "dep:postgres-native-tls"]
+postgres-openssl = ["dep:native-tls", "dep:openssl", "dep:postgres-openssl"]
 postgres-raw = [
-    "dep:openssl",
-    "dep:postgres-openssl",
     "dep:tokio-postgres",
     "moosicbox_database/postgres-raw",
     "postgres",

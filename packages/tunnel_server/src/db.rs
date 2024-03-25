@@ -121,21 +121,19 @@ impl ToValueType<MagicToken> for &Row {
 pub(crate) static DB: Lazy<Mutex<Option<Box<dyn Database>>>> = Lazy::new(|| Mutex::new(None));
 
 #[cfg(feature = "postgres-raw")]
-#[allow(unused)]
 pub(crate) static DB_CONNECTION: Lazy<
-    Mutex<
-        Option<
-            tokio_postgres::Connection<tokio_postgres::Socket, tokio_postgres::tls::NoTlsStream>,
-        >,
-    >,
+    Mutex<Option<tokio::task::JoinHandle<Result<(), tokio_postgres::Error>>>>,
 > = Lazy::new(|| Mutex::new(None));
 
 #[cfg(feature = "postgres")]
 #[derive(Debug, Error)]
 pub enum InitDatabaseError {
-    #[cfg(feature = "postgres-raw")]
+    #[cfg(all(feature = "postgres-openssl", feature = "postgres-raw"))]
     #[error(transparent)]
     OpenSsl(#[from] openssl::error::ErrorStack),
+    #[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
+    #[error(transparent)]
+    NativeTls(#[from] native_tls::Error),
     #[cfg(feature = "postgres-raw")]
     #[error(transparent)]
     Postgres(#[from] tokio_postgres::Error),
@@ -282,13 +280,65 @@ pub async fn init_postgres_sqlx() -> Result<(), InitDatabaseError> {
 
 #[cfg(feature = "postgres-raw")]
 #[allow(unused)]
-pub async fn init_postgres_raw() -> Result<
-    tokio_postgres::Connection<
-        tokio_postgres::Socket,
-        postgres_openssl::TlsStream<tokio_postgres::Socket>,
-    >,
-    InitDatabaseError,
-> {
+pub async fn init_postgres_raw() -> Result<(), InitDatabaseError> {
+    #[cfg(feature = "postgres-openssl")]
+    return init_postgres_raw_openssl().await;
+    #[cfg(feature = "postgres-native-tls")]
+    return init_postgres_raw_native_tls().await;
+    #[cfg(all(
+        not(feature = "postgres-openssl"),
+        not(feature = "postgres-native-tls")
+    ))]
+    return init_postgres_raw_no_tls().await;
+}
+
+#[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
+#[allow(unused)]
+pub async fn init_postgres_raw_native_tls() -> Result<(), InitDatabaseError> {
+    use moosicbox_database::postgres::postgres::PostgresDatabase;
+    use postgres_native_tls::MakeTlsConnector;
+
+    let (db_host, db_name, db_user, db_password) = get_db_config().await?;
+
+    let mut config = tokio_postgres::Config::new();
+    let mut config = config.host(&db_host).dbname(&db_name).user(&db_user);
+
+    if let Some(ref db_password) = db_password {
+        config = config.password(db_password);
+    }
+
+    let mut builder = native_tls::TlsConnector::builder();
+
+    match db_host.to_lowercase().as_str() {
+        "localhost" | "127.0.0.1" | "0.0.0.0" => {
+            builder.danger_accept_invalid_hostnames(true);
+        }
+        _ => {}
+    }
+
+    let connector = MakeTlsConnector::new(builder.build()?);
+
+    {
+        DB_CONNECTION.lock().await.take();
+    }
+
+    let (client, connection) = config.connect(connector).await?;
+
+    DB.lock()
+        .await
+        .replace(Box::new(PostgresDatabase::new(client)));
+
+    DB_CONNECTION
+        .lock()
+        .await
+        .replace(tokio::spawn(async move { connection.await }));
+
+    Ok(())
+}
+
+#[cfg(all(feature = "postgres-openssl", feature = "postgres-raw"))]
+#[allow(unused)]
+pub async fn init_postgres_raw_openssl() -> Result<(), InitDatabaseError> {
     use moosicbox_database::postgres::postgres::PostgresDatabase;
     use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
     use postgres_openssl::MakeTlsConnector;
@@ -313,13 +363,56 @@ pub async fn init_postgres_raw() -> Result<
 
     let connector = MakeTlsConnector::new(builder.build());
 
+    {
+        DB_CONNECTION.lock().await.take();
+    }
+
     let (client, connection) = config.connect(connector).await?;
 
     DB.lock()
         .await
         .replace(Box::new(PostgresDatabase::new(client)));
 
-    Ok(connection)
+    DB_CONNECTION
+        .lock()
+        .await
+        .replace(tokio::spawn(async move { connection.await }));
+
+    Ok(())
+}
+
+#[cfg(feature = "postgres-raw")]
+#[allow(unused)]
+pub async fn init_postgres_raw_no_tls() -> Result<(), InitDatabaseError> {
+    use moosicbox_database::postgres::postgres::PostgresDatabase;
+
+    let (db_host, db_name, db_user, db_password) = get_db_config().await?;
+
+    let mut config = tokio_postgres::Config::new();
+    let mut config = config.host(&db_host).dbname(&db_name).user(&db_user);
+
+    if let Some(ref db_password) = db_password {
+        config = config.password(db_password);
+    }
+
+    let connector = tokio_postgres::NoTls;
+
+    {
+        DB_CONNECTION.lock().await.take();
+    }
+
+    let (client, connection) = config.connect(connector).await?;
+
+    DB.lock()
+        .await
+        .replace(Box::new(PostgresDatabase::new(client)));
+
+    DB_CONNECTION
+        .lock()
+        .await
+        .replace(tokio::spawn(async move { connection.await }));
+
+    Ok(())
 }
 
 async fn resilient_exec<T, F>(
@@ -407,9 +500,9 @@ where
                                     return Err(err);
                                 }
                                 log::info!(
-                                        "Database connection closed. Attempting reconnect... {}/{MAX_RETRY}",
-                                        retries + 1
-                                    );
+                                    "Database connection closed. Attempting reconnect... {}/{MAX_RETRY}",
+                                    retries + 1
+                                );
                                 if let Err(init_err) = init_postgres_raw().await {
                                     log::error!("Failed to reinitialize: {init_err:?}");
                                     return Err(init_err.into());
