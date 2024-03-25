@@ -113,12 +113,14 @@ mysql = { version = "24.0.0", features = [
     "rustls-tls",
 ], default-features = false }
 mysql_common = { version = "0.30.6", default-features = false }
+native-tls = "0.2.11"
 ogg = "0.9.1"
 once_cell = { version = "1.19.0" }
 open = "5.1.2"
 openssl = { version = "0.10.64", features = ["v110"] }
 opus = "0.3.0"
 pin-project = "1.1.5"
+postgres-native-tls = "0.5.0"
 postgres-openssl = "0.5.0"
 postgres-protocol = "0.6.6"
 pretty_assertions = "1.4.0"

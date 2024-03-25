@@ -38,7 +38,9 @@ moosicbox_ws = { path = "../ws" }
 # Postgres
 aws-config = { workspace = true, optional = true }
 aws-sdk-ssm = { workspace = true, optional = true }
+native-tls = { workspace = true, optional = true }
 openssl = { workspace = true, optional = true }
+postgres-native-tls = { workspace = true, optional = true }
 postgres-openssl = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true, features = [
     "postgres",
@@ -79,6 +81,8 @@ default = [
     "flac",
     "mp3",
     "opus",
+    "postgres-native-tls",
+    "postgres-openssl",
     "postgres-raw",
     "postgres-sqlx",
     "pulseaudio",
@@ -135,9 +139,9 @@ opus = [
 ]
 
 postgres = ["dep:aws-config", "dep:aws-sdk-ssm", "moosicbox_database/postgres"]
+postgres-native-tls = ["dep:native-tls", "dep:postgres-native-tls"]
+postgres-openssl = ["dep:native-tls", "dep:openssl", "dep:postgres-openssl"]
 postgres-raw = [
-    "dep:openssl",
-    "dep:postgres-openssl",
     "dep:tokio-postgres",
     "moosicbox_database/postgres-raw",
     "postgres",

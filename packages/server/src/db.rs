@@ -135,9 +135,12 @@ async fn get_db_config() -> Result<(String, String, String, Option<String>), Ini
 #[cfg(feature = "postgres")]
 #[derive(Debug, Error)]
 pub enum InitDatabaseError {
-    #[cfg(feature = "postgres-raw")]
+    #[cfg(all(feature = "postgres-openssl", feature = "postgres-raw"))]
     #[error(transparent)]
     OpenSsl(#[from] openssl::error::ErrorStack),
+    #[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
+    #[error(transparent)]
+    NativeTls(#[from] native_tls::Error),
     #[cfg(feature = "postgres-raw")]
     #[error(transparent)]
     Postgres(#[from] tokio_postgres::Error),
@@ -178,9 +181,49 @@ pub async fn init_postgres_sqlx() -> Result<Box<dyn Database>, InitDatabaseError
     ))))
 }
 
-#[cfg(feature = "postgres-raw")]
+#[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
 #[allow(unused)]
-pub async fn init_postgres_raw() -> Result<
+pub async fn init_postgres_raw_native_tls() -> Result<
+    (
+        Box<dyn Database>,
+        tokio_postgres::Connection<
+            tokio_postgres::Socket,
+            postgres_native_tls::TlsStream<tokio_postgres::Socket>,
+        >,
+    ),
+    InitDatabaseError,
+> {
+    use moosicbox_database::postgres::postgres::PostgresDatabase;
+    use postgres_native_tls::MakeTlsConnector;
+
+    let (db_host, db_name, db_user, db_password) = get_db_config().await?;
+
+    let mut config = tokio_postgres::Config::new();
+    let mut config = config.host(&db_host).dbname(&db_name).user(&db_user);
+
+    if let Some(ref db_password) = db_password {
+        config = config.password(db_password);
+    }
+
+    let mut builder = native_tls::TlsConnector::builder();
+
+    match db_host.to_lowercase().as_str() {
+        "localhost" | "127.0.0.1" | "0.0.0.0" => {
+            builder.danger_accept_invalid_hostnames(true);
+        }
+        _ => {}
+    }
+
+    let connector = MakeTlsConnector::new(builder.build()?);
+
+    let (client, connection) = config.connect(connector).await?;
+
+    Ok((Box::new(PostgresDatabase::new(client)), connection))
+}
+
+#[cfg(all(feature = "postgres-openssl", feature = "postgres-raw"))]
+#[allow(unused)]
+pub async fn init_postgres_raw_openssl() -> Result<
     (
         Box<dyn Database>,
         tokio_postgres::Connection<
@@ -213,6 +256,33 @@ pub async fn init_postgres_raw() -> Result<
     }
 
     let connector = MakeTlsConnector::new(builder.build());
+
+    let (client, connection) = config.connect(connector).await?;
+
+    Ok((Box::new(PostgresDatabase::new(client)), connection))
+}
+
+#[cfg(feature = "postgres-raw")]
+#[allow(unused)]
+pub async fn init_postgres_raw_no_tls() -> Result<
+    (
+        Box<dyn Database>,
+        tokio_postgres::Connection<tokio_postgres::Socket, tokio_postgres::tls::NoTlsStream>,
+    ),
+    InitDatabaseError,
+> {
+    use moosicbox_database::postgres::postgres::PostgresDatabase;
+
+    let (db_host, db_name, db_user, db_password) = get_db_config().await?;
+
+    let mut config = tokio_postgres::Config::new();
+    let mut config = config.host(&db_host).dbname(&db_name).user(&db_user);
+
+    if let Some(ref db_password) = db_password {
+        config = config.password(db_password);
+    }
+
+    let connector = tokio_postgres::NoTls;
 
     let (client, connection) = config.connect(connector).await?;
 

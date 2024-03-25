@@ -81,9 +81,19 @@ fn main() -> std::io::Result<()> {
             .unwrap()
     })
     .block_on(async move {
-        #[cfg(feature = "postgres-raw")]
+        #[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
         #[allow(unused)]
-        let (db, db_connection) = db::init_postgres_raw()
+        let (db, db_connection) = db::init_postgres_raw_native_tls()
+            .await
+            .expect("Failed to init postgres DB");
+        #[cfg(all(not(feature = "postgres-native-tls"), feature = "postgres-openssl", feature = "postgres-raw"))]
+        #[allow(unused)]
+        let (db, db_connection) = db::init_postgres_raw_openssl()
+            .await
+            .expect("Failed to init postgres DB");
+        #[cfg(all(not(feature = "postgres-native-tls"), not(feature = "postgres-openssl"), feature = "postgres-raw"))]
+        #[allow(unused)]
+        let (db, db_connection) = db::init_postgres_raw_no_tls()
             .await
             .expect("Failed to init postgres DB");
         #[cfg(feature = "postgres-sqlx")]

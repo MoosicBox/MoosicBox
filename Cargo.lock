@@ -3189,8 +3189,10 @@ dependencies = [
  "moosicbox_tunnel",
  "moosicbox_tunnel_sender",
  "moosicbox_ws",
+ "native-tls",
  "once_cell",
  "openssl",
+ "postgres-native-tls",
  "postgres-openssl",
  "rand",
  "regex",
@@ -3968,6 +3970,19 @@ dependencies = [
  "fdeflate",
  "flate2",
  "miniz_oxide",
+]
+
+[[package]]
+name = "postgres-native-tls"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d442770e2b1e244bb5eb03b31c79b65bb2568f413b899eaba850fa945a65954"
+dependencies = [
+ "futures",
+ "native-tls",
+ "tokio",
+ "tokio-native-tls",
+ "tokio-postgres",
 ]
 
 [[package]]
