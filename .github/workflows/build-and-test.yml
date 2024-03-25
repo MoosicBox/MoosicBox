@@ -239,6 +239,20 @@ jobs:
                       features: postgres-raw
                       cargo: --no-default-features
 
+                    - name: tunnel_server-postgres-raw-openssl
+                      path: packages/tunnel_server
+                      os: ubuntu-latest
+                      env: TUNNEL_ACCESS_TOKEN=123
+                      features: postgres-raw,postgres-openssl
+                      cargo: --no-default-features
+
+                    - name: tunnel_server-postgres-raw-native-tls
+                      path: packages/tunnel_server
+                      os: ubuntu-latest
+                      env: TUNNEL_ACCESS_TOKEN=123
+                      features: postgres-raw,postgres-native-tls
+                      cargo: --no-default-features
+
                     - name: tunnel_server-postgres-sqlx
                       path: packages/tunnel_server
                       os: ubuntu-latest
