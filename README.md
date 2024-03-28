@@ -41,6 +41,7 @@ To-do (in no particular order):
 - Listen-only connections
 - Support MPEG-DASH encoding
 - Support gapless playback
+- Peer-to-peer secure tunneling
 
 ## Local Server
 
