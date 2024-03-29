@@ -20,6 +20,7 @@ Implemented:
 - Tidal and Qobuz integration
 - No internet connection required, ever.
 - Global search functionality
+- Postgres, MySQL, and SQLite database support
 
 To-do (in no particular order):
 
