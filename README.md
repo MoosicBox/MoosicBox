@@ -45,6 +45,7 @@ To-do (in no particular order):
 - Support gapless playback
 - Peer-to-peer secure tunneling
 - Turso database support
+- ios app
 
 ## Local Server
 
