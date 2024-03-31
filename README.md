@@ -21,6 +21,7 @@ Implemented:
 - No internet connection required, ever.
 - Global search functionality
 - Postgres, MySQL, and SQLite database support
+- Android app
 
 To-do (in no particular order):
 
