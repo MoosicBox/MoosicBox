@@ -44,6 +44,7 @@ To-do (in no particular order):
 - Support MPEG-DASH encoding
 - Support gapless playback
 - Peer-to-peer secure tunneling
+- Turso database support
 
 ## Local Server
 
