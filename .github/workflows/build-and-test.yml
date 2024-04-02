@@ -18,6 +18,10 @@ jobs:
 
             matrix:
                 package:
+                    - name: aconverter
+                      path: packages/aconverter
+                      os: ubuntu-latest
+
                     - name: auth
                       path: packages/auth
                       os: ubuntu-latest

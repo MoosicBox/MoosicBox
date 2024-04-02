@@ -1,0 +1,35 @@
+[package]
+authors = ["Braden Steffaniak"]
+edition = "2021"
+name    = "moosicbox_aconverter"
+version = "0.1.0"
+
+[[bin]]
+name              = "aconverter"
+path              = "src/main.rs"
+required-features = []
+
+[dependencies]
+moosicbox_converter = { path = "../converter", default-features = false }
+moosicbox_core = { path = "../core", default-features = false }
+moosicbox_files = { path = "../files", default-features = false, features = [
+    "files",
+] }
+
+opus = { workspace = true }
+
+clap       = { workspace = true }
+env_logger = { workspace = true }
+log        = { workspace = true }
+thiserror  = { workspace = true }
+tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default = ["aac", "flac", "mp3", "opus"]
+
+fail-on-warnings = []
+
+aac  = ["moosicbox_files/aac"]
+flac = ["moosicbox_files/flac"]
+mp3  = ["moosicbox_files/mp3"]
+opus = ["moosicbox_files/opus"]

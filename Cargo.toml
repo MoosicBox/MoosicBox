@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "packages/aconverter",
     "packages/auth",
     "packages/config",
     "packages/converter",
