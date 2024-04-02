@@ -19,6 +19,20 @@ pub enum AudioFormat {
     Source,
 }
 
+pub fn from_extension_to_audio_format(extension: &str) -> Option<AudioFormat> {
+    Some(match extension.to_lowercase().as_str() {
+        #[cfg(feature = "flac")]
+        "flac" => AudioFormat::Flac,
+        #[cfg(feature = "mp3")]
+        "mp3" => AudioFormat::Mp3,
+        #[cfg(feature = "opus")]
+        "opus" => AudioFormat::Opus,
+        #[cfg(feature = "aac")]
+        "m4a" | "mp4" => AudioFormat::Aac,
+        _ => return None,
+    })
+}
+
 #[derive(Copy, Clone, Default, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaybackQuality {

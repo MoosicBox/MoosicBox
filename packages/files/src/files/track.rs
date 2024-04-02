@@ -307,6 +307,35 @@ pub async fn get_track_bytes(
         None
     };
 
+    let track = moosicbox_core::sqlite::db::get_track(&db, track_id)
+        .await?
+        .ok_or(GetTrackBytesError::NotFound)?;
+
+    let format = match format {
+        #[cfg(feature = "flac")]
+        AudioFormat::Flac => {
+            if track.format != Some(AudioFormat::Flac) {
+                return Err(GetTrackBytesError::UnsupportedFormat);
+            }
+            format
+        }
+        AudioFormat::Source => track.format.ok_or(GetTrackBytesError::UnsupportedFormat)?,
+        #[allow(unreachable_patterns)]
+        _ => format,
+    };
+
+    get_audio_bytes(source, format, size, start, end).await
+}
+
+pub async fn get_audio_bytes(
+    source: TrackSource,
+    format: AudioFormat,
+    size: Option<u64>,
+    start: Option<u64>,
+    end: Option<u64>,
+) -> Result<TrackBytes, GetTrackBytesError> {
+    log::debug!("Getting audio bytes format={format:?} start={start:?} end={end:?}");
+
     let writer = ByteWriter::default();
     #[allow(unused)]
     let stream = writer.stream();
@@ -406,13 +435,9 @@ pub async fn get_track_bytes(
 
     let track_bytes = match source {
         TrackSource::LocalFilePath { path, .. } => match format {
-            AudioFormat::Source => {
-                request_track_bytes_from_file(db, track_id, path, format, size).await?
-            }
+            AudioFormat::Source => request_audio_bytes_from_file(path, format, size).await,
             #[cfg(feature = "flac")]
-            AudioFormat::Flac => {
-                request_track_bytes_from_file(db, track_id, path, format, size).await?
-            }
+            AudioFormat::Flac => request_audio_bytes_from_file(path, format, size).await,
             #[allow(unreachable_patterns)]
             _ => TrackBytes {
                 stream: StalledReadMonitor::new(stream.boxed()),
@@ -440,39 +465,20 @@ pub async fn get_track_bytes(
     Ok(track_bytes)
 }
 
-async fn request_track_bytes_from_file(
-    db: Arc<Box<dyn Database>>,
-    track_id: u64,
+async fn request_audio_bytes_from_file(
     path: String,
     format: AudioFormat,
     size: Option<u64>,
-) -> Result<TrackBytes, GetTrackBytesError> {
-    let track = moosicbox_core::sqlite::db::get_track(&db, track_id)
-        .await?
-        .ok_or(GetTrackBytesError::NotFound)?;
-
-    let format = match format {
-        #[cfg(feature = "flac")]
-        AudioFormat::Flac => {
-            if track.format != Some(AudioFormat::Flac) {
-                return Err(GetTrackBytesError::UnsupportedFormat);
-            }
-            format
-        }
-        AudioFormat::Source => track.format.ok_or(GetTrackBytesError::UnsupportedFormat)?,
-        #[allow(unreachable_patterns)]
-        _ => format,
-    };
-
+) -> TrackBytes {
     let stream = tokio::fs::File::open(path)
         .map_ok(|file| FramedRead::new(file, BytesCodec::new()).map_ok(BytesMut::freeze))
         .try_flatten_stream();
 
-    Ok(TrackBytes {
+    TrackBytes {
         stream: StalledReadMonitor::new(stream.boxed()),
         size,
         format,
-    })
+    }
 }
 
 async fn request_track_bytes_from_url(
