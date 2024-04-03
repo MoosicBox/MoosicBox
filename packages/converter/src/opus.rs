@@ -82,7 +82,7 @@ pub fn encode_audiopus(samples: &[f32]) -> Result<(u32, Vec<u8>), EncoderError> 
 
 pub fn encoder_opus() -> Result<::opus::Encoder, EncoderError> {
     let encoder =
-        ::opus::Encoder::new(48000, ::opus::Channels::Stereo, ::opus::Application::Audio).unwrap();
+        ::opus::Encoder::new(48000, ::opus::Channels::Stereo, ::opus::Application::Audio)?;
 
     Ok(encoder)
 }
@@ -92,7 +92,7 @@ pub fn encode_opus_float(
     input: &[f32],
     output: &mut [u8],
 ) -> Result<EncodeInfo, EncoderError> {
-    let len = encoder.encode_float(input, output).unwrap();
+    let len = encoder.encode_float(input, output)?;
 
     Ok(EncodeInfo {
         output_size: len,
@@ -238,8 +238,7 @@ impl std::io::Write for OpusWrite<'_> {
                 packet.page_num
             );
             self.packet_writer
-                .write_packet(packet.content, self.serial, info, packet.absgp)
-                .unwrap();
+                .write_packet(packet.content, self.serial, info, packet.absgp)?;
         }
         Ok(())
     }
