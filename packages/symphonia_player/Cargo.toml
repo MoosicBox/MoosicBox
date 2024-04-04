@@ -21,6 +21,7 @@ libpulse-binding        = { workspace = true, optional = true }
 libpulse-simple-binding = { workspace = true, optional = true }
 log                     = { workspace = true }
 mp3lame-encoder         = { workspace = true, optional = true }
+ogg                     = { workspace = true, optional = true }
 opus                    = { workspace = true, optional = true }
 pretty_env_logger       = { workspace = true }
 rangemap                = { workspace = true }
@@ -35,27 +36,27 @@ tokio-util              = { workspace = true }
 
 [features]
 default = [
-    "oboe-shared-stdcxx",
+    "aac",
     "cpal",
+    "mp3",
+    "oboe-shared-stdcxx",
+    "opus",
     "pulseaudio",
     "resampler",
-    "aac",
-    "mp3",
-    "opus",
 ]
 
 fail-on-warnings = []
 
 # Player audio outputs
 asio                = ["cpal/asio"]
-cpal                = ["resampler", "dep:cpal"]
+cpal                = ["dep:cpal", "resampler"]
 jack                = ["cpal/jack"]
 oboe-shared-stdcxx  = ["cpal/oboe-shared-stdcxx"]
-pulseaudio          = ["pulseaudio-standard", "pulseaudio-simple"]
+pulseaudio          = ["pulseaudio-simple", "pulseaudio-standard"]
 pulseaudio-simple   = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
 pulseaudio-standard = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
 resampler           = ["dep:arrayvec", "dep:rb", "dep:rubato"]
 
-aac  = ["resampler", "moosicbox_converter/aac", "dep:fdk-aac"]
+aac  = ["dep:fdk-aac", "moosicbox_converter/aac", "resampler"]
 mp3  = ["dep:mp3lame-encoder", "moosicbox_converter/mp3"]
-opus = ["resampler", "dep:opus", "moosicbox_converter/opus"]
+opus = ["dep:ogg", "dep:opus", "moosicbox_converter/opus", "resampler"]

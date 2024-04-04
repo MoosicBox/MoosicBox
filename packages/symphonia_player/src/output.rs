@@ -11,7 +11,7 @@ pub trait AudioOutput {
 
 #[allow(dead_code)]
 #[allow(clippy::enum_variant_names)]
-#[derive(Debug, Error, Clone)]
+#[derive(Debug, Error)]
 pub enum AudioOutputError {
     #[error("OpenStreamError")]
     OpenStream,
@@ -25,6 +25,8 @@ pub enum AudioOutputError {
     Resample,
     #[error("InterruptError")]
     Interrupt,
+    #[error(transparent)]
+    IO(#[from] std::io::Error),
 }
 
 #[cfg(all(

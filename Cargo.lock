@@ -3255,6 +3255,7 @@ dependencies = [
  "moosicbox_converter",
  "moosicbox_stream_utils",
  "mp3lame-encoder",
+ "ogg",
  "opus",
  "pretty_env_logger",
  "rangemap",

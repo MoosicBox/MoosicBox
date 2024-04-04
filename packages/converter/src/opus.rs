@@ -164,6 +164,37 @@ pub struct OpusWrite<'a> {
     packet: Option<OpusPacket>,
 }
 
+// Construct Opus Stream Header Packet data
+pub const OPUS_STREAM_IDENTIFICATION_HEADER: [u8; 19] = [
+    // Opus magic signature ("OpusHead")
+    b'O', b'p', b'u', b's', b'H', b'e', b'a', b'd',
+    // Version number (2 bytes, little endian)
+    0x01, // Version 1
+    // Number of channels (1 byte)
+    0x02, // Stereo
+    // Pre-skip (2 bytes, little endian)
+    0x00, 0x00, // Zero pre-skip
+    // Input sample rate (4 bytes, little endian)
+    0x80, 0xBB, 0x00, 0x00, // 48000 Hz
+    // 0x44, 0xAC, 0x00, 0x00, // 44100 Hz
+    // 0xC0, 0x5D, 0x00, 0x00, // 24000 Hz
+    // Output gain (2 bytes, little endian)
+    0x00, 0x00, // Zero output gain
+    // Channel mapping family (1 byte)
+    0x00, // Channel mapping: "normal"
+];
+
+// Construct Opus Stream Header Packet data
+pub const OPUS_STREAM_COMMENTS_HEADER: [u8; 17] = [
+    // Opus magic signature ("OpusHead")
+    b'O', b'p', b'u', b's', b'T', b'a', b'g', b's',
+    // Vendor String Length (32 bits, unsigned, little endian)
+    0x7, // ENCODER len
+    b'E', b'N', b'C', b'O', b'D', b'E', b'R',
+    // User Comment List Length (32 bits, unsigned, little endian)
+    0x0,
+];
+
 impl OpusWrite<'_> {
     pub fn new(path: &str) -> Self {
         let _ = std::fs::remove_file(path);
