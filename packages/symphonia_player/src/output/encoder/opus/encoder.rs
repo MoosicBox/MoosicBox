@@ -180,7 +180,9 @@ where
                 )
                 .expect("Failed to write packet");
 
-            self.absgp += (section.len() / 2) as u64;
+            self.absgp += (info.input_consumed / 2) as u64;
+
+            self.write_new_packet_writer_contents();
 
             read += buf_size;
             if self.time % 1000 == 0 {
@@ -201,7 +203,7 @@ where
         written
     }
 
-    fn write_packet_writer_contents(&mut self) {
+    fn write_new_packet_writer_contents(&mut self) {
         let writer_contents = self.packet_writer.inner();
 
         if writer_contents.len() > self.last_write_pos {
@@ -294,7 +296,7 @@ where
             )
             .expect("Failed to write packet end stream");
 
-        self.write_packet_writer_contents();
+        self.write_new_packet_writer_contents();
 
         let mut binding = self.writer.borrow_mut();
         if let Some(on_bytes) = binding.as_mut() {
