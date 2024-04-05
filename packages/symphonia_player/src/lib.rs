@@ -162,7 +162,6 @@ fn play(
             track_id: Some(track_id),
         };
 
-        log::debug!("Seeking reader to {seek_time:?}");
         // Attempt the seek. If the seek fails, ignore the error and return a seek timestamp of 0 so
         // that no samples are trimmed.
         match reader.seek(SeekMode::Accurate, seek_to) {
@@ -199,16 +198,10 @@ fn play(
         }
     };
 
-    let result = match result {
-        Err(PlaybackError::AudioOutput(AudioOutputError::Resample)) => {
-            log::warn!("Resample error");
-            Ok(0)
-        }
-        Err(PlaybackError::AudioOutput(AudioOutputError::StreamEnd)) => {
-            log::debug!("Stream ended");
-            Ok(0)
-        }
-        _ => result,
+    let result = if let Err(PlaybackError::AudioOutput(AudioOutputError::StreamEnd)) = result {
+        Ok(0)
+    } else {
+        result
     };
 
     match result {
