@@ -60,17 +60,17 @@ impl AudioOutputHandler {
         }
     }
 
-    pub fn with_filter(&mut self, filter: AudioFilter) -> &mut Self {
+    pub fn with_filter(mut self, filter: AudioFilter) -> Self {
         self.filters.push(filter);
         self
     }
 
-    pub fn with_output(&mut self, open_output: OpenFunc) -> &mut Self {
+    pub fn with_output(mut self, open_output: OpenFunc) -> Self {
         self.open_outputs.push(open_output);
         self
     }
 
-    pub fn with_cancellation_token(&mut self, cancellation_token: CancellationToken) -> &mut Self {
+    pub fn with_cancellation_token(mut self, cancellation_token: CancellationToken) -> Self {
         self.cancellation_token.replace(cancellation_token);
         self
     }

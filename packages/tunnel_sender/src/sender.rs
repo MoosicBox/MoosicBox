@@ -1175,7 +1175,7 @@ impl TunnelSender {
                                     #[cfg(feature = "aac")]
                                     AudioFormat::Aac => {
                                         log::debug!("Using AAC encoder for output");
-                                        audio_output_handler.with_output(Box::new(move |spec, duration| {
+                                        audio_output_handler = audio_output_handler.with_output(Box::new(move |spec, duration| {
                                             let mut encoder = moosicbox_symphonia_player::output::encoder::aac::encoder::AacEncoder::new(writer.clone());
                                             encoder.open(spec, duration);
                                             Ok(Box::new(encoder))
@@ -1184,7 +1184,7 @@ impl TunnelSender {
                                     #[cfg(feature = "mp3")]
                                     AudioFormat::Mp3 => {
                                         log::debug!("Using MP3 encoder for output");
-                                        audio_output_handler.with_output(Box::new(move |spec, duration| {
+                                        audio_output_handler = audio_output_handler.with_output(Box::new(move |spec, duration| {
                                             let mut encoder = moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder::new(writer.clone());
                                             encoder.open(spec, duration);
                                             Ok(Box::new(encoder))
@@ -1193,7 +1193,7 @@ impl TunnelSender {
                                     #[cfg(feature = "opus")]
                                     AudioFormat::Opus => {
                                         log::debug!("Using OPUS encoder for output");
-                                        audio_output_handler.with_output(Box::new(move |spec, duration| {
+                                        audio_output_handler = audio_output_handler.with_output(Box::new(move |spec, duration| {
                                             let mut encoder: moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder<i16, ByteWriter> = moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder::new(writer.clone());
                                             encoder.open(spec, duration);
                                             Ok(Box::new(encoder))

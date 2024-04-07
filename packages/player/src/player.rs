@@ -614,28 +614,9 @@ impl Player {
                 .await?;
             let mss = MediaSourceStream::new(playable_track.source, Default::default());
 
-            let mut audio_output_handler = AudioOutputHandler::new();
-
-            #[cfg(feature = "cpal")]
-            audio_output_handler.with_output(Box::new(
-                moosicbox_symphonia_player::output::cpal::player::try_open,
-            ));
-            #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
-            audio_output_handler.with_output(Box::new(
-                moosicbox_symphonia_player::output::pulseaudio::simple::try_open,
-            ));
-            #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
-            audio_output_handler.with_output(Box::new(
-                moosicbox_symphonia_player::output::pulseaudio::standard::try_open,
-            ));
-
-            if !audio_output_handler.contains_outputs_to_open() {
-                log::warn!("No outputs set for the audio_output_handler");
-            }
-
             let active_playback = self.active_playback.clone();
 
-            audio_output_handler
+            let mut audio_output_handler = AudioOutputHandler::new()
                 .with_filter(Box::new(move |_decoded, packet, track| {
                     if let Some(tb) = track.codec_params.time_base {
                         let ts = packet.ts();
@@ -656,6 +637,29 @@ impl Player {
                     Ok(())
                 }))
                 .with_cancellation_token(abort.clone());
+
+            #[cfg(feature = "cpal")]
+            {
+                audio_output_handler = audio_output_handler.with_output(Box::new(
+                    moosicbox_symphonia_player::output::cpal::player::try_open,
+                ));
+            }
+            #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
+            {
+                audio_output_handler = audio_output_handler.with_output(Box::new(
+                    moosicbox_symphonia_player::output::pulseaudio::simple::try_open,
+                ));
+            }
+            #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
+            {
+                audio_output_handler = audio_output_handler.with_output(Box::new(
+                    moosicbox_symphonia_player::output::pulseaudio::standard::try_open,
+                ));
+            }
+
+            if !audio_output_handler.contains_outputs_to_open() {
+                log::warn!("No outputs set for the audio_output_handler");
+            }
 
             if let Err(err) = moosicbox_symphonia_player::play_media_source(
                 mss,

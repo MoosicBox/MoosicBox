@@ -344,50 +344,51 @@ pub async fn get_audio_bytes(
         let source = source.clone();
 
         RT.spawn(async move {
-            let audio_output_handler = match format {
-                #[cfg(feature = "aac")]
-                AudioFormat::Aac => {
-                    use moosicbox_symphonia_player::output::encoder::aac::encoder::AacEncoder;
-                    let mut audio_output_handler =
-                        moosicbox_symphonia_player::output::AudioOutputHandler::new();
-                    audio_output_handler.with_output(Box::new(move |spec, duration| {
-                        let mut encoder = AacEncoder::new(writer.clone());
-                        encoder.open(spec, duration);
-                        Ok(Box::new(encoder))
-                    }));
-                    Some(audio_output_handler)
-                }
-                #[cfg(feature = "flac")]
-                AudioFormat::Flac => None,
-                #[cfg(feature = "mp3")]
-                AudioFormat::Mp3 => {
-                    use moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder;
-                    let encoder_writer = writer.clone();
-                    let mut audio_output_handler =
-                        moosicbox_symphonia_player::output::AudioOutputHandler::new();
-                    audio_output_handler.with_output(Box::new(move |spec, duration| {
-                        let mut encoder = Mp3Encoder::new(encoder_writer.clone());
-                        encoder.open(spec, duration);
-                        Ok(Box::new(encoder))
-                    }));
-                    Some(audio_output_handler)
-                }
-                #[cfg(feature = "opus")]
-                AudioFormat::Opus => {
-                    use moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder;
-                    let encoder_writer = writer.clone();
-                    let mut audio_output_handler =
-                        moosicbox_symphonia_player::output::AudioOutputHandler::new();
-                    audio_output_handler.with_output(Box::new(move |spec, duration| {
-                        let mut encoder: OpusEncoder<i16, ByteWriter> =
-                            OpusEncoder::new(encoder_writer.clone());
-                        encoder.open(spec, duration);
-                        Ok(Box::new(encoder))
-                    }));
-                    Some(audio_output_handler)
-                }
-                AudioFormat::Source => None,
-            };
+            let audio_output_handler =
+                match format {
+                    #[cfg(feature = "aac")]
+                    AudioFormat::Aac => {
+                        use moosicbox_symphonia_player::output::encoder::aac::encoder::AacEncoder;
+                        Some(
+                            moosicbox_symphonia_player::output::AudioOutputHandler::new()
+                                .with_output(Box::new(move |spec, duration| {
+                                    let mut encoder = AacEncoder::new(writer.clone());
+                                    encoder.open(spec, duration);
+                                    Ok(Box::new(encoder))
+                                })),
+                        )
+                    }
+                    #[cfg(feature = "flac")]
+                    AudioFormat::Flac => None,
+                    #[cfg(feature = "mp3")]
+                    AudioFormat::Mp3 => {
+                        use moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder;
+                        let encoder_writer = writer.clone();
+                        Some(
+                            moosicbox_symphonia_player::output::AudioOutputHandler::new()
+                                .with_output(Box::new(move |spec, duration| {
+                                    let mut encoder = Mp3Encoder::new(encoder_writer.clone());
+                                    encoder.open(spec, duration);
+                                    Ok(Box::new(encoder))
+                                })),
+                        )
+                    }
+                    #[cfg(feature = "opus")]
+                    AudioFormat::Opus => {
+                        use moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder;
+                        let encoder_writer = writer.clone();
+                        Some(
+                            moosicbox_symphonia_player::output::AudioOutputHandler::new()
+                                .with_output(Box::new(move |spec, duration| {
+                                    let mut encoder: OpusEncoder<i16, ByteWriter> =
+                                        OpusEncoder::new(encoder_writer.clone());
+                                    encoder.open(spec, duration);
+                                    Ok(Box::new(encoder))
+                                })),
+                        )
+                    }
+                    AudioFormat::Source => None,
+                };
 
             if let Some(mut audio_output_handler) = audio_output_handler {
                 match source {
@@ -646,14 +647,13 @@ pub fn get_or_init_track_visualization(
 
     match source {
         TrackSource::LocalFilePath { ref path, .. } => {
-            let mut audio_output_handler = AudioOutputHandler::new();
             let viz = Arc::new(RwLock::new(vec![]));
-
             let inner_viz = viz.clone();
-            audio_output_handler.with_filter(Box::new(move |decoded, _packet, _track| {
-                inner_viz.write().unwrap().push(visualize(decoded));
-                Ok(())
-            }));
+            let mut audio_output_handler =
+                AudioOutputHandler::new().with_filter(Box::new(move |decoded, _packet, _track| {
+                    inner_viz.write().unwrap().push(visualize(decoded));
+                    Ok(())
+                }));
 
             play_file_path_str(path, &mut audio_output_handler, true, true, None, None)?;
 

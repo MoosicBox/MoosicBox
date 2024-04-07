@@ -157,13 +157,12 @@ pub fn encode_mp3_spawn<T: std::io::Write + Send + Clone + 'static>(
 }
 
 pub fn encode_mp3<T: std::io::Write + Send + Clone + 'static>(path: String, writer: T) {
-    let mut audio_output_handler = AudioOutputHandler::new();
-
-    audio_output_handler.with_output(Box::new(move |spec, duration| {
-        let mut encoder = Mp3Encoder::new(writer.clone());
-        encoder.open(spec, duration);
-        Ok(Box::new(encoder))
-    }));
+    let mut audio_output_handler =
+        AudioOutputHandler::new().with_output(Box::new(move |spec, duration| {
+            let mut encoder = Mp3Encoder::new(writer.clone());
+            encoder.open(spec, duration);
+            Ok(Box::new(encoder))
+        }));
 
     if let Err(err) = play_file_path_str(&path, &mut audio_output_handler, true, true, None, None) {
         log::error!("Failed to encode to mp3: {err:?}");
