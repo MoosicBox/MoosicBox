@@ -64,6 +64,8 @@ pub enum PlayerError {
     #[error(transparent)]
     Db(#[from] DbError),
     #[error(transparent)]
+    IO(#[from] std::io::Error),
+    #[error(transparent)]
     PlaybackError(#[from] moosicbox_symphonia_player::PlaybackError),
     #[error("Track fetch failed: {0}")]
     TrackFetchFailed(i32),

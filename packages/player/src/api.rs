@@ -58,6 +58,7 @@ impl From<PlayerError> for actix_web::Error {
             }
             PlayerError::PlaybackError(err) => ErrorInternalServerError(err),
             PlayerError::Send(err) => ErrorInternalServerError(err),
+            PlayerError::IO(err) => ErrorInternalServerError(err),
         }
     }
 }
