@@ -56,6 +56,9 @@ impl From<PlayerError> for actix_web::Error {
             PlayerError::InvalidPlaybackType => {
                 ErrorBadRequest("Invalid Playback Type".to_string())
             }
+            PlayerError::UnsupportedFormat(format) => {
+                ErrorBadRequest(format!("Unsupported format: {format:?}"))
+            }
             PlayerError::PlaybackError(err) => ErrorInternalServerError(err),
             PlayerError::Send(err) => ErrorInternalServerError(err),
             PlayerError::IO(err) => ErrorInternalServerError(err),

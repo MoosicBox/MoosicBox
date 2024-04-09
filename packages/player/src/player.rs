@@ -65,6 +65,8 @@ pub enum PlayerError {
     Db(#[from] DbError),
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    #[error("Format not supported: {0:?}")]
+    UnsupportedFormat(AudioFormat),
     #[error(transparent)]
     PlaybackError(#[from] moosicbox_symphonia_player::PlaybackError),
     #[error("Track fetch failed: {0}")]
