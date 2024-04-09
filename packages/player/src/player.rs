@@ -266,7 +266,7 @@ pub struct PlayableTrack {
     pub hint: Hint,
 }
 
-#[derive(Copy, Clone, Default, Deserialize, Serialize)]
+#[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum PlaybackType {
     File,
