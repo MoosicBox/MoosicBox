@@ -116,7 +116,18 @@ fn scan_track(
     metadata: Metadata,
 ) -> Pin<Box<dyn Future<Output = Result<(), ScanError>> + Send>> {
     Box::pin(async move {
-        let tag = Tag::new().read_from_path(path.to_str().unwrap());
+        let extension = path
+            .extension()
+            .and_then(std::ffi::OsStr::to_str)
+            .unwrap_or("")
+            .to_uppercase();
+
+        let tag = match extension.as_str() {
+            "FLAC" | "MP4" | "M4A" | "MP3" | "WAV" => {
+                Some(Tag::new().read_from_path(path.to_str().unwrap()))
+            }
+            _ => None,
+        };
         let lofty_tag = lofty::Probe::open(path.clone())
             .expect("ERROR: Bad path provided!")
             .options(ParseOptions::new().read_picture(false))
@@ -129,18 +140,13 @@ fn scan_track(
                 .as_secs_f64()
         } else {
             match tag {
-                Ok(ref tag) => tag.duration().unwrap(),
-                Err(err) => return Err(ScanError::Tag(err)),
+                Some(Ok(ref tag)) => tag.duration().unwrap(),
+                Some(Err(err)) => return Err(ScanError::Tag(err)),
+                None => 10.0,
             }
         };
 
-        let tag = tag.ok();
-
-        let extension = path
-            .extension()
-            .and_then(std::ffi::OsStr::to_str)
-            .unwrap_or("")
-            .to_uppercase();
+        let tag = tag.map(|x| x.ok()).flatten();
 
         let path_artist = path.clone().parent().unwrap().parent().unwrap().to_owned();
         let artist_dir_name = path_artist
@@ -323,7 +329,8 @@ fn scan_track(
     })
 }
 
-static MUSIC_FILE_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r".+\.(flac|m4a|mp3)").unwrap());
+static MUSIC_FILE_PATTERN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r".+\.(flac|m4a|mp3|opus)").unwrap());
 static MULTI_ARTIST_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\S,\S").unwrap());
 
 fn process_dir_entry<F>(
