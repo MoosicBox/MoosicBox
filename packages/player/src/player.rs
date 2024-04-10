@@ -1040,23 +1040,32 @@ impl Player {
             match quality.format {
                 #[cfg(feature = "aac")]
                 AudioFormat::Aac => {
-                    signal_chain = signal_chain.add_encoder_step(|| {
-                        Box::new(moosicbox_symphonia_player::output::encoder::aac::encoder::AacEncoder::new())
-                    });
+                    use moosicbox_symphonia_player::output::encoder::aac::encoder::AacEncoder;
+                    let mut hint = Hint::new();
+                    hint.with_extension("m4a");
+                    signal_chain = signal_chain
+                        .add_encoder_step(|| Box::new(AacEncoder::new()))
+                        .with_hint(hint);
                 }
                 #[cfg(feature = "flac")]
                 AudioFormat::Flac => return Err(PlayerError::UnsupportedFormat(quality.format)),
                 #[cfg(feature = "mp3")]
                 AudioFormat::Mp3 => {
-                    signal_chain = signal_chain.add_encoder_step(|| {
-                        Box::new(moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder::new())
-                    });
+                    use moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder;
+                    let mut hint = Hint::new();
+                    hint.with_extension("mp3");
+                    signal_chain = signal_chain
+                        .add_encoder_step(|| Box::new(Mp3Encoder::new()))
+                        .with_hint(hint);
                 }
                 #[cfg(feature = "opus")]
                 AudioFormat::Opus => {
-                    signal_chain = signal_chain.add_encoder_step(|| {
-                        Box::new(moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder::new())
-                    });
+                    use moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder;
+                    let mut hint = Hint::new();
+                    hint.with_extension("opus");
+                    signal_chain = signal_chain
+                        .add_encoder_step(|| Box::new(OpusEncoder::new()))
+                        .with_hint(hint);
                 }
                 #[allow(unreachable_patterns)]
                 _ | AudioFormat::Source => {}
