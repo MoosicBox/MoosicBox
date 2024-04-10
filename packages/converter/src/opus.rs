@@ -185,14 +185,14 @@ pub const OPUS_STREAM_IDENTIFICATION_HEADER: [u8; 19] = [
 ];
 
 // Construct Opus Stream Header Packet data
-pub const OPUS_STREAM_COMMENTS_HEADER: [u8; 17] = [
+pub const OPUS_STREAM_COMMENTS_HEADER: [u8; 23] = [
     // Opus magic signature ("OpusHead")
     b'O', b'p', b'u', b's', b'T', b'a', b'g', b's',
     // Vendor String Length (32 bits, unsigned, little endian)
-    0x7, // ENCODER len
+    0x07, 0x00, 0x00, 0x00, // ENCODER len
     b'E', b'N', b'C', b'O', b'D', b'E', b'R',
     // User Comment List Length (32 bits, unsigned, little endian)
-    0x0,
+    0x00, 0x00, 0x00, 0x00, // Comment List len
 ];
 
 impl OpusWrite<'_> {
