@@ -8,6 +8,7 @@ use std::{
 
 use atomic_float::AtomicF64;
 use crossbeam_channel::{bounded, Receiver, SendError};
+use futures::{StreamExt as _, TryStreamExt as _};
 use lazy_static::lazy_static;
 use moosicbox_core::{
     sqlite::{
@@ -21,9 +22,11 @@ use moosicbox_core::{
 };
 use moosicbox_database::Database;
 use moosicbox_json_utils::{serde_json::ToValue, ParseError};
+use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use moosicbox_symphonia_player::{
-    media_sources::remote_bytestream::RemoteByteStream,
+    media_sources::{bytestream_source::ByteStreamSource, remote_bytestream::RemoteByteStream},
     output::{AudioOutputError, AudioOutputHandler},
+    signal_chain::{SignalChain, SignalChainError},
     volume_mixer::mix_volume,
     PlaybackError,
 };
@@ -40,7 +43,10 @@ use tokio::{
     runtime::{self, Runtime},
     time::sleep,
 };
-use tokio_util::sync::CancellationToken;
+use tokio_util::{
+    codec::{BytesCodec, FramedRead},
+    sync::CancellationToken,
+};
 use url::form_urlencoded;
 
 lazy_static! {
@@ -997,7 +1003,13 @@ impl Player {
         self.play_playback(playback, seek, retry_options)
     }
 
-    pub fn track_to_playable_file(&self, track: &LibraryTrack) -> PlayableTrack {
+    pub async fn track_to_playable_file(
+        &self,
+        track: &LibraryTrack,
+        quality: &PlaybackQuality,
+    ) -> Result<PlayableTrack, PlayerError> {
+        log::trace!("track_to_playable_file track={track:?} quality={quality:?}");
+
         let mut hint = Hint::new();
 
         let file = track.file.clone().unwrap();
@@ -1010,13 +1022,87 @@ impl Player {
             }
         }
 
-        let source = Box::new(File::open(path).unwrap());
+        let same_source = match quality.format {
+            AudioFormat::Source => true,
+            #[allow(unreachable_patterns)]
+            _ => match track.format {
+                Some(format) => format == quality.format,
+                None => true,
+            },
+        };
 
-        PlayableTrack {
+        let source: Box<dyn MediaSource> = if same_source {
+            Box::new(File::open(path)?)
+        } else {
+            #[allow(unused_mut)]
+            let mut signal_chain = SignalChain::new();
+
+            match quality.format {
+                #[cfg(feature = "aac")]
+                AudioFormat::Aac => {
+                    signal_chain = signal_chain.add_encoder_step(|| {
+                        Box::new(moosicbox_symphonia_player::output::encoder::aac::encoder::AacEncoder::new())
+                    });
+                }
+                #[cfg(feature = "flac")]
+                AudioFormat::Flac => return Err(PlayerError::UnsupportedFormat(quality.format)),
+                #[cfg(feature = "mp3")]
+                AudioFormat::Mp3 => {
+                    signal_chain = signal_chain.add_encoder_step(|| {
+                        Box::new(moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder::new())
+                    });
+                }
+                #[cfg(feature = "opus")]
+                AudioFormat::Opus => {
+                    signal_chain = signal_chain.add_encoder_step(|| {
+                        Box::new(moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder::new())
+                    });
+                }
+                #[allow(unreachable_patterns)]
+                _ | AudioFormat::Source => {}
+            }
+
+            let file = tokio::fs::File::open(path.to_path_buf()).await?;
+
+            let ms = Box::new(ByteStreamSource::new(
+                Box::new(
+                    StalledReadMonitor::new(
+                        FramedRead::new(file, BytesCodec::new())
+                            .map_ok(bytes::BytesMut::freeze)
+                            .boxed(),
+                    )
+                    .map(|x| match x {
+                        Ok(Ok(x)) => Ok(x),
+                        Ok(Err(err)) | Err(err) => Err(err),
+                    }),
+                ),
+                None,
+                true,
+                false,
+                CancellationToken::new(),
+            ));
+
+            match signal_chain.process(ms) {
+                Ok(stream) => stream,
+                Err(SignalChainError::Playback(err)) => {
+                    return Err(PlayerError::PlaybackError(match err {
+                        moosicbox_symphonia_player::unsync::PlaybackError::AudioOutput(err) => {
+                            PlaybackError::AudioOutput(err)
+                        }
+                        moosicbox_symphonia_player::unsync::PlaybackError::Symphonia(err) => {
+                            PlaybackError::Symphonia(err)
+                        }
+                    }));
+                }
+                Err(SignalChainError::Empty) => unreachable!("Empty signal chain"),
+            }
+        };
+
+        Ok(PlayableTrack {
             track_id: track.id,
             source,
             hint,
-        }
+        })
     }
 
     pub async fn track_or_id_to_playable_stream(
@@ -1201,11 +1287,12 @@ impl Player {
         track_or_id: &TrackOrId,
         quality: &PlaybackQuality,
     ) -> Result<PlayableTrack, PlayerError> {
+        log::trace!("track_or_id_to_playable playback_type={playback_type:?} track_or_id={track_or_id:?} quality={quality:?}");
         Ok(match playback_type {
             PlaybackType::File => match track_or_id.clone() {
                 TrackOrId::Id(_id, _) => return Err(PlayerError::InvalidPlaybackType),
                 TrackOrId::Track(track) => match *track {
-                    Track::Library(track) => self.track_to_playable_file(&track),
+                    Track::Library(track) => self.track_to_playable_file(&track, quality).await?,
                     Track::Tidal(track) => {
                         self.track_to_playable_stream(&Track::Tidal(track), quality)
                             .await?
@@ -1226,7 +1313,7 @@ impl Player {
                         .await?
                 }
                 TrackOrId::Track(track) => match *track {
-                    Track::Library(track) => self.track_to_playable_file(&track),
+                    Track::Library(track) => self.track_to_playable_file(&track, quality).await?,
                     Track::Tidal(track) => {
                         self.track_to_playable_stream(&Track::Tidal(track), quality)
                             .await?

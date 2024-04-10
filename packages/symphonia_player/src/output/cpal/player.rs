@@ -4,7 +4,7 @@ use crate::output::{AudioOutput, AudioOutputError};
 
 use cpal::SizedSample;
 use rb::{RbConsumer, RbProducer, SpscRb, RB};
-use symphonia::core::audio::{AudioBufferRef, RawSample, SampleBuffer, SignalSpec};
+use symphonia::core::audio::{AudioBuffer, RawSample, SampleBuffer, Signal as _, SignalSpec};
 use symphonia::core::conv::{ConvertibleSample, IntoSample};
 use symphonia::core::units::Duration;
 
@@ -183,7 +183,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
 }
 
 impl<T: AudioOutputSample> AudioOutput for CpalAudioOutputImpl<T> {
-    fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<usize, AudioOutputError> {
+    fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
         // Do nothing if there are no audio frames.
         if decoded.frames() == 0 {
             return Ok(0);
@@ -198,7 +198,7 @@ impl<T: AudioOutputSample> AudioOutput for CpalAudioOutputImpl<T> {
             }
         } else {
             // Resampling is not required. Interleave the sample for cpal using a sample buffer.
-            self.sample_buf.copy_interleaved_ref(decoded);
+            self.sample_buf.copy_interleaved_typed(&decoded);
 
             self.sample_buf.samples()
         };

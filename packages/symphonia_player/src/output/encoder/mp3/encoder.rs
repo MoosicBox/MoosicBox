@@ -1,21 +1,16 @@
-use std::cell::RefCell;
-use std::fs::File;
+use std::sync::{Arc, RwLock};
 
-use crate::output::{AudioOutput, AudioOutputError, AudioOutputHandler};
+use crate::output::{AudioEncoder, AudioOutput, AudioOutputError, AudioOutputHandler};
 use crate::play_file_path_str;
+use crate::resampler::Resampler;
 
 use bytes::Bytes;
-use futures::Stream;
 use lazy_static::lazy_static;
-use log::debug;
 use moosicbox_converter::mp3::encoder_mp3;
 use moosicbox_stream_utils::{ByteStream, ByteWriter};
-use symphonia::core::audio::AudioBufferRef;
 use symphonia::core::audio::*;
 use symphonia::core::conv::IntoSample;
 use symphonia::core::units::Duration;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-use tokio_stream::wrappers::UnboundedReceiverStream;
 
 lazy_static! {
     static ref RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
@@ -25,118 +20,138 @@ lazy_static! {
         .unwrap();
 }
 
-pub struct Mp3Encoder<W>
-where
-    W: std::io::Write,
-{
-    senders: RefCell<Vec<UnboundedSender<Bytes>>>,
-    on_bytes: RefCell<Option<W>>,
+pub struct Mp3Encoder {
+    resampler: Arc<RwLock<Option<Resampler<i16>>>>,
+    writer: Option<Box<dyn std::io::Write + Send + Sync>>,
     encoder: mp3lame_encoder::Encoder,
 }
 
-impl<W> Mp3Encoder<W>
-where
-    W: std::io::Write,
-{
-    pub fn new(writer: W) -> Self {
+impl Mp3Encoder {
+    pub fn new() -> Self {
         Self {
-            senders: RefCell::new(vec![]),
-            on_bytes: RefCell::new(Some(writer)),
+            resampler: Arc::new(RwLock::new(None)),
+            writer: None,
             encoder: encoder_mp3().unwrap(),
         }
     }
 
-    pub fn open(&mut self, _spec: SignalSpec, _duration: Duration) {}
-
-    pub fn try_open(_spec: SignalSpec, _duration: Duration) -> Result<Self, AudioOutputError> {
-        Ok(Self {
-            senders: RefCell::new(vec![]),
-            on_bytes: RefCell::new(None),
+    pub fn with_writer<W: std::io::Write + Send + Sync + 'static>(writer: W) -> Self {
+        Self {
+            resampler: Arc::new(RwLock::new(None)),
+            writer: Some(Box::new(writer)),
             encoder: encoder_mp3().unwrap(),
-        })
+        }
     }
 
-    pub fn bytes_receiver(&mut self) -> UnboundedReceiver<Bytes> {
-        let (sender, receiver) = unbounded_channel();
-        self.senders.borrow_mut().push(sender);
-        receiver
+    pub fn open(&mut self, spec: SignalSpec, duration: Duration) {
+        if spec.rate != 48000 {
+            self.resampler
+                .write()
+                .unwrap()
+                .replace(Resampler::<i16>::new(spec, 48000_usize, duration));
+        } else {
+            self.resampler.write().unwrap().take();
+        }
     }
 
-    pub fn stream(&mut self) -> impl Stream<Item = Bytes> {
-        let (sender, receiver) = unbounded_channel();
-        self.senders.borrow_mut().push(sender);
-        UnboundedReceiverStream::new(receiver)
-    }
+    fn encode_output(&mut self, buf: &[i16]) -> Bytes {
+        let mut read = 0;
+        let mut written = vec![];
+        loop {
+            let end = std::cmp::min(read + 1024, buf.len());
+            log::trace!("Encoding {} bytes {read}..{end}", end - read);
+            match moosicbox_converter::mp3::encode_mp3(&mut self.encoder, &buf[read..end]) {
+                Ok((output, info)) => {
+                    log::trace!(
+                        "input_consumed={} output_size={} (output len={})",
+                        info.input_consumed,
+                        info.output_size,
+                        output.len()
+                    );
+                    written.extend_from_slice(&output);
+                    read += info.input_consumed;
 
-    fn write_output(&mut self, buf: &[i16]) -> usize {
-        let mut written = 0;
-        match moosicbox_converter::mp3::encode_mp3(&mut self.encoder, buf) {
-            Ok((output_buf, info)) => {
-                let len = info.output_size;
-                let bytes = Bytes::from(output_buf);
-                self.senders.borrow_mut().retain(|sender| {
-                    if sender.send(bytes.clone()).is_err() {
-                        debug!("Receiver has disconnected. Removing sender.");
-                        false
-                    } else {
-                        true
-                    }
-                });
-                let mut binding = self.on_bytes.borrow_mut();
-                if let Some(on_bytes) = binding.as_mut() {
-                    loop {
-                        let count = on_bytes.write(&bytes).unwrap();
-                        if count >= bytes.len() {
-                            break;
-                        }
+                    if read >= buf.len() {
+                        break;
                     }
                 }
-                written += len;
-            }
-            Err(err) => {
-                panic!("Failed to convert: {err:?}");
+                Err(err) => {
+                    panic!("Failed to convert: {err:?}");
+                }
             }
         }
-        written
+        written.into()
     }
 }
 
-impl<W> AudioOutput for Mp3Encoder<W>
-where
-    W: std::io::Write,
-{
-    fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<usize, AudioOutputError> {
-        let s =
-            &mut AudioBuffer::<i16>::new(decoded.capacity() as Duration, decoded.spec().to_owned());
-        decoded.convert(s);
+impl AudioEncoder for Mp3Encoder {
+    fn encode(&mut self, decoded: AudioBuffer<f32>) -> Result<Bytes, AudioOutputError> {
+        log::debug!("Mp3Encoder encode {} frames", decoded.frames());
+        let buf = {
+            let s = &mut AudioBuffer::<i16>::new(
+                decoded.capacity() as Duration,
+                decoded.spec().to_owned(),
+            );
+            decoded.convert(s);
+            let decoded = AudioBufferRef::S16(std::borrow::Cow::Borrowed(s));
+            let mut binding = self.resampler.write().unwrap();
 
-        let n_channels = s.spec().channels.count();
-        let n_samples = s.frames() * n_channels;
-        let buf = &mut vec![0_i16; n_samples];
+            if let Some(resampler) = binding.as_mut() {
+                log::debug!("Resampling");
+                let mut buf = decoded.make_equivalent();
+                decoded.convert(&mut buf);
 
-        // Interleave the source buffer channels into the sample buffer.
-        for ch in 0..n_channels {
-            let ch_slice = s.chan(ch);
+                resampler
+                    .resample(buf)
+                    .ok_or(AudioOutputError::StreamEnd)?
+                    .to_vec()
+            } else {
+                log::debug!("Not resampling");
+                let n_channels = s.spec().channels.count();
+                let n_samples = s.frames() * n_channels;
+                let mut buf = vec![0_i16; n_samples];
 
-            for (dst, s) in buf[ch..].iter_mut().step_by(n_channels).zip(ch_slice) {
-                *dst = (*s).into_sample();
+                // Interleave the source buffer channels into the sample buffer.
+                for ch in 0..n_channels {
+                    let ch_slice = s.chan(ch);
+
+                    for (dst, s) in buf[ch..].iter_mut().step_by(n_channels).zip(ch_slice) {
+                        *dst = (*s).into_sample();
+                    }
+                }
+
+                buf
+            }
+        };
+
+        Ok(self.encode_output(&buf))
+    }
+}
+
+impl AudioOutput for Mp3Encoder {
+    fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+        if self.writer.is_none() {
+            return Ok(0);
+        }
+
+        let bytes = self.encode(decoded)?;
+
+        if let Some(writer) = self.writer.as_mut() {
+            let mut count = 0;
+            loop {
+                count += writer.write(&bytes[count..]).unwrap();
+                if count >= bytes.len() {
+                    break;
+                }
             }
         }
-        Ok(self.write_output(buf))
+
+        Ok(bytes.len())
     }
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
-        debug!("Flushing");
-
         Ok(())
     }
-}
-
-pub fn try_open(
-    spec: SignalSpec,
-    duration: Duration,
-) -> Result<Box<dyn AudioOutput>, AudioOutputError> {
-    Ok(Box::new(Mp3Encoder::<File>::try_open(spec, duration)?))
 }
 
 pub fn encode_mp3_stream(path: String) -> ByteStream {
@@ -148,7 +163,7 @@ pub fn encode_mp3_stream(path: String) -> ByteStream {
     stream
 }
 
-pub fn encode_mp3_spawn<T: std::io::Write + Send + Clone + 'static>(
+pub fn encode_mp3_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     path: String,
     writer: T,
 ) -> tokio::task::JoinHandle<()> {
@@ -156,10 +171,10 @@ pub fn encode_mp3_spawn<T: std::io::Write + Send + Clone + 'static>(
     RT.spawn(async move { encode_mp3(path, writer) })
 }
 
-pub fn encode_mp3<T: std::io::Write + Send + Clone + 'static>(path: String, writer: T) {
+pub fn encode_mp3<T: std::io::Write + Send + Sync + Clone + 'static>(path: String, writer: T) {
     let mut audio_output_handler =
         AudioOutputHandler::new().with_output(Box::new(move |spec, duration| {
-            let mut encoder = Mp3Encoder::new(writer.clone());
+            let mut encoder = Mp3Encoder::with_writer(writer.clone());
             encoder.open(spec, duration);
             Ok(Box::new(encoder))
         }));

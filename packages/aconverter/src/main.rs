@@ -3,6 +3,7 @@
 use std::{path::PathBuf, str::FromStr};
 
 use clap::Parser;
+use futures::StreamExt as _;
 use moosicbox_core::types::{from_extension_to_audio_format, AudioFormat};
 use moosicbox_files::{
     files::track::{get_audio_bytes, TrackSource},
@@ -82,7 +83,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await?;
 
-    save_bytes_stream_to_file(bytes.stream, &output, None).await?;
+    save_bytes_stream_to_file(
+        bytes.stream.map(|x| match x {
+            Ok(Ok(x)) => Ok(x),
+            Ok(Err(err)) | Err(err) => Err(err),
+        }),
+        &output,
+        None,
+    )
+    .await?;
 
     Ok(())
 }

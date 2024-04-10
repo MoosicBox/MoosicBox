@@ -17,6 +17,7 @@ use db::{
     create_download_task, get_download_location,
     models::{CreateDownloadTask, DownloadItem, DownloadTask},
 };
+use futures::StreamExt;
 use id3::Timestamp;
 use moosicbox_config::get_config_dir_path;
 use moosicbox_core::{
@@ -580,7 +581,10 @@ async fn download_track_inner(
         speed.store(0.0, std::sync::atomic::Ordering::SeqCst);
 
         let result = save_bytes_stream_to_file_with_speed_listener(
-            reader,
+            reader.map(|x| match x {
+                Ok(Ok(x)) => Ok(x),
+                Ok(Err(err)) | Err(err) => Err(err),
+            }),
             &track_path,
             start,
             Box::new({
@@ -770,7 +774,10 @@ pub async fn download_album_cover(
     log::debug!("Saving album cover to {cover_path:?}");
 
     let result = save_bytes_stream_to_file_with_speed_listener(
-        bytes.stream,
+        bytes.stream.map(|x| match x {
+            Ok(Ok(x)) => Ok(x),
+            Ok(Err(err)) | Err(err) => Err(err),
+        }),
         &cover_path,
         None,
         Box::new({
@@ -830,7 +837,10 @@ pub async fn download_artist_cover(
     log::debug!("Saving artist cover to {cover_path:?}");
 
     let result = save_bytes_stream_to_file_with_speed_listener(
-        bytes.stream,
+        bytes.stream.map(|x| match x {
+            Ok(Ok(x)) => Ok(x),
+            Ok(Err(err)) | Err(err) => Err(err),
+        }),
         &cover_path,
         None,
         Box::new({

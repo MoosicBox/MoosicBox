@@ -1,7 +1,6 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 use std::{
-    cell::RefCell,
     sync::{Arc, RwLock},
     task::Poll,
 };
@@ -15,7 +14,7 @@ pub mod stalled_monitor;
 #[derive(Clone)]
 pub struct ByteWriter {
     written: Arc<RwLock<u64>>,
-    senders: RefCell<Vec<UnboundedSender<Bytes>>>,
+    senders: Arc<RwLock<Vec<UnboundedSender<Bytes>>>>,
 }
 
 impl ByteWriter {
@@ -32,7 +31,7 @@ impl Default for ByteWriter {
     fn default() -> Self {
         Self {
             written: Arc::new(RwLock::new(0)),
-            senders: RefCell::new(vec![]),
+            senders: Arc::new(RwLock::new(vec![])),
         }
     }
 }
@@ -48,7 +47,7 @@ impl std::io::Write for ByteWriter {
         {
             *self.written.write().unwrap() += len as u64;
 
-            if self.senders.borrow().is_empty() {
+            if self.senders.read().unwrap().is_empty() {
                 log::trace!("No senders associated with ByteWriter. Eating {len} bytes");
                 return Ok(len);
             }
@@ -56,7 +55,7 @@ impl std::io::Write for ByteWriter {
 
         log::trace!("Sending bytes buf of size {len}");
         let bytes: Bytes = buf.to_vec().into();
-        self.senders.borrow_mut().retain(|sender| {
+        self.senders.write().unwrap().retain(|sender| {
             if sender.send(bytes.clone()).is_err() {
                 log::debug!("Receiver has disconnected. Removing sender.");
                 false
@@ -77,13 +76,13 @@ pub struct ByteStream {
 }
 
 impl ByteStream {
-    pub fn stalled_monitor(self) -> StalledReadMonitor<Bytes, ByteStream> {
+    pub fn stalled_monitor(self) -> StalledReadMonitor<Result<Bytes, std::io::Error>, ByteStream> {
         self.into()
     }
 }
 
-impl Into<StalledReadMonitor<Bytes, ByteStream>> for ByteStream {
-    fn into(self) -> StalledReadMonitor<Bytes, ByteStream> {
+impl Into<StalledReadMonitor<Result<Bytes, std::io::Error>, ByteStream>> for ByteStream {
+    fn into(self) -> StalledReadMonitor<Result<Bytes, std::io::Error>, ByteStream> {
         StalledReadMonitor::new(self)
     }
 }
@@ -110,7 +109,94 @@ impl futures::Stream for ByteStream {
 impl From<&ByteWriter> for ByteStream {
     fn from(value: &ByteWriter) -> Self {
         let (sender, receiver) = unbounded_channel();
-        value.senders.borrow_mut().push(sender);
+        value.senders.write().unwrap().push(sender);
+        Self { receiver }
+    }
+}
+
+#[derive(Clone)]
+pub struct TypedWriter<T> {
+    senders: Arc<RwLock<Vec<UnboundedSender<T>>>>,
+}
+
+impl<T> TypedWriter<T> {
+    pub fn stream(&self) -> TypedStream<T> {
+        TypedStream::from(self)
+    }
+}
+
+impl<T: Clone> TypedWriter<T> {
+    pub fn write(&self, buf: T) {
+        let mut senders = self.senders.write().unwrap();
+        let mut remove = vec![];
+        let len = senders.len();
+        for (i, sender) in senders.iter().enumerate() {
+            if i == len - 1 {
+                if sender.send(buf).is_err() {
+                    log::debug!("Receiver has disconnected. Removing sender.");
+                    remove.insert(0, i);
+                }
+                break;
+            } else {
+                if sender.send(buf.clone()).is_err() {
+                    log::debug!("Receiver has disconnected. Removing sender.");
+                    remove.insert(0, i);
+                }
+            }
+        }
+        for i in remove {
+            senders.remove(i);
+        }
+    }
+}
+
+impl<T> Default for TypedWriter<T> {
+    fn default() -> Self {
+        Self {
+            senders: Arc::new(RwLock::new(vec![])),
+        }
+    }
+}
+
+pub struct TypedStream<T> {
+    receiver: UnboundedReceiver<T>,
+}
+
+impl<T> TypedStream<T> {
+    pub fn stalled_monitor(self) -> StalledReadMonitor<T, TypedStream<T>> {
+        self.into()
+    }
+}
+
+impl<T> Into<StalledReadMonitor<T, TypedStream<T>>> for TypedStream<T> {
+    fn into(self) -> StalledReadMonitor<T, TypedStream<T>> {
+        StalledReadMonitor::new(self)
+    }
+}
+
+impl<T> futures::Stream for TypedStream<T> {
+    type Item = T;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        let stream = self.get_mut();
+        match stream.receiver.poll_recv(cx) {
+            Poll::Ready(Some(response)) => {
+                log::trace!("Received item");
+                Poll::Ready(Some(response))
+            }
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(None) => Poll::Ready(None),
+        }
+    }
+}
+
+impl<T> From<&TypedWriter<T>> for TypedStream<T> {
+    fn from(value: &TypedWriter<T>) -> Self {
+        let (sender, receiver) = unbounded_channel();
+        value.senders.write().unwrap().push(sender);
         Self { receiver }
     }
 }

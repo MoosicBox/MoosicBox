@@ -1,12 +1,17 @@
-use symphonia::core::audio::{AudioBufferRef, SignalSpec};
+use bytes::Bytes;
+use symphonia::core::audio::{AudioBuffer, SignalSpec};
 use symphonia::core::formats::{Packet, Track};
 use symphonia::core::units::Duration;
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 
 pub trait AudioOutput {
-    fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<usize, AudioOutputError>;
+    fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError>;
     fn flush(&mut self) -> Result<(), AudioOutputError>;
+}
+
+pub trait AudioEncoder: Send + Sync {
+    fn encode(&mut self, decoded: AudioBuffer<f32>) -> Result<Bytes, AudioOutputError>;
 }
 
 #[allow(dead_code)]
@@ -39,9 +44,9 @@ pub mod cpal;
 pub mod encoder;
 
 type InnerType = Box<dyn AudioOutput>;
-type OpenFunc = Box<dyn FnMut(SignalSpec, Duration) -> Result<InnerType, AudioOutputError>>;
+type OpenFunc = Box<dyn FnMut(SignalSpec, Duration) -> Result<InnerType, AudioOutputError> + Send>;
 type AudioFilter =
-    Box<dyn FnMut(&mut AudioBufferRef<'_>, &Packet, &Track) -> Result<(), AudioOutputError>>;
+    Box<dyn FnMut(&mut AudioBuffer<f32>, &Packet, &Track) -> Result<(), AudioOutputError> + Send>;
 
 pub struct AudioOutputHandler {
     pub cancellation_token: Option<CancellationToken>,
@@ -77,7 +82,7 @@ impl AudioOutputHandler {
 
     fn run_filters(
         &mut self,
-        decoded: &mut AudioBufferRef<'_>,
+        decoded: &mut AudioBuffer<f32>,
         packet: &Packet,
         track: &Track,
     ) -> Result<(), AudioOutputError> {
@@ -90,7 +95,7 @@ impl AudioOutputHandler {
 
     pub fn write(
         &mut self,
-        mut decoded: AudioBufferRef<'_>,
+        mut decoded: AudioBuffer<f32>,
         packet: &Packet,
         track: &Track,
     ) -> Result<(), AudioOutputError> {

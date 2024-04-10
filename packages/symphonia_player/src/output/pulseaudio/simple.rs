@@ -1,5 +1,5 @@
 use std::time::SystemTime;
-use symphonia::core::audio::{AudioBufferRef, SignalSpec};
+use symphonia::core::audio::SignalSpec;
 
 use crate::output::{
     pulseaudio::common::map_channels_to_pa_channelmap, AudioOutput, AudioOutputError,
@@ -62,7 +62,7 @@ impl PulseAudioOutput {
 }
 
 impl AudioOutput for PulseAudioOutput {
-    fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<usize, AudioOutputError> {
+    fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
         let frame_count = decoded.frames();
         // Do nothing if there are no audio frames.
         if frame_count == 0 {
@@ -72,7 +72,7 @@ impl AudioOutput for PulseAudioOutput {
 
         trace!("Interleaving samples");
         // Interleave samples from the audio buffer into the sample buffer.
-        self.sample_buf.copy_interleaved_ref(decoded);
+        self.sample_buf.copy_interleaved(&decoded);
         let buffer = self.sample_buf.as_bytes();
 
         trace!(

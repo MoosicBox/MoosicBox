@@ -27,7 +27,7 @@ impl From<fdk_aac::enc::EncoderError> for EncoderError {
 pub fn encoder_aac() -> Result<Encoder, EncoderError> {
     let encoder = Encoder::new(EncoderParams {
         bit_rate: BitRate::VbrVeryHigh,
-        sample_rate: 48_000,
+        sample_rate: 44_100,
         transport: Transport::Adts,
         channels: ChannelMode::Stereo,
     })?;
@@ -35,7 +35,7 @@ pub fn encoder_aac() -> Result<Encoder, EncoderError> {
 }
 
 pub fn encode_aac(
-    encoder: &mut Encoder,
+    encoder: &Encoder,
     input: &[i16],
     buf: &mut [u8],
 ) -> Result<EncodeInfo, EncoderError> {

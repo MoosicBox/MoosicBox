@@ -13,6 +13,7 @@ moosicbox_database = { path = "../database", default-features = false, features 
 moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
     "serde_json",
 ] }
+moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
 moosicbox_symphonia_player = { path = "../symphonia_player", default-features = false }
 
 actix-cors        = { workspace = true }
@@ -33,17 +34,17 @@ serde             = { workspace = true, features = ["derive"] }
 serde_json        = { workspace = true }
 symphonia         = { workspace = true }
 thiserror         = { workspace = true }
-tokio             = { workspace = true, features = ["rt", "time", "macros"] }
+tokio             = { workspace = true, features = ["macros", "rt", "time"] }
 tokio-util        = { workspace = true }
 url               = { workspace = true }
 
 [features]
 default = [
-    "oboe-shared-stdcxx",
-    "cpal",
     "aac",
+    "cpal",
     "flac",
     "mp3",
+    "oboe-shared-stdcxx",
     "opus",
     "pulseaudio",
 ]
@@ -55,24 +56,24 @@ asio                = ["moosicbox_symphonia_player/asio"]
 cpal                = ["moosicbox_symphonia_player/cpal"]
 jack                = ["moosicbox_symphonia_player/jack"]
 oboe-shared-stdcxx  = ["moosicbox_symphonia_player/oboe-shared-stdcxx"]
-pulseaudio          = ["pulseaudio-standard", "pulseaudio-simple"]
+pulseaudio          = ["pulseaudio-simple", "pulseaudio-standard"]
 pulseaudio-simple   = ["moosicbox_symphonia_player/pulseaudio-simple"]
 pulseaudio-standard = ["moosicbox_symphonia_player/pulseaudio-standard"]
 resampler           = ["moosicbox_symphonia_player/resampler"]
 
 aac = [
-    "moosicbox_symphonia_player/aac",
     "moosicbox_converter/aac",
     "moosicbox_core/aac",
+    "moosicbox_symphonia_player/aac",
 ]
 flac = ["moosicbox_core/flac"]
 mp3 = [
-    "moosicbox_symphonia_player/mp3",
     "moosicbox_converter/mp3",
     "moosicbox_core/mp3",
+    "moosicbox_symphonia_player/mp3",
 ]
 opus = [
-    "moosicbox_symphonia_player/opus",
     "moosicbox_converter/opus",
     "moosicbox_core/opus",
+    "moosicbox_symphonia_player/opus",
 ]

@@ -258,7 +258,7 @@ pub enum FetchCoverError {
 pub(crate) type BytesStream = Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>;
 
 pub struct CoverBytes {
-    pub stream: StalledReadMonitor<Bytes, BytesStream>,
+    pub stream: StalledReadMonitor<Result<Bytes, std::io::Error>, BytesStream>,
     pub size: Option<u64>,
 }
 

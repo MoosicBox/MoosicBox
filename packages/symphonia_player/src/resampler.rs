@@ -1,4 +1,4 @@
-use symphonia::core::audio::{AudioBuffer, AudioBufferRef, Signal, SignalSpec};
+use symphonia::core::audio::{AudioBuffer, Signal, SignalSpec};
 use symphonia::core::conv::{FromSample, IntoSample};
 use symphonia::core::sample::Sample;
 
@@ -86,9 +86,9 @@ where
     /// Resamples a planar/non-interleaved input.
     ///
     /// Returns the resampled samples in an interleaved format.
-    pub fn resample(&mut self, input: AudioBufferRef<'_>) -> Option<&[T]> {
+    pub fn resample(&mut self, input: AudioBuffer<f32>) -> Option<&[T]> {
         // Copy and convert samples into input buffer.
-        convert_samples_any(&input, &mut self.input);
+        convert_samples(&input, &mut self.input);
 
         // Check if more samples are required.
         if self.input[0].len() < self.duration {
@@ -118,21 +118,6 @@ where
         }
 
         Some(self.resample_inner())
-    }
-}
-
-fn convert_samples_any(input: &AudioBufferRef<'_>, output: &mut [Vec<f32>]) {
-    match input {
-        AudioBufferRef::U8(input) => convert_samples(input, output),
-        AudioBufferRef::U16(input) => convert_samples(input, output),
-        AudioBufferRef::U24(input) => convert_samples(input, output),
-        AudioBufferRef::U32(input) => convert_samples(input, output),
-        AudioBufferRef::S8(input) => convert_samples(input, output),
-        AudioBufferRef::S16(input) => convert_samples(input, output),
-        AudioBufferRef::S24(input) => convert_samples(input, output),
-        AudioBufferRef::S32(input) => convert_samples(input, output),
-        AudioBufferRef::F32(input) => convert_samples(input, output),
-        AudioBufferRef::F64(input) => convert_samples(input, output),
     }
 }
 

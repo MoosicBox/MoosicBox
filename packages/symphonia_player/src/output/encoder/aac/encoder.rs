@@ -1,15 +1,13 @@
-use std::cell::RefCell;
+use std::sync::{Arc, RwLock};
 
-use crate::output::{AudioOutput, AudioOutputError, AudioOutputHandler};
+use crate::output::{AudioEncoder, AudioOutput, AudioOutputError, AudioOutputHandler};
 use crate::play_file_path_str;
 use crate::resampler::Resampler;
 
 use bytes::Bytes;
 use lazy_static::lazy_static;
-use log::debug;
 use moosicbox_converter::aac::encoder_aac;
 use moosicbox_stream_utils::{ByteStream, ByteWriter};
-use symphonia::core::audio::AudioBufferRef;
 use symphonia::core::audio::*;
 use symphonia::core::conv::IntoSample;
 use symphonia::core::units::Duration;
@@ -22,62 +20,51 @@ lazy_static! {
         .unwrap();
 }
 
-pub struct AacEncoder<W>
-where
-    W: std::io::Write,
-{
-    resampler: RefCell<Option<Resampler<i16>>>,
-    writer: RefCell<Option<W>>,
-    encoder: RefCell<fdk_aac::enc::Encoder>,
+pub struct AacEncoder {
+    resampler: Arc<RwLock<Option<Resampler<i16>>>>,
+    writer: Option<Box<dyn std::io::Write + Send + Sync>>,
+    encoder: fdk_aac::enc::Encoder,
 }
 
-impl<W> AacEncoder<W>
-where
-    W: std::io::Write,
-{
-    pub fn new(writer: W) -> Self {
+impl AacEncoder {
+    pub fn new() -> Self {
         Self {
-            resampler: RefCell::new(None),
-            writer: RefCell::new(Some(writer)),
-            encoder: RefCell::new(encoder_aac().unwrap()),
+            resampler: Arc::new(RwLock::new(None)),
+            writer: None,
+            encoder: encoder_aac().unwrap(),
+        }
+    }
+
+    pub fn with_writer<W: std::io::Write + Send + Sync + 'static>(writer: W) -> Self {
+        Self {
+            resampler: Arc::new(RwLock::new(None)),
+            writer: Some(Box::new(writer)),
+            encoder: encoder_aac().unwrap(),
         }
     }
 
     pub fn open(&mut self, spec: SignalSpec, duration: Duration) {
-        if spec.rate != 48000 {
+        if spec.rate != 44100 {
             self.resampler
-                .borrow_mut()
-                .replace(Resampler::<i16>::new(spec, 48000_usize, duration));
+                .write()
+                .unwrap()
+                .replace(Resampler::<i16>::new(spec, 44100_usize, duration));
         } else {
-            self.resampler.borrow_mut().take();
+            self.resampler.write().unwrap().take();
         }
     }
 
-    fn write_output(&self, buf: &[i16]) -> usize {
+    fn encode_output(&self, buf: &[i16]) -> Bytes {
         let mut read = 0;
-        let mut written = 0;
+        let mut written = vec![];
         loop {
             let end = std::cmp::min(read + 1024, buf.len());
             let mut output = [0u8; 2048];
-            match moosicbox_converter::aac::encode_aac(
-                &mut self.encoder.borrow_mut(),
-                &buf[read..end],
-                &mut output,
-            ) {
+            match moosicbox_converter::aac::encode_aac(&self.encoder, &buf[read..end], &mut output)
+            {
                 Ok(info) => {
-                    let len = info.output_size;
-                    let bytes = Bytes::from(output[..info.output_size].to_vec());
-                    let mut binding = self.writer.borrow_mut();
-                    if let Some(writer) = binding.as_mut() {
-                        loop {
-                            let count = writer.write(&bytes).unwrap();
-                            if count >= bytes.len() {
-                                break;
-                            }
-                        }
-                    }
+                    written.extend_from_slice(&output[..info.output_size]);
                     read += info.input_consumed;
-                    written += len;
 
                     if read >= buf.len() {
                         break;
@@ -88,48 +75,64 @@ where
                 }
             }
         }
-        written
+        written.into()
     }
 }
 
-impl<W> AudioOutput for AacEncoder<W>
-where
-    W: std::io::Write,
-{
-    fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<usize, AudioOutputError> {
-        let s =
-            &mut AudioBuffer::<i16>::new(decoded.capacity() as Duration, decoded.spec().to_owned());
-        decoded.convert(s);
-        let decoded = AudioBufferRef::S16(std::borrow::Cow::Borrowed(s));
-        let mut binding = self.resampler.borrow_mut();
+impl AudioEncoder for AacEncoder {
+    fn encode(&mut self, decoded: AudioBuffer<f32>) -> Result<Bytes, AudioOutputError> {
+        log::debug!("AacEncoder encode {} frames", decoded.frames());
+        let mut binding = self.resampler.write().unwrap();
 
         if let Some(resampler) = binding.as_mut() {
+            log::debug!("Resampling");
             let decoded = resampler
                 .resample(decoded)
                 .ok_or(AudioOutputError::StreamEnd)?;
 
-            Ok(self.write_output(decoded))
+            Ok(self.encode_output(decoded))
         } else {
-            let n_channels = s.spec().channels.count();
-            let n_samples = s.frames() * n_channels;
+            log::debug!("Not resampling");
+            let n_channels = decoded.spec().channels.count();
+            let n_samples = decoded.frames() * n_channels;
             let buf = &mut vec![0_i16; n_samples];
 
             // Interleave the source buffer channels into the sample buffer.
             for ch in 0..n_channels {
-                let ch_slice = s.chan(ch);
+                let ch_slice = decoded.chan(ch);
 
-                for (dst, s) in buf[ch..].iter_mut().step_by(n_channels).zip(ch_slice) {
-                    *dst = (*s).into_sample();
+                for (dst, decoded) in buf[ch..].iter_mut().step_by(n_channels).zip(ch_slice) {
+                    *dst = (*decoded).into_sample();
                 }
             }
 
-            Ok(self.write_output(buf))
+            Ok(self.encode_output(buf))
         }
+    }
+}
+
+impl AudioOutput for AacEncoder {
+    fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+        if self.writer.is_none() {
+            return Ok(0);
+        }
+
+        let bytes = self.encode(decoded)?;
+
+        if let Some(writer) = self.writer.as_mut() {
+            let mut count = 0;
+            loop {
+                count += writer.write(&bytes[count..]).unwrap();
+                if count >= bytes.len() {
+                    break;
+                }
+            }
+        }
+
+        Ok(bytes.len())
     }
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
-        debug!("Flushing");
-
         Ok(())
     }
 }
@@ -143,7 +146,7 @@ pub fn encode_aac_stream(path: String) -> ByteStream {
     stream
 }
 
-pub fn encode_aac_spawn<T: std::io::Write + Send + Clone + 'static>(
+pub fn encode_aac_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     path: String,
     writer: T,
 ) -> tokio::task::JoinHandle<()> {
@@ -151,10 +154,10 @@ pub fn encode_aac_spawn<T: std::io::Write + Send + Clone + 'static>(
     RT.spawn(async move { encode_aac(path, writer) })
 }
 
-pub fn encode_aac<T: std::io::Write + Send + Clone + 'static>(path: String, writer: T) {
+pub fn encode_aac<T: std::io::Write + Send + Sync + Clone + 'static>(path: String, writer: T) {
     let mut audio_output_handler =
         AudioOutputHandler::new().with_output(Box::new(move |spec, duration| {
-            let mut encoder = AacEncoder::new(writer.clone());
+            let mut encoder = AacEncoder::with_writer(writer.clone());
             encoder.open(spec, duration);
             Ok(Box::new(encoder))
         }));

@@ -31,7 +31,7 @@ use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use symphonia::core::{
-    audio::{AudioBuffer, AudioBufferRef, Signal},
+    audio::{AudioBuffer, Signal},
     conv::{FromSample, IntoSample},
     io::MediaSourceStream,
     probe::Hint,
@@ -247,6 +247,8 @@ pub enum GetTrackBytesError {
     #[error(transparent)]
     Db(#[from] DbError),
     #[error(transparent)]
+    IO(#[from] std::io::Error),
+    #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
     #[error(transparent)]
     TrackInfo(#[from] TrackInfoError),
@@ -265,7 +267,7 @@ pub enum TrackByteStreamError {
 type BytesStream = Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>;
 
 pub struct TrackBytes {
-    pub stream: StalledReadMonitor<Bytes, BytesStream>,
+    pub stream: StalledReadMonitor<Result<Bytes, std::io::Error>, BytesStream>,
     pub size: Option<u64>,
     pub format: AudioFormat,
 }
@@ -344,51 +346,52 @@ pub async fn get_audio_bytes(
         let source = source.clone();
 
         RT.spawn(async move {
-            let audio_output_handler =
-                match format {
-                    #[cfg(feature = "aac")]
-                    AudioFormat::Aac => {
-                        use moosicbox_symphonia_player::output::encoder::aac::encoder::AacEncoder;
-                        Some(
-                            moosicbox_symphonia_player::output::AudioOutputHandler::new()
-                                .with_output(Box::new(move |spec, duration| {
-                                    let mut encoder = AacEncoder::new(writer.clone());
-                                    encoder.open(spec, duration);
-                                    Ok(Box::new(encoder))
-                                })),
-                        )
-                    }
-                    #[cfg(feature = "flac")]
-                    AudioFormat::Flac => None,
-                    #[cfg(feature = "mp3")]
-                    AudioFormat::Mp3 => {
-                        use moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder;
-                        let encoder_writer = writer.clone();
-                        Some(
-                            moosicbox_symphonia_player::output::AudioOutputHandler::new()
-                                .with_output(Box::new(move |spec, duration| {
-                                    let mut encoder = Mp3Encoder::new(encoder_writer.clone());
-                                    encoder.open(spec, duration);
-                                    Ok(Box::new(encoder))
-                                })),
-                        )
-                    }
-                    #[cfg(feature = "opus")]
-                    AudioFormat::Opus => {
-                        use moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder;
-                        let encoder_writer = writer.clone();
-                        Some(
-                            moosicbox_symphonia_player::output::AudioOutputHandler::new()
-                                .with_output(Box::new(move |spec, duration| {
-                                    let mut encoder: OpusEncoder<i16, ByteWriter> =
-                                        OpusEncoder::new(encoder_writer.clone());
-                                    encoder.open(spec, duration);
-                                    Ok(Box::new(encoder))
-                                })),
-                        )
-                    }
-                    AudioFormat::Source => None,
-                };
+            let audio_output_handler = match format {
+                #[cfg(feature = "aac")]
+                AudioFormat::Aac => {
+                    use moosicbox_symphonia_player::output::encoder::aac::encoder::AacEncoder;
+                    Some(
+                        moosicbox_symphonia_player::output::AudioOutputHandler::new().with_output(
+                            Box::new(move |spec, duration| {
+                                let mut encoder = AacEncoder::with_writer(writer.clone());
+                                encoder.open(spec, duration);
+                                Ok(Box::new(encoder))
+                            }),
+                        ),
+                    )
+                }
+                #[cfg(feature = "flac")]
+                AudioFormat::Flac => None,
+                #[cfg(feature = "mp3")]
+                AudioFormat::Mp3 => {
+                    use moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder;
+                    let encoder_writer = writer.clone();
+                    Some(
+                        moosicbox_symphonia_player::output::AudioOutputHandler::new().with_output(
+                            Box::new(move |spec, duration| {
+                                let mut encoder = Mp3Encoder::with_writer(encoder_writer.clone());
+                                encoder.open(spec, duration);
+                                Ok(Box::new(encoder))
+                            }),
+                        ),
+                    )
+                }
+                #[cfg(feature = "opus")]
+                AudioFormat::Opus => {
+                    use moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder;
+                    let encoder_writer = writer.clone();
+                    Some(
+                        moosicbox_symphonia_player::output::AudioOutputHandler::new().with_output(
+                            Box::new(move |spec, duration| {
+                                let mut encoder = OpusEncoder::with_writer(encoder_writer.clone());
+                                encoder.open(spec, duration);
+                                Ok(Box::new(encoder))
+                            }),
+                        ),
+                    )
+                }
+                AudioFormat::Source => None,
+            };
 
             if let Some(mut audio_output_handler) = audio_output_handler {
                 match source {
@@ -436,9 +439,9 @@ pub async fn get_audio_bytes(
 
     let track_bytes = match source {
         TrackSource::LocalFilePath { path, .. } => match format {
-            AudioFormat::Source => request_audio_bytes_from_file(path, format, size).await,
+            AudioFormat::Source => request_audio_bytes_from_file(path, format, size).await?,
             #[cfg(feature = "flac")]
-            AudioFormat::Flac => request_audio_bytes_from_file(path, format, size).await,
+            AudioFormat::Flac => request_audio_bytes_from_file(path, format, size).await?,
             #[allow(unreachable_patterns)]
             _ => TrackBytes {
                 stream: StalledReadMonitor::new(stream.boxed()),
@@ -470,16 +473,18 @@ async fn request_audio_bytes_from_file(
     path: String,
     format: AudioFormat,
     size: Option<u64>,
-) -> TrackBytes {
-    let stream = tokio::fs::File::open(path)
-        .map_ok(|file| FramedRead::new(file, BytesCodec::new()).map_ok(BytesMut::freeze))
-        .try_flatten_stream();
+) -> Result<TrackBytes, std::io::Error> {
+    let file = tokio::fs::File::open(path).await?;
 
-    TrackBytes {
-        stream: StalledReadMonitor::new(stream.boxed()),
+    Ok(TrackBytes {
+        stream: StalledReadMonitor::new(
+            FramedRead::new(file, BytesCodec::new())
+                .map_ok(BytesMut::freeze)
+                .boxed(),
+        ),
         size,
         format,
-    }
+    })
 }
 
 async fn request_track_bytes_from_url(
@@ -591,22 +596,7 @@ pub async fn get_track_info(
     Ok(track.unwrap().into())
 }
 
-pub fn visualize(input: &AudioBufferRef<'_>) -> u8 {
-    match input {
-        AudioBufferRef::U8(input) => visualize_inner(input),
-        AudioBufferRef::U16(input) => visualize_inner(input),
-        AudioBufferRef::U24(input) => visualize_inner(input),
-        AudioBufferRef::U32(input) => visualize_inner(input),
-        AudioBufferRef::S8(input) => visualize_inner(input),
-        AudioBufferRef::S16(input) => visualize_inner(input),
-        AudioBufferRef::S24(input) => visualize_inner(input),
-        AudioBufferRef::S32(input) => visualize_inner(input),
-        AudioBufferRef::F32(input) => visualize_inner(input),
-        AudioBufferRef::F64(input) => visualize_inner(input),
-    }
-}
-
-fn visualize_inner<S>(input: &AudioBuffer<S>) -> u8
+pub fn visualize<S>(input: &AudioBuffer<S>) -> u8
 where
     S: Sample + FromSample<u8> + IntoSample<u8>,
 {

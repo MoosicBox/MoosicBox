@@ -6,13 +6,13 @@ use pin_project::pin_project;
 use thiserror::Error;
 
 #[pin_project]
-pub struct StalledReadMonitor<T, R: futures::Stream<Item = Result<T>>> {
+pub struct StalledReadMonitor<T, R: futures::Stream<Item = T>> {
     #[pin]
     inner: R,
     sleeper: Option<tokio::time::Interval>,
 }
 
-impl<T, R: futures::Stream<Item = Result<T>>> StalledReadMonitor<T, R> {
+impl<T, R: futures::Stream<Item = T>> StalledReadMonitor<T, R> {
     pub fn new(inner: R) -> Self {
         Self {
             inner,
@@ -37,7 +37,7 @@ pub enum StalledReadMonitorError {
     Stalled,
 }
 
-impl<T, R: futures::Stream<Item = Result<T>>> futures::Stream for StalledReadMonitor<T, R> {
+impl<T, R: futures::Stream<Item = T>> futures::Stream for StalledReadMonitor<T, R> {
     type Item = Result<T>;
 
     fn poll_next(
@@ -49,8 +49,8 @@ impl<T, R: futures::Stream<Item = Result<T>>> futures::Stream for StalledReadMon
         let response = this.inner.poll_next(cx);
 
         match response {
-            Poll::Ready(Some(ref resp)) => {
-                log::trace!("Received stream poll response ok={}", resp.is_ok());
+            Poll::Ready(Some(_)) => {
+                log::trace!("Received stream poll response");
 
                 if let Some(sleeper) = this.sleeper {
                     sleeper.reset();
@@ -69,6 +69,7 @@ impl<T, R: futures::Stream<Item = Result<T>>> futures::Stream for StalledReadMon
             }
         }
 
-        response
+        response.map(|x| x.map(|y| Ok(y)))
+        //response
     }
 }

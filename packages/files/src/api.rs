@@ -4,6 +4,7 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, HttpResponse, Result,
 };
+use futures::StreamExt;
 use moosicbox_core::{
     app::AppState,
     integer_range::{parse_integer_ranges, ParseIntegersError},
@@ -74,6 +75,7 @@ impl From<GetTrackBytesError> for actix_web::Error {
         log::error!("GetTrackBytesError {err:?}");
         match err {
             GetTrackBytesError::Db(_) => ErrorInternalServerError(err),
+            GetTrackBytesError::IO(_) => ErrorInternalServerError(err),
             GetTrackBytesError::Reqwest(_) => ErrorInternalServerError(err),
             GetTrackBytesError::TrackInfo(_) => ErrorInternalServerError(err),
             GetTrackBytesError::NotFound => ErrorNotFound(err),
@@ -167,6 +169,8 @@ pub async fn track_endpoint(
 
     log::debug!("Got bytes with size={:?}", bytes.size);
 
+    let stream = bytes.stream.filter_map(|x| async { x.ok() });
+
     if let Some(mut size) = bytes.size {
         if let Some(range) = range {
             if let Some(end) = range.end {
@@ -188,9 +192,9 @@ pub async fn track_endpoint(
         }
 
         log::debug!("Returning stream body with size={:?}", size);
-        Ok(response.body(actix_web::body::SizedStream::new(size, bytes.stream)))
+        Ok(response.body(actix_web::body::SizedStream::new(size, stream)))
     } else {
-        Ok(response.streaming(bytes.stream))
+        Ok(response.streaming(stream))
     }
 }
 

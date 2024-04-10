@@ -1,8 +1,7 @@
-use std::cell::RefCell;
-use std::fs::File;
+use std::sync::{Mutex, RwLock};
 use std::usize;
 
-use crate::output::{AudioOutput, AudioOutputError, AudioOutputHandler};
+use crate::output::{AudioEncoder, AudioOutput, AudioOutputError, AudioOutputHandler};
 use crate::play_file_path_str;
 use crate::resampler::Resampler;
 
@@ -13,11 +12,8 @@ use moosicbox_converter::opus::{
 };
 use moosicbox_stream_utils::{ByteStream, ByteWriter};
 use ogg::{PacketWriteEndInfo, PacketWriter};
-use symphonia::core::audio::AudioBufferRef;
 use symphonia::core::audio::*;
-use symphonia::core::conv::ReversibleSample;
 use symphonia::core::units::Duration;
-use tokio::sync::mpsc::UnboundedSender;
 
 lazy_static! {
     static ref RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
@@ -29,11 +25,7 @@ lazy_static! {
 
 const STEREO_20MS: usize = 48000 * 2 * 20 / 1000;
 
-pub struct OpusEncoder<'a, T, W>
-where
-    T: ReversibleSample<f32> + 'static,
-    W: std::io::Write,
-{
+pub struct OpusEncoder<'a> {
     buf: [f32; STEREO_20MS],
     buf_len: usize,
     packet_writer: PacketWriter<'a, Vec<u8>>,
@@ -42,18 +34,13 @@ where
     absgp: u64,
     time: usize,
     bytes_read: usize,
-    resampler: RefCell<Option<Resampler<T>>>,
-    senders: RefCell<Vec<UnboundedSender<Bytes>>>,
-    writer: RefCell<Option<W>>,
-    encoder: RefCell<opus::Encoder>,
+    resampler: Option<RwLock<Resampler<f32>>>,
+    writer: Option<Box<dyn std::io::Write + Send + Sync>>,
+    encoder: Mutex<opus::Encoder>,
 }
 
-impl<T, W> OpusEncoder<'_, T, W>
-where
-    T: ReversibleSample<f32> + 'static,
-    W: std::io::Write,
-{
-    pub fn new(writer: W) -> Self {
+impl OpusEncoder<'_> {
+    pub fn new() -> Self {
         let packet_writer = PacketWriter::new(Vec::new());
 
         Self {
@@ -65,47 +52,30 @@ where
             absgp: 0,
             time: 0,
             bytes_read: 0,
-            resampler: RefCell::new(None),
-            senders: RefCell::new(vec![]),
-            writer: RefCell::new(Some(writer)),
-            encoder: RefCell::new(encoder_opus().unwrap()),
+            resampler: None,
+            writer: None,
+            encoder: Mutex::new(encoder_opus().unwrap()),
         }
+    }
+
+    pub fn with_writer<W: std::io::Write + Send + Sync + 'static>(writer: W) -> Self {
+        let mut x = Self::new();
+        x.writer.replace(Box::new(writer));
+        x
     }
 
     pub fn open(&mut self, spec: SignalSpec, duration: Duration) {
-        self.resampler
-            .borrow_mut()
-            .replace(Resampler::<T>::new(spec, 48000_usize, duration));
-    }
-
-    pub fn try_open(
-        writer: W,
-        spec: SignalSpec,
-        duration: Duration,
-    ) -> Result<Self, AudioOutputError> {
-        let packet_writer = PacketWriter::new(Vec::new());
         if spec.rate != 48000 {
-            log::info!("Will resample {} Hz to {} Hz", spec.rate, 48000);
+            self.resampler
+                .replace(RwLock::new(Resampler::new(spec, 48000_usize, duration)));
+        } else {
+            self.resampler.take();
         }
-        Ok(Self {
-            buf: [0.0; STEREO_20MS],
-            buf_len: 0,
-            packet_writer,
-            last_write_pos: 0,
-            serial: 0,
-            absgp: 0,
-            time: 0,
-            bytes_read: 0,
-            resampler: RefCell::new(Some(Resampler::<T>::new(spec, 48000_usize, duration))),
-            senders: RefCell::new(vec![]),
-            writer: RefCell::new(Some(writer)),
-            encoder: RefCell::new(encoder_opus().unwrap()),
-        })
     }
 
-    fn write_output(&mut self, input: &[f32], buf_size: usize) -> usize {
+    fn encode_output(&mut self, input: &[f32], buf_size: usize) -> Bytes {
         let mut read = 0;
-        let mut written = 0;
+        let mut written = vec![];
         let mut output_buf = vec![0_u8; buf_size];
 
         loop {
@@ -115,7 +85,7 @@ where
                 buf_size
             );
             let info = moosicbox_converter::opus::encode_opus_float(
-                &mut self.encoder.borrow_mut(),
+                &mut self.encoder.lock().unwrap(),
                 &input[read..read + buf_size],
                 &mut output_buf,
             )
@@ -129,22 +99,6 @@ where
 
             let len = info.output_size;
             let section = &output_buf[..info.output_size];
-            written += info.output_size;
-
-            {
-                let mut senders = self.senders.borrow_mut();
-                if !senders.is_empty() {
-                    let bytes = Bytes::from(section.to_vec());
-                    senders.retain(|sender| {
-                        if sender.send(bytes.clone()).is_err() {
-                            log::debug!("Receiver has disconnected. Removing sender.");
-                            false
-                        } else {
-                            true
-                        }
-                    });
-                }
-            }
 
             if self.absgp == 0 {
                 // https://datatracker.ietf.org/doc/html/rfc7845#section-5.1
@@ -182,14 +136,14 @@ where
 
             self.absgp += (info.input_consumed / 2) as u64;
 
-            self.write_new_packet_writer_contents();
+            written.extend_from_slice(&self.write_new_packet_writer_contents());
 
             read += buf_size;
             if self.time % 1000 == 0 {
                 log::debug!(
-                    "Info: read={} written={} input_consumed={} output_size={} len={}",
+                    "Info: read={} written len={} input_consumed={} output_size={} len={}",
                     read,
-                    written,
+                    written.len(),
                     buf_size,
                     len,
                     self.bytes_read
@@ -200,38 +154,36 @@ where
                 break;
             }
         }
-        written
+        written.into()
     }
 
-    fn write_new_packet_writer_contents(&mut self) {
+    fn write_new_packet_writer_contents(&mut self) -> Bytes {
         let writer_contents = self.packet_writer.inner();
 
+        log::debug!(
+            "last_write_pos={} current packet_writer len={}",
+            self.last_write_pos,
+            writer_contents.len()
+        );
         if writer_contents.len() > self.last_write_pos {
             let written_section = &writer_contents[self.last_write_pos..];
+            let written_section = written_section.to_vec();
             self.last_write_pos = writer_contents.len();
 
             log::trace!("OPUS packet writer data len={}", writer_contents.len());
 
-            let mut binding = self.writer.borrow_mut();
-            if let Some(on_bytes) = binding.as_mut() {
-                on_bytes.write_all(written_section).unwrap();
-            }
+            Bytes::from(written_section)
+        } else {
+            Bytes::new()
         }
     }
 
-    fn write_samples(&mut self, decoded: Vec<T>) -> usize {
-        let samples = [
-            self.buf[..self.buf_len].to_vec(),
-            decoded
-                .into_iter()
-                .map(|x| x.into_sample())
-                .collect::<Vec<f32>>(),
-        ]
-        .concat();
+    fn write_samples(&mut self, decoded: Vec<f32>) -> Bytes {
+        let samples = [self.buf[..self.buf_len].to_vec(), decoded].concat();
 
         self.buf_len = 0;
 
-        let mut written = 0;
+        let mut written = vec![];
 
         for chunk in samples.chunks(STEREO_20MS) {
             if chunk.len() < STEREO_20MS {
@@ -239,82 +191,90 @@ where
                 self.buf[..self.buf_len].copy_from_slice(chunk);
             } else {
                 self.time += 20;
-                let byte_count = self.write_output(chunk, STEREO_20MS);
+                log::debug!("Encoding OPUS chunk...");
+                let bytes = self.encode_output(chunk, STEREO_20MS);
+                let byte_count = bytes.len();
+                log::debug!("Encoded OPUS chunk to {byte_count} bytes");
+                written.extend_from_slice(&bytes);
                 self.bytes_read += byte_count;
-                written += byte_count;
                 if self.time % 1000 == 0 {
                     log::debug!("time: {}", self.time / 1000);
                 }
             }
         }
 
-        written
-    }
+        log::debug!("Encoded OPUS chunks to a total of {} bytes", written.len());
 
-    fn get_samples(&self, decoded: AudioBufferRef<'_>) -> Result<Vec<T>, AudioOutputError> {
-        Ok(self
-            .resampler
-            .borrow_mut()
-            .as_mut()
-            .unwrap()
-            .resample(decoded)
-            .ok_or(AudioOutputError::StreamEnd)?
-            .to_vec())
-    }
-
-    fn flush_samples(&self) -> Result<Vec<T>, AudioOutputError> {
-        Ok(self
-            .resampler
-            .borrow_mut()
-            .as_mut()
-            .unwrap()
-            .flush()
-            .ok_or(AudioOutputError::StreamEnd)?
-            .to_vec())
+        written.into()
     }
 }
 
-impl<T, W> AudioOutput for OpusEncoder<'_, T, W>
-where
-    T: ReversibleSample<f32> + 'static,
-    W: std::io::Write,
-{
-    fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<usize, AudioOutputError> {
-        Ok(self.write_samples(self.get_samples(decoded)?))
+fn to_samples(decoded: AudioBuffer<f32>) -> Vec<f32> {
+    let n_channels = decoded.spec().channels.count();
+    let n_samples = decoded.frames() * n_channels;
+    let mut buf = vec![0_f32; n_samples];
+
+    // Interleave the source buffer channels into the sample buffer.
+    for ch in 0..n_channels {
+        let ch_slice = decoded.chan(ch);
+
+        for (dst, decoded) in buf[ch..].iter_mut().step_by(n_channels).zip(ch_slice) {
+            *dst = *decoded;
+        }
+    }
+
+    buf
+}
+
+impl AudioEncoder for OpusEncoder<'_> {
+    fn encode(&mut self, decoded: AudioBuffer<f32>) -> Result<Bytes, AudioOutputError> {
+        log::debug!("OpusEncoder encode {} frames", decoded.frames());
+        let buf = {
+            if let Some(ref resampler) = self.resampler {
+                log::debug!("Resampling");
+                let mut buf = decoded.make_equivalent();
+                decoded.convert(&mut buf);
+
+                resampler
+                    .write()
+                    .unwrap()
+                    .resample(buf)
+                    .ok_or(AudioOutputError::StreamEnd)?
+                    .to_vec()
+            } else {
+                log::debug!("Not resampling");
+                to_samples(decoded)
+            }
+        };
+
+        Ok(self.write_samples(buf))
+    }
+}
+
+impl AudioOutput for OpusEncoder<'_> {
+    fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+        if self.writer.is_none() {
+            return Ok(0);
+        }
+
+        let bytes = self.encode(decoded)?;
+
+        if let Some(writer) = self.writer.as_mut() {
+            let mut count = 0;
+            loop {
+                count += writer.write(&bytes[count..]).unwrap();
+                if count >= bytes.len() {
+                    break;
+                }
+            }
+        }
+
+        Ok(bytes.len())
     }
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
-        log::debug!("Flushing");
-        self.write_samples(self.flush_samples()?);
-
-        self.packet_writer
-            .write_packet(
-                vec![],
-                self.serial,
-                PacketWriteEndInfo::EndStream,
-                self.absgp,
-            )
-            .expect("Failed to write packet end stream");
-
-        self.write_new_packet_writer_contents();
-
-        let mut binding = self.writer.borrow_mut();
-        if let Some(on_bytes) = binding.as_mut() {
-            on_bytes.flush()?;
-        }
-
         Ok(())
     }
-}
-
-pub fn try_open(
-    writer: File,
-    spec: SignalSpec,
-    duration: Duration,
-) -> Result<Box<dyn AudioOutput>, AudioOutputError> {
-    Ok(Box::new(OpusEncoder::<i16, File>::try_open(
-        writer, spec, duration,
-    )?))
 }
 
 pub fn encode_opus_stream(path: String) -> ByteStream {
@@ -326,7 +286,7 @@ pub fn encode_opus_stream(path: String) -> ByteStream {
     stream
 }
 
-pub fn encode_opus_spawn<T: std::io::Write + Send + Clone + 'static>(
+pub fn encode_opus_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     path: String,
     writer: T,
 ) -> tokio::task::JoinHandle<()> {
@@ -334,10 +294,10 @@ pub fn encode_opus_spawn<T: std::io::Write + Send + Clone + 'static>(
     RT.spawn(async move { encode_opus(path, writer) })
 }
 
-pub fn encode_opus<T: std::io::Write + Send + Clone + 'static>(path: String, writer: T) {
+pub fn encode_opus<T: std::io::Write + Send + Sync + Clone + 'static>(path: String, writer: T) {
     let mut audio_output_handler =
         AudioOutputHandler::new().with_output(Box::new(move |spec, duration| {
-            let mut encoder: OpusEncoder<'_, i16, T> = OpusEncoder::new(writer.clone());
+            let mut encoder: OpusEncoder<'_> = OpusEncoder::with_writer(writer.clone());
             encoder.open(spec, duration);
             Ok(Box::new(encoder))
         }));

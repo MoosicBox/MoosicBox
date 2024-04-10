@@ -1,7 +1,7 @@
 use pulse::def::BufferAttr;
 use pulse::error::PAErr;
 use pulse::time::MicroSeconds;
-use symphonia::core::audio::{AudioBufferRef, SignalSpec};
+use symphonia::core::audio::SignalSpec;
 use symphonia::core::units::Duration;
 use thiserror::Error;
 
@@ -310,7 +310,7 @@ fn drain(mainloop: &mut Mainloop, stream: &mut Stream) -> Result<(), AudioOutput
 }
 
 impl AudioOutput for PulseAudioOutput {
-    fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<usize, AudioOutputError> {
+    fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
         let frame_count = decoded.frames();
         // Do nothing if there are no audio frames.
         if frame_count == 0 {
@@ -319,7 +319,7 @@ impl AudioOutput for PulseAudioOutput {
         }
 
         // Interleave samples from the audio buffer into the sample buffer.
-        self.sample_buf.copy_interleaved_ref(decoded);
+        self.sample_buf.copy_interleaved(&decoded);
 
         // Wait for context to be ready
         wait_for_context(

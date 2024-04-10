@@ -18,6 +18,8 @@ use thiserror::Error;
 
 pub mod media_sources;
 pub mod output;
+pub mod signal_chain;
+pub mod unsync;
 pub mod volume_mixer;
 
 #[cfg(feature = "resampler")]
@@ -289,7 +291,9 @@ fn play_track(
                 // for the packet is >= the seeked position (0 if not seeking).
                 if ts >= play_opts.seek_ts {
                     log::trace!("Writing decoded to audio output");
-                    audio_output_handler.write(decoded, &packet, &track)?;
+                    let mut buf = decoded.make_equivalent();
+                    decoded.convert(&mut buf);
+                    audio_output_handler.write(buf, &packet, &track)?;
                     log::trace!("Wrote decoded to audio output");
                 } else {
                     log::trace!("Not to seeked position yet. Continuing decode");
