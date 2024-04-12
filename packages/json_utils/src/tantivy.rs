@@ -1,4 +1,4 @@
-use tantivy::schema::{NamedFieldDocument, Value};
+use tantivy::schema::{NamedFieldDocument, OwnedValue, Value as _};
 
 use crate::ParseError;
 
@@ -10,22 +10,22 @@ pub trait ToValueType<T> {
     }
 }
 
-impl<'a> ToValueType<&'a str> for &'a Value {
+impl<'a> ToValueType<&'a str> for &'a OwnedValue {
     fn to_value_type(self) -> Result<&'a str, ParseError> {
-        self.as_text()
+        self.as_str()
             .ok_or_else(|| ParseError::ConvertType("&str".into()))
     }
 }
 
-impl<'a> ToValueType<&'a Value> for &'a Value {
-    fn to_value_type(self) -> Result<&'a Value, ParseError> {
+impl<'a> ToValueType<&'a OwnedValue> for &'a OwnedValue {
+    fn to_value_type(self) -> Result<&'a OwnedValue, ParseError> {
         Ok(self)
     }
 }
 
-impl<'a, T> ToValueType<Option<T>> for &'a Value
+impl<'a, T> ToValueType<Option<T>> for &'a OwnedValue
 where
-    &'a Value: ToValueType<T>,
+    &'a OwnedValue: ToValueType<T>,
 {
     fn to_value_type(self) -> Result<Option<T>, ParseError> {
         self.to_value_type().map(|inner| Some(inner))
@@ -36,23 +36,23 @@ where
     }
 }
 
-impl ToValueType<String> for &Value {
+impl ToValueType<String> for &OwnedValue {
     fn to_value_type(self) -> Result<String, ParseError> {
         Ok(self
-            .as_text()
+            .as_str()
             .ok_or_else(|| ParseError::ConvertType("String".into()))?
             .to_string())
     }
 }
 
-impl ToValueType<bool> for &Value {
+impl ToValueType<bool> for &OwnedValue {
     fn to_value_type(self) -> Result<bool, ParseError> {
         self.as_bool()
             .ok_or_else(|| ParseError::ConvertType("bool".into()))
     }
 }
 
-impl ToValueType<f32> for &Value {
+impl ToValueType<f32> for &OwnedValue {
     fn to_value_type(self) -> Result<f32, ParseError> {
         Ok(self
             .as_f64()
@@ -60,14 +60,14 @@ impl ToValueType<f32> for &Value {
     }
 }
 
-impl ToValueType<f64> for &Value {
+impl ToValueType<f64> for &OwnedValue {
     fn to_value_type(self) -> Result<f64, ParseError> {
         self.as_f64()
             .ok_or_else(|| ParseError::ConvertType("f64".into()))
     }
 }
 
-impl ToValueType<u8> for &Value {
+impl ToValueType<u8> for &OwnedValue {
     fn to_value_type(self) -> Result<u8, ParseError> {
         Ok(self
             .as_u64()
@@ -75,7 +75,7 @@ impl ToValueType<u8> for &Value {
     }
 }
 
-impl ToValueType<u16> for &Value {
+impl ToValueType<u16> for &OwnedValue {
     fn to_value_type(self) -> Result<u16, ParseError> {
         Ok(self
             .as_u64()
@@ -83,7 +83,7 @@ impl ToValueType<u16> for &Value {
     }
 }
 
-impl ToValueType<u32> for &Value {
+impl ToValueType<u32> for &OwnedValue {
     fn to_value_type(self) -> Result<u32, ParseError> {
         Ok(self
             .as_u64()
@@ -91,7 +91,7 @@ impl ToValueType<u32> for &Value {
     }
 }
 
-impl ToValueType<u64> for &Value {
+impl ToValueType<u64> for &OwnedValue {
     fn to_value_type(self) -> Result<u64, ParseError> {
         self.as_u64()
             .ok_or_else(|| ParseError::ConvertType("u64".into()))
@@ -105,21 +105,21 @@ pub trait ToValue<Type> {
         &'a Type: ToValueType<T>;
 }
 
-impl ToValue<Vec<Value>> for NamedFieldDocument {
+impl ToValue<Vec<OwnedValue>> for NamedFieldDocument {
     fn to_value<'a, T>(&'a self, index: &str) -> Result<T, ParseError>
     where
-        Vec<Value>: 'a,
-        &'a Vec<Value>: ToValueType<T>,
+        Vec<OwnedValue>: 'a,
+        &'a Vec<OwnedValue>: ToValueType<T>,
     {
         get_doc_value_types(self, index)
     }
 }
 
-impl ToValue<Vec<Value>> for &NamedFieldDocument {
+impl ToValue<Vec<OwnedValue>> for &NamedFieldDocument {
     fn to_value<'a, T>(&'a self, index: &str) -> Result<T, ParseError>
     where
-        Vec<Value>: 'a,
-        &'a Vec<Value>: ToValueType<T>,
+        Vec<OwnedValue>: 'a,
+        &'a Vec<OwnedValue>: ToValueType<T>,
     {
         get_doc_value_types(self, index)
     }
@@ -130,7 +130,7 @@ pub fn get_doc_value_types<'a, T>(
     index: &str,
 ) -> Result<T, ParseError>
 where
-    &'a Vec<Value>: ToValueType<T>,
+    &'a Vec<OwnedValue>: ToValueType<T>,
 {
     if let Some(inner) = value.0.get(index) {
         return inner.to_value_type();
@@ -141,7 +141,7 @@ where
 
 pub fn get_value_type<'a, T>(value: &'a NamedFieldDocument, index: &str) -> Result<T, ParseError>
 where
-    &'a Value: ToValueType<T>,
+    &'a OwnedValue: ToValueType<T>,
 {
     if let Some(inner) = value.0.get(index) {
         if let Some(inner) = inner.first() {
@@ -153,7 +153,7 @@ where
     Err(ParseError::Parse(format!("Missing value: '{}'", index)))
 }
 
-impl<'a> ToValueType<&'a str> for &'a Vec<Value> {
+impl<'a> ToValueType<&'a str> for &'a Vec<OwnedValue> {
     fn to_value_type(self) -> Result<&'a str, ParseError> {
         self.first()
             .ok_or_else(|| ParseError::ConvertType("&str".into()))?
@@ -161,15 +161,15 @@ impl<'a> ToValueType<&'a str> for &'a Vec<Value> {
     }
 }
 
-impl<'a> ToValueType<&'a Vec<Value>> for &'a Vec<Value> {
-    fn to_value_type(self) -> Result<&'a Vec<Value>, ParseError> {
+impl<'a> ToValueType<&'a Vec<OwnedValue>> for &'a Vec<OwnedValue> {
+    fn to_value_type(self) -> Result<&'a Vec<OwnedValue>, ParseError> {
         Ok(self)
     }
 }
 
-impl<'a, T> ToValueType<Vec<T>> for &'a Vec<Value>
+impl<'a, T> ToValueType<Vec<T>> for &'a Vec<OwnedValue>
 where
-    &'a Value: ToValueType<T>,
+    &'a OwnedValue: ToValueType<T>,
 {
     fn to_value_type(self) -> Result<Vec<T>, ParseError> {
         self.iter()
@@ -178,9 +178,9 @@ where
     }
 }
 
-impl<'a, T> ToValueType<Option<T>> for &'a Vec<Value>
+impl<'a, T> ToValueType<Option<T>> for &'a Vec<OwnedValue>
 where
-    &'a Vec<Value>: ToValueType<T>,
+    &'a Vec<OwnedValue>: ToValueType<T>,
 {
     fn to_value_type(self) -> Result<Option<T>, ParseError> {
         self.to_value_type().map(|inner| Some(inner))
@@ -191,7 +191,7 @@ where
     }
 }
 
-impl ToValueType<String> for &Vec<Value> {
+impl ToValueType<String> for &Vec<OwnedValue> {
     fn to_value_type(self) -> Result<String, ParseError> {
         self.first()
             .ok_or_else(|| ParseError::ConvertType("String".into()))?
@@ -199,7 +199,7 @@ impl ToValueType<String> for &Vec<Value> {
     }
 }
 
-impl ToValueType<bool> for &Vec<Value> {
+impl ToValueType<bool> for &Vec<OwnedValue> {
     fn to_value_type(self) -> Result<bool, ParseError> {
         self.first()
             .ok_or_else(|| ParseError::ConvertType("bool".into()))?
@@ -207,7 +207,7 @@ impl ToValueType<bool> for &Vec<Value> {
     }
 }
 
-impl ToValueType<f32> for &Vec<Value> {
+impl ToValueType<f32> for &Vec<OwnedValue> {
     fn to_value_type(self) -> Result<f32, ParseError> {
         self.first()
             .ok_or_else(|| ParseError::ConvertType("f32".into()))?
@@ -215,7 +215,7 @@ impl ToValueType<f32> for &Vec<Value> {
     }
 }
 
-impl ToValueType<f64> for &Vec<Value> {
+impl ToValueType<f64> for &Vec<OwnedValue> {
     fn to_value_type(self) -> Result<f64, ParseError> {
         self.first()
             .ok_or_else(|| ParseError::ConvertType("f64".into()))?
@@ -223,7 +223,7 @@ impl ToValueType<f64> for &Vec<Value> {
     }
 }
 
-impl ToValueType<u8> for &Vec<Value> {
+impl ToValueType<u8> for &Vec<OwnedValue> {
     fn to_value_type(self) -> Result<u8, ParseError> {
         self.first()
             .ok_or_else(|| ParseError::ConvertType("u8".into()))?
@@ -231,7 +231,7 @@ impl ToValueType<u8> for &Vec<Value> {
     }
 }
 
-impl ToValueType<u16> for &Vec<Value> {
+impl ToValueType<u16> for &Vec<OwnedValue> {
     fn to_value_type(self) -> Result<u16, ParseError> {
         self.first()
             .ok_or_else(|| ParseError::ConvertType("u16".into()))?
@@ -239,7 +239,7 @@ impl ToValueType<u16> for &Vec<Value> {
     }
 }
 
-impl ToValueType<u32> for &Vec<Value> {
+impl ToValueType<u32> for &Vec<OwnedValue> {
     fn to_value_type(self) -> Result<u32, ParseError> {
         self.first()
             .ok_or_else(|| ParseError::ConvertType("u32".into()))?
@@ -247,7 +247,7 @@ impl ToValueType<u32> for &Vec<Value> {
     }
 }
 
-impl ToValueType<u64> for &Vec<Value> {
+impl ToValueType<u64> for &Vec<OwnedValue> {
     fn to_value_type(self) -> Result<u64, ParseError> {
         self.first()
             .ok_or_else(|| ParseError::ConvertType("u64".into()))?

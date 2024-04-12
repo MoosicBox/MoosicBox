@@ -161,7 +161,7 @@ strum_macros = "0.26.2"
 symphonia = { git = "https://github.com/pdeljanov/Symphonia", branch = "master", features = [
     "all",
 ] }
-tantivy = "0.21.1"
+tantivy = "0.22.0"
 test-log = "0.2.15"
 thiserror = "1.0.58"
 throttle = "0.1.0"

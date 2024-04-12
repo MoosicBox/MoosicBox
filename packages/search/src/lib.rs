@@ -9,7 +9,7 @@ use tantivy::collector::TopDocs;
 use tantivy::directory::MmapDirectory;
 use tantivy::query::{BooleanQuery, BoostQuery, DisjunctionMaxQuery, QueryParser, TermQuery};
 use tantivy::query_grammar::Occur;
-use tantivy::{schema::*, Directory};
+use tantivy::{schema::*, Directory, IndexWriter};
 use tantivy::{Index, IndexReader, ReloadPolicy};
 use thiserror::Error;
 
@@ -234,7 +234,7 @@ pub enum GetIndexReaderError {
 fn get_index_reader(index: &Index) -> Result<IndexReader, GetIndexReaderError> {
     Ok(index
         .reader_builder()
-        .reload_policy(ReloadPolicy::OnCommit)
+        .reload_policy(ReloadPolicy::OnCommitWithDelay)
         .try_into()?)
 }
 
@@ -291,7 +291,7 @@ pub fn populate_global_search_index(
     }
 
     for entry in data {
-        let mut doc = Document::default();
+        let mut doc = TantivyDocument::default();
 
         for (key, value) in entry {
             let field = schema.get_field(key)?;
@@ -417,7 +417,7 @@ pub fn delete_from_global_search_index(
     // throughput, but 50 MB is already plenty.
     let memory_budget = *GLOBAL_SEARCH_INDEX_WRITER_MEMORY_BUDGET.read().unwrap();
 
-    let mut index_writer =
+    let mut index_writer: IndexWriter<TantivyDocument> =
         if let Some(threads) = *GLOBAL_SEARCH_INDEX_WRITER_NUM_THREADS.read().unwrap() {
             index.writer_with_num_threads(threads, memory_budget)?
         } else {
@@ -817,8 +817,8 @@ pub fn search_global_search_index(
             //     let explanation = global_search_query.explain(&searcher, doc_address)?;
             //     log::debug!("{}", explanation.to_pretty_json());
             // }
-            let retrieved_doc: Document = searcher.doc(doc_address)?;
-            Ok(schema.to_named_doc(&retrieved_doc))
+            let retrieved_doc: TantivyDocument = searcher.doc(doc_address)?;
+            Ok(retrieved_doc.to_named_doc(&schema))
         })
         .collect::<Result<Vec<_>, tantivy::error::TantivyError>>()?;
 
@@ -835,7 +835,7 @@ mod tests {
     use pretty_assertions::assert_eq;
     use serial_test::serial;
     use static_init::dynamic;
-    use tantivy::schema::Value;
+    use tantivy::schema::OwnedValue;
 
     use crate::*;
 
@@ -984,18 +984,21 @@ mod tests {
         ]
     });
 
-    fn to_btree(data: Vec<(&'static str, DataValue)>) -> BTreeMap<String, Vec<Value>> {
+    fn to_btree(data: Vec<(&'static str, DataValue)>) -> BTreeMap<String, Vec<OwnedValue>> {
         let mut map = BTreeMap::new();
         for field in data {
             match &field.1 {
                 DataValue::String(value) => {
-                    map.insert(field.0.to_string(), vec![Value::Str(value.to_string())]);
+                    map.insert(
+                        field.0.to_string(),
+                        vec![OwnedValue::Str(value.to_string())],
+                    );
                 }
                 DataValue::Bool(value) => {
-                    map.insert(field.0.to_string(), vec![Value::Bool(*value)]);
+                    map.insert(field.0.to_string(), vec![OwnedValue::Bool(*value)]);
                 }
                 DataValue::Number(value) => {
-                    map.insert(field.0.to_string(), vec![Value::U64(*value)]);
+                    map.insert(field.0.to_string(), vec![OwnedValue::U64(*value)]);
                 }
             }
         }
@@ -1004,11 +1007,11 @@ mod tests {
 
     fn to_btree_vec(
         data: Vec<Vec<(&'static str, DataValue)>>,
-    ) -> Vec<BTreeMap<String, Vec<Value>>> {
+    ) -> Vec<BTreeMap<String, Vec<OwnedValue>>> {
         data.into_iter().map(to_btree).collect::<Vec<_>>()
     }
 
-    fn entry_cache_key(entry: &BTreeMap<String, Vec<Value>>) -> String {
+    fn entry_cache_key(entry: &BTreeMap<String, Vec<OwnedValue>>) -> String {
         entry
             .iter()
             .map(|entry| {
@@ -1019,9 +1022,9 @@ mod tests {
                         .1
                         .iter()
                         .map(|value| match value {
-                            Value::Str(str) => str.to_string(),
-                            Value::Bool(bool) => bool.to_string(),
-                            Value::U64(num) => num.to_string(),
+                            OwnedValue::Str(str) => str.to_string(),
+                            OwnedValue::Bool(bool) => bool.to_string(),
+                            OwnedValue::U64(num) => num.to_string(),
                             _ => unimplemented!(),
                         })
                         .collect::<Vec<_>>()
@@ -1034,8 +1037,8 @@ mod tests {
 
     #[allow(unused)]
     fn sort_entries(
-        a: &BTreeMap<String, Vec<Value>>,
-        b: &BTreeMap<String, Vec<Value>>,
+        a: &BTreeMap<String, Vec<OwnedValue>>,
+        b: &BTreeMap<String, Vec<OwnedValue>>,
     ) -> Ordering {
         entry_cache_key(a).cmp(&entry_cache_key(b))
     }
