@@ -97,7 +97,7 @@ futures-util = { version = "0.3.30", default-features = false, features = [
 hex = "0.4.3"
 home = "0.5.9"
 id3 = "1.13.1"
-image = "0.24.9"
+image = "0.25.1"
 io-streams = "0.16.0"
 itertools = "0.12.1"
 kanal = "0.1.0-pre8"
