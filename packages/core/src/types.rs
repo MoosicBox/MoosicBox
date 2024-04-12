@@ -20,6 +20,7 @@ pub enum AudioFormat {
 }
 
 pub fn from_extension_to_audio_format(extension: &str) -> Option<AudioFormat> {
+    #[allow(unreachable_code)]
     Some(match extension.to_lowercase().as_str() {
         #[cfg(feature = "flac")]
         "flac" => AudioFormat::Flac,
