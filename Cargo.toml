@@ -110,11 +110,11 @@ log = { version = "0.4", features = ["release_max_level_trace"] }
 md5 = "0.7.0"
 mp3-duration = "0.1.10"
 mp3lame-encoder = "0.1.5"
-mysql = { version = "24.0.0", features = [
+mysql = { version = "25.0.0", features = [
     "default-rustls",
     "rustls-tls",
 ], default-features = false }
-mysql_common = { version = "0.30.6", default-features = false }
+mysql_common = { version = "0.32.2", default-features = false }
 native-tls = "0.2.11"
 ogg = "0.9.1"
 once_cell = { version = "1.19.0" }
@@ -132,12 +132,12 @@ rand = "0.8"
 rangemap = "1.5.1"
 rb = "0.4.1"
 regex = "1.10.4"
-reqwest = { version = "0.11.27", default-features = false, features = [
+reqwest = { version = "0.12.3", default-features = false, features = [
     "blocking",
     "rustls-tls",
     "stream",
 ] }
-rubato = "0.14.1"
+rubato = "0.15.0"
 rusqlite = { version = "0.31.0", features = ["bundled"] }
 rustls = "0.23"
 serde = { version = "1", features = ["derive"] }
