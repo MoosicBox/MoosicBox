@@ -506,7 +506,6 @@ async fn download_track_inner(
             let is_timeout = err.source().is_some_and(|source| {
                 if let Some(error) = source.downcast_ref::<hyper::Error>() {
                     error.is_timeout()
-                        || error.is_connect()
                         || error.is_closed()
                         || error.is_canceled()
                         || error.is_incomplete_message()
