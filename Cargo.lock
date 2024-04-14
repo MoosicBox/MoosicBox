@@ -3099,7 +3099,7 @@ dependencies = [
  "atomic_float",
  "audiotags",
  "futures",
- "hyper 1.2.0",
+ "hyper 0.14.28",
  "id3",
  "lazy_static",
  "lofty",

@@ -27,7 +27,7 @@ async-trait     = { workspace = true }
 atomic_float    = { workspace = true }
 audiotags       = { workspace = true }
 futures         = { workspace = true }
-hyper           = { version = "1.2.0" }
+hyper           = { version = "=0.14.28" }
 id3             = { workspace = true }
 lazy_static     = { workspace = true }
 lofty           = { workspace = true }
@@ -49,10 +49,10 @@ pretty_assertions = { workspace = true }
 serial_test       = { workspace = true }
 static_init       = { workspace = true }
 test-log          = { workspace = true }
-tokio             = { workspace = true, features = ["rt", "macros"] }
+tokio             = { workspace = true, features = ["macros", "rt"] }
 
 [features]
-default = ["api", "aac", "flac", "mp3", "opus"]
+default = ["aac", "api", "flac", "mp3", "opus"]
 
 fail-on-warnings = []
 
