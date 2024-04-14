@@ -1272,7 +1272,7 @@ impl Player {
         let mut hint = Hint::new();
 
         if let Some(Ok(content_type)) = headers
-            .get(actix_web::http::header::CONTENT_TYPE)
+            .get(actix_web::http::header::CONTENT_TYPE.to_string())
             .map(|x| x.to_str())
         {
             if let Some(audio_type) = content_type.strip_prefix("audio/") {

@@ -60,7 +60,7 @@ pub async fn get_content_length(
         let end = end.map(|x| x.to_string()).unwrap_or("".into());
 
         client = client.header(
-            actix_web::http::header::RANGE,
+            actix_web::http::header::RANGE.to_string(),
             format!("bytes={start}-{end}"),
         );
     }
@@ -68,7 +68,10 @@ pub async fn get_content_length(
     let res = client.send().await.unwrap();
 
     Ok(
-        if let Some(header) = res.headers().get(actix_web::http::header::CONTENT_LENGTH) {
+        if let Some(header) = res
+            .headers()
+            .get(actix_web::http::header::CONTENT_LENGTH.to_string())
+        {
             Some(header.to_str()?.parse::<u64>()?)
         } else {
             None
