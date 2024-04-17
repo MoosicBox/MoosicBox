@@ -400,10 +400,10 @@ jobs:
                       cargo: --no-default-features
                       features: pulseaudio-simple
 
-                    # - name: symphonia_player-all-macos
-                    #   path: packages/symphonia_player
-                    #   os: macos-latest
-                    #   dependencies: brew install pulseaudio
+                    - name: symphonia_player-all-macos
+                      path: packages/symphonia_player
+                      os: macos-latest
+                      dependencies: brew install pulseaudio
 
         steps:
             - uses: actions/checkout@v4
