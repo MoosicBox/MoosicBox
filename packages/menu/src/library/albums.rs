@@ -14,7 +14,7 @@ use moosicbox_core::{
         },
         menu::{get_albums, GetAlbumError},
         models::{
-            track_source_to_u8, Album, AlbumSort, AlbumSource, ApiSource, ApiTrack, LibraryAlbum,
+            track_source_to_u8, AlbumSort, AlbumSource, ApiSource, ApiTrack, LibraryAlbum,
             LibraryTrack, ToApi, TrackApiSource,
         },
     },
@@ -342,8 +342,10 @@ pub enum AddAlbumError {
     Album(#[from] moosicbox_music_api::AlbumError),
     #[error(transparent)]
     AddAlbum(#[from] moosicbox_music_api::AddAlbumError),
+    #[cfg(feature = "tidal")]
     #[error(transparent)]
     TidalScan(#[from] moosicbox_scan::tidal::ScanError),
+    #[cfg(feature = "qobuz")]
     #[error(transparent)]
     QobuzScan(#[from] moosicbox_scan::qobuz::ScanError),
     #[error(transparent)]
@@ -378,11 +380,13 @@ pub async fn add_album(
     api.add_album(album_id).await?;
 
     match album {
-        Album::Tidal(album) => {
+        #[cfg(feature = "tidal")]
+        moosicbox_core::sqlite::models::Album::Tidal(album) => {
             moosicbox_scan::tidal::scan_albums(&[album], 1, db.clone(), output.clone(), None)
                 .await?;
         }
-        Album::Qobuz(album) => {
+        #[cfg(feature = "qobuz")]
+        moosicbox_core::sqlite::models::Album::Qobuz(album) => {
             moosicbox_scan::qobuz::scan_albums(&[album], 1, db.clone(), output.clone(), None)
                 .await?;
         }
