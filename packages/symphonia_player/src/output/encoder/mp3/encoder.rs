@@ -22,6 +22,8 @@ lazy_static! {
 
 pub struct Mp3Encoder {
     resampler: Arc<RwLock<Option<Resampler<i16>>>>,
+    rate: Option<u32>,
+    duration: Option<Duration>,
     writer: Option<Box<dyn std::io::Write + Send + Sync>>,
     encoder: mp3lame_encoder::Encoder,
 }
@@ -30,6 +32,8 @@ impl Mp3Encoder {
     pub fn new() -> Self {
         Self {
             resampler: Arc::new(RwLock::new(None)),
+            rate: None,
+            duration: None,
             writer: None,
             encoder: encoder_mp3().unwrap(),
         }
@@ -38,20 +42,35 @@ impl Mp3Encoder {
     pub fn with_writer<W: std::io::Write + Send + Sync + 'static>(writer: W) -> Self {
         Self {
             resampler: Arc::new(RwLock::new(None)),
+            rate: None,
+            duration: None,
             writer: Some(Box::new(writer)),
             encoder: encoder_mp3().unwrap(),
         }
     }
 
-    pub fn open(&mut self, spec: SignalSpec, duration: Duration) {
-        if spec.rate != 48000 {
+    pub fn init_resampler(&mut self, spec: &SignalSpec, duration: Duration) -> &Self {
+        if !self.rate.is_some_and(|r| r == spec.rate)
+            || !self.duration.is_some_and(|d| d == duration)
+        {
+            log::debug!(
+                "Initializing resampler with rate={} duration={}",
+                spec.rate,
+                duration
+            );
+            self.rate.replace(spec.rate);
+            self.duration.replace(duration);
             self.resampler
                 .write()
                 .unwrap()
-                .replace(Resampler::<i16>::new(spec, 48000_usize, duration));
-        } else {
-            self.resampler.write().unwrap().take();
+                .replace(Resampler::<i16>::new(spec.clone(), 44100_usize, duration));
         }
+        self
+    }
+
+    pub fn open(mut self, spec: SignalSpec, duration: Duration) -> Self {
+        self.init_resampler(&spec, duration);
+        self
     }
 
     fn encode_output(&mut self, buf: &[i16]) -> Bytes {
@@ -82,49 +101,59 @@ impl Mp3Encoder {
         }
         written.into()
     }
+
+    fn resample_if_needed(
+        &mut self,
+        decoded: AudioBuffer<f32>,
+    ) -> Result<Vec<i16>, AudioOutputError> {
+        let spec = decoded.spec();
+        let duration = decoded.capacity() as u64;
+
+        self.init_resampler(spec, duration);
+
+        let mut binding = { self.resampler.write().unwrap() };
+
+        if let Some(resampler) = binding.as_mut() {
+            log::debug!(
+                "Resampling rate={:?} duration={:?}",
+                self.rate,
+                self.duration
+            );
+
+            Ok(resampler
+                .resample(decoded)
+                .ok_or(AudioOutputError::StreamEnd)?
+                .to_vec())
+        } else {
+            Ok(to_samples(decoded))
+        }
+    }
+}
+
+fn to_samples(decoded: AudioBuffer<f32>) -> Vec<i16> {
+    let n_channels = decoded.spec().channels.count();
+    let n_samples = decoded.frames() * n_channels;
+    let mut buf = vec![0_i16; n_samples];
+
+    // Interleave the source buffer channels into the sample buffer.
+    for ch in 0..n_channels {
+        let ch_slice = decoded.chan(ch);
+
+        for (dst, decoded) in buf[ch..].iter_mut().step_by(n_channels).zip(ch_slice) {
+            *dst = (*decoded).into_sample();
+        }
+    }
+
+    buf
 }
 
 impl AudioEncoder for Mp3Encoder {
     fn encode(&mut self, decoded: AudioBuffer<f32>) -> Result<Bytes, AudioOutputError> {
         log::debug!("Mp3Encoder encode {} frames", decoded.frames());
-        let buf = {
-            let s = &mut AudioBuffer::<i16>::new(
-                decoded.capacity() as Duration,
-                decoded.spec().to_owned(),
-            );
-            decoded.convert(s);
-            let decoded = AudioBufferRef::S16(std::borrow::Cow::Borrowed(s));
-            let mut binding = self.resampler.write().unwrap();
 
-            if let Some(resampler) = binding.as_mut() {
-                log::debug!("Resampling");
-                let mut buf = decoded.make_equivalent();
-                decoded.convert(&mut buf);
+        let decoded = self.resample_if_needed(decoded)?;
 
-                resampler
-                    .resample(buf)
-                    .ok_or(AudioOutputError::StreamEnd)?
-                    .to_vec()
-            } else {
-                log::debug!("Not resampling");
-                let n_channels = s.spec().channels.count();
-                let n_samples = s.frames() * n_channels;
-                let mut buf = vec![0_i16; n_samples];
-
-                // Interleave the source buffer channels into the sample buffer.
-                for ch in 0..n_channels {
-                    let ch_slice = s.chan(ch);
-
-                    for (dst, s) in buf[ch..].iter_mut().step_by(n_channels).zip(ch_slice) {
-                        *dst = (*s).into_sample();
-                    }
-                }
-
-                buf
-            }
-        };
-
-        Ok(self.encode_output(&buf))
+        Ok(self.encode_output(&decoded))
     }
 }
 
@@ -174,9 +203,9 @@ pub fn encode_mp3_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
 pub fn encode_mp3<T: std::io::Write + Send + Sync + Clone + 'static>(path: String, writer: T) {
     let mut audio_output_handler =
         AudioOutputHandler::new().with_output(Box::new(move |spec, duration| {
-            let mut encoder = Mp3Encoder::with_writer(writer.clone());
-            encoder.open(spec, duration);
-            Ok(Box::new(encoder))
+            Ok(Box::new(
+                Mp3Encoder::with_writer(writer.clone()).open(spec, duration),
+            ))
         }));
 
     if let Err(err) = play_file_path_str(&path, &mut audio_output_handler, true, true, None, None) {

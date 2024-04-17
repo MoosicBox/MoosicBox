@@ -35,6 +35,9 @@ pub struct OpusEncoder<'a> {
     time: usize,
     bytes_read: usize,
     resampler: Option<RwLock<Resampler<f32>>>,
+    input_rate: Option<u32>,
+    output_rate: usize,
+    duration: Option<Duration>,
     writer: Option<Box<dyn std::io::Write + Send + Sync>>,
     encoder: Mutex<opus::Encoder>,
 }
@@ -53,6 +56,9 @@ impl OpusEncoder<'_> {
             time: 0,
             bytes_read: 0,
             resampler: None,
+            input_rate: None,
+            output_rate: 48000,
+            duration: None,
             writer: None,
             encoder: Mutex::new(encoder_opus().unwrap()),
         }
@@ -64,13 +70,29 @@ impl OpusEncoder<'_> {
         x
     }
 
-    pub fn open(&mut self, spec: SignalSpec, duration: Duration) {
-        if spec.rate != 48000 {
-            self.resampler
-                .replace(RwLock::new(Resampler::new(spec, 48000_usize, duration)));
-        } else {
-            self.resampler.take();
+    pub fn init_resampler(&mut self, spec: &SignalSpec, duration: Duration) -> &Self {
+        if !self.input_rate.is_some_and(|r| r == spec.rate)
+            || !self.duration.is_some_and(|d| d == duration)
+        {
+            log::debug!(
+                "Initializing resampler with rate={} duration={}",
+                spec.rate,
+                duration
+            );
+            self.input_rate.replace(spec.rate);
+            self.duration.replace(duration);
+            self.resampler.replace(RwLock::new(Resampler::new(
+                spec.clone(),
+                self.output_rate,
+                duration,
+            )));
         }
+        self
+    }
+
+    pub fn open(mut self, spec: SignalSpec, duration: Duration) -> Self {
+        self.init_resampler(&spec, duration);
+        self
     }
 
     fn encode_output(&mut self, input: &[f32], buf_size: usize) -> Bytes {
@@ -207,6 +229,34 @@ impl OpusEncoder<'_> {
 
         written.into()
     }
+
+    fn resample_if_needed(
+        &mut self,
+        decoded: AudioBuffer<f32>,
+    ) -> Result<Vec<f32>, AudioOutputError> {
+        let spec = decoded.spec();
+        let duration = decoded.capacity() as u64;
+
+        self.init_resampler(spec, duration);
+
+        if let Some(resampler) = &self.resampler {
+            log::debug!(
+                "Resampling input_rate={:?} output_rate={} duration={:?}",
+                self.input_rate,
+                self.output_rate,
+                self.duration
+            );
+
+            Ok(resampler
+                .write()
+                .unwrap()
+                .resample(decoded)
+                .ok_or(AudioOutputError::StreamEnd)?
+                .to_vec())
+        } else {
+            Ok(to_samples(decoded))
+        }
+    }
 }
 
 fn to_samples(decoded: AudioBuffer<f32>) -> Vec<f32> {
@@ -229,25 +279,10 @@ fn to_samples(decoded: AudioBuffer<f32>) -> Vec<f32> {
 impl AudioEncoder for OpusEncoder<'_> {
     fn encode(&mut self, decoded: AudioBuffer<f32>) -> Result<Bytes, AudioOutputError> {
         log::debug!("OpusEncoder encode {} frames", decoded.frames());
-        let buf = {
-            if let Some(ref resampler) = self.resampler {
-                log::debug!("Resampling");
-                let mut buf = decoded.make_equivalent();
-                decoded.convert(&mut buf);
 
-                resampler
-                    .write()
-                    .unwrap()
-                    .resample(buf)
-                    .ok_or(AudioOutputError::StreamEnd)?
-                    .to_vec()
-            } else {
-                log::debug!("Not resampling");
-                to_samples(decoded)
-            }
-        };
+        let decoded = self.resample_if_needed(decoded)?;
 
-        Ok(self.write_samples(buf))
+        Ok(self.write_samples(decoded))
     }
 }
 
@@ -297,9 +332,9 @@ pub fn encode_opus_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
 pub fn encode_opus<T: std::io::Write + Send + Sync + Clone + 'static>(path: String, writer: T) {
     let mut audio_output_handler =
         AudioOutputHandler::new().with_output(Box::new(move |spec, duration| {
-            let mut encoder: OpusEncoder<'_> = OpusEncoder::with_writer(writer.clone());
-            encoder.open(spec, duration);
-            Ok(Box::new(encoder))
+            Ok(Box::new(
+                OpusEncoder::with_writer(writer.clone()).open(spec, duration),
+            ))
         }));
 
     if let Err(err) = play_file_path_str(&path, &mut audio_output_handler, true, true, None, None) {

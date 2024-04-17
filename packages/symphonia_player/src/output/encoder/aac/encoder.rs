@@ -1,4 +1,4 @@
-use std::sync::{Arc, RwLock};
+use std::sync::RwLock;
 
 use crate::output::{AudioEncoder, AudioOutput, AudioOutputError, AudioOutputHandler};
 use crate::play_file_path_str;
@@ -21,7 +21,9 @@ lazy_static! {
 }
 
 pub struct AacEncoder {
-    resampler: Arc<RwLock<Option<Resampler<i16>>>>,
+    resampler: Option<RwLock<Resampler<i16>>>,
+    rate: Option<u32>,
+    duration: Option<Duration>,
     writer: Option<Box<dyn std::io::Write + Send + Sync>>,
     encoder: fdk_aac::enc::Encoder,
 }
@@ -29,7 +31,9 @@ pub struct AacEncoder {
 impl AacEncoder {
     pub fn new() -> Self {
         Self {
-            resampler: Arc::new(RwLock::new(None)),
+            resampler: None,
+            rate: None,
+            duration: None,
             writer: None,
             encoder: encoder_aac().unwrap(),
         }
@@ -37,21 +41,37 @@ impl AacEncoder {
 
     pub fn with_writer<W: std::io::Write + Send + Sync + 'static>(writer: W) -> Self {
         Self {
-            resampler: Arc::new(RwLock::new(None)),
+            resampler: None,
+            rate: None,
+            duration: None,
             writer: Some(Box::new(writer)),
             encoder: encoder_aac().unwrap(),
         }
     }
 
-    pub fn open(&mut self, spec: SignalSpec, duration: Duration) {
-        if spec.rate != 44100 {
-            self.resampler
-                .write()
-                .unwrap()
-                .replace(Resampler::<i16>::new(spec, 44100_usize, duration));
-        } else {
-            self.resampler.write().unwrap().take();
+    pub fn init_resampler(&mut self, spec: &SignalSpec, duration: Duration) -> &Self {
+        if !self.rate.is_some_and(|r| r == spec.rate)
+            || !self.duration.is_some_and(|d| d == duration)
+        {
+            log::debug!(
+                "Initializing resampler with rate={} duration={}",
+                spec.rate,
+                duration
+            );
+            self.rate.replace(spec.rate);
+            self.duration.replace(duration);
+            self.resampler.replace(RwLock::new(Resampler::new(
+                spec.clone(),
+                44100_usize,
+                duration,
+            )));
         }
+        self
+    }
+
+    pub fn open(mut self, spec: SignalSpec, duration: Duration) -> Self {
+        self.init_resampler(&spec, duration);
+        self
     }
 
     fn encode_output(&self, buf: &[i16]) -> Bytes {
@@ -77,37 +97,59 @@ impl AacEncoder {
         }
         written.into()
     }
+
+    fn resample_if_needed(
+        &mut self,
+        decoded: AudioBuffer<f32>,
+    ) -> Result<Vec<i16>, AudioOutputError> {
+        let spec = decoded.spec();
+        let duration = decoded.capacity() as u64;
+
+        self.init_resampler(spec, duration);
+
+        if let Some(resampler) = &self.resampler {
+            log::debug!(
+                "Resampling rate={:?} duration={:?}",
+                self.rate,
+                self.duration
+            );
+
+            Ok(resampler
+                .write()
+                .unwrap()
+                .resample(decoded)
+                .ok_or(AudioOutputError::StreamEnd)?
+                .to_vec())
+        } else {
+            Ok(to_samples(decoded))
+        }
+    }
+}
+
+fn to_samples(decoded: AudioBuffer<f32>) -> Vec<i16> {
+    let n_channels = decoded.spec().channels.count();
+    let n_samples = decoded.frames() * n_channels;
+    let mut buf = vec![0_i16; n_samples];
+
+    // Interleave the source buffer channels into the sample buffer.
+    for ch in 0..n_channels {
+        let ch_slice = decoded.chan(ch);
+
+        for (dst, decoded) in buf[ch..].iter_mut().step_by(n_channels).zip(ch_slice) {
+            *dst = (*decoded).into_sample();
+        }
+    }
+
+    buf
 }
 
 impl AudioEncoder for AacEncoder {
     fn encode(&mut self, decoded: AudioBuffer<f32>) -> Result<Bytes, AudioOutputError> {
-        log::debug!("AacEncoder encode {} frames", decoded.frames());
-        let mut binding = self.resampler.write().unwrap();
+        log::debug!("OpusEncoder encode {} frames", decoded.frames());
 
-        if let Some(resampler) = binding.as_mut() {
-            log::debug!("Resampling");
-            let decoded = resampler
-                .resample(decoded)
-                .ok_or(AudioOutputError::StreamEnd)?;
+        let decoded = self.resample_if_needed(decoded)?;
 
-            Ok(self.encode_output(decoded))
-        } else {
-            log::debug!("Not resampling");
-            let n_channels = decoded.spec().channels.count();
-            let n_samples = decoded.frames() * n_channels;
-            let buf = &mut vec![0_i16; n_samples];
-
-            // Interleave the source buffer channels into the sample buffer.
-            for ch in 0..n_channels {
-                let ch_slice = decoded.chan(ch);
-
-                for (dst, decoded) in buf[ch..].iter_mut().step_by(n_channels).zip(ch_slice) {
-                    *dst = (*decoded).into_sample();
-                }
-            }
-
-            Ok(self.encode_output(buf))
-        }
+        Ok(self.encode_output(&decoded))
     }
 }
 
@@ -157,9 +199,9 @@ pub fn encode_aac_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
 pub fn encode_aac<T: std::io::Write + Send + Sync + Clone + 'static>(path: String, writer: T) {
     let mut audio_output_handler =
         AudioOutputHandler::new().with_output(Box::new(move |spec, duration| {
-            let mut encoder = AacEncoder::with_writer(writer.clone());
-            encoder.open(spec, duration);
-            Ok(Box::new(encoder))
+            Ok(Box::new(
+                AacEncoder::with_writer(writer.clone()).open(spec, duration),
+            ))
         }));
 
     if let Err(err) = play_file_path_str(&path, &mut audio_output_handler, true, true, None, None) {
