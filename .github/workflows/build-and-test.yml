@@ -22,21 +22,11 @@ jobs:
                       path: packages/aconverter
                       os: ubuntu-latest
 
-                    - name: auth
-                      path: packages/auth
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-
                     - name: auth-api
                       path: packages/auth
                       os: ubuntu-latest
                       cargo: --no-default-features
                       features: api
-
-                    - name: converter
-                      path: packages/converter
-                      os: ubuntu-latest
-                      cargo: --no-default-features
 
                     - name: converter-default
                       path: packages/converter
@@ -75,11 +65,6 @@ jobs:
                     - name: downloader
                       path: packages/downloader
                       os: ubuntu-latest
-
-                    - name: downloader-no-default-features
-                      path: packages/downloader
-                      os: ubuntu-latest
-                      cargo: --no-default-features
 
                     - name: downloader-api
                       path: packages/downloader
@@ -149,11 +134,6 @@ jobs:
                       path: packages/qobuz
                       os: ubuntu-latest
 
-                    - name: qobuz-no-default-features
-                      path: packages/qobuz
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-
                     - name: qobuz-api
                       path: packages/qobuz
                       os: ubuntu-latest
@@ -169,11 +149,6 @@ jobs:
                     - name: search
                       path: packages/search
                       os: ubuntu-latest
-
-                    - name: search-no-default-features
-                      path: packages/search
-                      os: ubuntu-latest
-                      cargo: --no-default-features
 
                     - name: search-api
                       path: packages/search
@@ -200,11 +175,6 @@ jobs:
                       os: ubuntu-latest
                       features: base64
 
-                    - name: tunnel-base
-                      path: packages/tunnel
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-
                     - name: tunnel_sender
                       path: packages/tunnel_sender
                       os: ubuntu-latest
@@ -213,11 +183,6 @@ jobs:
                       path: packages/tunnel_sender
                       os: ubuntu-latest
                       features: base64
-
-                    - name: tunnel_sender-base
-                      path: packages/tunnel_sender
-                      os: ubuntu-latest
-                      cargo: --no-default-features
 
                     - name: tunnel_server
                       path: packages/tunnel_server
@@ -347,11 +312,6 @@ jobs:
                       path: packages/scan
                       os: ubuntu-latest
 
-                    - name: scan-no-default-features
-                      path: packages/scan
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-
                     - name: scan-local
                       path: packages/scan
                       os: ubuntu-latest
@@ -367,11 +327,6 @@ jobs:
                     - name: tidal
                       path: packages/tidal
                       os: ubuntu-latest
-
-                    - name: tidal-no-default-features
-                      path: packages/tidal
-                      os: ubuntu-latest
-                      cargo: --no-default-features
 
                     - name: tidal-api
                       path: packages/tidal
