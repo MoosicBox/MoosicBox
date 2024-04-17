@@ -2973,13 +2973,11 @@ dependencies = [
  "moosicbox_qobuz",
  "moosicbox_scan",
  "moosicbox_search",
- "moosicbox_server",
  "moosicbox_stream_utils",
  "moosicbox_symphonia_player",
  "moosicbox_tidal",
  "moosicbox_tunnel",
  "moosicbox_tunnel_sender",
- "moosicbox_tunnel_server",
  "moosicbox_ws",
 ]
 
