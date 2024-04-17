@@ -1,6 +1,6 @@
 use std::sync::{Arc, RwLock};
 
-use crate::output::{AudioEncoder, AudioOutput, AudioOutputError, AudioOutputHandler};
+use crate::output::{to_samples, AudioEncoder, AudioOutput, AudioOutputError, AudioOutputHandler};
 use crate::play_file_path_str;
 use crate::resampler::Resampler;
 
@@ -9,7 +9,6 @@ use lazy_static::lazy_static;
 use moosicbox_converter::mp3::encoder_mp3;
 use moosicbox_stream_utils::{ByteStream, ByteWriter};
 use symphonia::core::audio::*;
-use symphonia::core::conv::IntoSample;
 use symphonia::core::units::Duration;
 
 lazy_static! {
@@ -128,23 +127,6 @@ impl Mp3Encoder {
             Ok(to_samples(decoded))
         }
     }
-}
-
-fn to_samples(decoded: AudioBuffer<f32>) -> Vec<i16> {
-    let n_channels = decoded.spec().channels.count();
-    let n_samples = decoded.frames() * n_channels;
-    let mut buf = vec![0_i16; n_samples];
-
-    // Interleave the source buffer channels into the sample buffer.
-    for ch in 0..n_channels {
-        let ch_slice = decoded.chan(ch);
-
-        for (dst, decoded) in buf[ch..].iter_mut().step_by(n_channels).zip(ch_slice) {
-            *dst = (*decoded).into_sample();
-        }
-    }
-
-    buf
 }
 
 impl AudioEncoder for Mp3Encoder {

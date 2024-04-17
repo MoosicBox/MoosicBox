@@ -1,7 +1,7 @@
 use std::sync::{Mutex, RwLock};
 use std::usize;
 
-use crate::output::{AudioEncoder, AudioOutput, AudioOutputError, AudioOutputHandler};
+use crate::output::{to_samples, AudioEncoder, AudioOutput, AudioOutputError, AudioOutputHandler};
 use crate::play_file_path_str;
 use crate::resampler::Resampler;
 
@@ -257,23 +257,6 @@ impl OpusEncoder<'_> {
             Ok(to_samples(decoded))
         }
     }
-}
-
-fn to_samples(decoded: AudioBuffer<f32>) -> Vec<f32> {
-    let n_channels = decoded.spec().channels.count();
-    let n_samples = decoded.frames() * n_channels;
-    let mut buf = vec![0_f32; n_samples];
-
-    // Interleave the source buffer channels into the sample buffer.
-    for ch in 0..n_channels {
-        let ch_slice = decoded.chan(ch);
-
-        for (dst, decoded) in buf[ch..].iter_mut().step_by(n_channels).zip(ch_slice) {
-            *dst = *decoded;
-        }
-    }
-
-    buf
 }
 
 impl AudioEncoder for OpusEncoder<'_> {

@@ -1,5 +1,6 @@
 use bytes::Bytes;
-use symphonia::core::audio::{AudioBuffer, SignalSpec};
+use symphonia::core::audio::{AudioBuffer, Signal as _, SignalSpec};
+use symphonia::core::conv::{FromSample, IntoSample as _};
 use symphonia::core::formats::{Packet, Track};
 use symphonia::core::units::Duration;
 use thiserror::Error;
@@ -142,4 +143,22 @@ impl Default for AudioOutputHandler {
     fn default() -> Self {
         Self::new()
     }
+}
+
+#[allow(unused)]
+fn to_samples<S: FromSample<f32>>(decoded: AudioBuffer<f32>) -> Vec<S> {
+    let n_channels = decoded.spec().channels.count();
+    let n_samples = decoded.frames() * n_channels;
+    let mut buf: Vec<S> = Vec::with_capacity(n_samples);
+
+    // Interleave the source buffer channels into the sample buffer.
+    for ch in 0..n_channels {
+        let ch_slice = decoded.chan(ch);
+
+        for (dst, decoded) in buf[ch..].iter_mut().step_by(n_channels).zip(ch_slice) {
+            *dst = (*decoded).into_sample();
+        }
+    }
+
+    buf
 }
