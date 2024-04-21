@@ -596,7 +596,7 @@ fn build_set_props(values: &[(&str, Box<dyn Expression>)]) -> Vec<String> {
 
 fn build_values_clause(values: &[(&str, Box<dyn Expression>)]) -> String {
     if values.is_empty() {
-        "".to_string()
+        "DEFAULT VALUES".to_string()
     } else {
         format!("VALUES({})", build_values_props(values).join(", "))
     }
@@ -910,8 +910,13 @@ fn insert_and_get_row(
         .collect::<Vec<_>>()
         .join(", ");
 
+    let insert_columns = if values.is_empty() {
+        "".into()
+    } else {
+        format!("({column_names})")
+    };
     let query = format!(
-        "INSERT INTO {table_name} ({column_names}) {} RETURNING *",
+        "INSERT INTO {table_name} {insert_columns} {} RETURNING *",
         build_values_clause(values),
     );
 
@@ -1165,6 +1170,11 @@ fn upsert_chunk(
         .collect::<Vec<_>>();
 
     let values_str = values_str_list.join(", ");
+    let values_str = if values_str.is_empty() {
+        "DEFAULT VALUES".to_string()
+    } else {
+        format!("VALUES {values_str}")
+    };
 
     let unique_conflict = unique
         .iter()
@@ -1172,10 +1182,14 @@ fn upsert_chunk(
         .collect::<Vec<_>>()
         .join(", ");
 
+    let insert_columns = if values.is_empty() {
+        "".into()
+    } else {
+        format!("({column_names})")
+    };
     let query = format!(
         "
-        INSERT INTO {table_name} ({column_names})
-        VALUES {values_str}
+        INSERT INTO {table_name} {insert_columns} {values_str}
         ON CONFLICT({unique_conflict}) DO UPDATE
             SET {set_clause}
         RETURNING *"
