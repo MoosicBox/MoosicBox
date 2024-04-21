@@ -383,6 +383,14 @@ pub async fn delete_session(db: &Box<dyn Database>, session_id: i32) -> Result<(
         .execute(db)
         .await?;
 
+    db.delete("active_players")
+        .where_eq("session_id", session_id)
+        .execute(db)
+        .await?
+        .into_iter()
+        .next()
+        .ok_or(DbError::NoRow)?;
+
     db.delete("sessions")
         .where_eq("id", session_id)
         .execute(db)
