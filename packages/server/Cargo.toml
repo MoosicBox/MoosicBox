@@ -49,6 +49,9 @@ sqlx = { workspace = true, optional = true, features = [
 ] }
 tokio-postgres = { workspace = true, optional = true, features = [] }
 
+# auth
+qstring         = { workspace = true, optional = true }
+
 actix-cors      = { workspace = true }
 actix-files     = { workspace = true }
 actix-web       = { workspace = true }
@@ -103,7 +106,7 @@ pulseaudio-simple   = ["moosicbox_player/pulseaudio-simple"]
 pulseaudio-standard = ["moosicbox_player/pulseaudio-standard"]
 resampler           = ["moosicbox_player/resampler"]
 
-static-token-auth = []
+static-token-auth = ["dep:qstring"]
 
 aac = [
     "moosicbox_core/aac",

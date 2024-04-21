@@ -3429,6 +3429,7 @@ dependencies = [
  "openssl",
  "postgres-native-tls",
  "postgres-openssl",
+ "qstring",
  "rand",
  "regex",
  "rusqlite",

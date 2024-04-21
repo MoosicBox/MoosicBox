@@ -4,7 +4,11 @@ use actix_web::{
     http,
 };
 use futures_util::future::LocalBoxFuture;
-use std::future::{ready, Ready};
+use qstring::QString;
+use std::{
+    collections::HashMap,
+    future::{ready, Ready},
+};
 
 pub struct StaticTokenAuth {
     token: String,
@@ -61,24 +65,58 @@ where
             return Box::pin(self.service.call(req));
         }
 
-        if let Some(auth) = req.headers().get(http::header::AUTHORIZATION) {
-            if let Ok(auth) = auth.to_str() {
-                let token = if auth.to_lowercase().starts_with("bearer") {
-                    auth[6..].trim_start()
-                } else {
-                    auth
-                };
-
-                if token == self.token {
-                    return Box::pin(self.service.call(req));
-                }
-            }
+        if is_header_authorized(&req, &self.token) || is_query_authorized(&req, &self.token) {
+            return Box::pin(self.service.call(req));
         }
 
         log::warn!(
-            "Unauthorized StaticTokenAuthMiddleware request to '{}'",
-            req.path()
+            "Unauthorized StaticTokenAuthMiddleware {} request to '{}'",
+            req.method(),
+            req.path(),
         );
         Box::pin(async move { Err(ErrorUnauthorized("Unauthorized")) })
     }
+}
+
+fn is_header_authorized(req: &ServiceRequest, expected: &str) -> bool {
+    if let Some(auth) = req.headers().get(http::header::AUTHORIZATION) {
+        if let Ok(auth) = auth.to_str() {
+            let token = if auth.to_lowercase().starts_with("bearer") {
+                auth[6..].trim_start()
+            } else {
+                auth
+            };
+
+            if token == expected {
+                return true;
+            } else {
+                log::debug!("Incorrect AUTHORIZATION header value");
+            }
+        } else {
+            log::debug!("No AUTHORIZATION header value");
+        }
+    }
+
+    false
+}
+
+fn is_query_authorized(req: &ServiceRequest, expected: &str) -> bool {
+    let query: Vec<_> = QString::from(req.query_string()).into();
+    let query: HashMap<_, _> = query.into_iter().collect();
+    let authorization = query
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case(http::header::AUTHORIZATION.as_str()))
+        .map(|(_, value)| value);
+
+    if let Some(token) = authorization {
+        if token == expected {
+            return true;
+        } else {
+            log::debug!("Incorrect AUTHORIZATION query param value");
+        }
+    } else {
+        log::debug!("No AUTHORIZATION query param value");
+    }
+
+    false
 }
