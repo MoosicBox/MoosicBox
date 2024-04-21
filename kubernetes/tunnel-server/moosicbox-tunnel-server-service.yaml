@@ -13,7 +13,7 @@ metadata:
         service.beta.kubernetes.io/do-loadbalancer-healthcheck-path: "/health"
         service.beta.kubernetes.io/do-loadbalancer-healthcheck-check-interval-seconds: "10"
         service.beta.kubernetes.io/do-loadbalancer-healthcheck-response-timeout-seconds: "5"
-        service.beta.kubernetes.io/do-loadbalancer-healthcheck-unhealthy-threshold: "10"
+        service.beta.kubernetes.io/do-loadbalancer-healthcheck-unhealthy-threshold: "3"
         service.beta.kubernetes.io/do-loadbalancer-healthcheck-healthy-threshold: "5"
     labels:
         io.kompose.service: moosicbox-tunnel-service
