@@ -202,6 +202,11 @@ impl TunnelSender {
         )
     }
 
+    pub fn with_cancellation_token(mut self, token: CancellationToken) -> Self {
+        self.cancellation_token = token;
+        self
+    }
+
     async fn message_handler(
         tx: Sender<TunnelMessage>,
         m: Message,
