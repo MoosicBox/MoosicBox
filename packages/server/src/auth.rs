@@ -57,7 +57,7 @@ where
     forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        if req.path() == "/health" {
+        if req.path() == "/health" || req.method() == http::Method::OPTIONS {
             return Box::pin(self.service.call(req));
         }
 
