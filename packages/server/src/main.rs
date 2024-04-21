@@ -184,6 +184,8 @@ fn main() -> std::io::Result<()> {
                 let (mut tunnel, handle) =
                     TunnelSender::new(host.clone(), ws_url, client_id, access_token);
 
+                tunnel = tunnel.with_cancellation_token(CANCELLATION_TOKEN.clone());
+
                 let database_send = database.clone();
                 (
                     Some(host),
