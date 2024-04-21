@@ -47,6 +47,7 @@ To-do (in no particular order):
 - Peer-to-peer secure tunneling
 - Turso database support
 - ios app
+- Run as a service in the background, optionally at startup
 
 ## Local Server
 
