@@ -42,6 +42,7 @@ To-do (in no particular order):
 - Current playback screen
 - Listen-only connections
 - Support MPEG-DASH encoding
+- Support HLS protocol
 - Support gapless playback
 - Peer-to-peer secure tunneling
 - Turso database support
