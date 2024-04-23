@@ -1,17 +1,23 @@
 [package]
-authors = ["Braden Steffaniak"]
-edition = "2021"
-name    = "moosicbox_core"
-version = "0.1.0"
+authors     = ["Braden Steffaniak"]
+categories  = ["multimedia"]
+description = "MoosicBox core package"
+edition     = "2021"
+keywords    = ["core"]
+license     = "MPL-2.0"
+name        = "moosicbox_core"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
 
 [dependencies]
 moosicbox_database = { path = "../database", default-features = false, features = [
     "rusqlite",
 ] }
 moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
+    "database",
     "rusqlite",
     "serde_json",
-    "database",
 ] }
 
 actix-cors    = { workspace = true }

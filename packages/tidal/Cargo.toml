@@ -1,8 +1,14 @@
 [package]
-authors = ["Braden Steffaniak"]
-edition = "2021"
-name    = "moosicbox_tidal"
-version = "0.1.0"
+authors     = ["Braden Steffaniak"]
+categories  = ["multimedia", "network-programming"]
+description = "MoosicBox Tidal package"
+edition     = "2021"
+keywords    = ["audio", "tidal"]
+license     = "MPL-2.0"
+name        = "moosicbox_tidal"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
 
 [dependencies]
 moosicbox_core = { path = "../core", default-features = false }
@@ -10,8 +16,8 @@ moosicbox_database = { path = "../database", default-features = false, features 
     "rusqlite",
 ] }
 moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
-    "serde_json",
     "database",
+    "serde_json",
 ] }
 moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_paging = { path = "../paging", default-features = false }

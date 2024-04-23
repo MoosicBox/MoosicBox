@@ -1,8 +1,14 @@
 [package]
-authors = ["Braden Steffaniak"]
-edition = "2021"
-name    = "moosicbox"
-version = "0.1.0"
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools", "multimedia"]
+description = "MoosicBox package"
+edition     = "2021"
+keywords    = ["moosicbox"]
+license     = "MPL-2.0"
+name        = "moosicbox"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
 
 [dependencies]
 moosicbox_auth             = { version = "0.1.0", path = "../auth", default-features = false }

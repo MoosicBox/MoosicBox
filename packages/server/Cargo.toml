@@ -1,8 +1,14 @@
 [package]
-authors = ["Braden Steffaniak"]
-edition = "2021"
-name    = "moosicbox_server"
-version = "0.1.0"
+authors     = ["Braden Steffaniak"]
+categories  = ["multimedia"]
+description = "MoosicBox server package"
+edition     = "2021"
+keywords    = ["api", "audio", "moosicbox", "server"]
+license     = "MPL-2.0"
+name        = "moosicbox_server"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
 
 [dependencies]
 moosicbox_auth = { path = "../auth" }
@@ -50,7 +56,7 @@ sqlx = { workspace = true, optional = true, features = [
 tokio-postgres = { workspace = true, optional = true, features = [] }
 
 # auth
-qstring         = { workspace = true, optional = true }
+qstring = { workspace = true, optional = true }
 
 actix-cors      = { workspace = true }
 actix-files     = { workspace = true }

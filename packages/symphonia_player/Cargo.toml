@@ -1,8 +1,14 @@
 [package]
-authors = ["Braden Steffaniak"]
-edition = "2021"
-name    = "moosicbox_symphonia_player"
-version = "0.1.0"
+authors     = ["Braden Steffaniak"]
+categories  = ["encoding", "multimedia", "network-programming"]
+description = "MoosicBox Symphomia player package"
+edition     = "2021"
+keywords    = ["audio", "bytes", "decoder", "file", "remote", "stream"]
+license     = "MPL-2.0"
+name        = "moosicbox_symphonia_player"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
 
 [dependencies]
 moosicbox_converter    = { path = "../../packages/converter", default-features = false }

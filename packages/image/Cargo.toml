@@ -1,8 +1,14 @@
 [package]
-authors = ["Braden Steffaniak"]
-edition = "2021"
-name    = "moosicbox_image"
-version = "0.1.0"
+authors     = ["Braden Steffaniak"]
+categories  = ["compression", "development-tools", "multimedia"]
+description = "MoosicBox image package"
+edition     = "2021"
+keywords    = ["compression", "image", "resize"]
+license     = "MPL-2.0"
+name        = "moosicbox_image"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
 
 [[bin]]
 name              = "image_helper"

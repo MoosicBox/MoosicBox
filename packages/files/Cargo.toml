@@ -1,8 +1,14 @@
 [package]
-authors = ["Braden Steffaniak"]
-edition = "2021"
-name    = "moosicbox_files"
-version = "0.1.0"
+authors     = ["Braden Steffaniak"]
+categories  = ["multimedia"]
+description = "MoosicBox files package"
+edition     = "2021"
+keywords    = ["audio", "file", "track"]
+license     = "MPL-2.0"
+name        = "moosicbox_files"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
 
 [dependencies]
 moosicbox_config = { path = "../config" }
@@ -48,19 +54,19 @@ tokio-stream    = { workspace = true }
 tokio-util      = { workspace = true }
 
 [features]
-default = ["api", "files", "range", "image", "aac", "flac", "mp3", "opus"]
+default = ["aac", "api", "files", "flac", "image", "mp3", "opus", "range"]
 
 fail-on-warnings = []
 
 image   = ["moosicbox_image/image"]
 libvips = ["moosicbox_image/libvips"]
 
-api   = ["files", "range"]
-files = []
-range = []
+api         = ["files", "range"]
+files       = []
+range       = []
 track-range = []
 
-aac  = ["moosicbox_symphonia_player/aac", "moosicbox_core/aac"]
+aac  = ["moosicbox_core/aac", "moosicbox_symphonia_player/aac"]
 flac = ["moosicbox_core/flac"]
-mp3  = ["moosicbox_symphonia_player/mp3", "moosicbox_core/mp3"]
-opus = ["moosicbox_symphonia_player/opus", "moosicbox_core/opus"]
+mp3  = ["moosicbox_core/mp3", "moosicbox_symphonia_player/mp3"]
+opus = ["moosicbox_core/opus", "moosicbox_symphonia_player/opus"]

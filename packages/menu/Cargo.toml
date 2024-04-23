@@ -1,8 +1,14 @@
 [package]
-authors = ["Braden Steffaniak"]
-edition = "2021"
-name    = "moosicbox_menu"
-version = "0.1.0"
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools"]
+description = "MoosicBox menu package"
+edition     = "2021"
+keywords    = ["album", "artist", "menu", "playlist", "track"]
+license     = "MPL-2.0"
+name        = "moosicbox_menu"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
 
 [dependencies]
 moosicbox_core = { path = "../core", default-features = false }

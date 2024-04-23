@@ -1,8 +1,14 @@
 [package]
-authors = ["Braden Steffaniak"]
-edition = "2021"
-name    = "moosicbox_tunnel_sender"
-version = "0.1.0"
+authors     = ["Braden Steffaniak"]
+categories  = ["network-programming"]
+description = "MoosicBox tunnel sender package"
+edition     = "2021"
+keywords    = ["api", "tunnel", "websocket"]
+license     = "MPL-2.0"
+name        = "moosicbox_tunnel_sender"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
 
 [dependencies]
 moosicbox_auth = { path = "../auth" }
@@ -12,17 +18,17 @@ moosicbox_database = { path = "../database", default-features = false, features 
 ] }
 moosicbox_env_utils = { path = "../env_utils" }
 moosicbox_files = { path = "../files", default-features = false, features = [
+    "api",
     "files",
     "range",
-    "api",
 ] }
 moosicbox_image = { path = "../image", default-features = false, features = [
     "image",
 ] }
 moosicbox_stream_utils = { path = "../stream_utils" }
 moosicbox_symphonia_player = { path = "../symphonia_player", default-features = false }
-moosicbox_ws = { path = "../ws" }
 moosicbox_tunnel = { path = "../tunnel", default-features = false }
+moosicbox_ws = { path = "../ws" }
 
 # Base64 dependencies
 base64 = { workspace = true, optional = true }
@@ -49,25 +55,25 @@ tokio-tungstenite = { workspace = true }
 tokio-util        = { workspace = true }
 
 [features]
-default = ["base64", "aac", "flac", "mp3", "opus"]
+default = ["aac", "base64", "flac", "mp3", "opus"]
 
 fail-on-warnings = []
 
 base64 = ["dep:base64", "moosicbox_tunnel/base64"]
 
 aac = [
-    "moosicbox_symphonia_player/aac",
-    "moosicbox_files/aac",
     "moosicbox_core/aac",
+    "moosicbox_files/aac",
+    "moosicbox_symphonia_player/aac",
 ]
-flac = ["moosicbox_files/flac", "moosicbox_core/flac"]
+flac = ["moosicbox_core/flac", "moosicbox_files/flac"]
 mp3 = [
-    "moosicbox_symphonia_player/mp3",
-    "moosicbox_files/mp3",
     "moosicbox_core/mp3",
+    "moosicbox_files/mp3",
+    "moosicbox_symphonia_player/mp3",
 ]
 opus = [
-    "moosicbox_symphonia_player/opus",
-    "moosicbox_files/opus",
     "moosicbox_core/opus",
+    "moosicbox_files/opus",
+    "moosicbox_symphonia_player/opus",
 ]

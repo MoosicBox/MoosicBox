@@ -1,8 +1,14 @@
 [package]
-authors = ["Braden Steffaniak"]
-edition = "2021"
-name    = "moosicbox_paging"
-version = "0.1.0"
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools", "network-programming"]
+description = "MoosicBox paging package"
+edition     = "2021"
+keywords    = ["api", "util", "utility"]
+license     = "MPL-2.0"
+name        = "moosicbox_paging"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
 
 [dependencies]
 moosicbox_core = { path = "../core", default-features = false }

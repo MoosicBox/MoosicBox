@@ -1,8 +1,14 @@
 [package]
-authors = ["Braden Steffaniak"]
-edition = "2021"
-name    = "moosicbox_env_utils"
-version = "0.1.0"
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools::procedural-macro-helpers"]
+description = "MoosicBox env utilities package"
+edition     = "2021"
+keywords    = ["env", "environment", "util", "utilities", "utils"]
+license     = "MPL-2.0"
+name        = "moosicbox_env_utils"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
 
 [dependencies]
 thiserror = { workspace = true }

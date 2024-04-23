@@ -1,8 +1,14 @@
 [package]
-authors = ["Braden Steffaniak"]
-edition = "2021"
-name    = "moosicbox_search"
-version = "0.1.0"
+authors     = ["Braden Steffaniak"]
+categories  = ["database"]
+description = "MoosicBox search package"
+edition     = "2021"
+keywords    = ["api", "database", "search", "tantivy"]
+license     = "MPL-2.0"
+name        = "moosicbox_search"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
 
 [dependencies]
 moosicbox_config = { path = "../config" }

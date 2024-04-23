@@ -1,8 +1,14 @@
 [package]
-authors = ["Braden Steffaniak"]
-edition = "2021"
-name    = "moosicbox_stream_utils"
-version = "0.1.0"
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools", "network-programming"]
+description = "MoosicBox stream utils package"
+edition     = "2021"
+keywords    = ["bytes", "stream", "util", "utility"]
+license     = "MPL-2.0"
+name        = "moosicbox_stream_utils"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
 
 [dependencies]
 bytes       = { workspace = true }

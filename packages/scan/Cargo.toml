@@ -1,8 +1,14 @@
 [package]
-authors = ["Braden Steffaniak"]
-edition = "2021"
-name    = "moosicbox_scan"
-version = "0.1.0"
+authors     = ["Braden Steffaniak"]
+categories  = ["multimedia", "network-programming"]
+description = "MoosicBox scan package"
+edition     = "2021"
+keywords    = ["audio", "files", "local", "remote", "scan"]
+license     = "MPL-2.0"
+name        = "moosicbox_scan"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
 
 [dependencies]
 moosicbox_config = { path = "../config" }
@@ -45,7 +51,7 @@ tokio        = { workspace = true, features = ["macros"] }
 tokio-util   = { workspace = true }
 
 [features]
-default = ["api", "local", "qobuz", "tidal", "aac", "flac", "mp3", "opus"]
+default = ["aac", "api", "flac", "local", "mp3", "opus", "qobuz", "tidal"]
 
 fail-on-warnings = []
 

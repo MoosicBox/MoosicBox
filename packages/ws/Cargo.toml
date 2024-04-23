@@ -1,8 +1,14 @@
 [package]
-authors = ["Braden Steffaniak"]
-edition = "2021"
-name    = "moosicbox_ws"
-version = "0.1.0"
+authors     = ["Braden Steffaniak"]
+categories  = ["network-programming"]
+description = "MoosicBox websocket package"
+edition     = "2021"
+keywords    = ["api", "websocket"]
+license     = "MPL-2.0"
+name        = "moosicbox_ws"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
 
 [dependencies]
 moosicbox_core = { path = "../core", default-features = false }

@@ -1,8 +1,14 @@
 [package]
-authors = ["Braden Steffaniak"]
-edition = "2021"
-name    = "moosicbox_converter"
-version = "0.1.0"
+authors     = ["Braden Steffaniak"]
+categories  = ["compression", "encoding"]
+description = "Audio converter helper"
+edition     = "2021"
+keywords    = ["audio", "convert", "converter", "encoding"]
+license     = "MPL-2.0"
+name        = "moosicbox_converter"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
 
 [dependencies]
 # Aac dependencies
