@@ -32,10 +32,11 @@ use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use symphonia::core::{
     audio::{AudioBuffer, Signal},
-    conv::{FromSample, IntoSample},
+    conv::IntoSample,
     io::MediaSourceStream,
     probe::Hint,
     sample::Sample,
+    util::clamp::clamp_i16,
 };
 use thiserror::Error;
 use tokio_util::{
@@ -594,28 +595,27 @@ pub async fn get_track_info(track_id: u64, db: &dyn Database) -> Result<TrackInf
     Ok(track.unwrap().into())
 }
 
+const DIV: u16 = u16::MAX / u8::MAX as u16;
+
 pub fn visualize<S>(input: &AudioBuffer<S>) -> u8
 where
-    S: Sample + FromSample<u8> + IntoSample<u8>,
+    S: Sample + IntoSample<i16>,
 {
     let channels = input.spec().channels.count();
 
-    let mut step = 1_u64;
-    let max = step * channels as u64;
-    let mut count = 0_u64;
-    let mut sum = 0_u64;
+    let mut step = 1_u16;
+    let mut count = 0_u16;
+    let mut max = 0_u16;
 
     for c in 0..channels {
         for x in input.chan(c) {
-            sum += (*x).into_sample() as u64;
+            let value = clamp_i16(((*x).into_sample() as i32).abs()) as u16;
+            max = std::cmp::max(value, max);
             count += 1;
             if count >= step {
                 step += step;
                 break;
             }
-        }
-        if count >= max {
-            break;
         }
     }
 
@@ -623,7 +623,7 @@ where
         return 0;
     }
 
-    (sum / count) as u8
+    (max / DIV) as u8
 }
 
 pub fn get_or_init_track_visualization(
@@ -646,7 +646,8 @@ pub fn get_or_init_track_visualization(
             play_file_path_str(path, &mut audio_output_handler, true, true, None, None)?;
 
             let viz = viz.read().unwrap();
-            let mut ret_viz = Vec::with_capacity(std::cmp::min(max as usize, viz.len()));
+            let count = std::cmp::min(max as usize, viz.len());
+            let mut ret_viz = Vec::with_capacity(count);
 
             if viz.len() as u16 > max {
                 let offset = (viz.len() as f64) / (max as f64);
@@ -656,7 +657,7 @@ pub fn get_or_init_track_visualization(
                 while (pos as usize) < viz.len() {
                     let pos_usize = pos as usize;
                     let mut sum = viz[last_pos] as usize;
-                    let mut count = 0_usize;
+                    let mut count = 1_usize;
 
                     while pos_usize > last_pos {
                         last_pos += 1;
@@ -664,6 +665,7 @@ pub fn get_or_init_track_visualization(
                         sum += viz[last_pos] as usize;
                     }
 
+                    log::debug!("{} / {} = {}", sum, count, sum / count);
                     ret_viz.push((sum / count) as u8);
                     pos += offset;
                 }
@@ -671,7 +673,56 @@ pub fn get_or_init_track_visualization(
                 if ret_viz.len() < max as usize {
                     ret_viz.push(viz[viz.len() - 1]);
                 }
+            } else {
+                ret_viz.extend_from_slice(&viz[..count]);
             }
+
+            let mut min_value = u8::MAX;
+            let mut max_value = 0;
+
+            for x in ret_viz.iter() {
+                let x = *x;
+
+                if x < min_value {
+                    min_value = x;
+                }
+                if x > max_value {
+                    max_value = x;
+                }
+            }
+
+            let dyn_range = max_value - min_value;
+            let coefficient = u8::MAX as f64 / dyn_range as f64;
+
+            log::debug!("dyn_range={dyn_range} coefficient={coefficient} min_value={min_value} max_value={max_value}");
+
+            for x in ret_viz.iter_mut() {
+                *x -= min_value;
+                let diff = *x as f64 * coefficient;
+                *x = diff as u8;
+            }
+
+            let mut smooth_viz = vec![0; ret_viz.len()];
+            let mut last = 0;
+
+            const MAX_DELTA: i16 = 50;
+
+            for (i, x) in smooth_viz.iter_mut().enumerate() {
+                let mut current = ret_viz[i] as i16;
+
+                if i > 0 && (current - last).abs() > MAX_DELTA {
+                    if current > last {
+                        current = last + MAX_DELTA;
+                    } else {
+                        current = last - MAX_DELTA;
+                    }
+                }
+
+                last = current;
+                *x = current as u8;
+            }
+
+            let ret_viz = smooth_viz;
 
             Ok(ret_viz)
         }
