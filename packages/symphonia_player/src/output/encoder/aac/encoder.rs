@@ -127,7 +127,7 @@ impl AacEncoder {
 
 impl AudioEncoder for AacEncoder {
     fn encode(&mut self, decoded: AudioBuffer<f32>) -> Result<Bytes, AudioOutputError> {
-        log::debug!("OpusEncoder encode {} frames", decoded.frames());
+        log::debug!("AacEncoder encode {} frames", decoded.frames());
 
         let decoded = self.resample_if_needed(decoded)?;
 
