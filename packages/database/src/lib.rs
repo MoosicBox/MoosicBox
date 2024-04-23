@@ -10,9 +10,14 @@ pub mod sqlx;
 
 pub mod query;
 
+use std::num::TryFromIntError;
+
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
-use query::*;
+use query::{
+    BooleanExpression, DeleteStatement, Expression, ExpressionType, InsertStatement, Join,
+    SelectQuery, Sort, SortDirection, UpdateStatement, UpsertMultiStatement, UpsertStatement,
+};
 use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -34,107 +39,108 @@ pub enum DatabaseValue {
 }
 
 impl DatabaseValue {
+    #[must_use]
     pub fn as_str(&self) -> Option<&str> {
         match self {
-            DatabaseValue::String(value) | DatabaseValue::StringOpt(Some(value)) => Some(value),
+            Self::String(value) | Self::StringOpt(Some(value)) => Some(value),
             _ => None,
         }
     }
 }
 
-impl<T: Into<DatabaseValue>> Into<DatabaseValue> for Option<T> {
-    fn into(self) -> DatabaseValue {
-        self.map(|x| x.into()).unwrap_or(DatabaseValue::Null)
+impl<T: Into<Self>> From<Option<T>> for DatabaseValue {
+    fn from(val: Option<T>) -> Self {
+        val.map_or(Self::Null, std::convert::Into::into)
     }
 }
 
-impl Into<DatabaseValue> for bool {
-    fn into(self) -> DatabaseValue {
-        DatabaseValue::Bool(self)
+impl From<bool> for DatabaseValue {
+    fn from(val: bool) -> Self {
+        Self::Bool(val)
     }
 }
 
-impl Into<DatabaseValue> for &str {
-    fn into(self) -> DatabaseValue {
-        DatabaseValue::String(self.to_string())
+impl From<&str> for DatabaseValue {
+    fn from(val: &str) -> Self {
+        Self::String(val.to_string())
     }
 }
 
-impl Into<DatabaseValue> for String {
-    fn into(self) -> DatabaseValue {
-        DatabaseValue::String(self)
+impl From<String> for DatabaseValue {
+    fn from(val: String) -> Self {
+        Self::String(val)
     }
 }
 
-impl Into<DatabaseValue> for f32 {
-    fn into(self) -> DatabaseValue {
-        DatabaseValue::Real(self as f64)
+impl From<f32> for DatabaseValue {
+    fn from(val: f32) -> Self {
+        Self::Real(f64::from(val))
     }
 }
 
-impl Into<DatabaseValue> for f64 {
-    fn into(self) -> DatabaseValue {
-        DatabaseValue::Real(self)
+impl From<f64> for DatabaseValue {
+    fn from(val: f64) -> Self {
+        Self::Real(val)
     }
 }
 
-impl Into<DatabaseValue> for i8 {
-    fn into(self) -> DatabaseValue {
-        DatabaseValue::Number(self as i64)
+impl From<i8> for DatabaseValue {
+    fn from(val: i8) -> Self {
+        Self::Number(i64::from(val))
     }
 }
 
-impl Into<DatabaseValue> for i16 {
-    fn into(self) -> DatabaseValue {
-        DatabaseValue::Number(self as i64)
+impl From<i16> for DatabaseValue {
+    fn from(val: i16) -> Self {
+        Self::Number(i64::from(val))
     }
 }
 
-impl Into<DatabaseValue> for i32 {
-    fn into(self) -> DatabaseValue {
-        DatabaseValue::Number(self as i64)
+impl From<i32> for DatabaseValue {
+    fn from(val: i32) -> Self {
+        Self::Number(i64::from(val))
     }
 }
 
-impl Into<DatabaseValue> for i64 {
-    fn into(self) -> DatabaseValue {
-        DatabaseValue::Number(self)
+impl From<i64> for DatabaseValue {
+    fn from(val: i64) -> Self {
+        Self::Number(val)
     }
 }
 
-impl Into<DatabaseValue> for isize {
-    fn into(self) -> DatabaseValue {
-        DatabaseValue::Number(self as i64)
+impl From<isize> for DatabaseValue {
+    fn from(val: isize) -> Self {
+        Self::Number(val as i64)
     }
 }
 
-impl Into<DatabaseValue> for u8 {
-    fn into(self) -> DatabaseValue {
-        DatabaseValue::UNumber(self as u64)
+impl From<u8> for DatabaseValue {
+    fn from(val: u8) -> Self {
+        Self::UNumber(u64::from(val))
     }
 }
 
-impl Into<DatabaseValue> for u16 {
-    fn into(self) -> DatabaseValue {
-        DatabaseValue::UNumber(self as u64)
+impl From<u16> for DatabaseValue {
+    fn from(val: u16) -> Self {
+        Self::UNumber(u64::from(val))
     }
 }
 
-impl Into<DatabaseValue> for u32 {
-    fn into(self) -> DatabaseValue {
-        DatabaseValue::UNumber(self as u64)
+impl From<u32> for DatabaseValue {
+    fn from(val: u32) -> Self {
+        Self::UNumber(u64::from(val))
     }
 }
 
-impl Into<DatabaseValue> for u64 {
-    fn into(self) -> DatabaseValue {
-        DatabaseValue::UNumber(self)
+impl From<u64> for DatabaseValue {
+    fn from(val: u64) -> Self {
+        Self::UNumber(val)
     }
 }
 
-impl Into<DatabaseValue> for usize {
-    fn into(self) -> DatabaseValue {
-        DatabaseValue::UNumber(self as u64)
+impl From<usize> for DatabaseValue {
+    fn from(val: usize) -> Self {
+        Self::UNumber(val as u64)
     }
 }
 
@@ -142,6 +148,8 @@ impl Into<DatabaseValue> for usize {
 pub enum TryFromError {
     #[error("Could not convert to type '{0}'")]
     CouldNotConvert(String),
+    #[error(transparent)]
+    TryFromInt(#[from] TryFromIntError),
 }
 
 impl TryFrom<DatabaseValue> for u64 {
@@ -149,10 +157,10 @@ impl TryFrom<DatabaseValue> for u64 {
 
     fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
         match value {
-            DatabaseValue::Number(value) => Ok(value as u64),
-            DatabaseValue::NumberOpt(Some(value)) => Ok(value as u64),
-            DatabaseValue::UNumber(value) => Ok(value as u64),
-            DatabaseValue::UNumberOpt(Some(value)) => Ok(value as u64),
+            DatabaseValue::Number(value) | DatabaseValue::NumberOpt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            DatabaseValue::UNumber(value) | DatabaseValue::UNumberOpt(Some(value)) => Ok(value),
             _ => Err(TryFromError::CouldNotConvert("u64".into())),
         }
     }
@@ -163,10 +171,12 @@ impl TryFrom<DatabaseValue> for i32 {
 
     fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
         match value {
-            DatabaseValue::Number(value) => Ok(value as i32),
-            DatabaseValue::NumberOpt(Some(value)) => Ok(value as i32),
-            DatabaseValue::UNumber(value) => Ok(value as i32),
-            DatabaseValue::UNumberOpt(Some(value)) => Ok(value as i32),
+            DatabaseValue::Number(value) | DatabaseValue::NumberOpt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            DatabaseValue::UNumber(value) | DatabaseValue::UNumberOpt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
             _ => Err(TryFromError::CouldNotConvert("i32".into())),
         }
     }
@@ -194,6 +204,7 @@ pub struct Row {
 }
 
 impl Row {
+    #[must_use]
     pub fn get(&self, column_name: &str) -> Option<DatabaseValue> {
         self.columns
             .iter()
@@ -201,6 +212,7 @@ impl Row {
             .map(|c| c.1.clone())
     }
 
+    #[must_use]
     pub fn id(&self) -> Option<DatabaseValue> {
         self.get("id")
     }

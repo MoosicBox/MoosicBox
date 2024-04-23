@@ -258,7 +258,7 @@ pub async fn get_library_album_cover(
         if let Ok(AlbumCoverSource::LocalFilePath(cover)) =
             get_album_cover(AlbumId::Tidal(tidal_id), db.clone(), None).await
         {
-            return Ok(copy_streaming_cover_to_local(db.clone(), album.id, cover).await?);
+            return copy_streaming_cover_to_local(db.clone(), album.id, cover).await;
         }
     }
 
@@ -266,13 +266,13 @@ pub async fn get_library_album_cover(
         if let Ok(AlbumCoverSource::LocalFilePath(cover)) =
             get_album_cover(AlbumId::Qobuz(qobuz_id), db.clone(), None).await
         {
-            return Ok(copy_streaming_cover_to_local(db, album.id, cover).await?);
+            return copy_streaming_cover_to_local(db, album.id, cover).await;
         }
     }
 
-    return Err(AlbumCoverError::NotFound(AlbumId::Library(
+    Err(AlbumCoverError::NotFound(AlbumId::Library(
         library_album_id,
-    )));
+    )))
 }
 
 pub async fn get_library_album_cover_bytes(
@@ -313,9 +313,9 @@ pub async fn get_library_album_cover_bytes(
         }
     }
 
-    return Err(AlbumCoverError::NotFound(AlbumId::Library(
+    Err(AlbumCoverError::NotFound(AlbumId::Library(
         library_album_id,
-    )));
+    )))
 }
 
 async fn get_tidal_album_cover_request(

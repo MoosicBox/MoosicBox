@@ -192,7 +192,7 @@ pub fn get_create_download_tasks_for_tracks(
     source: Option<DownloadApiSource>,
     quality: Option<TrackAudioQuality>,
 ) -> Result<Vec<CreateDownloadTask>, GetCreateDownloadTasksError> {
-    Ok(tracks
+    tracks
         .into_iter()
         .map(|track| {
             let source = if let Some(source) = source {
@@ -224,7 +224,7 @@ pub fn get_create_download_tasks_for_tracks(
                 },
             })
         })
-        .collect::<Result<Vec<_>, _>>()?)
+        .collect::<Result<Vec<_>, _>>()
 }
 
 pub async fn get_create_download_tasks_for_album_ids(
