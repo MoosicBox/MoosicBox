@@ -39,7 +39,7 @@ pub trait AsModelResultMappedMut<T, E> {
 
 #[async_trait]
 pub trait AsModelResultMappedQuery<T, E> {
-    async fn as_model_mapped_query(&self, db: &Box<dyn Database>) -> Result<Vec<T>, E>;
+    async fn as_model_mapped_query(&self, db: &dyn Database) -> Result<Vec<T>, E>;
 }
 
 pub trait AsModelResultMut<T, E> {
@@ -81,7 +81,7 @@ pub trait AsId {
 
 #[async_trait]
 pub trait AsModelQuery<T> {
-    async fn as_model_query(&self, db: &Box<dyn Database>) -> Result<T, DbError>;
+    async fn as_model_query(&self, db: &dyn Database) -> Result<T, DbError>;
 }
 
 pub trait ToApi<T> {
@@ -818,7 +818,7 @@ impl AsModelResultMapped<LibraryAlbum, DbError> for Vec<moosicbox_database::Row>
 
 #[async_trait]
 impl AsModelQuery<LibraryAlbum> for &moosicbox_database::Row {
-    async fn as_model_query(&self, db: &Box<dyn Database>) -> Result<LibraryAlbum, DbError> {
+    async fn as_model_query(&self, db: &dyn Database) -> Result<LibraryAlbum, DbError> {
         let id = self.to_value("id")?;
 
         Ok(LibraryAlbum {
@@ -1199,7 +1199,7 @@ impl ToValueType<Session> for &moosicbox_database::Row {
 
 #[async_trait]
 impl AsModelQuery<Session> for &moosicbox_database::Row {
-    async fn as_model_query(&self, db: &Box<dyn Database>) -> Result<Session, DbError> {
+    async fn as_model_query(&self, db: &dyn Database) -> Result<Session, DbError> {
         let id = self.to_value("id")?;
         match get_session_playlist(db, id).await? {
             Some(playlist) => Ok(Session {
@@ -1272,10 +1272,7 @@ impl ToValueType<SessionPlaylist> for &moosicbox_database::Row {
 
 #[async_trait]
 impl AsModelResultMappedQuery<ApiTrack, DbError> for Vec<SessionPlaylistTrack> {
-    async fn as_model_mapped_query(
-        &self,
-        db: &Box<dyn Database>,
-    ) -> Result<Vec<ApiTrack>, DbError> {
+    async fn as_model_mapped_query(&self, db: &dyn Database) -> Result<Vec<ApiTrack>, DbError> {
         let tracks = self;
         log::trace!("Mapping tracks to ApiTracks: {tracks:?}");
 
@@ -1307,7 +1304,7 @@ impl AsModelResultMappedQuery<ApiTrack, DbError> for Vec<SessionPlaylistTrack> {
 
 #[async_trait]
 impl AsModelQuery<SessionPlaylist> for &moosicbox_database::Row {
-    async fn as_model_query(&self, db: &Box<dyn Database>) -> Result<SessionPlaylist, DbError> {
+    async fn as_model_query(&self, db: &dyn Database) -> Result<SessionPlaylist, DbError> {
         let id = self.to_value("id")?;
         let tracks = get_session_playlist_tracks(db, id)
             .await?
@@ -1421,7 +1418,7 @@ impl ToValueType<Connection> for &moosicbox_database::Row {
 
 #[async_trait]
 impl AsModelQuery<Connection> for &moosicbox_database::Row {
-    async fn as_model_query(&self, db: &Box<dyn Database>) -> Result<Connection, DbError> {
+    async fn as_model_query(&self, db: &dyn Database) -> Result<Connection, DbError> {
         let id = self.to_value::<String>("id")?;
         let players = get_players(db, &id).await?;
         Ok(Connection {

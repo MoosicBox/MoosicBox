@@ -812,11 +812,11 @@ impl<'a> SelectQuery<'a> {
         self
     }
 
-    pub async fn execute(self, db: &Box<dyn Database>) -> Result<Vec<Row>, DatabaseError> {
+    pub async fn execute(self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
         db.query(&self).await
     }
 
-    pub async fn execute_first(self, db: &Box<dyn Database>) -> Result<Option<Row>, DatabaseError> {
+    pub async fn execute_first(self, db: &dyn Database) -> Result<Option<Row>, DatabaseError> {
         let this = if self.limit.is_none() {
             self.limit(1)
         } else {
@@ -861,7 +861,7 @@ impl<'a> UpsertMultiStatement<'a> {
         self
     }
 
-    pub async fn execute(&mut self, db: &Box<dyn Database>) -> Result<Vec<Row>, DatabaseError> {
+    pub async fn execute(&mut self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
         db.exec_upsert_multi(self).await
     }
 }
@@ -891,7 +891,7 @@ impl<'a> InsertStatement<'a> {
         self
     }
 
-    pub async fn execute(&self, db: &Box<dyn Database>) -> Result<Row, DatabaseError> {
+    pub async fn execute(&self, db: &dyn Database) -> Result<Row, DatabaseError> {
         db.exec_insert(self).await
     }
 }
@@ -948,14 +948,11 @@ impl<'a> UpdateStatement<'a> {
         self
     }
 
-    pub async fn execute(&self, db: &Box<dyn Database>) -> Result<Vec<Row>, DatabaseError> {
+    pub async fn execute(&self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
         db.exec_update(self).await
     }
 
-    pub async fn execute_first(
-        &self,
-        db: &Box<dyn Database>,
-    ) -> Result<Option<Row>, DatabaseError> {
+    pub async fn execute_first(&self, db: &dyn Database) -> Result<Option<Row>, DatabaseError> {
         db.exec_update_first(self).await
     }
 }
@@ -1012,11 +1009,11 @@ impl<'a> UpsertStatement<'a> {
         self
     }
 
-    pub async fn execute(&self, db: &Box<dyn Database>) -> Result<Vec<Row>, DatabaseError> {
+    pub async fn execute(&self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
         db.exec_upsert(self).await
     }
 
-    pub async fn execute_first(&self, db: &Box<dyn Database>) -> Result<Row, DatabaseError> {
+    pub async fn execute_first(&self, db: &dyn Database) -> Result<Row, DatabaseError> {
         db.exec_upsert_first(self).await
     }
 }
@@ -1052,7 +1049,7 @@ impl<'a> DeleteStatement<'a> {
         self
     }
 
-    pub async fn execute(&self, db: &Box<dyn Database>) -> Result<Vec<Row>, DatabaseError> {
+    pub async fn execute(&self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
         db.exec_delete(self).await
     }
 }

@@ -70,7 +70,7 @@ pub async fn get_download_path(
 ) -> Result<PathBuf, GetDownloadPathError> {
     Ok(if let Some(location_id) = location_id {
         PathBuf::from_str(
-            &get_download_location(&db, location_id)
+            &get_download_location(&**db, location_id)
                 .await?
                 .ok_or(GetDownloadPathError::NotFound)?
                 .path,
@@ -181,7 +181,7 @@ pub async fn get_create_download_tasks_for_track_ids(
     source: Option<DownloadApiSource>,
     quality: Option<TrackAudioQuality>,
 ) -> Result<Vec<CreateDownloadTask>, GetCreateDownloadTasksError> {
-    let tracks = get_tracks(&db, Some(&track_ids.to_vec())).await?;
+    let tracks = get_tracks(&**db, Some(&track_ids.to_vec())).await?;
 
     get_create_download_tasks_for_tracks(&tracks, download_path, source, quality)
 }
@@ -239,7 +239,7 @@ pub async fn get_create_download_tasks_for_album_ids(
     let mut tasks = vec![];
 
     for album_id in album_ids {
-        let tracks = get_album_tracks(&db, *album_id)
+        let tracks = get_album_tracks(&**db, *album_id)
             .await?
             .into_iter()
             .filter(|track| {
@@ -269,7 +269,7 @@ pub async fn get_create_download_tasks_for_album_ids(
                     .join(&sanitize_filename(&track.artist))
                     .join(&sanitize_filename(&track.album))
             } else {
-                let album = get_album(&db, Some(*album_id), None, None)
+                let album = get_album(&**db, Some(*album_id), None, None)
                     .await?
                     .ok_or(GetCreateDownloadTasksError::NotFound)?;
 
@@ -285,7 +285,7 @@ pub async fn get_create_download_tasks_for_album_ids(
                 });
             }
             if download_artist_cover {
-                let artist = get_artist(&db, "id", tracks.first().unwrap().artist_id as u64)
+                let artist = get_artist(&**db, "id", tracks.first().unwrap().artist_id as u64)
                     .await?
                     .ok_or(GetCreateDownloadTasksError::NotFound)?;
 
@@ -321,7 +321,7 @@ pub async fn create_download_tasks(
     let mut results = vec![];
 
     for task in tasks {
-        results.push(create_download_task(&db, &task).await?);
+        results.push(create_download_task(&**db, &task).await?);
     }
 
     Ok(results)
@@ -371,7 +371,7 @@ pub async fn download_track_id(
 ) -> Result<(), DownloadTrackError> {
     log::debug!("Starting download for track_id={track_id} quality={quality:?} source={source:?} path={path}");
 
-    let track = get_track(&db, track_id)
+    let track = get_track(&**db, track_id)
         .await?
         .ok_or(DownloadTrackError::NotFound)?;
 
@@ -694,7 +694,7 @@ pub async fn download_album_id(
     log::debug!("Starting download for album_id={album_id} quality={quality:?} source={source:?} path={path}");
 
     let track_source = source.into();
-    let tracks = get_album_tracks(&db, album_id)
+    let tracks = get_album_tracks(&**db, album_id)
         .await?
         .into_iter()
         .filter(|track| track.source == track_source)
@@ -812,7 +812,7 @@ pub async fn download_artist_cover(
         return Ok(());
     }
 
-    let artist = get_artist_by_album_id(&db, album_id)
+    let artist = get_artist_by_album_id(&**db, album_id)
         .await?
         .ok_or(DownloadAlbumError::NotFound)?;
 

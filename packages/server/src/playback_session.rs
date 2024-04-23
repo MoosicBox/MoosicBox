@@ -25,7 +25,7 @@ pub fn on_playback_event(update: &UpdateSession, _current: &Playback) {
                 return;
             }
         };
-        if let Err(err) = update_session(&db, sender, None, update).await {
+        if let Err(err) = update_session(&**db, sender, None, update).await {
             log::error!("Failed to broadcast update_session: {err:?}");
         }
     })

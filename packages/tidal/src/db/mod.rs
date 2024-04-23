@@ -8,7 +8,7 @@ use crate::db::models::TidalConfig;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn create_tidal_config(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     client_id: &str,
     access_token: &str,
     refresh_token: &str,
@@ -37,7 +37,7 @@ pub async fn create_tidal_config(
 }
 
 pub async fn delete_tidal_config(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     refresh_token: &str,
 ) -> Result<(), DatabaseError> {
     db.delete("tidal_config")
@@ -58,9 +58,7 @@ pub enum TidalConfigError {
     NoConfigsAvailable,
 }
 
-pub async fn get_tidal_config(
-    db: &Box<dyn Database>,
-) -> Result<Option<TidalConfig>, TidalConfigError> {
+pub async fn get_tidal_config(db: &dyn Database) -> Result<Option<TidalConfig>, TidalConfigError> {
     let mut configs = db
         .select("tidal_config")
         .execute(db)
@@ -77,15 +75,13 @@ pub async fn get_tidal_config(
 }
 
 pub async fn get_tidal_access_tokens(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
 ) -> Result<Option<(String, String)>, TidalConfigError> {
     Ok(get_tidal_config(db)
         .await?
         .map(|c| (c.access_token.clone(), c.refresh_token.clone())))
 }
 
-pub async fn get_tidal_access_token(
-    db: &Box<dyn Database>,
-) -> Result<Option<String>, TidalConfigError> {
+pub async fn get_tidal_access_token(db: &dyn Database) -> Result<Option<String>, TidalConfigError> {
     Ok(get_tidal_access_tokens(db).await?.map(|c| c.0))
 }

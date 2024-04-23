@@ -115,7 +115,7 @@ pub enum WebsocketConnectError {
 }
 
 pub fn connect(
-    _db: &Box<dyn Database>,
+    _db: &dyn Database,
     _sender: &impl WebsocketSender,
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketConnectError> {
@@ -134,7 +134,7 @@ pub enum WebsocketDisconnectError {
 }
 
 pub async fn disconnect(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketDisconnectError> {
@@ -167,7 +167,7 @@ pub async fn disconnect(
 }
 
 pub async fn process_message(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     body: Value,
     context: WebsocketContext,
     sender: &impl WebsocketSender,
@@ -206,7 +206,7 @@ pub enum WebsocketMessageError {
 }
 
 pub async fn message(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     sender: &impl WebsocketSender,
     payload: Option<&Value>,
     message_type: InboundMessageType,
@@ -357,7 +357,7 @@ pub async fn message(
 }
 
 async fn get_sessions(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
     send_all: bool,
@@ -384,7 +384,7 @@ async fn get_sessions(
 }
 
 async fn create_session(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &CreateSession,
@@ -394,7 +394,7 @@ async fn create_session(
     Ok(())
 }
 
-async fn get_connections(db: &Box<dyn Database>) -> Result<String, WebsocketSendError> {
+async fn get_connections(db: &dyn Database) -> Result<String, WebsocketSendError> {
     let connection_data = CONNECTION_DATA.as_ref().read().unwrap().clone();
     let connections = {
         moosicbox_core::sqlite::db::get_connections(db)
@@ -420,7 +420,7 @@ async fn get_connections(db: &Box<dyn Database>) -> Result<String, WebsocketSend
 }
 
 async fn register_connection(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     _sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &RegisterConnection,
@@ -435,7 +435,7 @@ async fn register_connection(
 }
 
 async fn register_players(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &Vec<RegisterPlayer>,
@@ -450,7 +450,7 @@ async fn register_players(
 }
 
 async fn set_session_active_players(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &SetSessionActivePlayers,
@@ -491,7 +491,7 @@ pub enum UpdateSessionError {
 }
 
 pub async fn update_session(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     sender: &impl WebsocketSender,
     context: Option<&WebsocketContext>,
     payload: &UpdateSession,
@@ -539,7 +539,7 @@ pub async fn update_session(
 }
 
 async fn delete_session(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &DeleteSession,

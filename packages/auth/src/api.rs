@@ -23,7 +23,7 @@ pub async fn get_magic_token_endpoint(
     data: web::Data<AppState>,
 ) -> Result<Json<Value>> {
     if let Some((client_id, access_token)) =
-        get_credentials_from_magic_token(&data.database, &query.magic_token)
+        get_credentials_from_magic_token(&**data.database, &query.magic_token)
             .await
             .map_err(|e| ErrorInternalServerError(format!("Failed to get magic token: {e:?}")))?
     {
@@ -47,7 +47,7 @@ pub async fn create_magic_token_endpoint(
     data: web::Data<AppState>,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    let token = create_magic_token(&data.database, data.tunnel_host.clone())
+    let token = create_magic_token(&**data.database, data.tunnel_host.clone())
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to create magic token: {e:?}")))?;
 

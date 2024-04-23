@@ -176,7 +176,7 @@ pub enum ReindexFromDbError {
 }
 
 pub async fn reindex_global_search_index_from_db(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
 ) -> Result<(), ReindexFromDbError> {
     let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
     crate::recreate_global_search_index(path)?;

@@ -530,14 +530,14 @@ impl ScanOutput {
         let existing_artist_ids = db
             .select("artists")
             .columns(&["id"])
-            .execute(&db)
+            .execute(&**db)
             .await?
             .iter()
             .map(|id| id.id().unwrap().try_into())
             .collect::<Result<HashSet<i32>, _>>()?;
 
         let db_artists = add_artist_maps_and_get_artists(
-            &db,
+            &**db,
             artists
                 .iter()
                 .map(|artist| artist.clone().to_database_values())
@@ -567,7 +567,7 @@ impl ScanOutput {
         let existing_album_ids = db
             .select("albums")
             .columns(&["id"])
-            .execute(&db)
+            .execute(&**db)
             .await?
             .iter()
             .map(|id| id.id().unwrap().try_into())
@@ -587,7 +587,7 @@ impl ScanOutput {
         .flatten()
         .collect::<Vec<_>>();
 
-        let db_albums = add_album_maps_and_get_albums(&db, album_maps).await?;
+        let db_albums = add_album_maps_and_get_albums(&**db, album_maps).await?;
 
         let db_albums_end = std::time::SystemTime::now();
         log::info!(
@@ -611,7 +611,7 @@ impl ScanOutput {
         let existing_track_ids = db
             .select("tracks")
             .columns(&["id"])
-            .execute(&db)
+            .execute(&**db)
             .await?
             .iter()
             .map(|id| id.id().unwrap().try_into())
@@ -644,7 +644,7 @@ impl ScanOutput {
         .flatten()
         .collect::<Vec<_>>();
 
-        let db_tracks = add_tracks(&db, insert_tracks).await?;
+        let db_tracks = add_tracks(&**db, insert_tracks).await?;
 
         let db_tracks_end = std::time::SystemTime::now();
         log::info!(
@@ -681,7 +681,7 @@ impl ScanOutput {
             })
             .collect::<Vec<_>>();
 
-        set_track_sizes(&db, &track_sizes).await?;
+        set_track_sizes(&**db, &track_sizes).await?;
 
         let db_track_sizes_end = std::time::SystemTime::now();
         log::info!(
@@ -716,7 +716,7 @@ impl ScanOutput {
 
     pub async fn reindex_global_search_index(
         &self,
-        db: &Box<dyn Database>,
+        db: &dyn Database,
     ) -> Result<(), UpdateDatabaseError> {
         let reindex_start = std::time::SystemTime::now();
 

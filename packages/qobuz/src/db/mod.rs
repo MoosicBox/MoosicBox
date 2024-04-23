@@ -9,7 +9,7 @@ use crate::db::models::QobuzConfig;
 use self::models::{QobuzAppConfig, QobuzAppSecret};
 
 pub async fn create_qobuz_app_secret(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     qobuz_bundle_id: u32,
     timezone: &str,
     secret: &str,
@@ -27,7 +27,7 @@ pub async fn create_qobuz_app_secret(
 }
 
 pub async fn create_qobuz_app_config(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     bundle_version: &str,
     app_id: &str,
 ) -> Result<QobuzAppConfig, DbError> {
@@ -42,7 +42,7 @@ pub async fn create_qobuz_app_config(
 }
 
 pub async fn create_qobuz_config(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     access_token: &str,
     user_id: u64,
     user_email: &str,
@@ -60,7 +60,7 @@ pub async fn create_qobuz_config(
     Ok(())
 }
 
-pub async fn get_qobuz_app_secrets(db: &Box<dyn Database>) -> Result<Vec<QobuzAppSecret>, DbError> {
+pub async fn get_qobuz_app_secrets(db: &dyn Database) -> Result<Vec<QobuzAppSecret>, DbError> {
     Ok(db
         .select("qobuz_bundle_secrets")
         .execute(db)
@@ -68,9 +68,7 @@ pub async fn get_qobuz_app_secrets(db: &Box<dyn Database>) -> Result<Vec<QobuzAp
         .to_value_type()?)
 }
 
-pub async fn get_qobuz_app_config(
-    db: &Box<dyn Database>,
-) -> Result<Option<QobuzAppConfig>, DbError> {
+pub async fn get_qobuz_app_config(db: &dyn Database) -> Result<Option<QobuzAppConfig>, DbError> {
     let app_configs = db
         .select("qobuz_bundles")
         .execute(db)
@@ -80,7 +78,7 @@ pub async fn get_qobuz_app_config(
     Ok(app_configs.last().cloned())
 }
 
-pub async fn get_qobuz_config(db: &Box<dyn Database>) -> Result<Option<QobuzConfig>, DbError> {
+pub async fn get_qobuz_config(db: &dyn Database) -> Result<Option<QobuzConfig>, DbError> {
     let configs = db
         .select("qobuz_config")
         .execute(db)
@@ -90,6 +88,6 @@ pub async fn get_qobuz_config(db: &Box<dyn Database>) -> Result<Option<QobuzConf
     Ok(configs.last().cloned())
 }
 
-pub async fn get_qobuz_access_token(db: &Box<dyn Database>) -> Result<Option<String>, DbError> {
+pub async fn get_qobuz_access_token(db: &dyn Database) -> Result<Option<String>, DbError> {
     Ok(get_qobuz_config(db).await?.map(|c| c.access_token.clone()))
 }

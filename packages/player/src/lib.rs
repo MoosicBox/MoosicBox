@@ -13,7 +13,7 @@ pub mod api;
 pub mod player;
 
 pub async fn get_track_or_ids_from_track_id_ranges(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     track_ids: &str,
     source: Option<ApiSource>,
     host: Option<&str>,

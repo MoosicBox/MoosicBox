@@ -90,7 +90,7 @@ pub async fn scan(db: Arc<Box<dyn Database>>, token: CancellationToken) -> Resul
     {
         let output = output.read().await;
         output.update_database(db.clone()).await?;
-        output.reindex_global_search_index(&db).await?;
+        output.reindex_global_search_index(&**db).await?;
     }
 
     let end = std::time::SystemTime::now();

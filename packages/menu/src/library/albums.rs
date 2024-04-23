@@ -171,7 +171,7 @@ pub async fn get_all_albums(
     db: Arc<Box<dyn Database>>,
     request: &AlbumsRequest,
 ) -> PagingResult<LibraryAlbum, GetAlbumsError> {
-    let albums = get_albums(&db).await?;
+    let albums = get_albums(&**db).await?;
     let total = albums.len() as u32;
     let items = sort_albums(filter_albums(&albums, request).collect::<Vec<_>>(), request)
         .into_iter()
@@ -223,7 +223,7 @@ pub async fn get_album_tracks(
     album_id: i32,
     data: &AppState,
 ) -> Result<Vec<LibraryTrack>, GetAlbumTracksError> {
-    Ok(moosicbox_core::sqlite::db::get_album_tracks(&data.database, album_id as u64).await?)
+    Ok(moosicbox_core::sqlite::db::get_album_tracks(&**data.database, album_id as u64).await?)
 }
 
 #[derive(Clone)]
@@ -411,7 +411,8 @@ pub async fn add_album(
 
     for album in &results.albums {
         if let Some(album) =
-            moosicbox_core::sqlite::menu::get_album(&db, Some(album.id as u64), None, None).await?
+            moosicbox_core::sqlite::menu::get_album(&**db, Some(album.id as u64), None, None)
+                .await?
         {
             albums.push(album);
         }
@@ -426,7 +427,7 @@ pub async fn add_album(
     )?;
 
     let tracks = moosicbox_core::sqlite::db::get_tracks(
-        &db,
+        &**db,
         Some(
             &results
                 .tracks
@@ -496,7 +497,7 @@ pub async fn remove_album(
         log::error!("Failed to remove album from MusicApi: {err:?}");
     }
 
-    let tracks = moosicbox_core::sqlite::db::get_album_tracks(&db, album.id as u64).await?;
+    let tracks = moosicbox_core::sqlite::db::get_album_tracks(&**db, album.id as u64).await?;
 
     let has_local_tracks = tracks
         .iter()
@@ -514,9 +515,9 @@ pub async fn remove_album(
     let track_ids = target_tracks.iter().map(|t| t.id).collect::<Vec<_>>();
 
     log::debug!("Deleting track db items: {track_ids:?}");
-    delete_session_playlist_tracks_by_track_id(&db, Some(&track_ids)).await?;
-    delete_track_sizes_by_track_id(&db, Some(&track_ids)).await?;
-    delete_tracks(&db, Some(&track_ids)).await?;
+    delete_session_playlist_tracks_by_track_id(&**db, Some(&track_ids)).await?;
+    delete_track_sizes_by_track_id(&**db, Some(&track_ids)).await?;
+    delete_tracks(&**db, Some(&track_ids)).await?;
 
     let mut album_field_updates = vec![];
 
@@ -536,7 +537,7 @@ pub async fn remove_album(
         db.update("albums")
             .where_eq("id", album.id)
             .values(album_field_updates)
-            .execute(&db)
+            .execute(&**db)
             .await?;
     }
 
@@ -563,7 +564,7 @@ pub async fn remove_album(
     log::debug!("Deleting album db item: {}", album.id);
     db.delete("albums")
         .where_eq("id", album.id)
-        .execute(&db)
+        .execute(&**db)
         .await?;
 
     moosicbox_search::delete_from_global_search_index(vec![album.as_delete_term()])?;

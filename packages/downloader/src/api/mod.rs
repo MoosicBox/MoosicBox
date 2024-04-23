@@ -141,7 +141,7 @@ pub async fn download_tasks_endpoint(
     _query: web::Query<GetDownloadTasks>,
     data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<Page<ApiDownloadTask>>> {
-    let tasks = get_download_tasks(&data.database).await?;
+    let tasks = get_download_tasks(&**data.database).await?;
     let (mut current, mut history): (Vec<_>, Vec<_>) =
         tasks.into_iter().partition(|task| match task.state {
             DownloadTaskState::Pending | DownloadTaskState::Paused | DownloadTaskState::Started => {
@@ -168,7 +168,7 @@ pub async fn download_tasks_endpoint(
         })
         .collect::<Vec<_>>();
 
-    let tracks = get_tracks(&data.database, Some(&track_ids)).await?;
+    let tracks = get_tracks(&**data.database, Some(&track_ids)).await?;
 
     let album_ids = tasks
         .iter()
@@ -181,7 +181,7 @@ pub async fn download_tasks_endpoint(
         })
         .collect::<Vec<_>>();
 
-    let albums = get_albums(&data.database)
+    let albums = get_albums(&**data.database)
         .await?
         .iter()
         .filter(|album| album_ids.contains(&album.id))
@@ -193,7 +193,7 @@ pub async fn download_tasks_endpoint(
         .map(|album| album.artist_id)
         .collect::<HashSet<_>>();
 
-    let artists = get_artists(&data.database)
+    let artists = get_artists(&**data.database)
         .await?
         .iter()
         .filter(|artist| artist_ids.contains(&artist.id))

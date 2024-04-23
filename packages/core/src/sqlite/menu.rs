@@ -55,7 +55,7 @@ pub async fn get_artist(
 
     Ok(get_or_set_to_cache(request, || async {
         if let Some(artist_id) = artist_id {
-            match db::get_artist(&data.database, "id", artist_id as i32).await {
+            match db::get_artist(&**data.database, "id", artist_id as i32).await {
                 Ok(artist) => {
                     if artist.is_none() {
                         return Err(GetArtistError::ArtistNotFound(artist_id));
@@ -68,7 +68,7 @@ pub async fn get_artist(
                 Err(err) => Err(GetArtistError::DbError(err)),
             }
         } else if let Some(tidal_artist_id) = tidal_artist_id {
-            match db::get_artist(&data.database, "tidal_id", tidal_artist_id as i32).await {
+            match db::get_artist(&**data.database, "tidal_id", tidal_artist_id as i32).await {
                 Ok(artist) => {
                     if artist.is_none() {
                         return Err(GetArtistError::ArtistNotFound(tidal_artist_id));
@@ -81,7 +81,7 @@ pub async fn get_artist(
                 Err(err) => Err(GetArtistError::DbError(err)),
             }
         } else if let Some(qobuz_artist_id) = qobuz_artist_id {
-            match db::get_artist(&data.database, "qobuz_id", qobuz_artist_id as i32).await {
+            match db::get_artist(&**data.database, "qobuz_id", qobuz_artist_id as i32).await {
                 Ok(artist) => {
                     if artist.is_none() {
                         return Err(GetArtistError::ArtistNotFound(qobuz_artist_id));
@@ -94,7 +94,7 @@ pub async fn get_artist(
                 Err(err) => Err(GetArtistError::DbError(err)),
             }
         } else if let Some(album_id) = album_id {
-            match db::get_album_artist(&data.database, album_id as i32).await {
+            match db::get_album_artist(&**data.database, album_id as i32).await {
                 Ok(artist) => {
                     if artist.is_none() {
                         return Err(GetArtistError::AlbumArtistNotFound(album_id));
@@ -107,7 +107,7 @@ pub async fn get_artist(
                 Err(err) => Err(GetArtistError::DbError(err)),
             }
         } else if let Some(tidal_album_id) = tidal_album_id {
-            match db::get_tidal_album_artist(&data.database, tidal_album_id as i32).await {
+            match db::get_tidal_album_artist(&**data.database, tidal_album_id as i32).await {
                 Ok(artist) => {
                     if artist.is_none() {
                         return Err(GetArtistError::AlbumArtistNotFound(tidal_album_id));
@@ -120,7 +120,7 @@ pub async fn get_artist(
                 Err(err) => Err(GetArtistError::DbError(err)),
             }
         } else if let Some(qobuz_album_id) = qobuz_album_id {
-            match db::get_qobuz_album_artist(&data.database, qobuz_album_id as i32).await {
+            match db::get_qobuz_album_artist(&**data.database, qobuz_album_id as i32).await {
                 Ok(artist) => {
                     if artist.is_none() {
                         return Err(GetArtistError::AlbumArtistNotFound(qobuz_album_id));
@@ -173,7 +173,7 @@ impl From<GetAlbumError> for actix_web::Error {
 }
 
 pub async fn get_album(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     album_id: Option<u64>,
     tidal_album_id: Option<u64>,
     qobuz_album_id: Option<String>,
@@ -230,7 +230,7 @@ impl From<GetAlbumsError> for actix_web::Error {
     }
 }
 
-pub async fn get_albums(db: &Box<dyn Database>) -> Result<Arc<Vec<LibraryAlbum>>, GetAlbumsError> {
+pub async fn get_albums(db: &dyn Database) -> Result<Arc<Vec<LibraryAlbum>>, GetAlbumsError> {
     let request = CacheRequest {
         key: "sqlite|local_albums",
         expiration: Duration::from_secs(5 * 60),
@@ -280,7 +280,7 @@ pub async fn get_artist_albums(
 
     Ok(get_or_set_to_cache(request, || async {
         Ok::<CacheItemType, GetArtistAlbumsError>(CacheItemType::ArtistAlbums(Arc::new(
-            db::get_artist_albums(&data.database, artist_id).await?,
+            db::get_artist_albums(&**data.database, artist_id).await?,
         )))
     })
     .await?

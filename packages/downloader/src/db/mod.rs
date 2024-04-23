@@ -6,7 +6,7 @@ pub mod models;
 
 use self::models::{CreateDownloadTask, DownloadItem, DownloadLocation, DownloadTask};
 
-pub async fn create_download_location(db: &Box<dyn Database>, path: &str) -> Result<(), DbError> {
+pub async fn create_download_location(db: &dyn Database, path: &str) -> Result<(), DbError> {
     db.upsert("download_locations")
         .where_eq("path", path)
         .value("path", path)
@@ -17,7 +17,7 @@ pub async fn create_download_location(db: &Box<dyn Database>, path: &str) -> Res
 }
 
 pub async fn get_download_location(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     id: u64,
 ) -> Result<Option<DownloadLocation>, DbError> {
     Ok(db
@@ -29,9 +29,7 @@ pub async fn get_download_location(
         .to_value_type()?)
 }
 
-pub async fn get_download_locations(
-    db: &Box<dyn Database>,
-) -> Result<Vec<DownloadLocation>, DbError> {
+pub async fn get_download_locations(db: &dyn Database) -> Result<Vec<DownloadLocation>, DbError> {
     Ok(db
         .select("download_locations")
         .execute(db)
@@ -40,7 +38,7 @@ pub async fn get_download_locations(
 }
 
 pub async fn create_download_task(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     task: &CreateDownloadTask,
 ) -> Result<DownloadTask, DbError> {
     let track_id = if let DownloadItem::Track { track_id, .. } = task.item {
@@ -85,7 +83,7 @@ pub async fn create_download_task(
         .to_value_type()?)
 }
 
-pub async fn get_download_tasks(db: &Box<dyn Database>) -> Result<Vec<DownloadTask>, DbError> {
+pub async fn get_download_tasks(db: &dyn Database) -> Result<Vec<DownloadTask>, DbError> {
     Ok(db
         .select("download_tasks")
         .sort("id", SortDirection::Desc)

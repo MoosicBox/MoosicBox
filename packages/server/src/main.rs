@@ -172,7 +172,7 @@ fn main() -> std::io::Result<()> {
                 );
                 // FIXME: Handle retry
                 let (client_id, access_token) = {
-                    get_client_id_and_access_token(&database, &host)
+                    get_client_id_and_access_token(&**database, &host)
                         .await
                         .map_err(|e| {
                             std::io::Error::new(
@@ -227,7 +227,7 @@ fn main() -> std::io::Result<()> {
                                                     .clone();
                                                 if let Err(err) = tunnel
                                                     .ws_request(
-                                                        &database_send,
+                                                        &**database_send,
                                                         request.conn_id,
                                                         request.request_id,
                                                         request.body.clone(),

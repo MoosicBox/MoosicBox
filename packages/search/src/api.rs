@@ -30,7 +30,7 @@ pub async fn reindex_endpoint(
     _query: web::Query<ReindexQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<Value>> {
-    reindex_global_search_index_from_db(&data.database)
+    reindex_global_search_index_from_db(&**data.database)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to reindex from database: {e:?}")))?;
 

@@ -104,11 +104,11 @@ async fn fetch_credentials(
         } else {
             log::debug!("Fetching db Qobuz config");
 
-            match db::get_qobuz_config(&db).await {
+            match db::get_qobuz_config(&**db).await {
                 Ok(Some(config)) => {
                     log::debug!("Using db Qobuz config");
                     log::debug!("Fetching db Qobuz app config");
-                    match db::get_qobuz_app_config(&db).await {
+                    match db::get_qobuz_app_config(&**db).await {
                         Ok(Some(app_config)) => {
                             log::debug!("Using db Qobuz app config");
                             Some(Ok(QobuzCredentials {
@@ -398,7 +398,7 @@ async fn refetch_access_token(
         let user_email: &str = value.to_nested_value(&["user", "email"])?;
         let user_public_id: &str = value.to_nested_value(&["user", "publicId"])?;
 
-        db::create_qobuz_config(&db, access_token, user_id, user_email, user_public_id).await?;
+        db::create_qobuz_config(&**db, access_token, user_id, user_email, user_public_id).await?;
     }
 
     Ok(access_token.to_string())
@@ -556,7 +556,7 @@ pub async fn user_login(
             if let Some(app_config) = {
                 #[cfg(feature = "db")]
                 {
-                    db::get_qobuz_app_config(&db).await?
+                    db::get_qobuz_app_config(&**db).await?
                 }
 
                 #[cfg(not(feature = "db"))]
@@ -586,11 +586,12 @@ pub async fn user_login(
                         config.app_id
                     );
                     let app_config =
-                        db::create_qobuz_app_config(&db, &bundle_version, &config.app_id).await?;
+                        db::create_qobuz_app_config(&**db, &bundle_version, &config.app_id).await?;
 
                     for (timezone, secret) in config.secrets {
                         log::debug!("Creating Qobuz app secret: timezone={bundle_version}");
-                        db::create_qobuz_app_secret(&db, app_config.id, &timezone, &secret).await?;
+                        db::create_qobuz_app_secret(&**db, app_config.id, &timezone, &secret)
+                            .await?;
                     }
                 }
 
@@ -614,7 +615,7 @@ pub async fn user_login(
 
     #[cfg(feature = "db")]
     if persist.unwrap_or(false) {
-        db::create_qobuz_config(&db, access_token, user_id, user_email, user_public_id).await?;
+        db::create_qobuz_config(&**db, access_token, user_id, user_email, user_public_id).await?;
     }
 
     Ok(serde_json::json!({
@@ -1422,7 +1423,7 @@ pub async fn track_file_url(
     let app_secret = match app_secret {
         Some(app_secret) => app_secret,
         _ => {
-            let app_secrets = db::get_qobuz_app_secrets(&db).await?;
+            let app_secrets = db::get_qobuz_app_secrets(&**db).await?;
             let app_secrets = app_secrets
                 .iter()
                 .find(|secret| secret.timezone == "berlin")
@@ -1911,7 +1912,7 @@ impl MusicApi for QobuzMusicApi {
         album_id: &Id,
     ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
         Ok(
-            moosicbox_core::sqlite::menu::get_album(&self.db, None, None, Some(album_id.into()))
+            moosicbox_core::sqlite::menu::get_album(&**self.db, None, None, Some(album_id.into()))
                 .await
                 .map_err(|err| LibraryAlbumError::Other(Box::new(err)))?,
         )

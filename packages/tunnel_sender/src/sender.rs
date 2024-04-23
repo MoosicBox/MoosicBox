@@ -1276,7 +1276,8 @@ impl TunnelSender {
                     let mut headers = HashMap::new();
                     headers.insert("content-type".to_string(), "application/json".to_string());
 
-                    if let Ok(track_info) = get_track_info(query.track_id as u64, &database).await {
+                    if let Ok(track_info) = get_track_info(query.track_id as u64, &**database).await
+                    {
                         let mut bytes: Vec<u8> = Vec::new();
                         serde_json::to_writer(&mut bytes, &track_info)?;
                         self.send(request_id, 200, headers, Cursor::new(bytes), encoding)?;
@@ -1425,7 +1426,7 @@ impl TunnelSender {
 
     pub async fn ws_request(
         &self,
-        db: &Box<dyn Database>,
+        db: &dyn Database,
         conn_id: usize,
         request_id: usize,
         value: Value,

@@ -81,7 +81,7 @@ pub async fn get_scan_origins_endpoint(
     _query: web::Query<GetScanOriginsQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<Value>> {
-    let origins = get_scan_origins(&data.database)
+    let origins = get_scan_origins(&**data.database)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to get scan origins: {e:?}")))?;
 
@@ -99,7 +99,7 @@ pub async fn enable_scan_origin_endpoint(
     query: web::Query<EnableScanOriginQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<Value>> {
-    enable_scan_origin(&data.database, query.origin)
+    enable_scan_origin(&**data.database, query.origin)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to enable scan origin: {e:?}")))?;
 
@@ -117,7 +117,7 @@ pub async fn disable_scan_origin_endpoint(
     query: web::Query<DisableScanOriginQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<Value>> {
-    disable_scan_origin(&data.database, query.origin)
+    disable_scan_origin(&**data.database, query.origin)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to disable scan origin: {e:?}")))?;
 
@@ -133,7 +133,7 @@ pub async fn get_scan_paths_endpoint(
     _query: web::Query<GetScanPathsQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<Value>> {
-    let paths = get_scan_paths(&data.database)
+    let paths = get_scan_paths(&**data.database)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to get scan paths: {e:?}")))?;
 
@@ -151,7 +151,7 @@ pub async fn add_scan_path_endpoint(
     query: web::Query<AddScanPathQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<Value>> {
-    add_scan_path(&data.database, &query.path)
+    add_scan_path(&**data.database, &query.path)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to add scan path: {e:?}")))?;
 
@@ -169,7 +169,7 @@ pub async fn remove_scan_path_endpoint(
     query: web::Query<RemoveScanPathQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<Value>> {
-    remove_scan_path(&data.database, &query.path)
+    remove_scan_path(&**data.database, &query.path)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to remove scan path: {e:?}")))?;
 

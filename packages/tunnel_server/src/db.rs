@@ -533,7 +533,7 @@ pub async fn upsert_connection(client_id: &str, tunnel_ws_id: &str) -> Result<()
             moosicbox_database::query::upsert("connections")
                 .value("client_id", client_id.clone())
                 .value("tunnel_ws_id", tunnel_ws_id.clone())
-                .execute(DB.lock().await.as_mut().expect("DB not initialized"))
+                .execute(&**DB.lock().await.as_mut().expect("DB not initialized"))
                 .await?;
 
             Ok(())
@@ -551,7 +551,7 @@ pub async fn select_connection(client_id: &str) -> Result<Option<Connection>, Da
         Box::pin(async move {
             Ok(moosicbox_database::query::select("connections")
                 .where_eq("client_id", client_id)
-                .execute_first(DB.lock().await.as_mut().expect("DB not initialized"))
+                .execute_first(&**DB.lock().await.as_mut().expect("DB not initialized"))
                 .await?
                 .as_ref()
                 .to_value_type()?)
@@ -569,7 +569,7 @@ pub async fn delete_connection(tunnel_ws_id: &str) -> Result<(), DatabaseError> 
         Box::pin(async move {
             moosicbox_database::query::delete("connections")
                 .where_eq("tunnel_ws_id", tunnel_ws_id)
-                .execute(DB.lock().await.as_mut().expect("DB not initialized"))
+                .execute(&**DB.lock().await.as_mut().expect("DB not initialized"))
                 .await?;
 
             Ok(())
@@ -594,7 +594,7 @@ pub async fn insert_client_access_token(
                 .value("token_hash", token_hash)
                 .value("client_id", client_id)
                 .value("expires", DatabaseValue::Null)
-                .execute(DB.lock().await.as_mut().expect("DB not initialized"))
+                .execute(&**DB.lock().await.as_mut().expect("DB not initialized"))
                 .await?;
 
             Ok(())
@@ -631,7 +631,7 @@ pub async fn select_client_access_token(
                     where_eq("expires", DatabaseValue::Null),
                     where_gte("expires", DatabaseValue::Now)
                 ))
-                .execute_first(DB.lock().await.as_mut().expect("DB not initialized"))
+                .execute_first(&**DB.lock().await.as_mut().expect("DB not initialized"))
                 .await?
                 .as_ref()
                 .to_value_type()?)
@@ -656,7 +656,7 @@ pub async fn insert_magic_token(
                 .value("magic_token_hash", magic_token_hash)
                 .value("client_id", client_id)
                 .value("expires", DatabaseValue::Null)
-                .execute(DB.lock().await.as_mut().expect("DB not initialized"))
+                .execute(&**DB.lock().await.as_mut().expect("DB not initialized"))
                 .await?;
 
             Ok(())
@@ -678,7 +678,7 @@ pub async fn select_magic_token(token_hash: &str) -> Result<Option<MagicToken>, 
                     where_eq("expires", DatabaseValue::Null),
                     where_gte("expires", DatabaseValue::Now)
                 ))
-                .execute_first(DB.lock().await.as_mut().expect("DB not initialized"))
+                .execute_first(&**DB.lock().await.as_mut().expect("DB not initialized"))
                 .await?
                 .as_ref()
                 .to_value_type()?)
@@ -706,7 +706,7 @@ pub async fn insert_signature_token(
                     "expires",
                     DatabaseValue::NowAdd("INTERVAL '14 day'".to_string()),
                 )
-                .execute(DB.lock().await.as_mut().expect("DB not initialized"))
+                .execute(&**DB.lock().await.as_mut().expect("DB not initialized"))
                 .await?;
 
             Ok(())
@@ -740,7 +740,7 @@ pub async fn select_signature_token(
                 .where_eq("client_id", client_id)
                 .where_eq("token_hash", token_hash)
                 .where_gte("expires", DatabaseValue::Now)
-                .execute_first(DB.lock().await.as_mut().expect("DB not initialized"))
+                .execute_first(&**DB.lock().await.as_mut().expect("DB not initialized"))
                 .await?
                 .as_ref()
                 .to_value_type()?)
@@ -761,7 +761,7 @@ pub async fn select_signature_tokens(
         Box::pin(async move {
             Ok(moosicbox_database::query::select("signature_tokens")
                 .where_eq("client_id", client_id)
-                .execute(DB.lock().await.as_mut().expect("DB not initialized"))
+                .execute(&**DB.lock().await.as_mut().expect("DB not initialized"))
                 .await?
                 .to_value_type()?)
         })
@@ -779,7 +779,7 @@ pub async fn delete_signature_token(token_hash: &str) -> Result<(), DatabaseErro
         Box::pin(async move {
             moosicbox_database::query::delete("signature_tokens")
                 .where_eq("token_hash", token_hash)
-                .execute(DB.lock().await.as_mut().expect("DB not initialized"))
+                .execute(&**DB.lock().await.as_mut().expect("DB not initialized"))
                 .await?;
 
             Ok(())

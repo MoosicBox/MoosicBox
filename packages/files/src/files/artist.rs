@@ -135,7 +135,7 @@ async fn copy_streaming_cover_to_local(
     db.update("artists")
         .where_eq("id", artist_id)
         .value("cover", cover.clone())
-        .execute(&db)
+        .execute(&**db)
         .await?;
 
     Ok(cover)
@@ -186,7 +186,7 @@ pub async fn get_library_artist_cover(
     library_artist_id: i32,
     db: Arc<Box<dyn Database>>,
 ) -> Result<String, ArtistCoverError> {
-    let artist = get_artist(&db, "id", library_artist_id as u64)
+    let artist = get_artist(&**db, "id", library_artist_id as u64)
         .await?
         .ok_or(ArtistCoverError::NotFound(ArtistId::Library(
             library_artist_id,
@@ -229,7 +229,7 @@ pub async fn get_library_artist_cover_bytes(
     db: Arc<Box<dyn Database>>,
     try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, ArtistCoverError> {
-    let artist = get_artist(&db, "id", library_artist_id as u64)
+    let artist = get_artist(&**db, "id", library_artist_id as u64)
         .await?
         .ok_or(ArtistCoverError::NotFound(ArtistId::Library(
             library_artist_id,

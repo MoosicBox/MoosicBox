@@ -251,7 +251,7 @@ impl From<TrackOrId> for UpdateSessionPlaylistTrack {
 }
 
 pub async fn get_session_playlist_id_from_session_id(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     session_id: Option<usize>,
 ) -> Result<Option<usize>, PlayerError> {
     Ok(if let Some(session_id) = session_id {
@@ -320,7 +320,7 @@ impl Player {
     #[allow(clippy::too_many_arguments)]
     pub async fn play_album(
         &self,
-        db: &Box<dyn Database>,
+        db: &dyn Database,
         session_id: Option<usize>,
         album_id: i32,
         position: Option<u16>,
@@ -359,7 +359,7 @@ impl Player {
     #[allow(clippy::too_many_arguments)]
     pub async fn play_track(
         &self,
-        db: &Box<dyn Database>,
+        db: &dyn Database,
         session_id: Option<usize>,
         track: TrackOrId,
         seek: Option<f64>,
@@ -383,7 +383,7 @@ impl Player {
     #[allow(clippy::too_many_arguments)]
     pub async fn play_tracks(
         &self,
-        db: &Box<dyn Database>,
+        db: &dyn Database,
         session_id: Option<usize>,
         tracks: Vec<TrackOrId>,
         position: Option<u16>,

@@ -171,7 +171,7 @@ pub async fn get_track_id_source(
 ) -> Result<TrackSource, TrackSourceError> {
     debug!("Getting track audio file {track_id} quality={quality:?} source={source:?}");
 
-    let track = get_track(&db, track_id as u64)
+    let track = get_track(&**db, track_id as u64)
         .await?
         .ok_or(TrackSourceError::NotFound(track_id))?;
 
@@ -309,7 +309,7 @@ pub async fn get_track_bytes(
         None
     };
 
-    let track = moosicbox_core::sqlite::db::get_track(&db, track_id)
+    let track = moosicbox_core::sqlite::db::get_track(&**db, track_id)
         .await?
         .ok_or(GetTrackBytesError::NotFound)?;
 
@@ -569,7 +569,7 @@ impl From<LibraryTrack> for TrackInfo {
 
 pub async fn get_tracks_info(
     track_ids: Vec<u64>,
-    db: &Box<dyn Database>,
+    db: &dyn Database,
 ) -> Result<Vec<TrackInfo>, TrackInfoError> {
     debug!("Getting tracks info {track_ids:?}");
 
@@ -580,10 +580,7 @@ pub async fn get_tracks_info(
     Ok(tracks.into_iter().map(|t| t.into()).collect())
 }
 
-pub async fn get_track_info(
-    track_id: u64,
-    db: &Box<dyn Database>,
-) -> Result<TrackInfo, TrackInfoError> {
+pub async fn get_track_info(track_id: u64, db: &dyn Database) -> Result<TrackInfo, TrackInfoError> {
     debug!("Getting track info {track_id}");
 
     let track = get_track(db, track_id).await?;
@@ -690,7 +687,7 @@ pub async fn get_or_init_track_size(
 ) -> Result<u64, TrackInfoError> {
     debug!("Getting track size {track_id}");
 
-    if let Some(size) = get_track_size(&db, track_id as u64, &quality).await? {
+    if let Some(size) = get_track_size(&**db, track_id as u64, &quality).await? {
         return Ok(size);
     }
 
@@ -733,7 +730,7 @@ pub async fn get_or_init_track_size(
     };
 
     set_track_size(
-        &db,
+        &**db,
         SetTrackSize {
             track_id,
             quality,

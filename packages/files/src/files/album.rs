@@ -88,7 +88,7 @@ async fn fetch_local_album_cover(
         db.update("albums")
             .where_eq("id", album_id)
             .value("artwork", artwork)
-            .execute(&db)
+            .execute(&**db)
             .await?;
 
         return Ok(path.to_str().unwrap().to_string());
@@ -137,7 +137,7 @@ async fn fetch_local_album_cover_bytes(
         db.update("albums")
             .where_eq("id", album_id)
             .value("artwork", artwork)
-            .execute(&db)
+            .execute(&**db)
             .await?;
 
         let file = tokio::fs::File::open(path).await?;
@@ -195,7 +195,7 @@ async fn copy_streaming_cover_to_local(
     db.update("albums")
         .where_eq("id", album_id)
         .value("artwork", cover.clone())
-        .execute(&db)
+        .execute(&**db)
         .await?;
 
     Ok(cover)
@@ -242,7 +242,7 @@ pub async fn get_library_album_cover(
     library_album_id: i32,
     db: Arc<Box<dyn Database>>,
 ) -> Result<String, AlbumCoverError> {
-    let album = get_album(&db, Some(library_album_id as u64), None, None)
+    let album = get_album(&**db, Some(library_album_id as u64), None, None)
         .await?
         .ok_or(AlbumCoverError::NotFound(AlbumId::Library(
             library_album_id,
@@ -280,7 +280,7 @@ pub async fn get_library_album_cover_bytes(
     db: Arc<Box<dyn Database>>,
     try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, AlbumCoverError> {
-    let album = get_album(&db, Some(library_album_id as u64), None, None)
+    let album = get_album(&**db, Some(library_album_id as u64), None, None)
         .await?
         .ok_or(AlbumCoverError::NotFound(AlbumId::Library(
             library_album_id,

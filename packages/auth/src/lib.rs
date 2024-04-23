@@ -15,7 +15,7 @@ use moosicbox_core::sqlite::db::{create_client_access_token, get_client_access_t
 
 #[cfg(feature = "api")]
 pub(crate) async fn get_credentials_from_magic_token(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     magic_token: &str,
 ) -> Result<Option<(String, String)>, DbError> {
     if let Some((client_id, access_token)) =
@@ -53,7 +53,7 @@ async fn tunnel_magic_token(
 
 #[cfg(feature = "api")]
 pub(crate) async fn create_magic_token(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     tunnel_host: Option<String>,
 ) -> Result<String, DbError> {
     let magic_token = Uuid::new_v4().to_string();
@@ -79,7 +79,7 @@ fn create_client_id() -> String {
 }
 
 pub async fn get_client_id_and_access_token(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     host: &str,
 ) -> Result<(String, String), DbError> {
     if let Ok(Some((client_id, token))) = get_client_access_token(db).await {

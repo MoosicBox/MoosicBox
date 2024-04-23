@@ -45,7 +45,7 @@ impl From<DbError> for actix_web::Error {
 }
 
 pub async fn get_session_playlist_tracks(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     session_playlist_id: i32,
 ) -> Result<Vec<SessionPlaylistTrack>, DbError> {
     Ok(db
@@ -57,7 +57,7 @@ pub async fn get_session_playlist_tracks(
         .to_value_type()?)
 }
 
-pub async fn get_client_id(db: &Box<dyn Database>) -> Result<Option<String>, DbError> {
+pub async fn get_client_id(db: &dyn Database) -> Result<Option<String>, DbError> {
     Ok(db
         .select("client_access_tokens")
         .where_or(boxed![
@@ -73,7 +73,7 @@ pub async fn get_client_id(db: &Box<dyn Database>) -> Result<Option<String>, DbE
 }
 
 pub async fn get_client_access_token(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
 ) -> Result<Option<(String, String)>, DbError> {
     Ok(db
         .select("client_access_tokens")
@@ -98,7 +98,7 @@ pub async fn get_client_access_token(
 }
 
 pub async fn create_client_access_token(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     client_id: &str,
     token: &str,
 ) -> Result<(), DbError> {
@@ -113,7 +113,7 @@ pub async fn create_client_access_token(
     Ok(())
 }
 
-pub async fn delete_magic_token(db: &Box<dyn Database>, magic_token: &str) -> Result<(), DbError> {
+pub async fn delete_magic_token(db: &dyn Database, magic_token: &str) -> Result<(), DbError> {
     db.delete("magic_tokens")
         .where_eq("magic_token", magic_token)
         .execute(db)
@@ -123,7 +123,7 @@ pub async fn delete_magic_token(db: &Box<dyn Database>, magic_token: &str) -> Re
 }
 
 pub async fn get_credentials_from_magic_token(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     magic_token: &str,
 ) -> Result<Option<(String, String)>, DbError> {
     if let Some((client_id, access_token)) = db
@@ -156,7 +156,7 @@ pub async fn get_credentials_from_magic_token(
 }
 
 pub async fn save_magic_token(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     magic_token: &str,
     client_id: &str,
     access_token: &str,
@@ -176,7 +176,7 @@ pub async fn save_magic_token(
 }
 
 pub async fn get_session_playlist(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     session_id: i32,
 ) -> Result<Option<SessionPlaylist>, DbError> {
     if let Some(ref playlist) = db
@@ -192,7 +192,7 @@ pub async fn get_session_playlist(
 }
 
 pub async fn get_session_active_players(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     session_id: i32,
 ) -> Result<Vec<Player>, DbError> {
     Ok(db
@@ -205,7 +205,7 @@ pub async fn get_session_active_players(
         .to_value_type()?)
 }
 
-pub async fn get_session_playing(db: &Box<dyn Database>, id: i32) -> Result<Option<bool>, DbError> {
+pub async fn get_session_playing(db: &dyn Database, id: i32) -> Result<Option<bool>, DbError> {
     Ok(db
         .select("sessions")
         .columns(&["playing"])
@@ -218,7 +218,7 @@ pub async fn get_session_playing(db: &Box<dyn Database>, id: i32) -> Result<Opti
         .flatten())
 }
 
-pub async fn get_session(db: &Box<dyn Database>, id: i32) -> Result<Option<Session>, DbError> {
+pub async fn get_session(db: &dyn Database, id: i32) -> Result<Option<Session>, DbError> {
     Ok(
         if let Some(ref session) = db
             .select("sessions")
@@ -233,7 +233,7 @@ pub async fn get_session(db: &Box<dyn Database>, id: i32) -> Result<Option<Sessi
     )
 }
 
-pub async fn get_sessions(db: &Box<dyn Database>) -> Result<Vec<Session>, DbError> {
+pub async fn get_sessions(db: &dyn Database) -> Result<Vec<Session>, DbError> {
     let mut sessions = vec![];
 
     for ref session in db.select("sessions").execute(db).await? {
@@ -244,7 +244,7 @@ pub async fn get_sessions(db: &Box<dyn Database>) -> Result<Vec<Session>, DbErro
 }
 
 pub async fn create_session(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     session: &CreateSession,
 ) -> Result<Session, DbError> {
     let tracks = get_tracks(db, Some(&session.playlist.tracks)).await?;
@@ -291,10 +291,7 @@ pub async fn create_session(
     })
 }
 
-pub async fn update_session(
-    db: &Box<dyn Database>,
-    session: &UpdateSession,
-) -> Result<(), DbError> {
+pub async fn update_session(db: &dyn Database, session: &UpdateSession) -> Result<(), DbError> {
     if session.playlist.is_some() {
         db.delete("session_playlist_tracks")
             .where_in(
@@ -364,7 +361,7 @@ pub async fn update_session(
     Ok(())
 }
 
-pub async fn delete_session(db: &Box<dyn Database>, session_id: i32) -> Result<(), DbError> {
+pub async fn delete_session(db: &dyn Database, session_id: i32) -> Result<(), DbError> {
     db.delete("session_playlist_tracks")
         .where_in(
             "session_playlist_tracks.id",
@@ -407,9 +404,7 @@ pub async fn delete_session(db: &Box<dyn Database>, session_id: i32) -> Result<(
     Ok(())
 }
 
-pub async fn get_connections(
-    db: &Box<dyn Database>,
-) -> Result<Vec<super::models::Connection>, DbError> {
+pub async fn get_connections(db: &dyn Database) -> Result<Vec<super::models::Connection>, DbError> {
     let mut connections = vec![];
 
     for ref connection in db.select("connections").execute(db).await? {
@@ -420,7 +415,7 @@ pub async fn get_connections(
 }
 
 pub async fn register_connection(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     connection: &super::models::RegisterConnection,
 ) -> Result<super::models::Connection, DbError> {
     let row: super::models::Connection = db
@@ -445,7 +440,7 @@ pub async fn register_connection(
     })
 }
 
-pub async fn delete_connection(db: &Box<dyn Database>, connection_id: &str) -> Result<(), DbError> {
+pub async fn delete_connection(db: &dyn Database, connection_id: &str) -> Result<(), DbError> {
     db.delete("players")
         .where_in(
             "players.id",
@@ -466,7 +461,7 @@ pub async fn delete_connection(db: &Box<dyn Database>, connection_id: &str) -> R
 }
 
 pub async fn get_players(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     connection_id: &str,
 ) -> Result<Vec<super::models::Player>, DbError> {
     Ok(db
@@ -478,7 +473,7 @@ pub async fn get_players(
 }
 
 pub async fn create_player(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     connection_id: &str,
     player: &super::models::RegisterPlayer,
 ) -> Result<super::models::Player, DbError> {
@@ -496,7 +491,7 @@ pub async fn create_player(
 }
 
 pub async fn set_session_active_players(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     set_session_active_players: &super::models::SetSessionActivePlayers,
 ) -> Result<(), DbError> {
     db.delete("active_players")
@@ -515,7 +510,7 @@ pub async fn set_session_active_players(
     Ok(())
 }
 
-pub async fn delete_player(db: &Box<dyn Database>, player_id: i32) -> Result<(), DbError> {
+pub async fn delete_player(db: &dyn Database, player_id: i32) -> Result<(), DbError> {
     db.delete("players")
         .where_eq("id", player_id)
         .execute(db)
@@ -524,11 +519,11 @@ pub async fn delete_player(db: &Box<dyn Database>, player_id: i32) -> Result<(),
     Ok(())
 }
 
-pub async fn get_artists(db: &Box<dyn Database>) -> Result<Vec<LibraryArtist>, DbError> {
+pub async fn get_artists(db: &dyn Database) -> Result<Vec<LibraryArtist>, DbError> {
     Ok(db.select("artists").execute(db).await?.to_value_type()?)
 }
 
-pub async fn get_albums(db: &Box<dyn Database>) -> Result<Vec<LibraryAlbum>, DbError> {
+pub async fn get_albums(db: &dyn Database) -> Result<Vec<LibraryAlbum>, DbError> {
     Ok(db
         .select("albums")
         .distinct()
@@ -558,7 +553,7 @@ pub async fn get_albums(db: &Box<dyn Database>) -> Result<Vec<LibraryAlbum>, DbE
 }
 
 pub async fn get_all_album_version_qualities(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     album_ids: Vec<i32>,
 ) -> Result<Vec<AlbumVersionQuality>, DbError> {
     let mut versions: Vec<AlbumVersionQuality> = db
@@ -599,7 +594,7 @@ pub async fn get_all_album_version_qualities(
 }
 
 pub async fn get_album_version_qualities(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     album_id: i32,
 ) -> Result<Vec<AlbumVersionQuality>, DbError> {
     let mut versions: Vec<AlbumVersionQuality> = db
@@ -634,7 +629,7 @@ pub async fn get_album_version_qualities(
 }
 
 pub async fn get_artist<Id: Into<Box<dyn Expression>>>(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     column: &str,
     id: Id,
 ) -> Result<Option<LibraryArtist>, DbError> {
@@ -648,7 +643,7 @@ pub async fn get_artist<Id: Into<Box<dyn Expression>>>(
 }
 
 pub async fn get_artist_by_album_id(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     id: u64,
 ) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
@@ -662,7 +657,7 @@ pub async fn get_artist_by_album_id(
 }
 
 pub async fn get_artists_by_album_ids(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     album_ids: &[i32],
 ) -> Result<Vec<LibraryArtist>, DbError> {
     Ok(db
@@ -676,7 +671,7 @@ pub async fn get_artists_by_album_ids(
 }
 
 pub async fn get_album_artist(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     album_id: i32,
 ) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
@@ -691,7 +686,7 @@ pub async fn get_album_artist(
 }
 
 pub async fn get_tidal_album_artist(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     tidal_album_id: i32,
 ) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
@@ -706,7 +701,7 @@ pub async fn get_tidal_album_artist(
 }
 
 pub async fn get_qobuz_album_artist(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     qobuz_album_id: i32,
 ) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
@@ -721,7 +716,7 @@ pub async fn get_qobuz_album_artist(
 }
 
 pub async fn get_album<Id: Into<Box<dyn Expression>>>(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     column: &str,
     id: Id,
 ) -> Result<Option<LibraryAlbum>, DbError> {
@@ -742,7 +737,7 @@ pub async fn get_album<Id: Into<Box<dyn Expression>>>(
 }
 
 pub async fn get_album_tracks(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     album_id: u64,
 ) -> Result<Vec<LibraryTrack>, DbError> {
     Ok(db
@@ -780,7 +775,7 @@ pub async fn get_album_tracks(
 }
 
 pub async fn get_artist_albums(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     artist_id: i32,
 ) -> Result<Vec<LibraryAlbum>, DbError> {
     Ok(db
@@ -820,10 +815,7 @@ pub struct SetTrackSize {
     pub channels: Option<Option<u8>>,
 }
 
-pub async fn set_track_size(
-    db: &Box<dyn Database>,
-    value: SetTrackSize,
-) -> Result<TrackSize, DbError> {
+pub async fn set_track_size(db: &dyn Database, value: SetTrackSize) -> Result<TrackSize, DbError> {
     Ok(set_track_sizes(db, &[value])
         .await?
         .first()
@@ -832,7 +824,7 @@ pub async fn set_track_size(
 }
 
 pub async fn set_track_sizes(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     values: &[SetTrackSize],
 ) -> Result<Vec<TrackSize>, DbError> {
     let values = values
@@ -902,7 +894,7 @@ pub async fn set_track_sizes(
 }
 
 pub async fn get_track_size(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     id: u64,
     quality: &PlaybackQuality,
 ) -> Result<Option<u64>, DbError> {
@@ -920,12 +912,12 @@ pub async fn get_track_size(
         .flatten())
 }
 
-pub async fn get_track(db: &Box<dyn Database>, id: u64) -> Result<Option<LibraryTrack>, DbError> {
+pub async fn get_track(db: &dyn Database, id: u64) -> Result<Option<LibraryTrack>, DbError> {
     Ok(get_tracks(db, Some(&vec![id])).await?.into_iter().next())
 }
 
 pub async fn get_tracks(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     ids: Option<&Vec<u64>>,
 ) -> Result<Vec<LibraryTrack>, DbError> {
     if ids.is_some_and(|ids| ids.is_empty()) {
@@ -965,15 +957,12 @@ pub async fn get_tracks(
         .to_value_type()?)
 }
 
-pub async fn delete_track(
-    db: &Box<dyn Database>,
-    id: i32,
-) -> Result<Option<LibraryTrack>, DbError> {
+pub async fn delete_track(db: &dyn Database, id: i32) -> Result<Option<LibraryTrack>, DbError> {
     Ok(delete_tracks(db, Some(&vec![id])).await?.into_iter().next())
 }
 
 pub async fn delete_tracks(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     ids: Option<&Vec<i32>>,
 ) -> Result<Vec<LibraryTrack>, DbError> {
     if ids.is_some_and(|ids| ids.is_empty()) {
@@ -989,7 +978,7 @@ pub async fn delete_tracks(
 }
 
 pub async fn delete_track_size_by_track_id(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     id: i32,
 ) -> Result<Option<TrackSize>, DbError> {
     Ok(delete_track_sizes_by_track_id(db, Some(&vec![id]))
@@ -999,7 +988,7 @@ pub async fn delete_track_size_by_track_id(
 }
 
 pub async fn delete_track_sizes_by_track_id(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     ids: Option<&Vec<i32>>,
 ) -> Result<Vec<TrackSize>, DbError> {
     if ids.is_some_and(|ids| ids.is_empty()) {
@@ -1015,7 +1004,7 @@ pub async fn delete_track_sizes_by_track_id(
 }
 
 pub async fn delete_session_playlist_track_by_track_id(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     id: i32,
 ) -> Result<Option<SessionPlaylistTrack>, DbError> {
     Ok(
@@ -1027,7 +1016,7 @@ pub async fn delete_session_playlist_track_by_track_id(
 }
 
 pub async fn delete_session_playlist_tracks_by_track_id(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     ids: Option<&Vec<i32>>,
 ) -> Result<Vec<SessionPlaylistTrack>, DbError> {
     if ids.is_some_and(|ids| ids.is_empty()) {
@@ -1044,21 +1033,21 @@ pub async fn delete_session_playlist_tracks_by_track_id(
 }
 
 pub async fn add_artist_and_get_artist(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     artist: LibraryArtist,
 ) -> Result<LibraryArtist, DbError> {
     Ok(add_artists_and_get_artists(db, vec![artist]).await?[0].clone())
 }
 
 pub async fn add_artist_map_and_get_artist(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     artist: HashMap<&str, DatabaseValue>,
 ) -> Result<LibraryArtist, DbError> {
     Ok(add_artist_maps_and_get_artists(db, vec![artist]).await?[0].clone())
 }
 
 pub async fn add_artists_and_get_artists(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     artists: Vec<LibraryArtist>,
 ) -> Result<Vec<LibraryArtist>, DbError> {
     add_artist_maps_and_get_artists(
@@ -1077,7 +1066,7 @@ pub async fn add_artists_and_get_artists(
 }
 
 pub async fn add_artist_maps_and_get_artists(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     artists: Vec<HashMap<&str, DatabaseValue>>,
 ) -> Result<Vec<LibraryArtist>, DbError> {
     let mut results = vec![];
@@ -1102,7 +1091,7 @@ pub async fn add_artist_maps_and_get_artists(
 }
 
 pub async fn add_albums(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     albums: Vec<LibraryAlbum>,
 ) -> Result<Vec<LibraryAlbum>, DbError> {
     let mut data: Vec<LibraryAlbum> = Vec::new();
@@ -1128,21 +1117,21 @@ pub async fn add_albums(
 }
 
 pub async fn add_album_and_get_album(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     album: LibraryAlbum,
 ) -> Result<LibraryAlbum, DbError> {
     Ok(add_albums_and_get_albums(db, vec![album]).await?[0].clone())
 }
 
 pub async fn add_album_map_and_get_album(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     album: HashMap<&str, DatabaseValue>,
 ) -> Result<LibraryAlbum, DbError> {
     Ok(add_album_maps_and_get_albums(db, vec![album]).await?[0].clone())
 }
 
 pub async fn add_albums_and_get_albums(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     albums: Vec<LibraryAlbum>,
 ) -> Result<Vec<LibraryAlbum>, DbError> {
     add_album_maps_and_get_albums(
@@ -1167,7 +1156,7 @@ pub async fn add_albums_and_get_albums(
 }
 
 pub async fn add_album_maps_and_get_albums(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     albums: Vec<HashMap<&str, DatabaseValue>>,
 ) -> Result<Vec<LibraryAlbum>, DbError> {
     let mut values = vec![];
@@ -1202,7 +1191,7 @@ pub struct InsertTrack {
 }
 
 pub async fn add_tracks(
-    db: &Box<dyn Database>,
+    db: &dyn Database,
     tracks: Vec<InsertTrack>,
 ) -> Result<Vec<LibraryTrack>, DbError> {
     let values = tracks

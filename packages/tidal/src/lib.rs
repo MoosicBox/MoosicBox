@@ -236,7 +236,7 @@ pub async fn device_authorization_token(
         let user_id = value.to_value("user_id")?;
 
         db::create_tidal_config(
-            &db,
+            &**db,
             &client_id,
             access_token,
             refresh_token,
@@ -290,7 +290,7 @@ async fn fetch_credentials(
         } else {
             log::debug!("Fetching db Tidal config");
 
-            match db::get_tidal_config(&db).await {
+            match db::get_tidal_config(&**db).await {
                 Ok(Some(config)) => {
                     log::debug!("Using db Tidal config");
                     Some(Ok(TidalCredentials {
@@ -547,7 +547,7 @@ async fn refetch_access_token(
         let user_id = value.to_value("user_id")?;
 
         db::create_tidal_config(
-            &db,
+            &**db,
             client_id,
             access_token,
             refresh_token,
@@ -612,7 +612,7 @@ pub async fn favorite_artists<'a>(
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
     } else {
-        match db::get_tidal_config(&db).await {
+        match db::get_tidal_config(&**db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
@@ -725,7 +725,7 @@ pub async fn add_favorite_artist(
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
     } else {
-        match db::get_tidal_config(&db).await {
+        match db::get_tidal_config(&**db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
@@ -787,7 +787,7 @@ pub async fn remove_favorite_artist(
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
     } else {
-        match db::get_tidal_config(&db).await {
+        match db::get_tidal_config(&**db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
@@ -872,7 +872,7 @@ pub async fn favorite_albums(
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
     } else {
-        match db::get_tidal_config(&db).await {
+        match db::get_tidal_config(&**db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
@@ -1029,7 +1029,7 @@ pub async fn add_favorite_album(
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
     } else {
-        match db::get_tidal_config(&db).await {
+        match db::get_tidal_config(&**db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
@@ -1091,7 +1091,7 @@ pub async fn remove_favorite_album(
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
     } else {
-        match db::get_tidal_config(&db).await {
+        match db::get_tidal_config(&**db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
@@ -1176,7 +1176,7 @@ pub async fn favorite_tracks(
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
     } else {
-        match db::get_tidal_config(&db).await {
+        match db::get_tidal_config(&**db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
@@ -1289,7 +1289,7 @@ pub async fn add_favorite_track(
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
     } else {
-        match db::get_tidal_config(&db).await {
+        match db::get_tidal_config(&**db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
@@ -1351,7 +1351,7 @@ pub async fn remove_favorite_track(
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
     } else {
-        match db::get_tidal_config(&db).await {
+        match db::get_tidal_config(&**db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
@@ -2231,7 +2231,7 @@ impl MusicApi for TidalMusicApi {
         album_id: &Id,
     ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
         Ok(
-            moosicbox_core::sqlite::menu::get_album(&self.db, None, Some(album_id.into()), None)
+            moosicbox_core::sqlite::menu::get_album(&**self.db, None, Some(album_id.into()), None)
                 .await
                 .map_err(|err| LibraryAlbumError::Other(Box::new(err)))?,
         )

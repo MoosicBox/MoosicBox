@@ -225,7 +225,7 @@ pub async fn get_tracks_endpoint(
         .collect::<Vec<_>>();
 
     Ok(Json(
-        get_tracks(&data.database, Some(&ids))
+        get_tracks(&**data.database, Some(&ids))
             .await
             .map_err(|_e| ErrorInternalServerError("Failed to fetch tracks"))?
             .into_iter()
@@ -344,7 +344,7 @@ pub async fn get_album_endpoint(
 ) -> Result<Json<ApiAlbum>> {
     Ok(Json(
         get_album(
-            &data.database,
+            &**data.database,
             query.album_id,
             query.tidal_album_id,
             query.qobuz_album_id.clone(),

@@ -117,7 +117,7 @@ pub async fn play_album_endpoint(
     Ok(Json(
         get_player(query.host.as_deref())
             .play_album(
-                &data.database,
+                &**data.database,
                 query.session_id,
                 query.album_id,
                 query.position,
@@ -150,7 +150,7 @@ pub async fn play_track_endpoint(
     data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     let track_id = get_track_or_ids_from_track_id_ranges(
-        &data.database,
+        &**data.database,
         query.track_id.to_string().as_str(),
         query.source,
         query.host.as_deref(),
@@ -166,7 +166,7 @@ pub async fn play_track_endpoint(
     Ok(Json(
         get_player(query.host.as_deref())
             .play_track(
-                &data.database,
+                &**data.database,
                 query.session_id,
                 track_id,
                 query.seek,
@@ -199,7 +199,7 @@ pub async fn play_tracks_endpoint(
     data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     let track_ids = get_track_or_ids_from_track_id_ranges(
-        &data.database,
+        &**data.database,
         &query.track_ids,
         query.source,
         query.host.as_deref(),
@@ -209,7 +209,7 @@ pub async fn play_tracks_endpoint(
     Ok(Json(
         get_player(query.host.as_deref())
             .play_tracks(
-                &data.database,
+                &**data.database,
                 query.session_id,
                 track_ids,
                 query.position,
@@ -280,7 +280,7 @@ pub async fn update_playback_endpoint(
     let track_ids = if let Some(track_ids) = &query.track_ids {
         Some(
             get_track_or_ids_from_track_id_ranges(
-                &data.database,
+                &**data.database,
                 &track_ids,
                 query.source,
                 query.host.as_deref(),
@@ -301,7 +301,7 @@ pub async fn update_playback_endpoint(
         track_ids,
         query.format.map(|format| PlaybackQuality { format }),
         query.session_id,
-        get_session_playlist_id_from_session_id(&data.database, query.session_id).await?,
+        get_session_playlist_id_from_session_id(&**data.database, query.session_id).await?,
         Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
     )?))
 }
