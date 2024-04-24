@@ -28,6 +28,7 @@ pub struct StreamableFileAsync {
     read_position: usize,
     downloaded: RangeSet<usize>,
     requested: RangeSet<usize>,
+    #[allow(clippy::type_complexity)]
     receivers: Vec<(u128, Receiver<(usize, Vec<u8>)>)>,
 }
 

@@ -62,21 +62,21 @@ pub enum DownloadTaskState {
 
 impl ToValueType<DownloadTaskState> for DatabaseValue {
     fn to_value_type(self) -> Result<DownloadTaskState, ParseError> {
-        Ok(DownloadTaskState::from_str(
+        DownloadTaskState::from_str(
             self.as_str()
                 .ok_or_else(|| ParseError::ConvertType("DownloadTaskState".into()))?,
         )
-        .map_err(|_| ParseError::ConvertType("DownloadTaskState".into()))?)
+        .map_err(|_| ParseError::ConvertType("DownloadTaskState".into()))
     }
 }
 
 impl ToValueType<DownloadTaskState> for &serde_json::Value {
     fn to_value_type(self) -> Result<DownloadTaskState, ParseError> {
-        Ok(DownloadTaskState::from_str(
+        DownloadTaskState::from_str(
             self.as_str()
                 .ok_or_else(|| ParseError::ConvertType("DownloadTaskState".into()))?,
         )
-        .map_err(|_| ParseError::ConvertType("DownloadTaskState".into()))?)
+        .map_err(|_| ParseError::ConvertType("DownloadTaskState".into()))
     }
 }
 
@@ -121,21 +121,21 @@ impl From<TrackApiSource> for DownloadApiSource {
 
 impl ToValueType<DownloadApiSource> for DatabaseValue {
     fn to_value_type(self) -> Result<DownloadApiSource, ParseError> {
-        Ok(DownloadApiSource::from_str(
+        DownloadApiSource::from_str(
             self.as_str()
                 .ok_or_else(|| ParseError::ConvertType("DownloadApiSource".into()))?,
         )
-        .map_err(|_| ParseError::ConvertType("DownloadApiSource".into()))?)
+        .map_err(|_| ParseError::ConvertType("DownloadApiSource".into()))
     }
 }
 
 impl ToValueType<DownloadApiSource> for &serde_json::Value {
     fn to_value_type(self) -> Result<DownloadApiSource, ParseError> {
-        Ok(DownloadApiSource::from_str(
+        DownloadApiSource::from_str(
             self.as_str()
                 .ok_or_else(|| ParseError::ConvertType("DownloadApiSource".into()))?,
         )
-        .map_err(|_| ParseError::ConvertType("DownloadApiSource".into()))?)
+        .map_err(|_| ParseError::ConvertType("DownloadApiSource".into()))
     }
 }
 

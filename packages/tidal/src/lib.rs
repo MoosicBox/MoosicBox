@@ -593,7 +593,7 @@ pub enum TidalFavoriteArtistsError {
 
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
-pub async fn favorite_artists<'a>(
+pub async fn favorite_artists(
     #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
     offset: Option<u32>,
     limit: Option<u32>,

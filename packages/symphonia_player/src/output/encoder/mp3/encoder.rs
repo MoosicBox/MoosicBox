@@ -62,7 +62,7 @@ impl Mp3Encoder {
             self.resampler
                 .write()
                 .unwrap()
-                .replace(Resampler::<i16>::new(spec.clone(), 44100_usize, duration));
+                .replace(Resampler::<i16>::new(*spec, 44100_usize, duration));
         }
         self
     }
@@ -126,6 +126,12 @@ impl Mp3Encoder {
         } else {
             Ok(to_samples(decoded))
         }
+    }
+}
+
+impl Default for Mp3Encoder {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

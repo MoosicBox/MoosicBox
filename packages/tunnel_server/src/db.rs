@@ -120,6 +120,7 @@ impl ToValueType<MagicToken> for &Row {
 
 pub(crate) static DB: Lazy<Mutex<Option<Box<dyn Database>>>> = Lazy::new(|| Mutex::new(None));
 
+#[allow(clippy::type_complexity)]
 #[cfg(feature = "postgres-raw")]
 pub(crate) static DB_CONNECTION: Lazy<
     Mutex<Option<tokio::task::JoinHandle<Result<(), tokio_postgres::Error>>>>,
@@ -328,10 +329,7 @@ pub async fn init_postgres_raw_native_tls() -> Result<(), InitDatabaseError> {
         .await
         .replace(Box::new(PostgresDatabase::new(client)));
 
-    DB_CONNECTION
-        .lock()
-        .await
-        .replace(tokio::spawn(async move { connection.await }));
+    DB_CONNECTION.lock().await.replace(tokio::spawn(connection));
 
     Ok(())
 }
@@ -373,10 +371,7 @@ pub async fn init_postgres_raw_openssl() -> Result<(), InitDatabaseError> {
         .await
         .replace(Box::new(PostgresDatabase::new(client)));
 
-    DB_CONNECTION
-        .lock()
-        .await
-        .replace(tokio::spawn(async move { connection.await }));
+    DB_CONNECTION.lock().await.replace(tokio::spawn(connection));
 
     Ok(())
 }
@@ -407,10 +402,7 @@ pub async fn init_postgres_raw_no_tls() -> Result<(), InitDatabaseError> {
         .await
         .replace(Box::new(PostgresDatabase::new(client)));
 
-    DB_CONNECTION
-        .lock()
-        .await
-        .replace(tokio::spawn(async move { connection.await }));
+    DB_CONNECTION.lock().await.replace(tokio::spawn(connection));
 
     Ok(())
 }
@@ -444,30 +436,25 @@ where
         match exec().await {
             Ok(value) => return Ok(value),
             Err(err) => {
-                match err {
-                    DatabaseError::Db(moosicbox_database::DatabaseError::PostgresSqlx(
-                        ref postgres_err,
-                    )) => match postgres_err {
-                        moosicbox_database::sqlx::postgres::SqlxDatabaseError::Sqlx(
-                            sqlx::Error::Io(_io_err),
-                        ) => {
-                            if retries >= MAX_RETRY {
-                                return Err(err);
-                            }
-                            log::info!(
-                                "Database IO error. Attempting reconnect... {}/{MAX_RETRY}",
-                                retries + 1
-                            );
-                            if let Err(init_err) = init_postgres_sqlx().await {
-                                log::error!("Failed to reinitialize: {init_err:?}");
-                                return Err(init_err.into());
-                            }
-                            retries += 1;
-                            continue;
-                        }
-                        _ => {}
-                    },
-                    _ => {}
+                if let DatabaseError::Db(moosicbox_database::DatabaseError::PostgresSqlx(
+                    moosicbox_database::sqlx::postgres::SqlxDatabaseError::Sqlx(sqlx::Error::Io(
+                        ref _io_err,
+                    )),
+                )) = err
+                {
+                    if retries >= MAX_RETRY {
+                        return Err(err);
+                    }
+                    log::info!(
+                        "Database IO error. Attempting reconnect... {}/{MAX_RETRY}",
+                        retries + 1
+                    );
+                    if let Err(init_err) = init_postgres_sqlx().await {
+                        log::error!("Failed to reinitialize: {init_err:?}");
+                        return Err(init_err.into());
+                    }
+                    retries += 1;
+                    continue;
                 }
                 return Err(err);
             }

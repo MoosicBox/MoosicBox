@@ -97,6 +97,7 @@ pub enum GetCreateDownloadTasksError {
     NotFound,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn get_create_download_tasks(
     db: Arc<Box<dyn Database>>,
     download_path: &Path,
@@ -193,7 +194,7 @@ pub fn get_create_download_tasks_for_tracks(
     quality: Option<TrackAudioQuality>,
 ) -> Result<Vec<CreateDownloadTask>, GetCreateDownloadTasksError> {
     tracks
-        .into_iter()
+        .iter()
         .map(|track| {
             let source = if let Some(source) = source {
                 source
@@ -211,9 +212,9 @@ pub fn get_create_download_tasks_for_tracks(
 
             Ok(CreateDownloadTask {
                 file_path: download_path
-                    .join(&sanitize_filename(&track.artist))
-                    .join(&sanitize_filename(&track.album))
-                    .join(&get_filename_for_track(&track))
+                    .join(sanitize_filename(&track.artist))
+                    .join(sanitize_filename(&track.album))
+                    .join(get_filename_for_track(track))
                     .to_str()
                     .unwrap()
                     .to_string(),
@@ -359,6 +360,7 @@ pub enum DownloadTrackError {
     NotFound,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn download_track_id(
     db: Arc<Box<dyn Database>>,
     path: &str,
@@ -389,6 +391,7 @@ pub async fn download_track_id(
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 #[async_recursion]
 async fn download_track(
     db: Arc<Box<dyn Database>>,
@@ -472,6 +475,7 @@ pub enum DownloadTrackInnerError {
     Timeout(Option<u64>),
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn download_track_inner(
     db: Arc<Box<dyn Database>>,
     path: &str,
@@ -536,7 +540,7 @@ async fn download_track_inner(
         }
         moosicbox_files::files::track::TrackSource::Tidal { url, .. }
         | moosicbox_files::files::track::TrackSource::Qobuz { url, .. } => {
-            get_content_length(&url, start, None).await?
+            get_content_length(url, start, None).await?
         }
     };
 
@@ -679,6 +683,7 @@ pub enum DownloadAlbumError {
     NotFound,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn download_album_id(
     db: Arc<Box<dyn Database>>,
     path: &str,

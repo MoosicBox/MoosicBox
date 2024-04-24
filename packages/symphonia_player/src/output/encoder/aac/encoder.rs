@@ -59,11 +59,8 @@ impl AacEncoder {
             );
             self.rate.replace(spec.rate);
             self.duration.replace(duration);
-            self.resampler.replace(RwLock::new(Resampler::new(
-                spec.clone(),
-                44100_usize,
-                duration,
-            )));
+            self.resampler
+                .replace(RwLock::new(Resampler::new(*spec, 44100_usize, duration)));
         }
         self
     }
@@ -122,6 +119,12 @@ impl AacEncoder {
         } else {
             Ok(to_samples(decoded))
         }
+    }
+}
+
+impl Default for AacEncoder {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

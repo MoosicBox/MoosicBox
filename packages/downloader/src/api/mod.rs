@@ -127,7 +127,7 @@ pub async fn download_endpoint(
     let mut download_queue = queue.write().await;
 
     download_queue.add_tasks_to_queue(tasks).await;
-    let _ = download_queue.process();
+    download_queue.process();
 
     Ok(Json(serde_json::json!({"success": true})))
 }

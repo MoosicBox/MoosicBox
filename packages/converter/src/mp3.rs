@@ -56,8 +56,7 @@ pub fn encode_mp3(
     //use actual PCM data
     let interleaved = InterleavedPcm(input);
 
-    let mut mp3_out_buffer = Vec::new();
-    mp3_out_buffer.reserve(mp3lame_encoder::max_required_buffer_size(
+    let mut mp3_out_buffer = Vec::with_capacity(mp3lame_encoder::max_required_buffer_size(
         interleaved.0.len(),
     ));
     let encoded_size = encoder.encode(interleaved, mp3_out_buffer.spare_capacity_mut())?;

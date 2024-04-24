@@ -200,6 +200,7 @@ impl OpusWrite<'_> {
         let _ = std::fs::remove_file(path);
         let file = std::fs::OpenOptions::new()
             .create(true) // To create a new file
+            .truncate(true)
             .write(true)
             .open(path)
             .unwrap();

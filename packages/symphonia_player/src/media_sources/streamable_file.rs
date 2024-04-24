@@ -20,6 +20,7 @@ pub struct StreamableFile {
     read_position: usize,
     downloaded: RangeSet<usize>,
     requested: RangeSet<usize>,
+    #[allow(clippy::type_complexity)]
     receivers: Vec<(u128, Receiver<(usize, Vec<u8>)>)>,
 }
 
@@ -94,7 +95,7 @@ impl StreamableFile {
 
         // Remove completed receivers.
         self.receivers
-            .retain(|(id, _)| !completed_downloads.contains(&id));
+            .retain(|(id, _)| !completed_downloads.contains(id));
     }
 
     /// Determines if a chunk should be downloaded by getting

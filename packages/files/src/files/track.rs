@@ -99,21 +99,21 @@ pub enum TrackAudioQuality {
 impl MissingValue<TrackAudioQuality> for &moosicbox_database::Row {}
 impl ToValueType<TrackAudioQuality> for DatabaseValue {
     fn to_value_type(self) -> Result<TrackAudioQuality, ParseError> {
-        Ok(TrackAudioQuality::from_str(
+        TrackAudioQuality::from_str(
             self.as_str()
                 .ok_or_else(|| ParseError::ConvertType("TrackAudioQuality".into()))?,
         )
-        .map_err(|_| ParseError::ConvertType("TrackAudioQuality".into()))?)
+        .map_err(|_| ParseError::ConvertType("TrackAudioQuality".into()))
     }
 }
 
 impl ToValueType<TrackAudioQuality> for &serde_json::Value {
     fn to_value_type(self) -> Result<TrackAudioQuality, ParseError> {
-        Ok(TrackAudioQuality::from_str(
+        TrackAudioQuality::from_str(
             self.as_str()
                 .ok_or_else(|| ParseError::ConvertType("TrackAudioQuality".into()))?,
         )
-        .map_err(|_| ParseError::ConvertType("TrackAudioQuality".into()))?)
+        .map_err(|_| ParseError::ConvertType("TrackAudioQuality".into()))
     }
 }
 
@@ -200,7 +200,7 @@ pub async fn get_track_source(
                 "windows" => Ok(TrackSource::LocalFilePath {
                     path: Regex::new(r"/mnt/(\w+)")
                         .unwrap()
-                        .replace(&file, |caps: &Captures| {
+                        .replace(file, |caps: &Captures| {
                             format!("{}:", caps[1].to_uppercase())
                         })
                         .replace('/', "\\"),

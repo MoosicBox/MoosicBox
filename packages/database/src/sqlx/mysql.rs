@@ -25,6 +25,7 @@ trait ToParam {
 }
 
 impl<T: Expression + ?Sized> ToSql for T {
+    #[allow(clippy::too_many_lines)]
     fn to_sql(&self) -> String {
         match self.expression_type() {
             ExpressionType::Eq(value) => {
@@ -104,15 +105,12 @@ impl<T: Expression + ?Sized> ToSql for T {
                     format!("({} != {})", value.left.to_sql(), value.right.to_sql())
                 }
             }
-            ExpressionType::InList(value) => format!(
-                "{}",
-                value
-                    .values
-                    .iter()
-                    .map(|value| value.to_sql())
-                    .collect::<Vec<_>>()
-                    .join(",")
-            ),
+            ExpressionType::InList(value) => value
+                .values
+                .iter()
+                .map(|value| value.to_sql())
+                .collect::<Vec<_>>()
+                .join(","),
             ExpressionType::Coalesce(value) => format!(
                 "COALESCE({})",
                 value
@@ -125,19 +123,13 @@ impl<T: Expression + ?Sized> ToSql for T {
             ExpressionType::Literal(value) => value.value.to_string(),
             ExpressionType::Identifier(value) => value.value.clone(),
             ExpressionType::SelectQuery(value) => {
-                let joins = if let Some(joins) = &value.joins {
-                    joins
-                        .iter()
-                        .map(|x| x.to_sql())
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                } else {
-                    "".to_string()
-                };
+                let joins = value.joins.as_ref().map_or_else(String::new, |joins| {
+                    joins.iter().map(Join::to_sql).collect::<Vec<_>>().join(" ")
+                });
 
-                let where_clause = if let Some(filters) = &value.filters {
+                let where_clause = value.filters.as_ref().map_or_else(String::new, |filters| {
                     if filters.is_empty() {
-                        "".to_string()
+                        String::new()
                     } else {
                         format!(
                             "WHERE {}",
@@ -148,32 +140,26 @@ impl<T: Expression + ?Sized> ToSql for T {
                                 .join(" AND ")
                         )
                     }
-                } else {
-                    "".to_string()
-                };
+                });
 
-                let sort_clause = if let Some(sorts) = &value.sorts {
+                let sort_clause = value.sorts.as_ref().map_or_else(String::new, |sorts| {
                     if sorts.is_empty() {
-                        "".to_string()
+                        String::new()
                     } else {
                         format!(
                             "ORDER BY {}",
                             sorts
                                 .iter()
-                                .map(|x| x.to_sql())
+                                .map(Sort::to_sql)
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         )
                     }
-                } else {
-                    "".to_string()
-                };
+                });
 
-                let limit = if let Some(limit) = value.limit {
-                    format!("LIMIT {}", limit)
-                } else {
-                    "".to_string()
-                };
+                let limit = value
+                    .limit
+                    .map_or_else(String::new, |limit| format!("LIMIT {limit}"));
 
                 format!(
                     "SELECT {} {} FROM {} {} {} {} {}",
@@ -187,15 +173,15 @@ impl<T: Expression + ?Sized> ToSql for T {
                 )
             }
             ExpressionType::DatabaseValue(value) => match value {
-                DatabaseValue::Null => format!("NULL"),
-                DatabaseValue::BoolOpt(None) => format!("NULL"),
-                DatabaseValue::StringOpt(None) => format!("NULL"),
-                DatabaseValue::NumberOpt(None) => format!("NULL"),
-                DatabaseValue::UNumberOpt(None) => format!("NULL"),
-                DatabaseValue::RealOpt(None) => format!("NULL"),
-                DatabaseValue::Now => format!("NOW()"),
+                DatabaseValue::Null
+                | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::StringOpt(None)
+                | DatabaseValue::NumberOpt(None)
+                | DatabaseValue::UNumberOpt(None)
+                | DatabaseValue::RealOpt(None) => "NULL".to_string(),
+                DatabaseValue::Now => "NOW()".to_string(),
                 DatabaseValue::NowAdd(ref add) => format!("DATE_ADD(NOW(), {add}))"),
-                _ => format!("?"),
+                _ => "?".to_string(),
             },
         }
     }
@@ -234,7 +220,7 @@ pub enum SqlxDatabaseError {
 
 impl From<SqlxDatabaseError> for DatabaseError {
     fn from(value: SqlxDatabaseError) -> Self {
-        DatabaseError::MysqlSqlx(value)
+        Self::MysqlSqlx(value)
     }
 }
 
@@ -371,11 +357,11 @@ impl Database for MySqlSqlxDatabase {
     }
 }
 
-fn column_value(value: MySqlValueRef<'_>) -> Result<DatabaseValue, sqlx::Error> {
+fn column_value(value: &MySqlValueRef<'_>) -> Result<DatabaseValue, sqlx::Error> {
     if value.is_null() {
         return Ok(DatabaseValue::Null);
     }
-    let owned = sqlx::ValueRef::to_owned(&value);
+    let owned = sqlx::ValueRef::to_owned(value);
     match value.type_info().name() {
         "BOOL" => Ok(DatabaseValue::Bool(owned.try_decode()?)),
         "CHAR" | "SMALLINT" | "SMALLSERIAL" | "INT2" | "INT" | "SERIAL" | "INT4" | "BIGINT"
@@ -393,13 +379,13 @@ fn column_value(value: MySqlValueRef<'_>) -> Result<DatabaseValue, sqlx::Error> 
     }
 }
 
-fn from_row(column_names: &[String], row: MySqlRow) -> Result<crate::Row, SqlxDatabaseError> {
+fn from_row(column_names: &[String], row: &MySqlRow) -> Result<crate::Row, SqlxDatabaseError> {
     let mut columns = vec![];
 
     for column in column_names {
         columns.push((
             column.to_string(),
-            column_value(row.try_get_raw(column.as_str())?)?,
+            column_value(&row.try_get_raw(column.as_str())?)?,
         ));
     }
 
@@ -427,19 +413,19 @@ async fn update_and_get_row(
     );
 
     let all_values = values
-        .into_iter()
+        .iter()
         .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
-        .map(|x| x.into())
+        .map(std::convert::Into::into)
         .collect::<Vec<MySqlDatabaseValue>>();
     let mut all_filter_values = filters
         .map(|filters| {
             filters
-                .into_iter()
-                .flat_map(|value| value.params().unwrap_or(vec![]).into_iter().cloned())
-                .map(|x| x.into())
+                .iter()
+                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+                .map(std::convert::Into::into)
                 .collect::<Vec<MySqlDatabaseValue>>()
         })
-        .unwrap_or(vec![]);
+        .unwrap_or_default();
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());
@@ -465,7 +451,7 @@ async fn update_and_get_row(
     let mut stream = query.fetch(connection);
     let pg_row: Option<MySqlRow> = stream.next().await.transpose()?;
 
-    Ok(pg_row.map(|row| from_row(&column_names, row)).transpose()?)
+    pg_row.map(|row| from_row(&column_names, &row)).transpose()
 }
 
 async fn update_and_get_rows(
@@ -489,19 +475,19 @@ async fn update_and_get_rows(
     );
 
     let all_values = values
-        .into_iter()
+        .iter()
         .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
-        .map(|x| x.into())
+        .map(std::convert::Into::into)
         .collect::<Vec<MySqlDatabaseValue>>();
     let mut all_filter_values = filters
         .map(|filters| {
             filters
-                .into_iter()
-                .flat_map(|value| value.params().unwrap_or(vec![]).into_iter().cloned())
-                .map(|x| x.into())
+                .iter()
+                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+                .map(std::convert::Into::into)
                 .collect::<Vec<MySqlDatabaseValue>>()
         })
-        .unwrap_or(vec![]);
+        .unwrap_or_default();
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());
@@ -528,7 +514,7 @@ async fn update_and_get_rows(
 }
 
 fn build_join_clauses(joins: Option<&[Join]>) -> String {
-    if let Some(joins) = joins {
+    joins.map_or_else(String::new, |joins| {
         joins
             .iter()
             .map(|join| {
@@ -541,21 +527,17 @@ fn build_join_clauses(joins: Option<&[Join]>) -> String {
             })
             .collect::<Vec<_>>()
             .join(" ")
-    } else {
-        "".into()
-    }
+    })
 }
 
 fn build_where_clause(filters: Option<&[Box<dyn BooleanExpression>]>) -> String {
-    if let Some(filters) = filters {
+    filters.map_or_else(String::new, |filters| {
         if filters.is_empty() {
-            "".to_string()
+            String::new()
         } else {
             format!("WHERE {}", build_where_props(filters).join(" AND "))
         }
-    } else {
-        "".to_string()
-    }
+    })
 }
 
 fn build_where_props(filters: &[Box<dyn BooleanExpression>]) -> Vec<String> {
@@ -566,19 +548,17 @@ fn build_where_props(filters: &[Box<dyn BooleanExpression>]) -> Vec<String> {
 }
 
 fn build_sort_clause(sorts: Option<&[Sort]>) -> String {
-    if let Some(sorts) = sorts {
+    sorts.map_or_else(String::new, |sorts| {
         if sorts.is_empty() {
-            "".to_string()
+            String::new()
         } else {
             format!("ORDER BY {}", build_sort_props(sorts).join(", "))
         }
-    } else {
-        "".to_string()
-    }
+    })
 }
 
 fn build_sort_props(sorts: &[Sort]) -> Vec<String> {
-    sorts.iter().map(|sort| sort.to_sql()).collect()
+    sorts.iter().map(Sort::to_sql).collect()
 }
 
 fn build_update_where_clause(
@@ -601,20 +581,16 @@ fn build_update_where_clause(
 }
 
 fn build_update_limit_clause(limit: Option<usize>, query: Option<&str>) -> String {
-    if let Some(limit) = limit {
-        if let Some(query) = query {
+    limit.map_or_else(String::new, |limit| {
+        query.map_or_else(String::new, |query| {
             format!("rowid IN ({query} LIMIT {limit})")
-        } else {
-            "".into()
-        }
-    } else {
-        "".into()
-    }
+        })
+    })
 }
 
 fn build_set_clause(values: &[(&str, Box<dyn Expression>)]) -> String {
     if values.is_empty() {
-        "".to_string()
+        String::new()
     } else {
         format!("SET {}", build_set_props(values).join(", "))
     }
@@ -622,14 +598,14 @@ fn build_set_clause(values: &[(&str, Box<dyn Expression>)]) -> String {
 
 fn build_set_props(values: &[(&str, Box<dyn Expression>)]) -> Vec<String> {
     values
-        .into_iter()
+        .iter()
         .map(|(name, value)| format!("{name}={}", value.deref().to_param()))
         .collect()
 }
 
 fn build_values_clause(values: &[(&str, Box<dyn Expression>)]) -> String {
     if values.is_empty() {
-        "".to_string()
+        String::new()
     } else {
         format!("VALUES({})", build_values_props(values).join(", "))
     }
@@ -651,48 +627,35 @@ where
 {
     if let Some(values) = values {
         for value in values {
-            match value.deref() {
-                DatabaseValue::String(value) => {
+            match &**value {
+                DatabaseValue::String(value) | DatabaseValue::StringOpt(Some(value)) => {
                     query = query.bind(value);
                 }
-                DatabaseValue::StringOpt(Some(value)) => {
+                DatabaseValue::Null
+                | DatabaseValue::StringOpt(None)
+                | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::NumberOpt(None)
+                | DatabaseValue::UNumberOpt(None)
+                | DatabaseValue::RealOpt(None)
+                | DatabaseValue::Now => (),
+                DatabaseValue::Bool(value) | DatabaseValue::BoolOpt(Some(value)) => {
                     query = query.bind(value);
                 }
-                DatabaseValue::StringOpt(None) => (),
-                DatabaseValue::Bool(value) => {
-                    query = query.bind(value);
-                }
-                DatabaseValue::BoolOpt(Some(value)) => {
-                    query = query.bind(value);
-                }
-                DatabaseValue::BoolOpt(None) => (),
-                DatabaseValue::Number(value) => {
+                DatabaseValue::Number(value) | DatabaseValue::NumberOpt(Some(value)) => {
                     query = query.bind(*value);
                 }
-                DatabaseValue::NumberOpt(Some(value)) => {
+                DatabaseValue::UNumber(value) | DatabaseValue::UNumberOpt(Some(value)) => {
+                    query = query.bind(
+                        i64::try_from(*value).map_err(|_| SqlxDatabaseError::InvalidRequest)?,
+                    );
+                }
+                DatabaseValue::Real(value) | DatabaseValue::RealOpt(Some(value)) => {
                     query = query.bind(*value);
                 }
-                DatabaseValue::NumberOpt(None) => (),
-                DatabaseValue::UNumber(value) => {
-                    query = query.bind(*value as i64);
-                }
-                DatabaseValue::UNumberOpt(Some(value)) => {
-                    query = query.bind(*value as i64);
-                }
-                DatabaseValue::UNumberOpt(None) => (),
-                DatabaseValue::Real(value) => {
-                    query = query.bind(*value);
-                }
-                DatabaseValue::RealOpt(Some(value)) => {
-                    query = query.bind(*value);
-                }
-                DatabaseValue::RealOpt(None) => (),
                 DatabaseValue::NowAdd(_add) => (),
-                DatabaseValue::Now => (),
                 DatabaseValue::DateTime(value) => {
                     query = query.bind(value);
                 }
-                DatabaseValue::Null => (),
             }
         }
     }
@@ -706,7 +669,7 @@ async fn to_rows<'a>(
     let mut results = vec![];
 
     while let Some(row) = rows.next().await.transpose()? {
-        results.push(from_row(column_names, row)?);
+        results.push(from_row(column_names, &row)?);
     }
 
     log::trace!(
@@ -718,52 +681,53 @@ async fn to_rows<'a>(
     Ok(results)
 }
 
-fn to_values<'a>(values: &'a [(&str, DatabaseValue)]) -> Vec<MySqlDatabaseValue> {
+fn to_values(values: &[(&str, DatabaseValue)]) -> Vec<MySqlDatabaseValue> {
     values
-        .into_iter()
+        .iter()
         .map(|(_key, value)| value.clone())
-        .map(|x| x.into())
+        .map(std::convert::Into::into)
         .collect::<Vec<_>>()
 }
 
-fn exprs_to_values<'a>(values: &'a [(&str, Box<dyn Expression>)]) -> Vec<MySqlDatabaseValue> {
+fn exprs_to_values(values: &[(&str, Box<dyn Expression>)]) -> Vec<MySqlDatabaseValue> {
     values
-        .into_iter()
+        .iter()
         .flat_map(|value| value.1.values().into_iter())
         .flatten()
         .cloned()
-        .map(|x| x.into())
+        .map(std::convert::Into::into)
         .collect::<Vec<_>>()
 }
 
-fn bexprs_to_values<'a>(values: &'a [Box<dyn BooleanExpression>]) -> Vec<MySqlDatabaseValue> {
+fn bexprs_to_values(values: &[Box<dyn BooleanExpression>]) -> Vec<MySqlDatabaseValue> {
     values
-        .into_iter()
+        .iter()
         .flat_map(|value| value.values().into_iter())
         .flatten()
         .cloned()
-        .map(|x| x.into())
+        .map(std::convert::Into::into)
         .collect::<Vec<_>>()
 }
 
 #[allow(unused)]
 fn to_values_opt(values: Option<&[(&str, DatabaseValue)]>) -> Option<Vec<MySqlDatabaseValue>> {
-    values.map(|x| to_values(x))
+    values.map(to_values)
 }
 
 #[allow(unused)]
 fn exprs_to_values_opt(
     values: Option<&[(&str, Box<dyn Expression>)]>,
 ) -> Option<Vec<MySqlDatabaseValue>> {
-    values.map(|x| exprs_to_values(x))
+    values.map(exprs_to_values)
 }
 
 fn bexprs_to_values_opt(
     values: Option<&[Box<dyn BooleanExpression>]>,
 ) -> Option<Vec<MySqlDatabaseValue>> {
-    values.map(|x| bexprs_to_values(x))
+    values.map(bexprs_to_values)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn select(
     connection: &MySqlPool,
     table_name: &str,
@@ -781,16 +745,12 @@ async fn select(
         build_join_clauses(joins),
         build_where_clause(filters),
         build_sort_clause(sort),
-        if let Some(limit) = limit {
-            format!("LIMIT {limit}")
-        } else {
-            "".to_string()
-        }
+        limit.map_or_else(String::new, |limit| format!("LIMIT {limit}"))
     );
 
     log::trace!(
         "Running select query: {query} with params: {:?}",
-        filters.map(|f| f.iter().flat_map(|x| x.params()).collect::<Vec<_>>())
+        filters.map(|f| f.iter().filter_map(|x| x.params()).collect::<Vec<_>>())
     );
 
     let statement = connection.prepare(&query).await?;
@@ -815,16 +775,12 @@ async fn delete(
     let query = format!(
         "DELETE FROM {table_name} {} RETURNING * {}",
         build_where_clause(filters),
-        if let Some(limit) = limit {
-            format!("LIMIT {limit}")
-        } else {
-            "".to_string()
-        }
+        limit.map_or_else(String::new, |limit| format!("LIMIT {limit}"))
     );
 
     log::trace!(
         "Running delete query: {query} with params: {:?}",
-        filters.map(|f| f.iter().flat_map(|x| x.params()).collect::<Vec<_>>())
+        filters.map(|f| f.iter().filter_map(|x| x.params()).collect::<Vec<_>>())
     );
 
     let statement = connection.prepare(&query).await?;
@@ -867,7 +823,7 @@ async fn find_row(
 
     log::trace!(
         "Running find_row query: {query} with params: {:?}",
-        filters.map(|f| f.iter().flat_map(|x| x.params()).collect::<Vec<_>>())
+        filters.map(|f| f.iter().filter_map(|x| x.params()).collect::<Vec<_>>())
     );
 
     let filters = bexprs_to_values_opt(filters);
@@ -875,12 +831,12 @@ async fn find_row(
 
     let mut query = query.fetch(connection);
 
-    Ok(query
+    query
         .next()
         .await
         .transpose()?
-        .map(|row| from_row(&column_names, row))
-        .transpose()?)
+        .map(|row| from_row(&column_names, &row))
+        .transpose()
 }
 
 async fn insert_and_get_row(
@@ -889,7 +845,7 @@ async fn insert_and_get_row(
     values: &[(&str, Box<dyn Expression>)],
 ) -> Result<crate::Row, SqlxDatabaseError> {
     let column_names = values
-        .into_iter()
+        .iter()
         .map(|(key, _v)| format!("`{key}`"))
         .collect::<Vec<_>>()
         .join(", ");
@@ -910,7 +866,7 @@ async fn insert_and_get_row(
         "Running insert_and_get_row query: {query} with params: {:?}",
         values
             .iter()
-            .flat_map(|(_, x)| x.params())
+            .filter_map(|(_, x)| x.params())
             .collect::<Vec<_>>()
     );
 
@@ -919,14 +875,17 @@ async fn insert_and_get_row(
 
     let mut query = query.fetch(connection);
 
-    Ok(query
+    query
         .next()
         .await
         .transpose()?
-        .map(|row| from_row(&column_names, row))
-        .ok_or(SqlxDatabaseError::NoRow)??)
+        .map(|row| from_row(&column_names, &row))
+        .ok_or(SqlxDatabaseError::NoRow)?
 }
 
+/// # Errors
+///
+/// Will return `Err` if the update multi execution failed.
 pub async fn update_multi(
     connection: &MySqlPool,
     table_name: &str,
@@ -1021,28 +980,28 @@ async fn update_chunk(
     );
 
     let all_values = values
-        .into_iter()
-        .flat_map(|x| x.into_iter())
+        .iter()
+        .flat_map(std::iter::IntoIterator::into_iter)
         .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
-        .map(|x| x.into())
+        .map(std::convert::Into::into)
         .collect::<Vec<MySqlDatabaseValue>>();
     let mut all_filter_values = filters
         .as_ref()
         .map(|filters| {
             filters
-                .into_iter()
+                .iter()
                 .flat_map(|value| {
                     value
                         .params()
-                        .unwrap_or(vec![])
+                        .unwrap_or_default()
                         .into_iter()
                         .cloned()
                         .collect::<Vec<_>>()
                 })
-                .map(|x| x.into())
+                .map(std::convert::Into::into)
                 .collect::<Vec<MySqlDatabaseValue>>()
         })
-        .unwrap_or(vec![]);
+        .unwrap_or_default();
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());
@@ -1067,6 +1026,9 @@ async fn update_chunk(
     to_rows(&column_names, query.fetch(connection)).await
 }
 
+/// # Errors
+///
+/// Will return `Err` if the upsert multi execution failed.
 pub async fn upsert_multi(
     connection: &MySqlPool,
     table_name: &str,
@@ -1132,8 +1094,8 @@ async fn upsert_chunk(
         .join(", ");
 
     let values_str_list = values
-        .into_iter()
-        .map(|v| format!("({})", build_values_props(&v).join(", ")))
+        .iter()
+        .map(|v| format!("({})", build_values_props(v).join(", ")))
         .collect::<Vec<_>>();
 
     let values_str = values_str_list.join(", ");
@@ -1154,10 +1116,10 @@ async fn upsert_chunk(
     );
 
     let all_values = &values
-        .into_iter()
-        .flat_map(|x| x.into_iter())
+        .iter()
+        .flat_map(std::iter::IntoIterator::into_iter)
         .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
-        .map(|x| x.into())
+        .map(std::convert::Into::into)
         .collect::<Vec<MySqlDatabaseValue>>();
 
     log::trace!(
@@ -1172,7 +1134,7 @@ async fn upsert_chunk(
         .map(|x| x.name().to_string())
         .collect::<Vec<_>>();
 
-    let query = bind_values(statement.query(), Some(&all_values))?;
+    let query = bind_values(statement.query(), Some(all_values))?;
 
     to_rows(&column_names, query.fetch(connection)).await
 }
@@ -1203,7 +1165,7 @@ async fn upsert_and_get_row(
 ) -> Result<crate::Row, SqlxDatabaseError> {
     match find_row(connection, table_name, false, &["*"], filters, None, None).await? {
         Some(row) => {
-            let updated = update_and_get_row(connection, table_name, &values, filters, limit)
+            let updated = update_and_get_row(connection, table_name, values, filters, limit)
                 .await?
                 .unwrap();
 
@@ -1227,7 +1189,7 @@ pub struct MySqlDatabaseValue(DatabaseValue);
 
 impl From<DatabaseValue> for MySqlDatabaseValue {
     fn from(value: DatabaseValue) -> Self {
-        MySqlDatabaseValue(value)
+        Self(value)
     }
 }
 
@@ -1249,6 +1211,6 @@ impl Expression for MySqlDatabaseValue {
     }
 
     fn expression_type(&self) -> crate::ExpressionType {
-        ExpressionType::DatabaseValue(self.deref())
+        ExpressionType::DatabaseValue(self)
     }
 }

@@ -795,7 +795,7 @@ pub fn search_global_search_index(
     // only in the top 10. Keeping track of our top 10 best documents
     // is the role of the `TopDocs` collector.
 
-    let global_search_query = construct_global_search_query(&query, &index, &schema);
+    let global_search_query = construct_global_search_query(&query, index, &schema);
 
     // We can now perform our query.
     let top_docs = searcher.search(

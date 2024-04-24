@@ -181,9 +181,8 @@ pub async fn fetch_signature_token(
         .send()
         .await?;
 
-    match response.status() {
-        reqwest::StatusCode::UNAUTHORIZED => return Err(FetchSignatureError::Unauthorized),
-        _ => {}
+    if let reqwest::StatusCode::UNAUTHORIZED = response.status() {
+        return Err(FetchSignatureError::Unauthorized);
     }
 
     Ok(response.json::<Value>().await?.to_value("token")?)

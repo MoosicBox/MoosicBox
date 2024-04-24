@@ -59,7 +59,7 @@ impl From<&ProgressEvent> for ApiProgressEvent {
             },
             ProgressEvent::State { task, state } => Self::State {
                 task_id: task.id,
-                state: state.clone().into(),
+                state: (*state).into(),
             },
         }
     }
@@ -96,11 +96,11 @@ pub enum ApiDownloadTaskState {
 
 impl ToValueType<ApiDownloadTaskState> for &serde_json::Value {
     fn to_value_type(self) -> Result<ApiDownloadTaskState, ParseError> {
-        Ok(ApiDownloadTaskState::from_str(
+        ApiDownloadTaskState::from_str(
             self.as_str()
                 .ok_or_else(|| ParseError::ConvertType("ApiDownloadTaskState".into()))?,
         )
-        .map_err(|_| ParseError::ConvertType("ApiDownloadTaskState".into()))?)
+        .map_err(|_| ParseError::ConvertType("ApiDownloadTaskState".into()))
     }
 }
 
@@ -136,11 +136,11 @@ impl From<DownloadApiSource> for ApiDownloadApiSource {
 
 impl ToValueType<ApiDownloadApiSource> for &serde_json::Value {
     fn to_value_type(self) -> Result<ApiDownloadApiSource, ParseError> {
-        Ok(ApiDownloadApiSource::from_str(
+        ApiDownloadApiSource::from_str(
             self.as_str()
                 .ok_or_else(|| ParseError::ConvertType("ApiDownloadApiSource".into()))?,
         )
-        .map_err(|_| ParseError::ConvertType("ApiDownloadApiSource".into()))?)
+        .map_err(|_| ParseError::ConvertType("ApiDownloadApiSource".into()))
     }
 }
 
@@ -409,13 +409,8 @@ fn calc_progress_for_task(mut task: ApiDownloadTask) -> ApiDownloadTask {
 
     if let Some(total_bytes) = task.total_bytes {
         task.progress = 100.0_f64.min((task.bytes as f64) / (total_bytes as f64) * 100.0);
-    } else {
-        match task.state {
-            ApiDownloadTaskState::Finished => {
-                task.progress = 100.0;
-            }
-            _ => {}
-        }
+    } else if let ApiDownloadTaskState::Finished = task.state {
+        task.progress = 100.0;
     }
 
     task

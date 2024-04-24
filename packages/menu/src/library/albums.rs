@@ -53,7 +53,7 @@ pub struct AlbumFilters {
 }
 
 pub fn filter_albums<'a>(
-    albums: &'a Vec<LibraryAlbum>,
+    albums: &'a [LibraryAlbum],
     request: &'a AlbumsRequest,
 ) -> impl Iterator<Item = &'a LibraryAlbum> {
     albums

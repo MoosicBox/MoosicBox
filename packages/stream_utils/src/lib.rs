@@ -81,9 +81,9 @@ impl ByteStream {
     }
 }
 
-impl Into<StalledReadMonitor<Result<Bytes, std::io::Error>, ByteStream>> for ByteStream {
-    fn into(self) -> StalledReadMonitor<Result<Bytes, std::io::Error>, ByteStream> {
-        StalledReadMonitor::new(self)
+impl From<ByteStream> for StalledReadMonitor<Result<Bytes, std::io::Error>, ByteStream> {
+    fn from(val: ByteStream) -> Self {
+        StalledReadMonitor::new(val)
     }
 }
 
@@ -137,11 +137,9 @@ impl<T: Clone> TypedWriter<T> {
                     remove.insert(0, i);
                 }
                 break;
-            } else {
-                if sender.send(buf.clone()).is_err() {
-                    log::debug!("Receiver has disconnected. Removing sender.");
-                    remove.insert(0, i);
-                }
+            } else if sender.send(buf.clone()).is_err() {
+                log::debug!("Receiver has disconnected. Removing sender.");
+                remove.insert(0, i);
             }
         }
         for i in remove {
@@ -168,9 +166,9 @@ impl<T> TypedStream<T> {
     }
 }
 
-impl<T> Into<StalledReadMonitor<T, TypedStream<T>>> for TypedStream<T> {
-    fn into(self) -> StalledReadMonitor<T, TypedStream<T>> {
-        StalledReadMonitor::new(self)
+impl<T> From<TypedStream<T>> for StalledReadMonitor<T, TypedStream<T>> {
+    fn from(val: TypedStream<T>) -> Self {
+        StalledReadMonitor::new(val)
     }
 }
 

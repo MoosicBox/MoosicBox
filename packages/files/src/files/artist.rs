@@ -204,7 +204,7 @@ pub async fn get_library_artist_cover(
             get_artist_cover(ArtistId::Tidal(tidal_id), db.clone(), None).await
         {
             log::debug!("Found Tidal artist cover");
-            return Ok(copy_streaming_cover_to_local(db.clone(), artist.id, cover).await?);
+            return copy_streaming_cover_to_local(db.clone(), artist.id, cover).await;
         }
     }
 
@@ -214,14 +214,14 @@ pub async fn get_library_artist_cover(
             get_artist_cover(ArtistId::Qobuz(qobuz_id), db.clone(), None).await
         {
             log::debug!("Found Qobuz artist cover");
-            return Ok(copy_streaming_cover_to_local(db, artist.id, cover).await?);
+            return copy_streaming_cover_to_local(db, artist.id, cover).await;
         }
     }
 
     log::debug!("No artist covers found");
-    return Err(ArtistCoverError::NotFound(ArtistId::Library(
+    Err(ArtistCoverError::NotFound(ArtistId::Library(
         library_artist_id,
-    )));
+    )))
 }
 
 pub async fn get_library_artist_cover_bytes(
@@ -265,9 +265,9 @@ pub async fn get_library_artist_cover_bytes(
         }
     }
 
-    return Err(ArtistCoverError::NotFound(ArtistId::Library(
+    Err(ArtistCoverError::NotFound(ArtistId::Library(
         library_artist_id,
-    )));
+    )))
 }
 
 struct ArtistCoverRequest {

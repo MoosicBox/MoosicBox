@@ -281,7 +281,7 @@ pub async fn update_playback_endpoint(
         Some(
             get_track_or_ids_from_track_id_ranges(
                 &**data.database,
-                &track_ids,
+                track_ids,
                 query.source,
                 query.host.as_deref(),
             )

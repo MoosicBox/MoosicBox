@@ -61,13 +61,13 @@ async fn get_db_config() -> Result<(String, String, String, Option<String>), Ini
             let client = Client::new(&config);
 
             let ssm_db_name_param_name = std::env::var("SSM_DB_NAME_PARAM_NAME")
-                .unwrap_or("moosicbox_server_db_name".to_string());
+                .unwrap_or_else(|_| "moosicbox_server_db_name".to_string());
             let ssm_db_host_param_name = std::env::var("SSM_DB_HOST_PARAM_NAME")
-                .unwrap_or("moosicbox_server_db_hostname".to_string());
+                .unwrap_or_else(|_| "moosicbox_server_db_hostname".to_string());
             let ssm_db_user_param_name = std::env::var("SSM_DB_USER_PARAM_NAME")
-                .unwrap_or("moosicbox_server_db_user".to_string());
+                .unwrap_or_else(|_| "moosicbox_server_db_user".to_string());
             let ssm_db_password_param_name = std::env::var("SSM_DB_PASSWORD_PARAM_NAME")
-                .unwrap_or("moosicbox_server_db_password".to_string());
+                .unwrap_or_else(|_| "moosicbox_server_db_password".to_string());
 
             let ssm_db_name_param_name = ssm_db_name_param_name.as_str();
             let ssm_db_host_param_name = ssm_db_host_param_name.as_str();
@@ -101,8 +101,7 @@ async fn get_db_config() -> Result<(String, String, String, Option<String>), Ini
             let password = params
                 .get(ssm_db_password_param_name)
                 .cloned()
-                .expect("No db_password")
-                .to_string();
+                .expect("No db_password");
 
             let password = if password.is_empty() {
                 None
@@ -114,18 +113,15 @@ async fn get_db_config() -> Result<(String, String, String, Option<String>), Ini
                 params
                     .get(ssm_db_host_param_name)
                     .cloned()
-                    .expect("No hostname")
-                    .to_string(),
+                    .expect("No hostname"),
                 params
                     .get(ssm_db_name_param_name)
                     .cloned()
-                    .expect("No db_name")
-                    .to_string(),
+                    .expect("No db_name"),
                 params
                     .get(ssm_db_user_param_name)
                     .cloned()
-                    .expect("No db_user")
-                    .to_string(),
+                    .expect("No db_user"),
                 password,
             )
         },

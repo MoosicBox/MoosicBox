@@ -40,7 +40,7 @@ pub enum DbError {
 impl From<DbError> for actix_web::Error {
     fn from(err: DbError) -> Self {
         log::error!("{err:?}");
-        ErrorInternalServerError(format!("Database error"))
+        ErrorInternalServerError("Database error".to_string())
     }
 }
 
@@ -524,8 +524,7 @@ pub async fn get_artists(db: &dyn Database) -> Result<Vec<LibraryArtist>, DbErro
 }
 
 pub async fn get_albums(db: &dyn Database) -> Result<Vec<LibraryAlbum>, DbError> {
-    Ok(db
-        .select("albums")
+    db.select("albums")
         .distinct()
         .columns(&[
             "albums.*",
@@ -549,7 +548,7 @@ pub async fn get_albums(db: &dyn Database) -> Result<Vec<LibraryAlbum>, DbError>
         ])
         .execute(db)
         .await?
-        .as_model_mapped()?)
+        .as_model_mapped()
 }
 
 pub async fn get_all_album_version_qualities(
@@ -635,7 +634,7 @@ pub async fn get_artist<Id: Into<Box<dyn Expression>>>(
 ) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
         .select("artists")
-        .where_eq(format!("{column}"), id.into())
+        .where_eq(column.to_string(), id.into())
         .execute_first(db)
         .await?
         .as_ref()
@@ -778,8 +777,7 @@ pub async fn get_artist_albums(
     db: &dyn Database,
     artist_id: i32,
 ) -> Result<Vec<LibraryAlbum>, DbError> {
-    Ok(db
-        .select("albums")
+    db.select("albums")
         .distinct()
         .columns(&[
             "albums.*",
@@ -800,7 +798,7 @@ pub async fn get_artist_albums(
         .sort("albums.id", SortDirection::Desc)
         .execute(db)
         .await?
-        .as_model_mapped()?)
+        .as_model_mapped()
 }
 
 #[derive(Debug, Clone)]

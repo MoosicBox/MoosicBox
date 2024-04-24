@@ -337,7 +337,7 @@ impl Player {
                     PlayerError::AlbumFetchFailed(album_id)
                 })?
                 .into_iter()
-                .map(|t| Track::Library(t))
+                .map(Track::Library)
                 .map(Box::new)
                 .map(TrackOrId::Track)
                 .collect()
@@ -1068,7 +1068,7 @@ impl Player {
                         .with_hint(hint);
                 }
                 #[allow(unreachable_patterns)]
-                _ | AudioFormat::Source => {}
+                _ => {}
             }
 
             let file = tokio::fs::File::open(path.to_path_buf()).await?;

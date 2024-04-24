@@ -61,11 +61,7 @@ pub trait Expression: Send + Sync + Debug {
             x.into_iter()
                 .filter(|value| {
                     !value.is_null()
-                        && match value {
-                            DatabaseValue::Now => false,
-                            DatabaseValue::NowAdd(_) => false,
-                            _ => true,
-                        }
+                        && !matches!(value, DatabaseValue::Now | DatabaseValue::NowAdd(_))
                 })
                 .collect::<Vec<_>>()
         })
@@ -85,25 +81,23 @@ pub struct Literal {
     pub value: String,
 }
 
-impl Into<Literal> for &str {
-    fn into(self) -> Literal {
-        Literal {
-            value: self.to_string(),
+impl From<&str> for Literal {
+    fn from(val: &str) -> Self {
+        Self {
+            value: val.to_string(),
         }
     }
 }
 
-impl Into<Literal> for String {
-    fn into(self) -> Literal {
-        Literal {
-            value: self.clone(),
-        }
+impl From<String> for Literal {
+    fn from(val: String) -> Self {
+        Self { value: val }
     }
 }
 
-impl Into<Box<dyn Expression>> for Literal {
-    fn into(self) -> Box<dyn Expression> {
-        Box::new(self)
+impl From<Literal> for Box<dyn Expression> {
+    fn from(val: Literal) -> Self {
+        Box::new(val)
     }
 }
 
@@ -113,6 +107,7 @@ impl Expression for Literal {
     }
 }
 
+#[must_use]
 pub fn literal(value: &str) -> Literal {
     Literal {
         value: value.to_string(),
@@ -124,25 +119,23 @@ pub struct Identifier {
     pub value: String,
 }
 
-impl Into<Identifier> for &str {
-    fn into(self) -> Identifier {
-        Identifier {
-            value: self.to_string(),
+impl From<&str> for Identifier {
+    fn from(val: &str) -> Self {
+        Self {
+            value: val.to_string(),
         }
     }
 }
 
-impl Into<Identifier> for String {
-    fn into(self) -> Identifier {
-        Identifier {
-            value: self.clone(),
-        }
+impl From<String> for Identifier {
+    fn from(val: String) -> Self {
+        Self { value: val }
     }
 }
 
-impl Into<Box<dyn Expression>> for Identifier {
-    fn into(self) -> Box<dyn Expression> {
-        Box::new(self)
+impl From<Identifier> for Box<dyn Expression> {
+    fn from(val: Identifier) -> Self {
+        Box::new(val)
     }
 }
 
@@ -152,6 +145,7 @@ impl Expression for Identifier {
     }
 }
 
+#[must_use]
 pub fn identifier(value: &str) -> Identifier {
     Identifier {
         value: value.to_string(),
@@ -168,15 +162,15 @@ impl Expression for DatabaseValue {
     }
 
     fn is_null(&self) -> bool {
-        match self {
-            DatabaseValue::Null => true,
-            DatabaseValue::BoolOpt(None) => true,
-            DatabaseValue::RealOpt(None) => true,
-            DatabaseValue::StringOpt(None) => true,
-            DatabaseValue::NumberOpt(None) => true,
-            DatabaseValue::UNumberOpt(None) => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            Self::Null
+                | Self::BoolOpt(None)
+                | Self::RealOpt(None)
+                | Self::StringOpt(None)
+                | Self::NumberOpt(None)
+                | Self::UNumberOpt(None)
+        )
     }
 }
 
@@ -358,8 +352,8 @@ impl Expression for In<'_> {
 
     fn values(&self) -> Option<Vec<&DatabaseValue>> {
         let values = [
-            self.left.values().unwrap_or(vec![]),
-            self.values.values().unwrap_or(vec![]),
+            self.left.values().unwrap_or_default(),
+            self.values.values().unwrap_or_default(),
         ]
         .concat();
 
@@ -447,15 +441,18 @@ where
     }
 }
 
+#[must_use]
 pub fn where_and(conditions: Vec<Box<dyn BooleanExpression>>) -> And {
     And { conditions }
 }
 
+#[must_use]
 pub fn where_or(conditions: Vec<Box<dyn BooleanExpression>>) -> Or {
     Or { conditions }
 }
 
-pub fn join<'a>(table_name: &'a str, on: &'a str) -> Join<'a> {
+#[must_use]
+pub const fn join<'a>(table_name: &'a str, on: &'a str) -> Join<'a> {
     Join {
         table_name,
         on,
@@ -463,7 +460,8 @@ pub fn join<'a>(table_name: &'a str, on: &'a str) -> Join<'a> {
     }
 }
 
-pub fn left_join<'a>(table_name: &'a str, on: &'a str) -> Join<'a> {
+#[must_use]
+pub const fn left_join<'a>(table_name: &'a str, on: &'a str) -> Join<'a> {
     Join {
         table_name,
         on,
@@ -486,7 +484,7 @@ impl Expression for Coalesce {
         let values = self
             .values
             .iter()
-            .flat_map(|x| x.values().unwrap_or(vec![]))
+            .flat_map(|x| x.values().unwrap_or_default())
             .collect::<Vec<_>>();
 
         if values.is_empty() {
@@ -497,7 +495,8 @@ impl Expression for Coalesce {
     }
 }
 
-pub fn coalesce<'a>(values: Vec<Box<dyn Expression>>) -> Coalesce {
+#[must_use]
+pub fn coalesce(values: Vec<Box<dyn Expression>>) -> Coalesce {
     Coalesce { values }
 }
 
@@ -516,7 +515,7 @@ impl Expression for InList {
         let values = self
             .values
             .iter()
-            .flat_map(|x| x.values().unwrap_or(vec![]))
+            .flat_map(|x| x.values().unwrap_or_default())
             .collect::<Vec<_>>();
 
         if values.is_empty() {
@@ -529,13 +528,13 @@ impl Expression for InList {
 
 pub trait List: Expression {}
 
-impl<T> Into<Box<dyn List>> for Vec<T>
+impl<T> From<Vec<T>> for Box<dyn List>
 where
     T: Into<Box<dyn Expression>> + Send + Sync,
 {
-    fn into(self) -> Box<dyn List> {
+    fn from(val: Vec<T>) -> Self {
         Box::new(InList {
-            values: self.into_iter().map(|x| x.into()).collect(),
+            values: val.into_iter().map(std::convert::Into::into).collect(),
         })
     }
 }
@@ -561,20 +560,24 @@ macro_rules! boxed {
     );
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub trait FilterableQuery
 where
     Self: Sized,
 {
+    #[must_use]
     fn filters(self, filters: Vec<Box<dyn BooleanExpression>>) -> Self {
         let mut this = self;
-        for filter in filters.into_iter() {
-            this = this.filter(filter)
+        for filter in filters {
+            this = this.filter(filter);
         }
         this
     }
 
+    #[must_use]
     fn filter(self, filter: Box<dyn BooleanExpression>) -> Self;
 
+    #[must_use]
     fn filter_if_some<T: BooleanExpression + 'static>(self, filter: Option<T>) -> Self {
         if let Some(filter) = filter {
             self.filter(Box::new(filter))
@@ -583,6 +586,7 @@ where
         }
     }
 
+    #[must_use]
     fn where_in<L, V>(self, left: L, values: V) -> Self
     where
         L: Into<Identifier>,
@@ -591,14 +595,17 @@ where
         self.filter(Box::new(where_in(left, values)))
     }
 
+    #[must_use]
     fn where_and(self, conditions: Vec<Box<dyn BooleanExpression>>) -> Self {
         self.filter(Box::new(where_and(conditions)))
     }
 
+    #[must_use]
     fn where_or(self, conditions: Vec<Box<dyn BooleanExpression>>) -> Self {
         self.filter(Box::new(where_or(conditions)))
     }
 
+    #[must_use]
     fn where_eq<L, R>(self, left: L, right: R) -> Self
     where
         L: Into<Identifier>,
@@ -607,6 +614,7 @@ where
         self.filter(Box::new(where_eq(left, right)))
     }
 
+    #[must_use]
     fn where_not_eq<L, R>(self, left: L, right: R) -> Self
     where
         L: Into<Identifier>,
@@ -615,6 +623,7 @@ where
         self.filter(Box::new(where_not_eq(left, right)))
     }
 
+    #[must_use]
     fn where_gt<L, R>(self, left: L, right: R) -> Self
     where
         L: Into<Identifier>,
@@ -623,6 +632,7 @@ where
         self.filter(Box::new(where_gt(left, right)))
     }
 
+    #[must_use]
     fn where_gte<L, R>(self, left: L, right: R) -> Self
     where
         L: Into<Identifier>,
@@ -631,6 +641,7 @@ where
         self.filter(Box::new(where_gte(left, right)))
     }
 
+    #[must_use]
     fn where_lt<L, R>(self, left: L, right: R) -> Self
     where
         L: Into<Identifier>,
@@ -639,6 +650,7 @@ where
         self.filter(Box::new(where_lt(left, right)))
     }
 
+    #[must_use]
     fn where_lte<L, R>(self, left: L, right: R) -> Self
     where
         L: Into<Identifier>,
@@ -648,12 +660,13 @@ where
     }
 }
 
-impl<'a> Into<Box<dyn List + 'a>> for SelectQuery<'a> {
-    fn into(self) -> Box<dyn List + 'a> {
-        Box::new(self)
+impl<'a> From<SelectQuery<'a>> for Box<dyn List + 'a> {
+    fn from(val: SelectQuery<'a>) -> Self {
+        Box::new(val)
     }
 }
 
+#[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct SelectQuery<'a> {
     pub table_name: &'a str,
@@ -676,31 +689,31 @@ impl Expression for SelectQuery<'_> {
             .joins
             .as_ref()
             .map(|x| {
-                x.into_iter()
-                    .flat_map(|j| j.values().unwrap_or(vec![]))
-                    .collect()
+                x.iter()
+                    .flat_map(|j| j.values().unwrap_or_default())
+                    .collect::<Vec<_>>()
             })
-            .unwrap_or(vec![]);
+            .unwrap_or_default();
         let filters_values = self
             .filters
             .as_ref()
             .map(|x| {
-                x.into_iter()
-                    .flat_map(|j| j.values().unwrap_or(vec![]))
-                    .collect()
+                x.iter()
+                    .flat_map(|j| j.values().unwrap_or_default())
+                    .collect::<Vec<_>>()
             })
-            .unwrap_or(vec![]);
+            .unwrap_or_default();
         let sorts_values = self
             .sorts
             .as_ref()
             .map(|x| {
-                x.into_iter()
-                    .flat_map(|j| j.values().unwrap_or(vec![]))
-                    .collect()
+                x.iter()
+                    .flat_map(|j| j.values().unwrap_or_default())
+                    .collect::<Vec<_>>()
             })
-            .unwrap_or(vec![]);
+            .unwrap_or_default();
 
-        let values = [joins_values, filters_values, sorts_values].concat();
+        let values: Vec<_> = [joins_values, filters_values, sorts_values].concat();
 
         if values.is_empty() {
             None
@@ -710,7 +723,8 @@ impl Expression for SelectQuery<'_> {
     }
 }
 
-pub fn select<'a>(table_name: &'a str) -> SelectQuery<'a> {
+#[must_use]
+pub fn select(table_name: &str) -> SelectQuery<'_> {
     SelectQuery {
         table_name,
         distinct: false,
@@ -734,18 +748,21 @@ impl FilterableQuery for SelectQuery<'_> {
 }
 
 impl<'a> SelectQuery<'a> {
-    pub fn distinct(mut self) -> Self {
+    #[must_use]
+    pub const fn distinct(mut self) -> Self {
         self.distinct = true;
         self
     }
 
-    pub fn columns(mut self, columns: &'a [&'a str]) -> Self {
+    #[must_use]
+    pub const fn columns(mut self, columns: &'a [&'a str]) -> Self {
         self.columns = columns;
         self
     }
 
+    #[must_use]
     pub fn joins(mut self, joins: Vec<Join<'a>>) -> Self {
-        for join in joins.into_iter() {
+        for join in joins {
             if let Some(ref mut joins) = self.joins {
                 joins.push(join);
             } else {
@@ -755,6 +772,7 @@ impl<'a> SelectQuery<'a> {
         self
     }
 
+    #[must_use]
     pub fn join(mut self, table_name: &'a str, on: &'a str) -> Self {
         if let Some(ref mut joins) = self.joins {
             joins.push(join(table_name, on));
@@ -764,8 +782,9 @@ impl<'a> SelectQuery<'a> {
         self
     }
 
+    #[must_use]
     pub fn left_joins(mut self, left_joins: Vec<Join<'a>>) -> Self {
-        for left_join in left_joins.into_iter() {
+        for left_join in left_joins {
             if let Some(ref mut left_joins) = self.joins {
                 left_joins.push(left_join);
             } else {
@@ -775,6 +794,7 @@ impl<'a> SelectQuery<'a> {
         self
     }
 
+    #[must_use]
     pub fn left_join(mut self, table_name: &'a str, on: &'a str) -> Self {
         if let Some(ref mut left_joins) = self.joins {
             left_joins.push(left_join(table_name, on));
@@ -784,8 +804,9 @@ impl<'a> SelectQuery<'a> {
         self
     }
 
+    #[must_use]
     pub fn sorts(mut self, sorts: Vec<Sort>) -> Self {
-        for sort in sorts.into_iter() {
+        for sort in sorts {
             if let Some(ref mut sorts) = self.sorts {
                 sorts.push(sort);
             } else {
@@ -795,6 +816,7 @@ impl<'a> SelectQuery<'a> {
         self
     }
 
+    #[must_use]
     pub fn sort<T>(mut self, expression: T, direction: SortDirection) -> Self
     where
         T: Into<Identifier>,
@@ -807,15 +829,22 @@ impl<'a> SelectQuery<'a> {
         self
     }
 
+    #[must_use]
     pub fn limit(mut self, limit: usize) -> Self {
         self.limit.replace(limit);
         self
     }
 
+    /// # Errors
+    ///
+    /// Will return `Err` if the select query execution failed.
     pub async fn execute(self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
         db.query(&self).await
     }
 
+    /// # Errors
+    ///
+    /// Will return `Err` if the select query execution failed.
     pub async fn execute_first(self, db: &dyn Database) -> Result<Option<Row>, DatabaseError> {
         let this = if self.limit.is_none() {
             self.limit(1)
@@ -833,7 +862,8 @@ pub struct UpsertMultiStatement<'a> {
     pub unique: Option<Vec<Box<dyn Expression>>>,
 }
 
-pub fn upsert_multi<'a>(table_name: &'a str) -> UpsertMultiStatement<'a> {
+#[must_use]
+pub fn upsert_multi(table_name: &str) -> UpsertMultiStatement<'_> {
     UpsertMultiStatement {
         table_name,
         values: vec![],
@@ -856,11 +886,18 @@ impl<'a> UpsertMultiStatement<'a> {
     }
 
     pub fn unique(&mut self, unique: Vec<Box<dyn Expression>>) -> &mut Self {
-        self.unique
-            .replace(unique.into_iter().map(|x| x.into()).collect::<Vec<_>>());
+        self.unique.replace(
+            unique
+                .into_iter()
+                .map(std::convert::Into::into)
+                .collect::<Vec<_>>(),
+        );
         self
     }
 
+    /// # Errors
+    ///
+    /// Will return `Err` if the upsert multi execution failed.
     pub async fn execute(&mut self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
         db.exec_upsert_multi(self).await
     }
@@ -871,7 +908,8 @@ pub struct InsertStatement<'a> {
     pub values: Vec<(&'a str, Box<dyn Expression>)>,
 }
 
-pub fn insert<'a>(table_name: &'a str) -> InsertStatement<'a> {
+#[must_use]
+pub fn insert(table_name: &str) -> InsertStatement<'_> {
     InsertStatement {
         table_name,
         values: vec![],
@@ -879,18 +917,23 @@ pub fn insert<'a>(table_name: &'a str) -> InsertStatement<'a> {
 }
 
 impl<'a> InsertStatement<'a> {
+    #[must_use]
     pub fn values<T: Into<Box<dyn Expression>>>(mut self, values: Vec<(&'a str, T)>) -> Self {
-        for value in values.into_iter() {
+        for value in values {
             self.values.push((value.0, value.1.into()));
         }
         self
     }
 
+    #[must_use]
     pub fn value<T: Into<Box<dyn Expression>>>(mut self, name: &'a str, value: T) -> Self {
         self.values.push((name, value.into()));
         self
     }
 
+    /// # Errors
+    ///
+    /// Will return `Err` if the insert execution failed.
     pub async fn execute(&self, db: &dyn Database) -> Result<Row, DatabaseError> {
         db.exec_insert(self).await
     }
@@ -904,7 +947,8 @@ pub struct UpdateStatement<'a> {
     pub limit: Option<usize>,
 }
 
-pub fn update<'a>(table_name: &'a str) -> UpdateStatement<'a> {
+#[must_use]
+pub fn update(table_name: &str) -> UpdateStatement<'_> {
     UpdateStatement {
         table_name,
         values: vec![],
@@ -926,32 +970,42 @@ impl FilterableQuery for UpdateStatement<'_> {
 }
 
 impl<'a> UpdateStatement<'a> {
+    #[must_use]
     pub fn values<T: Into<Box<dyn Expression>>>(mut self, values: Vec<(&'a str, T)>) -> Self {
-        for value in values.into_iter() {
+        for value in values {
             self.values.push((value.0, value.1.into()));
         }
         self
     }
 
+    #[must_use]
     pub fn value<T: Into<Box<dyn Expression>>>(mut self, name: &'a str, value: T) -> Self {
         self.values.push((name, value.into()));
         self
     }
 
+    #[must_use]
     pub fn unique(mut self, unique: &'a [&'a str]) -> Self {
         self.unique.replace(unique);
         self
     }
 
+    #[must_use]
     pub fn limit(mut self, limit: usize) -> Self {
         self.limit.replace(limit);
         self
     }
 
+    /// # Errors
+    ///
+    /// Will return `Err` if the update execution failed.
     pub async fn execute(&self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
         db.exec_update(self).await
     }
 
+    /// # Errors
+    ///
+    /// Will return `Err` if the update execution failed.
     pub async fn execute_first(&self, db: &dyn Database) -> Result<Option<Row>, DatabaseError> {
         db.exec_update_first(self).await
     }
@@ -965,7 +1019,8 @@ pub struct UpsertStatement<'a> {
     pub limit: Option<usize>,
 }
 
-pub fn upsert<'a>(table_name: &'a str) -> UpsertStatement<'a> {
+#[must_use]
+pub fn upsert(table_name: &str) -> UpsertStatement<'_> {
     UpsertStatement {
         table_name,
         values: vec![],
@@ -987,32 +1042,42 @@ impl FilterableQuery for UpsertStatement<'_> {
 }
 
 impl<'a> UpsertStatement<'a> {
+    #[must_use]
     pub fn values<T: Into<Box<dyn Expression>>>(mut self, values: Vec<(&'a str, T)>) -> Self {
-        for value in values.into_iter() {
+        for value in values {
             self.values.push((value.0, value.1.into()));
         }
         self
     }
 
+    #[must_use]
     pub fn value<T: Into<Box<dyn Expression>>>(mut self, name: &'a str, value: T) -> Self {
         self.values.push((name, value.into()));
         self
     }
 
+    #[must_use]
     pub fn unique(mut self, unique: &'a [&'a str]) -> Self {
         self.unique.replace(unique);
         self
     }
 
+    #[must_use]
     pub fn limit(mut self, limit: usize) -> Self {
         self.limit.replace(limit);
         self
     }
 
+    /// # Errors
+    ///
+    /// Will return `Err` if the upsert execution failed.
     pub async fn execute(&self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
         db.exec_upsert(self).await
     }
 
+    /// # Errors
+    ///
+    /// Will return `Err` if the upsert execution failed.
     pub async fn execute_first(&self, db: &dyn Database) -> Result<Row, DatabaseError> {
         db.exec_upsert_first(self).await
     }
@@ -1024,7 +1089,8 @@ pub struct DeleteStatement<'a> {
     pub limit: Option<usize>,
 }
 
-pub fn delete<'a>(table_name: &'a str) -> DeleteStatement<'a> {
+#[must_use]
+pub fn delete(table_name: &str) -> DeleteStatement<'_> {
     DeleteStatement {
         table_name,
         filters: None,
@@ -1044,11 +1110,15 @@ impl FilterableQuery for DeleteStatement<'_> {
 }
 
 impl<'a> DeleteStatement<'a> {
+    #[must_use]
     pub fn limit(mut self, limit: usize) -> Self {
         self.limit.replace(limit);
         self
     }
 
+    /// # Errors
+    ///
+    /// Will return `Err` if the delete execution failed.
     pub async fn execute(&self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
         db.exec_delete(self).await
     }

@@ -25,7 +25,7 @@ use std::{
 use throttle::Throttle;
 use tokio::{task::spawn, try_join};
 use tokio_util::sync::CancellationToken;
-use ws::server::ChatServer;
+use ws::server::WsServer;
 
 static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
 
@@ -152,7 +152,7 @@ fn main() -> std::io::Result<()> {
         ))
         .await;
 
-        let (mut chat_server, server_tx) = ChatServer::new(database.clone());
+        let (mut chat_server, server_tx) = WsServer::new(database.clone());
         CHAT_SERVER_HANDLE.write().unwrap().replace(server_tx);
 
         #[cfg(feature = "postgres-raw")]

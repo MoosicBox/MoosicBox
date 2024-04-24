@@ -101,7 +101,7 @@ pub async fn track_endpoint(
     let content_type = query
         .format
         .as_ref()
-        .and_then(|format| audio_format_to_content_type(format))
+        .and_then(audio_format_to_content_type)
         .or(track_source_to_content_type(&source));
 
     let format = query.format.unwrap_or_default();
@@ -225,21 +225,17 @@ pub async fn tracks_info_endpoint(
     query: web::Query<GetTracksInfoQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<Vec<TrackInfo>>> {
-    let ids = parse_integer_ranges(&query.track_ids)
-        .map_err(|e| match e {
-            ParseIntegersError::ParseId(id) => {
-                ErrorBadRequest(format!("Could not parse trackId '{id}'"))
-            }
-            ParseIntegersError::UnmatchedRange(range) => {
-                ErrorBadRequest(format!("Unmatched range '{range}'"))
-            }
-            ParseIntegersError::RangeTooLarge(range) => {
-                ErrorBadRequest(format!("Range too large '{range}'"))
-            }
-        })?
-        .into_iter()
-        .map(|id| id as u64)
-        .collect::<Vec<_>>();
+    let ids = parse_integer_ranges(&query.track_ids).map_err(|e| match e {
+        ParseIntegersError::ParseId(id) => {
+            ErrorBadRequest(format!("Could not parse trackId '{id}'"))
+        }
+        ParseIntegersError::UnmatchedRange(range) => {
+            ErrorBadRequest(format!("Unmatched range '{range}'"))
+        }
+        ParseIntegersError::RangeTooLarge(range) => {
+            ErrorBadRequest(format!("Range too large '{range}'"))
+        }
+    })?;
 
     Ok(Json(get_tracks_info(ids, &**data.database).await?))
 }

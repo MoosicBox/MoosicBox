@@ -22,13 +22,13 @@ use tokio::sync::mpsc;
 
 use crate::ws::{ConnId, Msg, RoomId};
 
-impl WebsocketSender for ChatServer {
+impl WebsocketSender for WsServer {
     fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
         let id = connection_id.parse::<usize>().unwrap();
         debug!("Sending to {id}");
-        self.send_message_to(id, data.to_string())?;
+        self.send_message_to(id, data.to_string());
         for sender in &self.senders {
-            sender.send(connection_id, data)?
+            sender.send(connection_id, data)?;
         }
         Ok(())
     }
@@ -36,7 +36,7 @@ impl WebsocketSender for ChatServer {
     fn send_all(&self, data: &str) -> Result<(), WebsocketSendError> {
         self.send_system_message("main", 0, data.to_string());
         for sender in &self.senders {
-            sender.send_all(data)?
+            sender.send_all(data)?;
         }
         Ok(())
     }
@@ -48,7 +48,7 @@ impl WebsocketSender for ChatServer {
             data.to_string(),
         );
         for sender in &self.senders {
-            sender.send_all_except(connection_id, data)?
+            sender.send_all_except(connection_id, data)?;
         }
         Ok(())
     }
@@ -105,8 +105,9 @@ pub enum Command {
 /// Contains the logic of how connections chat with each other plus room management.
 ///
 /// Call and spawn [`run`](Self::run) to start processing commands.
+#[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
-pub struct ChatServer {
+pub struct WsServer {
     /// Map of connection IDs to their message receivers.
     sessions: HashMap<ConnId, mpsc::UnboundedSender<Msg>>,
 
@@ -124,7 +125,7 @@ pub struct ChatServer {
     senders: Vec<Box<dyn WebsocketSender>>,
 }
 
-impl ChatServer {
+impl WsServer {
     pub fn new(db: Arc<Box<dyn Database>>) -> (Self, ChatServerHandle) {
         // create empty server
         let mut rooms = HashMap::with_capacity(4);
@@ -149,7 +150,7 @@ impl ChatServer {
     }
 
     pub fn add_sender(&mut self, sender: Box<dyn WebsocketSender>) {
-        self.senders.push(sender)
+        self.senders.push(sender);
     }
 
     /// Send message to users in a room.
@@ -171,23 +172,17 @@ impl ChatServer {
     }
 
     /// Send message directly to the user.
-    fn send_message_to(
-        &self,
-        id: ConnId,
-        msg: impl Into<String>,
-    ) -> Result<(), WebsocketSendError> {
+    fn send_message_to(&self, id: ConnId, msg: impl Into<String>) {
         if let Some(session) = self.sessions.get(&id) {
             // errors if client disconnected abruptly and hasn't been timed-out yet
             let _ = session.send(msg.into());
         }
-
-        Ok(())
     }
 
     async fn on_message(
         &mut self,
         id: ConnId,
-        msg: impl Into<String>,
+        msg: impl Into<String> + Send,
     ) -> Result<(), WebsocketMessageError> {
         let connection_id = id.to_string();
         let context = WebsocketContext { connection_id };
@@ -206,7 +201,7 @@ impl ChatServer {
 
         // register session with random connection ID
         let id = thread_rng().gen::<usize>();
-        self.sessions.insert(id, tx.clone());
+        self.sessions.insert(id, tx);
 
         // auto join session to main room
         self.rooms.entry("main".to_owned()).or_default().insert(id);
@@ -229,15 +224,11 @@ impl ChatServer {
         let count = self.visitor_count.fetch_sub(1, Ordering::SeqCst);
         debug!("Visitor count: {}", count - 1);
 
-        let mut rooms: Vec<String> = Vec::new();
-
         // remove sender
         if self.sessions.remove(&conn_id).is_some() {
             // remove session from all rooms
-            for (name, sessions) in &mut self.rooms {
-                if sessions.remove(&conn_id) {
-                    rooms.push(name.to_owned());
-                }
+            for sessions in self.rooms.values_mut() {
+                sessions.remove(&conn_id);
             }
         }
 
@@ -255,7 +246,7 @@ impl ChatServer {
     }
 
     /// Join room, send disconnect message to old room send join message to new room.
-    fn join_room(&mut self, conn_id: ConnId, room: String) {
+    fn join_room(&mut self, conn_id: ConnId, room: &str) {
         let mut rooms = Vec::new();
 
         // remove session from all rooms
@@ -269,9 +260,12 @@ impl ChatServer {
             self.send_system_message(&room, 0, "Someone disconnected");
         }
 
-        self.rooms.entry(room.clone()).or_default().insert(conn_id);
+        self.rooms
+            .entry(room.to_string())
+            .or_default()
+            .insert(conn_id);
 
-        self.send_system_message(&room, conn_id, "Someone connected");
+        self.send_system_message(room, conn_id, "Someone connected");
     }
 
     pub async fn process_command(&mut self, cmd: Command) -> io::Result<()> {
@@ -293,7 +287,7 @@ impl ChatServer {
             }
 
             Command::Join { conn, room, res_tx } => {
-                self.join_room(conn, room);
+                self.join_room(conn, &room);
                 let _ = res_tx.send(());
             }
 
@@ -350,7 +344,7 @@ impl ChatServer {
 
 /// Handle and command sender for chat server.
 ///
-/// Reduces boilerplate of setting up response channels in WebSocket handlers.
+/// Reduces boilerplate of setting up response channels in `WebSocket` handlers.
 #[derive(Debug, Clone)]
 pub struct ChatServerHandle {
     cmd_tx: kanal::Sender<Command>,

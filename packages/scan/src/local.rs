@@ -146,7 +146,7 @@ fn scan_track(
             }
         };
 
-        let tag = tag.map(|x| x.ok()).flatten();
+        let tag = tag.and_then(|x| x.ok());
 
         let path_artist = path.clone().parent().unwrap().parent().unwrap().to_owned();
         let artist_dir_name = path_artist
@@ -333,6 +333,7 @@ static MUSIC_FILE_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r".+\.(flac|m4a|mp3|opus)").unwrap());
 static MULTI_ARTIST_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\S,\S").unwrap());
 
+#[allow(clippy::type_complexity)]
 fn process_dir_entry<F>(
     p: DirEntry,
     output: Arc<RwLock<ScanOutput>>,
@@ -357,6 +358,7 @@ where
     })
 }
 
+#[allow(clippy::type_complexity)]
 fn scan_dir<F>(
     path: PathBuf,
     output: Arc<RwLock<ScanOutput>>,

@@ -30,11 +30,11 @@ pub trait AsModelResult<T, E> {
 }
 
 pub trait AsModelResultMapped<T, E> {
-    fn as_model_mapped<'a>(&'a self) -> Result<Vec<T>, E>;
+    fn as_model_mapped(&self) -> Result<Vec<T>, E>;
 }
 
 pub trait AsModelResultMappedMut<T, E> {
-    fn as_model_mapped_mut<'a>(&'a mut self) -> Result<Vec<T>, E>;
+    fn as_model_mapped_mut(&mut self) -> Result<Vec<T>, E>;
 }
 
 #[async_trait]
@@ -170,11 +170,11 @@ pub enum TrackApiSource {
 
 impl ToValueType<TrackApiSource> for &serde_json::Value {
     fn to_value_type(self) -> Result<TrackApiSource, ParseError> {
-        Ok(TrackApiSource::from_str(
+        TrackApiSource::from_str(
             self.as_str()
                 .ok_or_else(|| ParseError::ConvertType("TrackApiSource".into()))?,
         )
-        .map_err(|_| ParseError::ConvertType("TrackApiSource".into()))?)
+        .map_err(|_| ParseError::ConvertType("TrackApiSource".into()))
     }
 }
 
@@ -1033,11 +1033,11 @@ impl Display for ApiSource {
 impl MissingValue<ApiSource> for &moosicbox_database::Row {}
 impl ToValueType<ApiSource> for DatabaseValue {
     fn to_value_type(self) -> Result<ApiSource, ParseError> {
-        Ok(ApiSource::from_str(
+        ApiSource::from_str(
             self.as_str()
                 .ok_or_else(|| ParseError::ConvertType("ApiSource".into()))?,
         )
-        .map_err(|_| ParseError::ConvertType("ApiSource".into()))?)
+        .map_err(|_| ParseError::ConvertType("ApiSource".into()))
     }
 }
 
@@ -1124,7 +1124,7 @@ impl ToApi<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
             tracks: self
                 .tracks
                 .into_iter()
-                .map(|t| From::<UpdateSessionPlaylistTrack>::from(t))
+                .map(From::<UpdateSessionPlaylistTrack>::from)
                 .map(|track: SessionPlaylistTrack| track.to_api())
                 .collect(),
         }
@@ -1279,7 +1279,7 @@ impl AsModelResultMappedQuery<ApiTrack, DbError> for Vec<SessionPlaylistTrack> {
         let library_track_ids = tracks
             .iter()
             .filter(|t| t.r#type == ApiSource::Library)
-            .map(|t| t.id as u64)
+            .map(|t| t.id)
             .collect::<Vec<_>>();
 
         log::trace!("Fetching tracks by ids: {library_track_ids:?}");

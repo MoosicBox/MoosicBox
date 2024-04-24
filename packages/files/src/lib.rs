@@ -147,7 +147,7 @@ pub async fn save_bytes_stream_to_file_with_speed_listener<
         Box::new(|_, _| {})
     };
 
-    let result = save_bytes_stream_to_file_with_progress_listener(
+    save_bytes_stream_to_file_with_progress_listener(
         stream,
         path,
         start,
@@ -177,9 +177,7 @@ pub async fn save_bytes_stream_to_file_with_speed_listener<
             }
         })),
     )
-    .await;
-
-    result
+    .await
 }
 
 pub async fn save_bytes_stream_to_file_with_progress_listener<
@@ -294,7 +292,7 @@ async fn get_or_fetch_cover_bytes_from_remote_url(
         });
     } else {
         let size = if try_to_get_stream_size {
-            get_content_length(&url, None, None).await?
+            get_content_length(url, None, None).await?
         } else {
             None
         };
@@ -317,7 +315,7 @@ async fn get_or_fetch_cover_from_remote_url(
         Ok(file_path.to_str().unwrap().to_string())
     } else {
         Ok(
-            fetch_and_save_bytes_from_remote_url(&IMAGE_CLIENT, &file_path, url)
+            fetch_and_save_bytes_from_remote_url(&IMAGE_CLIENT, file_path, url)
                 .await?
                 .to_str()
                 .unwrap()

@@ -14,19 +14,23 @@ pub fn on_playback_event(update: &UpdateSession, _current: &Playback) {
             .unwrap()
     });
 
-    let binding = CHAT_SERVER_HANDLE.read().unwrap_or_else(|e| e.into_inner());
-    let sender = binding.as_ref().unwrap();
-
     RT.block_on(async move {
-        let db = match DB.read().unwrap().as_ref() {
-            Some(db) => db.clone(),
-            None => {
-                log::error!("No DB connection");
-                return;
-            }
+        let db = if let Some(db) = DB.read().unwrap().as_ref() {
+            db.clone()
+        } else {
+            log::error!("No DB connection");
+            return;
         };
-        if let Err(err) = update_session(&**db, sender, None, update).await {
+
+        let sender = CHAT_SERVER_HANDLE
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .unwrap()
+            .clone();
+
+        if let Err(err) = update_session(&**db, &sender, None, update).await {
             log::error!("Failed to broadcast update_session: {err:?}");
         }
-    })
+    });
 }

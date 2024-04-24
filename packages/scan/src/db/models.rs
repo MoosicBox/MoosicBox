@@ -30,11 +30,11 @@ impl ToValueType<ScanOrigin> for &moosicbox_database::Row {
 }
 impl ToValueType<ScanOrigin> for DatabaseValue {
     fn to_value_type(self) -> Result<ScanOrigin, ParseError> {
-        Ok(ScanOrigin::from_str(
+        ScanOrigin::from_str(
             self.as_str()
                 .ok_or_else(|| ParseError::ConvertType("ScanOrigin".into()))?,
         )
-        .map_err(|_| ParseError::ConvertType("ScanOrigin".into()))?)
+        .map_err(|_| ParseError::ConvertType("ScanOrigin".into()))
     }
 }
 

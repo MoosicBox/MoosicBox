@@ -17,6 +17,7 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Echo text & binary messages received from the client, respond to ping messages, and monitor
 /// connection health to detect network issues and free up resources.
+#[allow(clippy::future_not_send)]
 pub async fn chat_ws(
     chat_server: ChatServerHandle,
     mut session: actix_ws::Session,
@@ -179,11 +180,10 @@ async fn process_text_msg(
         }
     } else {
         // prefix message with our name, if assigned
-        let msg = match name {
-            Some(ref name) => format!("{name}: {msg}"),
-            None => msg.to_owned(),
-        };
+        let msg = name
+            .as_mut()
+            .map_or_else(|| msg.to_owned(), |name| format!("{name}: {msg}"));
 
-        chat_server.send_message(conn, msg)
+        chat_server.send_message(conn, msg);
     }
 }

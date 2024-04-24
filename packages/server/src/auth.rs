@@ -10,12 +10,13 @@ use std::{
     future::{ready, Ready},
 };
 
+#[allow(clippy::module_name_repetitions)]
 pub struct StaticTokenAuth {
     token: String,
 }
 
 impl StaticTokenAuth {
-    pub fn new(token: String) -> Self {
+    pub const fn new(token: String) -> Self {
         Self { token }
     }
 }
@@ -89,9 +90,8 @@ fn is_header_authorized(req: &ServiceRequest, expected: &str) -> bool {
 
             if token == expected {
                 return true;
-            } else {
-                log::debug!("Incorrect AUTHORIZATION header value");
             }
+            log::debug!("Incorrect AUTHORIZATION header value");
         } else {
             log::debug!("No AUTHORIZATION header value");
         }
@@ -111,9 +111,8 @@ fn is_query_authorized(req: &ServiceRequest, expected: &str) -> bool {
     if let Some(token) = authorization {
         if token == expected {
             return true;
-        } else {
-            log::debug!("Incorrect AUTHORIZATION query param value");
         }
+        log::debug!("Incorrect AUTHORIZATION query param value");
     } else {
         log::debug!("No AUTHORIZATION query param value");
     }

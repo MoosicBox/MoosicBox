@@ -79,9 +79,8 @@ impl DownloadQueueState {
     }
 
     fn finish_task(&mut self, task: &DownloadTask) {
-        self.tasks.retain(|x| {
-            !(task.file_path == x.file_path && task.item == x.item && task.item == x.item)
-        });
+        self.tasks
+            .retain(|x| !(task.file_path == x.file_path && task.item == x.item));
     }
 }
 
@@ -122,6 +121,7 @@ pub struct DownloadQueue {
     database: Option<Arc<Box<dyn Database>>>,
     downloader: Option<Arc<Box<dyn Downloader + Send + Sync>>>,
     state: Arc<RwLock<DownloadQueueState>>,
+    #[allow(clippy::type_complexity)]
     join_handle: Arc<Mutex<Option<JoinHandle<Result<(), ProcessDownloadQueueError>>>>>,
 }
 
@@ -266,13 +266,12 @@ impl DownloadQueue {
     ) -> Result<Row, UpdateTaskError> {
         let db = self.database.clone().ok_or(UpdateTaskError::NoDatabase)?;
 
-        Ok(db
-            .update("download_tasks")
+        db.update("download_tasks")
             .where_eq("id", task_id)
             .values(values.to_vec())
             .execute_first(&**db)
             .await?
-            .ok_or(UpdateTaskError::NoRow)?)
+            .ok_or(UpdateTaskError::NoRow)
     }
 
     async fn process_task(
@@ -380,6 +379,12 @@ impl DownloadQueue {
             .await?;
 
         Ok(ProcessDownloadTaskResponse {})
+    }
+}
+
+impl Default for DownloadQueue {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

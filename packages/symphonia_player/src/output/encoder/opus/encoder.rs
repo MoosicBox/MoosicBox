@@ -82,7 +82,7 @@ impl OpusEncoder<'_> {
             self.input_rate.replace(spec.rate);
             self.duration.replace(duration);
             self.resampler.replace(RwLock::new(Resampler::new(
-                spec.clone(),
+                *spec,
                 self.output_rate,
                 duration,
             )));
@@ -256,6 +256,12 @@ impl OpusEncoder<'_> {
         } else {
             Ok(to_samples(decoded))
         }
+    }
+}
+
+impl Default for OpusEncoder<'_> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

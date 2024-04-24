@@ -185,7 +185,7 @@ impl ChatServer {
         debug!("Broadcasting message");
         let message = msg.into();
 
-        for (_id, session) in &self.clients {
+        for session in self.clients.values() {
             // errors if client disconnected abruptly and hasn't been timed-out yet
             session.send(message.clone())?
         }

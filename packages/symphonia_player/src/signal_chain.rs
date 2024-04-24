@@ -111,6 +111,12 @@ impl SignalChain {
     }
 }
 
+impl Default for SignalChain {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct SignalChainStep {
     hint: Option<Hint>,
     audio_output_handler: Option<CreateAudioOutputStream>,
@@ -167,7 +173,7 @@ impl SignalChainStep {
         self,
         media_source: Box<dyn MediaSource>,
     ) -> Result<SignalChainStepProcessor, SignalChainError> {
-        let hint = self.hint.unwrap_or_else(|| Hint::new());
+        let hint = self.hint.unwrap_or_default();
         let mss = MediaSourceStream::new(media_source, Default::default());
 
         let receiver = play_media_source(
@@ -190,6 +196,12 @@ impl SignalChainStep {
             receiver,
             overflow: vec![],
         })
+    }
+}
+
+impl Default for SignalChainStep {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -250,7 +262,7 @@ impl std::io::Read for SignalChainStepProcessor {
             bytes_now.len(),
             overflow.len()
         );
-        buf[..bytes_now.len()].copy_from_slice(&bytes_now);
+        buf[..bytes_now.len()].copy_from_slice(bytes_now);
         self.overflow.extend_from_slice(overflow);
 
         Ok(bytes_now.len())

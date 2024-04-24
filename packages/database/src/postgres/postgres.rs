@@ -20,6 +20,7 @@ trait ToSql {
 }
 
 impl<T: Expression + ?Sized> ToSql for T {
+    #[allow(clippy::too_many_lines)]
     fn to_sql(&self, index: &AtomicU16) -> String {
         match self.expression_type() {
             ExpressionType::Eq(value) => {
@@ -135,15 +136,13 @@ impl<T: Expression + ?Sized> ToSql for T {
                     )
                 }
             }
-            ExpressionType::InList(value) => format!(
-                "{}",
-                value
-                    .values
-                    .iter()
-                    .map(|value| value.to_sql(index))
-                    .collect::<Vec<_>>()
-                    .join(",")
-            ),
+            ExpressionType::InList(value) => value
+                .values
+                .iter()
+                .map(|value| value.to_sql(index))
+                .collect::<Vec<_>>()
+                .join(","),
+
             ExpressionType::Coalesce(value) => format!(
                 "COALESCE({})",
                 value
@@ -156,19 +155,17 @@ impl<T: Expression + ?Sized> ToSql for T {
             ExpressionType::Literal(value) => value.value.to_string(),
             ExpressionType::Identifier(value) => format_identifier(&value.value),
             ExpressionType::SelectQuery(value) => {
-                let joins = if let Some(joins) = &value.joins {
+                let joins = value.joins.as_ref().map_or_else(String::new, |joins| {
                     joins
                         .iter()
                         .map(|x| x.to_sql(index))
                         .collect::<Vec<_>>()
                         .join(" ")
-                } else {
-                    "".to_string()
-                };
+                });
 
-                let where_clause = if let Some(filters) = &value.filters {
+                let where_clause = value.filters.as_ref().map_or_else(String::new, |filters| {
                     if filters.is_empty() {
-                        "".to_string()
+                        String::new()
                     } else {
                         format!(
                             "WHERE {}",
@@ -179,13 +176,11 @@ impl<T: Expression + ?Sized> ToSql for T {
                                 .join(" AND ")
                         )
                     }
-                } else {
-                    "".to_string()
-                };
+                });
 
-                let sort_clause = if let Some(sorts) = &value.sorts {
+                let sort_clause = value.sorts.as_ref().map_or_else(String::new, |sorts| {
                     if sorts.is_empty() {
-                        "".to_string()
+                        String::new()
                     } else {
                         format!(
                             "ORDER BY {}",
@@ -196,15 +191,11 @@ impl<T: Expression + ?Sized> ToSql for T {
                                 .join(", ")
                         )
                     }
-                } else {
-                    "".to_string()
-                };
+                });
 
-                let limit = if let Some(limit) = value.limit {
-                    format!("LIMIT {}", limit)
-                } else {
-                    "".to_string()
-                };
+                let limit = value
+                    .limit
+                    .map_or_else(String::new, |limit| format!("LIMIT {limit}"));
 
                 format!(
                     "SELECT {} {} FROM {} {} {} {} {}",
@@ -223,13 +214,13 @@ impl<T: Expression + ?Sized> ToSql for T {
                 )
             }
             ExpressionType::DatabaseValue(value) => match value {
-                DatabaseValue::Null => format!("NULL"),
-                DatabaseValue::BoolOpt(None) => format!("NULL"),
-                DatabaseValue::StringOpt(None) => format!("NULL"),
-                DatabaseValue::NumberOpt(None) => format!("NULL"),
-                DatabaseValue::UNumberOpt(None) => format!("NULL"),
-                DatabaseValue::RealOpt(None) => format!("NULL"),
-                DatabaseValue::Now => format!("NOW()"),
+                DatabaseValue::Null
+                | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::StringOpt(None)
+                | DatabaseValue::NumberOpt(None)
+                | DatabaseValue::UNumberOpt(None)
+                | DatabaseValue::RealOpt(None) => "NULL".to_string(),
+                DatabaseValue::Now => "NOW()".to_string(),
                 DatabaseValue::NowAdd(ref add) => format!("NOW() + {add}"),
                 _ => {
                     let pos = index.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
@@ -240,17 +231,20 @@ impl<T: Expression + ?Sized> ToSql for T {
     }
 }
 
+#[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct PostgresDatabase {
     connection: Client,
 }
 
 impl PostgresDatabase {
-    pub fn new(connection: Client) -> Self {
+    #[must_use]
+    pub const fn new(connection: Client) -> Self {
         Self { connection }
     }
 }
 
+#[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Error)]
 pub enum PostgresDatabaseError {
     #[error(transparent)]
@@ -269,7 +263,7 @@ pub enum PostgresDatabaseError {
 
 impl From<PostgresDatabaseError> for DatabaseError {
     fn from(value: PostgresDatabaseError) -> Self {
-        DatabaseError::Postgres(value)
+        Self::Postgres(value)
     }
 }
 
@@ -406,7 +400,7 @@ fn column_value(row: &Row, index: &str) -> Result<DatabaseValue, PostgresDatabas
         .columns()
         .iter()
         .find(|x| x.name() == index)
-        .map(|c| c.type_())
+        .map(tokio_postgres::Column::type_)
         .unwrap();
 
     row.try_get(index)
@@ -453,31 +447,31 @@ async fn update_and_get_row(
     );
 
     let all_values = values
-        .into_iter()
+        .iter()
         .flat_map(|(_, value)| {
             value
                 .params()
                 .unwrap_or(vec![])
                 .into_iter()
                 .cloned()
-                .map(|x| x.into())
+                .map(std::convert::Into::into)
         })
         .collect::<Vec<PgDatabaseValue>>();
     let mut all_filter_values = filters
         .map(|filters| {
             filters
-                .into_iter()
+                .iter()
                 .flat_map(|value| {
                     value
                         .params()
-                        .unwrap_or(vec![])
+                        .unwrap_or_default()
                         .into_iter()
                         .cloned()
-                        .map(|x| x.into())
+                        .map(std::convert::Into::into)
                 })
                 .collect::<Vec<PgDatabaseValue>>()
         })
-        .unwrap_or(vec![]);
+        .unwrap_or_default();
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());
@@ -504,7 +498,7 @@ async fn update_and_get_row(
 
     let row: Option<Row> = stream.next().await.transpose()?;
 
-    Ok(row.map(|row| from_row(&column_names, &row)).transpose()?)
+    row.map(|row| from_row(&column_names, &row)).transpose()
 }
 
 async fn update_and_get_rows(
@@ -534,31 +528,31 @@ async fn update_and_get_rows(
     );
 
     let all_values = values
-        .into_iter()
+        .iter()
         .flat_map(|(_, value)| {
             value
                 .params()
                 .unwrap_or(vec![])
                 .into_iter()
                 .cloned()
-                .map(|x| x.into())
+                .map(std::convert::Into::into)
         })
         .collect::<Vec<PgDatabaseValue>>();
     let mut all_filter_values = filters
         .map(|filters| {
             filters
-                .into_iter()
+                .iter()
                 .flat_map(|value| {
                     value
                         .params()
-                        .unwrap_or(vec![])
+                        .unwrap_or_default()
                         .into_iter()
                         .cloned()
-                        .map(|x| x.into())
+                        .map(std::convert::Into::into)
                 })
                 .collect::<Vec<PgDatabaseValue>>()
         })
-        .unwrap_or(vec![]);
+        .unwrap_or_default();
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());
@@ -585,7 +579,7 @@ async fn update_and_get_rows(
 }
 
 fn build_join_clauses(joins: Option<&[Join]>) -> String {
-    if let Some(joins) = joins {
+    joins.map_or_else(String::new, |joins| {
         joins
             .iter()
             .map(|join| {
@@ -598,22 +592,18 @@ fn build_join_clauses(joins: Option<&[Join]>) -> String {
             })
             .collect::<Vec<_>>()
             .join(" ")
-    } else {
-        "".into()
-    }
+    })
 }
 
 fn build_where_clause(filters: Option<&[Box<dyn BooleanExpression>]>, index: &AtomicU16) -> String {
-    if let Some(filters) = filters {
+    filters.map_or_else(String::new, |filters| {
         if filters.is_empty() {
-            "".to_string()
+            String::new()
         } else {
             let filters = build_where_props(filters, index);
             format!("WHERE {}", filters.join(" AND "))
         }
-    } else {
-        "".to_string()
-    }
+    })
 }
 
 fn build_where_props(filters: &[Box<dyn BooleanExpression>], index: &AtomicU16) -> Vec<String> {
@@ -624,15 +614,13 @@ fn build_where_props(filters: &[Box<dyn BooleanExpression>], index: &AtomicU16) 
 }
 
 fn build_sort_clause(sorts: Option<&[Sort]>, index: &AtomicU16) -> String {
-    if let Some(sorts) = sorts {
+    sorts.map_or_else(String::new, |sorts| {
         if sorts.is_empty() {
-            "".to_string()
+            String::new()
         } else {
             format!("ORDER BY {}", build_sort_props(sorts, index).join(", "))
         }
-    } else {
-        "".to_string()
-    }
+    })
 }
 
 fn build_sort_props(sorts: &[Sort], index: &AtomicU16) -> Vec<String> {
@@ -660,20 +648,16 @@ fn build_update_where_clause(
 }
 
 fn build_update_limit_clause(limit: Option<usize>, query: Option<&str>) -> String {
-    if let Some(limit) = limit {
-        if let Some(query) = query {
+    limit.map_or_else(String::new, |limit| {
+        query.map_or_else(String::new, |query| {
             format!("CTID IN ({query} LIMIT {limit})")
-        } else {
-            "".into()
-        }
-    } else {
-        "".into()
-    }
+        })
+    })
 }
 
 fn build_set_clause(values: &[(&str, Box<dyn Expression>)], index: &AtomicU16) -> String {
     if values.is_empty() {
-        "".to_string()
+        String::new()
     } else {
         format!("SET {}", build_set_props(values, index).join(", "))
     }
@@ -681,7 +665,7 @@ fn build_set_clause(values: &[(&str, Box<dyn Expression>)], index: &AtomicU16) -
 
 fn build_set_props(values: &[(&str, Box<dyn Expression>)], index: &AtomicU16) -> Vec<String> {
     values
-        .into_iter()
+        .iter()
         .map(|(name, value)| {
             format!(
                 "{}={}",
@@ -741,47 +725,48 @@ async fn to_rows<'a>(
     Ok(results)
 }
 
-fn to_values<'a>(values: &'a [(&str, DatabaseValue)]) -> Vec<PgDatabaseValue> {
+fn to_values(values: &[(&str, DatabaseValue)]) -> Vec<PgDatabaseValue> {
     values
-        .into_iter()
+        .iter()
         .map(|(_key, value)| value.clone().into())
         .collect::<Vec<_>>()
 }
 
-fn exprs_to_params<'a>(values: &'a [(&str, Box<dyn Expression>)]) -> Vec<PgDatabaseValue> {
+fn exprs_to_params(values: &[(&str, Box<dyn Expression>)]) -> Vec<PgDatabaseValue> {
     values
-        .into_iter()
+        .iter()
         .flat_map(|value| value.1.params().into_iter())
         .flatten()
         .cloned()
-        .map(|value| value.into())
+        .map(std::convert::Into::into)
         .collect::<Vec<_>>()
 }
 
-fn bexprs_to_params<'a>(values: &'a [Box<dyn BooleanExpression>]) -> Vec<PgDatabaseValue> {
+fn bexprs_to_params(values: &[Box<dyn BooleanExpression>]) -> Vec<PgDatabaseValue> {
     values
-        .into_iter()
+        .iter()
         .flat_map(|value| value.params().into_iter())
         .flatten()
         .cloned()
-        .map(|value| value.into())
+        .map(std::convert::Into::into)
         .collect::<Vec<_>>()
 }
 
 #[allow(unused)]
 fn to_values_opt(values: Option<&[(&str, DatabaseValue)]>) -> Option<Vec<PgDatabaseValue>> {
-    values.map(|x| to_values(x))
+    values.map(to_values)
 }
 
 #[allow(unused)]
 fn exprs_to_params_opt(values: Option<&[(&str, Box<dyn Expression>)]>) -> Vec<PgDatabaseValue> {
-    values.map(|x| exprs_to_params(x)).unwrap_or(vec![])
+    values.map(exprs_to_params).unwrap_or_default()
 }
 
 fn bexprs_to_params_opt(values: Option<&[Box<dyn BooleanExpression>]>) -> Vec<PgDatabaseValue> {
-    values.map(|x| bexprs_to_params(x)).unwrap_or(vec![])
+    values.map(bexprs_to_params).unwrap_or_default()
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn select(
     connection: &Client,
     table_name: &str,
@@ -804,16 +789,12 @@ async fn select(
         build_join_clauses(joins),
         build_where_clause(filters, &index),
         build_sort_clause(sort, &index),
-        if let Some(limit) = limit {
-            format!("LIMIT {limit}")
-        } else {
-            "".to_string()
-        }
+        limit.map_or_else(String::new, |limit| format!("LIMIT {limit}"))
     );
 
     log::trace!(
         "Running select query: {query} with params: {:?}",
-        filters.map(|f| f.iter().flat_map(|x| x.params()).collect::<Vec<_>>())
+        filters.map(|f| f.iter().filter_map(|x| x.params()).collect::<Vec<_>>())
     );
 
     let statement = connection.prepare(&query).await?;
@@ -839,16 +820,12 @@ async fn delete(
     let query = format!(
         "DELETE FROM {table_name} {} RETURNING * {}",
         build_where_clause(filters, &index),
-        if let Some(limit) = limit {
-            format!("LIMIT {limit}")
-        } else {
-            "".to_string()
-        }
+        limit.map_or_else(String::new, |limit| format!("LIMIT {limit}"))
     );
 
     log::trace!(
         "Running delete query: {query} with params: {:?}",
-        filters.map(|f| f.iter().flat_map(|x| x.params()).collect::<Vec<_>>())
+        filters.map(|f| f.iter().filter_map(|x| x.params()).collect::<Vec<_>>())
     );
 
     let statement = connection.prepare(&query).await?;
@@ -901,12 +878,11 @@ async fn find_row(
 
     pin!(rows);
 
-    Ok(rows
-        .next()
+    rows.next()
         .await
         .transpose()?
         .map(|row| from_row(&column_names, &row))
-        .transpose()?)
+        .transpose()
 }
 
 async fn insert_and_get_row(
@@ -915,14 +891,14 @@ async fn insert_and_get_row(
     values: &[(&str, Box<dyn Expression>)],
 ) -> Result<crate::Row, PostgresDatabaseError> {
     let column_names = values
-        .into_iter()
+        .iter()
         .map(|(key, _v)| format_identifier(key))
         .collect::<Vec<_>>()
         .join(", ");
 
     let index = AtomicU16::new(0);
     let insert_columns = if values.is_empty() {
-        "".into()
+        String::new()
     } else {
         format!("({column_names})")
     };
@@ -948,14 +924,16 @@ async fn insert_and_get_row(
 
     pin!(rows);
 
-    Ok(rows
-        .next()
+    rows.next()
         .await
         .transpose()?
         .map(|row| from_row(&column_names, &row))
-        .ok_or(PostgresDatabaseError::NoRow)??)
+        .ok_or(PostgresDatabaseError::NoRow)?
 }
 
+/// # Errors
+///
+/// Will return `Err` if the update multi execution failed.
 pub async fn update_multi(
     connection: &Client,
     table_name: &str,
@@ -1062,34 +1040,34 @@ async fn update_chunk(
     );
 
     let all_values = values
-        .into_iter()
-        .flat_map(|x| x.into_iter())
+        .iter()
+        .flat_map(std::iter::IntoIterator::into_iter)
         .flat_map(|(_, value)| {
             value
                 .params()
                 .unwrap_or(vec![])
                 .into_iter()
                 .cloned()
-                .map(|x| x.into())
+                .map(std::convert::Into::into)
         })
         .collect::<Vec<PgDatabaseValue>>();
     let mut all_filter_values = filters
         .as_ref()
         .map(|filters| {
             filters
-                .into_iter()
+                .iter()
                 .flat_map(|value| {
                     value
                         .params()
-                        .unwrap_or(vec![])
+                        .unwrap_or_default()
                         .into_iter()
                         .cloned()
-                        .map(|x| x.into())
+                        .map(std::convert::Into::into)
                         .collect::<Vec<_>>()
                 })
                 .collect::<Vec<PgDatabaseValue>>()
         })
-        .unwrap_or(vec![]);
+        .unwrap_or_default();
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());
@@ -1114,6 +1092,9 @@ async fn update_chunk(
     to_rows(&column_names, rows).await
 }
 
+/// # Errors
+///
+/// Will return `Err` if the upsert multi execution failed.
 pub async fn upsert_multi(
     connection: &Client,
     table_name: &str,
@@ -1186,8 +1167,8 @@ async fn upsert_chunk(
 
     let index = AtomicU16::new(0);
     let values_str_list = values
-        .into_iter()
-        .map(|v| format!("({})", build_values_props(&v, &index).join(", ")))
+        .iter()
+        .map(|v| format!("({})", build_values_props(v, &index).join(", ")))
         .collect::<Vec<_>>();
 
     let values_str = values_str_list.join(", ");
@@ -1208,15 +1189,15 @@ async fn upsert_chunk(
     );
 
     let all_values = &values
-        .into_iter()
-        .flat_map(|x| x.into_iter())
+        .iter()
+        .flat_map(std::iter::IntoIterator::into_iter)
         .flat_map(|(_, value)| {
             value
                 .params()
                 .unwrap_or(vec![])
                 .into_iter()
                 .cloned()
-                .map(|x| x.into())
+                .map(std::convert::Into::into)
         })
         .collect::<Vec<PgDatabaseValue>>();
 
@@ -1262,7 +1243,7 @@ async fn upsert_and_get_row(
 ) -> Result<crate::Row, PostgresDatabaseError> {
     match find_row(connection, table_name, false, &["*"], filters, None, None).await? {
         Some(row) => {
-            let updated = update_and_get_row(connection, table_name, &values, filters, limit)
+            let updated = update_and_get_row(connection, table_name, values, filters, limit)
                 .await?
                 .unwrap();
 
@@ -1286,7 +1267,7 @@ pub struct PgDatabaseValue(DatabaseValue);
 
 impl From<DatabaseValue> for PgDatabaseValue {
     fn from(value: DatabaseValue) -> Self {
-        PgDatabaseValue(value)
+        Self(value)
     }
 }
 
@@ -1308,7 +1289,7 @@ impl Expression for PgDatabaseValue {
     }
 
     fn expression_type(&self) -> crate::ExpressionType {
-        ExpressionType::DatabaseValue(self.deref())
+        ExpressionType::DatabaseValue(self)
     }
 }
 
@@ -1318,16 +1299,14 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
         raw: &'a [u8],
     ) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
         Ok(match ty.name() {
-            "bool" => DatabaseValue::Bool(bool_from_sql(raw)?),
+            "bool" => Self::Bool(bool_from_sql(raw)?),
             "char" | "smallint" | "smallserial" | "int2" | "int" | "serial" | "int4" | "bigint"
-            | "bigserial" | "int8" => DatabaseValue::Number(int8_from_sql(raw)?),
-            "real" | "float4" | "double precision" | "float8" => {
-                DatabaseValue::Real(float8_from_sql(raw)?)
-            }
+            | "bigserial" | "int8" => Self::Number(int8_from_sql(raw)?),
+            "real" | "float4" | "double precision" | "float8" => Self::Real(float8_from_sql(raw)?),
             "varchar" | "char(n)" | "text" | "name" | "citext" => {
-                DatabaseValue::String(text_from_sql(raw)?.to_string())
+                Self::String(text_from_sql(raw)?.to_string())
             }
-            "timestamp" => DatabaseValue::DateTime(NaiveDateTime::from_sql(ty, raw)?),
+            "timestamp" => Self::DateTime(NaiveDateTime::from_sql(ty, raw)?),
             _ => {
                 return Err(Box::new(PostgresDatabaseError::TypeNotFound {
                     type_name: ty.to_string(),
@@ -1343,45 +1322,45 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
         Ok(match ty.name() {
             "bool" => raw
                 .map(|raw| {
-                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(DatabaseValue::Bool(
-                        bool_from_sql(raw)?,
-                    ))
+                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Bool(bool_from_sql(
+                        raw,
+                    )?))
                 })
                 .transpose()?
-                .unwrap_or(DatabaseValue::BoolOpt(None)),
+                .unwrap_or(Self::BoolOpt(None)),
             "char" | "smallint" | "smallserial" | "int2" | "int" | "serial" | "int4" | "bigint"
             | "bigserial" | "int8" => raw
                 .map(|raw| {
-                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(DatabaseValue::Number(
-                        int8_from_sql(raw)?,
-                    ))
+                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Number(int8_from_sql(
+                        raw,
+                    )?))
                 })
                 .transpose()?
-                .unwrap_or(DatabaseValue::NumberOpt(None)),
+                .unwrap_or(Self::NumberOpt(None)),
             "real" | "float4" | "double precision" | "float8" => raw
                 .map(|raw| {
-                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(DatabaseValue::Real(
-                        float8_from_sql(raw)?,
-                    ))
+                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Real(float8_from_sql(
+                        raw,
+                    )?))
                 })
                 .transpose()?
-                .unwrap_or(DatabaseValue::RealOpt(None)),
+                .unwrap_or(Self::RealOpt(None)),
             "varchar" | "char(n)" | "text" | "name" | "citext" => raw
                 .map(|raw| {
-                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(DatabaseValue::String(
+                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::String(
                         text_from_sql(raw)?.to_string(),
                     ))
                 })
                 .transpose()?
-                .unwrap_or(DatabaseValue::StringOpt(None)),
+                .unwrap_or(Self::StringOpt(None)),
             "timestamp" => raw
                 .map(|raw| {
-                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(DatabaseValue::DateTime(
+                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::DateTime(
                         NaiveDateTime::from_sql(ty, raw)?,
                     ))
                 })
                 .transpose()?
-                .unwrap_or(DatabaseValue::Null),
+                .unwrap_or(Self::Null),
             _ => {
                 return Err(Box::new(PostgresDatabaseError::TypeNotFound {
                     type_name: ty.to_string(),
@@ -1394,7 +1373,7 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
         ty: &tokio_postgres::types::Type,
     ) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
         log::trace!("FromSql from_sql_null: ty={}, {ty:?}", ty.name());
-        Ok(DatabaseValue::Null)
+        Ok(Self::Null)
     }
 
     fn accepts(ty: &tokio_postgres::types::Type) -> bool {
@@ -1419,17 +1398,15 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
     ) -> Result<IsNull, Box<dyn std::error::Error + Sync + Send>> {
         log::trace!("to_sql_checked: ty={}, {ty:?}", ty.name());
         Ok(match &self.0 {
-            DatabaseValue::Null => IsNull::Yes,
+            DatabaseValue::Null | DatabaseValue::UNumberOpt(None) => IsNull::Yes,
             DatabaseValue::String(value) => value.to_sql(ty, out)?,
             DatabaseValue::StringOpt(value) => value.to_sql(ty, out)?,
-            DatabaseValue::Bool(value) => (if *value { 1_i64 } else { 0_i64 }).to_sql(ty, out)?,
-            DatabaseValue::BoolOpt(value) => value
-                .map(|x| if x { 1_i64 } else { 0_i64 })
-                .to_sql(ty, out)?,
+            DatabaseValue::Bool(value) => i64::from(*value).to_sql(ty, out)?,
+            DatabaseValue::BoolOpt(value) => value.map(i64::from).to_sql(ty, out)?,
             DatabaseValue::Number(value) => value.to_sql(ty, out)?,
             DatabaseValue::NumberOpt(value) => value.to_sql(ty, out)?,
-            DatabaseValue::UNumber(value) => (*value as i64).to_sql(ty, out)?,
-            DatabaseValue::UNumberOpt(value) => value.map(|x| x as i64).to_sql(ty, out)?,
+            DatabaseValue::UNumber(value) => i64::try_from(*value)?.to_sql(ty, out)?,
+            DatabaseValue::UNumberOpt(Some(value)) => i64::try_from(*value)?.to_sql(ty, out)?,
             DatabaseValue::Real(value) => value.to_sql(ty, out)?,
             DatabaseValue::RealOpt(value) => value.to_sql(ty, out)?,
             DatabaseValue::NowAdd(value) => value.to_sql(ty, out)?,

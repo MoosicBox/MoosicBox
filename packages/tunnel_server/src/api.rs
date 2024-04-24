@@ -300,6 +300,7 @@ async fn handle_request(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn request(
     client_id: &str,
     request_id: usize,
