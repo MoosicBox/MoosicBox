@@ -991,7 +991,7 @@ pub struct UpdateSession {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub position: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub seek: Option<i32>,
+    pub seek: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub volume: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1148,7 +1148,7 @@ pub struct ApiUpdateSession {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub position: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub seek: Option<i32>,
+    pub seek: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub volume: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]

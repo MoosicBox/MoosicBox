@@ -10,7 +10,6 @@ use bytes::{Bytes, BytesMut};
 use futures::prelude::*;
 use futures_core::Stream;
 use lazy_static::lazy_static;
-use log::{debug, error, trace};
 use moosicbox_core::{
     sqlite::{
         db::{get_track, get_track_size, get_tracks, set_track_size, DbError, SetTrackSize},
@@ -170,7 +169,7 @@ pub async fn get_track_id_source(
     quality: Option<TrackAudioQuality>,
     source: Option<TrackApiSource>,
 ) -> Result<TrackSource, TrackSourceError> {
-    debug!("Getting track audio file {track_id} quality={quality:?} source={source:?}");
+    log::debug!("Getting track audio file {track_id} quality={quality:?} source={source:?}");
 
     let track = get_track(&**db, track_id as u64)
         .await?
@@ -185,14 +184,14 @@ pub async fn get_track_source(
     quality: Option<TrackAudioQuality>,
     source: Option<TrackApiSource>,
 ) -> Result<TrackSource, TrackSourceError> {
-    debug!(
+    log::debug!(
         "Getting track audio file {} quality={quality:?} source={source:?}",
         track.id
     );
 
     let source = source.unwrap_or(track.source);
 
-    debug!("Got track {track:?}. Getting source={source:?}");
+    log::debug!("Got track {track:?}. Getting source={source:?}");
 
     match source {
         TrackApiSource::Local => match &track.file {
@@ -572,21 +571,21 @@ pub async fn get_tracks_info(
     track_ids: Vec<u64>,
     db: &dyn Database,
 ) -> Result<Vec<TrackInfo>, TrackInfoError> {
-    debug!("Getting tracks info {track_ids:?}");
+    log::debug!("Getting tracks info {track_ids:?}");
 
     let tracks = get_tracks(db, Some(&track_ids)).await?;
 
-    trace!("Got tracks {tracks:?}");
+    log::trace!("Got tracks {tracks:?}");
 
     Ok(tracks.into_iter().map(|t| t.into()).collect())
 }
 
 pub async fn get_track_info(track_id: u64, db: &dyn Database) -> Result<TrackInfo, TrackInfoError> {
-    debug!("Getting track info {track_id}");
+    log::debug!("Getting track info {track_id}");
 
     let track = get_track(db, track_id).await?;
 
-    trace!("Got track {track:?}");
+    log::trace!("Got track {track:?}");
 
     if track.is_none() {
         return Err(TrackInfoError::NotFound(track_id));
@@ -631,7 +630,7 @@ pub fn get_or_init_track_visualization(
     source: &TrackSource,
     max: u16,
 ) -> Result<Vec<u8>, TrackInfoError> {
-    debug!("Getting track visualization {track_id}");
+    log::debug!("Getting track visualization {track_id} max={max}");
 
     match source {
         TrackSource::LocalFilePath { ref path, .. } => {
@@ -665,7 +664,6 @@ pub fn get_or_init_track_visualization(
                         sum += viz[last_pos] as usize;
                     }
 
-                    log::debug!("{} / {} = {}", sum, count, sum / count);
                     ret_viz.push((sum / count) as u8);
                     pos += offset;
                 }
@@ -736,7 +734,7 @@ pub async fn get_or_init_track_size(
     quality: PlaybackQuality,
     db: Arc<Box<dyn Database>>,
 ) -> Result<u64, TrackInfoError> {
-    debug!("Getting track size {track_id}");
+    log::debug!("Getting track size {track_id}");
 
     if let Some(size) = get_track_size(&**db, track_id as u64, &quality).await? {
         return Ok(size);

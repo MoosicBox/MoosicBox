@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     fs::File,
     path::Path,
-    sync::{Arc, RwLock},
+    sync::{atomic::AtomicBool, Arc, RwLock},
     u16, usize,
 };
 
@@ -623,6 +623,7 @@ impl Player {
             let mss = MediaSourceStream::new(playable_track.source, Default::default());
 
             let active_playback = self.active_playback.clone();
+            let sent_playback_start_event = AtomicBool::new(false);
 
             let mut audio_output_handler = AudioOutputHandler::new()
                 .with_filter(Box::new(move |_decoded, packet, track| {
@@ -633,6 +634,28 @@ impl Player {
 
                         let mut binding = active_playback.write().unwrap();
                         if let Some(playback) = binding.as_mut() {
+                            if !sent_playback_start_event.load(std::sync::atomic::Ordering::SeqCst)
+                            {
+                                if let Some(session_id) = playback.session_id {
+                                    sent_playback_start_event
+                                        .store(true, std::sync::atomic::Ordering::SeqCst);
+
+                                    let update = UpdateSession {
+                                        session_id: session_id as i32,
+                                        play: None,
+                                        stop: None,
+                                        name: None,
+                                        active: None,
+                                        playing: Some(true),
+                                        position: None,
+                                        seek: Some(secs),
+                                        volume: None,
+                                        playlist: None,
+                                    };
+                                    send_playback_event(&update, playback);
+                                }
+                            }
+
                             let old = playback.clone();
                             playback.progress = secs;
                             trigger_playback_event(playback, &old);
@@ -1394,7 +1417,7 @@ fn trigger_playback_event(current: &Playback, previous: &Playback) {
     };
     let seek = if current.progress as usize != previous.progress as usize {
         has_change = true;
-        Some(current.progress as i32)
+        Some(current.progress as i32 as f64)
     } else {
         None
     };
@@ -1458,7 +1481,11 @@ fn trigger_playback_event(current: &Playback, previous: &Playback) {
         playlist,
     };
 
+    send_playback_event(&update, current)
+}
+
+fn send_playback_event(update: &UpdateSession, playback: &Playback) {
     for listener in PLAYBACK_EVENT_LISTENERS.read().unwrap().iter() {
-        listener(&update, current);
+        listener(update, playback);
     }
 }
