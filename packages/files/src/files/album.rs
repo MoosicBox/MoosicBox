@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
+    sync::RwLock,
 };
 
 use async_recursion::async_recursion;
@@ -64,7 +64,7 @@ pub enum FetchLocalAlbumCoverError {
 }
 
 async fn fetch_local_album_cover(
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     cover: Option<String>,
     album_id: i32,
     directory: Option<String>,
@@ -88,7 +88,7 @@ async fn fetch_local_album_cover(
         db.update("albums")
             .where_eq("id", album_id)
             .value("artwork", artwork)
-            .execute(&**db)
+            .execute(db)
             .await?;
 
         return Ok(path.to_str().unwrap().to_string());
@@ -98,7 +98,7 @@ async fn fetch_local_album_cover(
 }
 
 async fn fetch_local_album_cover_bytes(
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     cover: Option<String>,
     album_id: i32,
     directory: Option<String>,
@@ -137,7 +137,7 @@ async fn fetch_local_album_cover_bytes(
         db.update("albums")
             .where_eq("id", album_id)
             .value("artwork", artwork)
-            .execute(&**db)
+            .execute(db)
             .await?;
 
         let file = tokio::fs::File::open(path).await?;
@@ -186,7 +186,7 @@ pub enum AlbumCoverError {
 }
 
 async fn copy_streaming_cover_to_local(
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     album_id: i32,
     cover: String,
 ) -> Result<String, AlbumCoverError> {
@@ -195,7 +195,7 @@ async fn copy_streaming_cover_to_local(
     db.update("albums")
         .where_eq("id", album_id)
         .value("artwork", cover.clone())
-        .execute(&**db)
+        .execute(db)
         .await?;
 
     Ok(cover)
@@ -204,7 +204,7 @@ async fn copy_streaming_cover_to_local(
 #[async_recursion]
 pub async fn get_album_cover_bytes(
     album_id: AlbumId,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     size: Option<u32>,
     try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, AlbumCoverError> {
@@ -224,7 +224,7 @@ pub async fn get_album_cover_bytes(
 #[async_recursion]
 pub async fn get_album_cover(
     album_id: AlbumId,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     size: Option<u32>,
 ) -> Result<AlbumCoverSource, AlbumCoverError> {
     let path = match &album_id {
@@ -240,31 +240,29 @@ pub async fn get_album_cover(
 
 pub async fn get_library_album_cover(
     library_album_id: i32,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
 ) -> Result<String, AlbumCoverError> {
-    let album = get_album(&**db, Some(library_album_id as u64), None, None)
+    let album = get_album(db, Some(library_album_id as u64), None, None)
         .await?
         .ok_or(AlbumCoverError::NotFound(AlbumId::Library(
             library_album_id,
         )))?;
 
-    if let Ok(cover) =
-        fetch_local_album_cover(db.clone(), album.artwork, album.id, album.directory).await
-    {
+    if let Ok(cover) = fetch_local_album_cover(db, album.artwork, album.id, album.directory).await {
         return Ok(cover);
     }
 
     if let Some(tidal_id) = album.tidal_id {
         if let Ok(AlbumCoverSource::LocalFilePath(cover)) =
-            get_album_cover(AlbumId::Tidal(tidal_id), db.clone(), None).await
+            get_album_cover(AlbumId::Tidal(tidal_id), db, None).await
         {
-            return copy_streaming_cover_to_local(db.clone(), album.id, cover).await;
+            return copy_streaming_cover_to_local(db, album.id, cover).await;
         }
     }
 
     if let Some(qobuz_id) = album.qobuz_id {
         if let Ok(AlbumCoverSource::LocalFilePath(cover)) =
-            get_album_cover(AlbumId::Qobuz(qobuz_id), db.clone(), None).await
+            get_album_cover(AlbumId::Qobuz(qobuz_id), db, None).await
         {
             return copy_streaming_cover_to_local(db, album.id, cover).await;
         }
@@ -277,29 +275,24 @@ pub async fn get_library_album_cover(
 
 pub async fn get_library_album_cover_bytes(
     library_album_id: i32,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, AlbumCoverError> {
-    let album = get_album(&**db, Some(library_album_id as u64), None, None)
+    let album = get_album(db, Some(library_album_id as u64), None, None)
         .await?
         .ok_or(AlbumCoverError::NotFound(AlbumId::Library(
             library_album_id,
         )))?;
 
     if let Ok(bytes) =
-        fetch_local_album_cover_bytes(db.clone(), album.artwork, album.id, album.directory).await
+        fetch_local_album_cover_bytes(db, album.artwork, album.id, album.directory).await
     {
         return Ok(bytes);
     }
 
     if let Some(tidal_id) = album.tidal_id {
-        if let Ok(bytes) = get_album_cover_bytes(
-            AlbumId::Tidal(tidal_id),
-            db.clone(),
-            None,
-            try_to_get_stream_size,
-        )
-        .await
+        if let Ok(bytes) =
+            get_album_cover_bytes(AlbumId::Tidal(tidal_id), db, None, try_to_get_stream_size).await
         {
             return Ok(bytes);
         }
@@ -320,7 +313,7 @@ pub async fn get_library_album_cover_bytes(
 
 async fn get_tidal_album_cover_request(
     tidal_album_id: u64,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     size: Option<u32>,
 ) -> Result<AlbumCoverRequest, AlbumCoverError> {
     static ALBUM_CACHE: Lazy<RwLock<HashMap<u64, Option<TidalAlbum>>>> =
@@ -377,7 +370,7 @@ async fn get_tidal_album_cover_request(
 
 async fn get_tidal_album_cover(
     tidal_album_id: u64,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     size: Option<u32>,
 ) -> Result<String, AlbumCoverError> {
     let request = get_tidal_album_cover_request(tidal_album_id, db, size).await?;
@@ -387,7 +380,7 @@ async fn get_tidal_album_cover(
 
 async fn get_tidal_album_cover_bytes(
     tidal_album_id: u64,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     size: Option<u32>,
     try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, AlbumCoverError> {
@@ -408,7 +401,7 @@ struct AlbumCoverRequest {
 
 async fn get_qobuz_album_cover_request(
     qobuz_album_id: &str,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     size: Option<u32>,
 ) -> Result<AlbumCoverRequest, AlbumCoverError> {
     static ALBUM_CACHE: Lazy<RwLock<HashMap<String, Option<QobuzAlbum>>>> =
@@ -466,7 +459,7 @@ async fn get_qobuz_album_cover_request(
 
 async fn get_qobuz_album_cover(
     qobuz_album_id: &str,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     size: Option<u32>,
 ) -> Result<String, AlbumCoverError> {
     let request = get_qobuz_album_cover_request(qobuz_album_id, db, size).await?;
@@ -476,7 +469,7 @@ async fn get_qobuz_album_cover(
 
 async fn get_qobuz_album_cover_bytes(
     qobuz_album_id: &str,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     size: Option<u32>,
     try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, AlbumCoverError> {

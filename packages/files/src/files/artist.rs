@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
+    sync::RwLock,
 };
 
 use async_recursion::async_recursion;
@@ -126,7 +126,7 @@ pub enum ArtistCoverError {
 }
 
 async fn copy_streaming_cover_to_local(
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     artist_id: i32,
     cover: String,
 ) -> Result<String, ArtistCoverError> {
@@ -135,7 +135,7 @@ async fn copy_streaming_cover_to_local(
     db.update("artists")
         .where_eq("id", artist_id)
         .value("cover", cover.clone())
-        .execute(&**db)
+        .execute(db)
         .await?;
 
     Ok(cover)
@@ -144,7 +144,7 @@ async fn copy_streaming_cover_to_local(
 #[async_recursion]
 pub async fn get_artist_cover_bytes(
     artist_id: ArtistId,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     size: Option<u32>,
     try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, ArtistCoverError> {
@@ -164,7 +164,7 @@ pub async fn get_artist_cover_bytes(
 #[async_recursion]
 pub async fn get_artist_cover(
     artist_id: ArtistId,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     size: Option<u32>,
 ) -> Result<ArtistCoverSource, ArtistCoverError> {
     let path = match &artist_id {
@@ -184,9 +184,9 @@ pub async fn get_artist_cover(
 
 pub async fn get_library_artist_cover(
     library_artist_id: i32,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
 ) -> Result<String, ArtistCoverError> {
-    let artist = get_artist(&**db, "id", library_artist_id as u64)
+    let artist = get_artist(db, "id", library_artist_id as u64)
         .await?
         .ok_or(ArtistCoverError::NotFound(ArtistId::Library(
             library_artist_id,
@@ -201,17 +201,17 @@ pub async fn get_library_artist_cover(
     log::debug!("Looking for Tidal artist cover");
     if let Some(tidal_id) = artist.tidal_id {
         if let Ok(ArtistCoverSource::LocalFilePath(cover)) =
-            get_artist_cover(ArtistId::Tidal(tidal_id), db.clone(), None).await
+            get_artist_cover(ArtistId::Tidal(tidal_id), db, None).await
         {
             log::debug!("Found Tidal artist cover");
-            return copy_streaming_cover_to_local(db.clone(), artist.id, cover).await;
+            return copy_streaming_cover_to_local(db, artist.id, cover).await;
         }
     }
 
     log::debug!("Looking for Qobuz artist cover");
     if let Some(qobuz_id) = artist.qobuz_id {
         if let Ok(ArtistCoverSource::LocalFilePath(cover)) =
-            get_artist_cover(ArtistId::Qobuz(qobuz_id), db.clone(), None).await
+            get_artist_cover(ArtistId::Qobuz(qobuz_id), db, None).await
         {
             log::debug!("Found Qobuz artist cover");
             return copy_streaming_cover_to_local(db, artist.id, cover).await;
@@ -226,10 +226,10 @@ pub async fn get_library_artist_cover(
 
 pub async fn get_library_artist_cover_bytes(
     library_artist_id: i32,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, ArtistCoverError> {
-    let artist = get_artist(&**db, "id", library_artist_id as u64)
+    let artist = get_artist(db, "id", library_artist_id as u64)
         .await?
         .ok_or(ArtistCoverError::NotFound(ArtistId::Library(
             library_artist_id,
@@ -240,26 +240,18 @@ pub async fn get_library_artist_cover_bytes(
     }
 
     if let Some(tidal_id) = artist.tidal_id {
-        if let Ok(bytes) = get_artist_cover_bytes(
-            ArtistId::Tidal(tidal_id),
-            db.clone(),
-            None,
-            try_to_get_stream_size,
-        )
-        .await
+        if let Ok(bytes) =
+            get_artist_cover_bytes(ArtistId::Tidal(tidal_id), db, None, try_to_get_stream_size)
+                .await
         {
             return Ok(bytes);
         }
     }
 
     if let Some(qobuz_id) = artist.qobuz_id {
-        if let Ok(bytes) = get_artist_cover_bytes(
-            ArtistId::Qobuz(qobuz_id),
-            db.clone(),
-            None,
-            try_to_get_stream_size,
-        )
-        .await
+        if let Ok(bytes) =
+            get_artist_cover_bytes(ArtistId::Qobuz(qobuz_id), db, None, try_to_get_stream_size)
+                .await
         {
             return Ok(bytes);
         }
@@ -277,7 +269,7 @@ struct ArtistCoverRequest {
 
 pub async fn get_tidal_artist_cover_bytes(
     tidal_artist_id: u64,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     size: Option<u32>,
     try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, ArtistCoverError> {
@@ -293,7 +285,7 @@ pub async fn get_tidal_artist_cover_bytes(
 
 pub async fn get_tidal_artist_cover(
     tidal_artist_id: u64,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     size: Option<u32>,
 ) -> Result<String, ArtistCoverError> {
     let request = get_tidal_artist_cover_request(tidal_artist_id, db, size).await?;
@@ -303,7 +295,7 @@ pub async fn get_tidal_artist_cover(
 
 async fn get_tidal_artist_cover_request(
     tidal_artist_id: u64,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     size: Option<u32>,
 ) -> Result<ArtistCoverRequest, ArtistCoverError> {
     static ARTIST_CACHE: Lazy<RwLock<HashMap<u64, Option<TidalArtist>>>> =
@@ -367,7 +359,7 @@ async fn get_tidal_artist_cover_request(
 
 pub async fn get_qobuz_artist_cover_bytes(
     qobuz_artist_id: u64,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     size: Option<u32>,
     try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, ArtistCoverError> {
@@ -383,7 +375,7 @@ pub async fn get_qobuz_artist_cover_bytes(
 
 pub async fn get_qobuz_artist_cover(
     qobuz_artist_id: u64,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     size: Option<u32>,
 ) -> Result<String, ArtistCoverError> {
     let request = get_qobuz_artist_cover_request(qobuz_artist_id, db, size).await?;
@@ -393,7 +385,7 @@ pub async fn get_qobuz_artist_cover(
 
 async fn get_qobuz_artist_cover_request(
     qobuz_artist_id: u64,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     size: Option<u32>,
 ) -> Result<ArtistCoverRequest, ArtistCoverError> {
     static ARTIST_CACHE: Lazy<RwLock<HashMap<u64, Option<QobuzArtist>>>> =

@@ -200,7 +200,7 @@ pub enum TidalDeviceAuthorizationTokenError {
 }
 
 pub async fn device_authorization_token(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     client_id: String,
     client_secret: String,
     device_code: String,
@@ -236,7 +236,7 @@ pub async fn device_authorization_token(
         let user_id = value.to_value("user_id")?;
 
         db::create_tidal_config(
-            &**db,
+            db,
             &client_id,
             access_token,
             refresh_token,
@@ -274,7 +274,7 @@ pub enum FetchCredentialsError {
 }
 
 async fn fetch_credentials(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     access_token: Option<String>,
 ) -> Result<TidalCredentials, FetchCredentialsError> {
     #[cfg(feature = "db")]
@@ -290,7 +290,7 @@ async fn fetch_credentials(
         } else {
             log::debug!("Fetching db Tidal config");
 
-            match db::get_tidal_config(&**db).await {
+            match db::get_tidal_config(db).await {
                 Ok(Some(config)) => {
                     log::debug!("Using db Tidal config");
                     Some(Ok(TidalCredentials {
@@ -342,7 +342,7 @@ pub enum AuthenticatedRequestError {
 }
 
 async fn authenticated_request(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     url: &str,
     access_token: Option<String>,
 ) -> Result<Value, AuthenticatedRequestError> {
@@ -361,7 +361,7 @@ async fn authenticated_request(
 }
 
 async fn authenticated_post_request(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     url: &str,
     access_token: Option<String>,
     body: Option<Value>,
@@ -386,7 +386,7 @@ async fn authenticated_post_request(
 }
 
 async fn authenticated_delete_request(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     url: &str,
     access_token: Option<String>,
 ) -> Result<Option<Value>, AuthenticatedRequestError> {
@@ -412,7 +412,7 @@ enum Method {
 
 #[async_recursion]
 async fn authenticated_request_inner(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     method: Method,
     url: &str,
     access_token: Option<String>,
@@ -429,7 +429,7 @@ async fn authenticated_request_inner(
 
     let credentials = fetch_credentials(
         #[cfg(feature = "db")]
-        db.clone(),
+        db,
         access_token,
     )
     .await?;
@@ -465,7 +465,7 @@ async fn authenticated_request_inner(
             {
                 return authenticated_request_inner(
                     #[cfg(feature = "db")]
-                    db.clone(),
+                    db,
                     method,
                     url,
                     Some(
@@ -518,7 +518,7 @@ pub enum RefetchAccessTokenError {
 }
 
 async fn refetch_access_token(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     client_id: &str,
     refresh_token: &str,
     #[cfg(feature = "db")] persist: bool,
@@ -547,7 +547,7 @@ async fn refetch_access_token(
         let user_id = value.to_value("user_id")?;
 
         db::create_tidal_config(
-            &**db,
+            db,
             client_id,
             access_token,
             refresh_token,
@@ -644,7 +644,7 @@ pub async fn favorite_artists(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        db.clone(),
+        &**db,
         &url,
         access_token.clone(),
     )
@@ -713,7 +713,7 @@ pub enum TidalAddFavoriteArtistError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_artist(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     artist_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -725,7 +725,7 @@ pub async fn add_favorite_artist(
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
     } else {
-        match db::get_tidal_config(&**db).await {
+        match db::get_tidal_config(db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
@@ -775,7 +775,7 @@ pub enum TidalRemoveFavoriteArtistError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_artist(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     artist_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -787,7 +787,7 @@ pub async fn remove_favorite_artist(
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
     } else {
-        match db::get_tidal_config(&**db).await {
+        match db::get_tidal_config(db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
@@ -904,7 +904,7 @@ pub async fn favorite_albums(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        db.clone(),
+        &**db,
         &url,
         access_token.clone(),
     )
@@ -1017,7 +1017,7 @@ pub enum TidalAddFavoriteAlbumError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_album(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     album_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1029,7 +1029,7 @@ pub async fn add_favorite_album(
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
     } else {
-        match db::get_tidal_config(&**db).await {
+        match db::get_tidal_config(db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
@@ -1079,7 +1079,7 @@ pub enum TidalRemoveFavoriteAlbumError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_album(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     album_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1091,7 +1091,7 @@ pub async fn remove_favorite_album(
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
     } else {
-        match db::get_tidal_config(&**db).await {
+        match db::get_tidal_config(db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
@@ -1208,7 +1208,7 @@ pub async fn favorite_tracks(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        db.clone(),
+        &**db,
         &url,
         access_token.clone(),
     )
@@ -1277,7 +1277,7 @@ pub enum TidalAddFavoriteTrackError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_track(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     track_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1289,7 +1289,7 @@ pub async fn add_favorite_track(
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
     } else {
-        match db::get_tidal_config(&**db).await {
+        match db::get_tidal_config(db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
@@ -1339,7 +1339,7 @@ pub enum TidalRemoveFavoriteTrackError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_track(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     track_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1351,7 +1351,7 @@ pub async fn remove_favorite_track(
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
     } else {
-        match db::get_tidal_config(&**db).await {
+        match db::get_tidal_config(db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
@@ -1458,7 +1458,7 @@ pub async fn artist_albums(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        db.clone(),
+        &**db,
         &url,
         access_token.clone(),
     )
@@ -1552,7 +1552,7 @@ pub async fn album_tracks(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        db.clone(),
+        &**db,
         &url,
         access_token.clone(),
     )
@@ -1615,7 +1615,7 @@ pub enum TidalAlbumError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn album(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     album_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1656,7 +1656,7 @@ pub enum TidalArtistError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn artist(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     artist_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1698,7 +1698,7 @@ pub enum TidalTrackError {
 }
 
 pub async fn track(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     track_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1749,7 +1749,7 @@ pub enum TidalTrackFileUrlError {
 }
 
 pub async fn track_file_url(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     audio_quality: TidalAudioQuality,
     track_id: &Id,
     access_token: Option<String>,
@@ -1806,7 +1806,7 @@ pub enum TidalTrackPlaybackInfoError {
 }
 
 pub async fn track_playback_info(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     audio_quality: TidalAudioQuality,
     track_id: &Id,
     access_token: Option<String>,
@@ -2040,7 +2040,7 @@ impl MusicApi for TidalMusicApi {
         Ok(Some(
             artist(
                 #[cfg(feature = "db")]
-                self.db.clone(),
+                &**self.db,
                 artist_id,
                 None,
                 None,
@@ -2055,7 +2055,7 @@ impl MusicApi for TidalMusicApi {
     async fn add_artist(&self, artist_id: &Id) -> Result<(), AddArtistError> {
         Ok(add_favorite_artist(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &**self.db,
             artist_id,
             None,
             None,
@@ -2069,7 +2069,7 @@ impl MusicApi for TidalMusicApi {
     async fn remove_artist(&self, artist_id: &Id) -> Result<(), RemoveArtistError> {
         Ok(remove_favorite_artist(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &**self.db,
             artist_id,
             None,
             None,
@@ -2108,7 +2108,7 @@ impl MusicApi for TidalMusicApi {
         Ok(Some(
             album(
                 #[cfg(feature = "db")]
-                self.db.clone(),
+                &**self.db,
                 album_id,
                 None,
                 None,
@@ -2240,7 +2240,7 @@ impl MusicApi for TidalMusicApi {
     async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
         Ok(add_favorite_album(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &**self.db,
             album_id,
             None,
             None,
@@ -2254,7 +2254,7 @@ impl MusicApi for TidalMusicApi {
     async fn remove_album(&self, album_id: &Id) -> Result<(), RemoveAlbumError> {
         Ok(remove_favorite_album(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &**self.db,
             album_id,
             None,
             None,
@@ -2293,7 +2293,7 @@ impl MusicApi for TidalMusicApi {
         Ok(Some(
             track(
                 #[cfg(feature = "db")]
-                self.db.clone(),
+                &**self.db,
                 track_id,
                 None,
                 None,
@@ -2308,7 +2308,7 @@ impl MusicApi for TidalMusicApi {
     async fn add_track(&self, track_id: &Id) -> Result<(), AddTrackError> {
         Ok(add_favorite_track(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &**self.db,
             track_id,
             None,
             None,
@@ -2322,7 +2322,7 @@ impl MusicApi for TidalMusicApi {
     async fn remove_track(&self, track_id: &Id) -> Result<(), RemoveTrackError> {
         Ok(remove_favorite_track(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &**self.db,
             track_id,
             None,
             None,

@@ -220,7 +220,7 @@ pub async fn artist_endpoint(
 ) -> Result<Json<ApiArtist>> {
     let artist = artist(
         #[cfg(feature = "db")]
-        data.database.clone(),
+        &**data.database,
         &query.artist_id.into(),
         req.headers()
             .get(QOBUZ_ACCESS_TOKEN_HEADER)
@@ -292,7 +292,7 @@ pub async fn album_endpoint(
 ) -> Result<Json<ApiAlbum>> {
     let album = album(
         #[cfg(feature = "db")]
-        data.database.clone(),
+        &**data.database,
         &query.album_id.clone().into(),
         req.headers()
             .get(QOBUZ_ACCESS_TOKEN_HEADER)
@@ -516,7 +516,7 @@ pub async fn track_endpoint(
 ) -> Result<Json<ApiTrack>> {
     let track = track(
         #[cfg(feature = "db")]
-        data.database.clone(),
+        &**data.database,
         &query.track_id.into(),
         req.headers()
             .get(QOBUZ_ACCESS_TOKEN_HEADER)
@@ -590,7 +590,7 @@ pub async fn track_file_url_endpoint(
     Ok(Json(serde_json::json!({
         "url": track_file_url(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &**data.database,
             &query.track_id.into(),
             query.audio_quality,
             req.headers()

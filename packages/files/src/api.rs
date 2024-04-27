@@ -61,7 +61,7 @@ pub async fn track_visualization_endpoint(
     query: web::Query<GetTrackVisualizationQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<Vec<u8>>> {
-    let source = get_track_id_source(query.track_id, data.database.clone(), None, None).await?;
+    let source = get_track_id_source(query.track_id, &**data.database, None, None).await?;
 
     Ok(Json(get_or_init_track_visualization(
         query.track_id,
@@ -92,7 +92,7 @@ pub async fn track_endpoint(
 ) -> Result<HttpResponse> {
     let source = get_track_id_source(
         query.track_id as i32,
-        data.database.clone(),
+        &**data.database,
         query.quality,
         query.source,
     )
@@ -157,7 +157,7 @@ pub async fn track_endpoint(
     log::debug!("Fetching track bytes with range range={range:?}");
 
     let bytes = get_track_bytes(
-        data.database.clone(),
+        &**data.database,
         query.track_id,
         source,
         format,
@@ -269,7 +269,7 @@ pub async fn artist_source_artwork_endpoint(
     }
     .map_err(|_e| ErrorBadRequest("Invalid artist_id"))?;
 
-    match get_artist_cover(artist_id, data.database.clone(), None).await? {
+    match get_artist_cover(artist_id, &**data.database, None).await? {
         ArtistCoverSource::LocalFilePath(path) => {
             let path_buf = std::path::PathBuf::from(path);
             let file_path = path_buf.as_path();
@@ -316,7 +316,7 @@ pub async fn artist_cover_endpoint(
 
     let ArtistCoverSource::LocalFilePath(path) = get_artist_cover(
         artist_id,
-        data.database.clone(),
+        &**data.database,
         Some(std::cmp::max(width, height)),
     )
     .await?;
@@ -354,7 +354,7 @@ pub async fn album_source_artwork_endpoint(
     }
     .map_err(|_e| ErrorBadRequest("Invalid album_id"))?;
 
-    match get_album_cover(album_id, data.database.clone(), None).await? {
+    match get_album_cover(album_id, &**data.database, None).await? {
         AlbumCoverSource::LocalFilePath(path) => {
             let path_buf = std::path::PathBuf::from(path);
             let file_path = path_buf.as_path();
@@ -401,7 +401,7 @@ pub async fn album_artwork_endpoint(
 
     let AlbumCoverSource::LocalFilePath(path) = get_album_cover(
         album_id,
-        data.database.clone(),
+        &**data.database,
         Some(std::cmp::max(width, height)),
     )
     .await?;

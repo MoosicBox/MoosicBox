@@ -87,7 +87,7 @@ pub enum FetchCredentialsError {
 }
 
 async fn fetch_credentials(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     app_id: Option<String>,
     access_token: Option<String>,
 ) -> Result<QobuzCredentials, FetchCredentialsError> {
@@ -104,11 +104,11 @@ async fn fetch_credentials(
         } else {
             log::debug!("Fetching db Qobuz config");
 
-            match db::get_qobuz_config(&**db).await {
+            match db::get_qobuz_config(db).await {
                 Ok(Some(config)) => {
                     log::debug!("Using db Qobuz config");
                     log::debug!("Fetching db Qobuz app config");
-                    match db::get_qobuz_app_config(&**db).await {
+                    match db::get_qobuz_app_config(db).await {
                         Ok(Some(app_config)) => {
                             log::debug!("Using db Qobuz app config");
                             Some(Ok(QobuzCredentials {
@@ -170,7 +170,7 @@ pub enum AuthenticatedRequestError {
 }
 
 async fn authenticated_request(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     url: &str,
     app_id: Option<String>,
     access_token: Option<String>,
@@ -192,7 +192,7 @@ async fn authenticated_request(
 
 #[allow(unused)]
 async fn authenticated_post_request(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     url: &str,
     app_id: Option<String>,
     access_token: Option<String>,
@@ -220,7 +220,7 @@ async fn authenticated_post_request(
 
 #[allow(unused)]
 async fn authenticated_delete_request(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     url: &str,
     app_id: Option<String>,
     access_token: Option<String>,
@@ -249,7 +249,7 @@ enum Method {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 async fn authenticated_request_inner(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     method: Method,
     url: &str,
     app_id: Option<String>,
@@ -267,7 +267,7 @@ async fn authenticated_request_inner(
 
     let credentials = fetch_credentials(
         #[cfg(feature = "db")]
-        db.clone(),
+        db,
         app_id,
         access_token,
     )
@@ -313,7 +313,7 @@ async fn authenticated_request_inner(
 
             return authenticated_request_inner(
                 #[cfg(feature = "db")]
-                db.clone(),
+                db,
                 method,
                 url,
                 Some(app_id.to_string()),
@@ -368,7 +368,7 @@ pub enum RefetchAccessTokenError {
 }
 
 async fn refetch_access_token(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     app_id: &str,
     username: &str,
     access_token: &str,
@@ -398,7 +398,7 @@ async fn refetch_access_token(
         let user_email: &str = value.to_nested_value(&["user", "email"])?;
         let user_public_id: &str = value.to_nested_value(&["user", "publicId"])?;
 
-        db::create_qobuz_config(&**db, access_token, user_id, user_email, user_public_id).await?;
+        db::create_qobuz_config(db, access_token, user_id, user_email, user_public_id).await?;
     }
 
     Ok(access_token.to_string())
@@ -635,7 +635,7 @@ pub enum QobuzArtistError {
 }
 
 pub async fn artist(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     artist_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -694,7 +694,7 @@ pub async fn favorite_artists(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        db.clone(),
+        &**db,
         &url,
         app_id.clone(),
         access_token.clone(),
@@ -744,7 +744,7 @@ pub enum QobuzAddFavoriteArtistError {
 }
 
 pub async fn add_favorite_artist(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     artist_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -776,7 +776,7 @@ pub enum QobuzRemoveFavoriteArtistError {
 }
 
 pub async fn remove_favorite_artist(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     artist_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -842,7 +842,7 @@ pub async fn artist_albums(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        db.clone(),
+        &**db,
         &url,
         app_id.clone(),
         access_token.clone(),
@@ -901,7 +901,7 @@ pub enum QobuzAlbumError {
 }
 
 pub async fn album(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     album_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -959,7 +959,7 @@ pub async fn favorite_albums(
 
         match authenticated_request(
             #[cfg(feature = "db")]
-            db.clone(),
+            &**db,
             &url,
             app_id.clone(),
             access_token.clone(),
@@ -1056,7 +1056,7 @@ pub enum QobuzAddFavoriteAlbumError {
 }
 
 pub async fn add_favorite_album(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     album_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -1084,7 +1084,7 @@ pub enum QobuzRemoveFavoriteAlbumError {
 }
 
 pub async fn remove_favorite_album(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     album_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -1142,7 +1142,7 @@ pub async fn album_tracks(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        db.clone(),
+        &**db,
         &url,
         app_id.clone(),
         access_token.clone(),
@@ -1215,7 +1215,7 @@ pub enum QobuzTrackError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn track(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     track_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -1272,7 +1272,7 @@ pub async fn favorite_tracks(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        db.clone(),
+        &**db,
         &url,
         app_id.clone(),
         access_token.clone(),
@@ -1320,7 +1320,7 @@ pub enum QobuzAddFavoriteTrackError {
 }
 
 pub async fn add_favorite_track(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     track_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -1348,7 +1348,7 @@ pub enum QobuzRemoveFavoriteTrackError {
 }
 
 pub async fn remove_favorite_track(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     track_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -1412,7 +1412,7 @@ pub enum QobuzTrackFileUrlError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn track_file_url(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &dyn Database,
     track_id: &Id,
     quality: QobuzAudioQuality,
     access_token: Option<String>,
@@ -1423,7 +1423,7 @@ pub async fn track_file_url(
     let app_secret = match app_secret {
         Some(app_secret) => app_secret,
         _ => {
-            let app_secrets = db::get_qobuz_app_secrets(&**db).await?;
+            let app_secrets = db::get_qobuz_app_secrets(db).await?;
             let app_secrets = app_secrets
                 .iter()
                 .find(|secret| secret.timezone == "berlin")
@@ -1804,7 +1804,7 @@ impl MusicApi for QobuzMusicApi {
         Ok(Some(
             artist(
                 #[cfg(feature = "db")]
-                self.db.clone(),
+                &**self.db,
                 artist_id,
                 None,
                 None,
@@ -1817,7 +1817,7 @@ impl MusicApi for QobuzMusicApi {
     async fn add_artist(&self, artist_id: &Id) -> Result<(), AddArtistError> {
         Ok(add_favorite_artist(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &**self.db,
             artist_id,
             None,
             None,
@@ -1828,7 +1828,7 @@ impl MusicApi for QobuzMusicApi {
     async fn remove_artist(&self, artist_id: &Id) -> Result<(), RemoveArtistError> {
         Ok(remove_favorite_artist(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &**self.db,
             artist_id,
             None,
             None,
@@ -1859,7 +1859,7 @@ impl MusicApi for QobuzMusicApi {
         Ok(Some(
             album(
                 #[cfg(feature = "db")]
-                self.db.clone(),
+                &**self.db,
                 album_id,
                 None,
                 None,
@@ -1921,7 +1921,7 @@ impl MusicApi for QobuzMusicApi {
     async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
         Ok(add_favorite_album(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &**self.db,
             album_id,
             None,
             None,
@@ -1932,7 +1932,7 @@ impl MusicApi for QobuzMusicApi {
     async fn remove_album(&self, album_id: &Id) -> Result<(), RemoveAlbumError> {
         Ok(remove_favorite_album(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &**self.db,
             album_id,
             None,
             None,
@@ -1963,7 +1963,7 @@ impl MusicApi for QobuzMusicApi {
         Ok(Some(
             track(
                 #[cfg(feature = "db")]
-                self.db.clone(),
+                &**self.db,
                 track_id,
                 None,
                 None,
@@ -1976,7 +1976,7 @@ impl MusicApi for QobuzMusicApi {
     async fn add_track(&self, track_id: &Id) -> Result<(), AddTrackError> {
         Ok(add_favorite_track(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &**self.db,
             track_id,
             None,
             None,
@@ -1987,7 +1987,7 @@ impl MusicApi for QobuzMusicApi {
     async fn remove_track(&self, track_id: &Id) -> Result<(), RemoveTrackError> {
         Ok(remove_favorite_track(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &**self.db,
             track_id,
             None,
             None,

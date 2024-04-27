@@ -165,13 +165,13 @@ pub enum TrackSourceError {
 
 pub async fn get_track_id_source(
     track_id: i32,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     quality: Option<TrackAudioQuality>,
     source: Option<TrackApiSource>,
 ) -> Result<TrackSource, TrackSourceError> {
     log::debug!("Getting track audio file {track_id} quality={quality:?} source={source:?}");
 
-    let track = get_track(&**db, track_id as u64)
+    let track = get_track(db, track_id as u64)
         .await?
         .ok_or(TrackSourceError::NotFound(track_id))?;
 
@@ -180,7 +180,7 @@ pub async fn get_track_id_source(
 
 pub async fn get_track_source(
     track: &LibraryTrack,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     quality: Option<TrackAudioQuality>,
     source: Option<TrackApiSource>,
 ) -> Result<TrackSource, TrackSourceError> {
@@ -273,7 +273,7 @@ pub struct TrackBytes {
 }
 
 pub async fn get_track_bytes(
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     track_id: u64,
     source: TrackSource,
     format: AudioFormat,
@@ -284,13 +284,7 @@ pub async fn get_track_bytes(
     log::debug!("Getting track bytes track_id={track_id} format={format:?} try_to_get_size={try_to_get_size} start={start:?} end={end:?}");
 
     let size = if try_to_get_size {
-        match get_or_init_track_size(
-            track_id as i32,
-            &source,
-            PlaybackQuality { format },
-            db.clone(),
-        )
-        .await
+        match get_or_init_track_size(track_id as i32, &source, PlaybackQuality { format }, db).await
         {
             Ok(size) => Some(size),
             Err(err) => match err {
@@ -309,7 +303,7 @@ pub async fn get_track_bytes(
         None
     };
 
-    let track = moosicbox_core::sqlite::db::get_track(&**db, track_id)
+    let track = moosicbox_core::sqlite::db::get_track(db, track_id)
         .await?
         .ok_or(GetTrackBytesError::NotFound)?;
 
@@ -732,11 +726,11 @@ pub async fn get_or_init_track_size(
     track_id: i32,
     source: &TrackSource,
     quality: PlaybackQuality,
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
 ) -> Result<u64, TrackInfoError> {
     log::debug!("Getting track size {track_id}");
 
-    if let Some(size) = get_track_size(&**db, track_id as u64, &quality).await? {
+    if let Some(size) = get_track_size(db, track_id as u64, &quality).await? {
         return Ok(size);
     }
 
@@ -779,7 +773,7 @@ pub async fn get_or_init_track_size(
     };
 
     set_track_size(
-        &**db,
+        db,
         SetTrackSize {
             track_id,
             quality,

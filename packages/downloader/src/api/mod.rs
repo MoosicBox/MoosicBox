@@ -105,7 +105,7 @@ pub async fn download_endpoint(
     query: web::Query<DownloadQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<Value>> {
-    let download_path = get_download_path(data.database.clone(), query.location_id).await?;
+    let download_path = get_download_path(&**data.database, query.location_id).await?;
 
     let tasks = get_create_download_tasks(
         data.database.clone(),
@@ -121,7 +121,7 @@ pub async fn download_endpoint(
     )
     .await?;
 
-    let tasks = create_download_tasks(data.database.clone(), tasks).await?;
+    let tasks = create_download_tasks(&**data.database, tasks).await?;
 
     let queue = get_default_download_queue(data.database.clone()).await;
     let mut download_queue = queue.write().await;

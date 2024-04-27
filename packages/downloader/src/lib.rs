@@ -65,12 +65,12 @@ pub enum GetDownloadPathError {
 }
 
 pub async fn get_download_path(
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     location_id: Option<u64>,
 ) -> Result<PathBuf, GetDownloadPathError> {
     Ok(if let Some(location_id) = location_id {
         PathBuf::from_str(
-            &get_download_location(&**db, location_id)
+            &get_download_location(db, location_id)
                 .await?
                 .ok_or(GetDownloadPathError::NotFound)?
                 .path,
@@ -316,13 +316,13 @@ pub enum CreateDownloadTasksError {
 }
 
 pub async fn create_download_tasks(
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     tasks: Vec<CreateDownloadTask>,
 ) -> Result<Vec<DownloadTask>, CreateDownloadTasksError> {
     let mut results = vec![];
 
     for task in tasks {
-        results.push(create_download_task(&**db, &task).await?);
+        results.push(create_download_task(db, &task).await?);
     }
 
     Ok(results)
@@ -362,7 +362,7 @@ pub enum DownloadTrackError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn download_track_id(
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     path: &str,
     track_id: u64,
     quality: TrackAudioQuality,
@@ -373,7 +373,7 @@ pub async fn download_track_id(
 ) -> Result<(), DownloadTrackError> {
     log::debug!("Starting download for track_id={track_id} quality={quality:?} source={source:?} path={path}");
 
-    let track = get_track(&**db, track_id)
+    let track = get_track(db, track_id)
         .await?
         .ok_or(DownloadTrackError::NotFound)?;
 
@@ -394,7 +394,7 @@ pub async fn download_track_id(
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 async fn download_track(
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     path: &str,
     track: &LibraryTrack,
     quality: TrackAudioQuality,
@@ -405,7 +405,7 @@ async fn download_track(
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadTrackError> {
     match download_track_inner(
-        db.clone(),
+        db,
         path,
         track,
         quality,
@@ -435,7 +435,7 @@ async fn download_track(
             DownloadTrackInnerError::Timeout(start) => {
                 log::warn!("Track download timed out. Trying again at start {start:?}");
                 return download_track(
-                    db.clone(),
+                    db,
                     path,
                     track,
                     quality,
@@ -477,7 +477,7 @@ pub enum DownloadTrackInnerError {
 
 #[allow(clippy::too_many_arguments)]
 async fn download_track_inner(
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     path: &str,
     track: &LibraryTrack,
     quality: TrackAudioQuality,
@@ -491,7 +491,7 @@ async fn download_track_inner(
         "Starting download for track={track:?} quality={quality:?} source={source:?} path={path} start={start:?}"
     );
 
-    let req = get_track_source(track, db.clone(), Some(quality), Some(source.into()));
+    let req = get_track_source(track, db, Some(quality), Some(source.into()));
 
     let result = if let Some(timeout_duration) = timeout_duration {
         select! {
@@ -707,7 +707,7 @@ pub async fn download_album_id(
 
     for track in tracks.iter() {
         download_track(
-            db.clone(),
+            &**db,
             path,
             track,
             quality,
@@ -723,25 +723,18 @@ pub async fn download_album_id(
     log::debug!("Completed album download for {} tracks", tracks.len());
 
     if try_download_album_cover {
-        download_album_cover(
-            db.clone(),
-            path,
-            album_id,
-            on_progress.clone(),
-            speed.clone(),
-        )
-        .await?;
+        download_album_cover(&**db, path, album_id, on_progress.clone(), speed.clone()).await?;
     }
 
     if try_download_artist_cover {
-        download_artist_cover(db, path, album_id, on_progress, speed).await?;
+        download_artist_cover(&**db, path, album_id, on_progress, speed).await?;
     }
 
     Ok(())
 }
 
 pub async fn download_album_cover(
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     path: &str,
     album_id: u64,
     on_progress: Arc<std::sync::Mutex<ProgressListener>>,
@@ -802,7 +795,7 @@ pub async fn download_album_cover(
 }
 
 pub async fn download_artist_cover(
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     path: &str,
     album_id: u64,
     on_progress: Arc<std::sync::Mutex<ProgressListener>>,
@@ -817,7 +810,7 @@ pub async fn download_artist_cover(
         return Ok(());
     }
 
-    let artist = get_artist_by_album_id(&**db, album_id)
+    let artist = get_artist_by_album_id(db, album_id)
         .await?
         .ok_or(DownloadAlbumError::NotFound)?;
 
@@ -925,7 +918,7 @@ impl Downloader for MoosicboxDownloader {
         timeout_duration: Option<Duration>,
     ) -> Result<(), DownloadTrackError> {
         download_track_id(
-            self.db.clone(),
+            &**self.db,
             path,
             track_id,
             quality,
@@ -944,7 +937,7 @@ impl Downloader for MoosicboxDownloader {
         on_progress: ProgressListener,
     ) -> Result<(), DownloadAlbumError> {
         download_album_cover(
-            self.db.clone(),
+            &**self.db,
             path,
             album_id,
             Arc::new(std::sync::Mutex::new(on_progress)),
@@ -960,7 +953,7 @@ impl Downloader for MoosicboxDownloader {
         on_progress: ProgressListener,
     ) -> Result<(), DownloadAlbumError> {
         download_artist_cover(
-            self.db.clone(),
+            &**self.db,
             path,
             album_id,
             Arc::new(std::sync::Mutex::new(on_progress)),

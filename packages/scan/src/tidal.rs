@@ -161,7 +161,7 @@ pub async fn scan_albums(
 
                 if read_artist.cover.is_none() && !read_artist.searched_cover {
                     match moosicbox_tidal::artist(
-                        db.clone(),
+                        &**db,
                         &album.artist_id.into(),
                         None,
                         None,

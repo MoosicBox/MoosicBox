@@ -197,7 +197,7 @@ pub async fn device_authorization_token_endpoint(
     Ok(Json(
         device_authorization_token(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &**data.database,
             query.client_id.clone(),
             query.client_secret.clone(),
             query.device_code.clone(),
@@ -231,7 +231,7 @@ pub async fn track_file_url_endpoint(
     Ok(Json(serde_json::json!({
         "urls": track_file_url(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &**data.database,
             query.audio_quality,
             &query.track_id.into(),
             req.headers()
@@ -265,7 +265,7 @@ pub async fn track_playback_info_endpoint(
     Ok(Json(
         track_playback_info(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &**data.database,
             query.audio_quality,
             &query.track_id.into(),
             req.headers()
@@ -349,7 +349,7 @@ pub async fn add_favorite_artist_endpoint(
 ) -> Result<Json<Value>> {
     add_favorite_artist(
         #[cfg(feature = "db")]
-        data.database.clone(),
+        &**data.database,
         &query.artist_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -391,7 +391,7 @@ pub async fn remove_favorite_artist_endpoint(
 ) -> Result<Json<Value>> {
     remove_favorite_artist(
         #[cfg(feature = "db")]
-        data.database.clone(),
+        &**data.database,
         &query.artist_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -481,7 +481,7 @@ pub async fn add_favorite_album_endpoint(
 ) -> Result<Json<Value>> {
     add_favorite_album(
         #[cfg(feature = "db")]
-        data.database.clone(),
+        &**data.database,
         &query.album_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -523,7 +523,7 @@ pub async fn remove_favorite_album_endpoint(
 ) -> Result<Json<Value>> {
     remove_favorite_album(
         #[cfg(feature = "db")]
-        data.database.clone(),
+        &**data.database,
         &query.album_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -565,7 +565,7 @@ pub async fn add_favorite_track_endpoint(
 ) -> Result<Json<Value>> {
     add_favorite_track(
         #[cfg(feature = "db")]
-        data.database.clone(),
+        &**data.database,
         &query.track_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -607,7 +607,7 @@ pub async fn remove_favorite_track_endpoint(
 ) -> Result<Json<Value>> {
     remove_favorite_track(
         #[cfg(feature = "db")]
-        data.database.clone(),
+        &**data.database,
         &query.track_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -815,7 +815,7 @@ pub async fn album_endpoint(
 ) -> Result<Json<ApiAlbum>> {
     let album = album(
         #[cfg(feature = "db")]
-        data.database.clone(),
+        &**data.database,
         &query.album_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -853,7 +853,7 @@ pub async fn artist_endpoint(
 ) -> Result<Json<ApiArtist>> {
     let artist = artist(
         #[cfg(feature = "db")]
-        data.database.clone(),
+        &**data.database,
         &query.artist_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -891,7 +891,7 @@ pub async fn track_endpoint(
 ) -> Result<Json<ApiTrack>> {
     let track = track(
         #[cfg(feature = "db")]
-        data.database.clone(),
+        &**data.database,
         &query.track_id.into(),
         query.country_code.clone(),
         query.locale.clone(),

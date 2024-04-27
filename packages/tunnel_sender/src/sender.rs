@@ -1101,7 +1101,7 @@ impl TunnelSender {
 
                     match get_track_id_source(
                         query.track_id,
-                        database.clone(),
+                        &**database,
                         query.quality,
                         query.source,
                     )
@@ -1328,7 +1328,7 @@ impl TunnelSender {
 
                             match get_album_cover(
                                 album_id,
-                                database.clone(),
+                                &**database,
                                 Some(std::cmp::max(width, height)),
                             )
                             .await
