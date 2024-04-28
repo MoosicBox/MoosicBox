@@ -108,7 +108,7 @@ pub async fn download_endpoint(
     let download_path = get_download_path(&**data.database, query.location_id).await?;
 
     let tasks = get_create_download_tasks(
-        data.database.clone(),
+        &**data.database,
         &download_path,
         query.track_id,
         query.track_ids.clone(),

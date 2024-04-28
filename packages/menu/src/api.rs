@@ -389,7 +389,7 @@ pub async fn remove_album_endpoint(
 ) -> Result<Json<ApiAlbum>> {
     Ok(Json(
         remove_album(
-            data.database.clone(),
+            &**data.database,
             &album_id_for_source(&query.album_id, query.source)?.into(),
             &*music_api_from_source(data.database.clone(), query.source),
         )

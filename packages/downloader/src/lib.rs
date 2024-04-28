@@ -99,7 +99,7 @@ pub enum GetCreateDownloadTasksError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn get_create_download_tasks(
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     download_path: &Path,
     track_id: Option<u64>,
     track_ids: Option<String>,
@@ -115,7 +115,7 @@ pub async fn get_create_download_tasks(
     if let Some(track_id) = track_id {
         tasks.extend(
             get_create_download_tasks_for_track_ids(
-                db.clone(),
+                db,
                 &[track_id],
                 download_path,
                 source,
@@ -129,21 +129,15 @@ pub async fn get_create_download_tasks(
         let track_ids = parse_integer_ranges(track_ids)?;
 
         tasks.extend(
-            get_create_download_tasks_for_track_ids(
-                db.clone(),
-                &track_ids,
-                download_path,
-                source,
-                quality,
-            )
-            .await?,
+            get_create_download_tasks_for_track_ids(db, &track_ids, download_path, source, quality)
+                .await?,
         );
     }
 
     if let Some(album_id) = album_id {
         tasks.extend(
             get_create_download_tasks_for_album_ids(
-                db.clone(),
+                db,
                 &[album_id],
                 download_path,
                 source,
@@ -176,13 +170,13 @@ pub async fn get_create_download_tasks(
 }
 
 pub async fn get_create_download_tasks_for_track_ids(
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     track_ids: &[u64],
     download_path: &Path,
     source: Option<DownloadApiSource>,
     quality: Option<TrackAudioQuality>,
 ) -> Result<Vec<CreateDownloadTask>, GetCreateDownloadTasksError> {
-    let tracks = get_tracks(&**db, Some(&track_ids.to_vec())).await?;
+    let tracks = get_tracks(db, Some(&track_ids.to_vec())).await?;
 
     get_create_download_tasks_for_tracks(&tracks, download_path, source, quality)
 }
@@ -229,7 +223,7 @@ pub fn get_create_download_tasks_for_tracks(
 }
 
 pub async fn get_create_download_tasks_for_album_ids(
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     album_ids: &[u64],
     download_path: &Path,
     source: Option<DownloadApiSource>,
@@ -240,7 +234,7 @@ pub async fn get_create_download_tasks_for_album_ids(
     let mut tasks = vec![];
 
     for album_id in album_ids {
-        let tracks = get_album_tracks(&**db, *album_id)
+        let tracks = get_album_tracks(db, *album_id)
             .await?
             .into_iter()
             .filter(|track| {
@@ -270,7 +264,7 @@ pub async fn get_create_download_tasks_for_album_ids(
                     .join(&sanitize_filename(&track.artist))
                     .join(&sanitize_filename(&track.album))
             } else {
-                let album = get_album(&**db, Some(*album_id), None, None)
+                let album = get_album(db, Some(*album_id), None, None)
                     .await?
                     .ok_or(GetCreateDownloadTasksError::NotFound)?;
 
@@ -286,7 +280,7 @@ pub async fn get_create_download_tasks_for_album_ids(
                 });
             }
             if download_artist_cover {
-                let artist = get_artist(&**db, "id", tracks.first().unwrap().artist_id as u64)
+                let artist = get_artist(db, "id", tracks.first().unwrap().artist_id as u64)
                     .await?
                     .ok_or(GetCreateDownloadTasksError::NotFound)?;
 
@@ -685,7 +679,7 @@ pub enum DownloadAlbumError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn download_album_id(
-    db: Arc<Box<dyn Database>>,
+    db: &dyn Database,
     path: &str,
     album_id: u64,
     try_download_album_cover: bool,
@@ -699,7 +693,7 @@ pub async fn download_album_id(
     log::debug!("Starting download for album_id={album_id} quality={quality:?} source={source:?} path={path}");
 
     let track_source = source.into();
-    let tracks = get_album_tracks(&**db, album_id)
+    let tracks = get_album_tracks(db, album_id)
         .await?
         .into_iter()
         .filter(|track| track.source == track_source)
@@ -707,7 +701,7 @@ pub async fn download_album_id(
 
     for track in tracks.iter() {
         download_track(
-            &**db,
+            db,
             path,
             track,
             quality,
@@ -723,11 +717,11 @@ pub async fn download_album_id(
     log::debug!("Completed album download for {} tracks", tracks.len());
 
     if try_download_album_cover {
-        download_album_cover(&**db, path, album_id, on_progress.clone(), speed.clone()).await?;
+        download_album_cover(db, path, album_id, on_progress.clone(), speed.clone()).await?;
     }
 
     if try_download_artist_cover {
-        download_artist_cover(&**db, path, album_id, on_progress, speed).await?;
+        download_artist_cover(db, path, album_id, on_progress, speed).await?;
     }
 
     Ok(())
