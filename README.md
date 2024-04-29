@@ -48,6 +48,7 @@ To-do (in no particular order):
 - Turso database support
 - ios app
 - Run as a service in the background, optionally at startup
+- UPnP/DLNA support
 
 ## Local Server
 
