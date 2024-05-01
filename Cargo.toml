@@ -71,7 +71,7 @@ awc = "3.4.0"
 aws-config = "1.2.1"
 aws-sdk-apigatewaymanagement = "1.21.0"
 aws-sdk-ssm = "1.24.0"
-base64 = "0.22.0"
+base64 = "0.22.1"
 bytes = "1.6.0"
 chrono = { version = "0.4.38", default-features = false, features = [
     "clock",
@@ -162,7 +162,7 @@ symphonia = { git = "https://github.com/pdeljanov/Symphonia", branch = "master",
     "all",
 ] }
 tantivy = "0.22.0"
-test-log = "0.2.15"
+test-log = "0.2.16"
 thiserror = "1.0.59"
 throttle = "0.1.0"
 tokio = { version = "1.37.0", features = ["io-util", "sync"] }
