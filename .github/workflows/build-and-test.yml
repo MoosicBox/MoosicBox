@@ -162,6 +162,16 @@ jobs:
                       cargo: --no-default-features
                       features: db
 
+                    - name: upnp
+                      path: packages/upnp
+                      os: ubuntu-latest
+
+                    - name: upnp-api
+                      path: packages/upnp
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: api
+
                     - name: ws
                       path: packages/ws
                       os: ubuntu-latest

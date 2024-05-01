@@ -31,6 +31,7 @@ RUN cat Cargo.toml | \
     \"packages\/tidal\",\r\
     \"packages\/tunnel\",\r\
     \"packages\/tunnel_sender\",\r\
+    \"packages\/upnp\",\r\
     \"packages\/ws\",\r\
 ]/" | tr '\r' '\n' \
     > Cargo2.toml && \
@@ -59,6 +60,7 @@ COPY packages/symphonia_player/Cargo.toml packages/symphonia_player/Cargo.toml
 COPY packages/tidal/Cargo.toml packages/tidal/Cargo.toml
 COPY packages/tunnel/Cargo.toml packages/tunnel/Cargo.toml
 COPY packages/tunnel_sender/Cargo.toml packages/tunnel_sender/Cargo.toml
+COPY packages/upnp/Cargo.toml packages/upnp/Cargo.toml
 COPY packages/ws/Cargo.toml packages/ws/Cargo.toml
 
 RUN touch temp_lib.rs
@@ -90,6 +92,7 @@ packages/symphonia_player|\
 packages/tidal|\
 packages/tunnel|\
 packages/tunnel_sender|\
+packages/upnp|\
 packages/ws|\
 )/Cargo.toml$"); \
     do printf "\n\n[lib]\npath=\"../../temp_lib.rs\"" >> "$file"; \

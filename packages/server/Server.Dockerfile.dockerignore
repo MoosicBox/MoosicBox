@@ -23,4 +23,5 @@
 !/packages/tidal
 !/packages/tunnel
 !/packages/tunnel_sender
+!/packages/upnp
 !/packages/ws

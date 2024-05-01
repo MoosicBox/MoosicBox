@@ -1,0 +1,31 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["network-programming"]
+description = "MoosicBox UPnP package"
+edition     = "2021"
+keywords    = ["dlna", "network", "upnp"]
+license     = "MPL-2.0"
+name        = "moosicbox_upnp"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
+
+[dependencies]
+# API Dependencies
+actix-web = { workspace = true, optional = true }
+
+async-recursion = { workspace = true }
+futures         = { workspace = true }
+log             = { workspace = true }
+pin-utils       = { workspace = true }
+rupnp           = { workspace = true }
+serde           = { workspace = true }
+serde_json      = { workspace = true }
+thiserror       = { workspace = true }
+
+[features]
+default = ["api"]
+
+fail-on-warnings = []
+
+api = ["dep:actix-web"]

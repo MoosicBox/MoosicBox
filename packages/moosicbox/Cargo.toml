@@ -33,6 +33,7 @@ moosicbox_symphonia_player = { version = "0.1.0", path = "../symphonia_player", 
 moosicbox_tidal            = { version = "0.1.0", path = "../tidal", default-features = false }
 moosicbox_tunnel           = { version = "0.1.0", path = "../tunnel", default-features = false }
 moosicbox_tunnel_sender    = { version = "0.1.0", path = "../tunnel_sender", default-features = false }
+moosicbox_upnp             = { version = "0.1.0", path = "../upnp", default-features = false }
 moosicbox_ws               = { version = "0.1.0", path = "../ws", default-features = false }
 
 [features]

@@ -26,6 +26,7 @@ members = [
     "packages/tunnel",
     "packages/tunnel_sender",
     "packages/tunnel_server",
+    "packages/upnp",
     "packages/ws",
 ]
 
@@ -122,6 +123,7 @@ open = "5.1.2"
 openssl = { version = "0.10.64", features = ["v110"] }
 opus = "0.3.0"
 pin-project = "1.1.5"
+pin-utils = "0.1.0"
 postgres-native-tls = "0.5.0"
 postgres-openssl = "0.5.0"
 postgres-protocol = "0.6.6"
@@ -138,6 +140,7 @@ reqwest = { version = "0.12.4", default-features = false, features = [
     "stream",
 ] }
 rubato = "0.15.0"
+rupnp = { version = "2.0.0", features = ["full_device_spec"] }
 rusqlite = { version = "0.31.0", features = ["bundled"] }
 rustls = "0.23"
 serde = { version = "1", features = ["derive"] }

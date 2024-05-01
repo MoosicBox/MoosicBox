@@ -268,6 +268,7 @@ fn main() -> std::io::Result<()> {
                 .service(moosicbox_qobuz::api::album_endpoint)
                 .service(moosicbox_qobuz::api::artist_endpoint)
                 .service(moosicbox_qobuz::api::track_endpoint)
+                .service(moosicbox_upnp::api::scan_devices_endpoint)
         };
 
         let mut http_server = actix_web::HttpServer::new(app);
