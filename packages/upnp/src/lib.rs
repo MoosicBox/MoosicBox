@@ -7,8 +7,8 @@ pub mod models;
 
 use async_recursion::async_recursion;
 use futures::prelude::*;
-use models::UpnpDevice;
-use rupnp::{ssdp::SearchTarget, DeviceSpec};
+use models::{UpnpDevice, UpnpService};
+use rupnp::{ssdp::SearchTarget, DeviceSpec, Service};
 use std::time::Duration;
 use thiserror::Error;
 
@@ -20,6 +20,22 @@ pub enum ScanError {
     MediaRendererNotFound,
     #[error(transparent)]
     Rupnp(#[from] rupnp::Error),
+}
+
+pub async fn scan_service(service: &Service, path: Option<&str>) -> Result<UpnpService, ScanError> {
+    let path = path.unwrap_or_default();
+
+    log::debug!(
+        "\n\
+        {path}Scanning service:\n\t\
+        {path}service_type={}\n\t\
+        {path}service_id={}\n\t\
+        ",
+        service.service_type(),
+        service.service_id(),
+    );
+
+    Ok(service.into())
 }
 
 #[async_recursion]
@@ -54,7 +70,21 @@ pub async fn scan_device(
         device.upc().unwrap_or("N/A"),
     );
 
-    let mut upnp_devices = vec![device.into()];
+    let upnp_device: UpnpDevice = device.into();
+    let mut upnp_services = vec![];
+
+    let services = device.services();
+
+    if services.is_empty() {
+        log::debug!("no services for {}", device.friendly_name());
+    } else {
+        let path = format!("{path}\t");
+        for sub in services {
+            upnp_services.push(scan_service(sub, Some(&path)).await?);
+        }
+    }
+
+    let mut upnp_devices = vec![upnp_device.with_services(upnp_services)];
 
     let sub_devices = device.devices();
 
