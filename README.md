@@ -13,7 +13,7 @@ Implemented:
 - Control playback across applications (web and desktop)
   - Supports multi simultaneous audio outputs
 - Audio encoding on the fly
-  - AAC (m4a), mp3, Opus (in progress)
+  - AAC (m4a), mp3
 - Hi-Fi audio player
 - Automatic image optimization for requested size on demand
 - Tunnel server reverse proxy - allows access to local server from internet without any firewall configuration
@@ -23,6 +23,12 @@ Implemented:
 - Postgres, MySQL, and SQLite database support
 - Android app
 
+In progress:
+
+- UPnP/DLNA support
+- Audio file visualization on seek bar
+- Opus decoder
+
 To-do (in no particular order):
 
 - Spotify integration
@@ -30,7 +36,6 @@ To-do (in no particular order):
 - Shareable playlists via an authenticated link
 - Audio encoding cache
 - Image optimization cache
-- Audio file visualization on seek bar
 - End-to-end encryption option
 - Schedule playback
 - Save tracks hosted on server locally on clients
@@ -48,7 +53,6 @@ To-do (in no particular order):
 - Turso database support
 - ios app
 - Run as a service in the background, optionally at startup
-- UPnP/DLNA support
 
 ## Local Server
 
