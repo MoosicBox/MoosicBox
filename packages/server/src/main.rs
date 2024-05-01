@@ -194,7 +194,9 @@ fn main() -> std::io::Result<()> {
                 std::env!("STATIC_TOKEN").into(),
             ));
 
-            app.app_data(web::Data::new(app_data))
+            #[allow(unused_mut)]
+            let mut app = app
+                .app_data(web::Data::new(app_data))
                 .service(api::health_endpoint)
                 .service(api::websocket)
                 .service(moosicbox_scan::api::run_scan_endpoint)
@@ -267,8 +269,14 @@ fn main() -> std::io::Result<()> {
                 .service(moosicbox_qobuz::api::album_tracks_endpoint)
                 .service(moosicbox_qobuz::api::album_endpoint)
                 .service(moosicbox_qobuz::api::artist_endpoint)
-                .service(moosicbox_qobuz::api::track_endpoint)
-                .service(moosicbox_upnp::api::scan_devices_endpoint)
+                .service(moosicbox_qobuz::api::track_endpoint);
+
+            #[cfg(feature = "upnp")]
+            {
+                app = app.service(moosicbox_upnp::api::scan_devices_endpoint);
+            }
+
+            app
         };
 
         let mut http_server = actix_web::HttpServer::new(app);

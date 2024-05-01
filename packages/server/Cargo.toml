@@ -39,7 +39,7 @@ moosicbox_search = { path = "../search" }
 moosicbox_tidal = { path = "../tidal" }
 moosicbox_tunnel = { path = "../tunnel", default-features = false }
 moosicbox_tunnel_sender = { path = "../tunnel_sender", default-features = false }
-moosicbox_upnp = { path = "../upnp", default-features = false, features = [
+moosicbox_upnp = { path = "../upnp", optional = true, default-features = false, features = [
     "api",
 ] }
 moosicbox_ws = { path = "../ws" }
@@ -100,6 +100,7 @@ default = [
     "pulseaudio",
     "sqlite",
     "static-token-auth",
+    "upnp",
 ]
 
 fail-on-warnings = []
@@ -160,3 +161,5 @@ postgres-raw = [
 ]
 postgres-sqlx = ["dep:sqlx", "moosicbox_database/postgres-sqlx", "postgres"]
 sqlite = ["moosicbox_database/rusqlite"]
+
+upnp = ["dep:moosicbox_upnp"]
