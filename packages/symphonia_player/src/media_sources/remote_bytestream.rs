@@ -133,7 +133,13 @@ impl RemoteByteStreamFetcher {
                     break;
                 }
                 log::trace!("Received more bytes from stream");
-                let bytes = item.unwrap();
+                let bytes = match item {
+                    Ok(bytes) => bytes,
+                    Err(err) => {
+                        log::info!("Aborted byte stream read (no bytes received): {err:?}");
+                        return;
+                    }
+                };
                 if let Err(err) = sender.send(bytes) {
                     log::info!("Aborted byte stream read: {err:?}");
                     return;
