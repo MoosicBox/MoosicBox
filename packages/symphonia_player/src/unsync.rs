@@ -181,6 +181,7 @@ fn play_track(
                         decoded.convert(&mut buf);
                         if let Err(err) = sender.send(buf) {
                             log::error!("Receiver dropped: {err:?}");
+                            break Ok(());
                         } else {
                             log::trace!("Wrote decoded to audio output");
                         }
