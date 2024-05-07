@@ -10,8 +10,6 @@ use symphonia::core::units::Duration;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
-use log::{error, info};
-
 pub struct CpalAudioOutput;
 
 trait AudioOutputSample:
@@ -46,7 +44,7 @@ impl CpalAudioOutput {
         let device = match host.default_output_device() {
             Some(device) => device,
             _ => {
-                error!("Failed to get default audio output device");
+                log::error!("Failed to get default audio output device");
                 return Err(AudioOutputError::OpenStream);
             }
         };
@@ -54,7 +52,7 @@ impl CpalAudioOutput {
         let config = match device.default_output_config() {
             Ok(config) => config,
             Err(err) => {
-                error!("Failed to get default audio output device config: {}", err);
+                log::error!("Failed to get default audio output device config: {}", err);
                 return Err(AudioOutputError::OpenStream);
             }
         };
@@ -141,12 +139,12 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
                 // Mute any remaining samples.
                 data[written..].iter_mut().for_each(|s| *s = T::MID);
             },
-            move |err| error!("Audio output error: {}", err),
+            move |err| log::error!("Audio output error: {}", err),
             None,
         );
 
         if let Err(err) = stream_result {
-            error!("Audio output stream open error: {}", err);
+            log::error!("Audio output stream open error: {}", err);
 
             return Err(AudioOutputError::OpenStream);
         }
@@ -155,7 +153,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
 
         // Start the output stream.
         if let Err(err) = stream.play() {
-            error!("Audio output stream play error: {}", err);
+            log::error!("Audio output stream play error: {}", err);
 
             return Err(AudioOutputError::PlayStream);
         }
@@ -163,7 +161,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         let sample_buf = SampleBuffer::<T>::new(duration, spec);
 
         let resampler = if spec.rate != config.sample_rate.0 {
-            info!("Resampling {} Hz to {} Hz", spec.rate, config.sample_rate.0);
+            log::info!("Resampling {} Hz to {} Hz", spec.rate, config.sample_rate.0);
             Some(Resampler::new(
                 spec,
                 config.sample_rate.0 as usize,
