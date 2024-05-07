@@ -146,10 +146,10 @@ impl Default for AudioOutputHandler {
 }
 
 #[allow(unused)]
-fn to_samples<S: FromSample<f32>>(decoded: AudioBuffer<f32>) -> Vec<S> {
+fn to_samples<S: FromSample<f32> + Default + Clone>(decoded: AudioBuffer<f32>) -> Vec<S> {
     let n_channels = decoded.spec().channels.count();
     let n_samples = decoded.frames() * n_channels;
-    let mut buf: Vec<S> = Vec::with_capacity(n_samples);
+    let mut buf: Vec<S> = vec![S::default(); n_samples];
 
     // Interleave the source buffer channels into the sample buffer.
     for ch in 0..n_channels {
