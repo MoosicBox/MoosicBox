@@ -18,9 +18,9 @@ impl From<&DeviceSpec> for UpnpDevice {
     }
 }
 
-impl From<Device> for UpnpDevice {
-    fn from(value: Device) -> Self {
-        let spec: &DeviceSpec = &value;
+impl From<&Device> for UpnpDevice {
+    fn from(value: &Device) -> Self {
+        let spec: &DeviceSpec = value;
         spec.into()
     }
 }
