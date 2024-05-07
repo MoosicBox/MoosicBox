@@ -176,3 +176,4 @@ tokio-util = "0.7.11"
 url = "2.5.0"
 uuid = { version = "1.8.0", features = ["v4"] }
 webp = "0.3.0"
+xml = "0.8.20"
