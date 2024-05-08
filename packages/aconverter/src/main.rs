@@ -65,12 +65,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         output_encoding
     );
 
-    println!(
-        "env_a={:?} env_b={:?}",
-        std::env::var("env_a").ok(),
-        std::env::var("env_b").ok()
-    );
-
     let bytes = get_audio_bytes(
         TrackSource::LocalFilePath {
             path: source.to_str().unwrap().to_string(),
