@@ -166,7 +166,7 @@ async fn get_db_config() -> Result<(String, String, String, Option<String>), Ini
             use aws_sdk_ssm::Client;
             use std::collections::HashMap;
 
-            let config = aws_config::defaults(BehaviorVersion::v2023_11_09())
+            let config = aws_config::defaults(BehaviorVersion::latest())
                 .region(Region::new("us-east-1"))
                 .load()
                 .await;
