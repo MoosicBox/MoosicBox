@@ -27,6 +27,7 @@ opus = { workspace = true }
 audiotags       = { workspace = true }
 clap            = { workspace = true }
 env_logger      = { workspace = true }
+free_log_client = { workspace = true }
 futures         = { workspace = true }
 log             = { workspace = true }
 thiserror       = { workspace = true }

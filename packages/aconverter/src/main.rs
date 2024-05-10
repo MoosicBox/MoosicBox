@@ -39,7 +39,10 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::init();
+    free_log_client::init(
+        free_log_client::LogsConfig::builder().log_level(free_log_client::Level::Warn),
+    )
+    .expect("Failed to initialize FreeLog client");
 
     let args = Args::parse();
 
@@ -81,6 +84,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None,
     )
     .await?;
+
+    log::debug!("Saving file ({output:?})");
 
     save_bytes_stream_to_file(
         bytes.stream.map(|x| match x {
