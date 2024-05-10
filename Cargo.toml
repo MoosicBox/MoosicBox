@@ -87,6 +87,7 @@ dotenv = "0.15"
 enum-as-inner = "0.6.0"
 env_logger = "0.11"
 fdk-aac = "0.6.0"
+flacenc = "0.4.0"
 flume = "0.11.0"
 free_log_client = { git = "https://github.com/BSteffaniak/FreeLog.git" }
 futures = "0.3"

@@ -67,6 +67,6 @@ range       = []
 track-range = []
 
 aac  = ["moosicbox_core/aac", "moosicbox_symphonia_player/aac"]
-flac = ["moosicbox_core/flac"]
+flac = ["moosicbox_core/flac", "moosicbox_symphonia_player/flac"]
 mp3  = ["moosicbox_core/mp3", "moosicbox_symphonia_player/mp3"]
 opus = ["moosicbox_core/opus", "moosicbox_symphonia_player/opus"]

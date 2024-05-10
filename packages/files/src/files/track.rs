@@ -356,7 +356,18 @@ pub async fn get_audio_bytes(
                         )
                     }
                     #[cfg(feature = "flac")]
-                    AudioFormat::Flac => None,
+                    AudioFormat::Flac => {
+                        use moosicbox_symphonia_player::output::encoder::flac::encoder::FlacEncoder;
+                        Some(
+                            moosicbox_symphonia_player::output::AudioOutputHandler::new()
+                                .with_output(Box::new(move |spec, duration| {
+                                    Ok(Box::new(
+                                        FlacEncoder::with_writer(writer.clone())
+                                            .open(spec, duration),
+                                    ))
+                                })),
+                        )
+                    }
                     #[cfg(feature = "mp3")]
                     AudioFormat::Mp3 => {
                         use moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder;
@@ -435,8 +446,6 @@ pub async fn get_audio_bytes(
     let track_bytes = match source {
         TrackSource::LocalFilePath { path, .. } => match format {
             AudioFormat::Source => request_audio_bytes_from_file(path, format, size).await?,
-            #[cfg(feature = "flac")]
-            AudioFormat::Flac => request_audio_bytes_from_file(path, format, size).await?,
             #[allow(unreachable_patterns)]
             _ => TrackBytes {
                 stream: StalledReadMonitor::new(stream.boxed()),

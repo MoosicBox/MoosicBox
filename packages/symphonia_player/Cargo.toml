@@ -45,6 +45,7 @@ tokio-util              = { workspace = true }
 default = [
     "aac",
     "cpal",
+    "flac",
     "mp3",
     "oboe-shared-stdcxx",
     "opus",
@@ -65,5 +66,6 @@ pulseaudio-standard = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
 resampler           = ["dep:arrayvec", "dep:rb", "dep:rubato"]
 
 aac  = ["dep:fdk-aac", "moosicbox_converter/aac", "resampler"]
+flac = ["moosicbox_converter/flac", "resampler"]
 mp3  = ["dep:mp3lame-encoder", "moosicbox_converter/mp3", "resampler"]
 opus = ["dep:ogg", "dep:opus", "moosicbox_converter/opus", "resampler"]

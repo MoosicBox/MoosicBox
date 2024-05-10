@@ -72,7 +72,11 @@ aac = [
     "moosicbox_core/aac",
     "moosicbox_symphonia_player/aac",
 ]
-flac = ["moosicbox_core/flac"]
+flac = [
+    "moosicbox_converter/flac",
+    "moosicbox_core/flac",
+    "moosicbox_symphonia_player/flac",
+]
 mp3 = [
     "moosicbox_converter/mp3",
     "moosicbox_core/mp3",
