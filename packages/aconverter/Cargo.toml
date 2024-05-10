@@ -24,12 +24,13 @@ moosicbox_files = { path = "../files", default-features = false, features = [
 
 opus = { workspace = true }
 
-clap       = { workspace = true }
-env_logger = { workspace = true }
-futures    = { workspace = true }
-log        = { workspace = true }
-thiserror  = { workspace = true }
-tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
+audiotags       = { workspace = true }
+clap            = { workspace = true }
+env_logger      = { workspace = true }
+futures         = { workspace = true }
+log             = { workspace = true }
+thiserror       = { workspace = true }
+tokio           = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
 default = ["aac", "flac", "mp3", "opus"]

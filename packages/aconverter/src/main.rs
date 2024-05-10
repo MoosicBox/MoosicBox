@@ -1,7 +1,11 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
-use std::{path::PathBuf, str::FromStr};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
+use audiotags::Tag;
 use clap::Parser;
 use futures::StreamExt as _;
 use moosicbox_core::types::{from_extension_to_audio_format, AudioFormat};
@@ -9,6 +13,7 @@ use moosicbox_files::{
     files::track::{get_audio_bytes, TrackSource},
     save_bytes_stream_to_file,
 };
+use thiserror::Error;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -86,6 +91,50 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None,
     )
     .await?;
+
+    tag_track_file(&source, &output).await?;
+
+    Ok(())
+}
+
+#[derive(Debug, Error)]
+pub enum TagTrackFileError {
+    #[error(transparent)]
+    Tag(#[from] audiotags::Error),
+}
+
+pub async fn tag_track_file(
+    input_path: &Path,
+    output_path: &Path,
+) -> Result<(), TagTrackFileError> {
+    log::debug!("Reading source tags from input_path={input_path:?}");
+
+    let input_tag = Tag::new().read_from_path(input_path)?;
+
+    log::debug!("Copying tags to output_path={output_path:?}");
+
+    let mut output_tag = Tag::new().read_from_path(output_path)?;
+
+    if let Some(title) = input_tag.title() {
+        output_tag.set_title(title);
+    }
+    if let Some(number) = input_tag.track_number() {
+        output_tag.set_track_number(number);
+    }
+    if let Some(album_title) = input_tag.album_title() {
+        output_tag.set_album_title(album_title);
+    }
+    if let Some(artist) = input_tag.artist() {
+        output_tag.set_artist(artist);
+    }
+    if let Some(album_artist) = input_tag.album_artist() {
+        output_tag.set_album_artist(album_artist);
+    }
+    if let Some(date) = input_tag.date() {
+        output_tag.set_date(date);
+    }
+
+    output_tag.write_to_path(output_path.to_str().unwrap())?;
 
     Ok(())
 }
