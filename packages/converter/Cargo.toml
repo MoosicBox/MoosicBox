@@ -14,6 +14,9 @@ version     = "0.1.0"
 # Aac dependencies
 fdk-aac = { workspace = true, optional = true }
 
+# Flac dependencies
+flacenc = { workspace = true, optional = true }
+
 # Opus dependencies
 audiopus = { workspace = true, optional = true }
 ogg      = { workspace = true, optional = true }
@@ -26,10 +29,11 @@ log       = { workspace = true }
 thiserror = { workspace = true }
 
 [features]
-default = ["aac", "mp3", "opus"]
+default = ["aac", "flac", "mp3", "opus"]
 
 fail-on-warnings = []
 
 aac  = ["dep:fdk-aac"]
+flac = ["dep:flacenc"]
 mp3  = ["dep:mp3lame-encoder"]
 opus = ["dep:audiopus", "dep:ogg", "dep:opus"]

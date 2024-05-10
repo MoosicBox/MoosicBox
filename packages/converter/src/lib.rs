@@ -3,6 +3,9 @@
 #[cfg(feature = "aac")]
 pub mod aac;
 
+#[cfg(feature = "flac")]
+pub mod flac;
+
 #[cfg(feature = "mp3")]
 pub mod mp3;
 
