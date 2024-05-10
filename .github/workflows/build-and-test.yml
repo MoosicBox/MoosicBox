@@ -38,6 +38,12 @@ jobs:
                       cargo: --no-default-features
                       features: aac
 
+                    - name: converter-flac
+                      path: packages/converter
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: flac
+
                     - name: converter-mp3
                       path: packages/converter
                       os: ubuntu-latest
