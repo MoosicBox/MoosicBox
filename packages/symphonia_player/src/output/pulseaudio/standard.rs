@@ -20,8 +20,6 @@ use symphonia::core::audio::*;
 
 use libpulse_binding as pulse;
 
-use log::{debug, error, trace};
-
 pub struct PulseAudioOutput {
     mainloop: Rc<RefCell<Mainloop>>,
     stream: Rc<RefCell<pulse::stream::Stream>>,
@@ -40,6 +38,11 @@ impl PulseAudioOutput {
             // move data between Symphonia AudioBuffers and the byte buffers required by PulseAudio.
             let sample_buf = RawSampleBuffer::<f32>::new(duration, spec);
 
+            log::debug!(
+                "Creating PulseAudio stream with spec rate={} channels={}",
+                spec.rate,
+                spec.channels.count()
+            );
             // Create a PulseAudio stream specification.
             let pa_spec = pulse::sample::Spec {
                 format: pulse::sample::Format::FLOAT32NE,
@@ -71,12 +74,12 @@ impl PulseAudioOutput {
             {
                 let mut ctx = context.borrow_mut();
 
-                ctx.set_state_callback(Some(Box::new(|| debug!("Context STATE"))));
+                ctx.set_state_callback(Some(Box::new(|| log::trace!("Context STATE"))));
                 ctx.set_event_callback(Some(Box::new(|evt, _props| {
-                    debug!("Context EVENT: {evt}")
+                    log::trace!("Context EVENT: {evt}")
                 })));
                 ctx.set_subscribe_callback(Some(Box::new(|_facility, _operation, _index| {
-                    debug!("Context SUBSCRIBED")
+                    log::trace!("Context SUBSCRIBED")
                 })));
 
                 ctx.connect(None, ContextFlagSet::NOFLAGS, None)
@@ -121,17 +124,17 @@ impl PulseAudioOutput {
                 )
                 .expect("Failed to connect playback");
 
-                strm.set_moved_callback(Some(Box::new(|| debug!("MOVED"))));
-                strm.set_started_callback(Some(Box::new(|| debug!("STARTED"))));
-                strm.set_overflow_callback(Some(Box::new(|| debug!("OVERFLOW"))));
-                strm.set_underflow_callback(Some(Box::new(|| debug!("UNDERFLOW"))));
-                strm.set_event_callback(Some(Box::new(|evt, _props| debug!("EVENT: {evt}"))));
-                strm.set_suspended_callback(Some(Box::new(|| debug!("SUSPENDED"))));
-                strm.set_latency_update_callback(Some(Box::new(|| debug!("LATENCY_UPDATE"))));
-                strm.set_buffer_attr_callback(Some(Box::new(|| debug!("BUFFER_ATTR"))));
-                strm.set_read_callback(Some(Box::new(|buf_size| debug!("READ: {buf_size}"))));
+                strm.set_moved_callback(Some(Box::new(|| log::trace!("MOVED"))));
+                strm.set_started_callback(Some(Box::new(|| log::trace!("STARTED"))));
+                strm.set_overflow_callback(Some(Box::new(|| log::trace!("OVERFLOW"))));
+                strm.set_underflow_callback(Some(Box::new(|| log::trace!("UNDERFLOW"))));
+                strm.set_event_callback(Some(Box::new(|evt, _props| log::trace!("EVENT: {evt}"))));
+                strm.set_suspended_callback(Some(Box::new(|| log::trace!("SUSPENDED"))));
+                strm.set_latency_update_callback(Some(Box::new(|| log::trace!("LATENCY_UPDATE"))));
+                strm.set_buffer_attr_callback(Some(Box::new(|| log::trace!("BUFFER_ATTR"))));
+                strm.set_read_callback(Some(Box::new(|buf_size| log::trace!("READ: {buf_size}"))));
                 strm.set_write_callback(Some(Box::new(move |buf_size| {
-                    debug!("WRITE: {buf_size:?}");
+                    log::trace!("WRITE: {buf_size:?}");
                 })));
             }
 
@@ -199,7 +202,7 @@ where
                 .find(|s| **s == state)
                 .map(|s| Err::<(), _>(StateError::State((*s).clone())))
                 .transpose()?;
-            debug!("Stream state {state:?}");
+            log::trace!("Stream state {state:?}");
         }
         last_state = Some(state);
     }
@@ -221,7 +224,7 @@ fn wait_for_context(
     )
     .map_err(|e| match e {
         StateError::State(state) => {
-            error!("Context failure state {:?}, quitting...", state);
+            log::error!("Context failure state {:?}, quitting...", state);
             match state {
                 pulse::context::State::Failed => AudioOutputError::StreamClosed,
                 pulse::context::State::Terminated => AudioOutputError::StreamClosed,
@@ -248,7 +251,7 @@ fn wait_for_stream(
     )
     .map_err(|e| match e {
         StateError::State(state) => {
-            error!("Stream failure state {:?}, quitting...", state);
+            log::error!("Stream failure state {:?}, quitting...", state);
             match state {
                 pulse::stream::State::Failed => AudioOutputError::StreamClosed,
                 pulse::stream::State::Terminated => AudioOutputError::StreamClosed,
@@ -266,11 +269,11 @@ fn write_bytes(stream: &mut Stream, bytes: &[u8]) -> Result<usize, AudioOutputEr
 
     let size_left = stream.writable_size().unwrap();
     // stream.begin_write(Some(byte_count)).unwrap();
-    trace!("Writing to pulse audio {byte_count} bytes ({size_left} left)");
+    log::trace!("Writing to pulse audio {byte_count} bytes ({size_left} left)");
     // Write interleaved samples to PulseAudio.
     match stream.write(buffer, None, 0, pulse::stream::SeekMode::Relative) {
         Err(err) => {
-            error!("audio output stream write error: {}", err);
+            log::error!("audio output stream write error: {}", err);
 
             Err(AudioOutputError::StreamClosed)
         }
@@ -284,28 +287,28 @@ fn write_bytes(stream: &mut Stream, bytes: &[u8]) -> Result<usize, AudioOutputEr
 }
 
 fn drain(mainloop: &mut Mainloop, stream: &mut Stream) -> Result<(), AudioOutputError> {
-    debug!("Draining...");
+    log::trace!("Draining...");
     // Wait for our data to be played
     let drained = Rc::new(RefCell::new(false));
     let _o = {
         let drain_state_ref = Rc::clone(&drained);
-        trace!("Attempting drain");
+        log::trace!("Attempting drain");
         stream.drain(Some(Box::new(move |success: bool| {
-            trace!("Drain success: {success}");
+            log::trace!("Drain success: {success}");
             *drain_state_ref.borrow_mut() = true;
         })))
     };
     while !(*drained.borrow_mut()) {
         match mainloop.iterate(false) {
             IterateResult::Quit(_) | IterateResult::Err(_) => {
-                error!("Iterate state was not success, quitting...");
+                log::error!("Iterate state was not success, quitting...");
                 return Err(AudioOutputError::StreamClosed);
             }
             IterateResult::Success(_) => {}
         }
     }
     *drained.borrow_mut() = false;
-    debug!("Drained.");
+    log::trace!("Drained.");
     Ok(())
 }
 
@@ -314,7 +317,7 @@ impl AudioOutput for PulseAudioOutput {
         let frame_count = decoded.frames();
         // Do nothing if there are no audio frames.
         if frame_count == 0 {
-            trace!("No decoded frames. Returning");
+            log::trace!("No decoded frames. Returning");
             return Ok(0);
         }
 
@@ -344,18 +347,18 @@ impl AudioOutput for PulseAudioOutput {
 
         let mut bytes_written = 0;
 
-        debug!("{bytes_available} bytes available");
-        debug!("Latency {:?}", latency);
+        log::debug!("{bytes_available} bytes available");
+        log::debug!("Latency {:?}", latency);
 
         let start = SystemTime::now();
-        trace!("Writing bytes");
+        log::trace!("Writing bytes");
 
         while bytes_available < bytes.len() {
             if bytes_available > 0 {
                 let write_now_bytes = &bytes[..bytes_available];
                 bytes = &bytes[bytes_available..];
 
-                trace!("Writing bytes (partial {bytes_available} bytes)");
+                log::trace!("Writing bytes (partial {bytes_available} bytes)");
                 bytes_written += write_bytes(&mut self.stream.borrow_mut(), write_now_bytes)?;
             }
 
@@ -375,10 +378,12 @@ impl AudioOutput for PulseAudioOutput {
             .fetch_add(bytes_written, std::sync::atomic::Ordering::SeqCst)
             + bytes_written;
 
-        trace!("Successfully wrote to pulseaudio (total {total_bytes} bytes). Took {took_ms}ms");
+        log::trace!(
+            "Successfully wrote to pulseaudio (total {total_bytes} bytes). Took {took_ms}ms"
+        );
 
         if took_ms >= 500 {
-            error!("Detected audio interrupt");
+            log::error!("Detected audio interrupt");
             return Err(AudioOutputError::Interrupt);
         }
 
@@ -395,18 +400,18 @@ impl AudioOutput for PulseAudioOutput {
 
 impl Drop for PulseAudioOutput {
     fn drop(&mut self) {
-        debug!("Shutting PulseAudioOutput down");
+        log::debug!("Shutting PulseAudioOutput down");
         match self.stream.borrow_mut().disconnect() {
-            Ok(()) => debug!("Disconnected stream"),
-            Err(err) => error!("Failed to disconnect stream: {err:?}"),
+            Ok(()) => log::debug!("Disconnected stream"),
+            Err(err) => log::error!("Failed to disconnect stream: {err:?}"),
         };
         match wait_for_stream(
             &mut self.mainloop.borrow_mut(),
             &mut self.stream.borrow_mut(),
             pulse::stream::State::Terminated,
         ) {
-            Ok(()) => debug!("Terminated stream"),
-            Err(err) => error!("Failed to terminate stream: {err:?}"),
+            Ok(()) => log::debug!("Terminated stream"),
+            Err(err) => log::error!("Failed to terminate stream: {err:?}"),
         }
 
         self.context.borrow_mut().disconnect()
