@@ -58,16 +58,18 @@ pub enum TrackSource {
     Qobuz { url: String, format: AudioFormat },
 }
 
-pub fn track_source_to_audio_format(source: &TrackSource) -> &AudioFormat {
-    match source {
-        TrackSource::LocalFilePath { format, .. } => format,
-        TrackSource::Tidal { format, .. } => format,
-        TrackSource::Qobuz { format, .. } => format,
+impl TrackSource {
+    pub fn format(&self) -> AudioFormat {
+        match self {
+            TrackSource::LocalFilePath { format, .. } => *format,
+            TrackSource::Tidal { format, .. } => *format,
+            TrackSource::Qobuz { format, .. } => *format,
+        }
     }
 }
 
 pub fn track_source_to_content_type(source: &TrackSource) -> Option<String> {
-    audio_format_to_content_type(track_source_to_audio_format(source))
+    audio_format_to_content_type(&source.format())
 }
 
 pub fn audio_format_to_content_type(format: &AudioFormat) -> Option<String> {
