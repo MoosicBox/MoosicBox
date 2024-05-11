@@ -138,6 +138,19 @@ macro_rules! option_env_usize {
     };
 }
 
+#[macro_export]
+macro_rules! option_env_u32 {
+    ($name:expr $(,)?) => {
+        match option_env!($name) {
+            Some(v) => match $crate::parse(v) {
+                Ok(v) => Some(v as u32),
+                Err(_e) => panic!("Invalid environment variable value"),
+            },
+            None => None,
+        }
+    };
+}
+
 pub fn default_env(name: &str, default: &str) -> String {
     match std::env::var(name) {
         Ok(value) => value,
