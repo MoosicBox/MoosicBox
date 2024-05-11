@@ -1071,7 +1071,14 @@ impl Player {
                         .with_hint(hint);
                 }
                 #[cfg(feature = "flac")]
-                AudioFormat::Flac => return Err(PlayerError::UnsupportedFormat(quality.format)),
+                AudioFormat::Flac => {
+                    use moosicbox_symphonia_player::output::encoder::flac::encoder::FlacEncoder;
+                    let mut hint = Hint::new();
+                    hint.with_extension("flac");
+                    signal_chain = signal_chain
+                        .add_encoder_step(|| Box::new(FlacEncoder::new()))
+                        .with_hint(hint);
+                }
                 #[cfg(feature = "mp3")]
                 AudioFormat::Mp3 => {
                     use moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder;
