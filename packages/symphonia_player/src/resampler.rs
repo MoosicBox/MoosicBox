@@ -1,5 +1,5 @@
 use symphonia::core::audio::{AudioBuffer, Signal, SignalSpec};
-use symphonia::core::conv::{FromSample, IntoSample};
+use symphonia::core::conv::{IntoSample, ReversibleSample};
 use symphonia::core::sample::Sample;
 
 pub struct Resampler<T> {
@@ -12,7 +12,7 @@ pub struct Resampler<T> {
 
 impl<T> Resampler<T>
 where
-    T: Sample + FromSample<f32> + IntoSample<f32>,
+    T: Sample + ReversibleSample<f32>,
 {
     fn resample_inner(&mut self) -> &[T] {
         {
@@ -55,7 +55,7 @@ where
 
 impl<T> Resampler<T>
 where
-    T: Sample + FromSample<f32> + IntoSample<f32>,
+    T: Sample + ReversibleSample<f32>,
 {
     pub fn new(spec: SignalSpec, to_sample_rate: usize, duration: u64) -> Self {
         let duration = duration as usize;
