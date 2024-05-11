@@ -49,6 +49,18 @@ impl CpalAudioOutput {
             }
         };
 
+        log::debug!(
+            "Using default audio device: {}",
+            device.name().unwrap_or("(Unknown)".to_string())
+        );
+
+        for output in device.supported_output_configs().unwrap() {
+            println!("\toutput: {output:?}",);
+        }
+        for input in device.supported_input_configs().unwrap() {
+            println!("\tinput: {input:?}",);
+        }
+
         let config = match device.default_output_config() {
             Ok(config) => config,
             Err(err) => {
@@ -56,6 +68,8 @@ impl CpalAudioOutput {
                 return Err(AudioOutputError::OpenStream);
             }
         };
+
+        println!("Using default output: {config:?} with spec {spec:?}");
 
         // Select proper playback routine based on sample format.
         match config.sample_format() {
@@ -122,6 +136,8 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
                 .expect("Failed to get the default output config.")
                 .config()
         };
+
+        println!("Using default output: {config:?} with spec {spec:?}");
 
         // Create a ring buffer with a capacity for up-to 200ms of audio.
         let ring_len = ((200 * config.sample_rate.0 as usize) / 1000) * num_channels;
