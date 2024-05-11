@@ -8,6 +8,7 @@ pub struct Resampler<T> {
     output: Vec<Vec<f32>>,
     interleaved: Vec<T>,
     duration: usize,
+    pub spec: SignalSpec,
 }
 
 impl<T> Resampler<T>
@@ -79,6 +80,7 @@ where
             input,
             output,
             duration,
+            spec,
             interleaved: Default::default(),
         }
     }

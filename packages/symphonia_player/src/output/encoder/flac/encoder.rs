@@ -158,6 +158,13 @@ impl AudioEncoder for FlacEncoder {
 
         Ok(self.encode_output(&decoded))
     }
+
+    fn spec(&self) -> SignalSpec {
+        SignalSpec {
+            rate: self.output_rate as u32,
+            channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
+        }
+    }
 }
 
 impl AudioOutput for FlacEncoder {

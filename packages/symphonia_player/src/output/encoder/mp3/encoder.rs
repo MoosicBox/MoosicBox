@@ -1,4 +1,4 @@
-use std::sync::{Arc, RwLock};
+use std::sync::RwLock;
 
 use crate::output::{to_samples, AudioEncoder, AudioOutput, AudioOutputError, AudioOutputHandler};
 use crate::play_file_path_str;
@@ -20,8 +20,10 @@ lazy_static! {
 }
 
 pub struct Mp3Encoder {
-    resampler: Arc<RwLock<Option<Resampler<i16>>>>,
-    rate: Option<u32>,
+    resampler: Option<RwLock<Resampler<i16>>>,
+    input_rate: Option<u32>,
+    resample_rate: Option<u32>,
+    output_rate: usize,
     duration: Option<Duration>,
     writer: Option<Box<dyn std::io::Write + Send + Sync>>,
     encoder: mp3lame_encoder::Encoder,
@@ -30,8 +32,10 @@ pub struct Mp3Encoder {
 impl Mp3Encoder {
     pub fn new() -> Self {
         Self {
-            resampler: Arc::new(RwLock::new(None)),
-            rate: None,
+            resampler: None,
+            input_rate: None,
+            resample_rate: None,
+            output_rate: 44100,
             duration: None,
             writer: None,
             encoder: encoder_mp3().unwrap(),
@@ -40,8 +44,10 @@ impl Mp3Encoder {
 
     pub fn with_writer<W: std::io::Write + Send + Sync + 'static>(writer: W) -> Self {
         Self {
-            resampler: Arc::new(RwLock::new(None)),
-            rate: None,
+            resampler: None,
+            input_rate: None,
+            resample_rate: None,
+            output_rate: 44100,
             duration: None,
             writer: Some(Box::new(writer)),
             encoder: encoder_mp3().unwrap(),
@@ -49,20 +55,22 @@ impl Mp3Encoder {
     }
 
     pub fn init_resampler(&mut self, spec: &SignalSpec, duration: Duration) -> &Self {
-        if !self.rate.is_some_and(|r| r == spec.rate)
-            || !self.duration.is_some_and(|d| d == duration)
+        if !self.resample_rate.is_some_and(|r| r == spec.rate)
+            && self.output_rate != spec.rate as usize
         {
             log::debug!(
                 "Initializing resampler with rate={} duration={}",
                 spec.rate,
-                duration
+                duration,
             );
-            self.rate.replace(spec.rate);
+            self.input_rate.replace(spec.rate);
             self.duration.replace(duration);
-            self.resampler
-                .write()
-                .unwrap()
-                .replace(Resampler::<i16>::new(*spec, 44100_usize, duration));
+            self.resample_rate.replace(spec.rate);
+            self.resampler.replace(RwLock::new(Resampler::new(
+                *spec,
+                self.output_rate,
+                duration,
+            )));
         }
         self
     }
@@ -110,20 +118,28 @@ impl Mp3Encoder {
 
         self.init_resampler(spec, duration);
 
-        let mut binding = { self.resampler.write().unwrap() };
-
-        if let Some(resampler) = binding.as_mut() {
+        if let Some(resampler) = &self.resampler {
             log::debug!(
-                "Resampling rate={:?} duration={:?}",
-                self.rate,
+                "Resampling input_rate={:?} output_rate={} duration={:?}",
+                self.input_rate,
+                self.output_rate,
                 self.duration
             );
 
             Ok(resampler
+                .write()
+                .unwrap()
                 .resample(decoded)
                 .ok_or(AudioOutputError::StreamEnd)?
                 .to_vec())
         } else {
+            log::debug!(
+                "Passing through audio frames={} duration={duration} rate={} channels={} channels_count={}",
+                decoded.frames(),
+                spec.rate,
+                spec.channels,
+                spec.channels.count(),
+            );
             Ok(to_samples(decoded))
         }
     }
@@ -142,6 +158,13 @@ impl AudioEncoder for Mp3Encoder {
         let decoded = self.resample_if_needed(decoded)?;
 
         Ok(self.encode_output(&decoded))
+    }
+
+    fn spec(&self) -> SignalSpec {
+        SignalSpec {
+            rate: self.output_rate as u32,
+            channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
+        }
     }
 }
 

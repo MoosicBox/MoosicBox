@@ -36,6 +36,7 @@ pub struct OpusEncoder<'a> {
     bytes_read: usize,
     resampler: Option<RwLock<Resampler<f32>>>,
     input_rate: Option<u32>,
+    resample_rate: Option<u32>,
     output_rate: usize,
     duration: Option<Duration>,
     writer: Option<Box<dyn std::io::Write + Send + Sync>>,
@@ -57,6 +58,7 @@ impl OpusEncoder<'_> {
             bytes_read: 0,
             resampler: None,
             input_rate: None,
+            resample_rate: None,
             output_rate: 48000,
             duration: None,
             writer: None,
@@ -71,16 +73,17 @@ impl OpusEncoder<'_> {
     }
 
     pub fn init_resampler(&mut self, spec: &SignalSpec, duration: Duration) -> &Self {
-        if !self.input_rate.is_some_and(|r| r == spec.rate)
-            || !self.duration.is_some_and(|d| d == duration)
+        if !self.resample_rate.is_some_and(|r| r == spec.rate)
+            && self.output_rate != spec.rate as usize
         {
             log::debug!(
                 "Initializing resampler with rate={} duration={}",
                 spec.rate,
-                duration
+                duration,
             );
             self.input_rate.replace(spec.rate);
             self.duration.replace(duration);
+            self.resample_rate.replace(spec.rate);
             self.resampler.replace(RwLock::new(Resampler::new(
                 *spec,
                 self.output_rate,
@@ -254,6 +257,13 @@ impl OpusEncoder<'_> {
                 .ok_or(AudioOutputError::StreamEnd)?
                 .to_vec())
         } else {
+            log::debug!(
+                "Passing through audio frames={} duration={duration} rate={} channels={} channels_count={}",
+                decoded.frames(),
+                spec.rate,
+                spec.channels,
+                spec.channels.count(),
+            );
             Ok(to_samples(decoded))
         }
     }
@@ -272,6 +282,13 @@ impl AudioEncoder for OpusEncoder<'_> {
         let decoded = self.resample_if_needed(decoded)?;
 
         Ok(self.write_samples(decoded))
+    }
+
+    fn spec(&self) -> SignalSpec {
+        SignalSpec {
+            rate: self.output_rate as u32,
+            channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
+        }
     }
 }
 

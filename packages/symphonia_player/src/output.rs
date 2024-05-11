@@ -13,6 +13,7 @@ pub trait AudioOutput {
 
 pub trait AudioEncoder: Send + Sync {
     fn encode(&mut self, decoded: AudioBuffer<f32>) -> Result<Bytes, AudioOutputError>;
+    fn spec(&self) -> SignalSpec;
 }
 
 #[allow(dead_code)]

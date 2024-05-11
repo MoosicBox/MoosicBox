@@ -21,7 +21,9 @@ lazy_static! {
 
 pub struct AacEncoder {
     resampler: Option<RwLock<Resampler<i16>>>,
-    rate: Option<u32>,
+    input_rate: Option<u32>,
+    resample_rate: Option<u32>,
+    output_rate: usize,
     duration: Option<Duration>,
     writer: Option<Box<dyn std::io::Write + Send + Sync>>,
     encoder: fdk_aac::enc::Encoder,
@@ -31,7 +33,9 @@ impl AacEncoder {
     pub fn new() -> Self {
         Self {
             resampler: None,
-            rate: None,
+            input_rate: None,
+            resample_rate: None,
+            output_rate: 44100,
             duration: None,
             writer: None,
             encoder: encoder_aac().unwrap(),
@@ -41,7 +45,9 @@ impl AacEncoder {
     pub fn with_writer<W: std::io::Write + Send + Sync + 'static>(writer: W) -> Self {
         Self {
             resampler: None,
-            rate: None,
+            input_rate: None,
+            resample_rate: None,
+            output_rate: 44100,
             duration: None,
             writer: Some(Box::new(writer)),
             encoder: encoder_aac().unwrap(),
@@ -49,18 +55,23 @@ impl AacEncoder {
     }
 
     pub fn init_resampler(&mut self, spec: &SignalSpec, duration: Duration) -> &Self {
-        if !self.rate.is_some_and(|r| r == spec.rate)
-            || !self.duration.is_some_and(|d| d == duration)
+        self.input_rate.replace(spec.rate);
+        self.duration.replace(duration);
+
+        if !self.resample_rate.is_some_and(|r| r == spec.rate)
+            && self.output_rate != spec.rate as usize
         {
             log::debug!(
                 "Initializing resampler with rate={} duration={}",
                 spec.rate,
-                duration
+                duration,
             );
-            self.rate.replace(spec.rate);
-            self.duration.replace(duration);
-            self.resampler
-                .replace(RwLock::new(Resampler::new(*spec, 44100_usize, duration)));
+            self.resample_rate.replace(spec.rate);
+            self.resampler.replace(RwLock::new(Resampler::new(
+                *spec,
+                self.output_rate,
+                duration,
+            )));
         }
         self
     }
@@ -105,18 +116,26 @@ impl AacEncoder {
 
         if let Some(resampler) = &self.resampler {
             log::debug!(
-                "Resampling rate={:?} duration={:?}",
-                self.rate,
+                "Resampling input_rate={:?} output_rate={} duration={:?}",
+                self.input_rate,
+                self.output_rate,
                 self.duration
             );
 
+            let mut resampler = resampler.write().unwrap();
+
             Ok(resampler
-                .write()
-                .unwrap()
                 .resample(decoded)
                 .ok_or(AudioOutputError::StreamEnd)?
                 .to_vec())
         } else {
+            log::debug!(
+                "Passing through audio frames={} duration={duration} rate={} channels={} channels_count={}",
+                decoded.frames(),
+                spec.rate,
+                spec.channels,
+                spec.channels.count(),
+            );
             Ok(to_samples(decoded))
         }
     }
@@ -135,6 +154,13 @@ impl AudioEncoder for AacEncoder {
         let decoded = self.resample_if_needed(decoded)?;
 
         Ok(self.encode_output(&decoded))
+    }
+
+    fn spec(&self) -> SignalSpec {
+        SignalSpec {
+            rate: self.output_rate as u32,
+            channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
+        }
     }
 }
 
