@@ -100,6 +100,12 @@ where
         Some(self.resample_inner())
     }
 
+    pub fn resample_to_audio_buffer(&mut self, input: AudioBuffer<f32>) -> Option<AudioBuffer<T>> {
+        let spec = self.spec;
+        self.resample(input)
+            .map(|samples| to_audio_buffer(samples, spec))
+    }
+
     /// Resample any remaining samples in the resample buffer.
     #[allow(unused)]
     pub fn flush(&mut self) -> Option<&[T]> {
