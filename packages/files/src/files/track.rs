@@ -337,11 +337,23 @@ pub async fn get_audio_bytes(
     let writer = ByteWriter::default();
     #[allow(unused)]
     let stream = writer.stream();
+    let same_format = source.format() == format;
 
-    {
-        let source = source.clone();
+    let track_bytes = if same_format {
+        match source {
+            TrackSource::LocalFilePath { path, .. } => {
+                request_audio_bytes_from_file(path, format, size).await?
+            }
+            TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } => {
+                request_track_bytes_from_url(&url, start, end, format, size).await?
+            }
+        }
+    } else {
+        let source_send = source.clone();
 
         RT.spawn(async move {
+            let source = source_send;
+
             let audio_output_handler =
                 match format {
                     #[cfg(feature = "aac")]
@@ -443,33 +455,29 @@ pub async fn get_audio_bytes(
                 }
             }
         });
-    }
 
-    let track_bytes = match source {
-        TrackSource::LocalFilePath { path, .. } => match format {
-            AudioFormat::Source => request_audio_bytes_from_file(path, format, size).await?,
-            #[allow(unreachable_patterns)]
-            _ => TrackBytes {
-                stream: StalledReadMonitor::new(stream.boxed()),
-                size,
-                format,
+        match source {
+            TrackSource::LocalFilePath { path, .. } => match format {
+                AudioFormat::Source => request_audio_bytes_from_file(path, format, size).await?,
+                #[allow(unreachable_patterns)]
+                _ => TrackBytes {
+                    stream: StalledReadMonitor::new(stream.boxed()),
+                    size,
+                    format,
+                },
             },
-        },
-        TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } => match format {
-            AudioFormat::Source => {
-                request_track_bytes_from_url(&url, start, end, format, size).await?
-            }
-            #[cfg(feature = "flac")]
-            AudioFormat::Flac => {
-                request_track_bytes_from_url(&url, start, end, format, size).await?
-            }
-            #[allow(unreachable_patterns)]
-            _ => TrackBytes {
-                stream: StalledReadMonitor::new(stream.boxed()),
-                size,
-                format,
+            TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } => match format {
+                AudioFormat::Source => {
+                    request_track_bytes_from_url(&url, start, end, format, size).await?
+                }
+                #[allow(unreachable_patterns)]
+                _ => TrackBytes {
+                    stream: StalledReadMonitor::new(stream.boxed()),
+                    size,
+                    format,
+                },
             },
-        },
+        }
     };
 
     Ok(track_bytes)
