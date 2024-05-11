@@ -2,6 +2,8 @@ allowed-duplicate-crates = [
     "audiopus_sys",
     "base64",
     "bitflags",
+    "crc",
+    "crc-catalog",
     "env_logger",
     "fallible-iterator",
     "hashlink",

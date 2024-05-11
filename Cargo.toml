@@ -140,7 +140,7 @@ reqwest = { version = "0.12.4", default-features = false, features = [
     "rustls-tls",
     "stream",
 ] }
-rubato = "0.15.0"
+rubato = "=0.12.0"
 rupnp = { version = "2.0.0", features = ["full_device_spec"] }
 rusqlite = { version = "0.31.0", features = ["bundled"] }
 rustls = "0.23"
