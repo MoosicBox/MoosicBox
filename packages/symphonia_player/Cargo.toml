@@ -15,7 +15,7 @@ moosicbox_converter    = { path = "../../packages/converter", default-features =
 moosicbox_env_utils    = { path = "../../packages/env_utils" }
 moosicbox_stream_utils = { path = "../../packages/stream_utils" }
 
-arrayvec                = { workspace = true, optional = true }
+arrayvec                = { workspace = true }
 atomic_float            = { workspace = true }
 bytes                   = { workspace = true }
 clap                    = { workspace = true }
@@ -33,9 +33,9 @@ ogg                     = { workspace = true, optional = true }
 opus                    = { workspace = true, optional = true }
 pretty_env_logger       = { workspace = true }
 rangemap                = { workspace = true }
-rb                      = { workspace = true, optional = true }
+rb                      = { workspace = true }
 reqwest                 = { workspace = true }
-rubato                  = { workspace = true, optional = true }
+rubato                  = { workspace = true }
 symphonia               = { workspace = true }
 thiserror               = { workspace = true }
 tokio                   = { workspace = true, features = ["rt-multi-thread"] }
@@ -51,26 +51,20 @@ default = [
     "oboe-shared-stdcxx",
     "opus",
     "pulseaudio",
-    "resampler",
 ]
 
 fail-on-warnings = []
 
 # Player audio outputs
-asio = ["cpal/asio"]
-cpal = ["dep:cpal", "resampler"]
-jack = ["cpal/jack"]
-oboe-shared-stdcxx = ["cpal/oboe-shared-stdcxx"]
-pulseaudio = ["pulseaudio-simple", "pulseaudio-standard"]
-pulseaudio-simple = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
-pulseaudio-standard = [
-    "dep:libpulse-binding",
-    "dep:libpulse-simple-binding",
-    "resampler",
-]
-resampler = ["dep:arrayvec", "dep:rb", "dep:rubato"]
+asio                = ["cpal/asio"]
+cpal                = ["dep:cpal"]
+jack                = ["cpal/jack"]
+oboe-shared-stdcxx  = ["cpal/oboe-shared-stdcxx"]
+pulseaudio          = ["pulseaudio-simple", "pulseaudio-standard"]
+pulseaudio-simple   = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
+pulseaudio-standard = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
 
-aac  = ["dep:fdk-aac", "moosicbox_converter/aac", "resampler"]
-flac = ["moosicbox_converter/flac", "resampler"]
-mp3  = ["dep:mp3lame-encoder", "moosicbox_converter/mp3", "resampler"]
-opus = ["dep:ogg", "dep:opus", "moosicbox_converter/opus", "resampler"]
+aac  = ["dep:fdk-aac", "moosicbox_converter/aac"]
+flac = ["moosicbox_converter/flac"]
+mp3  = ["dep:mp3lame-encoder", "moosicbox_converter/mp3"]
+opus = ["dep:ogg", "dep:opus", "moosicbox_converter/opus"]

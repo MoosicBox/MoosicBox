@@ -24,9 +24,7 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
 moosicbox_music_api = { path = "../music_api" }
 moosicbox_qobuz = { path = "../qobuz" }
 moosicbox_stream_utils = { path = "../stream_utils" }
-moosicbox_symphonia_player = { path = "../symphonia_player", default-features = false, features = [
-    "resampler",
-] }
+moosicbox_symphonia_player = { path = "../symphonia_player", default-features = false }
 moosicbox_tidal = { path = "../tidal" }
 
 actix-cors      = { workspace = true }

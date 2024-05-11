@@ -65,7 +65,6 @@ oboe-shared-stdcxx  = ["moosicbox_symphonia_player/oboe-shared-stdcxx"]
 pulseaudio          = ["pulseaudio-simple", "pulseaudio-standard"]
 pulseaudio-simple   = ["moosicbox_symphonia_player/pulseaudio-simple"]
 pulseaudio-standard = ["moosicbox_symphonia_player/pulseaudio-standard"]
-resampler           = ["moosicbox_symphonia_player/resampler"]
 
 aac = [
     "moosicbox_converter/aac",

@@ -18,12 +18,10 @@ use thiserror::Error;
 
 pub mod media_sources;
 pub mod output;
+pub mod resampler;
 pub mod signal_chain;
 pub mod unsync;
 pub mod volume_mixer;
-
-#[cfg(feature = "resampler")]
-pub mod resampler;
 
 impl From<io::Error> for PlaybackError {
     fn from(err: io::Error) -> Self {
