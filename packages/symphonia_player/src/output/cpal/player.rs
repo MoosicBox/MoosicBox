@@ -2,7 +2,7 @@ use crate::resampler::Resampler;
 
 use crate::output::{AudioOutput, AudioOutputError};
 
-use cpal::SizedSample;
+use cpal::{Host, SizedSample};
 use rb::{RbConsumer, RbProducer, SpscRb, RB};
 use symphonia::core::audio::{AudioBuffer, RawSample, SampleBuffer, Signal as _, SignalSpec};
 use symphonia::core::conv::{ConvertibleSample, IntoSample};
@@ -251,6 +251,19 @@ impl<T: AudioOutputSample> AudioOutput for CpalAudioOutputImpl<T> {
         let _ = self.stream.pause();
 
         Ok(())
+    }
+}
+
+#[allow(unused)]
+fn list_devices(host: &Host) {
+    for dv in host.output_devices().unwrap() {
+        println!("device: {}", dv.name().unwrap());
+        for output in dv.supported_output_configs().unwrap() {
+            println!("\toutput: {output:?}",);
+        }
+        for input in dv.supported_input_configs().unwrap() {
+            println!("\tinput: {input:?}",);
+        }
     }
 }
 
