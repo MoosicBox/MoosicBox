@@ -8,6 +8,7 @@ use thiserror::Error;
 
 use crate::{
     output::{AudioEncoder, AudioOutputError, AudioOutputHandler},
+    resampler::Resampler,
     unsync::{play_media_source, PlaybackError},
 };
 
@@ -92,6 +93,12 @@ impl SignalChain {
         self
     }
 
+    pub fn add_resampler_step(mut self, resampler: Resampler<f32>) -> Self {
+        self.steps
+            .push(SignalChainStep::new().with_resampler(resampler));
+        self
+    }
+
     pub fn process(
         mut self,
         media_source: Box<dyn MediaSource>,
@@ -121,6 +128,7 @@ pub struct SignalChainStep {
     hint: Option<Hint>,
     audio_output_handler: Option<CreateAudioOutputStream>,
     encoder: Option<CreateAudioEncoder>,
+    resampler: Option<Resampler<f32>>,
     enable_gapless: bool,
     verify: bool,
     seek: Option<f64>,
@@ -132,6 +140,7 @@ impl SignalChainStep {
             hint: None,
             audio_output_handler: None,
             encoder: None,
+            resampler: None,
             enable_gapless: true,
             verify: true,
             seek: None,
@@ -156,6 +165,11 @@ impl SignalChainStep {
         encoder: F,
     ) -> Self {
         self.encoder.replace(Box::new(encoder));
+        self
+    }
+
+    pub fn with_resampler(mut self, resampler: Resampler<f32>) -> Self {
+        self.resampler.replace(resampler);
         self
     }
 
@@ -185,14 +199,11 @@ impl SignalChainStep {
             self.seek,
         )?;
 
-        let encoder = if let Some(get_encoder) = self.encoder {
-            get_encoder()
-        } else {
-            return Err(SignalChainError::Empty);
-        };
+        let encoder = self.encoder.map(|get_encoder| get_encoder());
 
         Ok(SignalChainStepProcessor {
             encoder,
+            resampler: self.resampler,
             receiver,
             overflow: vec![],
         })
@@ -206,7 +217,8 @@ impl Default for SignalChainStep {
 }
 
 pub struct SignalChainStepProcessor {
-    encoder: Box<dyn AudioEncoder>,
+    encoder: Option<Box<dyn AudioEncoder>>,
+    resampler: Option<Resampler<f32>>,
     receiver: Receiver<AudioBuffer<f32>>,
     overflow: Vec<u8>,
 }
@@ -242,18 +254,37 @@ impl std::io::Read for SignalChainStepProcessor {
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::TimedOut, e))?;
             log::debug!("Received {} frames from receiver", audio.frames());
 
-            log::debug!("Encoding frames...");
-            let bytes = self
-                .encoder
-                .encode(audio)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-            log::debug!("Encoded into {} bytes", bytes.len());
+            let audio = if let Some(resampler) = &mut self.resampler {
+                let channels = audio.spec().channels.count();
 
-            if !bytes.is_empty() {
-                break bytes;
+                log::debug!("Resampling frames...");
+                let samples = resampler.resample(audio).ok_or(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Failed to resample",
+                ))?;
+                let buf = AudioBuffer::new((samples.len() / channels) as u64, resampler.spec);
+                log::debug!("Resampled into {} frames", buf.frames());
+                buf
+            } else {
+                audio
+            };
+
+            if let Some(encoder) = &mut self.encoder {
+                log::debug!("Encoding frames...");
+                let bytes = encoder
+                    .encode(audio)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+                log::debug!("Encoded into {} bytes", bytes.len());
+
+                if !bytes.is_empty() {
+                    break Some(bytes);
+                }
+            } else {
+                break None;
             }
         };
 
+        let bytes = bytes.unwrap();
         let (bytes_now, overflow) = bytes.split_at(std::cmp::min(buf.len(), bytes.len()));
 
         log::debug!(
