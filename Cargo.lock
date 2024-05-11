@@ -3576,6 +3576,7 @@ dependencies = [
  "libpulse-simple-binding",
  "log",
  "moosicbox_converter",
+ "moosicbox_env_utils",
  "moosicbox_stream_utils",
  "mp3lame-encoder",
  "ogg",

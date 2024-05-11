@@ -12,6 +12,7 @@ version     = "0.1.0"
 
 [dependencies]
 moosicbox_converter    = { path = "../../packages/converter", default-features = false }
+moosicbox_env_utils    = { path = "../../packages/env_utils" }
 moosicbox_stream_utils = { path = "../../packages/stream_utils" }
 
 arrayvec                = { workspace = true, optional = true }

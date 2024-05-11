@@ -1,3 +1,4 @@
+use moosicbox_env_utils::option_env_u32;
 use pulse::def::BufferAttr;
 use pulse::error::PAErr;
 use pulse::time::MicroSeconds;
@@ -11,6 +12,7 @@ use std::{cell::RefCell, rc::Rc, time::SystemTime};
 
 use crate::output::pulseaudio::common::map_channels_to_pa_channelmap;
 use crate::output::{AudioOutput, AudioOutputError};
+use crate::resampler::Resampler;
 
 use pulse::context::{Context, FlagSet as ContextFlagSet};
 use pulse::mainloop::standard::{IterateResult, Mainloop};
@@ -25,8 +27,11 @@ pub struct PulseAudioOutput {
     stream: Rc<RefCell<pulse::stream::Stream>>,
     context: Rc<RefCell<pulse::context::Context>>,
     sample_buf: RawSampleBuffer<f32>,
+    resampler: Option<Resampler<f32>>,
     bytes: AtomicUsize,
 }
+
+static SAMPLE_RATE: Option<u32> = option_env_u32!("PULSEAUDIO_RESAMPLE_RATE");
 
 impl PulseAudioOutput {
     pub fn try_open(
@@ -38,16 +43,23 @@ impl PulseAudioOutput {
             // move data between Symphonia AudioBuffers and the byte buffers required by PulseAudio.
             let sample_buf = RawSampleBuffer::<f32>::new(duration, spec);
 
-            log::debug!(
-                "Creating PulseAudio stream with spec rate={} channels={}",
-                spec.rate,
-                spec.channels.count()
-            );
-            // Create a PulseAudio stream specification.
-            let pa_spec = pulse::sample::Spec {
-                format: pulse::sample::Format::FLOAT32NE,
-                channels: spec.channels.count() as u8,
-                rate: spec.rate,
+            let pa_spec = {
+                let spec = SignalSpec {
+                    rate: SAMPLE_RATE.unwrap_or(spec.rate),
+                    channels: spec.channels,
+                };
+
+                log::debug!(
+                    "Creating PulseAudio stream with spec rate={} channels={}",
+                    spec.rate,
+                    spec.channels.count()
+                );
+                // Create a PulseAudio stream specification.
+                pulse::sample::Spec {
+                    format: pulse::sample::Format::FLOAT32NE,
+                    channels: spec.channels.count() as u8,
+                    rate: spec.rate,
+                }
             };
 
             assert!(pa_spec.is_valid());
@@ -138,11 +150,23 @@ impl PulseAudioOutput {
                 })));
             }
 
+            let resampler = if let Some(rate) = SAMPLE_RATE {
+                if spec.rate != rate {
+                    log::info!("Resampling {} Hz to {} Hz", spec.rate, rate);
+                    Some(Resampler::new(spec, rate as usize, duration))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
             PulseAudioOutput {
                 mainloop: mainloop.clone(),
                 stream: stream.clone(),
                 context: context.clone(),
                 sample_buf,
+                resampler,
                 bytes: AtomicUsize::new(0),
             }
         };
@@ -321,8 +345,25 @@ impl AudioOutput for PulseAudioOutput {
             return Ok(0);
         }
 
-        // Interleave samples from the audio buffer into the sample buffer.
-        self.sample_buf.copy_interleaved(&decoded);
+        let bytes_vec = if let Some(resampler) = &mut self.resampler {
+            let spec = resampler.spec;
+
+            // Resampling is required. The resampler will return interleaved samples in the
+            // correct sample format.
+            let buf = match resampler.resample_to_audio_buffer(decoded) {
+                Some(resampled) => resampled,
+                None => return Ok(0),
+            };
+
+            let mut sample_buf = RawSampleBuffer::<f32>::new(buf.capacity() as u64, spec);
+            sample_buf.copy_interleaved_typed(&buf);
+            sample_buf.as_bytes().to_vec()
+        } else {
+            // Resampling is not required. Interleave the sample for cpal using a sample buffer.
+            self.sample_buf.copy_interleaved_typed(&decoded);
+            self.sample_buf.as_bytes().to_vec()
+        };
+        let mut bytes = bytes_vec.as_slice();
 
         // Wait for context to be ready
         wait_for_context(
@@ -336,7 +377,6 @@ impl AudioOutput for PulseAudioOutput {
             pulse::stream::State::Ready,
         )?;
 
-        let mut bytes = self.sample_buf.as_bytes();
         let mut bytes_available = self.stream.borrow().writable_size().unwrap();
         let latency = match self.stream.borrow().get_latency() {
             Ok(Latency::Positive(MicroSeconds(micros))) => {
