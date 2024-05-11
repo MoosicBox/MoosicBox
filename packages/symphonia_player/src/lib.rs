@@ -23,7 +23,7 @@ pub mod unsync;
 pub mod volume_mixer;
 
 #[cfg(feature = "resampler")]
-mod resampler;
+pub mod resampler;
 
 impl From<io::Error> for PlaybackError {
     fn from(err: io::Error) -> Self {
