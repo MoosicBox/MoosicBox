@@ -57,14 +57,18 @@ default = [
 fail-on-warnings = []
 
 # Player audio outputs
-asio                = ["cpal/asio"]
-cpal                = ["dep:cpal", "resampler"]
-jack                = ["cpal/jack"]
-oboe-shared-stdcxx  = ["cpal/oboe-shared-stdcxx"]
-pulseaudio          = ["pulseaudio-simple", "pulseaudio-standard"]
-pulseaudio-simple   = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
-pulseaudio-standard = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
-resampler           = ["dep:arrayvec", "dep:rb", "dep:rubato"]
+asio = ["cpal/asio"]
+cpal = ["dep:cpal", "resampler"]
+jack = ["cpal/jack"]
+oboe-shared-stdcxx = ["cpal/oboe-shared-stdcxx"]
+pulseaudio = ["pulseaudio-simple", "pulseaudio-standard"]
+pulseaudio-simple = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
+pulseaudio-standard = [
+    "dep:libpulse-binding",
+    "dep:libpulse-simple-binding",
+    "resampler",
+]
+resampler = ["dep:arrayvec", "dep:rb", "dep:rubato"]
 
 aac  = ["dep:fdk-aac", "moosicbox_converter/aac", "resampler"]
 flac = ["moosicbox_converter/flac", "resampler"]
