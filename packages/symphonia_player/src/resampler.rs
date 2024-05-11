@@ -130,3 +130,29 @@ where
         dst.extend(src.iter().map(|&s| s.into_sample()));
     }
 }
+
+pub fn to_audio_buffer<S>(samples: &[S], spec: SignalSpec) -> AudioBuffer<S>
+where
+    S: Sample,
+{
+    let duration = (samples.len() / 2) as u64;
+    let mut buf: AudioBuffer<S> = AudioBuffer::new(duration, spec);
+    buf.render_reserved(Some(samples.len() / 2));
+
+    let (left, right) = buf.chan_pair_mut(0, 1);
+    let mut is_left = true;
+    let mut i = 0;
+
+    for sample in samples {
+        if is_left {
+            left[i] = *sample;
+            is_left = false;
+        } else {
+            right[i] = *sample;
+            is_left = true;
+            i += 1;
+        }
+    }
+
+    buf
+}
