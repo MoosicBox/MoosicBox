@@ -45,33 +45,36 @@ fn main() -> std::io::Result<()> {
     #[cfg(not(debug_assertions))]
     const DEFAULT_LOG_LEVEL: &str = "moosicbox=info";
 
-    let log_dir = get_config_dir_path()
-        .expect("Failed to get config dir")
-        .join("logs");
+    let mut logs_config = free_log_client::LogsConfig::builder()
+        .with_api_writer(
+            free_log_client::ApiWriterConfig::builder()
+                .user_agent("moosicbox_app")
+                .api_url("https://logs.moosicbox.com")
+                .log_level(free_log_client::Level::Warn),
+        )
+        .expect("Failed to initialize api writer");
 
-    create_dir_all(&log_dir).expect("Failed to create logs directory");
+    if let Some(log_dir) = get_config_dir_path().map(|p| p.join("logs")) {
+        if create_dir_all(&log_dir).is_ok() {
+            logs_config = logs_config
+                .with_file_writer(
+                    free_log_client::FileWriterConfig::builder()
+                        .file_path(log_dir.join("moosicbox_app.log"))
+                        .log_level(free_log_client::Level::Debug),
+                )
+                .expect("Failed to initialize file writer");
+        } else {
+            log::warn!("Could not create directory path for logs files at {log_dir:?}");
+        }
+    } else {
+        log::warn!("Could not get config dir to put the logs into");
+    }
 
-    free_log_client::init(
-        free_log_client::LogsConfig::builder()
-            .with_api_writer(
-                free_log_client::ApiWriterConfig::builder()
-                    .user_agent("moosicbox_server")
-                    .api_url("https://logs.moosicbox.com")
-                    .log_level(free_log_client::Level::Warn),
-            )
-            .expect("Failed to initialize api writer")
-            .with_file_writer(
-                free_log_client::FileWriterConfig::builder()
-                    .file_path(log_dir.join("moosicbox.log"))
-                    .log_level(free_log_client::Level::Debug),
-            )
-            .expect("Failed to initialize file writer")
-            .env_filter(default_env!(
-                "MOOSICBOX_LOG",
-                default_env!("RUST_LOG", DEFAULT_LOG_LEVEL)
-            )),
-    )
-    .expect("Failed to initialize FreeLog client");
+    free_log_client::init(logs_config.env_filter(default_env!(
+        "MOOSICBOX_LOG",
+        default_env!("RUST_LOG", DEFAULT_LOG_LEVEL)
+    )))
+    .expect("Failed to initialize FreeLog");
 
     let args: Vec<String> = env::args().collect();
 
