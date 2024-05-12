@@ -1858,8 +1858,8 @@ dependencies = [
 
 [[package]]
 name = "free_log_client"
-version = "0.1.1"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#3428f34e9a91193c55b2e39922b1c60a357e18c1"
+version = "0.2.0"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#29419c984434278d46b02eef0232f1cdf586fed4"
 dependencies = [
  "free_log_models",
  "futures-util",
@@ -1878,8 +1878,8 @@ dependencies = [
 
 [[package]]
 name = "free_log_models"
-version = "0.1.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#3428f34e9a91193c55b2e39922b1c60a357e18c1"
+version = "0.1.1"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#29419c984434278d46b02eef0232f1cdf586fed4"
 dependencies = [
  "log",
  "serde",
@@ -3511,6 +3511,7 @@ dependencies = [
  "lazy_static",
  "log",
  "moosicbox_auth",
+ "moosicbox_config",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_downloader",

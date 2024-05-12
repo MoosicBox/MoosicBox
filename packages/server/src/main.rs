@@ -11,6 +11,7 @@ mod ws;
 
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App};
+use moosicbox_config::get_config_dir_path;
 use moosicbox_core::app::AppState;
 use moosicbox_database::Database;
 use moosicbox_downloader::{api::models::ApiProgressEvent, queue::ProgressEvent};
@@ -19,6 +20,7 @@ use moosicbox_ws::api::send_download_event;
 use once_cell::sync::Lazy;
 use std::{
     env,
+    fs::create_dir_all,
     sync::{atomic::AtomicUsize, Arc, Mutex},
     time::Duration,
 };
@@ -43,11 +45,27 @@ fn main() -> std::io::Result<()> {
     #[cfg(not(debug_assertions))]
     const DEFAULT_LOG_LEVEL: &str = "moosicbox=info";
 
+    let log_dir = get_config_dir_path()
+        .expect("Failed to get config dir")
+        .join("logs");
+
+    create_dir_all(&log_dir).expect("Failed to create logs directory");
+
     free_log_client::init(
         free_log_client::LogsConfig::builder()
-            .user_agent("moosicbox_server")
-            .log_writer_api_url("https://logs.moosicbox.com")
-            .log_level(free_log_client::Level::Warn)
+            .with_api_writer(
+                free_log_client::ApiWriterConfig::builder()
+                    .user_agent("moosicbox_server")
+                    .api_url("https://logs.moosicbox.com")
+                    .log_level(free_log_client::Level::Warn),
+            )
+            .expect("Failed to initialize api writer")
+            .with_file_writer(
+                free_log_client::FileWriterConfig::builder()
+                    .file_path(log_dir.join("moosicbox.log"))
+                    .log_level(free_log_client::Level::Debug),
+            )
+            .expect("Failed to initialize file writer")
             .env_filter(default_env!(
                 "MOOSICBOX_LOG",
                 default_env!("RUST_LOG", DEFAULT_LOG_LEVEL)
