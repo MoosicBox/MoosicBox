@@ -13,7 +13,7 @@ Implemented:
 - Control playback across applications (web and desktop)
   - Supports multi simultaneous audio outputs
 - Audio encoding on the fly
-  - AAC (m4a), mp3
+  - AAC (m4a), mp3, Opus
 - Hi-Fi audio player
 - Automatic image optimization for requested size on demand
 - Tunnel server reverse proxy - allows access to local server from internet without any firewall configuration
