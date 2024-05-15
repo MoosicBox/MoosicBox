@@ -22,11 +22,11 @@ Implemented:
 - Global search functionality
 - Postgres, MySQL, and SQLite database support
 - Android app
+- Audio file visualization on seek bar
 
 In progress:
 
 - UPnP/DLNA support
-- Audio file visualization on seek bar
 - Opus decoder
 
 To-do (in no particular order):
