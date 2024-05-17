@@ -37,4 +37,6 @@ thiserror                    = { workspace = true }
 rusqlite = { workspace = true }
 
 [features]
+default = []
+
 fail-on-warnings = []

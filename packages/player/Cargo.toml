@@ -47,6 +47,7 @@ url               = { workspace = true }
 [features]
 default = [
     "aac",
+    "api",
     "cpal",
     "flac",
     "mp3",
@@ -56,6 +57,8 @@ default = [
 ]
 
 fail-on-warnings = []
+
+api = []
 
 # Player audio outputs
 asio                = ["moosicbox_symphonia_player/asio"]

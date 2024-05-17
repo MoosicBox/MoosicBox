@@ -27,7 +27,7 @@ use moosicbox_symphonia_player::media_sources::remote_bytestream::RemoteByteStre
 use moosicbox_symphonia_player::output::AudioOutputHandler;
 use moosicbox_symphonia_player::play_media_source;
 use moosicbox_tunnel::{Method, TunnelEncoding, TunnelWsResponse};
-use moosicbox_ws::api::{WebsocketContext, WebsocketSendError, WebsocketSender};
+use moosicbox_ws::{WebsocketContext, WebsocketSendError, WebsocketSender};
 use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng as _};
 use regex::Regex;
@@ -86,7 +86,7 @@ fn wrap_to_500<E: std::error::Error + 'static>(e: E) -> TunnelRequestError {
 }
 
 impl WebsocketSender for TunnelSenderHandle {
-    fn send(&self, conn_id: &str, data: &str) -> Result<(), moosicbox_ws::api::WebsocketSendError> {
+    fn send(&self, conn_id: &str, data: &str) -> Result<(), moosicbox_ws::WebsocketSendError> {
         if let Some(sender) = self.sender.read().unwrap().as_ref() {
             sender
                 .unbounded_send(TunnelResponseMessage::Ws(TunnelResponseWs {
@@ -99,7 +99,7 @@ impl WebsocketSender for TunnelSenderHandle {
         Ok(())
     }
 
-    fn send_all(&self, data: &str) -> Result<(), moosicbox_ws::api::WebsocketSendError> {
+    fn send_all(&self, data: &str) -> Result<(), moosicbox_ws::WebsocketSendError> {
         if let Some(sender) = self.sender.read().unwrap().as_ref() {
             sender
                 .unbounded_send(TunnelResponseMessage::Ws(TunnelResponseWs {
@@ -116,7 +116,7 @@ impl WebsocketSender for TunnelSenderHandle {
         &self,
         conn_id: &str,
         data: &str,
-    ) -> Result<(), moosicbox_ws::api::WebsocketSendError> {
+    ) -> Result<(), moosicbox_ws::WebsocketSendError> {
         if let Some(sender) = self.sender.read().unwrap().as_ref() {
             sender
                 .unbounded_send(TunnelResponseMessage::Ws(TunnelResponseWs {
@@ -1445,7 +1445,7 @@ impl TunnelSender {
             root_sender: sender,
             tunnel_sender: self.sender.read().unwrap().clone().unwrap(),
         };
-        moosicbox_ws::api::process_message(db, value, context, &sender).await?;
+        moosicbox_ws::process_message(db, value, context, &sender).await?;
         log::debug!("Processed tunnel ws request {request_id} {packet_id}");
         Ok(())
     }

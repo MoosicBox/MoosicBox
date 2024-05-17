@@ -9,7 +9,9 @@ use moosicbox_core::{
 use moosicbox_database::Database;
 use player::TrackOrId;
 
+#[cfg(feature = "api")]
 pub mod api;
+
 pub mod player;
 
 pub async fn get_track_or_ids_from_track_id_ranges(

@@ -28,7 +28,9 @@ moosicbox_files = { path = "../files", default-features = false, features = [
     "range",
 ] }
 moosicbox_menu = { path = "../menu" }
-moosicbox_player = { path = "../player", default-features = false }
+moosicbox_player = { path = "../player", default-features = false, features = [
+    "api",
+] }
 moosicbox_qobuz = { path = "../qobuz" }
 moosicbox_scan = { path = "../scan", default-features = false, features = [
     "api",

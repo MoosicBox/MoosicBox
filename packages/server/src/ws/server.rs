@@ -12,7 +12,7 @@ use std::{
 use kanal::OneshotSender;
 use log::{debug, error, info};
 use moosicbox_database::Database;
-use moosicbox_ws::api::{
+use moosicbox_ws::{
     WebsocketConnectError, WebsocketContext, WebsocketDisconnectError, WebsocketMessageError,
     WebsocketSendError, WebsocketSender,
 };
@@ -190,7 +190,7 @@ impl WsServer {
         let body = serde_json::from_str::<Value>(&payload)
             .map_err(|e| WebsocketMessageError::InvalidPayload(payload, e.to_string()))?;
 
-        moosicbox_ws::api::process_message(&**self.db.clone(), body, context, self).await?;
+        moosicbox_ws::process_message(&**self.db.clone(), body, context, self).await?;
 
         Ok(())
     }
@@ -212,7 +212,7 @@ impl WsServer {
         let connection_id = id.to_string();
         let context = WebsocketContext { connection_id };
 
-        moosicbox_ws::api::connect(&**self.db.clone(), self, &context)?;
+        moosicbox_ws::connect(&**self.db.clone(), self, &context)?;
 
         // send id back
         Ok(id)
@@ -235,7 +235,7 @@ impl WsServer {
         let connection_id = conn_id.to_string();
         let context = WebsocketContext { connection_id };
 
-        moosicbox_ws::api::disconnect(&**self.db.clone(), self, &context).await?;
+        moosicbox_ws::disconnect(&**self.db.clone(), self, &context).await?;
 
         Ok(())
     }

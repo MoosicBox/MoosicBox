@@ -1,6 +1,6 @@
 use moosicbox_core::sqlite::models::UpdateSession;
 use moosicbox_player::player::Playback;
-use moosicbox_ws::api::update_session;
+use moosicbox_ws::update_session;
 use once_cell::sync::Lazy;
 
 use crate::{CHAT_SERVER_HANDLE, DB};

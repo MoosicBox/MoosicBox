@@ -16,7 +16,7 @@ use moosicbox_core::app::AppState;
 use moosicbox_database::Database;
 use moosicbox_downloader::{api::models::ApiProgressEvent, queue::ProgressEvent};
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
-use moosicbox_ws::api::send_download_event;
+use moosicbox_ws::send_download_event;
 use once_cell::sync::Lazy;
 use std::{
     env,

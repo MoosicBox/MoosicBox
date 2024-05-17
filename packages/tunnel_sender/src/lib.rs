@@ -3,7 +3,7 @@
 use bytes::Bytes;
 use moosicbox_core::{sqlite::models::TrackApiSource, types::AudioFormat};
 use moosicbox_files::files::track::TrackAudioQuality;
-use moosicbox_ws::api::WebsocketMessageError;
+use moosicbox_ws::WebsocketMessageError;
 use serde::Deserialize;
 use serde_aux::prelude::*;
 use thiserror::Error;

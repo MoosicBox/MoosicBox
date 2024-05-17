@@ -1,5 +1,5 @@
 use futures_channel::mpsc::UnboundedSender;
-use moosicbox_ws::api::{WebsocketSendError, WebsocketSender};
+use moosicbox_ws::{WebsocketSendError, WebsocketSender};
 use serde_json::{json, Value};
 use tokio_tungstenite::tungstenite::Message;
 
