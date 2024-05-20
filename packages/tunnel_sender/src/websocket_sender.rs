@@ -1,4 +1,4 @@
-use futures_channel::mpsc::UnboundedSender;
+use futures_channel::mpsc::{TrySendError, UnboundedSender};
 use moosicbox_ws::{WebsocketSendError, WebsocketSender};
 use serde_json::{json, Value};
 use tokio_tungstenite::tungstenite::Message;
@@ -27,7 +27,7 @@ where
         broadcast: bool,
         except_id: Option<usize>,
         only_id: Option<usize>,
-    ) {
+    ) -> Result<(), TrySendError<TunnelResponseMessage>> {
         let body: Value = serde_json::from_str(data).unwrap();
         let request_id = self.request_id;
         let packet_id = self.packet_id;
@@ -42,7 +42,6 @@ where
                 only_id,
                 message: Message::Text(value.to_string()),
             }))
-            .unwrap();
     }
 }
 
@@ -54,7 +53,12 @@ where
         let id = connection_id.parse::<usize>().unwrap();
 
         if id == self.id {
-            self.send_tunnel(data, false, None, Some(self.propagate_id));
+            if self
+                .send_tunnel(data, false, None, Some(self.propagate_id))
+                .is_err()
+            {
+                log::error!("Failed to send tunnel message");
+            }
         } else {
             self.root_sender.send(connection_id, data)?;
         }
@@ -63,7 +67,9 @@ where
     }
 
     fn send_all(&self, data: &str) -> Result<(), WebsocketSendError> {
-        self.send_tunnel(data, true, None, None);
+        if self.send_tunnel(data, true, None, None).is_err() {
+            log::error!("Failed to send tunnel message");
+        }
 
         self.root_sender.send_all(data)?;
 
@@ -73,8 +79,12 @@ where
     fn send_all_except(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
         let id = connection_id.parse::<usize>().unwrap();
 
-        if id != self.propagate_id {
-            self.send_tunnel(data, true, Some(self.propagate_id), None);
+        if id != self.propagate_id
+            && self
+                .send_tunnel(data, true, Some(self.propagate_id), None)
+                .is_err()
+        {
+            log::error!("Failed to send tunnel message");
         }
 
         self.root_sender.send_all_except(connection_id, data)?;
