@@ -168,7 +168,7 @@ pub struct ApiPlaybackStatus {
     active_playbacks: Option<ApiPlayback>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug, Clone, Copy)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaybackStatus {
     pub playback_id: usize,
