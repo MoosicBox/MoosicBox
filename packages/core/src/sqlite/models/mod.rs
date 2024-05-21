@@ -998,6 +998,18 @@ pub struct UpdateSession {
     pub playlist: Option<UpdateSessionPlaylist>,
 }
 
+impl UpdateSession {
+    pub fn playback_updated(&self) -> bool {
+        self.play.is_some()
+            || self.stop.is_some()
+            || self.active.is_some()
+            || self.playing.is_some()
+            || self.position.is_some()
+            || self.volume.is_some()
+            || self.playlist.is_some()
+    }
+}
+
 impl ToApi<ApiUpdateSession> for UpdateSession {
     fn to_api(self) -> ApiUpdateSession {
         ApiUpdateSession {
