@@ -14,7 +14,9 @@ pub fn on_playback_event(update: &UpdateSession, _current: &Playback) {
             .unwrap()
     });
 
-    RT.block_on(async move {
+    let update = update.clone();
+
+    RT.spawn(async move {
         let db = if let Some(db) = DB.read().unwrap().as_ref() {
             db.clone()
         } else {
@@ -29,7 +31,7 @@ pub fn on_playback_event(update: &UpdateSession, _current: &Playback) {
             .unwrap()
             .clone();
 
-        if let Err(err) = update_session(&**db, &sender, None, update).await {
+        if let Err(err) = update_session(&**db, &sender, None, &update).await {
             log::error!("Failed to broadcast update_session: {err:?}");
         }
     });
