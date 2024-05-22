@@ -11,6 +11,7 @@ use std::{
 
 use kanal::OneshotSender;
 use log::{debug, error, info};
+use moosicbox_core::sqlite::models::UpdateSession;
 use moosicbox_database::Database;
 use moosicbox_ws::{
     WebsocketConnectError, WebsocketContext, WebsocketDisconnectError, WebsocketMessageError,
@@ -57,6 +58,11 @@ impl WebsocketSender for WsServer {
 /// A command received by the [`ChatServer`].
 #[derive(Debug)]
 pub enum Command {
+    AddPlayerAction {
+        id: i32,
+        action: PlayerAction,
+    },
+
     Connect {
         conn_tx: mpsc::UnboundedSender<Msg>,
         res_tx: OneshotSender<ConnId>,
@@ -100,6 +106,8 @@ pub enum Command {
     },
 }
 
+type PlayerAction = fn(&UpdateSession);
+
 /// A multi-room chat server.
 ///
 /// Contains the logic of how connections chat with each other plus room management.
@@ -123,6 +131,8 @@ pub struct WsServer {
     cmd_rx: kanal::Receiver<Command>,
 
     senders: Vec<Box<dyn WebsocketSender>>,
+
+    player_actions: Vec<(i32, PlayerAction)>,
 }
 
 impl WsServer {
@@ -144,9 +154,14 @@ impl WsServer {
                 visitor_count: Arc::new(AtomicUsize::new(0)),
                 cmd_rx,
                 senders: vec![],
+                player_actions: vec![],
             },
             handle,
         )
+    }
+
+    pub fn add_player_action(&mut self, id: i32, action: PlayerAction) {
+        self.player_actions.push((id, action));
     }
 
     pub fn add_sender(&mut self, sender: Box<dyn WebsocketSender>) {
@@ -185,7 +200,10 @@ impl WsServer {
         msg: impl Into<String> + Send,
     ) -> Result<(), WebsocketMessageError> {
         let connection_id = id.to_string();
-        let context = WebsocketContext { connection_id };
+        let context = WebsocketContext {
+            connection_id,
+            player_actions: self.player_actions.clone(),
+        };
         let payload = msg.into();
         let body = serde_json::from_str::<Value>(&payload)
             .map_err(|e| WebsocketMessageError::InvalidPayload(payload, e.to_string()))?;
@@ -210,7 +228,10 @@ impl WsServer {
         debug!("Visitor count: {}", count + 1);
 
         let connection_id = id.to_string();
-        let context = WebsocketContext { connection_id };
+        let context = WebsocketContext {
+            connection_id,
+            player_actions: self.player_actions.clone(),
+        };
 
         moosicbox_ws::connect(&**self.db.clone(), self, &context)?;
 
@@ -233,7 +254,10 @@ impl WsServer {
         }
 
         let connection_id = conn_id.to_string();
-        let context = WebsocketContext { connection_id };
+        let context = WebsocketContext {
+            connection_id,
+            player_actions: self.player_actions.clone(),
+        };
 
         moosicbox_ws::disconnect(&**self.db.clone(), self, &context).await?;
 
@@ -270,6 +294,10 @@ impl WsServer {
 
     pub async fn process_command(&mut self, cmd: Command) -> io::Result<()> {
         match cmd {
+            Command::AddPlayerAction { id, action } => {
+                self.add_player_action(id, action);
+            }
+
             Command::Connect { conn_tx, res_tx } => {
                 if let Err(error) = self.connect(conn_tx).map(|conn_id| res_tx.send(conn_id)) {
                     error!("Failed to connect: {:?}", error);
@@ -379,6 +407,13 @@ impl WebsocketSender for ChatServerHandle {
 }
 
 impl ChatServerHandle {
+    pub fn add_player_action(&mut self, id: i32, action: PlayerAction) {
+        // unwrap: chat server should not have been dropped
+        self.cmd_tx
+            .send(Command::AddPlayerAction { id, action })
+            .unwrap();
+    }
+
     /// Register client message sender and obtain connection ID.
     pub fn connect(&self, conn_tx: mpsc::UnboundedSender<String>) -> ConnId {
         let (res_tx, res_rx) = kanal::oneshot();

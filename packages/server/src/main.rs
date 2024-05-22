@@ -12,13 +12,21 @@ mod ws;
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App};
 use moosicbox_config::get_config_dir_path;
-use moosicbox_core::app::AppState;
+use moosicbox_core::{
+    app::AppState,
+    sqlite::models::{RegisterConnection, RegisterPlayer, UpdateSession},
+};
 use moosicbox_database::Database;
 use moosicbox_downloader::{api::models::ApiProgressEvent, queue::ProgressEvent};
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
-use moosicbox_ws::send_download_event;
+use moosicbox_player::{
+    api::DEFAULT_PLAYBACK_RETRY_OPTIONS,
+    player::{PlayerSource, TrackOrId},
+};
+use moosicbox_ws::{send_download_event, WebsocketContext, WebsocketSendError};
 use once_cell::sync::Lazy;
 use std::{
+    collections::HashMap,
     env,
     fs::create_dir_all,
     sync::{atomic::AtomicUsize, Arc, Mutex},
@@ -27,7 +35,7 @@ use std::{
 use throttle::Throttle;
 use tokio::{task::spawn, try_join};
 use tokio_util::sync::CancellationToken;
-use ws::server::WsServer;
+use ws::server::{ChatServerHandle, WsServer};
 
 static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
 
@@ -174,6 +182,7 @@ fn main() -> std::io::Result<()> {
         .await;
 
         let (mut chat_server, server_tx) = WsServer::new(database.clone());
+        let handle = server_tx.clone();
         CHAT_SERVER_HANDLE.write().unwrap().replace(server_tx);
 
         #[cfg(feature = "postgres-raw")]
@@ -189,6 +198,12 @@ fn main() -> std::io::Result<()> {
         }
 
         let chat_server_handle = spawn(async move { chat_server.run().await });
+
+        if let Err(err) = register_server_player(&**database.clone(), handle).await {
+            log::error!("Failed to register server player: {err:?}");
+        } else {
+            log::debug!("Registered server player");
+        }
 
         let app = move || {
             let app_data = AppState {
@@ -359,4 +374,81 @@ fn main() -> std::io::Result<()> {
 
         Ok(())
     })
+}
+
+static SERVER_PLAYER: Lazy<std::sync::RwLock<HashMap<i32, moosicbox_player::player::Player>>> =
+    Lazy::new(|| std::sync::RwLock::new(HashMap::new()));
+
+fn handle_server_playback_update(update: &UpdateSession) {
+    let updated = SERVER_PLAYER
+        .write()
+        .unwrap()
+        .entry(update.session_id)
+        .or_insert_with(|| moosicbox_player::player::Player::new(PlayerSource::Local, None))
+        .update_playback(
+            update.play,
+            update.stop,
+            update.playing,
+            update.position.map(|x| x.try_into().unwrap()),
+            update.seek,
+            update.volume,
+            update.playlist.as_ref().map(|x| {
+                x.tracks
+                    .iter()
+                    .map(|t| TrackOrId::Id(t.id.try_into().unwrap(), t.r#type))
+                    .collect::<Vec<_>>()
+            }),
+            None,
+            Some(update.session_id.try_into().unwrap()),
+            None,
+            Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
+        );
+
+    match updated {
+        Ok(status) => {
+            log::debug!("Updated server player playback: {status:?}");
+        }
+        Err(err) => {
+            log::error!("Failed to update server player playback: {err:?}");
+        }
+    }
+}
+
+async fn register_server_player(
+    db: &dyn Database,
+    mut ws: ChatServerHandle,
+) -> Result<(), WebsocketSendError> {
+    let connection_id = "self";
+
+    let context = WebsocketContext {
+        connection_id: connection_id.to_string(),
+        ..Default::default()
+    };
+    let payload = RegisterConnection {
+        connection_id: connection_id.to_string(),
+        name: "MoosicBox Server".to_string(),
+        players: vec![RegisterPlayer {
+            name: "MoosicBox Server".into(),
+            r#type: "SYMPHONIA".into(),
+        }],
+    };
+
+    let handle = CHAT_SERVER_HANDLE
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone()
+        .ok_or(WebsocketSendError::Unknown("No chat server handle".into()))?;
+
+    let connection = moosicbox_ws::register_connection(db, &handle, &context, &payload).await?;
+
+    let player = connection
+        .players
+        .first()
+        .ok_or(WebsocketSendError::Unknown(
+            "No player on connection".into(),
+        ))?;
+
+    ws.add_player_action(player.id, handle_server_playback_update);
+
+    moosicbox_ws::get_sessions(db, &handle, &context, true).await
 }

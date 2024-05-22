@@ -1434,6 +1434,7 @@ impl TunnelSender {
     ) -> Result<(), TunnelRequestError> {
         let context = WebsocketContext {
             connection_id: conn_id.to_string(),
+            ..Default::default()
         };
         let packet_id = 1_u32;
         log::debug!("Processing tunnel ws request request_id={request_id} packet_id={packet_id} conn_id={conn_id}");

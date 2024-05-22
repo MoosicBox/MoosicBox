@@ -78,8 +78,12 @@ pub enum OutboundMessageType {
     SetSeek,
 }
 
+type PlayerAction = fn(&UpdateSession);
+
+#[derive(Clone, Default, Debug)]
 pub struct WebsocketContext {
     pub connection_id: String,
+    pub player_actions: Vec<(i32, PlayerAction)>,
 }
 
 #[derive(Debug, Error)]
@@ -361,7 +365,7 @@ pub async fn message(
     })
 }
 
-async fn get_sessions(
+pub async fn get_sessions(
     db: &dyn Database,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
@@ -424,22 +428,22 @@ async fn get_connections(db: &dyn Database) -> Result<String, WebsocketSendError
     Ok(connections_json)
 }
 
-async fn register_connection(
+pub async fn register_connection(
     db: &dyn Database,
     _sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &RegisterConnection,
-) -> Result<(), WebsocketSendError> {
+) -> Result<Connection, WebsocketSendError> {
     let connection = moosicbox_core::sqlite::db::register_connection(db, payload).await?;
 
     let mut connection_data = CONNECTION_DATA.write().unwrap();
 
-    connection_data.insert(context.connection_id.clone(), connection);
+    connection_data.insert(context.connection_id.clone(), connection.clone());
 
-    Ok(())
+    Ok(connection)
 }
 
-async fn register_players(
+pub async fn register_players(
     db: &dyn Database,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
@@ -501,6 +505,28 @@ pub async fn update_session(
     context: Option<&WebsocketContext>,
     payload: &UpdateSession,
 ) -> Result<(), UpdateSessionError> {
+    if let Some(actions) = context.map(|x| &x.player_actions) {
+        if payload.playback_updated() {
+            if let Some(session) =
+                moosicbox_core::sqlite::db::get_session(db, payload.session_id).await?
+            {
+                let funcs = session
+                    .active_players
+                    .iter()
+                    .filter_map(|p| {
+                        actions
+                            .iter()
+                            .find_map(|x| if x.0 == p.id { Some(x.1) } else { None })
+                    })
+                    .collect::<Vec<_>>();
+
+                for func in funcs {
+                    func(payload);
+                }
+            }
+        }
+    }
+
     moosicbox_core::sqlite::db::update_session(db, payload).await?;
 
     let playlist = if payload.playlist.is_some() {
