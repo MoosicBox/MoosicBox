@@ -112,7 +112,7 @@ log = { version = "0.4", features = ["release_max_level_trace"] }
 md5 = "0.7.0"
 mp3-duration = "0.1.10"
 mp3lame-encoder = "0.1.5"
-mysql = { version = "25.0.0", features = [
+mysql = { version = "25.0.1", features = [
     "default-rustls",
     "rustls-tls",
 ], default-features = false }
