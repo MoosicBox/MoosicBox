@@ -11,11 +11,10 @@ use std::{
 
 use kanal::OneshotSender;
 use log::{debug, error, info};
-use moosicbox_core::sqlite::models::UpdateSession;
 use moosicbox_database::Database;
 use moosicbox_ws::{
-    WebsocketConnectError, WebsocketContext, WebsocketDisconnectError, WebsocketMessageError,
-    WebsocketSendError, WebsocketSender,
+    PlayerAction, WebsocketConnectError, WebsocketContext, WebsocketDisconnectError,
+    WebsocketMessageError, WebsocketSendError, WebsocketSender,
 };
 use rand::{thread_rng, Rng as _};
 use serde_json::Value;
@@ -105,8 +104,6 @@ pub enum Command {
         res_tx: OneshotSender<()>,
     },
 }
-
-type PlayerAction = fn(&UpdateSession);
 
 /// A multi-room chat server.
 ///

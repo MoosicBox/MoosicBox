@@ -6,7 +6,9 @@ pub mod api;
 use core::fmt;
 use std::{
     collections::HashMap,
+    future::Future,
     num::ParseIntError,
+    pin::Pin,
     str::FromStr,
     sync::{Arc, RwLock},
 };
@@ -78,7 +80,7 @@ pub enum OutboundMessageType {
     SetSeek,
 }
 
-type PlayerAction = fn(&UpdateSession);
+pub type PlayerAction = fn(&UpdateSession) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>;
 
 #[derive(Clone, Default, Debug)]
 pub struct WebsocketContext {
@@ -521,7 +523,7 @@ pub async fn update_session(
                     .collect::<Vec<_>>();
 
                 for func in funcs {
-                    func(payload);
+                    func(payload).await;
                 }
             }
         }
