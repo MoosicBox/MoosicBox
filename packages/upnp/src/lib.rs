@@ -242,5 +242,9 @@ pub async fn scan_devices() -> Result<Vec<UpnpDevice>, ScanError> {
         upnp_devices.extend_from_slice(&scan_device(Some(device.url()), &device, None).await?);
     }
 
+    if upnp_devices.is_empty() {
+        log::debug!("No UPnP devices discovered");
+    }
+
     Ok(upnp_devices)
 }
