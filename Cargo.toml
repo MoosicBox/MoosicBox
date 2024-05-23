@@ -69,9 +69,9 @@ atomic_float = "1.0.0"
 audiopus = "0.2.0"
 audiotags = { git = "https://github.com/BSteffaniak/audiotags.git", branch = "master-shallow" }
 awc = "3.5.0"
-aws-config = "1.4.0"
-aws-sdk-apigatewaymanagement = "1.25.0"
-aws-sdk-ssm = "1.28.0"
+aws-config = "1.5.0"
+aws-sdk-apigatewaymanagement = "1.26.0"
+aws-sdk-ssm = "1.29.0"
 base64 = "0.22.1"
 bytes = "1.6.0"
 chrono = { version = "0.4.38", default-features = false, features = [
