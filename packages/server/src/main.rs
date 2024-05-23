@@ -11,6 +11,7 @@ mod ws;
 
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App};
+use futures_util::Future;
 use moosicbox_config::get_config_dir_path;
 use moosicbox_core::{
     app::AppState,
@@ -26,9 +27,10 @@ use moosicbox_player::{
 use moosicbox_ws::{send_download_event, WebsocketContext, WebsocketSendError};
 use once_cell::sync::Lazy;
 use std::{
-    collections::HashMap,
+    collections::{hash_map::Entry, HashMap},
     env,
     fs::create_dir_all,
+    pin::Pin,
     sync::{atomic::AtomicUsize, Arc, Mutex},
     time::Duration,
 };
@@ -376,42 +378,55 @@ fn main() -> std::io::Result<()> {
     })
 }
 
-static SERVER_PLAYER: Lazy<std::sync::RwLock<HashMap<i32, moosicbox_player::player::Player>>> =
-    Lazy::new(|| std::sync::RwLock::new(HashMap::new()));
+static SERVER_PLAYER: Lazy<tokio::sync::RwLock<HashMap<i32, moosicbox_player::player::Player>>> =
+    Lazy::new(|| tokio::sync::RwLock::new(HashMap::new()));
 
-fn handle_server_playback_update(update: &UpdateSession) {
-    let updated = SERVER_PLAYER
-        .write()
-        .unwrap()
-        .entry(update.session_id)
-        .or_insert_with(|| moosicbox_player::player::Player::new(PlayerSource::Local, None))
-        .update_playback(
-            update.play,
-            update.stop,
-            update.playing,
-            update.position.map(|x| x.try_into().unwrap()),
-            update.seek,
-            update.volume,
-            update.playlist.as_ref().map(|x| {
-                x.tracks
-                    .iter()
-                    .map(|t| TrackOrId::Id(t.id.try_into().unwrap(), t.r#type))
-                    .collect::<Vec<_>>()
-            }),
-            None,
-            Some(update.session_id.try_into().unwrap()),
-            None,
-            Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
-        );
+fn handle_server_playback_update(
+    update: &UpdateSession,
+) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> {
+    let update = update.clone();
 
-    match updated {
-        Ok(status) => {
-            log::debug!("Updated server player playback: {status:?}");
+    Box::pin(async move {
+        let updated = {
+            let mut lock = SERVER_PLAYER.write().await;
+            let entry = lock.entry(update.session_id);
+            let updated = match entry {
+                Entry::Occupied(occ_entry) => occ_entry.into_mut(),
+                Entry::Vacant(vac_entry) => vac_entry.insert(
+                    moosicbox_player::player::Player::new(PlayerSource::Local, None),
+                ),
+            }
+            .update_playback(
+                update.play,
+                update.stop,
+                update.playing,
+                update.position.map(|x| x.try_into().unwrap()),
+                update.seek,
+                update.volume,
+                update.playlist.as_ref().map(|x| {
+                    x.tracks
+                        .iter()
+                        .map(|t| TrackOrId::Id(t.id.try_into().unwrap(), t.r#type))
+                        .collect::<Vec<_>>()
+                }),
+                None,
+                Some(update.session_id.try_into().unwrap()),
+                None,
+                Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
+            );
+            drop(lock);
+            updated
+        };
+
+        match updated {
+            Ok(status) => {
+                log::debug!("Updated server player playback: {status:?}");
+            }
+            Err(err) => {
+                log::error!("Failed to update server player playback: {err:?}");
+            }
         }
-        Err(err) => {
-            log::error!("Failed to update server player playback: {err:?}");
-        }
-    }
+    })
 }
 
 async fn register_server_player(
