@@ -768,7 +768,7 @@ impl TunnelSender {
         if !overflow_buf.is_empty() {
             overflow_buf.push_str(buf);
             *buf = overflow_buf.to_string();
-            *overflow_buf = "".to_owned();
+            "".clone_into(overflow_buf);
         }
 
         let mut prefix = format!("{request_id}|{packet_id}|");
@@ -831,7 +831,7 @@ impl TunnelSender {
                     if !overflow_buf.is_empty() {
                         overflow_buf.push_str(&base64);
                         base64 = overflow_buf;
-                        overflow_buf = "".to_owned();
+                        overflow_buf = "".to_string();
                     }
                     let end = min(base64.len(), buf_size - prefix.len());
                     let data = &base64[..end];
@@ -842,7 +842,7 @@ impl TunnelSender {
                     if size == 0 {
                         while !overflow_buf.is_empty() {
                             let base64 = overflow_buf;
-                            overflow_buf = "".to_owned();
+                            overflow_buf = "".to_string();
                             let end = min(base64.len(), buf_size - prefix.len());
                             let data = &base64[..end];
                             overflow_buf.push_str(&base64[end..]);
@@ -1430,7 +1430,7 @@ impl TunnelSender {
         conn_id: usize,
         request_id: usize,
         value: Value,
-        sender: impl WebsocketSender + Send + Sync,
+        sender: impl WebsocketSender,
     ) -> Result<(), TunnelRequestError> {
         let context = WebsocketContext {
             connection_id: conn_id.to_string(),
