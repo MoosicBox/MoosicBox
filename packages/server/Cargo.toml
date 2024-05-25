@@ -70,6 +70,7 @@ actix-web       = { workspace = true }
 actix-ws        = { workspace = true }
 awc             = { workspace = true }
 enum-as-inner   = { workspace = true }
+flume           = { workspace = true }
 free_log_client = { workspace = true }
 futures         = { workspace = true }
 futures-util    = { workspace = true }

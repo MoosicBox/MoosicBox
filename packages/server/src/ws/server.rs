@@ -19,6 +19,7 @@ use moosicbox_ws::{
 use rand::{thread_rng, Rng as _};
 use serde_json::Value;
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
 use crate::ws::{ConnId, Msg, RoomId};
 
@@ -125,11 +126,13 @@ pub struct WsServer {
     visitor_count: Arc<AtomicUsize>,
 
     /// Command receiver.
-    cmd_rx: kanal::Receiver<Command>,
+    cmd_rx: flume::Receiver<Command>,
 
     senders: Vec<Box<dyn WebsocketSender>>,
 
     player_actions: Vec<(i32, PlayerAction)>,
+
+    token: CancellationToken,
 }
 
 impl WsServer {
@@ -140,8 +143,12 @@ impl WsServer {
         // create default room
         rooms.insert("main".to_owned(), HashSet::new());
 
-        let (cmd_tx, cmd_rx) = kanal::unbounded();
-        let handle = ChatServerHandle { cmd_tx };
+        let (cmd_tx, cmd_rx) = flume::unbounded();
+        let token = CancellationToken::new();
+        let handle = ChatServerHandle {
+            cmd_tx,
+            token: token.clone(),
+        };
 
         (
             Self {
@@ -152,6 +159,7 @@ impl WsServer {
                 cmd_rx,
                 senders: vec![],
                 player_actions: vec![],
+                token,
             },
             handle,
         )
@@ -359,7 +367,14 @@ impl WsServer {
     }
 
     pub async fn run(mut self) -> io::Result<()> {
-        while let Ok(cmd) = self.cmd_rx.recv() {
+        while let Ok(cmd) = tokio::select!(
+            () = self.token.cancelled() => {
+                log::debug!("WsServer was cancelled");
+                return Ok(());
+            }
+            cmd = self.cmd_rx.recv_async() => { cmd }
+        ) {
+            log::trace!("Received WsServer command");
             self.process_command(cmd).await?;
         }
 
@@ -372,7 +387,8 @@ impl WsServer {
 /// Reduces boilerplate of setting up response channels in `WebSocket` handlers.
 #[derive(Debug, Clone)]
 pub struct ChatServerHandle {
-    cmd_tx: kanal::Sender<Command>,
+    cmd_tx: flume::Sender<Command>,
+    token: CancellationToken,
 }
 
 impl WebsocketSender for ChatServerHandle {
@@ -405,6 +421,7 @@ impl WebsocketSender for ChatServerHandle {
 
 impl ChatServerHandle {
     pub fn add_player_action(&mut self, id: i32, action: PlayerAction) {
+        log::trace!("Sending AddPlayerAction command");
         // unwrap: chat server should not have been dropped
         self.cmd_tx
             .send(Command::AddPlayerAction { id, action })
@@ -413,6 +430,7 @@ impl ChatServerHandle {
 
     /// Register client message sender and obtain connection ID.
     pub fn connect(&self, conn_tx: mpsc::UnboundedSender<String>) -> ConnId {
+        log::trace!("Sending Connect command");
         let (res_tx, res_rx) = kanal::oneshot();
 
         // unwrap: chat server should not have been dropped
@@ -426,6 +444,7 @@ impl ChatServerHandle {
 
     /// List all created rooms.
     pub fn list_rooms(&self) -> Vec<String> {
+        log::trace!("Sending List command");
         let (res_tx, res_rx) = kanal::oneshot();
 
         // unwrap: chat server should not have been dropped
@@ -437,6 +456,7 @@ impl ChatServerHandle {
 
     /// Join `room`, creating it if it does not exist.
     pub fn join_room(&self, conn: ConnId, room: impl Into<String>) {
+        log::trace!("Sending Join command");
         let (res_tx, res_rx) = kanal::oneshot();
 
         // unwrap: chat server should not have been dropped
@@ -453,6 +473,7 @@ impl ChatServerHandle {
     }
 
     pub fn send(&self, conn: ConnId, msg: impl Into<String>) {
+        log::trace!("Sending Send command");
         let (res_tx, res_rx) = kanal::oneshot();
 
         // unwrap: chat server should not have been dropped
@@ -469,6 +490,7 @@ impl ChatServerHandle {
     }
 
     pub fn broadcast(&self, msg: impl Into<String>) {
+        log::trace!("Sending Broadcast command");
         let (res_tx, res_rx) = kanal::oneshot();
 
         // unwrap: chat server should not have been dropped
@@ -484,6 +506,7 @@ impl ChatServerHandle {
     }
 
     pub fn broadcast_except(&self, conn: ConnId, msg: impl Into<String>) {
+        log::trace!("Sending BroadcastExcept command");
         let (res_tx, res_rx) = kanal::oneshot();
 
         // unwrap: chat server should not have been dropped
@@ -501,6 +524,7 @@ impl ChatServerHandle {
 
     /// Broadcast message to current room.
     pub fn send_message(&self, conn: ConnId, msg: impl Into<String>) {
+        log::trace!("Sending Message command");
         let (res_tx, res_rx) = kanal::oneshot();
 
         // unwrap: chat server should not have been dropped
@@ -518,7 +542,12 @@ impl ChatServerHandle {
 
     /// Unregister message sender and broadcast disconnection message to current room.
     pub fn disconnect(&self, conn: ConnId) {
+        log::trace!("Sending Disconnect command");
         // unwrap: chat server should not have been dropped
         self.cmd_tx.send(Command::Disconnect { conn }).unwrap();
+    }
+
+    pub fn shutdown(&self) {
+        self.token.cancel();
     }
 }

@@ -35,9 +35,11 @@ use std::{
     time::Duration,
 };
 use throttle::Throttle;
-use tokio::{task::spawn, try_join};
+use tokio::try_join;
 use tokio_util::sync::CancellationToken;
 use ws::server::{ChatServerHandle, WsServer};
+
+use crate::playback_session::PLAYBACK_EVENT_HANDLER;
 
 static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
 
@@ -47,6 +49,22 @@ static CHAT_SERVER_HANDLE: Lazy<std::sync::RwLock<Option<ws::server::ChatServerH
 #[allow(clippy::type_complexity)]
 static DB: Lazy<std::sync::RwLock<Option<Arc<Box<dyn Database>>>>> =
     Lazy::new(|| std::sync::RwLock::new(None));
+
+static PLAYBACK_EVENT_RT: Lazy<tokio::runtime::Runtime> = Lazy::new(|| {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .max_blocking_threads(1)
+        .build()
+        .unwrap()
+});
+
+static WS_SERVER_RT: Lazy<tokio::runtime::Runtime> = Lazy::new(|| {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .max_blocking_threads(1)
+        .build()
+        .unwrap()
+});
 
 #[allow(clippy::too_many_lines)]
 fn main() -> std::io::Result<()> {
@@ -96,9 +114,6 @@ fn main() -> std::io::Result<()> {
             .try_into()
             .expect("Invalid PORT environment variable")
     };
-
-    moosicbox_player::player::set_service_port(service_port);
-    moosicbox_player::player::on_playback_event(crate::playback_session::on_playback_event);
 
     actix_web::rt::System::with_tokio_rt(|| {
         let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
@@ -187,6 +202,11 @@ fn main() -> std::io::Result<()> {
         let handle = server_tx.clone();
         CHAT_SERVER_HANDLE.write().unwrap().replace(server_tx);
 
+        let playback_event_handle = PLAYBACK_EVENT_RT.spawn(PLAYBACK_EVENT_HANDLER.run());
+
+        moosicbox_player::player::set_service_port(service_port);
+        moosicbox_player::player::on_playback_event(crate::playback_session::on_playback_event);
+
         #[cfg(feature = "postgres-raw")]
         let db_connection_handle = tokio::spawn(db_connection);
 
@@ -199,7 +219,7 @@ fn main() -> std::io::Result<()> {
             chat_server.add_sender(Box::new(tunnel_handle.clone()));
         }
 
-        let chat_server_handle = spawn(async move { chat_server.run().await });
+        let chat_server_handle = WS_SERVER_RT.spawn(chat_server.run());
 
         if let Err(err) = register_server_player(&**database.clone(), handle).await {
             log::error!("Failed to register server player: {err:?}");
@@ -338,7 +358,9 @@ fn main() -> std::io::Result<()> {
             async move {
                 let resp = http_server.await;
                 log::debug!("Shutting down ws server...");
-                CHAT_SERVER_HANDLE.write().unwrap().take();
+                if let Some(x) = CHAT_SERVER_HANDLE.write().unwrap().take() {
+                    x.shutdown();
+                }
                 log::debug!("Shutting down db client...");
                 DB.write().unwrap().take();
                 log::debug!("Cancelling scan...");
@@ -359,12 +381,19 @@ fn main() -> std::io::Result<()> {
                     log::debug!("Aborting database connection...");
                     db_connection_handle.abort();
                 }
+                log::debug!("Shutting down PlaybackEventHandler...");
+                PLAYBACK_EVENT_HANDLER.shutdown();
                 log::trace!("Connections closed");
                 resp
             },
             async move {
                 let resp = chat_server_handle.await.unwrap();
                 log::debug!("Ws server connection closed");
+                resp
+            },
+            async move {
+                let resp = playback_event_handle.await.unwrap();
+                log::debug!("PlaybackEventHandler connection closed");
                 resp
             },
         ) {

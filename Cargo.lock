@@ -3508,6 +3508,7 @@ dependencies = [
  "aws-config",
  "aws-sdk-ssm",
  "enum-as-inner",
+ "flume",
  "free_log_client",
  "futures",
  "futures-util",
