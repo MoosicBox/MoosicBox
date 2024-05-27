@@ -58,7 +58,6 @@ impl<Sender: WebsocketSender> PlaybackEventHandler<Sender> {
     }
 
     pub async fn run(&self) -> Result<(), std::io::Error> {
-        log::error!("PlaybackEventHandler RUN");
         while let Ok(cmd) = tokio::select!(
             () = self.token.cancelled() => {
                 log::debug!("PlaybackEventHandler was cancelled");
