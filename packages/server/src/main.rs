@@ -428,47 +428,14 @@ fn handle_server_playback_update(
                         lock.clone().expect("No database")
                     };
 
-                    let player = moosicbox_player::player::Player::new(PlayerSource::Local, None);
-
-                    log::trace!("Searching for existing session id {}", update.session_id);
-                    if let Ok(session) =
-                        moosicbox_core::sqlite::db::get_session(&**db, update.session_id).await
-                    {
-                        if let Some(session) = session {
-                            log::debug!("Got session {session:?}");
-                            if let Err(err) = player.update_playback(
-                                None,
-                                None,
-                                None,
-                                session.position.map(|x| x.try_into().unwrap()),
-                                session.seek.map(std::convert::Into::into),
-                                session.volume,
-                                Some(
-                                    session
-                                        .playlist
-                                        .tracks
-                                        .iter()
-                                        .map(|x| {
-                                            TrackOrId::Id(
-                                                x.track_id().try_into().unwrap(),
-                                                x.api_source(),
-                                            )
-                                        })
-                                        .collect::<Vec<_>>(),
-                                ),
-                                None,
-                                Some(session.id.try_into().unwrap()),
-                                Some(session.playlist.id.try_into().unwrap()),
-                                None,
-                            ) {
-                                log::error!("Failed to update playback: {err:?}");
-                            }
-                        } else {
-                            log::debug!("No session with id {}", update.session_id);
-                        }
-                    } else {
-                        log::error!("Failed to get session with id {}", update.session_id);
-                    }
+                    let player = moosicbox_player::player::Player::new_from_session(
+                        &**db,
+                        update.session_id,
+                    )
+                    .await
+                    .unwrap_or_else(|_| {
+                        moosicbox_player::player::Player::new(PlayerSource::Local, None)
+                    });
 
                     vac_entry.insert(player)
                 }

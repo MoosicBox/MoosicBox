@@ -93,6 +93,8 @@ pub enum PlayerError {
     PlaybackAlreadyPlaying(usize),
     #[error("Invalid Playback Type")]
     InvalidPlaybackType,
+    #[error("Invalid session with id {session_id}: {message}")]
+    InvalidSession { session_id: i32, message: String },
 }
 
 impl std::fmt::Debug for PlayableTrack {
@@ -315,6 +317,53 @@ impl Player {
             active_playback: Arc::new(RwLock::new(None)),
             receiver: Arc::new(RwLock::new(None)),
         }
+    }
+
+    pub async fn new_from_session(db: &dyn Database, session_id: i32) -> Result<Self, PlayerError> {
+        let player = Self::new(PlayerSource::Local, None);
+
+        log::trace!("Searching for existing session id {}", session_id);
+        if let Ok(session) = moosicbox_core::sqlite::db::get_session(db, session_id).await {
+            if let Some(session) = session {
+                log::debug!("Got session {session:?}");
+                if let Err(err) = player.update_playback(
+                    None,
+                    None,
+                    None,
+                    session.position.map(|x| x.try_into().unwrap()),
+                    session.seek.map(std::convert::Into::into),
+                    session.volume,
+                    Some(
+                        session
+                            .playlist
+                            .tracks
+                            .iter()
+                            .map(|x| {
+                                TrackOrId::Id(x.track_id().try_into().unwrap(), x.api_source())
+                            })
+                            .collect::<Vec<_>>(),
+                    ),
+                    None,
+                    Some(session.id.try_into().unwrap()),
+                    Some(session.playlist.id.try_into().unwrap()),
+                    None,
+                ) {
+                    return Err(PlayerError::InvalidSession {
+                        session_id,
+                        message: format!("Failed to update playback: {err:?}"),
+                    });
+                }
+            } else {
+                log::debug!("No session with id {}", session_id);
+            }
+        } else {
+            return Err(PlayerError::InvalidSession {
+                session_id,
+                message: format!("Failed to get session with id {}", session_id),
+            });
+        }
+
+        Ok(player)
     }
 
     #[allow(clippy::too_many_arguments)]
