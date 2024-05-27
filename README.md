@@ -60,7 +60,7 @@ To-do (in no particular order):
 
 - pkg-config (optional for OPUS)
 - libtool (optional for OPUS)
-- vips (optional for libvips image optimization)
+- [vips](https://www.libvips.org/install.html) (optional for libvips image optimization)
 
 ### Run
 
