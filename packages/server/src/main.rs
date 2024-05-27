@@ -433,7 +433,8 @@ fn handle_server_playback_update(
                         update.session_id,
                     )
                     .await
-                    .unwrap_or_else(|_| {
+                    .unwrap_or_else(|err| {
+                        log::error!("Failed to create new player from session: {err:?}");
                         moosicbox_player::player::Player::new(PlayerSource::Local, None)
                     });
 
