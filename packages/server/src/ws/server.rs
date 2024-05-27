@@ -400,7 +400,7 @@ impl WebsocketSender for ChatServerHandle {
 
     fn send_all(&self, data: &str) -> Result<(), WebsocketSendError> {
         if log::log_enabled!(log::Level::Trace) {
-            log::debug!("Broadcasting message to all: {data}");
+            log::trace!("Broadcasting message to all: {data}");
         } else {
             log::debug!("Broadcasting message to all");
         }
@@ -410,7 +410,7 @@ impl WebsocketSender for ChatServerHandle {
 
     fn send_all_except(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
         if log::log_enabled!(log::Level::Trace) {
-            log::debug!("Broadcasting message to all except {connection_id}: {data}");
+            log::trace!("Broadcasting message to all except {connection_id}: {data}");
         } else {
             log::debug!("Broadcasting message to all except {connection_id}");
         }
