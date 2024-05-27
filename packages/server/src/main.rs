@@ -416,14 +416,62 @@ fn handle_server_playback_update(
     let update = update.clone();
 
     Box::pin(async move {
+        log::debug!("Handling server playback update");
         let updated = {
             let mut lock = SERVER_PLAYER.write().await;
             let entry = lock.entry(update.session_id);
             let updated = match entry {
                 Entry::Occupied(occ_entry) => occ_entry.into_mut(),
-                Entry::Vacant(vac_entry) => vac_entry.insert(
-                    moosicbox_player::player::Player::new(PlayerSource::Local, None),
-                ),
+                Entry::Vacant(vac_entry) => {
+                    let db = {
+                        let lock = DB.read().unwrap();
+                        lock.clone().expect("No database")
+                    };
+
+                    let player = moosicbox_player::player::Player::new(PlayerSource::Local, None);
+
+                    log::trace!("Searching for existing session id {}", update.session_id);
+                    if let Ok(session) =
+                        moosicbox_core::sqlite::db::get_session(&**db, update.session_id).await
+                    {
+                        if let Some(session) = session {
+                            log::debug!("Got session {session:?}");
+                            if let Err(err) = player.update_playback(
+                                None,
+                                None,
+                                None,
+                                session.position.map(|x| x.try_into().unwrap()),
+                                session.seek.map(std::convert::Into::into),
+                                session.volume,
+                                Some(
+                                    session
+                                        .playlist
+                                        .tracks
+                                        .iter()
+                                        .map(|x| {
+                                            TrackOrId::Id(
+                                                x.track_id().try_into().unwrap(),
+                                                x.api_source(),
+                                            )
+                                        })
+                                        .collect::<Vec<_>>(),
+                                ),
+                                None,
+                                Some(session.id.try_into().unwrap()),
+                                Some(session.playlist.id.try_into().unwrap()),
+                                None,
+                            ) {
+                                log::error!("Failed to update playback: {err:?}");
+                            }
+                        } else {
+                            log::debug!("No session with id {}", update.session_id);
+                        }
+                    } else {
+                        log::error!("Failed to get session with id {}", update.session_id);
+                    }
+
+                    vac_entry.insert(player)
+                }
             }
             .update_playback(
                 update.play,

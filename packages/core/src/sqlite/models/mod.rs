@@ -331,10 +331,93 @@ impl AsId for LibraryTrack {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
-pub enum ApiTrack {
+enum ApiTrackInner {
     Library(ApiLibraryTrack),
     Tidal(serde_json::Value),
     Qobuz(serde_json::Value),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ApiTrack {
+    Library {
+        track_id: u64,
+        data: ApiLibraryTrack,
+    },
+    Tidal {
+        track_id: u64,
+        data: serde_json::Value,
+    },
+    Qobuz {
+        track_id: u64,
+        data: serde_json::Value,
+    },
+}
+
+impl Serialize for ApiTrack {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            ApiTrack::Library { data, .. } => {
+                ApiTrackInner::Library(data.clone()).serialize(serializer)
+            }
+            ApiTrack::Tidal { data, .. } => {
+                ApiTrackInner::Tidal(data.clone()).serialize(serializer)
+            }
+            ApiTrack::Qobuz { data, .. } => {
+                ApiTrackInner::Tidal(data.clone()).serialize(serializer)
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ApiTrack {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(match ApiTrackInner::deserialize(deserializer)? {
+            ApiTrackInner::Library(track) => ApiTrack::Library {
+                track_id: track.track_id.try_into().unwrap(),
+                data: track,
+            },
+            ApiTrackInner::Tidal(data) => ApiTrack::Tidal {
+                track_id: data
+                    .get("id")
+                    .expect("Failed to get tidal track id")
+                    .as_u64()
+                    .unwrap(),
+                data,
+            },
+            ApiTrackInner::Qobuz(data) => ApiTrack::Qobuz {
+                track_id: data
+                    .get("id")
+                    .expect("Failed to get qobuz track id")
+                    .as_u64()
+                    .unwrap(),
+                data,
+            },
+        })
+    }
+}
+
+impl ApiTrack {
+    pub fn track_id(&self) -> u64 {
+        match self {
+            ApiTrack::Library { track_id, .. } => *track_id,
+            ApiTrack::Tidal { track_id, .. } => *track_id,
+            ApiTrack::Qobuz { track_id, .. } => *track_id,
+        }
+    }
+
+    pub fn api_source(&self) -> ApiSource {
+        match self {
+            ApiTrack::Library { .. } => ApiSource::Library,
+            ApiTrack::Tidal { .. } => ApiSource::Tidal,
+            ApiTrack::Qobuz { .. } => ApiSource::Qobuz,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
@@ -364,28 +447,31 @@ pub struct ApiLibraryTrack {
 
 impl ToApi<ApiTrack> for LibraryTrack {
     fn to_api(self) -> ApiTrack {
-        ApiTrack::Library(ApiLibraryTrack {
-            track_id: self.id,
-            number: self.number,
-            title: self.title.clone(),
-            duration: self.duration,
-            artist: self.artist.clone(),
-            artist_id: self.artist_id,
-            date_released: self.date_released.clone(),
-            date_added: self.date_added.clone(),
-            album: self.album.clone(),
-            album_id: self.album_id,
-            contains_cover: self.artwork.is_some(),
-            blur: self.blur,
-            bytes: self.bytes,
-            format: self.format,
-            bit_depth: self.bit_depth,
-            audio_bitrate: self.audio_bitrate,
-            overall_bitrate: self.overall_bitrate,
-            sample_rate: self.sample_rate,
-            channels: self.channels,
-            source: self.source,
-        })
+        ApiTrack::Library {
+            track_id: self.id as u64,
+            data: ApiLibraryTrack {
+                track_id: self.id,
+                number: self.number,
+                title: self.title.clone(),
+                duration: self.duration,
+                artist: self.artist.clone(),
+                artist_id: self.artist_id,
+                date_released: self.date_released.clone(),
+                date_added: self.date_added.clone(),
+                album: self.album.clone(),
+                album_id: self.album_id,
+                contains_cover: self.artwork.is_some(),
+                blur: self.blur,
+                bytes: self.bytes,
+                format: self.format,
+                bit_depth: self.bit_depth,
+                audio_bitrate: self.audio_bitrate,
+                overall_bitrate: self.overall_bitrate,
+                sample_rate: self.sample_rate,
+                channels: self.channels,
+                source: self.source,
+            },
+        }
     }
 }
 
@@ -1082,29 +1168,40 @@ impl From<UpdateSessionPlaylistTrack> for SessionPlaylistTrack {
 impl ToApi<ApiTrack> for SessionPlaylistTrack {
     fn to_api(self) -> ApiTrack {
         match self.r#type {
-            ApiSource::Library => ApiTrack::Library(ApiLibraryTrack {
-                track_id: self.id as i32,
-                ..Default::default()
-            }),
+            ApiSource::Library => ApiTrack::Library {
+                track_id: self.id,
+                data: ApiLibraryTrack {
+                    track_id: self.id as i32,
+                    ..Default::default()
+                },
+            },
             ApiSource::Tidal => match &self.data {
-                Some(data) => ApiTrack::Tidal(
-                    serde_json::from_str(data)
+                Some(data) => ApiTrack::Tidal {
+                    track_id: self.id,
+                    data: serde_json::from_str(data)
                         .expect("Failed to parse UpdateSessionPlaylistTrack data"),
-                ),
-                None => ApiTrack::Tidal(serde_json::json!({
-                    "id": self.id,
-                    "type": self.r#type,
-                })),
+                },
+                None => ApiTrack::Tidal {
+                    track_id: self.id,
+                    data: serde_json::json!({
+                        "id": self.id,
+                        "type": self.r#type,
+                    }),
+                },
             },
             ApiSource::Qobuz => match &self.data {
-                Some(data) => ApiTrack::Qobuz(
-                    serde_json::from_str(data)
+                Some(data) => ApiTrack::Qobuz {
+                    track_id: self.id,
+                    data: serde_json::from_str(data)
                         .expect("Failed to parse UpdateSessionPlaylistTrack data"),
-                ),
-                None => ApiTrack::Qobuz(serde_json::json!({
-                    "id": self.id,
-                    "type": self.r#type,
-                })),
+                },
+                None => ApiTrack::Qobuz {
+                    track_id: self.id,
+                    data: serde_json::json!({
+                        "id": self.id,
+                        "type": self.r#type,
+                    }),
+                },
             },
         }
     }
