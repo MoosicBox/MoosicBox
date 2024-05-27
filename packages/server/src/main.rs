@@ -412,7 +412,7 @@ static SERVER_PLAYER: Lazy<tokio::sync::RwLock<HashMap<i32, moosicbox_player::pl
 
 fn handle_server_playback_update(
     update: &UpdateSession,
-) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> {
+) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     let update = update.clone();
 
     Box::pin(async move {

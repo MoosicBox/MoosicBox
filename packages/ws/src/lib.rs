@@ -80,7 +80,7 @@ pub enum OutboundMessageType {
     SetSeek,
 }
 
-pub type PlayerAction = fn(&UpdateSession) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>;
+pub type PlayerAction = fn(&UpdateSession) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 
 #[derive(Clone, Default, Debug)]
 pub struct WebsocketContext {
