@@ -56,6 +56,12 @@ To-do (in no particular order):
 
 ## Local Server
 
+### Dependencies
+
+- pkg-config (optional for OPUS)
+- libtool (optional for OPUS)
+- vips (optional for libvips image optimization)
+
 ### Run
 
 `cargo server 8001`
