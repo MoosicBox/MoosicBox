@@ -450,14 +450,17 @@ pub async fn register_players(
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &Vec<RegisterPlayer>,
-) -> Result<(), WebsocketSendError> {
+) -> Result<Vec<moosicbox_core::sqlite::models::Player>, WebsocketSendError> {
+    let mut players = vec![];
     for player in payload {
-        moosicbox_core::sqlite::db::create_player(db, &context.connection_id, player).await?;
+        players.push(
+            moosicbox_core::sqlite::db::create_player(db, &context.connection_id, player).await?,
+        );
     }
 
     get_sessions(db, sender, context, true).await?;
 
-    Ok(())
+    Ok(players)
 }
 
 async fn set_session_active_players(
