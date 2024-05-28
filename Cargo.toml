@@ -117,7 +117,7 @@ mysql = { version = "25.0.1", features = [
     "rustls-tls",
 ], default-features = false }
 mysql_common = { version = "0.32.3", default-features = false }
-native-tls = "0.2.11"
+native-tls = "0.2.12"
 ogg = "0.9.1"
 once_cell = { version = "1.19.0" }
 open = "5.1.3"
