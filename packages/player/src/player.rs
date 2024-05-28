@@ -329,7 +329,7 @@ impl Player {
                 if let Err(err) = player.update_playback(
                     None,
                     None,
-                    None,
+                    Some(session.playing),
                     session.position.map(|x| x.try_into().unwrap()),
                     session.seek.map(std::convert::Into::into),
                     session.volume,
