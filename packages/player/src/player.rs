@@ -319,14 +319,16 @@ impl Player {
         }
     }
 
-    pub async fn new_from_session(db: &dyn Database, session_id: i32) -> Result<Self, PlayerError> {
-        let player = Self::new(PlayerSource::Local, None);
-
+    pub async fn init_from_session(
+        self,
+        db: &dyn Database,
+        session_id: i32,
+    ) -> Result<Self, PlayerError> {
         log::trace!("Searching for existing session id {}", session_id);
         if let Ok(session) = moosicbox_core::sqlite::db::get_session(db, session_id).await {
             if let Some(session) = session {
                 log::debug!("Got session {session:?}");
-                if let Err(err) = player.update_playback(
+                if let Err(err) = self.update_playback(
                     None,
                     None,
                     Some(session.playing),
@@ -363,7 +365,7 @@ impl Player {
             });
         }
 
-        Ok(player)
+        Ok(self)
     }
 
     #[allow(clippy::too_many_arguments)]

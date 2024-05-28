@@ -428,15 +428,13 @@ fn handle_server_playback_update(
                         lock.clone().expect("No database")
                     };
 
-                    let player = moosicbox_player::player::Player::new_from_session(
-                        &**db,
-                        update.session_id,
-                    )
-                    .await
-                    .unwrap_or_else(|err| {
-                        log::error!("Failed to create new player from session: {err:?}");
-                        moosicbox_player::player::Player::new(PlayerSource::Local, None)
-                    });
+                    let player = moosicbox_player::player::Player::new(PlayerSource::Local, None)
+                        .init_from_session(&**db, update.session_id)
+                        .await
+                        .unwrap_or_else(|err| {
+                            log::error!("Failed to create new player from session: {err:?}");
+                            moosicbox_player::player::Player::new(PlayerSource::Local, None)
+                        });
 
                     vac_entry.insert(player)
                 }
