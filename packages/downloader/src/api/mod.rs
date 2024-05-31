@@ -134,13 +134,18 @@ pub async fn download_endpoint(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GetDownloadTasks {}
+pub struct GetDownloadTasks {
+    offset: Option<u32>,
+    limit: Option<u32>,
+}
 
 #[route("/download-tasks", method = "GET")]
 pub async fn download_tasks_endpoint(
-    _query: web::Query<GetDownloadTasks>,
+    query: web::Query<GetDownloadTasks>,
     data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<Page<ApiDownloadTask>>> {
+    let offset = query.offset.unwrap_or(0);
+    let limit = query.limit.unwrap_or(30);
     let tasks = get_download_tasks(&**data.database).await?;
     let (mut current, mut history): (Vec<_>, Vec<_>) =
         tasks.into_iter().partition(|task| match task.state {
@@ -156,6 +161,12 @@ pub async fn download_tasks_endpoint(
     history.sort_by(|a, b| b.id.cmp(&a.id));
 
     let tasks = [current, history].concat();
+    let total = tasks.len() as u32;
+    let tasks = tasks
+        .into_iter()
+        .skip(offset as usize)
+        .take(limit as usize)
+        .collect::<Vec<_>>();
 
     let track_ids = tasks
         .iter()
@@ -200,8 +211,6 @@ pub async fn download_tasks_endpoint(
         .cloned()
         .collect::<Vec<_>>();
 
-    let len = tasks.len() as u32;
-
     let mut items = tasks
         .into_iter()
         .map(|task| to_api_download_task(task, &tracks, &albums, &artists))
@@ -218,9 +227,9 @@ pub async fn download_tasks_endpoint(
     }
 
     Ok(Json(Page::WithTotal {
-        offset: 0,
+        offset,
         items,
-        limit: len,
-        total: len,
+        limit,
+        total,
     }))
 }
