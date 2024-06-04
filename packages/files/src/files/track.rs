@@ -609,33 +609,26 @@ pub async fn get_track_info(track_id: u64, db: &dyn Database) -> Result<TrackInf
 
 const DIV: u16 = u16::MAX / u8::MAX as u16;
 
-pub fn visualize<S>(input: &AudioBuffer<S>) -> u8
+pub fn visualize<S>(input: &AudioBuffer<S>) -> Vec<u8>
 where
     S: Sample + IntoSample<i16>,
 {
     let channels = input.spec().channels.count();
 
-    let mut step = 1_u16;
-    let mut count = 0_u16;
-    let mut max = 0_u16;
+    let mut values = vec![0; input.capacity()];
 
     for c in 0..channels {
-        for x in input.chan(c) {
+        for (i, x) in input.chan(c).iter().enumerate() {
             let value = clamp_i16(((*x).into_sample() as i32).abs()) as u16;
-            max = std::cmp::max(value, max);
-            count += 1;
-            if count >= step {
-                step += step;
-                break;
-            }
+            values[i] += (value / DIV) as u8;
         }
     }
 
-    if count == 0 {
-        return 0;
+    for value in values.iter_mut() {
+        *value /= channels as u8;
     }
 
-    (max / DIV) as u8
+    values
 }
 
 pub fn get_or_init_track_visualization(
@@ -651,7 +644,10 @@ pub fn get_or_init_track_visualization(
             let inner_viz = viz.clone();
             let mut audio_output_handler =
                 AudioOutputHandler::new().with_filter(Box::new(move |decoded, _packet, _track| {
-                    inner_viz.write().unwrap().push(visualize(decoded));
+                    inner_viz
+                        .write()
+                        .unwrap()
+                        .extend_from_slice(&visualize(decoded));
                     Ok(())
                 }));
 
@@ -661,8 +657,9 @@ pub fn get_or_init_track_visualization(
             let count = std::cmp::min(max as usize, viz.len());
             let mut ret_viz = Vec::with_capacity(count);
 
-            if viz.len() as u16 > max {
+            if viz.len() > max as usize {
                 let offset = (viz.len() as f64) / (max as f64);
+                log::debug!("Trimming visualization: offset={offset}");
                 let mut last_pos = 0_usize;
                 let mut pos = offset;
 
