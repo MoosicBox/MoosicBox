@@ -1,5 +1,6 @@
 /packages/*
 
+!/packages/assert
 !/packages/auth
 !/packages/config
 !/packages/converter

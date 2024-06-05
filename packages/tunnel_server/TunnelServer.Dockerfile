@@ -8,6 +8,7 @@ COPY Cargo.lock Cargo.lock
 RUN cat Cargo.toml | \
     tr '\n' '\r' | \
     sed -E "s/members = \[[^]]+\]/members = [\r\
+    \"packages\/assert\",\r\
     \"packages\/database\",\r\
     \"packages\/env_utils\",\r\
     \"packages\/json_utils\",\r\
@@ -17,6 +18,7 @@ RUN cat Cargo.toml | \
     > Cargo2.toml && \
     mv Cargo2.toml Cargo.toml
 
+COPY packages/assert/Cargo.toml packages/assert/Cargo.toml
 COPY packages/database/Cargo.toml packages/database/Cargo.toml
 COPY packages/env_utils/Cargo.toml packages/env_utils/Cargo.toml
 COPY packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
@@ -29,6 +31,7 @@ RUN for file in $(\
     for file in packages/*/Cargo.toml; \
       do printf "$file\n"; \
     done | grep -E "^(\
+packages/assert|\
 packages/database|\
 packages/env_utils|\
 packages/json_utils|\

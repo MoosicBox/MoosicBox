@@ -11,6 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
+moosicbox_assert       = { path = "../assert", default-features = false }
 moosicbox_converter    = { path = "../../packages/converter", default-features = false }
 moosicbox_env_utils    = { path = "../../packages/env_utils" }
 moosicbox_stream_utils = { path = "../../packages/stream_utils" }

@@ -11,6 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
+moosicbox_assert           = { version = "0.1.0", path = "../assert", default-features = false }
 moosicbox_auth             = { version = "0.1.0", path = "../auth", default-features = false }
 moosicbox_config           = { version = "0.1.0", path = "../config", default-features = false }
 moosicbox_converter        = { version = "0.1.0", path = "../converter", default-features = false }

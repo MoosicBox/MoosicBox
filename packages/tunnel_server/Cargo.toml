@@ -16,6 +16,7 @@ name = "moosicbox_tunnel_server"
 path = "src/main.rs"
 
 [dependencies]
+moosicbox_assert     = { path = "../assert", default-features = false }
 moosicbox_database   = { path = "../database", default-features = false }
 moosicbox_env_utils  = { path = "../env_utils" }
 moosicbox_json_utils = { path = "../json_utils" }

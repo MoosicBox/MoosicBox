@@ -8,6 +8,7 @@ COPY Cargo.lock Cargo.lock
 RUN cat Cargo.toml | \
     tr '\n' '\r' | \
     sed -E "s/members = \[[^]]+\]/members = [\r\
+    \"packages\/assert\",\r\
     \"packages\/auth\",\r\
     \"packages\/config\",\r\
     \"packages\/converter\",\r\
@@ -37,6 +38,7 @@ RUN cat Cargo.toml | \
     > Cargo2.toml && \
     mv Cargo2.toml Cargo.toml
 
+COPY packages/assert/Cargo.toml packages/assert/Cargo.toml
 COPY packages/auth/Cargo.toml packages/auth/Cargo.toml
 COPY packages/config/Cargo.toml packages/config/Cargo.toml
 COPY packages/converter/Cargo.toml packages/converter/Cargo.toml

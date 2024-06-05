@@ -3058,6 +3058,7 @@ dependencies = [
 name = "moosicbox"
 version = "0.1.0"
 dependencies = [
+ "moosicbox_assert",
  "moosicbox_auth",
  "moosicbox_config",
  "moosicbox_converter",
@@ -3094,6 +3095,7 @@ dependencies = [
  "free_log_client",
  "futures",
  "log",
+ "moosicbox_assert",
  "moosicbox_converter",
  "moosicbox_core",
  "moosicbox_files",
@@ -3103,12 +3105,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_assert"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_env_utils",
+]
+
+[[package]]
 name = "moosicbox_auth"
 version = "0.1.0"
 dependencies = [
  "actix",
  "actix-web",
  "log",
+ "moosicbox_assert",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",
@@ -3127,6 +3137,7 @@ version = "0.1.0"
 dependencies = [
  "home",
  "log",
+ "moosicbox_assert",
  "rand",
  "thiserror",
 ]
@@ -3139,6 +3150,7 @@ dependencies = [
  "fdk-aac",
  "flacenc",
  "log",
+ "moosicbox_assert",
  "mp3lame-encoder",
  "ogg",
  "opus",
@@ -3176,6 +3188,7 @@ dependencies = [
  "chrono",
  "futures",
  "log",
+ "moosicbox_assert",
  "once_cell",
  "postgres-protocol",
  "regex",
@@ -3208,6 +3221,7 @@ dependencies = [
  "lazy_static",
  "lofty",
  "log",
+ "moosicbox_assert",
  "moosicbox_config",
  "moosicbox_core",
  "moosicbox_database",
@@ -3254,6 +3268,7 @@ dependencies = [
  "futures-core",
  "lazy_static",
  "log",
+ "moosicbox_assert",
  "moosicbox_config",
  "moosicbox_core",
  "moosicbox_database",
@@ -3288,6 +3303,7 @@ dependencies = [
  "image",
  "libvips",
  "log",
+ "moosicbox_assert",
  "once_cell",
  "strum",
  "strum_macros",
@@ -3302,6 +3318,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "log",
+ "moosicbox_assert",
  "moosicbox_database",
  "rusqlite",
  "serde",
@@ -3321,6 +3338,7 @@ dependencies = [
  "awc",
  "futures",
  "log",
+ "moosicbox_assert",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_music_api",
@@ -3343,6 +3361,7 @@ dependencies = [
  "async-trait",
  "futures",
  "log",
+ "moosicbox_assert",
  "moosicbox_core",
  "moosicbox_json_utils",
  "moosicbox_paging",
@@ -3387,6 +3406,7 @@ dependencies = [
  "futures",
  "lazy_static",
  "log",
+ "moosicbox_assert",
  "moosicbox_converter",
  "moosicbox_core",
  "moosicbox_database",
@@ -3416,6 +3436,7 @@ dependencies = [
  "base64 0.22.1",
  "log",
  "md5",
+ "moosicbox_assert",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",
@@ -3445,6 +3466,7 @@ dependencies = [
  "futures",
  "lofty",
  "log",
+ "moosicbox_assert",
  "moosicbox_config",
  "moosicbox_core",
  "moosicbox_database",
@@ -3474,6 +3496,7 @@ dependencies = [
  "actix-web",
  "itertools",
  "log",
+ "moosicbox_assert",
  "moosicbox_config",
  "moosicbox_core",
  "moosicbox_database",
@@ -3509,6 +3532,7 @@ dependencies = [
  "kanal",
  "lazy_static",
  "log",
+ "moosicbox_assert",
  "moosicbox_auth",
  "moosicbox_config",
  "moosicbox_core",
@@ -3553,6 +3577,7 @@ dependencies = [
  "bytes",
  "futures",
  "log",
+ "moosicbox_assert",
  "pin-project",
  "thiserror",
  "tokio",
@@ -3575,6 +3600,7 @@ dependencies = [
  "libpulse-binding",
  "libpulse-simple-binding",
  "log",
+ "moosicbox_assert",
  "moosicbox_converter",
  "moosicbox_env_utils",
  "moosicbox_stream_utils",
@@ -3602,6 +3628,7 @@ dependencies = [
  "async-trait",
  "futures",
  "log",
+ "moosicbox_assert",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",
@@ -3630,6 +3657,7 @@ dependencies = [
  "crossbeam-channel",
  "futures-util",
  "log",
+ "moosicbox_assert",
  "rand",
  "regex",
  "serde",
@@ -3653,6 +3681,7 @@ dependencies = [
  "futures-util",
  "lazy_static",
  "log",
+ "moosicbox_assert",
  "moosicbox_auth",
  "moosicbox_core",
  "moosicbox_database",
@@ -3696,6 +3725,7 @@ dependencies = [
  "hex",
  "lazy_static",
  "log",
+ "moosicbox_assert",
  "moosicbox_database",
  "moosicbox_env_utils",
  "moosicbox_json_utils",
@@ -3728,6 +3758,7 @@ dependencies = [
  "async-recursion",
  "futures",
  "log",
+ "moosicbox_assert",
  "once_cell",
  "pin-utils",
  "regex",
@@ -3752,6 +3783,7 @@ dependencies = [
  "aws-sdk-apigatewaymanagement",
  "env_logger 0.11.3",
  "log",
+ "moosicbox_assert",
  "moosicbox_core",
  "moosicbox_database",
  "once_cell",

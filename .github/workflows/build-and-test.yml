@@ -22,6 +22,15 @@ jobs:
                       path: packages/aconverter
                       os: ubuntu-latest
 
+                    - name: assert
+                      path: packages/assert
+                      os: ubuntu-latest
+
+                    - name: assert-disabled
+                      path: packages/assert
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+
                     - name: auth-api
                       path: packages/auth
                       os: ubuntu-latest
