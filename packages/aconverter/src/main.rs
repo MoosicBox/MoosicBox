@@ -77,6 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         TrackSource::LocalFilePath {
             path: source.to_str().unwrap().to_string(),
             format: source_encoding,
+            track_id: None,
         },
         output_encoding,
         None,

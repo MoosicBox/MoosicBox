@@ -53,9 +53,21 @@ lazy_static! {
 
 #[derive(Clone, Debug)]
 pub enum TrackSource {
-    LocalFilePath { path: String, format: AudioFormat },
-    Tidal { url: String, format: AudioFormat },
-    Qobuz { url: String, format: AudioFormat },
+    LocalFilePath {
+        path: String,
+        format: AudioFormat,
+        track_id: Option<u64>,
+    },
+    Tidal {
+        url: String,
+        format: AudioFormat,
+        track_id: Option<u64>,
+    },
+    Qobuz {
+        url: String,
+        format: AudioFormat,
+        track_id: Option<u64>,
+    },
 }
 
 impl TrackSource {
@@ -206,10 +218,12 @@ pub async fn get_track_source(
                         })
                         .replace('/', "\\"),
                     format: track.format.unwrap_or(AudioFormat::Source),
+                    track_id: Some(track.id.try_into().expect("Invalid track id")),
                 }),
                 _ => Ok(TrackSource::LocalFilePath {
                     path: file.to_string(),
                     format: track.format.unwrap_or(AudioFormat::Source),
+                    track_id: Some(track.id.try_into().expect("Invalid track id")),
                 }),
             },
             None => Err(TrackSourceError::InvalidSource),
@@ -227,6 +241,7 @@ pub async fn get_track_source(
                     .unwrap()
                     .to_string(),
                 format: track.format.unwrap_or(AudioFormat::Source),
+                track_id: Some(track.id.try_into().expect("Invalid track id")),
             })
         }
         TrackApiSource::Qobuz => {
@@ -239,6 +254,7 @@ pub async fn get_track_source(
                 url: moosicbox_qobuz::track_file_url(db, &track_id, quality, None, None, None)
                     .await?,
                 format: track.format.unwrap_or(AudioFormat::Source),
+                track_id: Some(track.id.try_into().expect("Invalid track id")),
             })
         }
     }
