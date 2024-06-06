@@ -46,6 +46,18 @@ macro_rules! assert {
 
 #[macro_export]
 macro_rules! die {
+    () => {
+        if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1" {
+            eprintln!(
+                "{}",
+                $crate::Colorize::on_red($crate::Colorize::white($crate::Colorize::bold(
+                    format!("{}", std::backtrace::Backtrace::force_capture()).as_str()
+                )))
+            );
+            log::logger().flush();
+            std::process::exit(1);
+        }
+    };
     ($($message:tt)+) => {
         if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1" {
             eprintln!(
