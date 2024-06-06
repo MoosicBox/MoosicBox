@@ -537,10 +537,8 @@ impl TunnelSender {
 
         moosicbox_assert::assert!(
             offset == *BINARY_REQUEST_BUFFER_OFFSET,
-            format!(
-                "Invalid binary request buffer offset {offset} != {}",
-                *BINARY_REQUEST_BUFFER_OFFSET
-            )
+            "Invalid binary request buffer offset {offset} != {}",
+            *BINARY_REQUEST_BUFFER_OFFSET
         );
 
         if packet_id == 1 {

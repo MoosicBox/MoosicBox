@@ -22,7 +22,7 @@ macro_rules! assert {
             std::process::exit(1);
         }
     };
-    ($evaluate:expr, $message:expr $(,)?) => {
+    ($evaluate:expr, $($message:tt)+) => {
         if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1"
             && !($evaluate)
         {
@@ -31,7 +31,7 @@ macro_rules! assert {
                 $crate::Colorize::on_red($crate::Colorize::white($crate::Colorize::bold(
                     format!(
                         "assert failed: {}\n{}",
-                        $crate::Colorize::underline(format!("{}", $message).as_str()),
+                        $crate::Colorize::underline(format!($($message)*).as_str()),
                         std::backtrace::Backtrace::force_capture()
                     )
                     .as_str()
