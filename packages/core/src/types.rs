@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 
@@ -17,6 +19,12 @@ pub enum AudioFormat {
     Opus,
     #[default]
     Source,
+}
+
+impl Display for AudioFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_ref())
+    }
 }
 
 pub fn from_extension_to_audio_format(extension: &str) -> Option<AudioFormat> {
