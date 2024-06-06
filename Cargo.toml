@@ -162,7 +162,7 @@ sqlx-postgres = { version = "0.7", default-features = false, features = [
 ] }
 static_init = "1.0.3"
 strum = "0.26.2"
-strum_macros = "0.26.3"
+strum_macros = "0.26.4"
 symphonia = { git = "https://github.com/pdeljanov/Symphonia", branch = "master", features = [
     "all",
 ] }
