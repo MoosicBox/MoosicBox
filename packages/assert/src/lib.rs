@@ -19,6 +19,7 @@ macro_rules! assert {
                     .as_str()
                 )))
             );
+            log::logger().flush();
             std::process::exit(1);
         }
     };
@@ -37,6 +38,7 @@ macro_rules! assert {
                     .as_str()
                 )))
             );
+            log::logger().flush();
             std::process::exit(1);
         }
     };
