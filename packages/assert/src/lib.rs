@@ -1,5 +1,6 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
+pub use colored::Colorize;
 pub use moosicbox_env_utils;
 
 #[macro_export]
@@ -9,8 +10,14 @@ macro_rules! assert {
             && !($evaluate)
         {
             eprintln!(
-                "assert failed:\n{}",
-                std::backtrace::Backtrace::force_capture()
+                "{}",
+                $crate::Colorize::on_red($crate::Colorize::white($crate::Colorize::bold(
+                    format!(
+                        "assert failed:\n{}",
+                        std::backtrace::Backtrace::force_capture()
+                    )
+                    .as_str()
+                )))
             );
             std::process::exit(1);
         }
@@ -20,9 +27,15 @@ macro_rules! assert {
             && !($evaluate)
         {
             eprintln!(
-                "assert failed: \"{}\"\n{}",
-                $message,
-                std::backtrace::Backtrace::force_capture()
+                "{}",
+                $crate::Colorize::on_red($crate::Colorize::white($crate::Colorize::bold(
+                    format!(
+                        "assert failed: {}\n{}",
+                        $crate::Colorize::underline(format!("{}", $message).as_str()),
+                        std::backtrace::Backtrace::force_capture()
+                    )
+                    .as_str()
+                )))
             );
             std::process::exit(1);
         }
