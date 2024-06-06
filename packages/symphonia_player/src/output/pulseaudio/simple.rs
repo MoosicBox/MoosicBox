@@ -34,7 +34,7 @@ impl PulseAudioOutput {
             rate: spec.rate,
         };
 
-        assert!(pa_spec.is_valid());
+        moosicbox_assert::assert!(pa_spec.is_valid());
 
         let pa_ch_map = map_channels_to_pa_channelmap(spec.channels);
 
