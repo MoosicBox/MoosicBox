@@ -5,7 +5,7 @@ pub mod api;
 #[cfg(feature = "db")]
 pub mod db;
 
-use std::sync::Arc;
+use std::{fmt::Display, sync::Arc};
 
 #[cfg(feature = "db")]
 use moosicbox_database::{Database, DatabaseError};
@@ -403,11 +403,18 @@ async fn authenticated_delete_request(
     .await
 }
 
-#[derive(Clone, Copy)]
+#[derive(Copy, Debug, EnumString, AsRefStr, PartialEq, Clone)]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 enum Method {
     Get,
     Post,
     Delete,
+}
+
+impl Display for Method {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_ref())
+    }
 }
 
 #[async_recursion]
@@ -451,6 +458,7 @@ async fn authenticated_request_inner(
         request = request.json(body);
     }
 
+    log::debug!("Sending authenticated {method} request to {url}");
     let response = request.send().await?;
 
     let status: u16 = response.status().into();
