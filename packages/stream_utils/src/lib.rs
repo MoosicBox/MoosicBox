@@ -1,7 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 use std::{
-    sync::{Arc, RwLock},
+    sync::{atomic::AtomicUsize, Arc, RwLock},
     task::Poll,
 };
 
@@ -11,8 +11,15 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 pub mod stalled_monitor;
 
+static CUR_ID: AtomicUsize = AtomicUsize::new(1);
+
+pub fn new_byte_writer_id() -> usize {
+    CUR_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+}
+
 #[derive(Clone)]
 pub struct ByteWriter {
+    pub id: usize,
     written: Arc<RwLock<u64>>,
     senders: Arc<RwLock<Vec<UnboundedSender<Bytes>>>>,
 }
@@ -30,6 +37,7 @@ impl ByteWriter {
 impl Default for ByteWriter {
     fn default() -> Self {
         Self {
+            id: new_byte_writer_id(),
             written: Arc::new(RwLock::new(0)),
             senders: Arc::new(RwLock::new(vec![])),
         }
@@ -48,16 +56,22 @@ impl std::io::Write for ByteWriter {
             *self.written.write().unwrap() += len as u64;
 
             if self.senders.read().unwrap().is_empty() {
-                log::trace!("No senders associated with ByteWriter. Eating {len} bytes");
+                log::trace!(
+                    "No senders associated with ByteWriter writer id={}. Eating {len} bytes",
+                    self.id
+                );
                 return Ok(len);
             }
         }
 
-        log::trace!("Sending bytes buf of size {len}");
+        log::trace!("Sending bytes buf of size {len} writer id={}", self.id);
         let bytes: Bytes = buf.to_vec().into();
         self.senders.write().unwrap().retain(|sender| {
             if sender.send(bytes.clone()).is_err() {
-                log::debug!("Receiver has disconnected. Removing sender.");
+                log::debug!(
+                    "Receiver has disconnected from writer id={}. Removing sender.",
+                    self.id
+                );
                 false
             } else {
                 true
@@ -72,6 +86,7 @@ impl std::io::Write for ByteWriter {
 }
 
 pub struct ByteStream {
+    id: usize,
     receiver: UnboundedReceiver<Bytes>,
 }
 
@@ -97,7 +112,11 @@ impl futures::Stream for ByteStream {
         let stream = self.get_mut();
         match stream.receiver.poll_recv(cx) {
             Poll::Ready(Some(response)) => {
-                log::trace!("Received bytes buf of size {}", response.len());
+                log::trace!(
+                    "Received bytes buf of size {} from writer id={}",
+                    response.len(),
+                    stream.id
+                );
                 Poll::Ready(Some(Ok(response)))
             }
             Poll::Pending => Poll::Pending,
@@ -110,12 +129,16 @@ impl From<&ByteWriter> for ByteStream {
     fn from(value: &ByteWriter) -> Self {
         let (sender, receiver) = unbounded_channel();
         value.senders.write().unwrap().push(sender);
-        Self { receiver }
+        Self {
+            id: value.id,
+            receiver,
+        }
     }
 }
 
 #[derive(Clone)]
 pub struct TypedWriter<T> {
+    id: usize,
     senders: Arc<RwLock<Vec<UnboundedSender<T>>>>,
 }
 
@@ -133,12 +156,18 @@ impl<T: Clone> TypedWriter<T> {
         for (i, sender) in senders.iter().enumerate() {
             if i == len - 1 {
                 if sender.send(buf).is_err() {
-                    log::debug!("Receiver has disconnected. Removing sender.");
+                    log::debug!(
+                        "Receiver has disconnected from writer id={}. Removing sender.",
+                        self.id
+                    );
                     remove.insert(0, i);
                 }
                 break;
             } else if sender.send(buf.clone()).is_err() {
-                log::debug!("Receiver has disconnected. Removing sender.");
+                log::debug!(
+                    "Receiver has disconnected from writer id={}. Removing sender.",
+                    self.id
+                );
                 remove.insert(0, i);
             }
         }
@@ -151,6 +180,7 @@ impl<T: Clone> TypedWriter<T> {
 impl<T> Default for TypedWriter<T> {
     fn default() -> Self {
         Self {
+            id: new_byte_writer_id(),
             senders: Arc::new(RwLock::new(vec![])),
         }
     }
