@@ -63,6 +63,7 @@ impl From<PlayerError> for actix_web::Error {
             PlayerError::Send(err) => ErrorInternalServerError(err),
             PlayerError::IO(err) => ErrorInternalServerError(err),
             PlayerError::InvalidSession { .. } => ErrorInternalServerError(err.to_string()),
+            PlayerError::Join { .. } => ErrorInternalServerError(err.to_string()),
         }
     }
 }

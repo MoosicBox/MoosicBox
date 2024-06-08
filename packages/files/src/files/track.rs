@@ -7,7 +7,7 @@ use std::{
 };
 
 use bytes::{Bytes, BytesMut};
-use futures::prelude::*;
+use futures::{prelude::*, StreamExt};
 use futures_core::Stream;
 use lazy_static::lazy_static;
 use moosicbox_core::{
@@ -20,7 +20,7 @@ use moosicbox_core::{
 use moosicbox_database::{Database, DatabaseValue};
 use moosicbox_json_utils::{MissingValue, ParseError, ToValueType};
 use moosicbox_qobuz::{QobuzAudioQuality, QobuzTrackFileUrlError};
-use moosicbox_stream_utils::{stalled_monitor::StalledReadMonitor, ByteWriter};
+use moosicbox_stream_utils::{new_byte_writer_id, stalled_monitor::StalledReadMonitor, ByteWriter};
 use moosicbox_symphonia_player::{
     media_sources::remote_bytestream::RemoteByteStream, output::AudioOutputHandler,
     play_file_path_str, play_media_source, PlaybackError,
@@ -41,6 +41,10 @@ use thiserror::Error;
 use tokio_util::{
     codec::{BytesCodec, FramedRead},
     sync::CancellationToken,
+};
+
+use crate::files::{
+    track_bytes_media_source::TrackBytesMediaSource, track_pool::get_or_fetch_track,
 };
 
 lazy_static! {
@@ -183,7 +187,7 @@ pub async fn get_track_id_source(
     quality: Option<TrackAudioQuality>,
     source: Option<TrackApiSource>,
 ) -> Result<TrackSource, TrackSourceError> {
-    log::debug!("Getting track audio file {track_id} quality={quality:?} source={source:?}");
+    log::debug!("get_track_id_source: {track_id} quality={quality:?} source={source:?}",);
 
     let track = get_track(db, track_id as u64)
         .await?
@@ -199,8 +203,8 @@ pub async fn get_track_source(
     source: Option<TrackApiSource>,
 ) -> Result<TrackSource, TrackSourceError> {
     log::debug!(
-        "Getting track audio file {} quality={quality:?} source={source:?}",
-        track.id
+        "get_track_source: {} quality={quality:?} source={source:?}",
+        track.id,
     );
 
     let source = source.unwrap_or(track.source);
@@ -269,6 +273,10 @@ pub enum GetTrackBytesError {
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
     #[error(transparent)]
+    Join(#[from] tokio::task::JoinError),
+    #[error(transparent)]
+    Acquire(#[from] tokio::sync::AcquireError),
+    #[error(transparent)]
     TrackInfo(#[from] TrackInfoError),
     #[error("Track not found")]
     NotFound,
@@ -282,10 +290,12 @@ pub enum TrackByteStreamError {
     UnsupportedFormat(Box<dyn std::error::Error>),
 }
 
-type BytesStream = Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>;
+pub type BytesStreamItem = Result<Bytes, std::io::Error>;
+pub type BytesStream = Pin<Box<dyn Stream<Item = BytesStreamItem> + Send>>;
 
 pub struct TrackBytes {
-    pub stream: StalledReadMonitor<Result<Bytes, std::io::Error>, BytesStream>,
+    pub id: usize,
+    pub stream: StalledReadMonitor<BytesStreamItem, BytesStream>,
     pub size: Option<u64>,
     pub format: AudioFormat,
 }
@@ -350,153 +360,167 @@ pub async fn get_audio_bytes(
 ) -> Result<TrackBytes, GetTrackBytesError> {
     log::debug!("Getting audio bytes format={format:?} start={start:?} end={end:?}");
 
-    let writer = ByteWriter::default();
-    #[allow(unused)]
-    let stream = writer.stream();
-    let same_format = source.format() == format;
+    get_or_fetch_track(&source, format, {
+        let source = source.clone();
+        || {
+            Box::pin(async move {
+                let writer = ByteWriter::default();
+                let writer_id = writer.id;
+                #[allow(unused)]
+                let stream = writer.stream();
+                let same_format = source.format() == format;
 
-    let track_bytes = if same_format {
-        match source {
-            TrackSource::LocalFilePath { path, .. } => {
-                request_audio_bytes_from_file(path, format, size).await?
-            }
-            TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } => {
-                request_track_bytes_from_url(&url, start, end, format, size).await?
-            }
-        }
-    } else {
-        let source_send = source.clone();
+                let track_bytes = if same_format {
+                    match source {
+                        TrackSource::LocalFilePath { path, .. } => {
+                            request_audio_bytes_from_file(path, format, size).await?
+                        }
+                        TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } => {
+                            request_track_bytes_from_url(&url, start, end, format, size).await?
+                        }
+                    }
+                } else {
+                    let source_send = source.clone();
 
-        RT.spawn(async move {
-            let source = source_send;
+                    RT.spawn_blocking(move || {
+                        let source = source_send;
 
-            let audio_output_handler =
-                match format {
-                    #[cfg(feature = "aac")]
-                    AudioFormat::Aac => {
-                        use moosicbox_symphonia_player::output::encoder::aac::encoder::AacEncoder;
-                        Some(
-                            moosicbox_symphonia_player::output::AudioOutputHandler::new()
-                                .with_output(Box::new(move |spec, duration| {
-                                    Ok(Box::new(
-                                        AacEncoder::with_writer(writer.clone())
-                                            .open(spec, duration),
-                                    ))
-                                })),
-                        )
+                        let audio_output_handler =
+                            match format {
+                                #[cfg(feature = "aac")]
+                                AudioFormat::Aac => {
+                                    use moosicbox_symphonia_player::output::encoder::aac::encoder::AacEncoder;
+                                    Some(
+                                        moosicbox_symphonia_player::output::AudioOutputHandler::new()
+                                            .with_output(Box::new(move |spec, duration| {
+                                                Ok(Box::new(
+                                                    AacEncoder::with_writer(writer.clone())
+                                                        .open(spec, duration),
+                                                ))
+                                            })),
+                                    )
+                                }
+                                #[cfg(feature = "flac")]
+                                AudioFormat::Flac => {
+                                    use moosicbox_symphonia_player::output::encoder::flac::encoder::FlacEncoder;
+                                    Some(
+                                        moosicbox_symphonia_player::output::AudioOutputHandler::new()
+                                            .with_output(Box::new(move |spec, duration| {
+                                                Ok(Box::new(
+                                                    FlacEncoder::with_writer(writer.clone())
+                                                        .open(spec, duration),
+                                                ))
+                                            })),
+                                    )
+                                }
+                                #[cfg(feature = "mp3")]
+                                AudioFormat::Mp3 => {
+                                    use moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder;
+                                    let encoder_writer = writer.clone();
+                                    Some(
+                                        moosicbox_symphonia_player::output::AudioOutputHandler::new()
+                                            .with_output(Box::new(move |spec, duration| {
+                                                Ok(Box::new(
+                                                    Mp3Encoder::with_writer(encoder_writer.clone())
+                                                        .open(spec, duration),
+                                                ))
+                                            })),
+                                    )
+                                }
+                                #[cfg(feature = "opus")]
+                                AudioFormat::Opus => {
+                                    use moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder;
+                                    let encoder_writer = writer.clone();
+                                    Some(
+                                        moosicbox_symphonia_player::output::AudioOutputHandler::new()
+                                            .with_output(Box::new(move |spec, duration| {
+                                                Ok(Box::new(
+                                                    OpusEncoder::with_writer(encoder_writer.clone())
+                                                        .open(spec, duration),
+                                                ))
+                                            })),
+                                    )
+                                }
+                                AudioFormat::Source => None,
+                            };
+
+                        if let Some(mut audio_output_handler) = audio_output_handler {
+                            match source {
+                                TrackSource::LocalFilePath { ref path, .. } => {
+                                    if let Err(err) = play_file_path_str(
+                                        path,
+                                        &mut audio_output_handler,
+                                        true,
+                                        true,
+                                        None,
+                                        None,
+                                    ) {
+                                        log::error!("Failed to encode to aac: {err:?}");
+                                    }
+                                }
+                                TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } => {
+                                    let source = Box::new(RemoteByteStream::new(
+                                        url,
+                                        size,
+                                        true,
+                                        #[cfg(feature = "flac")]
+                                        {
+                                            format == AudioFormat::Flac
+                                        },
+                                        #[cfg(not(feature = "flac"))]
+                                        false,
+                                        CancellationToken::new(),
+                                    ));
+                                    if let Err(err) = play_media_source(
+                                        MediaSourceStream::new(source, Default::default()),
+                                        &Hint::new(),
+                                        &mut audio_output_handler,
+                                        true,
+                                        true,
+                                        None,
+                                        None,
+                                    ) {
+                                        log::error!("Failed to encode to aac: {err:?}");
+                                    }
+                                }
+                            }
+                        }
+                    }).await?;
+
+                    match source {
+                        TrackSource::LocalFilePath { path, .. } => match format {
+                            AudioFormat::Source => {
+                                request_audio_bytes_from_file(path, format, size).await?
+                            }
+                            #[allow(unreachable_patterns)]
+                            _ => TrackBytes {
+                                id: writer_id,
+                                stream: StalledReadMonitor::new(stream.boxed()),
+                                size,
+                                format,
+                            },
+                        },
+                        TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } => match format
+                        {
+                            AudioFormat::Source => {
+                                request_track_bytes_from_url(&url, start, end, format, size).await?
+                            }
+                            #[allow(unreachable_patterns)]
+                            _ => TrackBytes {
+                                id: writer_id,
+                                stream: StalledReadMonitor::new(stream.boxed()),
+                                size,
+                                format,
+                            },
+                        },
                     }
-                    #[cfg(feature = "flac")]
-                    AudioFormat::Flac => {
-                        use moosicbox_symphonia_player::output::encoder::flac::encoder::FlacEncoder;
-                        Some(
-                            moosicbox_symphonia_player::output::AudioOutputHandler::new()
-                                .with_output(Box::new(move |spec, duration| {
-                                    Ok(Box::new(
-                                        FlacEncoder::with_writer(writer.clone())
-                                            .open(spec, duration),
-                                    ))
-                                })),
-                        )
-                    }
-                    #[cfg(feature = "mp3")]
-                    AudioFormat::Mp3 => {
-                        use moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder;
-                        let encoder_writer = writer.clone();
-                        Some(
-                            moosicbox_symphonia_player::output::AudioOutputHandler::new()
-                                .with_output(Box::new(move |spec, duration| {
-                                    Ok(Box::new(
-                                        Mp3Encoder::with_writer(encoder_writer.clone())
-                                            .open(spec, duration),
-                                    ))
-                                })),
-                        )
-                    }
-                    #[cfg(feature = "opus")]
-                    AudioFormat::Opus => {
-                        use moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder;
-                        let encoder_writer = writer.clone();
-                        Some(
-                            moosicbox_symphonia_player::output::AudioOutputHandler::new()
-                                .with_output(Box::new(move |spec, duration| {
-                                    Ok(Box::new(
-                                        OpusEncoder::with_writer(encoder_writer.clone())
-                                            .open(spec, duration),
-                                    ))
-                                })),
-                        )
-                    }
-                    AudioFormat::Source => None,
                 };
 
-            if let Some(mut audio_output_handler) = audio_output_handler {
-                match source {
-                    TrackSource::LocalFilePath { ref path, .. } => {
-                        if let Err(err) = play_file_path_str(
-                            path,
-                            &mut audio_output_handler,
-                            true,
-                            true,
-                            None,
-                            None,
-                        ) {
-                            log::error!("Failed to encode to aac: {err:?}");
-                        }
-                    }
-                    TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } => {
-                        let source = Box::new(RemoteByteStream::new(
-                            url,
-                            size,
-                            true,
-                            #[cfg(feature = "flac")]
-                            {
-                                format == AudioFormat::Flac
-                            },
-                            #[cfg(not(feature = "flac"))]
-                            false,
-                            CancellationToken::new(),
-                        ));
-                        if let Err(err) = play_media_source(
-                            MediaSourceStream::new(source, Default::default()),
-                            &Hint::new(),
-                            &mut audio_output_handler,
-                            true,
-                            true,
-                            None,
-                            None,
-                        ) {
-                            log::error!("Failed to encode to aac: {err:?}");
-                        }
-                    }
-                }
-            }
-        });
-
-        match source {
-            TrackSource::LocalFilePath { path, .. } => match format {
-                AudioFormat::Source => request_audio_bytes_from_file(path, format, size).await?,
-                #[allow(unreachable_patterns)]
-                _ => TrackBytes {
-                    stream: StalledReadMonitor::new(stream.boxed()),
-                    size,
-                    format,
-                },
-            },
-            TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } => match format {
-                AudioFormat::Source => {
-                    request_track_bytes_from_url(&url, start, end, format, size).await?
-                }
-                #[allow(unreachable_patterns)]
-                _ => TrackBytes {
-                    stream: StalledReadMonitor::new(stream.boxed()),
-                    size,
-                    format,
-                },
-            },
+                Ok(track_bytes)
+            })
         }
-    };
-
-    Ok(track_bytes)
+    })
+    .await
 }
 
 async fn request_audio_bytes_from_file(
@@ -507,6 +531,7 @@ async fn request_audio_bytes_from_file(
     let file = tokio::fs::File::open(path).await?;
 
     Ok(TrackBytes {
+        id: new_byte_writer_id(),
         stream: StalledReadMonitor::new(
             FramedRead::new(file, BytesCodec::new())
                 .map_ok(BytesMut::freeze)
@@ -526,7 +551,7 @@ async fn request_track_bytes_from_url(
 ) -> Result<TrackBytes, GetTrackBytesError> {
     let client = reqwest::Client::new();
 
-    log::debug!("Getting track source from url: {url}");
+    log::debug!("request_track_bytes_from_url: Getting track source from url: {url}");
 
     let mut request = client.get(url);
 
@@ -534,9 +559,11 @@ async fn request_track_bytes_from_url(
         let start = start.map(|start| start.to_string()).unwrap_or("".into());
         let end = end.map(|end| end.to_string()).unwrap_or("".into());
 
+        log::debug!("request_track_bytes_from_url: Using byte range start={start} end={end}");
         request = request.header("Range", format!("bytes={start}-{end}"))
     }
 
+    log::debug!("request_track_bytes_from_url: Sending request to url={url}");
     let stream = request
         .send()
         .await?
@@ -544,6 +571,7 @@ async fn request_track_bytes_from_url(
         .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err));
 
     Ok(TrackBytes {
+        id: new_byte_writer_id(),
         stream: StalledReadMonitor::new(stream.boxed()),
         size,
         format,
@@ -559,7 +587,11 @@ pub enum TrackInfoError {
     #[error("Track not found: {0}")]
     NotFound(u64),
     #[error(transparent)]
+    Join(#[from] tokio::task::JoinError),
+    #[error(transparent)]
     Playback(#[from] PlaybackError),
+    #[error(transparent)]
+    GetTrackBytes(#[from] Box<GetTrackBytesError>),
     #[error(transparent)]
     Db(#[from] DbError),
 }
@@ -647,111 +679,126 @@ where
     values
 }
 
-pub fn get_or_init_track_visualization(
+pub async fn get_or_init_track_visualization(
     track_id: i32,
     source: &TrackSource,
     max: u16,
 ) -> Result<Vec<u8>, TrackInfoError> {
     log::debug!("Getting track visualization {track_id} max={max}");
 
-    match source {
-        TrackSource::LocalFilePath { ref path, .. } => {
-            let viz = Arc::new(RwLock::new(vec![]));
-            let inner_viz = viz.clone();
-            let mut audio_output_handler =
-                AudioOutputHandler::new().with_filter(Box::new(move |decoded, _packet, _track| {
-                    inner_viz
-                        .write()
-                        .unwrap()
-                        .extend_from_slice(&visualize(decoded));
-                    Ok(())
-                }));
+    let viz = Arc::new(RwLock::new(vec![]));
+    let inner_viz = viz.clone();
 
-            play_file_path_str(path, &mut audio_output_handler, true, true, None, None)?;
+    let bytes = get_audio_bytes(source.clone(), source.format(), None, None, None)
+        .await
+        .map_err(Box::new)?;
 
-            let viz = viz.read().unwrap();
-            let count = std::cmp::min(max as usize, viz.len());
-            let mut ret_viz = Vec::with_capacity(count);
+    tokio::task::spawn_blocking(move || {
+        let mut audio_output_handler =
+            AudioOutputHandler::new().with_filter(Box::new(move |decoded, _packet, _track| {
+                inner_viz
+                    .write()
+                    .unwrap()
+                    .extend_from_slice(&visualize(decoded));
+                Ok(())
+            }));
 
-            if viz.len() > max as usize {
-                let offset = (viz.len() as f64) / (max as f64);
-                log::debug!("Trimming visualization: offset={offset}");
-                let mut last_pos = 0_usize;
-                let mut pos = offset;
+        let hint = Hint::new();
+        let media_source = TrackBytesMediaSource::new(bytes);
+        let mss = MediaSourceStream::new(Box::new(media_source), Default::default());
 
-                while (pos as usize) < viz.len() {
-                    let pos_usize = pos as usize;
-                    let mut sum = viz[last_pos] as usize;
-                    let mut count = 1_usize;
+        play_media_source(
+            mss,
+            &hint,
+            &mut audio_output_handler,
+            true,
+            true,
+            None,
+            None,
+        )
+    })
+    .await??;
 
-                    while pos_usize > last_pos {
-                        last_pos += 1;
-                        count += 1;
-                        sum += viz[last_pos] as usize;
-                    }
+    let viz = viz.read().unwrap();
+    let count = std::cmp::min(max as usize, viz.len());
+    let mut ret_viz = Vec::with_capacity(count);
 
-                    ret_viz.push((sum / count) as u8);
-                    pos += offset;
-                }
+    if viz.len() > max as usize {
+        let offset = (viz.len() as f64) / (max as f64);
+        log::debug!("Trimming visualization: offset={offset}");
+        let mut last_pos = 0_usize;
+        let mut pos = offset;
 
-                if ret_viz.len() < max as usize {
-                    ret_viz.push(viz[viz.len() - 1]);
-                }
-            } else {
-                ret_viz.extend_from_slice(&viz[..count]);
+        while (pos as usize) < viz.len() {
+            let pos_usize = pos as usize;
+            let mut sum = viz[last_pos] as usize;
+            let mut count = 1_usize;
+
+            while pos_usize > last_pos {
+                last_pos += 1;
+                count += 1;
+                sum += viz[last_pos] as usize;
             }
 
-            let mut min_value = u8::MAX;
-            let mut max_value = 0;
-
-            for x in ret_viz.iter() {
-                let x = *x;
-
-                if x < min_value {
-                    min_value = x;
-                }
-                if x > max_value {
-                    max_value = x;
-                }
-            }
-
-            let dyn_range = max_value - min_value;
-            let coefficient = u8::MAX as f64 / dyn_range as f64;
-
-            log::debug!("dyn_range={dyn_range} coefficient={coefficient} min_value={min_value} max_value={max_value}");
-
-            for x in ret_viz.iter_mut() {
-                *x -= min_value;
-                let diff = *x as f64 * coefficient;
-                *x = diff as u8;
-            }
-
-            let mut smooth_viz = vec![0; ret_viz.len()];
-            let mut last = 0;
-
-            const MAX_DELTA: i16 = 50;
-
-            for (i, x) in smooth_viz.iter_mut().enumerate() {
-                let mut current = ret_viz[i] as i16;
-
-                if i > 0 && (current - last).abs() > MAX_DELTA {
-                    if current > last {
-                        current = last + MAX_DELTA;
-                    } else {
-                        current = last - MAX_DELTA;
-                    }
-                }
-
-                last = current;
-                *x = current as u8;
-            }
-
-            let ret_viz = smooth_viz;
-
-            Ok(ret_viz)
+            ret_viz.push((sum / count) as u8);
+            pos += offset;
         }
-        TrackSource::Tidal { .. } | TrackSource::Qobuz { .. } => unimplemented!(),
+
+        if ret_viz.len() < max as usize {
+            ret_viz.push(viz[viz.len() - 1]);
+        }
+    } else {
+        ret_viz.extend_from_slice(&viz[..count]);
     }
+
+    let mut min_value = u8::MAX;
+    let mut max_value = 0;
+
+    for x in ret_viz.iter() {
+        let x = *x;
+
+        if x < min_value {
+            min_value = x;
+        }
+        if x > max_value {
+            max_value = x;
+        }
+    }
+
+    let dyn_range = max_value - min_value;
+    let coefficient = u8::MAX as f64 / dyn_range as f64;
+
+    log::debug!("dyn_range={dyn_range} coefficient={coefficient} min_value={min_value} max_value={max_value}");
+
+    for x in ret_viz.iter_mut() {
+        *x -= min_value;
+        let diff = *x as f64 * coefficient;
+        *x = diff as u8;
+    }
+
+    let mut smooth_viz = vec![0; ret_viz.len()];
+    let mut last = 0;
+
+    const MAX_DELTA: i16 = 50;
+
+    for (i, x) in smooth_viz.iter_mut().enumerate() {
+        let mut current = ret_viz[i] as i16;
+
+        if i > 0 && (current - last).abs() > MAX_DELTA {
+            if current > last {
+                current = last + MAX_DELTA;
+            } else {
+                current = last - MAX_DELTA;
+            }
+        }
+
+        last = current;
+        *x = current as u8;
+    }
+
+    let ret_viz = smooth_viz;
+
+    Ok(ret_viz)
 }
 
 pub async fn get_or_init_track_size(

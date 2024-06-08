@@ -70,6 +70,8 @@ pub enum PlayerError {
     #[error(transparent)]
     Db(#[from] DbError),
     #[error(transparent)]
+    Join(#[from] tokio::task::JoinError),
+    #[error(transparent)]
     IO(#[from] std::io::Error),
     #[error("Format not supported: {0:?}")]
     UnsupportedFormat(AudioFormat),
@@ -676,104 +678,115 @@ impl Player {
             let active_playback = self.active_playback.clone();
             let sent_playback_start_event = AtomicBool::new(false);
 
-            let mut audio_output_handler = AudioOutputHandler::new()
-                .with_filter(Box::new(move |_decoded, packet, track| {
-                    if let Some(tb) = track.codec_params.time_base {
-                        let ts = packet.ts();
-                        let t = tb.calc_time(ts);
-                        let secs = f64::from(t.seconds as u32) + t.frac;
+            let retry = tokio::task::spawn_blocking(move || {
+                let mut audio_output_handler = AudioOutputHandler::new()
+                    .with_filter(Box::new({
+                        let active_playback = active_playback.clone();
+                        move |_decoded, packet, track| {
+                            if let Some(tb) = track.codec_params.time_base {
+                                let ts = packet.ts();
+                                let t = tb.calc_time(ts);
+                                let secs = f64::from(t.seconds as u32) + t.frac;
 
-                        let mut binding = active_playback.write().unwrap();
-                        if let Some(playback) = binding.as_mut() {
-                            if !sent_playback_start_event.load(std::sync::atomic::Ordering::SeqCst)
-                            {
-                                if let Some(session_id) = playback.session_id {
-                                    sent_playback_start_event
-                                        .store(true, std::sync::atomic::Ordering::SeqCst);
+                                let mut binding = active_playback.write().unwrap();
+                                if let Some(playback) = binding.as_mut() {
+                                    if !sent_playback_start_event.load(std::sync::atomic::Ordering::SeqCst)
+                                    {
+                                        if let Some(session_id) = playback.session_id {
+                                            sent_playback_start_event
+                                                .store(true, std::sync::atomic::Ordering::SeqCst);
 
-                                    let update = UpdateSession {
-                                        session_id: session_id as i32,
-                                        play: None,
-                                        stop: None,
-                                        name: None,
-                                        active: None,
-                                        playing: Some(true),
-                                        position: None,
-                                        seek: Some(secs),
-                                        volume: None,
-                                        playlist: None,
-                                    };
-                                    send_playback_event(&update, playback);
+                                            let update = UpdateSession {
+                                                session_id: session_id as i32,
+                                                play: None,
+                                                stop: None,
+                                                name: None,
+                                                active: None,
+                                                playing: Some(true),
+                                                position: None,
+                                                seek: Some(secs),
+                                                volume: None,
+                                                playlist: None,
+                                            };
+                                            send_playback_event(&update, playback);
+                                        }
+                                    }
+
+                                    let old = playback.clone();
+                                    playback.progress = secs;
+                                    trigger_playback_event(playback, &old);
                                 }
                             }
-
-                            let old = playback.clone();
-                            playback.progress = secs;
-                            trigger_playback_event(playback, &old);
+                            Ok(())
                         }
-                    }
-                    Ok(())
-                }))
-                .with_filter(Box::new(move |decoded, _packet, _track| {
-                    mix_volume(decoded, volume.load(std::sync::atomic::Ordering::SeqCst));
-                    Ok(())
-                }))
-                .with_cancellation_token(abort.clone());
+                    }))
+                    .with_filter(Box::new(move |decoded, _packet, _track| {
+                        mix_volume(decoded, volume.load(std::sync::atomic::Ordering::SeqCst));
+                        Ok(())
+                    }))
+                    .with_cancellation_token(abort.clone());
 
-            #[cfg(feature = "cpal")]
-            {
-                audio_output_handler = audio_output_handler.with_output(Box::new(
-                    moosicbox_symphonia_player::output::cpal::player::try_open,
-                ));
-            }
-            #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
-            {
-                audio_output_handler = audio_output_handler.with_output(Box::new(
-                    moosicbox_symphonia_player::output::pulseaudio::simple::try_open,
-                ));
-            }
-            #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
-            {
-                audio_output_handler = audio_output_handler.with_output(Box::new(
-                    moosicbox_symphonia_player::output::pulseaudio::standard::try_open,
-                ));
-            }
-
-            if !audio_output_handler.contains_outputs_to_open() {
-                log::warn!("No outputs set for the audio_output_handler");
-            }
-
-            if let Err(err) = moosicbox_symphonia_player::play_media_source(
-                mss,
-                &playable_track.hint,
-                &mut audio_output_handler,
-                true,
-                true,
-                None,
-                current_seek,
-            ) {
-                if retry_options.is_none() {
-                    log::error!("Track playback failed and no retry options: {err:?}");
-                    return Err(PlayerError::PlaybackError(err));
+                #[cfg(feature = "cpal")]
+                {
+                    audio_output_handler = audio_output_handler.with_output(Box::new(
+                        moosicbox_symphonia_player::output::cpal::player::try_open,
+                    ));
+                }
+                #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
+                {
+                    audio_output_handler = audio_output_handler.with_output(Box::new(
+                        moosicbox_symphonia_player::output::pulseaudio::simple::try_open,
+                    ));
+                }
+                #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
+                {
+                    audio_output_handler = audio_output_handler.with_output(Box::new(
+                        moosicbox_symphonia_player::output::pulseaudio::standard::try_open,
+                    ));
                 }
 
-                let retry_options = retry_options.unwrap();
-
-                if let PlaybackError::AudioOutput(AudioOutputError::Interrupt) = err {
-                    retry_count += 1;
-                    if retry_count > retry_options.max_retry_count {
-                        log::error!(
-                            "Playback retry failed after {retry_count} attempts. Not retrying"
-                        );
-                        break;
-                    }
-                    let binding = self.active_playback.read().unwrap();
-                    let playback = binding.as_ref().unwrap();
-                    current_seek = Some(playback.progress);
-                    log::warn!("Playback interrupted. Trying again at position {current_seek:?} (attempt {retry_count}/{})", retry_options.max_retry_count);
-                    continue;
+                if !audio_output_handler.contains_outputs_to_open() {
+                    log::warn!("No outputs set for the audio_output_handler");
                 }
+
+                if let Err(err) = moosicbox_symphonia_player::play_media_source(
+                    mss,
+                    &playable_track.hint,
+                    &mut audio_output_handler,
+                    true,
+                    true,
+                    None,
+                    current_seek,
+                ) {
+                    if retry_options.is_none() {
+                        log::error!("Track playback failed and no retry options: {err:?}");
+                        return Err(PlayerError::PlaybackError(err));
+                    }
+
+                    let retry_options = retry_options.unwrap();
+
+                    if let PlaybackError::AudioOutput(AudioOutputError::Interrupt) = err {
+                        retry_count += 1;
+                        if retry_count > retry_options.max_retry_count {
+                            log::error!(
+                                "Playback retry failed after {retry_count} attempts. Not retrying"
+                            );
+                            return Ok(false);
+                        }
+                        let binding = active_playback.read().unwrap();
+                        let playback = binding.as_ref().unwrap();
+                        current_seek = Some(playback.progress);
+                        log::warn!("Playback interrupted. Trying again at position {current_seek:?} (attempt {retry_count}/{})", retry_options.max_retry_count);
+                        return Ok(true);
+                    }
+                }
+                Ok(false)
+            }).await??;
+
+            if retry {
+                continue;
             }
+
             log::info!("Finished playback for track {}", track_id);
             break;
         }

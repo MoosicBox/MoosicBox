@@ -70,11 +70,9 @@ pub async fn track_visualization_endpoint(
         query.track_id
     );
 
-    Ok(Json(get_or_init_track_visualization(
-        query.track_id,
-        &source,
-        query.max.unwrap_or(333),
-    )?))
+    Ok(Json(
+        get_or_init_track_visualization(query.track_id, &source, query.max.unwrap_or(333)).await?,
+    ))
 }
 
 impl From<GetTrackBytesError> for actix_web::Error {
@@ -87,6 +85,8 @@ impl From<GetTrackBytesError> for actix_web::Error {
             GetTrackBytesError::TrackInfo(_) => ErrorInternalServerError(err),
             GetTrackBytesError::NotFound => ErrorNotFound(err),
             GetTrackBytesError::UnsupportedFormat => ErrorBadRequest(err),
+            GetTrackBytesError::Acquire(_) => ErrorInternalServerError(err),
+            GetTrackBytesError::Join(_) => ErrorInternalServerError(err),
         }
     }
 }

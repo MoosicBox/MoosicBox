@@ -3276,6 +3276,7 @@ dependencies = [
  "audiotags",
  "awc",
  "bytes",
+ "flume",
  "futures",
  "futures-core",
  "lazy_static",

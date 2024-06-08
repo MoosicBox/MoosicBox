@@ -1158,7 +1158,7 @@ impl TunnelSender {
                             let writer = ByteWriter::default();
                             let stream = writer.stream();
 
-                            RT.spawn(async move {
+                            RT.spawn_blocking(move || {
                                 let mut audio_output_handler = AudioOutputHandler::new();
 
                                 let format = match query.format {
@@ -1235,7 +1235,7 @@ impl TunnelSender {
                                 ) {
                                     log::error!("Failed to encode to {:?}: {err:?}", query.format);
                                 }
-                            });
+                            }).await?;
 
                             self.send_stream(
                                 request_id,

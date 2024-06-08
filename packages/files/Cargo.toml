@@ -36,6 +36,7 @@ atomic_float    = { workspace = true }
 audiotags       = { workspace = true }
 awc             = { workspace = true }
 bytes           = { workspace = true }
+flume           = { workspace = true }
 futures         = { workspace = true }
 futures-core    = { workspace = true }
 lazy_static     = { workspace = true }

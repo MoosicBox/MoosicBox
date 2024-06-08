@@ -45,6 +45,8 @@ pub enum TunnelRequestError {
     #[error(transparent)]
     IO(#[from] std::io::Error),
     #[error(transparent)]
+    Join(#[from] tokio::task::JoinError),
+    #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
     #[error(transparent)]
     Regex(#[from] regex::Error),

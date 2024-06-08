@@ -8,6 +8,9 @@ pub mod album;
 pub mod artist;
 pub mod track;
 
+mod track_bytes_media_source;
+mod track_pool;
+
 #[derive(Debug, Error)]
 pub enum ResizeImageError {
     #[error("Failed to read file with path: {0} ({1})")]
