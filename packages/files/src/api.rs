@@ -57,11 +57,18 @@ pub struct GetTrackVisualizationQuery {
 
 #[route("/track/visualization", method = "GET")]
 pub async fn track_visualization_endpoint(
-    _req: HttpRequest,
+    req: HttpRequest,
     query: web::Query<GetTrackVisualizationQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<Vec<u8>>> {
+    let method = req.method();
+
     let source = get_track_id_source(query.track_id, &**data.database, None, None).await?;
+
+    log::debug!(
+        "{method} /track/visualization track_id={} source={source:?}",
+        query.track_id
+    );
 
     Ok(Json(get_or_init_track_visualization(
         query.track_id,
@@ -86,10 +93,13 @@ impl From<GetTrackBytesError> for actix_web::Error {
 
 #[route("/track", method = "GET", method = "HEAD")]
 pub async fn track_endpoint(
+    req: HttpRequest,
     #[cfg(feature = "track-range")] req: HttpRequest,
     query: web::Query<GetTrackQuery>,
     data: web::Data<AppState>,
 ) -> Result<HttpResponse> {
+    let method = req.method();
+
     let source = get_track_id_source(
         query.track_id as i32,
         &**data.database,
@@ -97,6 +107,13 @@ pub async fn track_endpoint(
         query.source,
     )
     .await?;
+
+    log::debug!(
+        "{method} /track track_id={} quality={:?} query.source={:?} source={source:?}",
+        query.track_id,
+        query.quality,
+        query.source
+    );
 
     let content_type = query
         .format
@@ -154,7 +171,7 @@ pub async fn track_endpoint(
         }
     }
 
-    log::debug!("Fetching track bytes with range range={range:?}");
+    log::debug!("{method} /track Fetching track bytes with range range={range:?}");
 
     let bytes = get_track_bytes(
         &**data.database,
