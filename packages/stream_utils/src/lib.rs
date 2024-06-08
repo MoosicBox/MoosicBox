@@ -32,6 +32,20 @@ impl ByteWriter {
     pub fn bytes_written(&self) -> u64 {
         *self.written.read().unwrap()
     }
+
+    pub fn close(&self) {
+        self.senders.write().unwrap().retain(|sender| {
+            if sender.send(Bytes::new()).is_err() {
+                log::debug!(
+                    "Receiver has disconnected from writer id={}. Removing sender.",
+                    self.id
+                );
+                false
+            } else {
+                true
+            }
+        });
+    }
 }
 
 impl Default for ByteWriter {
