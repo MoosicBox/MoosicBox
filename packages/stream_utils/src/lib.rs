@@ -74,7 +74,10 @@ impl std::io::Write for ByteWriter {
                     "No senders associated with ByteWriter writer id={}. Eating {len} bytes",
                     self.id
                 );
-                return Ok(len);
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "All receivers dropped",
+                ));
             }
         }
 
