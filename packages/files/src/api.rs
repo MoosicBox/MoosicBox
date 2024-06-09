@@ -339,6 +339,7 @@ pub async fn artist_cover_endpoint(
     .await?;
 
     resize_image_path(&path, width, height)
+        .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to resize image: {e:?}")))
 }
 
@@ -424,5 +425,6 @@ pub async fn album_artwork_endpoint(
     .await?;
 
     resize_image_path(&path, width, height)
+        .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to resize image: {e:?}")))
 }
