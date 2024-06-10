@@ -52,6 +52,22 @@ static CHAT_SERVER_HANDLE: Lazy<std::sync::RwLock<Option<ws::server::ChatServerH
 static DB: Lazy<std::sync::RwLock<Option<Arc<Box<dyn Database>>>>> =
     Lazy::new(|| std::sync::RwLock::new(None));
 
+static PLAYBACK_EVENT_RT: Lazy<tokio::runtime::Runtime> = Lazy::new(|| {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .max_blocking_threads(1)
+        .build()
+        .unwrap()
+});
+
+static WS_SERVER_RT: Lazy<tokio::runtime::Runtime> = Lazy::new(|| {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .max_blocking_threads(1)
+        .build()
+        .unwrap()
+});
+
 #[allow(clippy::too_many_lines)]
 fn main() -> std::io::Result<()> {
     #[cfg(debug_assertions)]
@@ -188,7 +204,7 @@ fn main() -> std::io::Result<()> {
         let handle = server_tx.clone();
         CHAT_SERVER_HANDLE.write().unwrap().replace(server_tx);
 
-        let playback_event_handle = tokio::spawn(PLAYBACK_EVENT_HANDLER.run());
+        let playback_event_handle = PLAYBACK_EVENT_RT.spawn(PLAYBACK_EVENT_HANDLER.run());
 
         moosicbox_player::player::set_service_port(service_port);
         moosicbox_player::player::on_playback_event(crate::playback_session::on_playback_event);
@@ -205,7 +221,7 @@ fn main() -> std::io::Result<()> {
             chat_server.add_sender(Box::new(tunnel_handle.clone()));
         }
 
-        let chat_server_handle = tokio::spawn(chat_server.run());
+        let chat_server_handle = WS_SERVER_RT.spawn(chat_server.run());
 
         if let Err(err) = register_server_player(&**database.clone(), handle, &tunnel_handle).await
         {

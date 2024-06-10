@@ -81,10 +81,15 @@ impl<Sender: WebsocketSender> PlaybackEventHandler<Sender> {
             Command::UpdateSession { update } => {
                 log::debug!("Received UpdateSession command: {update:?}");
 
-                let db = DB.read().unwrap().clone().ok_or_else(|| {
+                let db = if let Some(db) = DB.read().unwrap().as_ref() {
+                    db.clone()
+                } else {
                     log::error!("No DB connection");
-                    std::io::Error::new(std::io::ErrorKind::Other, "No DB connection")
-                })?;
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "No DB connection",
+                    ));
+                };
                 if let Err(err) = update_session(&**db, &self.sender, None, &update).await {
                     log::error!("Failed to broadcast update_session: {err:?}");
                 }
