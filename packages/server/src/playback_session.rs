@@ -58,13 +58,13 @@ impl<Sender: WebsocketSender> PlaybackEventHandler<Sender> {
     }
 
     pub async fn run(&self) -> Result<(), std::io::Error> {
-        while let Ok(cmd) = tokio::select!(
+        while let Ok(Ok(cmd)) = tokio::select!(
             () = self.token.cancelled() => {
                 log::debug!("PlaybackEventHandler was cancelled");
-                return Ok(());
+                Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "Cancelled"))
             }
             cmd = self.rx.recv_async() => {
-                cmd
+                Ok(cmd)
             }
         ) {
             log::trace!("Received PlaybackEventHandler command");

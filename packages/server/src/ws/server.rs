@@ -372,12 +372,12 @@ impl WsServer {
     }
 
     pub async fn run(mut self) -> io::Result<()> {
-        while let Ok(cmd) = tokio::select!(
+        while let Ok(Ok(cmd)) = tokio::select!(
             () = self.token.cancelled() => {
                 log::debug!("WsServer was cancelled");
-                return Ok(());
+                Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "Cancelled"))
             }
-            cmd = self.cmd_rx.recv_async() => { cmd }
+            cmd = self.cmd_rx.recv_async() => { Ok(cmd) }
         ) {
             log::trace!("Received WsServer command");
             self.process_command(cmd).await?;
