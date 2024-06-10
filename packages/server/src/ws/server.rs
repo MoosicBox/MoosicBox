@@ -205,6 +205,10 @@ impl WsServer {
         msg: impl Into<String> + Send,
     ) -> Result<(), WebsocketMessageError> {
         let connection_id = id.to_string();
+        log::trace!(
+            "on_message connection_id={connection_id} player_actions.len={}",
+            self.player_actions.len()
+        );
         let context = WebsocketContext {
             connection_id,
             player_actions: self.player_actions.clone(),
@@ -301,6 +305,7 @@ impl WsServer {
         match cmd {
             Command::AddPlayerAction { id, action } => {
                 self.add_player_action(id, action);
+                log::debug!("Added a player action with id={id}");
             }
 
             Command::Connect { conn_tx, res_tx } => {
