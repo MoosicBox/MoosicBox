@@ -72,7 +72,7 @@ To-do (in no particular order):
 
 ### Deploy
 
-`WS_HOST="wss://tunnel2.moosicbox.com/ws" TUNNEL_ACCESS_TOKEN='your access token here' STATIC_TOKEN='your static token here' ./aws-deploy.sh moosicbox_server moosicbox-server`
+`WS_HOST="wss://tunnel2.moosicbox.com/ws" TUNNEL_ACCESS_TOKEN='your access token here' STATIC_TOKEN='your static token here' ./do-deploy.sh moosicbox-tunnel-server`
 
 ## Tunnel Server
 
@@ -86,7 +86,7 @@ To-do (in no particular order):
 
 ### Deploy
 
-`TUNNEL_ACCESS_TOKEN='your access token here' ./aws-deploy.sh moosicbox_tunnel_server moosicbox-tunnel-server`
+`TUNNEL_ACCESS_TOKEN='your access token here' AWS_ACCESS_KEY_ID='token here' AWS_SECRET_ACCESS_KEY='key here' ./do-deploy.sh moosicbox-tunnel-server`
 
 ## Database
 
