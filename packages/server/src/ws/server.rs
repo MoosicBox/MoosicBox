@@ -383,6 +383,8 @@ impl WsServer {
             self.process_command(cmd).await?;
         }
 
+        log::debug!("Stopped WsServer");
+
         Ok(())
     }
 }

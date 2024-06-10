@@ -71,6 +71,8 @@ impl<Sender: WebsocketSender> PlaybackEventHandler<Sender> {
             self.process_command(cmd).await?;
         }
 
+        log::debug!("Stopped PlaybackEventHandler");
+
         Ok(())
     }
 

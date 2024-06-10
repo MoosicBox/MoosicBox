@@ -428,6 +428,8 @@ impl TunnelSender {
                     just_retried = true;
                 }
             }
+
+            log::debug!("Tunnel closed");
         });
 
         rx
