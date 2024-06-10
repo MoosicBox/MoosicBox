@@ -406,12 +406,16 @@ fn main() -> std::io::Result<()> {
                 resp
             },
             async move {
-                let resp = chat_server_handle.await.unwrap();
+                let resp = chat_server_handle
+                    .await
+                    .expect("Failed to shut down chat server");
                 log::debug!("Ws server connection closed");
                 resp
             },
             async move {
-                let resp = playback_event_handle.await.unwrap();
+                let resp = playback_event_handle
+                    .await
+                    .expect("Failed to shut down playback event handler");
                 log::debug!("PlaybackEventHandler connection closed");
                 resp
             },
