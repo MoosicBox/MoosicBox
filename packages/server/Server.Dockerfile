@@ -71,6 +71,7 @@ RUN for file in $(\
     for file in packages/*/Cargo.toml; \
       do printf "$file\n"; \
     done | grep -E "^(\
+packages/assert|\
 packages/auth|\
 packages/config|\
 packages/converter|\
