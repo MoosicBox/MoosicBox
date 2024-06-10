@@ -70,6 +70,7 @@ fn main() -> Result<(), std::io::Error> {
 
             App::new()
                 .wrap(cors)
+                .wrap(moosicbox_middleware::api_logger::ApiLogger::default())
                 .wrap(middleware::Compress::default())
                 .service(health_endpoint)
                 .service(ws::api::websocket)

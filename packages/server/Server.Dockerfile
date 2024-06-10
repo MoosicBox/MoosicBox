@@ -20,6 +20,7 @@ RUN cat Cargo.toml | \
     \"packages\/image\",\r\
     \"packages\/json_utils\",\r\
     \"packages\/menu\",\r\
+    \"packages\/middleware\",\r\
     \"packages\/music_api\",\r\
     \"packages\/paging\",\r\
     \"packages\/player\",\r\
@@ -50,6 +51,7 @@ COPY packages/files/Cargo.toml packages/files/Cargo.toml
 COPY packages/image/Cargo.toml packages/image/Cargo.toml
 COPY packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
 COPY packages/menu/Cargo.toml packages/menu/Cargo.toml
+COPY packages/middleware/Cargo.toml packages/middleware/Cargo.toml
 COPY packages/music_api/Cargo.toml packages/music_api/Cargo.toml
 COPY packages/paging/Cargo.toml packages/paging/Cargo.toml
 COPY packages/player/Cargo.toml packages/player/Cargo.toml
@@ -83,6 +85,7 @@ packages/files|\
 packages/image|\
 packages/json_utils|\
 packages/menu|\
+packages/middleware|\
 packages/music_api|\
 packages/paging|\
 packages/player|\

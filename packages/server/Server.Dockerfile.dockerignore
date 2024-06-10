@@ -12,6 +12,7 @@
 !/packages/image
 !/packages/json_utils
 !/packages/menu
+!/packages/middleware
 !/packages/music_api
 !/packages/paging
 !/packages/player

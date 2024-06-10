@@ -2,7 +2,6 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 mod api;
-mod api_logger;
 #[cfg(feature = "static-token-auth")]
 mod auth;
 mod db;
@@ -242,7 +241,7 @@ fn main() -> std::io::Result<()> {
 
             let app = App::new()
                 .wrap(cors)
-                .wrap(api_logger::ApiLogger::default())
+                .wrap(moosicbox_middleware::api_logger::ApiLogger::default())
                 .wrap(middleware::Compress::default());
 
             #[cfg(feature = "static-token-auth")]
