@@ -120,12 +120,15 @@ pub async fn chat_ws(
 
             // client WebSocket stream error
             Either::Left((Either::Left((Some(Err(err)), _)), _)) => {
-                log::error!("{}", err);
+                log::error!("WebSocket stream error: {}", err);
                 break None;
             }
 
             // client WebSocket stream ended
-            Either::Left((Either::Left((None, _)), _)) => break None,
+            Either::Left((Either::Left((None, _)), _)) => {
+                log::debug!("WebSocket stream ended");
+                break None;
+            }
 
             // chat messages received from other room participants
             Either::Left((Either::Right((Some(chat_msg), _)), _)) => {
