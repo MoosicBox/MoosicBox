@@ -373,6 +373,19 @@ fn main() -> std::io::Result<()> {
                 }
                 log::debug!("Shutting down PlaybackEventHandler...");
                 PLAYBACK_EVENT_HANDLER.shutdown();
+                log::debug!("Shutting down server players...");
+                SERVER_PLAYER
+                    .write()
+                    .await
+                    .drain()
+                    .for_each(|(id, player)| {
+                        log::debug!("Shutting down player id={}", id);
+                        if let Err(err) = player.stop() {
+                            log::error!("Failed to stop player id={}: {err:?}", id);
+                        } else {
+                            log::debug!("Successfully shut down player id={}", id);
+                        }
+                    });
                 log::trace!("Connections closed");
                 resp
             },
