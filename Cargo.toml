@@ -56,10 +56,10 @@ panic    = "abort"
 edition = "2021"
 
 [workspace.dependencies]
-actix = "0.13.4"
+actix = "0.13.5"
 actix-cors = "0.7.0"
-actix-files = "0.6.5"
-actix-rt = "2.9.0"
+actix-files = "0.6.6"
+actix-rt = "2.10.0"
 actix-web = "4.7.0"
 actix-ws = "0.2.5"
 arrayvec = "0.7.4"
@@ -117,7 +117,7 @@ mysql = { version = "25.0.1", features = [
     "default-rustls",
     "rustls-tls",
 ], default-features = false }
-mysql_common = { version = "0.32.3", default-features = false }
+mysql_common = { version = "0.32.4", default-features = false }
 native-tls = "0.2.12"
 ogg = "0.9.1"
 once_cell = { version = "1.19.0" }
@@ -135,7 +135,7 @@ qstring = "0.7.2"
 rand = "0.8"
 rangemap = "1.5.1"
 rb = "0.4.1"
-regex = "1.10.4"
+regex = "1.10.5"
 reqwest = { version = "0.12.4", default-features = false, features = [
     "blocking",
     "rustls-tls",
