@@ -5,7 +5,6 @@ use futures_util::{
     future::{select, Either},
     StreamExt as _,
 };
-use log::{debug, error};
 use moosicbox_tunnel::TunnelWsResponse;
 use tokio::{pin, sync::mpsc, time::interval};
 
@@ -80,16 +79,16 @@ pub async fn chat_ws(
                         if sender {
                             if let Ok(response) = serde_json::from_str::<TunnelWsResponse>(text) {
                                 if response.request_id == 0 {
-                                    debug!("Propagating ws message {text}");
+                                    log::debug!("Propagating ws message {text}");
                                     if let Err(err) = chat_server.ws_message(response).await {
-                                        error!(
+                                        log::error!(
                                             "Failed to propagate ws message from tunnel_server: {err:?}"
                                         );
                                     }
                                 } else {
-                                    debug!("Propagating ws response");
+                                    log::debug!("Propagating ws response");
                                     if let Err(err) = chat_server.ws_response(response).await {
-                                        error!(
+                                        log::error!(
                                             "Failed to propagate ws response from tunnel_server: {err:?}"
                                         );
                                     }
@@ -100,7 +99,9 @@ pub async fn chat_ws(
                         } else if let Err(err) =
                             chat_server.ws_request(conn_id, &client_id, text).await
                         {
-                            error!("Failed to propagate ws request from tunnel_server: {err:?}");
+                            log::error!(
+                                "Failed to propagate ws request from tunnel_server: {err:?}"
+                            );
                         }
                     }
                 }

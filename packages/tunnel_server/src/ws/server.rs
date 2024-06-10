@@ -9,7 +9,6 @@ use std::{
     },
 };
 
-use log::{debug, error, info, warn};
 use moosicbox_tunnel::{
     TunnelAbortRequest, TunnelRequest, TunnelResponse, TunnelWsRequest, TunnelWsResponse,
 };
@@ -153,11 +152,11 @@ impl ChatServer {
         id: ConnId,
         request_id: usize,
     ) -> Result<(), WebsocketMessageError> {
-        debug!("Aborting request {request_id} (conn_id={id})");
+        log::debug!("Aborting request {request_id} (conn_id={id})");
         if let Some(abort_token) = self.abort_request_tokens.get(&request_id) {
             abort_token.cancel();
         } else {
-            debug!("No abort token for request {request_id}");
+            log::debug!("No abort token for request {request_id}");
         }
         let body = TunnelRequest::Abort(TunnelAbortRequest { request_id });
         self.send_message_to(id, serde_json::to_string(&body).unwrap())
@@ -170,11 +169,11 @@ impl ChatServer {
         id: ConnId,
         msg: impl Into<String>,
     ) -> Result<(), WebsocketMessageError> {
-        debug!("Sending message to {id}");
-
         if let Some(session) = self.sessions.get(&id) {
+            let message = msg.into();
+            log::debug!("Sending message to {id} size={}", message.len());
             // errors if client disconnected abruptly and hasn't been timed-out yet
-            Ok(session.send(msg.into())?)
+            Ok(session.send(message)?)
         } else {
             Err(WebsocketMessageError::NoSession(id))
         }
@@ -182,7 +181,7 @@ impl ChatServer {
 
     /// Send message directly to the user.
     async fn broadcast(&self, msg: impl Into<String>) -> Result<(), WebsocketMessageError> {
-        debug!("Broadcasting message");
+        log::debug!("Broadcasting message");
         let message = msg.into();
 
         for session in self.clients.values() {
@@ -198,7 +197,7 @@ impl ChatServer {
         ids: &[ConnId],
         msg: impl Into<String>,
     ) -> Result<(), WebsocketMessageError> {
-        debug!("Broadcasting message except {ids:?}");
+        log::debug!("Broadcasting message except {ids:?}");
         let message = msg.into();
 
         for (id, session) in &self.clients {
@@ -221,7 +220,7 @@ impl ChatServer {
         // register session with random connection ID
         let id = thread_rng().gen::<usize>();
 
-        info!("Someone joined {id} sender={sender}");
+        log::info!("Someone joined {id} sender={sender}");
 
         self.sessions.insert(id, tx.clone());
 
@@ -233,7 +232,7 @@ impl ChatServer {
         }
 
         let count = self.visitor_count.fetch_add(1, Ordering::SeqCst) + 1;
-        debug!("Visitor count: {count}");
+        log::debug!("Visitor count: {count}");
 
         // send id back
         Ok(id)
@@ -241,9 +240,9 @@ impl ChatServer {
 
     /// Unregister connection from room map and invoke ws api disconnect.
     async fn disconnect(&mut self, conn_id: ConnId) -> Result<(), DatabaseError> {
-        info!("Someone disconnected {conn_id}");
+        log::info!("Someone disconnected {conn_id}");
         let count = self.visitor_count.fetch_sub(1, Ordering::SeqCst) - 1;
-        debug!("Visitor count: {count}");
+        log::debug!("Visitor count: {count}");
 
         delete_connection(&conn_id.to_string()).await?;
 
@@ -270,15 +269,15 @@ impl ChatServer {
                 } => match self.connect(client_id, sender, conn_tx).await {
                     Ok(id) => {
                         if let Err(error) = res_tx.send(id) {
-                            error!("Failed to connect {error:?}");
+                            log::error!("Failed to connect {error:?}");
                         }
                     }
-                    Err(err) => error!("Failed to connect {err:?}"),
+                    Err(err) => log::error!("Failed to connect {err:?}"),
                 },
 
                 Command::Disconnect { conn } => {
                     if let Err(err) = self.disconnect(conn).await {
-                        error!("Failed to disconnect {err:?}");
+                        log::error!("Failed to disconnect {err:?}");
                     }
                 }
 
@@ -312,14 +311,14 @@ impl ChatServer {
                                 })
                                 .is_err()
                             {
-                                warn!("Header sender dropped for request {}", request_id);
+                                log::warn!("Header sender dropped for request {}", request_id);
                                 self.headers_senders.remove(&request_id);
                                 if let Err(err) = self.abort_request(conn_id, request_id).await {
-                                    error!("Failed to abort request {request_id} {err:?}");
+                                    log::error!("Failed to abort request {request_id} {err:?}");
                                 }
                             }
                         } else {
-                            error!(
+                            log::error!(
                                 "unexpected binary message {} (size {})",
                                 request_id,
                                 response.bytes.len()
@@ -329,14 +328,14 @@ impl ChatServer {
 
                     if let Some(sender) = self.senders.get(&request_id) {
                         if sender.send(response).is_err() {
-                            debug!("Sender dropped for request {}", request_id);
+                            log::debug!("Sender dropped for request {}", request_id);
                             self.senders.remove(&request_id);
                             if let Err(err) = self.abort_request(conn_id, request_id).await {
-                                error!("Failed to abort request {request_id} {err:?}");
+                                log::error!("Failed to abort request {request_id} {err:?}");
                             }
                         }
                     } else {
-                        error!(
+                        log::error!(
                             "unexpected binary message {} (size {})",
                             request_id,
                             response.bytes.len()
@@ -363,7 +362,7 @@ impl ChatServer {
                             .send_message_to(client_conn_id, serde_json::to_string(&body).unwrap())
                             .await
                         {
-                            error!("Failed to send WsRequest to {client_conn_id}: {error:?}");
+                            log::error!("Failed to send WsRequest to {client_conn_id}: {error:?}");
                         }
                         self.ws_requests.insert(request_id, conn_id);
                     }
@@ -379,7 +378,7 @@ impl ChatServer {
                                 .send_message_to(conn_id, message.body.to_string())
                                 .await
                             {
-                                error!("Failed to send WsResponse to {conn_id}: {error:?}");
+                                log::error!("Failed to send WsResponse to {conn_id}: {error:?}");
                             }
                         }
                     } else if let Some(exclude_connection_ids) = message.exclude_connection_ids {
@@ -387,10 +386,10 @@ impl ChatServer {
                             .broadcast_except(&exclude_connection_ids, message.body.to_string())
                             .await
                         {
-                            error!("Failed to broadcast_except WsMessage: {error:?}");
+                            log::error!("Failed to broadcast_except WsMessage: {error:?}");
                         }
                     } else if let Err(error) = self.broadcast(message.body.to_string()).await {
-                        error!("Failed to broadcast WsMessage: {error:?}");
+                        log::error!("Failed to broadcast WsMessage: {error:?}");
                     }
                 }
 
@@ -400,16 +399,16 @@ impl ChatServer {
                             .send_message_to(*ws_id, response.body.to_string())
                             .await
                         {
-                            error!("Failed to send WsResponse to {ws_id}: {error:?}");
+                            log::error!("Failed to send WsResponse to {ws_id}: {error:?}");
                         }
                     } else {
-                        error!("unexpected ws response {}", response.request_id,);
+                        log::error!("unexpected ws response {}", response.request_id,);
                     }
                 }
 
                 Command::Message { conn, msg, res_tx } => {
                     if let Err(error) = self.send_message_to(conn, &msg).await {
-                        error!("Failed to send message to {conn}: {msg:?}: {error:?}");
+                        log::error!("Failed to send message to {conn}: {msg:?}: {error:?}");
                     }
                     let _ = res_tx.send(());
                 }
