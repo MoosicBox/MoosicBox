@@ -25,6 +25,7 @@ use moosicbox_player::{
     api::DEFAULT_PLAYBACK_RETRY_OPTIONS,
     player::{PlayerSource, TrackOrId},
 };
+use moosicbox_tunnel_sender::sender::TunnelSenderHandle;
 use moosicbox_ws::{send_download_event, WebsocketContext, WebsocketSendError};
 use once_cell::sync::Lazy;
 use std::{
@@ -206,7 +207,8 @@ fn main() -> std::io::Result<()> {
 
         let chat_server_handle = tokio::spawn(chat_server.run());
 
-        if let Err(err) = register_server_player(&**database.clone(), handle).await {
+        if let Err(err) = register_server_player(&**database.clone(), handle, &tunnel_handle).await
+        {
             log::error!("Failed to register server player: {err:?}");
         } else {
             log::debug!("Registered server player");
@@ -463,6 +465,7 @@ fn handle_server_playback_update(
 async fn register_server_player(
     db: &dyn Database,
     mut ws: ChatServerHandle,
+    tunnel_handle: &Option<TunnelSenderHandle>,
 ) -> Result<(), WebsocketSendError> {
     let connection_id = "self";
 
@@ -495,6 +498,10 @@ async fn register_server_player(
         ))?;
 
     ws.add_player_action(player.id, handle_server_playback_update);
+
+    if let Some(handle) = tunnel_handle {
+        handle.add_player_action(player.id, handle_server_playback_update);
+    }
 
     moosicbox_ws::get_sessions(db, &handle, &context, true).await
 }

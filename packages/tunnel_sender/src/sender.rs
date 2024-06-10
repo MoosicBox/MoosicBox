@@ -27,7 +27,7 @@ use moosicbox_symphonia_player::media_sources::remote_bytestream::RemoteByteStre
 use moosicbox_symphonia_player::output::AudioOutputHandler;
 use moosicbox_symphonia_player::play_media_source;
 use moosicbox_tunnel::{Method, TunnelEncoding, TunnelWsResponse};
-use moosicbox_ws::{WebsocketContext, WebsocketSendError, WebsocketSender};
+use moosicbox_ws::{PlayerAction, WebsocketContext, WebsocketSendError, WebsocketSender};
 use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng as _};
 use regex::Regex;
@@ -70,6 +70,7 @@ pub enum CloseError {
 pub struct TunnelSenderHandle {
     sender: Arc<RwLock<Option<UnboundedSender<TunnelResponseMessage>>>>,
     cancellation_token: CancellationToken,
+    player_actions: Arc<RwLock<Vec<(i32, PlayerAction)>>>,
 }
 
 impl TunnelSenderHandle {
@@ -77,6 +78,10 @@ impl TunnelSenderHandle {
         self.cancellation_token.cancel();
 
         Ok(())
+    }
+
+    pub fn add_player_action(&self, id: i32, action: PlayerAction) {
+        self.player_actions.write().unwrap().push((id, action));
     }
 }
 
@@ -160,6 +165,7 @@ pub struct TunnelSender {
     sender: Arc<RwLock<Option<UnboundedSender<TunnelResponseMessage>>>>,
     cancellation_token: CancellationToken,
     abort_request_tokens: Arc<RwLock<HashMap<usize, CancellationToken>>>,
+    player_actions: Arc<RwLock<Vec<(i32, PlayerAction)>>>,
 }
 
 static BINARY_REQUEST_BUFFER_OFFSET: Lazy<usize> = Lazy::new(|| {
@@ -182,9 +188,11 @@ impl TunnelSender {
         let sender = Arc::new(RwLock::new(None));
         let cancellation_token = CancellationToken::new();
         let id = thread_rng().gen::<usize>();
+        let player_actions = Arc::new(RwLock::new(vec![]));
         let handle = TunnelSenderHandle {
             sender: sender.clone(),
             cancellation_token: cancellation_token.clone(),
+            player_actions: player_actions.clone(),
         };
 
         (
@@ -197,6 +205,7 @@ impl TunnelSender {
                 sender: sender.clone(),
                 cancellation_token: cancellation_token.clone(),
                 abort_request_tokens: Arc::new(RwLock::new(HashMap::new())),
+                player_actions,
             },
             handle,
         )
@@ -204,6 +213,11 @@ impl TunnelSender {
 
     pub fn with_cancellation_token(mut self, token: CancellationToken) -> Self {
         self.cancellation_token = token;
+        self
+    }
+
+    pub fn add_player_action(self, id: i32, action: PlayerAction) -> Self {
+        self.player_actions.write().unwrap().push((id, action));
         self
     }
 
@@ -1434,7 +1448,7 @@ impl TunnelSender {
     ) -> Result<(), TunnelRequestError> {
         let context = WebsocketContext {
             connection_id: conn_id.to_string(),
-            ..Default::default()
+            player_actions: self.player_actions.read().unwrap().clone(),
         };
         let packet_id = 1_u32;
         log::debug!("Processing tunnel ws request request_id={request_id} packet_id={packet_id} conn_id={conn_id}");
