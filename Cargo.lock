@@ -3367,6 +3367,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_middleware"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "futures-util",
+ "log",
+]
+
+[[package]]
 name = "moosicbox_music_api"
 version = "0.1.0"
 dependencies = [

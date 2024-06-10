@@ -1,0 +1,19 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools"]
+description = "MoosicBox middleware package"
+edition     = "2021"
+keywords    = ["middleware"]
+license     = "MPL-2.0"
+name        = "moosicbox_middleware"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
+
+[dependencies]
+actix-web    = { workspace = true }
+futures-util = { workspace = true }
+log          = { workspace = true }
+
+[features]
+fail-on-warnings = []
