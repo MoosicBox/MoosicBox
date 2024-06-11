@@ -862,8 +862,10 @@ mod tests {
                 std::fs::remove_dir_all(path.as_path()).expect("Failed to clean up temp directory");
             }
             log::debug!("Cleaning up temp directory {:?}", TESTS_DIR_PATH.as_path());
-            std::fs::remove_dir_all(TESTS_DIR_PATH.as_path())
-                .expect("Failed to clean up temp directory");
+            if TESTS_DIR_PATH.exists() {
+                std::fs::remove_dir_all(TESTS_DIR_PATH.as_path())
+                    .expect("Failed to clean up temp directory");
+            }
         }
     }
 
