@@ -2,6 +2,8 @@
 
 #[cfg(feature = "api")]
 pub mod api;
+#[cfg(feature = "listener")]
+pub mod listener;
 
 pub mod models;
 

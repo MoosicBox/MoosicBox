@@ -3918,6 +3918,7 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "async-recursion",
+ "flume",
  "futures",
  "log",
  "moosicbox_assert",
@@ -3928,6 +3929,8 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "tokio",
+ "tokio-util",
  "xml",
 ]
 

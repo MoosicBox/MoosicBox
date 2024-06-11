@@ -25,6 +25,7 @@ use moosicbox_player::{
     player::{PlayerSource, TrackOrId},
 };
 use moosicbox_tunnel_sender::sender::TunnelSenderHandle;
+use moosicbox_upnp::listener::UpnpCommander;
 use moosicbox_ws::{send_download_event, WebsocketContext, WebsocketSendError};
 use once_cell::sync::Lazy;
 use std::{
@@ -221,6 +222,10 @@ fn main() -> std::io::Result<()> {
             log::debug!("Registered server player");
         }
 
+        let upnp_service = moosicbox_upnp::listener::UpnpListener::new();
+        let upnp_service_handle = upnp_service.handle();
+        let join_upnp_service = upnp_service.start();
+
         let app = move || {
             let app_data = AppState {
                 tunnel_host: tunnel_host.clone(),
@@ -354,19 +359,24 @@ fn main() -> std::io::Result<()> {
         if let Err(err) = try_join!(
             async move {
                 let resp = http_server.await;
+
                 log::debug!("Shutting down ws server...");
                 if let Some(x) = CHAT_SERVER_HANDLE.write().unwrap().take() {
                     x.shutdown();
                 }
+
                 log::debug!("Shutting down db client...");
                 DB.write().unwrap().take();
+
                 log::debug!("Cancelling scan...");
                 moosicbox_scan::cancel();
                 CANCELLATION_TOKEN.cancel();
+
                 if let Some(handle) = tunnel_handle {
                     log::debug!("Closing tunnel connection...");
                     let _ = handle.close().await;
                 }
+
                 if let Some(handle) = tunnel_join_handle {
                     log::debug!("Closing tunnel join handle connection...");
                     handle.await.unwrap();
@@ -378,8 +388,10 @@ fn main() -> std::io::Result<()> {
                     log::debug!("Aborting database connection...");
                     db_connection_handle.abort();
                 }
+
                 log::debug!("Shutting down PlaybackEventHandler...");
                 PLAYBACK_EVENT_HANDLER.shutdown();
+
                 log::debug!("Shutting down server players...");
                 SERVER_PLAYER
                     .write()
@@ -393,6 +405,12 @@ fn main() -> std::io::Result<()> {
                             log::debug!("Successfully shut down player id={}", id);
                         }
                     });
+
+                log::debug!("Shutting down UpnpListener...");
+                if let Err(e) = upnp_service_handle.shutdown() {
+                    log::error!("Failed to shut down UpnpListener: {e:?}");
+                }
+
                 log::trace!("Connections closed");
                 resp
             },
@@ -408,6 +426,14 @@ fn main() -> std::io::Result<()> {
                     .await
                     .expect("Failed to shut down playback event handler");
                 log::debug!("PlaybackEventHandler connection closed");
+                resp
+            },
+            async move {
+                let resp = join_upnp_service
+                    .await
+                    .expect("Failed to shut down UPnP service")
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
+                log::debug!("UPnP service closed");
                 resp
             },
         ) {

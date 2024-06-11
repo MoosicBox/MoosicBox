@@ -46,6 +46,7 @@ moosicbox_tunnel = { path = "../tunnel", default-features = false }
 moosicbox_tunnel_sender = { path = "../tunnel_sender", default-features = false }
 moosicbox_upnp = { path = "../upnp", optional = true, default-features = false, features = [
     "api",
+    "listener",
 ] }
 moosicbox_ws = { path = "../ws" }
 
