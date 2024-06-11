@@ -30,4 +30,4 @@ jobs:
                   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
                   TUNNEL_ACCESS_TOKEN: ${{ secrets.TUNNEL_ACCESS_TOKEN }}
               run: |
-                  ./do-deploy.sh moosicbox-tunnel-server
+                  ./do-deploy.sh moosicbox-tunnel-server kubernetes/tunnel-server

@@ -32,4 +32,4 @@ jobs:
                   TUNNEL_ACCESS_TOKEN: ${{ secrets.TUNNEL_ACCESS_TOKEN }}
                   STATIC_TOKEN: ${{ secrets.STATIC_TOKEN }}
               run: |
-                  ./do-deploy.sh moosicbox-server
+                  ./do-deploy.sh moosicbox-server kubernetes/server
