@@ -22,7 +22,7 @@ use moosicbox_downloader::{api::models::ApiProgressEvent, queue::ProgressEvent};
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 use moosicbox_player::{
     api::DEFAULT_PLAYBACK_RETRY_OPTIONS,
-    player::{PlayerSource, TrackOrId},
+    player::{Player as _, PlayerSource, TrackOrId},
 };
 use moosicbox_tunnel_sender::sender::TunnelSenderHandle;
 use moosicbox_ws::{send_download_event, WebsocketContext, WebsocketSendError};
@@ -459,8 +459,9 @@ fn main() -> std::io::Result<()> {
     })
 }
 
-static SERVER_PLAYER: Lazy<tokio::sync::RwLock<HashMap<i32, moosicbox_player::player::Player>>> =
-    Lazy::new(|| tokio::sync::RwLock::new(HashMap::new()));
+static SERVER_PLAYER: Lazy<
+    tokio::sync::RwLock<HashMap<i32, moosicbox_player::player::local::LocalPlayer>>,
+> = Lazy::new(|| tokio::sync::RwLock::new(HashMap::new()));
 
 fn handle_server_playback_update(
     update: &UpdateSession,
@@ -480,13 +481,14 @@ fn handle_server_playback_update(
                         lock.clone().expect("No database")
                     };
 
-                    let player = moosicbox_player::player::Player::new(PlayerSource::Local, None)
-                        .init_from_session(&**db, update.session_id)
-                        .await
-                        .unwrap_or_else(|err| {
-                            log::error!("Failed to create new player from session: {err:?}");
-                            moosicbox_player::player::Player::new(PlayerSource::Local, None)
-                        });
+                    let mut player = moosicbox_player::player::local::LocalPlayer::new(
+                        PlayerSource::Local,
+                        None,
+                    );
+
+                    if let Err(e) = player.init_from_session(&**db, update.session_id).await {
+                        log::error!("Failed to create new player from session: {e:?}");
+                    }
 
                     vac_entry.insert(player)
                 }

@@ -26,6 +26,7 @@ moosicbox_symphonia_player = { path = "../symphonia_player", default-features = 
 actix-cors        = { workspace = true }
 actix-files       = { workspace = true }
 actix-web         = { workspace = true }
+async-trait       = { workspace = true }
 atomic_float      = { workspace = true }
 awc               = { workspace = true }
 bytes             = { workspace = true }
@@ -48,6 +49,7 @@ url               = { workspace = true }
 [features]
 default = [
     "aac",
+    "local",
     "api",
     "cpal",
     "flac",
@@ -90,3 +92,5 @@ opus = [
     "moosicbox_core/opus",
     "moosicbox_symphonia_player/opus",
 ]
+
+local = []

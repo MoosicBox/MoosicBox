@@ -32,6 +32,7 @@ moosicbox_menu = { path = "../menu" }
 moosicbox_middleware = { path = "../middleware" }
 moosicbox_player = { path = "../player", default-features = false, features = [
     "api",
+    "local",
 ] }
 moosicbox_qobuz = { path = "../qobuz" }
 moosicbox_scan = { path = "../scan", default-features = false, features = [

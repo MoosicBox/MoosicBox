@@ -20,8 +20,8 @@ use serde::Deserialize;
 use crate::{
     get_track_or_ids_from_track_id_ranges,
     player::{
-        get_session_playlist_id_from_session_id, ApiPlaybackStatus, PlaybackRetryOptions,
-        PlaybackStatus, Player, PlayerError, PlayerSource,
+        get_session_playlist_id_from_session_id, local::LocalPlayer, ApiPlaybackStatus,
+        PlaybackRetryOptions, PlaybackStatus, Player as _, PlayerError, PlayerSource,
     },
 };
 
@@ -68,10 +68,10 @@ impl From<PlayerError> for actix_web::Error {
     }
 }
 
-static PLAYER_CACHE: Lazy<Arc<Mutex<HashMap<String, Player>>>> =
+static PLAYER_CACHE: Lazy<Arc<Mutex<HashMap<String, LocalPlayer>>>> =
     Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
-fn get_player(host: Option<&str>) -> Player {
+fn get_player(host: Option<&str>) -> LocalPlayer {
     PLAYER_CACHE
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -80,7 +80,7 @@ fn get_player(host: Option<&str>) -> Player {
             None => "local".into(),
         })
         .or_insert(if let Some(host) = host {
-            Player::new(
+            LocalPlayer::new(
                 PlayerSource::Remote {
                     host: host.to_string(),
                     query: None,
@@ -89,7 +89,7 @@ fn get_player(host: Option<&str>) -> Player {
                 Some(super::player::PlaybackType::Stream),
             )
         } else {
-            Player::new(PlayerSource::Local, None)
+            LocalPlayer::new(PlayerSource::Local, None)
         })
         .clone()
 }
