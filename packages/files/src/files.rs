@@ -1,7 +1,4 @@
-use actix_web::{
-    http::header::{CacheControl, CacheDirective},
-    HttpResponse,
-};
+use actix_web::HttpResponse;
 use thiserror::Error;
 
 pub mod album;
@@ -81,6 +78,7 @@ pub(crate) async fn resize_image_path(
             .await??
         };
 
+        use actix_web::http::header::{CacheControl, CacheDirective};
         let mut response = HttpResponse::Ok();
         response.insert_header(CacheControl(vec![CacheDirective::MaxAge(86400u32 * 14)]));
         response.content_type(format!("image/{image_type}"));
