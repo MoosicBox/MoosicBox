@@ -16,7 +16,7 @@ path              = "src/main.rs"
 required-features = ["build-binary"]
 
 [dependencies]
-moosicbox_assert = { workspace = true, default-features = false }
+moosicbox_assert = { path = "../assert", default-features = false }
 
 bytes = { workspace = true }
 clap = { workspace = true }

@@ -11,7 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { workspace = true, default-features = false }
+moosicbox_assert = { path = "../assert", default-features = false }
 
 # Base64 dependencies
 base64 = { workspace = true, optional = true }

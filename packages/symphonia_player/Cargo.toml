@@ -11,10 +11,10 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert       = { workspace = true, default-features = false }
-moosicbox_converter    = { workspace = true, default-features = false }
-moosicbox_env_utils    = { workspace = true }
-moosicbox_stream_utils = { workspace = true }
+moosicbox_assert       = { path = "../assert", default-features = false }
+moosicbox_converter    = { path = "../converter", default-features = false }
+moosicbox_env_utils    = { path = "../env_utils" }
+moosicbox_stream_utils = { path = "../stream_utils" }
 
 arrayvec                = { workspace = true }
 atomic_float            = { workspace = true }

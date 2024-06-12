@@ -11,7 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_env_utils = { workspace = true, default-features = false }
+moosicbox_env_utils = { path = "../env_utils", default-features = false }
 
 colored = { version = "2.1.0" }
 
