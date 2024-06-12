@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display, pin::Pin, time::Duration};
+use std::{collections::HashMap, fmt::Display, pin::Pin, sync::Arc, time::Duration};
 
 use flume::{unbounded, Receiver, SendError, Sender};
 use futures::Future;
@@ -15,20 +15,39 @@ pub enum ListenerError {
 }
 
 pub enum UpnpCommand {
-    Subscribe {
+    SubscribeMediaInfo {
+        interval: Duration,
         instance_id: u32,
-        action: SubscriptionAction,
+        udn: String,
+        service_id: String,
+        action: MediaInfoSubscriptionAction,
     },
-    Unsubscribe {
+    UnsubscribeMediaInfo {
         instance_id: u32,
+        udn: String,
+        service_id: String,
+    },
+    SubscribePositionInfo {
+        interval: Duration,
+        instance_id: u32,
+        udn: String,
+        service_id: String,
+        action: PositionInfoSubscriptionAction,
+    },
+    UnsubscribePositionInfo {
+        instance_id: u32,
+        udn: String,
+        service_id: String,
     },
 }
 
 impl Display for UpnpCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            UpnpCommand::Subscribe { .. } => f.write_str("Subscribe"),
-            UpnpCommand::Unsubscribe { .. } => f.write_str("Unsubscribe"),
+            UpnpCommand::SubscribeMediaInfo { .. } => f.write_str("SubscribeMediaInfo"),
+            UpnpCommand::UnsubscribeMediaInfo { .. } => f.write_str("UnsubscribeMediaInfo"),
+            UpnpCommand::SubscribePositionInfo { .. } => f.write_str("SubscribePositionInfo"),
+            UpnpCommand::UnsubscribePositionInfo { .. } => f.write_str("UnsubscribePositionInfo"),
         }
     }
 }
@@ -37,9 +56,9 @@ pub struct UpnpListener {
     sender: Sender<UpnpCommand>,
     receiver: Receiver<UpnpCommand>,
     #[allow(clippy::type_complexity)]
-    status_join_handles: HashMap<u32, JoinHandle<Result<(), ListenerError>>>,
+    status_join_handles: HashMap<String, JoinHandle<Result<(), ListenerError>>>,
     token: CancellationToken,
-    status_tokens: HashMap<u32, CancellationToken>,
+    status_tokens: HashMap<String, CancellationToken>,
 }
 
 impl UpnpListener {
@@ -86,16 +105,17 @@ impl UpnpListener {
 
     async fn subscribe(
         &mut self,
-        instance_id: u32,
+        interval: Duration,
+        key: String,
         action: SubscriptionAction,
     ) -> Result<(), ListenerError> {
         let token = self.token.clone();
         let status_token = CancellationToken::new();
-        self.status_tokens.insert(instance_id, status_token.clone());
+        self.status_tokens.insert(key.clone(), status_token.clone());
         self.status_join_handles.insert(
-            instance_id,
+            key.clone(),
             tokio::spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_millis(200));
+                let mut interval = tokio::time::interval(interval);
 
                 while tokio::select!(
                     () = token.cancelled() => {
@@ -103,7 +123,7 @@ impl UpnpListener {
                         Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "Cancelled"))
                     }
                     () = status_token.cancelled() => {
-                        log::debug!("Subscription was cancelled for instance_id={instance_id}");
+                        log::debug!("Subscription was cancelled for key={key}");
                         Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "Cancelled"))
                     }
                     _ = interval.tick() => { Ok(()) }
@@ -121,12 +141,17 @@ impl UpnpListener {
         Ok(())
     }
 
-    async fn unsubscribe(&mut self, instance_id: u32) -> Result<(), ListenerError> {
-        if let Some(token) = self.status_tokens.remove(&instance_id) {
+    async fn unsubscribe(&mut self, key: String) -> Result<(), ListenerError> {
+        log::debug!("Unsubscribing key={key}");
+        if let Some(token) = self.status_tokens.remove(&key) {
             token.cancel();
-            if let Some(handle) = self.status_join_handles.remove(&instance_id) {
+            if let Some(handle) = self.status_join_handles.remove(&key) {
                 handle.await??;
+            } else {
+                log::debug!("No status_join_handle with key={key}");
             }
+        } else {
+            log::debug!("No token with key={key}");
         }
 
         Ok(())
@@ -135,14 +160,109 @@ impl UpnpListener {
     async fn process_command(&mut self, command: UpnpCommand) -> Result<(), ListenerError> {
         log::debug!("process_command command={command}");
         match command {
-            UpnpCommand::Subscribe {
+            UpnpCommand::SubscribeMediaInfo {
+                interval,
                 instance_id,
+                udn,
+                service_id,
                 action,
             } => {
-                self.subscribe(instance_id, action).await?;
+                let action = Arc::new(action);
+                let key = format!("MediaInfo:{instance_id}:{udn}:{service_id}");
+                self.subscribe(
+                    interval,
+                    key,
+                    Box::new(move || {
+                        let action = action.clone();
+                        let udn = udn.clone();
+                        let service_id = service_id.clone();
+                        Box::pin(async move {
+                            if let Some(device) = super::get_device(&udn) {
+                                if let Some(service) = super::get_service(&udn, &service_id) {
+                                    match super::get_media_info(&service, device.url(), instance_id)
+                                        .await
+                                    {
+                                        Ok(info) => {
+                                            action(info).await;
+                                        }
+                                        Err(e) => {
+                                            log::error!("Failed to get_media_info: {e:?}");
+                                        }
+                                    }
+                                } else {
+                                    log::debug!(
+                                        "No service with device_udn={udn} service_id={service_id}"
+                                    );
+                                }
+                            } else {
+                                log::debug!("No device with udn={udn}");
+                            }
+                        })
+                    }),
+                )
+                .await?;
             }
-            UpnpCommand::Unsubscribe { instance_id } => {
-                self.unsubscribe(instance_id).await?;
+            UpnpCommand::UnsubscribeMediaInfo {
+                instance_id,
+                udn,
+                service_id,
+            } => {
+                let key = format!("MediaInfo:{instance_id}:{udn}:{service_id}");
+                self.unsubscribe(key).await?;
+            }
+            UpnpCommand::SubscribePositionInfo {
+                interval,
+                instance_id,
+                udn,
+                service_id,
+                action,
+            } => {
+                let action = Arc::new(action);
+                let key = format!("PositionInfo:{instance_id}:{udn}:{service_id}");
+                self.subscribe(
+                    interval,
+                    key,
+                    Box::new(move || {
+                        let action = action.clone();
+                        let udn = udn.clone();
+                        let service_id = service_id.clone();
+                        Box::pin(async move {
+                            if let Some(device) = super::get_device(&udn) {
+                                if let Some(service) = super::get_service(&udn, &service_id) {
+                                    match super::get_position_info(
+                                        &service,
+                                        device.url(),
+                                        instance_id,
+                                    )
+                                    .await
+                                    {
+                                        Ok(info) => {
+                                            action(info).await;
+                                        }
+                                        Err(e) => {
+                                            log::error!("Failed to get_position_info: {e:?}");
+                                        }
+                                    }
+                                } else {
+                                    log::debug!(
+                                        "No service with device_udn={udn} service_id={service_id}"
+                                    );
+                                }
+                            } else {
+                                log::debug!("No device with udn={udn}");
+                            }
+                        })
+                    }),
+                )
+                .await?;
+            }
+            UpnpCommand::UnsubscribePositionInfo {
+                instance_id,
+                udn,
+                service_id,
+            } => {
+                let key = format!("PositionInfo:{instance_id}:{udn}:{service_id}");
+                self.unsubscribe(key).await?;
             }
         }
 
@@ -156,16 +276,49 @@ impl Default for UpnpListener {
     }
 }
 
-pub type SubscriptionAction = Box<dyn (Fn() -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send>;
+type SubscriptionAction = Box<dyn (Fn() -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send>;
+pub type MediaInfoSubscriptionAction = Box<
+    dyn (Fn(HashMap<String, String>) -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync,
+>;
+pub type PositionInfoSubscriptionAction = Box<
+    dyn (Fn(HashMap<String, String>) -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync,
+>;
 
 pub trait UpnpCommander {
     type Error;
 
-    fn subscribe(&self, instance_id: u32, func: SubscriptionAction) -> Result<(), Self::Error>;
-    fn unsubscribe(&self, instance_id: u32) -> Result<(), Self::Error>;
+    fn subscribe_media_info(
+        &self,
+        interval: Duration,
+        instance_id: u32,
+        udn: String,
+        service_id: String,
+        action: MediaInfoSubscriptionAction,
+    ) -> Result<(), Self::Error>;
+    fn unsubscribe_media_info(
+        &self,
+        instance_id: u32,
+        udn: String,
+        service_id: String,
+    ) -> Result<(), Self::Error>;
+    fn subscribe_position_info(
+        &self,
+        interval: Duration,
+        instance_id: u32,
+        udn: String,
+        service_id: String,
+        func: PositionInfoSubscriptionAction,
+    ) -> Result<(), Self::Error>;
+    fn unsubscribe_position_info(
+        &self,
+        instance_id: u32,
+        udn: String,
+        service_id: String,
+    ) -> Result<(), Self::Error>;
     fn shutdown(&self) -> Result<(), Self::Error>;
 }
 
+#[derive(Clone)]
 pub struct UpnpListenerHandle {
     sender: Sender<UpnpCommand>,
     token: CancellationToken,
@@ -174,15 +327,64 @@ pub struct UpnpListenerHandle {
 impl UpnpCommander for UpnpListener {
     type Error = SendError<UpnpCommand>;
 
-    fn subscribe(&self, instance_id: u32, action: SubscriptionAction) -> Result<(), Self::Error> {
-        self.sender.send(UpnpCommand::Subscribe {
+    fn subscribe_media_info(
+        &self,
+        interval: Duration,
+        instance_id: u32,
+        udn: String,
+        service_id: String,
+        action: MediaInfoSubscriptionAction,
+    ) -> Result<(), Self::Error> {
+        self.sender.send(UpnpCommand::SubscribeMediaInfo {
+            interval,
             instance_id,
+            udn,
+            service_id,
             action,
         })
     }
 
-    fn unsubscribe(&self, instance_id: u32) -> Result<(), Self::Error> {
-        self.sender.send(UpnpCommand::Unsubscribe { instance_id })
+    fn unsubscribe_media_info(
+        &self,
+        instance_id: u32,
+        udn: String,
+        service_id: String,
+    ) -> Result<(), Self::Error> {
+        self.sender.send(UpnpCommand::UnsubscribeMediaInfo {
+            instance_id,
+            udn,
+            service_id,
+        })
+    }
+
+    fn subscribe_position_info(
+        &self,
+        interval: Duration,
+        instance_id: u32,
+        udn: String,
+        service_id: String,
+        action: PositionInfoSubscriptionAction,
+    ) -> Result<(), Self::Error> {
+        self.sender.send(UpnpCommand::SubscribePositionInfo {
+            interval,
+            instance_id,
+            udn,
+            service_id,
+            action,
+        })
+    }
+
+    fn unsubscribe_position_info(
+        &self,
+        instance_id: u32,
+        udn: String,
+        service_id: String,
+    ) -> Result<(), Self::Error> {
+        self.sender.send(UpnpCommand::UnsubscribePositionInfo {
+            instance_id,
+            udn,
+            service_id,
+        })
     }
 
     fn shutdown(&self) -> Result<(), Self::Error> {
@@ -195,15 +397,64 @@ impl UpnpCommander for UpnpListener {
 impl UpnpCommander for UpnpListenerHandle {
     type Error = SendError<UpnpCommand>;
 
-    fn subscribe(&self, instance_id: u32, action: SubscriptionAction) -> Result<(), Self::Error> {
-        self.sender.send(UpnpCommand::Subscribe {
+    fn subscribe_media_info(
+        &self,
+        interval: Duration,
+        instance_id: u32,
+        udn: String,
+        service_id: String,
+        action: MediaInfoSubscriptionAction,
+    ) -> Result<(), Self::Error> {
+        self.sender.send(UpnpCommand::SubscribeMediaInfo {
+            interval,
             instance_id,
+            udn,
+            service_id,
             action,
         })
     }
 
-    fn unsubscribe(&self, instance_id: u32) -> Result<(), Self::Error> {
-        self.sender.send(UpnpCommand::Unsubscribe { instance_id })
+    fn unsubscribe_media_info(
+        &self,
+        instance_id: u32,
+        udn: String,
+        service_id: String,
+    ) -> Result<(), Self::Error> {
+        self.sender.send(UpnpCommand::UnsubscribeMediaInfo {
+            instance_id,
+            udn,
+            service_id,
+        })
+    }
+
+    fn subscribe_position_info(
+        &self,
+        interval: Duration,
+        instance_id: u32,
+        udn: String,
+        service_id: String,
+        action: PositionInfoSubscriptionAction,
+    ) -> Result<(), Self::Error> {
+        self.sender.send(UpnpCommand::SubscribePositionInfo {
+            interval,
+            instance_id,
+            udn,
+            service_id,
+            action,
+        })
+    }
+
+    fn unsubscribe_position_info(
+        &self,
+        instance_id: u32,
+        udn: String,
+        service_id: String,
+    ) -> Result<(), Self::Error> {
+        self.sender.send(UpnpCommand::UnsubscribePositionInfo {
+            instance_id,
+            udn,
+            service_id,
+        })
     }
 
     fn shutdown(&self) -> Result<(), Self::Error> {
