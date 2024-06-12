@@ -25,7 +25,6 @@ use moosicbox_player::{
     player::{PlayerSource, TrackOrId},
 };
 use moosicbox_tunnel_sender::sender::TunnelSenderHandle;
-use moosicbox_upnp::listener::UpnpCommander;
 use moosicbox_ws::{send_download_event, WebsocketContext, WebsocketSendError};
 use once_cell::sync::Lazy;
 use std::{
@@ -222,8 +221,11 @@ fn main() -> std::io::Result<()> {
             log::debug!("Registered server player");
         }
 
+        #[cfg(feature = "upnp")]
         let upnp_service = moosicbox_upnp::listener::UpnpListener::new();
+        #[cfg(feature = "upnp")]
         let upnp_service_handle = upnp_service.handle();
+        #[cfg(feature = "upnp")]
         let join_upnp_service = upnp_service.start();
 
         let app = move || {
@@ -406,9 +408,14 @@ fn main() -> std::io::Result<()> {
                         }
                     });
 
-                log::debug!("Shutting down UpnpListener...");
-                if let Err(e) = upnp_service_handle.shutdown() {
-                    log::error!("Failed to shut down UpnpListener: {e:?}");
+                #[cfg(feature = "upnp")]
+                {
+                    use moosicbox_upnp::listener::UpnpCommander as _;
+
+                    log::debug!("Shutting down UpnpListener...");
+                    if let Err(e) = upnp_service_handle.shutdown() {
+                        log::error!("Failed to shut down UpnpListener: {e:?}");
+                    }
                 }
 
                 log::trace!("Connections closed");
@@ -429,12 +436,17 @@ fn main() -> std::io::Result<()> {
                 resp
             },
             async move {
-                let resp = join_upnp_service
-                    .await
-                    .expect("Failed to shut down UPnP service")
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
-                log::debug!("UPnP service closed");
-                resp
+                #[cfg(feature = "upnp")]
+                {
+                    let resp = join_upnp_service
+                        .await
+                        .expect("Failed to shut down UPnP service")
+                        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
+                    log::debug!("UPnP service closed");
+                    resp
+                }
+                #[cfg(not(feature = "upnp"))]
+                Ok(())
             },
         ) {
             log::error!("Error on shutdown: {err:?}");
