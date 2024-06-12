@@ -719,9 +719,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-apigatewaymanagement"
-version = "1.29.0"
+version = "1.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "873ae19eb2589c8a700861bc6a3ac8bf05e80b5fd65976bcd8b75708eee50280"
+checksum = "4dfff38355c966e11343d721e91c272584e40a2b0749b7ffb567667f79aa71f4"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -741,9 +741,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ssm"
-version = "1.32.0"
+version = "1.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3fedca2f09194f7dddbc8a5ac13d926bb38ae421956a63c6454d57e245cd739"
+checksum = "bf55d016eb29d9a8c4bf0a8e480e2e1a4bb0ceffed3ba6a80ff014aa4302e155"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -764,9 +764,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-sso"
-version = "1.29.0"
+version = "1.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da75cf91cbb46686a27436d639a720a3a198b148efa76dc2467b7e5374a67fc0"
+checksum = "ebb97e44983752cf7e12968c5f569a5d7562dbbc67006755c331d9d9c99580ae"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -786,9 +786,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ssooidc"
-version = "1.30.0"
+version = "1.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf2ec8a6687299685ed0a4a3137c129cdb132b5235bc3aa3443f6cffe468b9ff"
+checksum = "ad061d977235898e4a97ecbd5d882786cca41b4828943584dc792dcc35eb3d3c"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -808,9 +808,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-sts"
-version = "1.29.0"
+version = "1.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "458f1031e094b1411b59b49b19e4118f069e1fe13a9c5b8888e933daaf7ffdd6"
+checksum = "300ce43d1f7f4eb023e57d38b0921d964e8e62bed7f82f6b7849e7eab7a14575"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -831,9 +831,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sigv4"
-version = "1.2.1"
+version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58b56f1cbe6fd4d0c2573df72868f20ab1c125ca9c9dbce17927a463433a2e57"
+checksum = "31eed8d45759b2c5fe7fd304dd70739060e9e0de509209036eabea14d0720cce"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-http",
@@ -1910,9 +1910,9 @@ dependencies = [
 
 [[package]]
 name = "fs4"
-version = "0.8.3"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73969b81e8bc90a3828d913dd3973d80771bfb9d7fbe1a78a79122aad456af15"
+checksum = "f7e180ac76c23b45e767bd7ae9579bc0bb458618c4bc71835926e098e61d15f8"
 dependencies = [
  "rustix",
  "windows-sys 0.52.0",
