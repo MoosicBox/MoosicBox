@@ -206,6 +206,20 @@ pub async fn get_transport_info(
         .await?)
 }
 
+pub async fn get_position_info(
+    service: &Service,
+    url: &Uri,
+    instance_id: u32,
+) -> Result<HashMap<String, String>, ScanError> {
+    Ok(service
+        .action(
+            url,
+            "GetPositionInfo",
+            &format!("<InstanceID>{instance_id}</InstanceID>"),
+        )
+        .await?)
+}
+
 pub async fn get_media_info(
     service: &Service,
     url: &Uri,
