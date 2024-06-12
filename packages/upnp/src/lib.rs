@@ -234,6 +234,19 @@ pub async fn get_media_info(
         .await?)
 }
 
+pub async fn subscribe_events(
+    service: &Service,
+    url: &Uri,
+) -> Result<
+    (
+        String,
+        impl Stream<Item = Result<HashMap<String, String>, rupnp::Error>>,
+    ),
+    ScanError,
+> {
+    Ok(service.subscribe(url, 300).await?)
+}
+
 pub async fn play(
     service: &Service,
     url: &Uri,
