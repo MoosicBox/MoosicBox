@@ -11,26 +11,26 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { path = "../assert", default-features = false }
-moosicbox_config = { path = "../config" }
-moosicbox_core = { path = "../core", default-features = false }
-moosicbox_database = { path = "../database", default-features = false, features = [
+moosicbox_assert = { workspace = true, default-features = false }
+moosicbox_config = { workspace = true }
+moosicbox_core = { workspace = true, default-features = false }
+moosicbox_database = { workspace = true, default-features = false, features = [
     "rusqlite",
 ] }
-moosicbox_files = { path = "../files", default-features = false }
-moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
+moosicbox_files = { workspace = true, default-features = false }
+moosicbox_json_utils = { workspace = true, default-features = false, features = [
     "serde_json",
 ] }
-moosicbox_search = { path = "../search" }
+moosicbox_search = { workspace = true }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
 
 # Qobuz Dependencies
-moosicbox_qobuz = { path = "../qobuz", optional = true }
+moosicbox_qobuz = { workspace = true, optional = true }
 
 # Tidal Dependencies
-moosicbox_tidal = { path = "../tidal", optional = true }
+moosicbox_tidal = { workspace = true, optional = true }
 
 # Local Dependencies
 audiotags    = { workspace = true, optional = true }

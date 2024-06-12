@@ -11,12 +11,12 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { path = "../assert", default-features = false }
-moosicbox_config = { path = "../config" }
-moosicbox_database = { path = "../database", default-features = false, features = [
+moosicbox_assert = { workspace = true, default-features = false }
+moosicbox_config = { workspace = true }
+moosicbox_database = { workspace = true, default-features = false, features = [
     "rusqlite",
 ] }
-moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
+moosicbox_json_utils = { workspace = true, default-features = false, features = [
     "tantivy",
 ] }
 
@@ -26,7 +26,7 @@ serde      = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 
 # DB Dependencies
-moosicbox_core = { path = "../core", optional = true, default-features = false }
+moosicbox_core = { workspace = true, optional = true, default-features = false }
 
 itertools = { workspace = true }
 log       = { workspace = true }
@@ -36,7 +36,7 @@ tantivy   = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-moosicbox_config = { path = "../config", features = ["test"] }
+moosicbox_config = { workspace = true, features = ["test"] }
 
 pretty_assertions = { workspace = true }
 serial_test       = { workspace = true }

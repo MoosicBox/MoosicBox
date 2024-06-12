@@ -57,6 +57,37 @@ panic    = "abort"
 edition = "2021"
 
 [workspace.dependencies]
+moosicbox_aconverter       = { path = "packages/aconverter", default-features = false }
+moosicbox_assert           = { path = "packages/assert", default-features = false }
+moosicbox_auth             = { path = "packages/auth", default-features = false }
+moosicbox_config           = { path = "packages/config", default-features = false }
+moosicbox_converter        = { path = "packages/converter", default-features = false }
+moosicbox_core             = { path = "packages/core", default-features = false }
+moosicbox_database         = { path = "packages/database", default-features = false }
+moosicbox_downloader       = { path = "packages/downloader", default-features = false }
+moosicbox_env_utils        = { path = "packages/env_utils", default-features = false }
+moosicbox_files            = { path = "packages/files", default-features = false }
+moosicbox_image            = { path = "packages/image", default-features = false }
+moosicbox_json_utils       = { path = "packages/json_utils", default-features = false }
+moosicbox_menu             = { path = "packages/menu", default-features = false }
+moosicbox_middleware       = { path = "packages/middleware", default-features = false }
+moosicbox_moosicbox        = { path = "packages/moosicbox", default-features = false }
+moosicbox_music_api        = { path = "packages/music_api", default-features = false }
+moosicbox_paging           = { path = "packages/paging", default-features = false }
+moosicbox_player           = { path = "packages/player", default-features = false }
+moosicbox_qobuz            = { path = "packages/qobuz", default-features = false }
+moosicbox_scan             = { path = "packages/scan", default-features = false }
+moosicbox_search           = { path = "packages/search", default-features = false }
+moosicbox_server           = { path = "packages/server", default-features = false }
+moosicbox_stream_utils     = { path = "packages/stream_utils", default-features = false }
+moosicbox_symphonia_player = { path = "packages/symphonia_player", default-features = false }
+moosicbox_tidal            = { path = "packages/tidal", default-features = false }
+moosicbox_tunnel           = { path = "packages/tunnel", default-features = false }
+moosicbox_tunnel_sender    = { path = "packages/tunnel_sender", default-features = false }
+moosicbox_tunnel_server    = { path = "packages/tunnel_server", default-features = false }
+moosicbox_upnp             = { path = "packages/upnp", default-features = false }
+moosicbox_ws               = { path = "packages/ws", default-features = false }
+
 actix = "0.13.5"
 actix-cors = "0.7.0"
 actix-files = "0.6.6"
