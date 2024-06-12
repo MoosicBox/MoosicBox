@@ -192,6 +192,20 @@ pub async fn set_av_transport_uri(
         .await?)
 }
 
+pub async fn get_transport_info(
+    service: &Service,
+    url: &Uri,
+    instance_id: u32,
+) -> Result<HashMap<String, String>, ScanError> {
+    Ok(service
+        .action(
+            url,
+            "GetTransportInfo",
+            &format!("<InstanceID>{instance_id}</InstanceID>"),
+        )
+        .await?)
+}
+
 pub async fn get_media_info(
     service: &Service,
     url: &Uri,
