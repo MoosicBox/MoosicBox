@@ -11,9 +11,92 @@ use async_recursion::async_recursion;
 use futures::prelude::*;
 use models::{UpnpDevice, UpnpService};
 use once_cell::sync::Lazy;
-use rupnp::{http::Uri, ssdp::SearchTarget, DeviceSpec, Service};
+pub use rupnp::{http::Uri, ssdp::SearchTarget, Device, DeviceSpec, Service};
 use std::{collections::HashMap, time::Duration};
 use thiserror::Error;
+
+mod cache {
+    use std::{collections::HashMap, sync::RwLock};
+
+    use once_cell::sync::Lazy;
+    use rupnp::{Device, Service};
+
+    #[derive(Debug, Clone)]
+    struct DeviceMapping {
+        device: Device,
+        services: HashMap<String, Service>,
+    }
+
+    static DEVICE_MAPPINGS: Lazy<RwLock<HashMap<String, DeviceMapping>>> =
+        Lazy::new(|| RwLock::new(HashMap::new()));
+
+    pub(crate) fn get_device(udn: &str) -> Option<Device> {
+        DEVICE_MAPPINGS
+            .read()
+            .unwrap()
+            .get(udn)
+            .map(|x| x.device.clone())
+    }
+
+    pub(crate) fn insert_device(device: Device) {
+        DEVICE_MAPPINGS.write().unwrap().insert(
+            device.udn().to_owned(),
+            DeviceMapping {
+                device,
+                services: HashMap::new(),
+            },
+        );
+    }
+
+    pub(crate) fn get_service(device_udn: &str, service_id: &str) -> Option<Service> {
+        DEVICE_MAPPINGS
+            .read()
+            .unwrap()
+            .get(device_udn)
+            .and_then(|x| x.services.get(service_id))
+            .cloned()
+    }
+
+    pub(crate) fn get_device_and_service(
+        device_udn: &str,
+        service_id: &str,
+    ) -> Option<(Device, Service)> {
+        DEVICE_MAPPINGS
+            .read()
+            .unwrap()
+            .get(device_udn)
+            .and_then(|x| {
+                x.services
+                    .get(service_id)
+                    .map(|s| (x.device.clone(), s.clone()))
+            })
+    }
+
+    pub(crate) fn insert_service(device_udn: &str, service: Service) {
+        if let Some(device_mapping) = DEVICE_MAPPINGS
+            .write()
+            .as_mut()
+            .unwrap()
+            .get_mut(device_udn)
+        {
+            device_mapping
+                .services
+                .insert(service.service_id().to_owned(), service.clone());
+        }
+    }
+}
+
+pub fn get_device(udn: &str) -> Option<Device> {
+    cache::get_device(udn)
+}
+
+pub fn get_service(device_udn: &str, service_id: &str) -> Option<Service> {
+    cache::get_service(device_udn, service_id)
+}
+
+pub fn get_device_and_service(device_udn: &str, service_id: &str) -> Option<(Device, Service)> {
+    cache::get_device_and_service(device_udn, service_id)
+}
 
 #[derive(Debug, Error)]
 pub enum ScanError {
@@ -213,6 +296,7 @@ pub async fn scan_device(
     } else {
         let path = format!("{path}\t");
         for service in services {
+            cache::insert_service(device.udn(), service.clone());
             upnp_services.push(scan_service(url, service, Some(&path)).await?);
         }
     }
@@ -226,6 +310,7 @@ pub async fn scan_device(
     } else {
         let path = format!("{path}\t");
         for sub in sub_devices {
+            // FIXME: should somehow insert sub-devices into the cache
             upnp_devices.extend_from_slice(&scan_device(None, sub, Some(&path)).await?);
         }
     }
@@ -241,6 +326,7 @@ pub async fn scan_devices() -> Result<Vec<UpnpDevice>, ScanError> {
     let mut upnp_devices = vec![];
 
     while let Some(device) = devices.try_next().await? {
+        cache::insert_device(device.clone());
         upnp_devices.extend_from_slice(&scan_device(Some(device.url()), &device, None).await?);
     }
 
