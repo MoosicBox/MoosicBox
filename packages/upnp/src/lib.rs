@@ -220,6 +220,37 @@ pub async fn get_position_info(
         .await?)
 }
 
+pub async fn get_volume(
+    service: &Service,
+    url: &Uri,
+    instance_id: u32,
+    channel: &str,
+) -> Result<HashMap<String, String>, ScanError> {
+    Ok(service
+        .action(
+            url,
+            "GetVolume",
+            &format!("<InstanceID>{instance_id}</InstanceID><Channel>{channel}</Channel>"),
+        )
+        .await?)
+}
+
+pub async fn set_volume(
+    service: &Service,
+    url: &Uri,
+    instance_id: u32,
+    channel: &str,
+    volume: u8,
+) -> Result<HashMap<String, String>, ScanError> {
+    Ok(service
+        .action(
+            url,
+            "SetVolume",
+            &format!("<InstanceID>{instance_id}</InstanceID><Channel>{channel}</Channel><DesiredVolume>{volume}</DesiredVolume>"),
+        )
+        .await?)
+}
+
 pub async fn get_media_info(
     service: &Service,
     url: &Uri,
