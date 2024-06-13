@@ -387,6 +387,20 @@ pub async fn play(
         .await?)
 }
 
+pub async fn pause(
+    service: &Service,
+    url: &Uri,
+    instance_id: u32,
+) -> Result<HashMap<String, String>, ScanError> {
+    Ok(service
+        .action(
+            url,
+            "Pause",
+            &format!("<InstanceID>{instance_id}</InstanceID>"),
+        )
+        .await?)
+}
+
 pub async fn scan_service(
     url: Option<&Uri>,
     service: &Service,
