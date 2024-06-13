@@ -175,7 +175,13 @@ impl AudioOutput for AacEncoder {
         if let Some(writer) = self.writer.as_mut() {
             let mut count = 0;
             loop {
-                count += writer.write(&bytes[count..]).unwrap();
+                count += match writer.write(&bytes[count..]) {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        log::error!("Failed to write: {e:?}");
+                        break;
+                    }
+                };
                 if count >= bytes.len() {
                     break;
                 }
