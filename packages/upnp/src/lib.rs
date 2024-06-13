@@ -27,8 +27,19 @@ mod cache {
         services: HashMap<String, Service>,
     }
 
+    static DEVICE_URL_MAPPINGS: Lazy<RwLock<HashMap<String, DeviceMapping>>> =
+        Lazy::new(|| RwLock::new(HashMap::new()));
+
     static DEVICE_MAPPINGS: Lazy<RwLock<HashMap<String, DeviceMapping>>> =
         Lazy::new(|| RwLock::new(HashMap::new()));
+
+    pub(crate) fn get_device_from_url(url: &str) -> Option<Device> {
+        DEVICE_URL_MAPPINGS
+            .read()
+            .unwrap()
+            .get(url)
+            .map(|x| x.device.clone())
+    }
 
     pub(crate) fn get_device(udn: &str) -> Option<Device> {
         DEVICE_MAPPINGS
@@ -39,6 +50,13 @@ mod cache {
     }
 
     pub(crate) fn insert_device(device: Device) {
+        DEVICE_URL_MAPPINGS.write().unwrap().insert(
+            device.url().to_string(),
+            DeviceMapping {
+                device: device.clone(),
+                services: HashMap::new(),
+            },
+        );
         DEVICE_MAPPINGS.write().unwrap().insert(
             device.udn().to_owned(),
             DeviceMapping {
@@ -72,12 +90,37 @@ mod cache {
             })
     }
 
-    pub(crate) fn insert_service(device_udn: &str, service: Service) {
+    pub(crate) fn get_device_and_service_from_url(
+        device_url: &str,
+        service_id: &str,
+    ) -> Option<(Device, Service)> {
+        DEVICE_URL_MAPPINGS
+            .read()
+            .unwrap()
+            .get(device_url)
+            .and_then(|x| {
+                x.services
+                    .get(service_id)
+                    .map(|s| (x.device.clone(), s.clone()))
+            })
+    }
+
+    pub(crate) fn insert_service(device: &Device, service: Service) {
+        if let Some(device_mapping) = DEVICE_URL_MAPPINGS
+            .write()
+            .as_mut()
+            .unwrap()
+            .get_mut(device.url().to_string().as_str())
+        {
+            device_mapping
+                .services
+                .insert(service.service_id().to_owned(), service.clone());
+        }
         if let Some(device_mapping) = DEVICE_MAPPINGS
             .write()
             .as_mut()
             .unwrap()
-            .get_mut(device_udn)
+            .get_mut(device.udn())
         {
             device_mapping
                 .services
@@ -96,6 +139,17 @@ pub fn get_service(device_udn: &str, service_id: &str) -> Option<Service> {
 
 pub fn get_device_and_service(device_udn: &str, service_id: &str) -> Option<(Device, Service)> {
     cache::get_device_and_service(device_udn, service_id)
+}
+
+pub fn get_device_from_url(url: &str) -> Option<Device> {
+    cache::get_device_from_url(url)
+}
+
+pub fn get_device_and_service_from_url(
+    device_url: &str,
+    service_id: &str,
+) -> Option<(Device, Service)> {
+    cache::get_device_and_service_from_url(device_url, service_id)
 }
 
 #[derive(Debug, Error)]
@@ -325,8 +379,8 @@ pub async fn scan_service(
 
 #[async_recursion]
 pub async fn scan_device(
-    url: Option<&Uri>,
-    device: &DeviceSpec,
+    device: Option<Device>,
+    spec: &DeviceSpec,
     path: Option<&str>,
 ) -> Result<Vec<UpnpDevice>, ScanError> {
     let path = path.unwrap_or_default();
@@ -345,40 +399,43 @@ pub async fn scan_device(
         {path}udn={}\n\t\
         {path}upc={}\
         ",
-        device.friendly_name(),
-        url,
-        device.manufacturer(),
-        device.manufacturer_url().unwrap_or("N/A"),
-        device.model_name(),
-        device.model_description().unwrap_or("N/A"),
-        device.model_number().unwrap_or("N/A"),
-        device.model_url().unwrap_or("N/A"),
-        device.serial_number().unwrap_or("N/A"),
-        device.udn(),
-        device.upc().unwrap_or("N/A"),
+        spec.friendly_name(),
+        device.as_ref().map(|x| x.url()),
+        spec.manufacturer(),
+        spec.manufacturer_url().unwrap_or("N/A"),
+        spec.model_name(),
+        spec.model_description().unwrap_or("N/A"),
+        spec.model_number().unwrap_or("N/A"),
+        spec.model_url().unwrap_or("N/A"),
+        spec.serial_number().unwrap_or("N/A"),
+        spec.udn(),
+        spec.upc().unwrap_or("N/A"),
     );
 
-    let upnp_device: UpnpDevice = device.into();
+    let upnp_device: UpnpDevice = spec.into();
     let mut upnp_services = vec![];
 
-    let services = device.services();
+    let services = spec.services();
 
     if services.is_empty() {
-        log::debug!("no services for {}", device.friendly_name());
+        log::debug!("no services for {}", spec.friendly_name());
     } else {
         let path = format!("{path}\t");
         for service in services {
-            cache::insert_service(device.udn(), service.clone());
-            upnp_services.push(scan_service(url, service, Some(&path)).await?);
+            if let Some(device) = &device {
+                cache::insert_service(device, service.clone());
+            }
+            upnp_services
+                .push(scan_service(device.as_ref().map(|x| x.url()), service, Some(&path)).await?);
         }
     }
 
     let mut upnp_devices = vec![upnp_device.with_services(upnp_services)];
 
-    let sub_devices = device.devices();
+    let sub_devices = spec.devices();
 
     if sub_devices.is_empty() {
-        log::debug!("no sub-devices for {}", device.friendly_name());
+        log::debug!("no sub-devices for {}", spec.friendly_name());
     } else {
         let path = format!("{path}\t");
         for sub in sub_devices {
@@ -399,7 +456,8 @@ pub async fn scan_devices() -> Result<Vec<UpnpDevice>, ScanError> {
 
     while let Some(device) = devices.try_next().await? {
         cache::insert_device(device.clone());
-        upnp_devices.extend_from_slice(&scan_device(Some(device.url()), &device, None).await?);
+        let spec: &DeviceSpec = &device;
+        upnp_devices.extend_from_slice(&scan_device(Some(device.clone()), spec, None).await?);
     }
 
     if upnp_devices.is_empty() {
