@@ -290,6 +290,30 @@ pub async fn get_position_info(
         .await?)
 }
 
+pub async fn seek(
+    service: &Service,
+    url: &Uri,
+    instance_id: u32,
+    unit: &str,
+    target: u32,
+) -> Result<HashMap<String, String>, ScanError> {
+    let target_str = duration_to_string(target);
+
+    Ok(service
+        .action(
+            url,
+            "Seek",
+            &format!(
+                r###"
+                <InstanceID>{instance_id}</InstanceID>
+                <Unit>{unit}</Unit>
+                <Target>{target_str}</Target>
+                "###
+            ),
+        )
+        .await?)
+}
+
 pub async fn get_volume(
     service: &Service,
     url: &Uri,
