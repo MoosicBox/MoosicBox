@@ -162,6 +162,15 @@ pub enum ScanError {
     Rupnp(#[from] rupnp::Error),
 }
 
+fn duration_to_string(duration: u32) -> String {
+    format!(
+        "{:0>2}:{:0>2}:{:0>2}",
+        (duration / 60) / 60,
+        (duration / 60) % 60,
+        duration % 60
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn set_av_transport_uri(
     service: &Service,
@@ -174,6 +183,8 @@ pub async fn set_av_transport_uri(
     artist: Option<&str>,
     album: Option<&str>,
     original_track_number: Option<u32>,
+    duration: Option<u32>,
+    size: Option<u64>,
 ) -> Result<HashMap<String, String>, ScanError> {
     let headers = "*";
 
@@ -193,7 +204,7 @@ pub async fn set_av_transport_uri(
                 {artist}
                 {album}
                 {original_track_number}
-                <res protocolInfo="http-get:*:audio/{format}:{headers}">{transport_uri}</res>
+                <res{duration}{size} protocolInfo="http-get:*:audio/{format}:{headers}">{transport_uri}</res>
             </item>
         </DIDL-Lite>
         "###,
@@ -206,6 +217,11 @@ pub async fn set_av_transport_uri(
         original_track_number = original_track_number.map_or("".to_string(), |x| format!(
             "<upnp:originalTrackNumber>{x}</upnp:originalTrackNumber>"
         )),
+        duration = duration.map_or("".to_string(), |x| format!(
+            " duration=\"{}\"",
+            duration_to_string(x)
+        )),
+        size = size.map_or("".to_string(), |x| format!(" size=\"{x}\"",)),
     );
 
     static BRACKET_WHITESPACE: Lazy<regex::Regex> =
