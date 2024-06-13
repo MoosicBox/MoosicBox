@@ -335,7 +335,16 @@ fn main() -> std::io::Result<()> {
 
             #[cfg(feature = "upnp")]
             {
-                app = app.service(moosicbox_upnp::api::scan_devices_endpoint);
+                app = app
+                    .service(moosicbox_upnp::api::scan_devices_endpoint)
+                    .service(moosicbox_upnp::api::get_transport_info_endpoint)
+                    .service(moosicbox_upnp::api::get_media_info_endpoint)
+                    .service(moosicbox_upnp::api::get_position_info_endpoint)
+                    .service(moosicbox_upnp::api::get_volume_endpoint)
+                    .service(moosicbox_upnp::api::set_volume_endpoint)
+                    .service(moosicbox_upnp::api::pause_endpoint)
+                    .service(moosicbox_upnp::api::play_endpoint)
+                    .service(moosicbox_upnp::api::seek_endpoint);
             }
 
             app
