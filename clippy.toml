@@ -12,6 +12,7 @@ allowed-duplicate-crates = [
     "http-body",
     "hyper",
     "hyper-rustls",
+    "itertools",
     "num-derive",
     "regex-automata",
     "regex-syntax",
