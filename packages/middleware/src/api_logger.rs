@@ -81,12 +81,24 @@ where
             let duration = std::time::Instant::now().duration_since(start).as_millis();
             match response {
                 Ok(data) => {
-                    log::trace!("{prefix} FINISHED SUCCESS ({duration} ms)");
+                    let status = data.response().status();
+                    if status.is_success() {
+                        log::trace!("{prefix} FINISHED SUCCESS {status} ({duration} ms)");
+                    } else {
+                        let e = data.response().error();
+                        if status.is_server_error() {
+                            moosicbox_assert::die_or_error!(
+                                "{prefix} FINISHED FAILURE ({duration} ms): {e:?}"
+                            );
+                        } else {
+                            log::error!("{prefix} FINISHED FAILURE ({duration} ms): {e:?}");
+                        }
+                    }
                     Ok(data)
                 }
                 Err(e) => {
                     moosicbox_assert::die_or_error!(
-                        "{prefix} FINISHED FAILURE ({duration} ms): {e:?}"
+                        "{prefix} FINISHED ERROR ({duration} ms): {e:?}"
                     );
                     Err(e)
                 }
