@@ -1,4 +1,7 @@
-use actix_web::dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform};
+use actix_web::{
+    dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
+    http::header,
+};
 use futures_util::{future::LocalBoxFuture, FutureExt};
 use std::future::{ready, Ready};
 
@@ -55,8 +58,14 @@ where
     forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
+        const RELEVANT_HEADER_NAMES: [header::HeaderName; 1] = [header::RANGE];
+        let relevant_headers = req
+            .headers()
+            .iter()
+            .filter(|(name, _)| RELEVANT_HEADER_NAMES.iter().any(|x| x == name))
+            .collect::<Vec<_>>();
         let prefix = format!(
-            "{method} {path}{query}",
+            "{method} {path}{query} headers={headers:?}",
             method = req.method(),
             path = req.path(),
             query = if req.query_string().is_empty() {
@@ -64,6 +73,7 @@ where
             } else {
                 format!("?{}", req.query_string())
             },
+            headers = relevant_headers,
         );
         let start = std::time::Instant::now();
         log::trace!("{prefix} STARTED");
