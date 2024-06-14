@@ -158,7 +158,9 @@ impl AsId for StringId {
     }
 }
 
-#[derive(Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(
+    Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, Eq, PartialEq, Clone, Copy,
+)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum TrackApiSource {
@@ -1113,7 +1115,7 @@ impl ToApi<ApiUpdateSession> for UpdateSession {
     }
 }
 
-#[derive(Copy, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone)]
+#[derive(Copy, Debug, Serialize, Deserialize, EnumString, AsRefStr, Eq, PartialEq, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum ApiSource {
