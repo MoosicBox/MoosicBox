@@ -82,16 +82,18 @@ where
             match response {
                 Ok(data) => {
                     let status = data.response().status();
-                    if status.is_success() {
-                        log::trace!("{prefix} FINISHED SUCCESS {status} ({duration} ms)");
+                    if status.is_success() || status.is_redirection() || status.is_informational() {
+                        log::trace!("{prefix} FINISHED SUCCESS \"{status}\" ({duration} ms)");
                     } else {
                         let e = data.response().error();
                         if status.is_server_error() {
                             moosicbox_assert::die_or_error!(
-                                "{prefix} FINISHED FAILURE ({duration} ms): {e:?}"
+                                "{prefix} FINISHED FAILURE \"{status}\" ({duration} ms): {e:?}"
                             );
                         } else {
-                            log::error!("{prefix} FINISHED FAILURE ({duration} ms): {e:?}");
+                            log::error!(
+                                "{prefix} FINISHED FAILURE \"{status}\" ({duration} ms): {e:?}"
+                            );
                         }
                     }
                     Ok(data)
