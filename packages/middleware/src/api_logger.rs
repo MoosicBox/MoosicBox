@@ -85,7 +85,7 @@ where
                     Ok(data)
                 }
                 Err(e) => {
-                    log::trace!("{prefix} FINISHED FAILURE ({duration} ms): {e:?}");
+                    log::error!("{prefix} FINISHED FAILURE ({duration} ms): {e:?}");
                     Err(e)
                 }
             }
