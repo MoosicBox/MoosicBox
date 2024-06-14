@@ -11,6 +11,8 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
+moosicbox_assert = { path = "../assert", default-features = false }
+
 actix-web    = { workspace = true }
 futures-util = { workspace = true }
 log          = { workspace = true }

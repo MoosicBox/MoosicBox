@@ -85,7 +85,9 @@ where
                     Ok(data)
                 }
                 Err(e) => {
-                    log::error!("{prefix} FINISHED FAILURE ({duration} ms): {e:?}");
+                    moosicbox_assert::die_or_error!(
+                        "{prefix} FINISHED FAILURE ({duration} ms): {e:?}"
+                    );
                     Err(e)
                 }
             }
