@@ -78,6 +78,8 @@ impl From<GetTrackBytesError> for actix_web::Error {
             GetTrackBytesError::UnsupportedFormat => ErrorBadRequest(err),
             GetTrackBytesError::Acquire(_) => ErrorInternalServerError(err),
             GetTrackBytesError::Join(_) => ErrorInternalServerError(err),
+            GetTrackBytesError::ToStr(_) => ErrorInternalServerError(err),
+            GetTrackBytesError::ParseInt(_) => ErrorInternalServerError(err),
         }
     }
 }

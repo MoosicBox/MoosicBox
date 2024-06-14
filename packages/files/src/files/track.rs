@@ -271,6 +271,10 @@ pub enum GetTrackBytesError {
     #[error(transparent)]
     Db(#[from] DbError),
     #[error(transparent)]
+    ToStr(#[from] reqwest::header::ToStrError),
+    #[error(transparent)]
+    ParseInt(#[from] std::num::ParseIntError),
+    #[error(transparent)]
     IO(#[from] std::io::Error),
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
@@ -364,12 +368,11 @@ pub async fn get_audio_bytes(
 ) -> Result<TrackBytes, GetTrackBytesError> {
     log::debug!("Getting audio bytes format={format:?} size={size:?} start={start:?} end={end:?}");
 
-    get_or_fetch_track(&source, format, 
-
-
-    size,
-    start ,
-    end,
+    get_or_fetch_track(
+        &source, format, 
+        size,
+        start ,
+        end,
         {
         let source = source.clone();
         || {
@@ -591,6 +594,7 @@ async fn request_track_bytes_from_url(
 
     log::debug!("request_track_bytes_from_url: Getting track source from url: {url}");
 
+    let mut head_request = client.head(url);
     let mut request = client.get(url);
 
     if start.is_some() || end.is_some() {
@@ -598,8 +602,31 @@ async fn request_track_bytes_from_url(
         let end = end.map_or("".into(), |end| end.to_string());
 
         log::debug!("request_track_bytes_from_url: Using byte range start={start} end={end}");
-        request = request.header("Range", format!("bytes={start}-{end}"))
+        request = request.header("Range", format!("bytes={start}-{end}"));
+        head_request = head_request.header("Range", format!("bytes={start}-{end}"));
     }
+
+    let size = if size.is_none() {
+        log::debug!("request_track_bytes_from_url: Sending head request to url={url}");
+        let head = head_request
+            .send()
+            .await?;
+
+        if let Some(header) = head
+            .headers()
+            .get(actix_web::http::header::CONTENT_LENGTH.to_string())
+        {
+            let size = header.to_str()?.parse::<u64>()?;
+            log::debug!("Got size from Content-Length header: size={size}");
+            Some(size)
+        } else {
+            log::debug!("No Content-Length header");
+            None
+        }
+    } else {
+        log::debug!("Already has size={size:?}");
+        size
+    };
 
     log::debug!("request_track_bytes_from_url: Sending request to url={url}");
     let stream = request
