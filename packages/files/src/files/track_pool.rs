@@ -14,7 +14,7 @@ use moosicbox_stream_utils::{stalled_monitor::StalledReadMonitor, ByteWriter};
 use once_cell::sync::Lazy;
 use tokio::sync::{Mutex, RwLock, Semaphore};
 
-use crate::BytesStream;
+use crate::{files::filename_from_path_str, BytesStream};
 
 use super::track::{GetTrackBytesError, TrackBytes, TrackSource};
 
@@ -38,6 +38,7 @@ struct TrackBytesSource {
     bytes: Arc<RwLock<Vec<u8>>>,
     size: Option<u64>,
     format: AudioFormat,
+    filename: Option<String>,
     created: SystemTime,
     finished: Arc<AtomicBool>,
 }
@@ -91,7 +92,9 @@ impl TrackBytesSource {
             id,
             stream: StalledReadMonitor::new(stream),
             size: self.size,
+            original_size: self.size,
             format: self.format,
+            filename: self.filename.clone(),
         })
     }
 }
@@ -139,8 +142,15 @@ pub fn track_key(source: &TrackSource, output_format: AudioFormat) -> String {
 pub async fn get_or_fetch_track(
     source: &TrackSource,
     output_format: AudioFormat,
+    _size: Option<u64>,
+    start: Option<u64>,
+    end: Option<u64>,
     fetch: impl FnOnce() -> Pin<Box<dyn Future<Output = Result<TrackBytes, GetTrackBytesError>> + Send>>,
 ) -> Result<TrackBytes, GetTrackBytesError> {
+    if start.is_some() || end.is_some() {
+        return fetch().await;
+    }
+
     let key = track_key(source, output_format);
     log::debug!("get_or_fetch_track key={key}");
 
@@ -166,6 +176,12 @@ pub async fn get_or_fetch_track(
         }
     }
 
+    let filename = match source {
+        TrackSource::LocalFilePath { path, .. } => filename_from_path_str(path),
+        TrackSource::Tidal { .. } => None,
+        TrackSource::Qobuz { .. } => None,
+    };
+
     let writers = Arc::new(Mutex::new(vec![]));
     let bytes = Arc::new(RwLock::new(vec![]));
     let finished = Arc::new(AtomicBool::new(false));
@@ -180,6 +196,7 @@ pub async fn get_or_fetch_track(
         format: track_bytes.format,
         created: std::time::SystemTime::now(),
         finished: finished.clone(),
+        filename,
     };
 
     let stream = track_bytes.stream;

@@ -1,3 +1,5 @@
+use std::str::FromStr as _;
+
 use actix_web::HttpResponse;
 use thiserror::Error;
 
@@ -16,6 +18,13 @@ pub enum ResizeImageError {
     NoImageResizeFeaturesEnabled,
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
+}
+
+pub(crate) fn filename_from_path_str(path: &str) -> Option<String> {
+    std::path::PathBuf::from_str(path).ok().and_then(|p| {
+        p.file_name()
+            .and_then(|x| x.to_str().map(|x| x.to_string()))
+    })
 }
 
 #[allow(unused)]

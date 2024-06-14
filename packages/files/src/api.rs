@@ -25,15 +25,6 @@ use crate::files::{
     },
 };
 
-#[derive(Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct GetTrackQuery {
-    pub track_id: u64,
-    pub format: Option<AudioFormat>,
-    pub quality: Option<TrackAudioQuality>,
-    pub source: Option<TrackApiSource>,
-}
-
 impl From<TrackSourceError> for actix_web::Error {
     fn from(err: TrackSourceError) -> Self {
         log::error!("TrackSourceError {err:?}");
@@ -91,10 +82,18 @@ impl From<GetTrackBytesError> for actix_web::Error {
     }
 }
 
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTrackQuery {
+    pub track_id: u64,
+    pub format: Option<AudioFormat>,
+    pub quality: Option<TrackAudioQuality>,
+    pub source: Option<TrackApiSource>,
+}
+
 #[route("/track", method = "GET", method = "HEAD")]
 pub async fn track_endpoint(
     req: HttpRequest,
-    #[cfg(feature = "track-range")] req: HttpRequest,
     query: web::Query<GetTrackQuery>,
     data: web::Data<AppState>,
 ) -> Result<HttpResponse> {
@@ -147,6 +146,8 @@ pub async fn track_endpoint(
     let range: Option<crate::range::Range> = None;
 
     let mut response = HttpResponse::Ok();
+    response.insert_header((actix_web::http::header::ACCEPT_RANGES, "bytes"));
+    response.insert_header((actix_web::http::header::CONTENT_ENCODING, "identity"));
 
     if let Some(content_type) = content_type {
         response.insert_header((actix_web::http::header::CONTENT_TYPE, content_type));
@@ -184,12 +185,23 @@ pub async fn track_endpoint(
     )
     .await?;
 
+    response.insert_header((
+        actix_web::http::header::CONTENT_DISPOSITION,
+        format!(
+            "inline{filename}",
+            filename = bytes
+                .filename
+                .map_or("".into(), |x| format!("; filename=\"{x}\""))
+        ),
+    ));
+
     log::debug!("Got bytes with size={:?}", bytes.size);
 
     let stream = bytes.stream.filter_map(|x| async { x.ok() });
 
-    if let Some(mut size) = bytes.size {
-        if let Some(range) = range {
+    if let Some(original_size) = bytes.original_size {
+        let size = if let Some(range) = range {
+            let mut size = original_size;
             if let Some(end) = range.end {
                 if end > size as usize {
                     let error = format!("Range end out of bounds: {end}");
@@ -206,6 +218,26 @@ pub async fn track_endpoint(
                 }
                 size -= start as u64;
             }
+
+            response.insert_header((
+                actix_web::http::header::CONTENT_RANGE,
+                format!(
+                    "bytes {start}-{end}/{original_size}",
+                    start = range.start.map_or("".to_string(), |x| x.to_string()),
+                    end = range.end.map(|x| x as u64).unwrap_or(original_size - 1),
+                ),
+            ));
+            size
+        } else {
+            response.insert_header((
+                actix_web::http::header::CONTENT_RANGE,
+                format!("bytes -{end}/{original_size}", end = original_size - 1),
+            ));
+            original_size
+        };
+
+        if size != original_size {
+            response.status(actix_web::http::StatusCode::PARTIAL_CONTENT);
         }
 
         log::debug!("Returning stream body with size={:?}", size);

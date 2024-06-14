@@ -38,13 +38,15 @@ use symphonia::core::{
     util::clamp::clamp_i16,
 };
 use thiserror::Error;
+use tokio::io::AsyncSeekExt;
 use tokio_util::{
     codec::{BytesCodec, FramedRead},
     sync::CancellationToken,
 };
 
 use crate::files::{
-    track_bytes_media_source::TrackBytesMediaSource, track_pool::get_or_fetch_track,
+    filename_from_path_str, track_bytes_media_source::TrackBytesMediaSource,
+    track_pool::get_or_fetch_track,
 };
 
 lazy_static! {
@@ -297,7 +299,9 @@ pub struct TrackBytes {
     pub id: usize,
     pub stream: StalledReadMonitor<BytesStreamItem, BytesStream>,
     pub size: Option<u64>,
+    pub original_size: Option<u64>,
     pub format: AudioFormat,
+    pub filename: Option<String>,
 }
 
 pub async fn get_track_bytes(
@@ -358,9 +362,15 @@ pub async fn get_audio_bytes(
     start: Option<u64>,
     end: Option<u64>,
 ) -> Result<TrackBytes, GetTrackBytesError> {
-    log::debug!("Getting audio bytes format={format:?} start={start:?} end={end:?}");
+    log::debug!("Getting audio bytes format={format:?} size={size:?} start={start:?} end={end:?}");
 
-    get_or_fetch_track(&source, format, {
+    get_or_fetch_track(&source, format, 
+
+
+    size,
+    start ,
+    end,
+        {
         let source = source.clone();
         || {
             Box::pin(async move {
@@ -373,7 +383,7 @@ pub async fn get_audio_bytes(
                 let track_bytes = if same_format {
                     match source {
                         TrackSource::LocalFilePath { path, .. } => {
-                            request_audio_bytes_from_file(path, format, size).await?
+                            request_audio_bytes_from_file(path, format, size, start, end).await?
                         }
                         TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } => {
                             request_track_bytes_from_url(&url, start, end, format, size).await?
@@ -490,14 +500,16 @@ pub async fn get_audio_bytes(
                     match source {
                         TrackSource::LocalFilePath { path, .. } => match format {
                             AudioFormat::Source => {
-                                request_audio_bytes_from_file(path, format, size).await?
+                                request_audio_bytes_from_file(path, format, size, start, end).await?
                             }
                             #[allow(unreachable_patterns)]
                             _ => TrackBytes {
                                 id: writer_id,
                                 stream: StalledReadMonitor::new(stream.boxed()),
                                 size,
+                                original_size: size,
                                 format,
+                                filename: filename_from_path_str(&path),
                             },
                         },
                         TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } => match format
@@ -510,7 +522,9 @@ pub async fn get_audio_bytes(
                                 id: writer_id,
                                 stream: StalledReadMonitor::new(stream.boxed()),
                                 size,
+                                original_size: size,
                                 format,
+                                filename: None,
                             },
                         },
                     }
@@ -527,18 +541,42 @@ async fn request_audio_bytes_from_file(
     path: String,
     format: AudioFormat,
     size: Option<u64>,
+    start: Option<u64>,
+    end: Option<u64>,
 ) -> Result<TrackBytes, std::io::Error> {
-    let file = tokio::fs::File::open(path).await?;
+    log::debug!("request_audio_bytes_from_file path={path} format={format} size={size:?} start={start:?} end={end:?}");
+    let mut file = tokio::fs::File::open(&path).await?;
+
+    if let Some(start) = start {
+        file.seek(std::io::SeekFrom::Start(start)).await?;
+    }
+
+    let original_size = size;
+    let size = if let (Some(start), Some(end)) = (start, end) {
+        Some(end - start)
+    } else if let Some(start) = start {
+        size.map(|size| size - start)
+    } else if let Some(end) = end {
+        Some(end)
+    } else {
+        size
+    };
+
+    log::debug!("request_audio_bytes_from_file calculated size={size:?}");
+
+    let framed_read = if let Some(size) = size {
+        FramedRead::with_capacity(file, BytesCodec::new(), size as usize)
+    } else {
+        FramedRead::new(file, BytesCodec::new())
+    };
 
     Ok(TrackBytes {
         id: new_byte_writer_id(),
-        stream: StalledReadMonitor::new(
-            FramedRead::new(file, BytesCodec::new())
-                .map_ok(BytesMut::freeze)
-                .boxed(),
-        ),
+        stream: StalledReadMonitor::new(framed_read.map_ok(BytesMut::freeze).boxed()),
         size,
+        original_size,
         format,
+        filename: filename_from_path_str(&path),
     })
 }
 
@@ -556,8 +594,8 @@ async fn request_track_bytes_from_url(
     let mut request = client.get(url);
 
     if start.is_some() || end.is_some() {
-        let start = start.map(|start| start.to_string()).unwrap_or("".into());
-        let end = end.map(|end| end.to_string()).unwrap_or("".into());
+        let start = start.map_or("".into(), |start| start.to_string());
+        let end = end.map_or("".into(), |end| end.to_string());
 
         log::debug!("request_track_bytes_from_url: Using byte range start={start} end={end}");
         request = request.header("Range", format!("bytes={start}-{end}"))
@@ -574,7 +612,9 @@ async fn request_track_bytes_from_url(
         id: new_byte_writer_id(),
         stream: StalledReadMonitor::new(stream.boxed()),
         size,
+        original_size: size,
         format,
+        filename: None,
     })
 }
 
@@ -807,7 +847,7 @@ pub async fn get_or_init_track_size(
     quality: PlaybackQuality,
     db: &dyn Database,
 ) -> Result<u64, TrackInfoError> {
-    log::debug!("Getting track size {track_id}");
+    log::debug!("Getting track size track_id={track_id}");
 
     if let Some(size) = get_track_size(db, track_id as u64, &quality).await? {
         return Ok(size);
