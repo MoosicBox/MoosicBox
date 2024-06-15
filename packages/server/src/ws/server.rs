@@ -429,10 +429,10 @@ impl WebsocketSender for ChatServerHandle {
 impl ChatServerHandle {
     pub fn add_player_action(&mut self, id: i32, action: PlayerAction) {
         log::trace!("Sending AddPlayerAction command");
-        // unwrap: chat server should not have been dropped
-        self.cmd_tx
-            .send(Command::AddPlayerAction { id, action })
-            .unwrap();
+
+        if let Err(e) = self.cmd_tx.send(Command::AddPlayerAction { id, action }) {
+            moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
+        }
     }
 
     /// Register client message sender and obtain connection ID.
@@ -440,13 +440,13 @@ impl ChatServerHandle {
         log::trace!("Sending Connect command");
         let (res_tx, res_rx) = kanal::oneshot();
 
-        // unwrap: chat server should not have been dropped
-        self.cmd_tx
-            .send(Command::Connect { conn_tx, res_tx })
-            .unwrap();
+        if let Err(e) = self.cmd_tx.send(Command::Connect { conn_tx, res_tx }) {
+            moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
+        }
 
-        // unwrap: chat server does not drop out response channel
-        res_rx.recv().unwrap()
+        res_rx.recv().unwrap_or_else(|e| {
+            moosicbox_assert::die_or_panic!("Failed to recv response from ws server: {e:?}")
+        })
     }
 
     /// List all created rooms.
@@ -454,11 +454,13 @@ impl ChatServerHandle {
         log::trace!("Sending List command");
         let (res_tx, res_rx) = kanal::oneshot();
 
-        // unwrap: chat server should not have been dropped
-        self.cmd_tx.send(Command::List { res_tx }).unwrap();
+        if let Err(e) = self.cmd_tx.send(Command::List { res_tx }) {
+            moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
+        }
 
-        // unwrap: chat server does not drop our response channel
-        res_rx.recv().unwrap()
+        res_rx.recv().unwrap_or_else(|e| {
+            moosicbox_assert::die_or_panic!("Failed to recv response from ws server: {e:?}")
+        })
     }
 
     /// Join `room`, creating it if it does not exist.
@@ -466,67 +468,67 @@ impl ChatServerHandle {
         log::trace!("Sending Join command");
         let (res_tx, res_rx) = kanal::oneshot();
 
-        // unwrap: chat server should not have been dropped
-        self.cmd_tx
-            .send(Command::Join {
-                conn,
-                room: room.into(),
-                res_tx,
-            })
-            .unwrap();
+        if let Err(e) = self.cmd_tx.send(Command::Join {
+            conn,
+            room: room.into(),
+            res_tx,
+        }) {
+            moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
+        }
 
-        // unwrap: chat server does not drop our response channel
-        res_rx.recv().unwrap();
+        res_rx.recv().unwrap_or_else(|e| {
+            moosicbox_assert::die_or_error!("Failed to recv response from ws server: {e:?}");
+        });
     }
 
     pub fn send(&self, conn: ConnId, msg: impl Into<String>) {
         log::trace!("Sending Send command");
         let (res_tx, res_rx) = kanal::oneshot();
 
-        // unwrap: chat server should not have been dropped
-        self.cmd_tx
-            .send(Command::Send {
-                msg: msg.into(),
-                conn,
-                res_tx,
-            })
-            .unwrap();
+        if let Err(e) = self.cmd_tx.send(Command::Send {
+            msg: msg.into(),
+            conn,
+            res_tx,
+        }) {
+            moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
+        }
 
-        // unwrap: chat server does not drop our response channel
-        res_rx.recv().unwrap();
+        res_rx.recv().unwrap_or_else(|e| {
+            moosicbox_assert::die_or_error!("Failed to recv response from ws server: {e:?}");
+        });
     }
 
     pub fn broadcast(&self, msg: impl Into<String>) {
         log::trace!("Sending Broadcast command");
         let (res_tx, res_rx) = kanal::oneshot();
 
-        // unwrap: chat server should not have been dropped
-        self.cmd_tx
-            .send(Command::Broadcast {
-                msg: msg.into(),
-                res_tx,
-            })
-            .unwrap();
+        if let Err(e) = self.cmd_tx.send(Command::Broadcast {
+            msg: msg.into(),
+            res_tx,
+        }) {
+            moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
+        };
 
-        // unwrap: chat server does not drop our response channel
-        res_rx.recv().unwrap();
+        res_rx.recv().unwrap_or_else(|e| {
+            moosicbox_assert::die_or_error!("Failed to recv response from ws server: {e:?}");
+        });
     }
 
     pub fn broadcast_except(&self, conn: ConnId, msg: impl Into<String>) {
         log::trace!("Sending BroadcastExcept command");
         let (res_tx, res_rx) = kanal::oneshot();
 
-        // unwrap: chat server should not have been dropped
-        self.cmd_tx
-            .send(Command::BroadcastExcept {
-                msg: msg.into(),
-                conn,
-                res_tx,
-            })
-            .unwrap();
+        if let Err(e) = self.cmd_tx.send(Command::BroadcastExcept {
+            msg: msg.into(),
+            conn,
+            res_tx,
+        }) {
+            moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
+        }
 
-        // unwrap: chat server does not drop our response channel
-        res_rx.recv().unwrap();
+        res_rx.recv().unwrap_or_else(|e| {
+            moosicbox_assert::die_or_error!("Failed to recv response from ws server: {e:?}");
+        });
     }
 
     /// Broadcast message to current room.
@@ -534,24 +536,26 @@ impl ChatServerHandle {
         log::trace!("Sending Message command");
         let (res_tx, res_rx) = kanal::oneshot();
 
-        // unwrap: chat server should not have been dropped
-        self.cmd_tx
-            .send(Command::Message {
-                msg: msg.into(),
-                conn,
-                res_tx,
-            })
-            .unwrap();
+        if let Err(e) = self.cmd_tx.send(Command::Message {
+            msg: msg.into(),
+            conn,
+            res_tx,
+        }) {
+            moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
+        }
 
-        // unwrap: chat server does not drop our response channel
-        res_rx.recv().unwrap();
+        res_rx.recv().unwrap_or_else(|e| {
+            moosicbox_assert::die_or_error!("Failed to recv response from ws server: {e:?}");
+        });
     }
 
     /// Unregister message sender and broadcast disconnection message to current room.
     pub fn disconnect(&self, conn: ConnId) {
         log::trace!("Sending Disconnect command");
-        // unwrap: chat server should not have been dropped
-        self.cmd_tx.send(Command::Disconnect { conn }).unwrap();
+
+        if let Err(e) = self.cmd_tx.send(Command::Disconnect { conn }) {
+            moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
+        }
     }
 
     pub fn shutdown(&self) {
