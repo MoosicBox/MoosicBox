@@ -171,7 +171,7 @@ macro_rules! async_service {
             Send(#[from] $crate::SendError<()>),
         }
 
-        async_service_body!($command, $context);
+        $crate::async_service_body!($command, $context);
     };
 
     ($command:path, $context:path, $error:path $(,)?) => {
