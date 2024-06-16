@@ -1,6 +1,7 @@
 /packages/*
 
 !/packages/assert
+!/packages/async_service
 !/packages/auth
 !/packages/config
 !/packages/converter

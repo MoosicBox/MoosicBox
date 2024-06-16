@@ -3188,6 +3188,7 @@ name = "moosicbox"
 version = "0.1.0"
 dependencies = [
  "moosicbox_assert",
+ "moosicbox_async_service",
  "moosicbox_auth",
  "moosicbox_config",
  "moosicbox_converter",
@@ -3239,6 +3240,22 @@ version = "0.1.0"
 dependencies = [
  "colored",
  "moosicbox_env_utils",
+]
+
+[[package]]
+name = "moosicbox_async_service"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "flume",
+ "futures",
+ "log",
+ "moosicbox_assert",
+ "pretty_assertions",
+ "test-log",
+ "thiserror",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]

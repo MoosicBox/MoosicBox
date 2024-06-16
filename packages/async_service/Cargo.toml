@@ -1,0 +1,29 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools::procedural-macro-helpers"]
+description = "MoosicBox async service package"
+edition     = "2021"
+keywords    = ["async", "service", "util", "utilities", "utils"]
+license     = "MPL-2.0"
+name        = "moosicbox_async_service"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_assert = { path = "../assert", default-features = false }
+
+async-trait = { workspace = true }
+flume       = { workspace = true }
+futures     = { workspace = true }
+log         = { workspace = true }
+thiserror   = { workspace = true }
+tokio       = { workspace = true, features = ["macros", "rt", "time"] }
+tokio-util  = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+test-log          = { workspace = true }
+
+[features]
+fail-on-warnings = []

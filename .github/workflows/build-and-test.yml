@@ -31,6 +31,10 @@ jobs:
                       os: ubuntu-latest
                       cargo: --no-default-features
 
+                    - name: async_service
+                      path: packages/async_service
+                      os: ubuntu-latest
+
                     - name: auth-api
                       path: packages/auth
                       os: ubuntu-latest
