@@ -5,7 +5,7 @@ use atomic_float::AtomicF64;
 use crossbeam_channel::{bounded, Receiver};
 use moosicbox_core::{
     sqlite::models::{ApiSource, ToApi, TrackApiSource, UpdateSession},
-    types::{AudioFormat, PlaybackQuality},
+    types::PlaybackQuality,
 };
 use moosicbox_json_utils::serde_json::ToValue as _;
 use moosicbox_symphonia_player::{
@@ -629,7 +629,7 @@ impl Player for LocalPlayer {
             true,
             #[cfg(feature = "flac")]
             {
-                quality.format == AudioFormat::Flac
+                quality.format == moosicbox_core::types::AudioFormat::Flac
             },
             #[cfg(not(feature = "flac"))]
             false,
