@@ -7,8 +7,9 @@ use moosicbox_core::{
     sqlite::models::{ApiSource, ToApi, TrackApiSource, UpdateSession},
     types::PlaybackQuality,
 };
+use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;
 use moosicbox_symphonia_player::{
-    media_sources::remote_bytestream::RemoteByteStream,
+    media_sources::remote_bytestream::RemoteByteStreamMediaSource,
     output::{AudioOutputError, AudioOutputHandler},
     volume_mixer::mix_volume,
     PlaybackError,
@@ -549,7 +550,7 @@ impl Player for LocalPlayer {
             .get("content-length")
             .map(|length| length.to_str().unwrap().parse::<u64>().unwrap());
 
-        let source = Box::new(RemoteByteStream::new(
+        let source: RemoteByteStreamMediaSource = RemoteByteStream::new(
             url,
             size,
             true,
@@ -565,7 +566,8 @@ impl Player for LocalPlayer {
                 .as_ref()
                 .map(|p| p.abort.clone())
                 .unwrap_or_default(),
-        ));
+        )
+        .into();
 
         let mut hint = Hint::new();
 
@@ -583,7 +585,7 @@ impl Player for LocalPlayer {
 
         Ok(PlayableTrack {
             track_id,
-            source,
+            source: Box::new(source),
             hint,
         })
     }

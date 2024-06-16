@@ -11,7 +11,8 @@ use moosicbox_core::{
     sqlite::models::{ApiSource, ToApi, UpdateSession},
     types::PlaybackQuality,
 };
-use moosicbox_symphonia_player::media_sources::remote_bytestream::RemoteByteStream;
+use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;
+use moosicbox_symphonia_player::media_sources::remote_bytestream::RemoteByteStreamMediaSource;
 use rand::{thread_rng, Rng as _};
 use rupnp::{Device, Service};
 use symphonia::core::probe::Hint;
@@ -602,7 +603,7 @@ impl Player for UpnpPlayer {
             .get("content-length")
             .map(|length| length.to_str().unwrap().parse::<u64>().unwrap());
 
-        let source = Box::new(RemoteByteStream::new(
+        let source: RemoteByteStreamMediaSource = RemoteByteStream::new(
             url,
             size,
             true,
@@ -618,7 +619,8 @@ impl Player for UpnpPlayer {
                 .as_ref()
                 .map(|p| p.abort.clone())
                 .unwrap_or_default(),
-        ));
+        )
+        .into();
 
         let mut hint = Hint::new();
 
@@ -636,7 +638,7 @@ impl Player for UpnpPlayer {
 
         Ok(PlayableTrack {
             track_id,
-            source,
+            source: Box::new(source),
             hint,
         })
     }

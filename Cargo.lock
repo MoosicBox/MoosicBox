@@ -3753,12 +3753,16 @@ name = "moosicbox_stream_utils"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "flume",
  "futures",
+ "lazy_static",
  "log",
  "moosicbox_assert",
  "pin-project",
+ "reqwest 0.12.4",
  "thiserror",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -3945,6 +3949,7 @@ dependencies = [
  "moosicbox_core",
  "moosicbox_json_utils",
  "moosicbox_player",
+ "moosicbox_stream_utils",
  "moosicbox_symphonia_player",
  "once_cell",
  "pin-utils",

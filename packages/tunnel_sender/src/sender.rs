@@ -22,8 +22,9 @@ use moosicbox_files::files::track::{
     audio_format_to_content_type, get_track_id_source, get_track_info, TrackSource,
 };
 use moosicbox_files::range::{parse_ranges, Range};
+use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;
 use moosicbox_stream_utils::ByteWriter;
-use moosicbox_symphonia_player::media_sources::remote_bytestream::RemoteByteStream;
+use moosicbox_symphonia_player::media_sources::remote_bytestream::RemoteByteStreamMediaSource;
 use moosicbox_symphonia_player::output::AudioOutputHandler;
 use moosicbox_symphonia_player::play_media_source;
 use moosicbox_tunnel::{Method, TunnelEncoding, TunnelWsResponse};
@@ -1238,7 +1239,7 @@ impl TunnelSender {
                                 }
 
                                 log::debug!("Creating RemoteByteStream with url={url}");
-                                let source = Box::new(RemoteByteStream::new(
+                                let source: RemoteByteStreamMediaSource = RemoteByteStream::new(
                                     url,
                                     None,
                                     true,
@@ -1248,10 +1249,10 @@ impl TunnelSender {
                                     #[cfg(not(feature = "flac"))]
                                     false,
                                     CancellationToken::new(),
-                                ));
+                                ).into();
 
                                 if let Err(err) = play_media_source(
-                                    MediaSourceStream::new(source, Default::default()),
+                                    MediaSourceStream::new(Box::new(source), Default::default()),
                                     &Hint::new(),
                                     &mut audio_output_handler,
                                     true,

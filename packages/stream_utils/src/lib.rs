@@ -9,6 +9,9 @@ use bytes::Bytes;
 use stalled_monitor::StalledReadMonitor;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
+#[cfg(feature = "remote-bytestream")]
+pub mod remote_bytestream;
+#[cfg(feature = "stalled-monitor")]
 pub mod stalled_monitor;
 
 static CUR_ID: AtomicUsize = AtomicUsize::new(1);

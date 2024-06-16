@@ -20,10 +20,9 @@ use moosicbox_core::{
 use moosicbox_database::{Database, DatabaseValue};
 use moosicbox_json_utils::{MissingValue, ParseError, ToValueType};
 use moosicbox_qobuz::{QobuzAudioQuality, QobuzTrackFileUrlError};
-use moosicbox_stream_utils::{new_byte_writer_id, stalled_monitor::StalledReadMonitor, ByteWriter};
+use moosicbox_stream_utils::{new_byte_writer_id, remote_bytestream::RemoteByteStream, stalled_monitor::StalledReadMonitor, ByteWriter};
 use moosicbox_symphonia_player::{
-    media_sources::remote_bytestream::RemoteByteStream, output::AudioOutputHandler,
-    play_file_path_str, play_media_source, PlaybackError,
+    media_sources::remote_bytestream::RemoteByteStreamMediaSource, output::AudioOutputHandler, play_file_path_str, play_media_source, PlaybackError
 };
 use moosicbox_tidal::{TidalAudioQuality, TidalTrackFileUrlError};
 use regex::{Captures, Regex};
@@ -472,7 +471,7 @@ pub async fn get_audio_bytes(
                                     }
                                 }
                                 TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } => {
-                                    let source = Box::new(RemoteByteStream::new(
+                                    let source: RemoteByteStreamMediaSource = RemoteByteStream::new(
                                         url,
                                         size,
                                         true,
@@ -483,9 +482,9 @@ pub async fn get_audio_bytes(
                                         #[cfg(not(feature = "flac"))]
                                         false,
                                         CancellationToken::new(),
-                                    ));
+                                    ).into();
                                     if let Err(err) = play_media_source(
-                                        MediaSourceStream::new(source, Default::default()),
+                                        MediaSourceStream::new(Box::new(source), Default::default()),
                                         &Hint::new(),
                                         &mut audio_output_handler,
                                         true,

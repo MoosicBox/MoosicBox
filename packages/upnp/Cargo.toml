@@ -23,17 +23,20 @@ tokio                   = { workspace = true, optional = true, features = ["macr
 tokio-util              = { workspace = true, optional = true }
 
 # Player Dependencies
-async-trait                = { workspace = true, optional = true }
-atomic_float               = { workspace = true, optional = true }
-crossbeam-channel          = { workspace = true, optional = true }
-moosicbox_core             = { path = "../core", optional = true }
-moosicbox_json_utils       = { path = "../json_utils", optional = true }
-moosicbox_player           = { path = "../player", optional = true }
+async-trait = { workspace = true, optional = true }
+atomic_float = { workspace = true, optional = true }
+crossbeam-channel = { workspace = true, optional = true }
+moosicbox_core = { path = "../core", optional = true }
+moosicbox_json_utils = { path = "../json_utils", optional = true }
+moosicbox_player = { path = "../player", optional = true }
+moosicbox_stream_utils = { path = "../stream_utils", optional = true, features = [
+    "remote-bytestream",
+] }
 moosicbox_symphonia_player = { path = "../symphonia_player", optional = true }
-rand                       = { workspace = true, optional = true }
-reqwest                    = { workspace = true, optional = true }
-symphonia                  = { workspace = true, optional = true }
-url                        = { workspace = true, optional = true }
+rand = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+symphonia = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
 
 async-recursion = { workspace = true }
 futures         = { workspace = true }
@@ -65,6 +68,7 @@ player = [
     "dep:moosicbox_core",
     "dep:moosicbox_json_utils",
     "dep:moosicbox_player",
+    "dep:moosicbox_stream_utils",
     "dep:moosicbox_symphonia_player",
     "dep:rand",
     "dep:reqwest",

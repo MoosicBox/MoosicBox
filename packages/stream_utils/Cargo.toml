@@ -14,11 +14,20 @@ version     = "0.1.0"
 moosicbox_assert = { path = "../assert", default-features = false }
 
 bytes       = { workspace = true }
+flume       = { workspace = true }
 futures     = { workspace = true }
+lazy_static = { workspace = true }
 log         = { workspace = true }
 pin-project = { workspace = true }
+reqwest     = { workspace = true }
 thiserror   = { workspace = true }
 tokio       = { workspace = true, features = ["time"] }
+tokio-util  = { workspace = true }
 
 [features]
+default = ["remote-bytestream", "stalled-monitor"]
+
 fail-on-warnings = []
+
+remote-bytestream = []
+stalled-monitor   = []
