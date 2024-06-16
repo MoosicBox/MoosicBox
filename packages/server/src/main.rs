@@ -40,7 +40,7 @@ use tokio::try_join;
 use tokio_util::sync::CancellationToken;
 use ws::server::{ChatServerHandle, WsServer};
 
-use crate::playback_session::PLAYBACK_EVENT_HANDLER;
+use crate::playback_session::{service::Commander, PLAYBACK_EVENT_HANDLE};
 
 static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
 
@@ -50,14 +50,6 @@ static CHAT_SERVER_HANDLE: Lazy<std::sync::RwLock<Option<ws::server::ChatServerH
 #[allow(clippy::type_complexity)]
 static DB: Lazy<std::sync::RwLock<Option<Arc<Box<dyn Database>>>>> =
     Lazy::new(|| std::sync::RwLock::new(None));
-
-static PLAYBACK_EVENT_RT: Lazy<tokio::runtime::Runtime> = Lazy::new(|| {
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .max_blocking_threads(1)
-        .build()
-        .unwrap()
-});
 
 static WS_SERVER_RT: Lazy<tokio::runtime::Runtime> = Lazy::new(|| {
     tokio::runtime::Builder::new_multi_thread()
@@ -203,7 +195,13 @@ fn main() -> std::io::Result<()> {
         let handle = server_tx.clone();
         CHAT_SERVER_HANDLE.write().unwrap().replace(server_tx);
 
-        let playback_event_handle = PLAYBACK_EVENT_RT.spawn(PLAYBACK_EVENT_HANDLER.run());
+        let playback_event_service =
+            playback_session::service::Service::new(playback_session::Context::new(handle.clone()));
+        let playback_event_handle = playback_event_service.handle();
+        let playback_join_handle = playback_event_service.start();
+        PLAYBACK_EVENT_HANDLE
+            .set(playback_event_handle.clone())
+            .unwrap_or_else(|_| panic!("Failed to set PLAYBACK_EVENT_HANDLE"));
 
         moosicbox_player::player::set_service_port(service_port);
         moosicbox_player::player::on_playback_event(crate::playback_session::on_playback_event);
@@ -410,7 +408,9 @@ fn main() -> std::io::Result<()> {
                 }
 
                 log::debug!("Shutting down PlaybackEventHandler...");
-                PLAYBACK_EVENT_HANDLER.shutdown();
+                if let Err(e) = playback_event_handle.shutdown() {
+                    log::error!("Failed to shut down PlaybackEventHandler: {e:?}");
+                }
 
                 log::debug!("Shutting down server players...");
                 SERVER_PLAYER
@@ -447,9 +447,10 @@ fn main() -> std::io::Result<()> {
                 resp
             },
             async move {
-                let resp = playback_event_handle
+                let resp = playback_join_handle
                     .await
-                    .expect("Failed to shut down playback event handler");
+                    .expect("Failed to shut down playback event handler")
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
                 log::debug!("PlaybackEventHandler connection closed");
                 resp
             },

@@ -12,6 +12,7 @@ version     = "0.1.0"
 
 [dependencies]
 moosicbox_assert = { path = "../assert" }
+moosicbox_async_service = { path = "../async_service", default-features = false }
 moosicbox_auth = { path = "../auth" }
 moosicbox_config = { path = "../config", default-features = false }
 moosicbox_core = { path = "../core", default-features = false }
@@ -87,6 +88,8 @@ regex           = { workspace = true }
 rusqlite        = { workspace = true }
 serde           = { workspace = true, features = ["derive"] }
 serde_json      = { workspace = true }
+strum           = { workspace = true }
+strum_macros    = { workspace = true }
 thiserror       = { workspace = true }
 throttle        = { workspace = true }
 tokio           = { workspace = true, features = ["macros", "rt", "time"] }
