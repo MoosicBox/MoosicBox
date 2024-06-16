@@ -70,6 +70,5 @@ impl<T, R: futures::Stream<Item = T>> futures::Stream for StalledReadMonitor<T, 
         }
 
         response.map(|x| x.map(|y| Ok(y)))
-        //response
     }
 }
