@@ -172,7 +172,7 @@ pub struct PlaybackStatus {
     pub success: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TrackOrId {
     Track(Box<Track>),
     Id(i32, ApiSource),
