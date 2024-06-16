@@ -28,6 +28,7 @@ moosicbox_files = { path = "../files", default-features = false, features = [
     "files",
     "image",
     "range",
+    "track-range",
 ] }
 moosicbox_menu = { path = "../menu" }
 moosicbox_middleware = { path = "../middleware" }

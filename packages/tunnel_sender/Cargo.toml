@@ -22,6 +22,7 @@ moosicbox_files = { path = "../files", default-features = false, features = [
     "api",
     "files",
     "range",
+    "track-range",
 ] }
 moosicbox_image = { path = "../image", default-features = false, features = [
     "image",
