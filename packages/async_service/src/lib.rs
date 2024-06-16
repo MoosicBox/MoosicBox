@@ -169,6 +169,9 @@ macro_rules! async_service {
             Join(#[from] $crate::JoinError),
             #[error(transparent)]
             Send(#[from] $crate::SendError<()>),
+            #[allow(unused)]
+            #[error(transparent)]
+            IO(#[from] std::io::Error),
         }
 
         $crate::async_service_body!($command, $context);
@@ -181,6 +184,9 @@ macro_rules! async_service {
             Join(#[from] $crate::JoinError),
             #[error(transparent)]
             Send(#[from] $crate::SendError<()>),
+            #[allow(unused)]
+            #[error(transparent)]
+            IO(#[from] std::io::Error),
             #[error(transparent)]
             Process(#[from] $error),
         }
