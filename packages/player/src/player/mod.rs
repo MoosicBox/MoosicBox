@@ -162,7 +162,7 @@ impl ToApi<ApiPlayback> for Playback {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiPlaybackStatus {
-    pub(crate) active_playbacks: Option<ApiPlayback>,
+    pub active_playbacks: Option<ApiPlayback>,
 }
 
 #[derive(Serialize, Debug, Clone, Copy)]
