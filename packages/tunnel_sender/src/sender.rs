@@ -354,12 +354,22 @@ impl TunnelSender {
                                     },
                                     TunnelResponseMessage::Ws(ws) => {
                                         if let Message::Text(text) = ws.message {
-                                            log::debug!(
-                                                "Sending ws message to={:?} exclude={:?} size={}",
-                                                ws.to_connection_ids,
-                                                ws.exclude_connection_ids,
-                                                text.len()
-                                            );
+                                            if log::log_enabled!(log::Level::Trace) {
+                                                log::debug!(
+                                                    "Sending ws message to={:?} exclude={:?} size={} message={}",
+                                                    ws.to_connection_ids,
+                                                    ws.exclude_connection_ids,
+                                                    text.len(),
+                                                    text,
+                                                );
+                                            } else {
+                                                log::debug!(
+                                                    "Sending ws message to={:?} exclude={:?} size={}",
+                                                    ws.to_connection_ids,
+                                                    ws.exclude_connection_ids,
+                                                    text.len(),
+                                                );
+                                            }
                                             serde_json::from_str(&text).and_then(|value: Value| {
                                                 serde_json::to_string(&TunnelWsResponse {
                                                     request_id: 0,
