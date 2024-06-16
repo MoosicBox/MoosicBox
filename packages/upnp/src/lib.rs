@@ -4,6 +4,8 @@
 pub mod api;
 #[cfg(feature = "listener")]
 pub mod listener;
+#[cfg(feature = "player")]
+pub mod player;
 
 pub mod models;
 

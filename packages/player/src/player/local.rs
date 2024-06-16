@@ -7,7 +7,6 @@ use moosicbox_core::{
     sqlite::models::{ApiSource, ToApi, TrackApiSource, UpdateSession},
     types::PlaybackQuality,
 };
-use moosicbox_json_utils::serde_json::ToValue as _;
 use moosicbox_symphonia_player::{
     media_sources::remote_bytestream::RemoteByteStream,
     output::{AudioOutputError, AudioOutputHandler},
@@ -15,16 +14,14 @@ use moosicbox_symphonia_player::{
     PlaybackError,
 };
 use rand::{thread_rng, Rng as _};
-use serde_json::Value;
 use symphonia::core::{io::MediaSourceStream, probe::Hint};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
-use url::form_urlencoded;
 
 use crate::player::{
-    send_playback_event, trigger_playback_event, ApiPlaybackStatus, PlayableTrack, Playback,
-    PlaybackRetryOptions, PlaybackStatus, PlaybackType, Player, PlayerError, PlayerSource,
-    TrackOrId, CLIENT, RT, SERVICE_PORT,
+    get_track_url, send_playback_event, trigger_playback_event, ApiPlaybackStatus, PlayableTrack,
+    Playback, PlaybackRetryOptions, PlaybackStatus, PlaybackType, Player, PlayerError,
+    PlayerSource, TrackOrId, RT,
 };
 
 #[derive(Clone)]
@@ -205,7 +202,7 @@ impl Player for LocalPlayer {
             };
 
             let playable_track = self
-                .track_or_id_to_playable(playback_type, &track_or_id, &quality)
+                .track_or_id_to_playable(playback_type, &track_or_id, quality)
                 .await?;
             let mss = MediaSourceStream::new(playable_track.source, Default::default());
 
@@ -362,7 +359,7 @@ impl Player for LocalPlayer {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn update_playback(
+    async fn update_playback(
         &self,
         play: Option<bool>,
         stop: Option<bool>,
@@ -406,7 +403,7 @@ impl Player for LocalPlayer {
             log::trace!("update_playback: existing playback={playback:?}");
             if playback.playing {
                 if let Some(false) = playing {
-                    self.stop()?;
+                    self.pause_playback().await?;
                 }
             } else {
                 should_play = should_play || playing.unwrap_or(false);
@@ -483,7 +480,7 @@ impl Player for LocalPlayer {
         }
     }
 
-    fn pause_playback(&self) -> Result<PlaybackStatus, PlayerError> {
+    async fn pause_playback(&self) -> Result<PlaybackStatus, PlayerError> {
         log::info!("Pausing playback id");
         let mut playback = self.get_playback()?;
 
@@ -525,87 +522,16 @@ impl Player for LocalPlayer {
         &self,
         track_id: i32,
         source: ApiSource,
-        quality: &PlaybackQuality,
+        quality: PlaybackQuality,
     ) -> Result<PlayableTrack, PlayerError> {
-        let (host, query, headers) = match &self.source {
-            PlayerSource::Remote {
-                host,
-                query,
-                headers,
-            } => (host.to_string(), query, headers),
-            PlayerSource::Local => (
-                format!(
-                    "http://127.0.0.1:{}",
-                    SERVICE_PORT
-                        .read()
-                        .unwrap()
-                        .expect("Missing SERVICE_PORT value")
-                ),
-                &None,
-                &None,
-            ),
-        };
-
-        let query_params = {
-            let mut serializer = form_urlencoded::Serializer::new(String::new());
-
-            if let Some(query) = query {
-                for (key, value) in query {
-                    serializer.append_pair(key, value);
-                }
-            }
-
-            serializer.append_pair("trackId", &track_id.to_string());
-
-            match source {
-                ApiSource::Library => {
-                    if quality.format != AudioFormat::Source {
-                        serializer.append_pair("format", quality.format.as_ref());
-                    }
-                }
-                ApiSource::Tidal => {
-                    serializer.append_pair("audioQuality", "HIGH");
-                }
-                ApiSource::Qobuz => {
-                    serializer.append_pair("audioQuality", "LOW");
-                }
-            }
-
-            serializer.finish()
-        };
-
-        let query_string = format!("?{}", query_params);
-
-        let url = match source {
-            ApiSource::Library => Ok(format!("{host}/track{query_string}")),
-            ApiSource::Tidal => {
-                let url = format!("{host}/tidal/track/url{query_string}");
-                log::debug!("Fetching track file url from {url}");
-
-                CLIENT
-                    .get(url)
-                    .send()
-                    .await?
-                    .json::<Value>()
-                    .await?
-                    .to_value::<Vec<String>>("urls")?
-                    .first()
-                    .cloned()
-                    .ok_or(PlayerError::TrackFetchFailed(track_id))
-            }
-            ApiSource::Qobuz => {
-                let url = format!("{host}/qobuz/track/url{query_string}");
-                log::debug!("Fetching track file url from {url}");
-
-                Ok(CLIENT
-                    .get(url)
-                    .send()
-                    .await?
-                    .json::<Value>()
-                    .await?
-                    .to_value::<String>("url")?)
-            }
-        }?;
+        let (url, headers) = get_track_url(
+            track_id.try_into().unwrap(),
+            source,
+            &self.source,
+            quality,
+            false,
+        )
+        .await?;
 
         log::debug!("Fetching track bytes from url: {url}");
 

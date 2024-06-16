@@ -28,7 +28,7 @@ use moosicbox_tunnel_sender::sender::TunnelSenderHandle;
 use moosicbox_ws::{send_download_event, WebsocketContext, WebsocketSendError};
 use once_cell::sync::Lazy;
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::HashMap,
     env,
     fs::create_dir_all,
     pin::Pin,
@@ -43,6 +43,9 @@ use ws::server::{ChatServerHandle, WsServer};
 use crate::playback_session::{service::Commander, PLAYBACK_EVENT_HANDLE};
 
 static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
+#[cfg(feature = "upnp")]
+static UPNP_LISTENER_HANDLE: std::sync::OnceLock<moosicbox_upnp::listener::Handle> =
+    std::sync::OnceLock::new();
 
 static CHAT_SERVER_HANDLE: Lazy<std::sync::RwLock<Option<ws::server::ChatServerHandle>>> =
     Lazy::new(|| std::sync::RwLock::new(None));
@@ -220,7 +223,8 @@ fn main() -> std::io::Result<()> {
 
         let chat_server_handle = WS_SERVER_RT.spawn(chat_server.run());
 
-        if let Err(err) = register_server_player(&**database.clone(), handle, &tunnel_handle).await
+        if let Err(err) =
+            register_server_player(&**database.clone(), handle.clone(), &tunnel_handle).await
         {
             log::error!("Failed to register server player: {err:?}");
         } else {
@@ -230,10 +234,25 @@ fn main() -> std::io::Result<()> {
         #[cfg(feature = "upnp")]
         let upnp_service =
             moosicbox_upnp::listener::Service::new(moosicbox_upnp::listener::UpnpContext::new());
+
+        #[cfg(feature = "upnp")]
+        if let Err(err) = register_upnp_players(&**database.clone(), handle, &tunnel_handle).await {
+            log::error!("Failed to register server player: {err:?}");
+        } else {
+            log::debug!("Registered server player");
+        }
+
         #[cfg(feature = "upnp")]
         let upnp_service_handle = upnp_service.handle();
         #[cfg(feature = "upnp")]
         let join_upnp_service = upnp_service.start();
+        #[cfg(feature = "upnp")]
+        UPNP_LISTENER_HANDLE
+            .set(upnp_service_handle.clone())
+            .unwrap_or_else(|_| panic!("Failed to set UPNP_LISTENER_HANDLE"));
+
+        #[cfg(feature = "upnp")]
+        tokio::spawn(moosicbox_upnp::scan_devices());
 
         let app = move || {
             let app_data = AppState {
@@ -413,7 +432,7 @@ fn main() -> std::io::Result<()> {
                 }
 
                 log::debug!("Shutting down server players...");
-                SERVER_PLAYER
+                SERVER_PLAYERS
                     .write()
                     .await
                     .drain()
@@ -478,7 +497,7 @@ fn main() -> std::io::Result<()> {
     })
 }
 
-static SERVER_PLAYER: Lazy<
+static SERVER_PLAYERS: Lazy<
     tokio::sync::RwLock<HashMap<i32, moosicbox_player::player::local::LocalPlayer>>,
 > = Lazy::new(|| tokio::sync::RwLock::new(HashMap::new()));
 
@@ -490,11 +509,15 @@ fn handle_server_playback_update(
     Box::pin(async move {
         log::debug!("Handling server playback update");
         let updated = {
-            let mut lock = SERVER_PLAYER.write().await;
-            let entry = lock.entry(update.session_id);
-            let updated = match entry {
-                Entry::Occupied(occ_entry) => occ_entry.into_mut(),
-                Entry::Vacant(vac_entry) => {
+            {
+                if SERVER_PLAYERS
+                    .write()
+                    .await
+                    .get(&update.session_id)
+                    .is_none()
+                {
+                    let mut players = SERVER_PLAYERS.write().await;
+
                     let db = {
                         let lock = DB.read().unwrap();
                         lock.clone().expect("No database")
@@ -509,8 +532,14 @@ fn handle_server_playback_update(
                         log::error!("Failed to create new player from session: {e:?}");
                     }
 
-                    vac_entry.insert(player)
+                    players.insert(update.session_id, player);
                 }
+
+                SERVER_PLAYERS
+                    .read()
+                    .await
+                    .get(&update.session_id)
+                    .expect("No player")
             }
             .update_playback(
                 update.play,
@@ -529,9 +558,8 @@ fn handle_server_playback_update(
                 Some(update.session_id.try_into().unwrap()),
                 None,
                 Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
-            );
-            drop(lock);
-            updated
+            )
+            .await
         };
 
         match updated {
@@ -584,6 +612,119 @@ async fn register_server_player(
 
     if let Some(handle) = tunnel_handle {
         handle.add_player_action(player.id, handle_server_playback_update);
+    }
+
+    moosicbox_ws::get_sessions(db, &handle, &context, true).await
+}
+
+static UPNP_PLAYERS: Lazy<tokio::sync::RwLock<HashMap<i32, moosicbox_upnp::player::UpnpPlayer>>> =
+    Lazy::new(|| tokio::sync::RwLock::new(HashMap::new()));
+
+fn handle_upnp_playback_update(update: &UpdateSession) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    let update = update.clone();
+
+    Box::pin(async move {
+        log::debug!("Handling UPnP playback update={update:?}");
+        let updated = {
+            {
+                if UPNP_PLAYERS.write().await.get(&update.session_id).is_none() {
+                    let mut players = UPNP_PLAYERS.write().await;
+
+                    let db = {
+                        let lock = DB.read().unwrap();
+                        lock.clone().expect("No database")
+                    };
+
+                    let device_udn = "uuid:17a101f7-8d90-a0f6-0513-d83adde5d7cc";
+                    // let device_udn = "uuid:0cdc0abf-2c9a-48c0-ade6-9f49435aa152";
+                    let service_id = "urn:upnp-org:serviceId:AVTransport";
+                    let (device, service) =
+                        moosicbox_upnp::get_device_and_service(device_udn, service_id)
+                            .ok_or(moosicbox_upnp::ScanError::MediaRendererNotFound)
+                            .expect("Failed to get device and service");
+
+                    let mut player = moosicbox_upnp::player::UpnpPlayer::new(
+                        device,
+                        service,
+                        PlayerSource::Local,
+                        UPNP_LISTENER_HANDLE.get().unwrap().clone(),
+                    );
+
+                    if let Err(e) = player.init_from_session(&**db, update.session_id).await {
+                        log::error!("Failed to create new player from session: {e:?}");
+                    }
+
+                    players.insert(update.session_id, player);
+                }
+
+                UPNP_PLAYERS
+                    .read()
+                    .await
+                    .get(&update.session_id)
+                    .expect("No player")
+            }
+            .update_playback(
+                update.play,
+                update.stop,
+                update.playing,
+                update.position.map(|x| x.try_into().unwrap()),
+                update.seek,
+                update.volume,
+                update.playlist.as_ref().map(|x| {
+                    x.tracks
+                        .iter()
+                        .map(|t| TrackOrId::Id(t.id.try_into().unwrap(), t.r#type))
+                        .collect::<Vec<_>>()
+                }),
+                None,
+                Some(update.session_id.try_into().unwrap()),
+                None,
+                Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
+            )
+            .await
+        };
+
+        match updated {
+            Ok(status) => {
+                log::debug!("Updated UPnP player playback: {status:?}");
+            }
+            Err(err) => {
+                log::error!("Failed to update UPnP player playback: {err:?}");
+            }
+        }
+    })
+}
+
+async fn register_upnp_players(
+    db: &dyn Database,
+    mut ws: ChatServerHandle,
+    tunnel_handle: &Option<TunnelSenderHandle>,
+) -> Result<(), WebsocketSendError> {
+    let connection_id = "self";
+
+    let context = WebsocketContext {
+        connection_id: connection_id.to_string(),
+        ..Default::default()
+    };
+    let payload = vec![RegisterPlayer {
+        name: "MoosicBox UPnP".into(),
+        r#type: "SYMPHONIA".into(),
+    }];
+
+    let handle = CHAT_SERVER_HANDLE
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone()
+        .ok_or(WebsocketSendError::Unknown("No chat server handle".into()))?;
+
+    let players = moosicbox_ws::register_players(db, &handle, &context, &payload).await?;
+
+    for player in players {
+        ws.add_player_action(player.id, handle_upnp_playback_update);
+
+        if let Some(handle) = tunnel_handle {
+            handle.add_player_action(player.id, handle_server_playback_update);
+        }
     }
 
     moosicbox_ws::get_sessions(db, &handle, &context, true).await

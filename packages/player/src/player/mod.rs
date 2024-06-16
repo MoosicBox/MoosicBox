@@ -10,6 +10,7 @@ use atomic_float::AtomicF64;
 use crossbeam_channel::SendError;
 use futures::{StreamExt as _, TryStreamExt as _};
 use lazy_static::lazy_static;
+use local_ip_address::local_ip;
 use moosicbox_core::{
     sqlite::{
         db::{get_album_tracks, get_session_playlist, get_tracks, DbError},
@@ -21,7 +22,7 @@ use moosicbox_core::{
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_database::Database;
-use moosicbox_json_utils::ParseError;
+use moosicbox_json_utils::{serde_json::ToValue as _, ParseError};
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use moosicbox_symphonia_player::{
     media_sources::bytestream_source::ByteStreamSource,
@@ -31,6 +32,7 @@ use moosicbox_symphonia_player::{
 use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng as _};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use symphonia::core::{io::MediaSource, probe::Hint};
 use thiserror::Error;
 use tokio::runtime::{self, Runtime};
@@ -235,6 +237,106 @@ impl TrackOrId {
     }
 }
 
+pub async fn get_track_url(
+    track_id: u64,
+    api_source: ApiSource,
+    player_source: &PlayerSource,
+    quality: PlaybackQuality,
+    use_local_network_ip: bool,
+) -> Result<(String, Option<HashMap<String, String>>), PlayerError> {
+    let (host, query, headers) = match player_source {
+        PlayerSource::Remote {
+            host,
+            query,
+            headers,
+        } => (host.to_string(), query, headers.to_owned()),
+        PlayerSource::Local => {
+            let ip = if use_local_network_ip {
+                local_ip().map(|x| x.to_string()).unwrap_or_else(|e| {
+                    log::warn!("Failed to get local ip address: {e:?}");
+                    "127.0.0.1".to_string()
+                })
+            } else {
+                "127.0.0.1".to_string()
+            };
+            (
+                format!(
+                    "http://{ip}:{}",
+                    SERVICE_PORT
+                        .read()
+                        .unwrap()
+                        .expect("Missing SERVICE_PORT value")
+                ),
+                &None,
+                None,
+            )
+        }
+    };
+
+    let query_params = {
+        let mut serializer = url::form_urlencoded::Serializer::new(String::new());
+
+        if let Some(query) = query {
+            for (key, value) in query {
+                serializer.append_pair(key, value);
+            }
+        }
+
+        serializer.append_pair("trackId", &track_id.to_string());
+
+        match api_source {
+            ApiSource::Library => {
+                if quality.format != AudioFormat::Source {
+                    serializer.append_pair("format", quality.format.as_ref());
+                }
+            }
+            ApiSource::Tidal => {
+                serializer.append_pair("audioQuality", "HIGH");
+            }
+            ApiSource::Qobuz => {
+                serializer.append_pair("audioQuality", "LOW");
+            }
+        }
+
+        serializer.finish()
+    };
+
+    let query_string = format!("?{}", query_params);
+
+    let url = match api_source {
+        ApiSource::Library => Ok(format!("{host}/track{query_string}")),
+        ApiSource::Tidal => {
+            let url = format!("{host}/tidal/track/url{query_string}");
+            log::debug!("Fetching track file url from {url}");
+
+            CLIENT
+                .get(url)
+                .send()
+                .await?
+                .json::<Value>()
+                .await?
+                .to_value::<Vec<String>>("urls")?
+                .first()
+                .cloned()
+                .ok_or(PlayerError::TrackFetchFailed(track_id as i32))
+        }
+        ApiSource::Qobuz => {
+            let url = format!("{host}/qobuz/track/url{query_string}");
+            log::debug!("Fetching track file url from {url}");
+
+            Ok(CLIENT
+                .get(url)
+                .send()
+                .await?
+                .json::<Value>()
+                .await?
+                .to_value::<String>("url")?)
+        }
+    }?;
+
+    Ok((url, headers))
+}
+
 impl From<TrackOrId> for UpdateSessionPlaylistTrack {
     fn from(value: TrackOrId) -> Self {
         UpdateSessionPlaylistTrack {
@@ -305,28 +407,31 @@ pub trait Player {
         if let Ok(session) = moosicbox_core::sqlite::db::get_session(db, session_id).await {
             if let Some(session) = session {
                 log::debug!("Got session {session:?}");
-                if let Err(err) = self.update_playback(
-                    None,
-                    None,
-                    Some(session.playing),
-                    session.position.map(|x| x.try_into().unwrap()),
-                    session.seek.map(std::convert::Into::into),
-                    session.volume,
-                    Some(
-                        session
-                            .playlist
-                            .tracks
-                            .iter()
-                            .map(|x| {
-                                TrackOrId::Id(x.track_id().try_into().unwrap(), x.api_source())
-                            })
-                            .collect::<Vec<_>>(),
-                    ),
-                    None,
-                    Some(session.id.try_into().unwrap()),
-                    Some(session.playlist.id.try_into().unwrap()),
-                    None,
-                ) {
+                if let Err(err) = self
+                    .update_playback(
+                        None,
+                        None,
+                        Some(session.playing),
+                        session.position.map(|x| x.try_into().unwrap()),
+                        session.seek.map(std::convert::Into::into),
+                        session.volume,
+                        Some(
+                            session
+                                .playlist
+                                .tracks
+                                .iter()
+                                .map(|x| {
+                                    TrackOrId::Id(x.track_id().try_into().unwrap(), x.api_source())
+                                })
+                                .collect::<Vec<_>>(),
+                        ),
+                        None,
+                        Some(session.id.try_into().unwrap()),
+                        Some(session.playlist.id.try_into().unwrap()),
+                        None,
+                    )
+                    .await
+                {
                     return Err(PlayerError::InvalidSession {
                         session_id,
                         message: format!("Failed to update playback: {err:?}"),
@@ -504,7 +609,7 @@ pub trait Player {
 
     fn stop(&self) -> Result<Playback, PlayerError>;
 
-    fn seek_track(
+    async fn seek_track(
         &self,
         seek: f64,
         retry_options: Option<PlaybackRetryOptions>,
@@ -520,7 +625,7 @@ pub trait Player {
         })
     }
 
-    fn next_track(
+    async fn next_track(
         &self,
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
@@ -547,9 +652,10 @@ pub trait Player {
             None,
             retry_options,
         )
+        .await
     }
 
-    fn previous_track(
+    async fn previous_track(
         &self,
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
@@ -574,10 +680,11 @@ pub trait Player {
             None,
             retry_options,
         )
+        .await
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn update_playback(
+    async fn update_playback(
         &self,
         play: Option<bool>,
         stop: Option<bool>,
@@ -592,9 +699,9 @@ pub trait Player {
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError>;
 
-    fn pause_playback(&self) -> Result<PlaybackStatus, PlayerError>;
+    async fn pause_playback(&self) -> Result<PlaybackStatus, PlayerError>;
 
-    fn resume_playback(
+    async fn resume_playback(
         &self,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
@@ -618,7 +725,7 @@ pub trait Player {
     async fn track_to_playable_file(
         &self,
         track: &LibraryTrack,
-        quality: &PlaybackQuality,
+        quality: PlaybackQuality,
     ) -> Result<PlayableTrack, PlayerError> {
         log::trace!("track_to_playable_file track={track:?} quality={quality:?}");
 
@@ -736,7 +843,7 @@ pub trait Player {
     async fn track_or_id_to_playable_stream(
         &self,
         track_or_id: &TrackOrId,
-        quality: &PlaybackQuality,
+        quality: PlaybackQuality,
     ) -> Result<PlayableTrack, PlayerError> {
         match track_or_id {
             TrackOrId::Id(id, source) => {
@@ -750,7 +857,7 @@ pub trait Player {
     async fn track_to_playable_stream(
         &self,
         track: &Track,
-        quality: &PlaybackQuality,
+        quality: PlaybackQuality,
     ) -> Result<PlayableTrack, PlayerError> {
         self.track_id_to_playable_stream(
             match track {
@@ -772,14 +879,14 @@ pub trait Player {
         &self,
         track_id: i32,
         source: ApiSource,
-        quality: &PlaybackQuality,
+        quality: PlaybackQuality,
     ) -> Result<PlayableTrack, PlayerError>;
 
     async fn track_or_id_to_playable(
         &self,
         playback_type: PlaybackType,
         track_or_id: &TrackOrId,
-        quality: &PlaybackQuality,
+        quality: PlaybackQuality,
     ) -> Result<PlayableTrack, PlayerError> {
         log::trace!("track_or_id_to_playable playback_type={playback_type:?} track_or_id={track_or_id:?} quality={quality:?}");
         Ok(match playback_type {

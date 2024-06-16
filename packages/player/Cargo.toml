@@ -33,6 +33,7 @@ bytes             = { workspace = true }
 crossbeam-channel = { workspace = true }
 futures           = { workspace = true }
 lazy_static       = { workspace = true }
+local-ip-address  = { workspace = true }
 log               = { workspace = true }
 ogg               = { workspace = true }
 once_cell         = { workspace = true }
@@ -49,10 +50,10 @@ url               = { workspace = true }
 [features]
 default = [
     "aac",
-    "local",
     "api",
     "cpal",
     "flac",
+    "local",
     "mp3",
     "oboe-shared-stdcxx",
     "opus",

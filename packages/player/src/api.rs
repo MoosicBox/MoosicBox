@@ -252,10 +252,11 @@ pub async fn seek_track_endpoint(
     query: web::Query<SeekTrackQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(get_player(query.host.as_deref()).seek_track(
-        query.seek,
-        Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
-    )?))
+    Ok(Json(
+        get_player(query.host.as_deref())
+            .seek_track(query.seek, Some(DEFAULT_PLAYBACK_RETRY_OPTIONS))
+            .await?,
+    ))
 }
 
 #[derive(Deserialize, Clone)]
@@ -293,19 +294,23 @@ pub async fn update_playback_endpoint(
         None
     };
 
-    Ok(Json(get_player(query.host.as_deref()).update_playback(
-        query.play,
-        query.stop,
-        query.playing,
-        query.position,
-        query.seek,
-        query.volume,
-        track_ids,
-        query.format.map(|format| PlaybackQuality { format }),
-        query.session_id,
-        get_session_playlist_id_from_session_id(&**data.database, query.session_id).await?,
-        Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
-    )?))
+    Ok(Json(
+        get_player(query.host.as_deref())
+            .update_playback(
+                query.play,
+                query.stop,
+                query.playing,
+                query.position,
+                query.seek,
+                query.volume,
+                track_ids,
+                query.format.map(|format| PlaybackQuality { format }),
+                query.session_id,
+                get_session_playlist_id_from_session_id(&**data.database, query.session_id).await?,
+                Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
+            )
+            .await?,
+    ))
 }
 
 #[derive(Deserialize, Clone)]
@@ -320,10 +325,11 @@ pub async fn next_track_endpoint(
     query: web::Query<NextTrackQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(get_player(query.host.as_deref()).next_track(
-        query.seek,
-        Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
-    )?))
+    Ok(Json(
+        get_player(query.host.as_deref())
+            .next_track(query.seek, Some(DEFAULT_PLAYBACK_RETRY_OPTIONS))
+            .await?,
+    ))
 }
 
 #[derive(Deserialize, Clone)]
@@ -337,7 +343,9 @@ pub async fn pause_playback_endpoint(
     query: web::Query<PauseQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(get_player(query.host.as_deref()).pause_playback()?))
+    Ok(Json(
+        get_player(query.host.as_deref()).pause_playback().await?,
+    ))
 }
 
 #[derive(Deserialize, Clone)]
@@ -352,7 +360,9 @@ pub async fn resume_playback_endpoint(
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(
-        get_player(query.host.as_deref()).resume_playback(Some(DEFAULT_PLAYBACK_RETRY_OPTIONS))?,
+        get_player(query.host.as_deref())
+            .resume_playback(Some(DEFAULT_PLAYBACK_RETRY_OPTIONS))
+            .await?,
     ))
 }
 
@@ -368,10 +378,11 @@ pub async fn previous_track_endpoint(
     query: web::Query<PreviousTrackQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(get_player(query.host.as_deref()).previous_track(
-        query.seek,
-        Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
-    )?))
+    Ok(Json(
+        get_player(query.host.as_deref())
+            .previous_track(query.seek, Some(DEFAULT_PLAYBACK_RETRY_OPTIONS))
+            .await?,
+    ))
 }
 
 #[derive(Deserialize, Clone)]

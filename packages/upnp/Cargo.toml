@@ -22,6 +22,19 @@ moosicbox_async_service = { path = "../async_service", optional = true }
 tokio                   = { workspace = true, optional = true, features = ["macros"] }
 tokio-util              = { workspace = true, optional = true }
 
+# Player Dependencies
+async-trait                = { workspace = true, optional = true }
+atomic_float               = { workspace = true, optional = true }
+crossbeam-channel          = { workspace = true, optional = true }
+moosicbox_core             = { path = "../core", optional = true }
+moosicbox_json_utils       = { path = "../json_utils", optional = true }
+moosicbox_player           = { path = "../player", optional = true }
+moosicbox_symphonia_player = { path = "../symphonia_player", optional = true }
+rand                       = { workspace = true, optional = true }
+reqwest                    = { workspace = true, optional = true }
+symphonia                  = { workspace = true, optional = true }
+url                        = { workspace = true, optional = true }
+
 async-recursion = { workspace = true }
 futures         = { workspace = true }
 log             = { workspace = true }
@@ -35,14 +48,25 @@ thiserror       = { workspace = true }
 xml             = { workspace = true }
 
 [features]
-default = ["api", "listener"]
+default = ["api", "listener", "player"]
 
 fail-on-warnings = []
 
+
 api = ["dep:actix-web"]
-listener = [
-    "dep:flume",
+listener = ["dep:flume", "dep:tokio", "dep:tokio-util"]
+player = [
+    "dep:async-trait",
+    "dep:atomic_float",
+    "dep:crossbeam-channel",
     "dep:moosicbox_async_service",
-    "dep:tokio",
-    "dep:tokio-util",
+    "dep:moosicbox_core",
+    "dep:moosicbox_json_utils",
+    "dep:moosicbox_player",
+    "dep:moosicbox_symphonia_player",
+    "dep:rand",
+    "dep:reqwest",
+    "dep:symphonia",
+    "dep:url",
+    "listener",
 ]
