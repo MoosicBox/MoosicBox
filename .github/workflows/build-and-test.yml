@@ -184,6 +184,7 @@ jobs:
                     - name: upnp
                       path: packages/upnp
                       os: ubuntu-latest
+                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev
 
                     - name: upnp-api
                       path: packages/upnp
