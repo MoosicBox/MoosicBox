@@ -617,9 +617,11 @@ async fn register_server_player(
     moosicbox_ws::get_sessions(db, &handle, &context, true).await
 }
 
+#[cfg(feature = "upnp")]
 static UPNP_PLAYERS: Lazy<tokio::sync::RwLock<HashMap<i32, moosicbox_upnp::player::UpnpPlayer>>> =
     Lazy::new(|| tokio::sync::RwLock::new(HashMap::new()));
 
+#[cfg(feature = "upnp")]
 fn handle_upnp_playback_update(update: &UpdateSession) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     let update = update.clone();
 
@@ -695,6 +697,7 @@ fn handle_upnp_playback_update(update: &UpdateSession) -> Pin<Box<dyn Future<Out
     })
 }
 
+#[cfg(feature = "upnp")]
 async fn register_upnp_players(
     db: &dyn Database,
     mut ws: ChatServerHandle,
