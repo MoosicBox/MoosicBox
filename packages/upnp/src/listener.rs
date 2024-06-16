@@ -1,6 +1,7 @@
 use std::{collections::HashMap, fmt::Display, pin::Pin, sync::Arc, time::Duration};
 
 use futures::Future;
+use strum_macros::AsRefStr;
 use thiserror::Error;
 use tokio::task::{JoinError, JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -13,6 +14,7 @@ pub enum ListenerError {
     Rupnp(#[from] rupnp::Error),
 }
 
+#[derive(AsRefStr)]
 pub enum UpnpCommand {
     SubscribeMediaInfo {
         interval: Duration,
@@ -42,12 +44,7 @@ pub enum UpnpCommand {
 
 impl Display for UpnpCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            UpnpCommand::SubscribeMediaInfo { .. } => f.write_str("SubscribeMediaInfo"),
-            UpnpCommand::UnsubscribeMediaInfo { .. } => f.write_str("UnsubscribeMediaInfo"),
-            UpnpCommand::SubscribePositionInfo { .. } => f.write_str("SubscribePositionInfo"),
-            UpnpCommand::UnsubscribePositionInfo { .. } => f.write_str("UnsubscribePositionInfo"),
-        }
+        f.write_str(self.as_ref())
     }
 }
 
