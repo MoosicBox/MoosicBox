@@ -85,7 +85,7 @@ clap = { version = "4.5.7", features = ["derive"] }
 cpal = "0.15.3"
 crossbeam-channel = "0.5.13"
 debounce = "0.2.2"
-derive_more = "0.99.17"
+derive_more = "0.99.18"
 dotenv = "0.15"
 enum-as-inner = "0.6.0"
 env_logger = "0.11"
