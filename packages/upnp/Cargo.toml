@@ -17,9 +17,10 @@ moosicbox_assert = { path = "../assert", default-features = false }
 actix-web = { workspace = true, optional = true }
 
 # Listener Dependencies
-flume      = { workspace = true, optional = true }
-tokio      = { workspace = true, optional = true, features = ["macros"] }
-tokio-util = { workspace = true, optional = true }
+flume                   = { workspace = true, optional = true }
+moosicbox_async_service = { path = "../async_service", optional = true }
+tokio                   = { workspace = true, optional = true, features = ["macros"] }
+tokio-util              = { workspace = true, optional = true }
 
 async-recursion = { workspace = true }
 futures         = { workspace = true }
@@ -38,5 +39,10 @@ default = ["api", "listener"]
 
 fail-on-warnings = []
 
-api      = ["dep:actix-web"]
-listener = ["dep:flume", "dep:tokio", "dep:tokio-util"]
+api = ["dep:actix-web"]
+listener = [
+    "dep:flume",
+    "dep:moosicbox_async_service",
+    "dep:tokio",
+    "dep:tokio-util",
+]

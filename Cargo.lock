@@ -3922,6 +3922,7 @@ dependencies = [
  "futures",
  "log",
  "moosicbox_assert",
+ "moosicbox_async_service",
  "once_cell",
  "pin-utils",
  "regex",

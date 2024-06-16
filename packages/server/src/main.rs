@@ -230,7 +230,8 @@ fn main() -> std::io::Result<()> {
         }
 
         #[cfg(feature = "upnp")]
-        let upnp_service = moosicbox_upnp::listener::UpnpListener::new();
+        let upnp_service =
+            moosicbox_upnp::listener::Service::new(moosicbox_upnp::listener::UpnpContext::new());
         #[cfg(feature = "upnp")]
         let upnp_service_handle = upnp_service.handle();
         #[cfg(feature = "upnp")]
@@ -427,7 +428,7 @@ fn main() -> std::io::Result<()> {
 
                 #[cfg(feature = "upnp")]
                 {
-                    use moosicbox_upnp::listener::UpnpCommander as _;
+                    use moosicbox_upnp::listener::Commander as _;
 
                     log::debug!("Shutting down UpnpListener...");
                     if let Err(e) = upnp_service_handle.shutdown() {
