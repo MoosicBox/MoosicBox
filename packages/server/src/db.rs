@@ -9,7 +9,7 @@ pub enum InitSqliteError {
 }
 
 #[cfg(not(feature = "postgres"))]
-pub async fn init_sqlite() -> Result<Box<dyn Database>, InitSqliteError> {
+pub fn init_sqlite() -> Result<Box<dyn Database>, InitSqliteError> {
     let library = ::rusqlite::Connection::open("library.db")?;
     library
         .busy_timeout(std::time::Duration::from_millis(10))

@@ -150,7 +150,7 @@ fn main() -> std::io::Result<()> {
             .expect("Failed to init postgres DB");
         #[cfg(not(feature = "postgres"))]
         #[allow(unused_variables)]
-        let db = db::init_sqlite().await.expect("Failed to init sqlite DB");
+        let db = db::init_sqlite().expect("Failed to init sqlite DB");
 
         let database: Arc<Box<dyn Database>> = Arc::new(db);
         DB.write().unwrap().replace(database.clone());
