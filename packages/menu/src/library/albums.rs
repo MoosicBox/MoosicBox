@@ -1,7 +1,6 @@
 use std::{
     cmp::Ordering,
     sync::{Arc, PoisonError},
-    usize,
 };
 
 use async_recursion::async_recursion;

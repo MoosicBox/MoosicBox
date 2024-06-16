@@ -1,5 +1,4 @@
 use std::sync::{Mutex, RwLock};
-use std::usize;
 
 use crate::output::{to_samples, AudioEncoder, AudioOutput, AudioOutputError, AudioOutputHandler};
 use crate::play_file_path_str;

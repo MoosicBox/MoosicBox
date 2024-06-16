@@ -1,7 +1,4 @@
-use std::{
-    sync::{atomic::AtomicBool, Arc, RwLock},
-    usize,
-};
+use std::sync::{atomic::AtomicBool, Arc, RwLock};
 
 use async_trait::async_trait;
 use atomic_float::AtomicF64;
