@@ -162,7 +162,7 @@ macro_rules! async_service_body {
 
 #[macro_export]
 macro_rules! async_service {
-    ($command:path, $context:path, $(,)?) => {
+    ($command:path, $context:path $(,)?) => {
         #[derive(Debug, $crate::Error)]
         pub enum Error {
             #[error(transparent)]
