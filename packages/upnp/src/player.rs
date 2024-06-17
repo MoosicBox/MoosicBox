@@ -405,7 +405,7 @@ impl Player for UpnpPlayer {
             )
         };
 
-        log::debug!("update_playback: should_play={should_play}");
+        log::debug!("update_playback: should_play={should_play} should_resume={should_resume}");
 
         let original = playback.clone();
 
