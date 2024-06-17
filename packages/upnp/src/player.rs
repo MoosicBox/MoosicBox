@@ -478,7 +478,7 @@ impl Player for UpnpPlayer {
         _retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
         log::debug!("seek_track seek={seek}");
-        let playback = self.stop()?;
+        let playback = self.get_playback()?;
         let playback_id = playback.id;
         crate::seek(
             &self.service,
