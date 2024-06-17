@@ -385,7 +385,8 @@ impl Player for UpnpPlayer {
                     self.pause_playback().await?;
                 }
             } else if position.is_none() || tracks.is_some() {
-                should_resume = same_active_track(position, tracks.as_deref(), &playback)
+                should_resume = seek.is_none()
+                    && same_active_track(position, tracks.as_deref(), &playback)
                     && (should_resume || playing.unwrap_or(false));
             }
 
