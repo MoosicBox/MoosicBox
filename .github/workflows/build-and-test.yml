@@ -374,6 +374,23 @@ jobs:
                       path: packages/stream_utils
                       os: ubuntu-latest
 
+                    - name: stream_utils-no-default-features
+                      path: packages/stream_utils
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+
+                    - name: stream_utils-remote-bytestream
+                      path: packages/stream_utils
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: remote-bytestream
+
+                    - name: stream_utils-stalled-monitor
+                      path: packages/stream_utils
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: stalled-monitor
+
                     - name: symphonia_player-cpal-windows
                       path: packages/symphonia_player
                       os: windows-latest
