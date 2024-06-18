@@ -40,6 +40,18 @@ pub enum UpnpCommand {
         udn: String,
         service_id: String,
     },
+    SubscribeTransportInfo {
+        interval: Duration,
+        instance_id: u32,
+        udn: String,
+        service_id: String,
+        action: TransportInfoSubscriptionAction,
+    },
+    UnsubscribeTransportInfo {
+        instance_id: u32,
+        udn: String,
+        service_id: String,
+    },
 }
 
 impl Display for UpnpCommand {
@@ -192,6 +204,61 @@ impl Processor for Service {
                 let key = format!("PositionInfo:{instance_id}:{udn}:{service_id}");
                 unsubscribe(ctx, key).await?;
             }
+            UpnpCommand::SubscribeTransportInfo {
+                interval,
+                instance_id,
+                udn,
+                service_id,
+                action,
+            } => {
+                let action = Arc::new(action);
+                let key = format!("TransportInfo:{instance_id}:{udn}:{service_id}");
+                subscribe(
+                    ctx,
+                    interval,
+                    key,
+                    Box::new(move || {
+                        let action = action.clone();
+                        let udn = udn.clone();
+                        let service_id = service_id.clone();
+                        Box::pin(async move {
+                            if let Some(device) = super::get_device(&udn) {
+                                if let Some(service) = super::get_service(&udn, &service_id) {
+                                    match super::get_transport_info(
+                                        &service,
+                                        device.url(),
+                                        instance_id,
+                                    )
+                                    .await
+                                    {
+                                        Ok(info) => {
+                                            action(info).await;
+                                        }
+                                        Err(e) => {
+                                            log::error!("Failed to get_transport_info: {e:?}");
+                                        }
+                                    }
+                                } else {
+                                    log::debug!(
+                                        "No service with device_udn={udn} service_id={service_id}"
+                                    );
+                                }
+                            } else {
+                                log::debug!("No device with udn={udn}");
+                            }
+                        })
+                    }),
+                )
+                .await?;
+            }
+            UpnpCommand::UnsubscribeTransportInfo {
+                instance_id,
+                udn,
+                service_id,
+            } => {
+                let key = format!("TransportInfo:{instance_id}:{udn}:{service_id}");
+                unsubscribe(ctx, key).await?;
+            }
         }
         Ok(())
     }
@@ -256,5 +323,8 @@ pub type MediaInfoSubscriptionAction = Box<
     dyn (Fn(HashMap<String, String>) -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync,
 >;
 pub type PositionInfoSubscriptionAction = Box<
+    dyn (Fn(HashMap<String, String>) -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync,
+>;
+pub type TransportInfoSubscriptionAction = Box<
     dyn (Fn(HashMap<String, String>) -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync,
 >;
