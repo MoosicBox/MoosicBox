@@ -403,6 +403,20 @@ pub async fn pause(
         .await?)
 }
 
+pub async fn stop(
+    service: &Service,
+    url: &Uri,
+    instance_id: u32,
+) -> Result<HashMap<String, String>, ActionError> {
+    Ok(service
+        .action(
+            url,
+            "Stop",
+            &format!("<InstanceID>{instance_id}</InstanceID>"),
+        )
+        .await?)
+}
+
 pub async fn scan_service(
     url: Option<&Uri>,
     service: &Service,
