@@ -6,7 +6,6 @@ use std::{
 };
 
 use bytes::Bytes;
-use stalled_monitor::StalledReadMonitor;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 #[cfg(feature = "remote-bytestream")]
@@ -110,15 +109,21 @@ pub struct ByteStream {
     receiver: UnboundedReceiver<Bytes>,
 }
 
+#[cfg(feature = "stalled-monitor")]
 impl ByteStream {
-    pub fn stalled_monitor(self) -> StalledReadMonitor<Result<Bytes, std::io::Error>, ByteStream> {
+    pub fn stalled_monitor(
+        self,
+    ) -> stalled_monitor::StalledReadMonitor<Result<Bytes, std::io::Error>, ByteStream> {
         self.into()
     }
 }
 
-impl From<ByteStream> for StalledReadMonitor<Result<Bytes, std::io::Error>, ByteStream> {
+#[cfg(feature = "stalled-monitor")]
+impl From<ByteStream>
+    for stalled_monitor::StalledReadMonitor<Result<Bytes, std::io::Error>, ByteStream>
+{
     fn from(val: ByteStream) -> Self {
-        StalledReadMonitor::new(val)
+        stalled_monitor::StalledReadMonitor::new(val)
     }
 }
 
@@ -210,15 +215,17 @@ pub struct TypedStream<T> {
     receiver: UnboundedReceiver<T>,
 }
 
+#[cfg(feature = "stalled-monitor")]
 impl<T> TypedStream<T> {
-    pub fn stalled_monitor(self) -> StalledReadMonitor<T, TypedStream<T>> {
+    pub fn stalled_monitor(self) -> stalled_monitor::StalledReadMonitor<T, TypedStream<T>> {
         self.into()
     }
 }
 
-impl<T> From<TypedStream<T>> for StalledReadMonitor<T, TypedStream<T>> {
+#[cfg(feature = "stalled-monitor")]
+impl<T> From<TypedStream<T>> for stalled_monitor::StalledReadMonitor<T, TypedStream<T>> {
     fn from(val: TypedStream<T>) -> Self {
-        StalledReadMonitor::new(val)
+        stalled_monitor::StalledReadMonitor::new(val)
     }
 }
 
