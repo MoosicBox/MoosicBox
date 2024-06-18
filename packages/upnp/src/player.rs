@@ -762,31 +762,29 @@ impl UpnpPlayer {
                         let sent_playback_start_event = sent_playback_start_event.clone();
 
                         Box::pin(async move {
-                            log::debug!("position_info={position_info:?}");
-                            if let Some(track) = position_info.get("Track") {
-                                if track == "0" {
-                                    log::debug!("playback finished. unsubscribing");
-                                    if let Err(e) = tx.send_async(false).await {
-                                        log::error!("send error: {e:?}");
-                                    }
-                                    unsubscribe();
-                                    return;
+                            if log::log_enabled!(log::Level::Trace) {
+                                log::debug!(
+                                    "position_info={position_info:?} active_playback={:?}",
+                                    active_playback.read().unwrap()
+                                );
+                            } else {
+                                log::debug!("position_info={position_info:?}");
+                            }
+                            if position_info.track == 0 {
+                                log::debug!("playback finished. unsubscribing");
+                                if let Err(e) = tx.send_async(false).await {
+                                    log::error!("send error: {e:?}");
                                 }
+                                unsubscribe();
+                                return;
                             }
 
-                            let position = if let Some(time) = position_info.get("AbsTime") {
-                                let time_components = time
-                                    .split(':')
-                                    .map(|x| x.parse())
-                                    .collect::<Result<Vec<u32>, std::num::ParseIntError>>()
-                                    .expect("Failed to parse time...");
+                            if position_info.track_duration == 0 {
+                                log::debug!("Waiting for track duration...");
+                                return;
+                            }
 
-                                time_components[0] * 60 * 60
-                                    + time_components[1] * 60
-                                    + time_components[2]
-                            } else {
-                                0
-                            };
+                            let position = position_info.abs_time;
 
                             let mut binding = active_playback.write().unwrap();
                             if let Some(playback) = binding.as_mut() {

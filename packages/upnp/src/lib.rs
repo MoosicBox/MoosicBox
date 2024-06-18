@@ -14,6 +14,7 @@ use futures::prelude::*;
 use models::{UpnpDevice, UpnpService};
 use once_cell::sync::Lazy;
 pub use rupnp::{http::Uri, ssdp::SearchTarget, Device, DeviceSpec, Service};
+use serde::Serialize;
 use std::{collections::HashMap, time::Duration};
 use thiserror::Error;
 
@@ -155,6 +156,14 @@ pub fn get_device_and_service_from_url(
 }
 
 #[derive(Debug, Error)]
+pub enum ActionError {
+    #[error(transparent)]
+    Rupnp(#[from] rupnp::Error),
+    #[error("Missing property \"{0}\"")]
+    MissingProperty(String),
+}
+
+#[derive(Debug, Error)]
 pub enum ScanError {
     #[error("Failed to find RenderingControl service")]
     RenderingControlNotFound,
@@ -164,7 +173,21 @@ pub enum ScanError {
     Rupnp(#[from] rupnp::Error),
 }
 
-fn duration_to_string(duration: u32) -> String {
+pub fn str_to_duration(duration: &str) -> u32 {
+    let time_components = duration
+        .split(':')
+        .map(|x| x.parse())
+        .collect::<Result<Vec<u32>, std::num::ParseIntError>>()
+        .expect("Failed to parse time...");
+
+    time_components[0] * 60 * 60 + time_components[1] * 60 + time_components[2]
+}
+
+pub fn string_to_duration(duration: String) -> u32 {
+    str_to_duration(duration.as_str())
+}
+
+pub fn duration_to_string(duration: u32) -> String {
     format!(
         "{:0>2}:{:0>2}:{:0>2}",
         (duration / 60) / 60,
@@ -187,7 +210,7 @@ pub async fn set_av_transport_uri(
     original_track_number: Option<u32>,
     duration: Option<u32>,
     size: Option<u64>,
-) -> Result<HashMap<String, String>, ScanError> {
+) -> Result<HashMap<String, String>, ActionError> {
     let headers = "*";
 
     let transport_uri = xml::escape::escape_str_attribute(transport_uri);
@@ -264,32 +287,108 @@ pub async fn set_av_transport_uri(
         .await?)
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransportInfo {
+    current_transport_status: String,
+    current_transport_state: String,
+    current_speed: String,
+}
+
 pub async fn get_transport_info(
     service: &Service,
     url: &Uri,
     instance_id: u32,
-) -> Result<HashMap<String, String>, ScanError> {
-    Ok(service
+) -> Result<TransportInfo, ActionError> {
+    let map = service
         .action(
             url,
             "GetTransportInfo",
             &format!("<InstanceID>{instance_id}</InstanceID>"),
         )
-        .await?)
+        .await?;
+
+    Ok(TransportInfo {
+        current_transport_status: map
+            .get("CurrentTransportStatus")
+            .ok_or(ActionError::MissingProperty(
+                "CurrentTransportStatus".into(),
+            ))?
+            .to_string(),
+        current_transport_state: map
+            .get("CurrentTransportState")
+            .ok_or(ActionError::MissingProperty("CurrentTransportState".into()))?
+            .to_string(),
+        current_speed: map
+            .get("CurrentSpeed")
+            .ok_or(ActionError::MissingProperty("TrackURI".into()))?
+            .to_string(),
+    })
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PositionInfo {
+    track: u32,
+    rel_time: u32,
+    abs_time: u32,
+    track_uri: String,
+    track_metadata: String,
+    rel_count: u32,
+    abs_count: u32,
+    track_duration: u32,
 }
 
 pub async fn get_position_info(
     service: &Service,
     url: &Uri,
     instance_id: u32,
-) -> Result<HashMap<String, String>, ScanError> {
-    Ok(service
+) -> Result<PositionInfo, ActionError> {
+    let map = service
         .action(
             url,
             "GetPositionInfo",
             &format!("<InstanceID>{instance_id}</InstanceID>"),
         )
-        .await?)
+        .await?;
+
+    Ok(PositionInfo {
+        abs_time: str_to_duration(
+            map.get("AbsTime")
+                .ok_or(ActionError::MissingProperty("AbsTime".into()))?,
+        ),
+        rel_time: str_to_duration(
+            map.get("RelTime")
+                .ok_or(ActionError::MissingProperty("RelTime".into()))?,
+        ),
+        track_duration: str_to_duration(
+            map.get("TrackDuration")
+                .ok_or(ActionError::MissingProperty("TrackDuration".into()))?,
+        ),
+        abs_count: map
+            .get("AbsCount")
+            .ok_or(ActionError::MissingProperty("AbsCount".into()))?
+            .parse::<u32>()
+            .map_err(|e| ActionError::MissingProperty(format!("AbsCount (\"{e:?}\")")))?,
+        rel_count: map
+            .get("RelCount")
+            .ok_or(ActionError::MissingProperty("RelCount".into()))?
+            .parse::<u32>()
+            .map_err(|e| ActionError::MissingProperty(format!("RelCount (\"{e:?}\")")))?,
+        track: map
+            .get("Track")
+            .ok_or(ActionError::MissingProperty("Track".into()))?
+            .parse::<u32>()
+            .map_err(|e| ActionError::MissingProperty(format!("Track (\"{e:?}\")")))?,
+        track_uri: map
+            .get("TrackURI")
+            .ok_or(ActionError::MissingProperty("TrackURI".into()))?
+            .to_string(),
+        track_metadata: map
+            .get("TrackMetaData")
+            .ok_or(ActionError::MissingProperty("TrackMetaData".into()))?
+            .to_string(),
+    })
 }
 
 pub async fn seek(
@@ -298,8 +397,9 @@ pub async fn seek(
     instance_id: u32,
     unit: &str,
     target: u32,
-) -> Result<HashMap<String, String>, ScanError> {
+) -> Result<HashMap<String, String>, ActionError> {
     let target_str = duration_to_string(target);
+    log::trace!("seek: seeking to target={target_str} instance_id={instance_id} unit={unit}");
 
     Ok(service
         .action(
@@ -321,7 +421,7 @@ pub async fn get_volume(
     url: &Uri,
     instance_id: u32,
     channel: &str,
-) -> Result<HashMap<String, String>, ScanError> {
+) -> Result<HashMap<String, String>, ActionError> {
     Ok(service
         .action(
             url,
@@ -337,7 +437,7 @@ pub async fn set_volume(
     instance_id: u32,
     channel: &str,
     volume: u8,
-) -> Result<HashMap<String, String>, ScanError> {
+) -> Result<HashMap<String, String>, ActionError> {
     Ok(service
         .action(
             url,
@@ -347,18 +447,62 @@ pub async fn set_volume(
         .await?)
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaInfo {
+    media_duration: u32,
+    record_medium: String,
+    write_status: String,
+    current_uri_metadata: String,
+    nr_tracks: u32,
+    play_medium: String,
+    current_uri: String,
+}
+
 pub async fn get_media_info(
     service: &Service,
     url: &Uri,
     instance_id: u32,
-) -> Result<HashMap<String, String>, ScanError> {
-    Ok(service
+) -> Result<MediaInfo, ActionError> {
+    let map = service
         .action(
             url,
             "GetMediaInfo",
             &format!("<InstanceID>{instance_id}</InstanceID>"),
         )
-        .await?)
+        .await?;
+
+    Ok(MediaInfo {
+        media_duration: str_to_duration(
+            map.get("MediaDuration")
+                .ok_or(ActionError::MissingProperty("MediaDuration".into()))?,
+        ),
+        record_medium: map
+            .get("RecordMedium")
+            .ok_or(ActionError::MissingProperty("MediaDuration".into()))?
+            .to_string(),
+        write_status: map
+            .get("WriteStatus")
+            .ok_or(ActionError::MissingProperty("WriteStatus".into()))?
+            .to_string(),
+        current_uri_metadata: map
+            .get("CurrentURIMetaData")
+            .ok_or(ActionError::MissingProperty("CurrentURIMetaData".into()))?
+            .to_string(),
+        nr_tracks: map
+            .get("NrTracks")
+            .ok_or(ActionError::MissingProperty("NrTracks".into()))?
+            .parse::<u32>()
+            .map_err(|e| ActionError::MissingProperty(format!("NrTracks (\"{e:?}\")")))?,
+        play_medium: map
+            .get("PlayMedium")
+            .ok_or(ActionError::MissingProperty("PlayMedium".into()))?
+            .to_string(),
+        current_uri: map
+            .get("CurrentURI")
+            .ok_or(ActionError::MissingProperty("CurrentURI".into()))?
+            .to_string(),
+    })
 }
 
 pub async fn subscribe_events(
@@ -379,7 +523,7 @@ pub async fn play(
     url: &Uri,
     instance_id: u32,
     speed: f64,
-) -> Result<HashMap<String, String>, ScanError> {
+) -> Result<HashMap<String, String>, ActionError> {
     Ok(service
         .action(
             url,
@@ -393,7 +537,7 @@ pub async fn pause(
     service: &Service,
     url: &Uri,
     instance_id: u32,
-) -> Result<HashMap<String, String>, ScanError> {
+) -> Result<HashMap<String, String>, ActionError> {
     Ok(service
         .action(
             url,

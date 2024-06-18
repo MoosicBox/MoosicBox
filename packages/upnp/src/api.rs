@@ -11,12 +11,17 @@ use serde::Deserialize;
 use crate::{
     cache::get_device_and_service_from_url, get_device_and_service, get_media_info,
     get_position_info, get_transport_info, get_volume, models::UpnpDevice, pause, play,
-    scan_devices, seek, set_volume, ScanError,
+    scan_devices, seek, set_volume, ActionError, MediaInfo, PositionInfo, ScanError, TransportInfo,
 };
+
+impl From<ActionError> for actix_web::Error {
+    fn from(err: ActionError) -> Self {
+        ErrorInternalServerError(err.to_string())
+    }
+}
 
 impl From<ScanError> for actix_web::Error {
     fn from(err: ScanError) -> Self {
-        log::error!("{err:?}");
         ErrorInternalServerError(err.to_string())
     }
 }
@@ -37,7 +42,7 @@ pub struct GetTransportInfoQuery {
 #[route("/upnp/transport-info", method = "GET")]
 pub async fn get_transport_info_endpoint(
     query: web::Query<GetTransportInfoQuery>,
-) -> Result<Json<HashMap<String, String>>> {
+) -> Result<Json<TransportInfo>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
         get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")
             .ok_or(ErrorBadRequest("Invalid device udn"))?
@@ -63,7 +68,7 @@ pub struct GetMediaInfoQuery {
 #[route("/upnp/media-info", method = "GET")]
 pub async fn get_media_info_endpoint(
     query: web::Query<GetMediaInfoQuery>,
-) -> Result<Json<HashMap<String, String>>> {
+) -> Result<Json<MediaInfo>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
         get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")
             .ok_or(ErrorBadRequest("Invalid device udn"))?
@@ -89,7 +94,7 @@ pub struct GetPositionInfoQuery {
 #[route("/upnp/position-info", method = "GET")]
 pub async fn get_position_info_endpoint(
     query: web::Query<GetPositionInfoQuery>,
-) -> Result<Json<HashMap<String, String>>> {
+) -> Result<Json<PositionInfo>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
         get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")
             .ok_or(ErrorBadRequest("Invalid device udn"))?

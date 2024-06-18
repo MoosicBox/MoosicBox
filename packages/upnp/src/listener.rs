@@ -6,6 +6,8 @@ use thiserror::Error;
 use tokio::task::{JoinError, JoinHandle};
 use tokio_util::sync::CancellationToken;
 
+use crate::{MediaInfo, PositionInfo, TransportInfo};
+
 #[derive(Debug, Error)]
 pub enum ListenerError {
     #[error(transparent)]
@@ -319,12 +321,9 @@ async fn unsubscribe(ctx: &mut UpnpContext, key: String) -> Result<(), ListenerE
 }
 
 type SubscriptionAction = Box<dyn (Fn() -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send>;
-pub type MediaInfoSubscriptionAction = Box<
-    dyn (Fn(HashMap<String, String>) -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync,
->;
-pub type PositionInfoSubscriptionAction = Box<
-    dyn (Fn(HashMap<String, String>) -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync,
->;
-pub type TransportInfoSubscriptionAction = Box<
-    dyn (Fn(HashMap<String, String>) -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync,
->;
+pub type MediaInfoSubscriptionAction =
+    Box<dyn (Fn(MediaInfo) -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
+pub type PositionInfoSubscriptionAction =
+    Box<dyn (Fn(PositionInfo) -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
+pub type TransportInfoSubscriptionAction =
+    Box<dyn (Fn(TransportInfo) -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
