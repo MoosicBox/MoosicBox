@@ -78,6 +78,39 @@ macro_rules! die {
 }
 
 #[macro_export]
+macro_rules! die_or_warn {
+    ($($message:tt)+) => {
+        if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1" {
+            eprintln!(
+                "{}",
+                $crate::Colorize::on_yellow($crate::Colorize::white($crate::Colorize::bold(
+                    format!(
+                        "{}\n{}",
+                        $crate::Colorize::underline(format!($($message)*).as_str()),
+                        std::backtrace::Backtrace::force_capture()
+                    )
+                    .as_str()
+                )))
+            );
+            log::logger().flush();
+            std::process::exit(1);
+        } else {
+            log::warn!(
+                "{}",
+                $crate::Colorize::on_yellow($crate::Colorize::white($crate::Colorize::bold(
+                    format!(
+                        "{}\n{}",
+                        $crate::Colorize::underline(format!($($message)*).as_str()),
+                        std::backtrace::Backtrace::force_capture()
+                    )
+                    .as_str()
+                )))
+            );
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! die_or_error {
     ($($message:tt)+) => {
         if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1" {
