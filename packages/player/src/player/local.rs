@@ -277,9 +277,11 @@ impl Player for LocalPlayer {
                     ));
                 }
 
-                if !audio_output_handler.contains_outputs_to_open() {
-                    log::warn!("No outputs set for the audio_output_handler");
-                }
+                moosicbox_assert::assert_or_err!(
+                    audio_output_handler.contains_outputs_to_open(),
+                    PlayerError::NoAudioOutputs,
+                    "No outputs set for the audio_output_handler"
+                );
 
                 if let Err(err) = moosicbox_symphonia_player::play_media_source(
                     mss,

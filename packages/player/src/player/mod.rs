@@ -84,6 +84,8 @@ pub enum PlayerError {
     NoPlayersPlaying,
     #[error("Position out of bounds: {0}")]
     PositionOutOfBounds(i32),
+    #[error("No audio outputs")]
+    NoAudioOutputs,
     #[error("Playback not playing: {0}")]
     PlaybackNotPlaying(usize),
     #[error("Playback already playing: {0}")]
