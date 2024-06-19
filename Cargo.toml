@@ -72,9 +72,9 @@ atomic_float = "1.0.0"
 audiopus = "0.2.0"
 audiotags = { git = "https://github.com/BSteffaniak/audiotags.git", branch = "master-shallow" }
 awc = "3.5.0"
-aws-config = "1.5.1"
-aws-sdk-apigatewaymanagement = "1.31.0"
-aws-sdk-ssm = "1.34.0"
+aws-config = "1.5.2"
+aws-sdk-apigatewaymanagement = "1.32.0"
+aws-sdk-ssm = "1.35.0"
 base64 = "0.22.1"
 bytes = "1.6.0"
 chrono = { version = "0.4.38", default-features = false, features = [
@@ -178,7 +178,7 @@ tokio-postgres = { version = "0.7.10", features = ["with-chrono-0_4"] }
 tokio-stream = "0.1.15"
 tokio-tungstenite = { version = "0.23.1", features = ["native-tls-vendored"] }
 tokio-util = "0.7.11"
-url = "2.5.1"
+url = "2.5.2"
 uuid = { version = "1.8.0", features = ["v4"] }
 webp = "0.3.0"
 xml = "0.8.20"
