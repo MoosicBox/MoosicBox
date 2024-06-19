@@ -144,6 +144,31 @@ macro_rules! die_or_error {
 }
 
 #[macro_export]
+macro_rules! die_or_propagate {
+    ($evaluate:expr, $($message:tt)+) => {
+        if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1" {
+            match $evaluate {
+                Ok(x) => x,
+                Err(e) => $crate::die!($($message)*),
+            }
+        } else {
+            $evaluate?
+        }
+    };
+
+    ($evaluate:expr $(,)?) => {
+        if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1" {
+            match $evaluate {
+                Ok(x) => x,
+                Err(_e) => $crate::die!(),
+            }
+        } else {
+            $evaluate?
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! die_or_panic {
     ($($message:tt)+) => {
         if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1" {
