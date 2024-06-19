@@ -22,6 +22,7 @@ allowed-duplicate-crates = [
     "rustls-webpki",
     "spin",
     "syn",
+    "sync_wrapper",
     "tokio-rustls",
     "toml_edit",
     "webpki-roots",
