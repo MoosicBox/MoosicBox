@@ -45,6 +45,28 @@ macro_rules! assert {
 }
 
 #[macro_export]
+macro_rules! assert_or_err {
+    ($evaluate:expr, $err:expr, $(,)?) => {
+        if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1"
+            && !($evaluate)
+        {
+            $crate::assert!($evaluate)
+        } else if !($evaluate) {
+            return Err($err);
+        }
+    };
+    ($evaluate:expr, $err:expr, $($message:tt)+) => {
+        if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1"
+            && !($evaluate)
+        {
+            $crate::assert!($evaluate, $($message)*)
+        } else if !($evaluate) {
+            return Err($err);
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! die {
     () => {
         if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1" {
