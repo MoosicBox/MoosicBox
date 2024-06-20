@@ -83,6 +83,14 @@ impl TrackSource {
             TrackSource::Qobuz { format, .. } => *format,
         }
     }
+
+    pub fn track_id(&self) -> Option<u64> {
+        match self {
+            TrackSource::LocalFilePath { track_id, .. } => *track_id,
+            TrackSource::Tidal { track_id, .. } => *track_id,
+            TrackSource::Qobuz { track_id, .. } => *track_id,
+        }
+    }
 }
 
 pub fn track_source_to_content_type(source: &TrackSource) -> Option<String> {
