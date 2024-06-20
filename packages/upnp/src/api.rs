@@ -6,12 +6,14 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
+use futures::TryStreamExt;
 use serde::Deserialize;
 
 use crate::{
     cache::get_device_and_service_from_url, get_device_and_service, get_media_info,
     get_position_info, get_transport_info, get_volume, models::UpnpDevice, pause, play,
-    scan_devices, seek, set_volume, ActionError, MediaInfo, PositionInfo, ScanError, TransportInfo,
+    scan_devices, seek, set_volume, subscribe_events, ActionError, MediaInfo, PositionInfo,
+    ScanError, TransportInfo,
 };
 
 impl From<ActionError> for actix_web::Error {
@@ -179,6 +181,38 @@ pub async fn set_volume_endpoint(
         )
         .await?,
     ))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscribeQuery {
+    device_udn: Option<String>,
+    device_url: Option<String>,
+    service_id: String,
+}
+
+#[route("/upnp/subscribe", method = "POST")]
+pub async fn subscribe_endpoint(query: web::Query<SubscribeQuery>) -> Result<Json<String>> {
+    let (device, service) = if let Some(udn) = &query.device_udn {
+        get_device_and_service(udn, &query.service_id)?
+    } else if let Some(url) = &query.device_url {
+        get_device_and_service_from_url(url, &query.service_id)?
+    } else {
+        return Err(ErrorBadRequest("Must pass device_udn or device_url"));
+    };
+    let (sid, mut stream) = subscribe_events(&service, device.url()).await?;
+
+    tokio::spawn({
+        let sid = sid.clone();
+        async move {
+            while let Ok(Some(event)) = stream.try_next().await {
+                log::info!("Received subscription event for sid={sid}: {event:?}");
+            }
+            log::info!("Stream ended for sid={sid}");
+        }
+    });
+
+    Ok(Json(sid))
 }
 
 #[derive(Deserialize)]

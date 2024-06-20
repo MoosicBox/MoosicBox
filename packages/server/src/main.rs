@@ -368,6 +368,7 @@ fn main() -> std::io::Result<()> {
                     .service(moosicbox_upnp::api::get_position_info_endpoint)
                     .service(moosicbox_upnp::api::get_volume_endpoint)
                     .service(moosicbox_upnp::api::set_volume_endpoint)
+                    .service(moosicbox_upnp::api::subscribe_endpoint)
                     .service(moosicbox_upnp::api::pause_endpoint)
                     .service(moosicbox_upnp::api::play_endpoint)
                     .service(moosicbox_upnp::api::seek_endpoint);
