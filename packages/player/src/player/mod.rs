@@ -13,7 +13,7 @@ use lazy_static::lazy_static;
 use local_ip_address::local_ip;
 use moosicbox_core::{
     sqlite::{
-        db::{get_album_tracks, get_session_playlist, get_tracks, DbError},
+        db::{get_album_tracks, get_session_playlist, get_track, get_tracks, DbError},
         models::{
             qobuz::QobuzTrack, tidal::TidalTrack, ApiSource, LibraryTrack, ToApi, Track,
             TrackApiSource, UpdateSession, UpdateSessionPlaylistTrack,
@@ -240,6 +240,7 @@ impl TrackOrId {
 }
 
 pub async fn get_track_url(
+    db: &dyn Database,
     track_id: u64,
     api_source: ApiSource,
     player_source: &PlayerSource,
@@ -275,6 +276,17 @@ pub async fn get_track_url(
         }
     };
 
+    let track_source = match api_source {
+        ApiSource::Library => {
+            get_track(db, track_id)
+                .await?
+                .ok_or(PlayerError::TrackNotFound(track_id as i32))?
+                .source
+        }
+        ApiSource::Tidal => TrackApiSource::Tidal,
+        ApiSource::Qobuz => TrackApiSource::Qobuz,
+    };
+
     let query_params = {
         let mut serializer = url::form_urlencoded::Serializer::new(String::new());
 
@@ -285,6 +297,7 @@ pub async fn get_track_url(
         }
 
         serializer.append_pair("trackId", &track_id.to_string());
+        serializer.append_pair("source", track_source.as_ref());
 
         match api_source {
             ApiSource::Library => {

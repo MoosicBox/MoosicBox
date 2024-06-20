@@ -11,6 +11,7 @@ use moosicbox_core::{
     sqlite::models::{ApiSource, ToApi, UpdateSession},
     types::PlaybackQuality,
 };
+use moosicbox_database::Database;
 use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;
 use moosicbox_symphonia_player::media_sources::remote_bytestream::RemoteByteStreamMediaSource;
 use rand::{thread_rng, Rng as _};
@@ -29,6 +30,7 @@ use crate::listener::{Commander, Handle, UpnpCommand};
 
 #[derive(Clone)]
 pub struct UpnpPlayer {
+    pub db: Arc<Box<dyn Database>>,
     pub id: usize,
     source: PlayerSource,
     pub active_playback: Arc<RwLock<Option<Playback>>>,
@@ -201,6 +203,7 @@ impl Player for UpnpPlayer {
             let sent_playback_start_event = Arc::new(AtomicBool::new(false));
 
             let (transport_uri, headers) = get_track_url(
+                &**self.db,
                 track_id.try_into().unwrap(),
                 track_or_id.api_source(),
                 &self.source,
@@ -580,6 +583,7 @@ impl Player for UpnpPlayer {
         quality: PlaybackQuality,
     ) -> Result<PlayableTrack, PlayerError> {
         let (url, headers) = get_track_url(
+            &**self.db,
             track_id.try_into().unwrap(),
             source,
             &self.source,
@@ -695,6 +699,7 @@ fn same_active_track(
 
 impl UpnpPlayer {
     pub fn new(
+        db: Arc<Box<dyn Database>>,
         device: Device,
         service: Service,
         source: PlayerSource,
@@ -702,6 +707,7 @@ impl UpnpPlayer {
     ) -> UpnpPlayer {
         UpnpPlayer {
             id: thread_rng().gen::<usize>(),
+            db,
             source,
             active_playback: Arc::new(RwLock::new(None)),
             receiver: Arc::new(RwLock::new(None)),
