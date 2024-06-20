@@ -20,6 +20,7 @@ use moosicbox_core::{
 use moosicbox_database::Database;
 use moosicbox_downloader::{api::models::ApiProgressEvent, queue::ProgressEvent};
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
+use moosicbox_files::files::track_pool::service::Commander as _;
 use moosicbox_player::{
     api::DEFAULT_PLAYBACK_RETRY_OPTIONS,
     player::{Player as _, PlayerSource, TrackOrId},
@@ -231,6 +232,20 @@ fn main() -> std::io::Result<()> {
             log::debug!("Registered server player");
         }
 
+        let (track_pool_handle, track_pool_join_handle) = {
+            use moosicbox_files::files::track_pool::{service::Service, Context, HANDLE};
+
+            let service = Service::new(Context::new());
+            let handle = service.handle();
+            let join_handle = service.start();
+
+            HANDLE
+                .set(handle.clone())
+                .unwrap_or_else(|_| panic!("Failed to set TrackPool HANDLE"));
+
+            (handle, join_handle)
+        };
+
         #[cfg(feature = "upnp")]
         let upnp_service =
             moosicbox_upnp::listener::Service::new(moosicbox_upnp::listener::UpnpContext::new());
@@ -432,6 +447,11 @@ fn main() -> std::io::Result<()> {
                     log::error!("Failed to shut down PlaybackEventHandler: {e:?}");
                 }
 
+                log::debug!("Shutting down TrackPool...");
+                if let Err(e) = track_pool_handle.shutdown() {
+                    log::error!("Failed to shut down TrackPool: {e:?}");
+                }
+
                 log::debug!("Shutting down server players...");
                 let players = SERVER_PLAYERS.write().await.drain().collect::<Vec<_>>();
                 for (id, player) in players {
@@ -481,6 +501,14 @@ fn main() -> std::io::Result<()> {
                 let resp = playback_join_handle
                     .await
                     .expect("Failed to shut down playback event handler")
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
+                log::debug!("PlaybackEventHandler connection closed");
+                resp
+            },
+            async move {
+                let resp = track_pool_join_handle
+                    .await
+                    .expect("Failed to shut down track_pool event handler")
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
                 log::debug!("PlaybackEventHandler connection closed");
                 resp

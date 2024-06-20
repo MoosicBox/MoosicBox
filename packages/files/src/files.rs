@@ -8,7 +8,7 @@ pub mod artist;
 pub mod track;
 
 mod track_bytes_media_source;
-mod track_pool;
+pub mod track_pool;
 
 #[derive(Debug, Error)]
 pub enum ResizeImageError {

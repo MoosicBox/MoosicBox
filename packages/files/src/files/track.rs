@@ -7,6 +7,7 @@ use std::{
 };
 
 use bytes::{Bytes, BytesMut};
+use flume::RecvError;
 use futures::{prelude::*, StreamExt};
 use futures_core::Stream;
 use lazy_static::lazy_static;
@@ -51,6 +52,8 @@ use crate::files::{
     filename_from_path_str, track_bytes_media_source::TrackBytesMediaSource,
     track_pool::get_or_fetch_track,
 };
+
+use super::track_pool::service::CommanderError;
 
 lazy_static! {
     static ref RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
@@ -295,7 +298,11 @@ pub enum GetTrackBytesError {
     #[error(transparent)]
     Acquire(#[from] tokio::sync::AcquireError),
     #[error(transparent)]
+    Recv(#[from] RecvError),
+    #[error(transparent)]
     TrackInfo(#[from] TrackInfoError),
+    #[error(transparent)]
+    Commander(#[from] CommanderError),
     #[error("Track not found")]
     NotFound,
     #[error("Unsupported format")]
