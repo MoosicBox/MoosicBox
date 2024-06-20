@@ -118,8 +118,8 @@ impl Processor for Service {
                         let udn = udn.clone();
                         let service_id = service_id.clone();
                         Box::pin(async move {
-                            if let Some(device) = super::get_device(&udn) {
-                                if let Some(service) = super::get_service(&udn, &service_id) {
+                            if let Ok(device) = super::get_device(&udn) {
+                                if let Ok(service) = super::get_service(&udn, &service_id) {
                                     match super::get_media_info(&service, device.url(), instance_id)
                                         .await
                                     {
@@ -169,8 +169,8 @@ impl Processor for Service {
                         let udn = udn.clone();
                         let service_id = service_id.clone();
                         Box::pin(async move {
-                            if let Some(device) = super::get_device(&udn) {
-                                if let Some(service) = super::get_service(&udn, &service_id) {
+                            if let Ok(device) = super::get_device(&udn) {
+                                if let Ok(service) = super::get_service(&udn, &service_id) {
                                     match super::get_position_info(
                                         &service,
                                         device.url(),
@@ -224,8 +224,8 @@ impl Processor for Service {
                         let udn = udn.clone();
                         let service_id = service_id.clone();
                         Box::pin(async move {
-                            if let Some(device) = super::get_device(&udn) {
-                                if let Some(service) = super::get_service(&udn, &service_id) {
+                            if let Ok(device) = super::get_device(&udn) {
+                                if let Ok(service) = super::get_service(&udn, &service_id) {
                                     match super::get_transport_info(
                                         &service,
                                         device.url(),

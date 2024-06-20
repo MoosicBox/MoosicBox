@@ -642,7 +642,6 @@ fn handle_upnp_playback_update(update: &UpdateSession) -> Pin<Box<dyn Future<Out
                     let service_id = "urn:upnp-org:serviceId:AVTransport";
                     let (device, service) =
                         moosicbox_upnp::get_device_and_service(device_udn, service_id)
-                            .ok_or(moosicbox_upnp::ScanError::MediaRendererNotFound)
                             .expect("Failed to get device and service");
 
                     let mut player = moosicbox_upnp::player::UpnpPlayer::new(

@@ -44,11 +44,9 @@ pub async fn get_transport_info_endpoint(
     query: web::Query<GetTransportInfoQuery>,
 ) -> Result<Json<TransportInfo>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
-        get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")
-            .ok_or(ErrorBadRequest("Invalid device udn"))?
+        get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")?
     } else if let Some(url) = &query.device_url {
-        get_device_and_service_from_url(url, "urn:upnp-org:serviceId:AVTransport")
-            .ok_or(ErrorBadRequest("Invalid device url"))?
+        get_device_and_service_from_url(url, "urn:upnp-org:serviceId:AVTransport")?
     } else {
         return Err(ErrorBadRequest("Must pass device_udn or device_url"));
     };
@@ -70,11 +68,9 @@ pub async fn get_media_info_endpoint(
     query: web::Query<GetMediaInfoQuery>,
 ) -> Result<Json<MediaInfo>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
-        get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")
-            .ok_or(ErrorBadRequest("Invalid device udn"))?
+        get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")?
     } else if let Some(url) = &query.device_url {
-        get_device_and_service_from_url(url, "urn:upnp-org:serviceId:AVTransport")
-            .ok_or(ErrorBadRequest("Invalid device url"))?
+        get_device_and_service_from_url(url, "urn:upnp-org:serviceId:AVTransport")?
     } else {
         return Err(ErrorBadRequest("Must pass device_udn or device_url"));
     };
@@ -96,11 +92,9 @@ pub async fn get_position_info_endpoint(
     query: web::Query<GetPositionInfoQuery>,
 ) -> Result<Json<PositionInfo>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
-        get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")
-            .ok_or(ErrorBadRequest("Invalid device udn"))?
+        get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")?
     } else if let Some(url) = &query.device_url {
-        get_device_and_service_from_url(url, "urn:upnp-org:serviceId:AVTransport")
-            .ok_or(ErrorBadRequest("Invalid device url"))?
+        get_device_and_service_from_url(url, "urn:upnp-org:serviceId:AVTransport")?
     } else {
         return Err(ErrorBadRequest("Must pass device_udn or device_url"));
     };
@@ -123,11 +117,9 @@ pub async fn get_volume_endpoint(
     query: web::Query<GetVolumeQuery>,
 ) -> Result<Json<HashMap<String, String>>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
-        get_device_and_service(udn, "urn:upnp-org:serviceId:RenderingControl")
-            .ok_or(ErrorBadRequest("Invalid device udn"))?
+        get_device_and_service(udn, "urn:upnp-org:serviceId:RenderingControl")?
     } else if let Some(url) = &query.device_url {
-        get_device_and_service_from_url(url, "urn:upnp-org:serviceId:RenderingControl")
-            .ok_or(ErrorBadRequest("Invalid device url"))?
+        get_device_and_service_from_url(url, "urn:upnp-org:serviceId:RenderingControl")?
     } else {
         return Err(ErrorBadRequest("Must pass device_udn or device_url"));
     };
@@ -157,11 +149,9 @@ pub async fn set_volume_endpoint(
     query: web::Query<SetVolumeQuery>,
 ) -> Result<Json<HashMap<String, String>>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
-        get_device_and_service(udn, "urn:upnp-org:serviceId:RenderingControl")
-            .ok_or(ErrorBadRequest("Invalid device udn"))?
+        get_device_and_service(udn, "urn:upnp-org:serviceId:RenderingControl")?
     } else if let Some(url) = &query.device_url {
-        get_device_and_service_from_url(url, "urn:upnp-org:serviceId:RenderingControl")
-            .ok_or(ErrorBadRequest("Invalid device url"))?
+        get_device_and_service_from_url(url, "urn:upnp-org:serviceId:RenderingControl")?
     } else {
         return Err(ErrorBadRequest("Must pass device_udn or device_url"));
     };
@@ -190,11 +180,9 @@ pub async fn pause_endpoint(
     query: web::Query<PauseQuery>,
 ) -> Result<Json<HashMap<String, String>>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
-        get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")
-            .ok_or(ErrorBadRequest("Invalid device udn"))?
+        get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")?
     } else if let Some(url) = &query.device_url {
-        get_device_and_service_from_url(url, "urn:upnp-org:serviceId:AVTransport")
-            .ok_or(ErrorBadRequest("Invalid device url"))?
+        get_device_and_service_from_url(url, "urn:upnp-org:serviceId:AVTransport")?
     } else {
         return Err(ErrorBadRequest("Must pass device_udn or device_url"));
     };
@@ -215,11 +203,9 @@ pub struct PlayQuery {
 #[route("/upnp/play", method = "POST")]
 pub async fn play_endpoint(query: web::Query<PlayQuery>) -> Result<Json<HashMap<String, String>>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
-        get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")
-            .ok_or(ErrorBadRequest("Invalid device udn"))?
+        get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")?
     } else if let Some(url) = &query.device_url {
-        get_device_and_service_from_url(url, "urn:upnp-org:serviceId:AVTransport")
-            .ok_or(ErrorBadRequest("Invalid device url"))?
+        get_device_and_service_from_url(url, "urn:upnp-org:serviceId:AVTransport")?
     } else {
         return Err(ErrorBadRequest("Must pass device_udn or device_url"));
     };
@@ -247,11 +233,9 @@ pub struct SeekQuery {
 #[route("/upnp/seek", method = "POST")]
 pub async fn seek_endpoint(query: web::Query<SeekQuery>) -> Result<Json<HashMap<String, String>>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
-        get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")
-            .ok_or(ErrorBadRequest("Invalid device udn"))?
+        get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")?
     } else if let Some(url) = &query.device_url {
-        get_device_and_service_from_url(url, "urn:upnp-org:serviceId:AVTransport")
-            .ok_or(ErrorBadRequest("Invalid device url"))?
+        get_device_and_service_from_url(url, "urn:upnp-org:serviceId:AVTransport")?
     } else {
         return Err(ErrorBadRequest("Must pass device_udn or device_url"));
     };

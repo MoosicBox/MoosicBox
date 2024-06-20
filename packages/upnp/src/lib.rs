@@ -24,6 +24,8 @@ mod cache {
     use once_cell::sync::Lazy;
     use rupnp::{Device, Service};
 
+    use crate::ScanError;
+
     #[derive(Debug, Clone)]
     struct DeviceMapping {
         device: Device,
@@ -36,20 +38,28 @@ mod cache {
     static DEVICE_MAPPINGS: Lazy<RwLock<HashMap<String, DeviceMapping>>> =
         Lazy::new(|| RwLock::new(HashMap::new()));
 
-    pub(crate) fn get_device_from_url(url: &str) -> Option<Device> {
-        DEVICE_URL_MAPPINGS
+    pub(crate) fn get_device_from_url(url: &str) -> Result<Device, ScanError> {
+        Ok(DEVICE_MAPPINGS
             .read()
             .unwrap()
             .get(url)
-            .map(|x| x.device.clone())
+            .ok_or_else(|| ScanError::DeviceUrlNotFound {
+                device_url: url.to_string(),
+            })?
+            .device
+            .clone())
     }
 
-    pub(crate) fn get_device(udn: &str) -> Option<Device> {
-        DEVICE_MAPPINGS
+    pub(crate) fn get_device(udn: &str) -> Result<Device, ScanError> {
+        Ok(DEVICE_MAPPINGS
             .read()
             .unwrap()
             .get(udn)
-            .map(|x| x.device.clone())
+            .ok_or_else(|| ScanError::DeviceUdnNotFound {
+                device_udn: udn.to_string(),
+            })?
+            .device
+            .clone())
     }
 
     pub(crate) fn insert_device(device: Device) {
@@ -69,43 +79,64 @@ mod cache {
         );
     }
 
-    pub(crate) fn get_service(device_udn: &str, service_id: &str) -> Option<Service> {
-        DEVICE_MAPPINGS
+    pub(crate) fn get_service(device_udn: &str, service_id: &str) -> Result<Service, ScanError> {
+        Ok(DEVICE_MAPPINGS
             .read()
             .unwrap()
             .get(device_udn)
-            .and_then(|x| x.services.get(service_id))
-            .cloned()
+            .ok_or_else(|| ScanError::DeviceUdnNotFound {
+                device_udn: device_udn.to_string(),
+            })?
+            .services
+            .get(service_id)
+            .ok_or_else(|| ScanError::ServiceIdNotFound {
+                service_id: service_id.to_string(),
+            })?
+            .clone())
     }
 
     pub(crate) fn get_device_and_service(
         device_udn: &str,
         service_id: &str,
-    ) -> Option<(Device, Service)> {
-        DEVICE_MAPPINGS
-            .read()
-            .unwrap()
+    ) -> Result<(Device, Service), ScanError> {
+        let devices = DEVICE_MAPPINGS.read().unwrap();
+        let device = devices
             .get(device_udn)
-            .and_then(|x| {
-                x.services
-                    .get(service_id)
-                    .map(|s| (x.device.clone(), s.clone()))
-            })
+            .ok_or_else(|| ScanError::DeviceUdnNotFound {
+                device_udn: device_udn.to_string(),
+            })?;
+        Ok((
+            device.device.clone(),
+            device
+                .services
+                .get(service_id)
+                .ok_or_else(|| ScanError::ServiceIdNotFound {
+                    service_id: service_id.to_string(),
+                })?
+                .clone(),
+        ))
     }
 
     pub(crate) fn get_device_and_service_from_url(
         device_url: &str,
         service_id: &str,
-    ) -> Option<(Device, Service)> {
-        DEVICE_URL_MAPPINGS
-            .read()
-            .unwrap()
+    ) -> Result<(Device, Service), ScanError> {
+        let devices = DEVICE_URL_MAPPINGS.read().unwrap();
+        let device = devices
             .get(device_url)
-            .and_then(|x| {
-                x.services
-                    .get(service_id)
-                    .map(|s| (x.device.clone(), s.clone()))
-            })
+            .ok_or_else(|| ScanError::DeviceUrlNotFound {
+                device_url: device_url.to_string(),
+            })?;
+        Ok((
+            device.device.clone(),
+            device
+                .services
+                .get(service_id)
+                .ok_or_else(|| ScanError::ServiceIdNotFound {
+                    service_id: service_id.to_string(),
+                })?
+                .clone(),
+        ))
     }
 
     pub(crate) fn insert_service(device: &Device, service: Service) {
@@ -132,26 +163,29 @@ mod cache {
     }
 }
 
-pub fn get_device(udn: &str) -> Option<Device> {
+pub fn get_device(udn: &str) -> Result<Device, ScanError> {
     cache::get_device(udn)
 }
 
-pub fn get_service(device_udn: &str, service_id: &str) -> Option<Service> {
+pub fn get_service(device_udn: &str, service_id: &str) -> Result<Service, ScanError> {
     cache::get_service(device_udn, service_id)
 }
 
-pub fn get_device_and_service(device_udn: &str, service_id: &str) -> Option<(Device, Service)> {
+pub fn get_device_and_service(
+    device_udn: &str,
+    service_id: &str,
+) -> Result<(Device, Service), ScanError> {
     cache::get_device_and_service(device_udn, service_id)
 }
 
-pub fn get_device_from_url(url: &str) -> Option<Device> {
+pub fn get_device_from_url(url: &str) -> Result<Device, ScanError> {
     cache::get_device_from_url(url)
 }
 
 pub fn get_device_and_service_from_url(
     device_url: &str,
     service_id: &str,
-) -> Option<(Device, Service)> {
+) -> Result<(Device, Service), ScanError> {
     cache::get_device_and_service_from_url(device_url, service_id)
 }
 
@@ -169,6 +203,12 @@ pub enum ScanError {
     RenderingControlNotFound,
     #[error("Failed to find MediaRenderer service")]
     MediaRendererNotFound,
+    #[error("Failed to find UPnP Device device_udn={device_udn}")]
+    DeviceUdnNotFound { device_udn: String },
+    #[error("Failed to find UPnP Device device_url={device_url}")]
+    DeviceUrlNotFound { device_url: String },
+    #[error("Failed to find UPnP Service service_id={service_id}")]
+    ServiceIdNotFound { service_id: String },
     #[error(transparent)]
     Rupnp(#[from] rupnp::Error),
 }
