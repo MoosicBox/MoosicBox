@@ -24,10 +24,7 @@ macro_rules! async_service_body {
             ) -> Result<(), Self::Error>;
 
             #[allow(unused_variables)]
-            async fn on_start(
-                ctx: &mut $context,
-                token: $crate::CancellationToken
-            ) -> Result<(), Self::Error> {
+            async fn on_start(&mut self) -> Result<(), Self::Error> {
                 Ok(())
             }
 
@@ -40,10 +37,10 @@ macro_rules! async_service_body {
         }
 
         pub struct Service {
-            ctx: $context,
+            pub ctx: $context,
+            pub token: $crate::CancellationToken,
             sender: $crate::Sender<Command>,
             receiver: $crate::Receiver<Command>,
-            token: $crate::CancellationToken,
         }
 
         impl Service {
@@ -59,7 +56,7 @@ macro_rules! async_service_body {
 
             pub fn start(mut self) -> $crate::JoinHandle<Result<(), Error>> {
                 $crate::tokio::spawn(async move {
-                    Self::on_start(&mut self.ctx, self.token.clone()).await?;
+                    self.on_start().await?;
 
                     while let Ok(Ok(command)) = $crate::tokio::select!(
                         () = self.token.cancelled() => {

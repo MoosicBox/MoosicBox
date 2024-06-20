@@ -82,8 +82,8 @@ moosicbox_async_service::async_service!(UpnpCommand, UpnpContext, ListenerError)
 impl Processor for Service {
     type Error = ListenerError;
 
-    async fn on_start(ctx: &mut UpnpContext, token: CancellationToken) -> Result<(), Self::Error> {
-        ctx.token.replace(token);
+    async fn on_start(&mut self) -> Result<(), Self::Error> {
+        self.ctx.token.replace(self.token.clone());
         Ok(())
     }
 
