@@ -94,18 +94,19 @@ pub async fn track_visualization_endpoint(
 
 impl From<GetTrackBytesError> for actix_web::Error {
     fn from(err: GetTrackBytesError) -> Self {
-        log::error!("GetTrackBytesError {err:?}");
         match err {
-            GetTrackBytesError::Db(_) => ErrorInternalServerError(err),
-            GetTrackBytesError::IO(_) => ErrorInternalServerError(err),
-            GetTrackBytesError::Reqwest(_) => ErrorInternalServerError(err),
-            GetTrackBytesError::TrackInfo(_) => ErrorInternalServerError(err),
+            GetTrackBytesError::Db(_)
+            | GetTrackBytesError::IO(_)
+            | GetTrackBytesError::Reqwest(_)
+            | GetTrackBytesError::Acquire(_)
+            | GetTrackBytesError::Join(_)
+            | GetTrackBytesError::ToStr(_)
+            | GetTrackBytesError::ParseInt(_)
+            | GetTrackBytesError::Recv(_)
+            | GetTrackBytesError::Commander(_)
+            | GetTrackBytesError::TrackInfo(_) => ErrorInternalServerError(err),
             GetTrackBytesError::NotFound => ErrorNotFound(err),
             GetTrackBytesError::UnsupportedFormat => ErrorBadRequest(err),
-            GetTrackBytesError::Acquire(_) => ErrorInternalServerError(err),
-            GetTrackBytesError::Join(_) => ErrorInternalServerError(err),
-            GetTrackBytesError::ToStr(_) => ErrorInternalServerError(err),
-            GetTrackBytesError::ParseInt(_) => ErrorInternalServerError(err),
         }
     }
 }
