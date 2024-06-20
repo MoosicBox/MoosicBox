@@ -293,6 +293,7 @@ pub async fn create_session(
 
 pub async fn update_session(db: &dyn Database, session: &UpdateSession) -> Result<(), DbError> {
     if session.playlist.is_some() {
+        log::trace!("update_session: Deleting existing session_playlist_tracks");
         db.delete("session_playlist_tracks")
             .where_in(
                 "session_playlist_tracks.id",
@@ -310,6 +311,8 @@ pub async fn update_session(db: &dyn Database, session: &UpdateSession) -> Resul
             )
             .execute(db)
             .await?;
+    } else {
+        log::trace!("update_session: No playlist");
     }
 
     let playlist_id = session
@@ -318,7 +321,9 @@ pub async fn update_session(db: &dyn Database, session: &UpdateSession) -> Resul
         .map(|p| p.session_playlist_id as i64);
 
     if let Some(tracks) = session.playlist.as_ref().map(|p| &p.tracks) {
+        log::trace!("update_session: Inserting new tracks");
         for track in tracks {
+            log::trace!("update_session: Inserting track {track:?}");
             db.insert("session_playlist_tracks")
                 .value("session_playlist_id", playlist_id)
                 .value("track_id", track.id)
@@ -327,6 +332,8 @@ pub async fn update_session(db: &dyn Database, session: &UpdateSession) -> Resul
                 .execute(db)
                 .await?;
         }
+    } else {
+        log::trace!("update_session: No tracks to insert");
     }
 
     let mut values = Vec::new();
@@ -351,13 +358,17 @@ pub async fn update_session(db: &dyn Database, session: &UpdateSession) -> Resul
     }
 
     if !values.is_empty() {
+        log::trace!("update_session: Updating session values values={values:?}");
         db.update("sessions")
             .where_eq("id", session.session_id)
             .values(values)
             .execute_first(db)
             .await?;
+    } else {
+        log::trace!("update_session: No values to update on the session");
     }
 
+    log::trace!("update_session: Finished updating session");
     Ok(())
 }
 
