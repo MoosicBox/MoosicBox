@@ -248,7 +248,10 @@ pub async fn get_or_fetch_track(
 
             finished.store(true, std::sync::atomic::Ordering::SeqCst);
             writers.lock().await.retain_mut(|x| {
-                log::debug!("Closing writer id={}", x.id);
+                log::debug!(
+                    "Writer has finished reading from stream, closing writer id={}",
+                    x.id
+                );
                 x.close();
                 false
             });
