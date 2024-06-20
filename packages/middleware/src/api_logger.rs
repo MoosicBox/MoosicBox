@@ -81,6 +81,18 @@ where
             let duration = std::time::Instant::now().duration_since(start).as_millis();
             match response {
                 Ok(data) => {
+                    const RELEVANT_HEADER_NAMES: [header::HeaderName; 3] = [
+                        header::CONTENT_RANGE,
+                        header::ACCEPT_RANGES,
+                        header::CONTENT_LENGTH,
+                    ];
+                    let relevant_headers = data
+                        .response()
+                        .headers()
+                        .iter()
+                        .filter(|(name, _)| RELEVANT_HEADER_NAMES.iter().any(|x| x == name))
+                        .collect::<Vec<_>>();
+                    let prefix = format!("{prefix} resp_headers={relevant_headers:?}");
                     let status = data.response().status();
                     if status.is_success() || status.is_redirection() || status.is_informational() {
                         log::trace!("{prefix} FINISHED SUCCESS \"{status}\" ({duration} ms)");
