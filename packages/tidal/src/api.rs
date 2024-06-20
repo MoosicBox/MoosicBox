@@ -1,5 +1,5 @@
 use actix_web::{
-    error::{ErrorInternalServerError, ErrorNotFound},
+    error::{ErrorInternalServerError, ErrorNotFound, ErrorUnauthorized},
     route,
     web::{self, Json},
     HttpRequest, Result,
@@ -209,9 +209,11 @@ pub async fn device_authorization_token_endpoint(
 }
 
 impl From<TidalTrackFileUrlError> for actix_web::Error {
-    fn from(err: TidalTrackFileUrlError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
+    fn from(e: TidalTrackFileUrlError) -> Self {
+        match e {
+            TidalTrackFileUrlError::AuthenticatedRequest(e) => ErrorUnauthorized(e.to_string()),
+            TidalTrackFileUrlError::Parse(_) => ErrorInternalServerError(e.to_string()),
+        }
     }
 }
 
