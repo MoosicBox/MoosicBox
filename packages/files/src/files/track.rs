@@ -20,9 +20,13 @@ use moosicbox_core::{
 use moosicbox_database::{Database, DatabaseValue};
 use moosicbox_json_utils::{MissingValue, ParseError, ToValueType};
 use moosicbox_qobuz::{QobuzAudioQuality, QobuzTrackFileUrlError};
-use moosicbox_stream_utils::{new_byte_writer_id, remote_bytestream::RemoteByteStream, stalled_monitor::StalledReadMonitor, ByteWriter};
+use moosicbox_stream_utils::{
+    new_byte_writer_id, remote_bytestream::RemoteByteStream, stalled_monitor::StalledReadMonitor,
+    ByteWriter,
+};
 use moosicbox_symphonia_player::{
-    media_sources::remote_bytestream::RemoteByteStreamMediaSource, output::AudioOutputHandler, play_file_path_str, play_media_source, PlaybackError
+    media_sources::remote_bytestream::RemoteByteStreamMediaSource, output::AudioOutputHandler,
+    play_file_path_str, play_media_source, PlaybackError,
 };
 use moosicbox_tidal::{TidalAudioQuality, TidalTrackFileUrlError};
 use regex::{Captures, Regex};
@@ -376,15 +380,11 @@ pub async fn get_audio_bytes(
 ) -> Result<TrackBytes, GetTrackBytesError> {
     log::debug!("Getting audio bytes format={format:?} size={size:?} start={start:?} end={end:?}");
 
-    get_or_fetch_track(
-        &source, format, 
-        size,
-        start ,
-        end,
-        {
+    get_or_fetch_track(&source, format, size, start, end, {
         let source = source.clone();
         || {
             Box::pin(async move {
+                log::debug!("get_audio_bytes: cache miss; eagerly fetching audio bytes");
                 let writer = ByteWriter::default();
                 let writer_id = writer.id;
                 #[allow(unused)]
@@ -491,7 +491,8 @@ pub async fn get_audio_bytes(
                                         #[cfg(not(feature = "flac"))]
                                         false,
                                         CancellationToken::new(),
-                                    ).into();
+                                    )
+                                    .into();
                                     if let Err(err) = play_media_source(
                                         MediaSourceStream::new(Box::new(source), Default::default()),
                                         &Hint::new(),
@@ -506,12 +507,14 @@ pub async fn get_audio_bytes(
                                 }
                             }
                         }
-                    }).await?;
+                    })
+                    .await?;
 
                     match source {
                         TrackSource::LocalFilePath { path, .. } => match format {
                             AudioFormat::Source => {
-                                request_audio_bytes_from_file(path, format, size, start, end).await?
+                                request_audio_bytes_from_file(path, format, size, start, end)
+                                    .await?
                             }
                             #[allow(unreachable_patterns)]
                             _ => TrackBytes {
@@ -523,21 +526,23 @@ pub async fn get_audio_bytes(
                                 filename: filename_from_path_str(&path),
                             },
                         },
-                        TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } => match format
-                        {
-                            AudioFormat::Source => {
-                                request_track_bytes_from_url(&url, start, end, format, size).await?
+                        TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } => {
+                            match format {
+                                AudioFormat::Source => {
+                                    request_track_bytes_from_url(&url, start, end, format, size)
+                                        .await?
+                                }
+                                #[allow(unreachable_patterns)]
+                                _ => TrackBytes {
+                                    id: writer_id,
+                                    stream: StalledReadMonitor::new(stream.boxed()),
+                                    size,
+                                    original_size: size,
+                                    format,
+                                    filename: None,
+                                },
                             }
-                            #[allow(unreachable_patterns)]
-                            _ => TrackBytes {
-                                id: writer_id,
-                                stream: StalledReadMonitor::new(stream.boxed()),
-                                size,
-                                original_size: size,
-                                format,
-                                filename: None,
-                            },
-                        },
+                        }
                     }
                 };
 
@@ -616,9 +621,7 @@ async fn request_track_bytes_from_url(
 
     let size = if size.is_none() {
         log::debug!("request_track_bytes_from_url: Sending head request to url={url}");
-        let head = head_request
-            .send()
-            .await?;
+        let head = head_request.send().await?;
 
         if let Some(header) = head
             .headers()
