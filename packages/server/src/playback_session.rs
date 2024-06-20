@@ -18,7 +18,7 @@ pub fn on_playback_event(update: &UpdateSession, _current: &Playback) {
         .unwrap()
         .send_command(Command::UpdateSession { update })
     {
-        log::error!("Failed to broadcast update_session: {err:?}");
+        moosicbox_assert::die_or_error!("Failed to broadcast update_session: {err:?}");
     }
 }
 
@@ -77,7 +77,7 @@ impl<Sender: WebsocketSender> Context<Sender> {
                     ));
                 };
                 if let Err(err) = update_session(&**db, &self.sender, None, &update).await {
-                    log::error!("Failed to broadcast update_session: {err:?}");
+                    moosicbox_assert::die_or_error!("Failed to update_session: {err:?}");
                 }
             }
         }
