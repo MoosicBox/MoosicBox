@@ -142,13 +142,17 @@ pub fn track_key(source: &TrackSource, output_format: AudioFormat) -> String {
 pub async fn get_or_fetch_track(
     source: &TrackSource,
     output_format: AudioFormat,
-    _size: Option<u64>,
+    size: Option<u64>,
     start: Option<u64>,
     end: Option<u64>,
-    fetch: impl FnOnce() -> Pin<Box<dyn Future<Output = Result<TrackBytes, GetTrackBytesError>> + Send>>,
+    fetch: impl Fn(
+        Option<u64>,
+        Option<u64>,
+        Option<u64>,
+    ) -> Pin<Box<dyn Future<Output = Result<TrackBytes, GetTrackBytesError>> + Send>>,
 ) -> Result<TrackBytes, GetTrackBytesError> {
     if start.is_some() || end.is_some() {
-        return fetch().await;
+        return fetch(start, end, size).await;
     }
 
     let key = track_key(source, output_format);
@@ -186,8 +190,8 @@ pub async fn get_or_fetch_track(
     let bytes = Arc::new(RwLock::new(vec![]));
     let finished = Arc::new(AtomicBool::new(false));
 
-    log::debug!("Fetching track bytes for key={key}");
-    let track_bytes = fetch().await?;
+    log::debug!("Fetching track bytes for key={key} start={start:?} end={end:?} size={size:?}");
+    let track_bytes = fetch(start, end, size).await?;
     let bytes_source = TrackBytesSource {
         key: key.clone(),
         writers: writers.clone(),

@@ -382,7 +382,8 @@ pub async fn get_audio_bytes(
 
     get_or_fetch_track(&source, format, size, start, end, {
         let source = source.clone();
-        || {
+        move |start, end, size| {
+            let source = source.clone();
             Box::pin(async move {
                 log::debug!("get_audio_bytes: cache miss; eagerly fetching audio bytes");
                 let writer = ByteWriter::default();
