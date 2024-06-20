@@ -113,10 +113,16 @@ macro_rules! async_service_body {
             token: $crate::CancellationToken,
         }
 
+        impl From<$crate::SendError<Command>> for CommanderError {
+            fn from(_value: $crate::SendError<Command>) -> Self {
+                Self::Send
+            }
+        }
+
         #[derive(Debug, $crate::Error)]
         pub enum CommanderError {
-            #[error(transparent)]
-            Send(#[from] $crate::SendError<Command>),
+            #[error("Failed to send")]
+            Send,
             #[error(transparent)]
             Recv(#[from] $crate::RecvError),
         }
@@ -160,12 +166,18 @@ macro_rules! async_service_body {
 #[macro_export]
 macro_rules! async_service {
     ($command:path, $context:path $(,)?) => {
+        impl From<$crate::SendError<()>> for Error {
+            fn from(_value: $crate::SendError<()>) -> Self {
+                Self::Send
+            }
+        }
+
         #[derive(Debug, $crate::Error)]
         pub enum Error {
             #[error(transparent)]
             Join(#[from] $crate::JoinError),
-            #[error(transparent)]
-            Send(#[from] $crate::SendError<()>),
+            #[error("Failed to send")]
+            Send,
             #[allow(unused)]
             #[error(transparent)]
             IO(#[from] std::io::Error),
@@ -175,12 +187,18 @@ macro_rules! async_service {
     };
 
     ($command:path, $context:path, $error:path $(,)?) => {
+        impl From<$crate::SendError<()>> for Error {
+            fn from(_value: $crate::SendError<()>) -> Self {
+                Self::Send
+            }
+        }
+
         #[derive(Debug, $crate::Error)]
         pub enum Error {
             #[error(transparent)]
             Join(#[from] $crate::JoinError),
-            #[error(transparent)]
-            Send(#[from] $crate::SendError<()>),
+            #[error("Failed to send")]
+            Send,
             #[allow(unused)]
             #[error(transparent)]
             IO(#[from] std::io::Error),
