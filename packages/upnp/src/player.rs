@@ -42,7 +42,7 @@ pub struct UpnpPlayer {
 
 #[async_trait]
 impl Player for UpnpPlayer {
-    fn play_playback(
+    async fn play_playback(
         &self,
         mut playback: Playback,
         seek: Option<f64>,
@@ -51,7 +51,7 @@ impl Player for UpnpPlayer {
         log::info!("Playing playback...");
         if let Ok(playback) = self.get_playback() {
             log::debug!("Stopping existing playback {}", playback.id);
-            self.stop()?;
+            self.stop().await?;
         }
 
         if playback.tracks.is_empty() {
@@ -303,7 +303,7 @@ impl Player for UpnpPlayer {
         Ok(())
     }
 
-    fn stop(&self) -> Result<Playback, PlayerError> {
+    async fn stop(&self) -> Result<Playback, PlayerError> {
         log::info!("Stopping playback");
         let playback = self.get_playback()?;
 
@@ -371,7 +371,7 @@ impl Player for UpnpPlayer {
         if stop.unwrap_or(false) {
             return Ok(PlaybackStatus {
                 success: true,
-                playback_id: self.stop()?.id,
+                playback_id: self.stop().await?.id,
             });
         }
 
@@ -449,12 +449,12 @@ impl Player for UpnpPlayer {
             match self.resume_playback(retry_options).await {
                 Ok(status) => Ok(status),
                 Err(e) => {
-                    log::error!("Failed to resume playback: {e:?}");
-                    self.play_playback(playback, progress, retry_options)
+                    moosicbox_assert::die_or_error!("Failed to resume playback: {e:?}");
+                    self.play_playback(playback, progress, retry_options).await
                 }
             }
         } else if should_play {
-            self.play_playback(playback, progress, retry_options)
+            self.play_playback(playback, progress, retry_options).await
         } else {
             if let Some(seek) = seek {
                 self.seek_track(seek, retry_options).await?;

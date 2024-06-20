@@ -529,7 +529,7 @@ pub trait Player {
     ) -> Result<PlaybackStatus, PlayerError> {
         if let Ok(playback) = self.get_playback() {
             log::debug!("Stopping existing playback {}", playback.id);
-            self.stop()?;
+            self.stop().await?;
         }
 
         let tracks = {
@@ -583,10 +583,10 @@ pub trait Player {
             get_session_playlist_id_from_session_id(db, session_id).await?,
         );
 
-        self.play_playback(playback, seek, retry_options)
+        self.play_playback(playback, seek, retry_options).await
     }
 
-    fn play_playback(
+    async fn play_playback(
         &self,
         playback: Playback,
         seek: Option<f64>,
@@ -599,9 +599,9 @@ pub trait Player {
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError>;
 
-    fn stop_track(&self) -> Result<PlaybackStatus, PlayerError> {
+    async fn stop_track(&self) -> Result<PlaybackStatus, PlayerError> {
         log::debug!("stop_track called");
-        let playback = self.stop()?;
+        let playback = self.stop().await?;
 
         Ok(PlaybackStatus {
             success: true,
@@ -609,7 +609,7 @@ pub trait Player {
         })
     }
 
-    fn stop(&self) -> Result<Playback, PlayerError>;
+    async fn stop(&self) -> Result<Playback, PlayerError>;
 
     async fn seek_track(
         &self,
@@ -617,9 +617,10 @@ pub trait Player {
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
         log::debug!("seek_track seek={seek}");
-        let playback = self.stop()?;
+        let playback = self.stop().await?;
         let playback_id = playback.id;
-        self.play_playback(playback, Some(seek), retry_options)?;
+        self.play_playback(playback, Some(seek), retry_options)
+            .await?;
 
         Ok(PlaybackStatus {
             success: true,
@@ -721,7 +722,7 @@ pub trait Player {
         playback.playing = true;
         playback.abort = CancellationToken::new();
 
-        self.play_playback(playback, seek, retry_options)
+        self.play_playback(playback, seek, retry_options).await
     }
 
     async fn track_to_playable_file(

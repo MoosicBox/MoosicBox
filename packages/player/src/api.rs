@@ -238,7 +238,7 @@ pub async fn stop_track_endpoint(
     query: web::Query<StopTrackQuery>,
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(get_player(query.host.as_deref()).stop_track()?))
+    Ok(Json(get_player(query.host.as_deref()).stop_track().await?))
 }
 
 #[derive(Deserialize, Clone)]

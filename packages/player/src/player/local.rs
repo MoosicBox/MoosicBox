@@ -36,7 +36,7 @@ pub struct LocalPlayer {
 
 #[async_trait]
 impl Player for LocalPlayer {
-    fn play_playback(
+    async fn play_playback(
         &self,
         mut playback: Playback,
         seek: Option<f64>,
@@ -45,7 +45,7 @@ impl Player for LocalPlayer {
         log::info!("Playing playback...");
         if let Ok(playback) = self.get_playback() {
             log::debug!("Stopping existing playback {}", playback.id);
-            self.stop()?;
+            self.stop().await?;
         }
 
         if playback.tracks.is_empty() {
@@ -328,7 +328,7 @@ impl Player for LocalPlayer {
         Ok(())
     }
 
-    fn stop(&self) -> Result<Playback, PlayerError> {
+    async fn stop(&self) -> Result<Playback, PlayerError> {
         log::info!("Stopping playback");
         let playback = self.get_playback()?;
 
@@ -396,7 +396,7 @@ impl Player for LocalPlayer {
         if stop.unwrap_or(false) {
             return Ok(PlaybackStatus {
                 success: true,
-                playback_id: self.stop()?.id,
+                playback_id: self.stop().await?.id,
             });
         }
 
@@ -468,7 +468,7 @@ impl Player for LocalPlayer {
         };
 
         if should_play {
-            self.play_playback(playback, seek, retry_options)
+            self.play_playback(playback, seek, retry_options).await
         } else {
             log::debug!("update_playback: updating active playback to {playback:?}");
             self.active_playback
