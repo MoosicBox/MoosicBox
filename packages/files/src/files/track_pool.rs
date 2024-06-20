@@ -225,7 +225,7 @@ pub async fn get_or_fetch_track(
                                     .join(", ")
                             );
                             writers.retain_mut(|x| {
-                                log::debug!(
+                                log::trace!(
                                     "Writing {} track bytes to writer id={} for key={key}",
                                     new_bytes.len(),
                                     x.id
