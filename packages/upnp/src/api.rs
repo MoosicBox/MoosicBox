@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use actix_web::{
-    error::{ErrorBadRequest, ErrorInternalServerError},
+    error::{ErrorBadRequest, ErrorFailedDependency, ErrorInternalServerError},
     route,
     web::{self, Json},
     Result,
@@ -15,14 +15,28 @@ use crate::{
 };
 
 impl From<ActionError> for actix_web::Error {
-    fn from(err: ActionError) -> Self {
-        ErrorInternalServerError(err.to_string())
+    fn from(e: ActionError) -> Self {
+        match &e {
+            ActionError::Rupnp(rupnp_err) => {
+                ErrorFailedDependency(format!("UPnP error: {rupnp_err:?}"))
+            }
+            ActionError::MissingProperty(_property) => ErrorInternalServerError(e.to_string()),
+        }
     }
 }
 
 impl From<ScanError> for actix_web::Error {
-    fn from(err: ScanError) -> Self {
-        ErrorInternalServerError(err.to_string())
+    fn from(e: ScanError) -> Self {
+        match e {
+            ScanError::RenderingControlNotFound => ErrorFailedDependency(e.to_string()),
+            ScanError::MediaRendererNotFound => ErrorFailedDependency(e.to_string()),
+            ScanError::DeviceUdnNotFound { .. } => ErrorFailedDependency(e.to_string()),
+            ScanError::DeviceUrlNotFound { .. } => ErrorFailedDependency(e.to_string()),
+            ScanError::ServiceIdNotFound { .. } => ErrorFailedDependency(e.to_string()),
+            ScanError::Rupnp(rupnp_err) => {
+                ErrorFailedDependency(format!("UPnP error: {rupnp_err:?}"))
+            }
+        }
     }
 }
 
