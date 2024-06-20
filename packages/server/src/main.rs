@@ -511,7 +511,7 @@ fn handle_server_playback_update(
         let updated = {
             {
                 if SERVER_PLAYERS
-                    .write()
+                    .read()
                     .await
                     .get(&update.session_id)
                     .is_none()
@@ -631,7 +631,7 @@ fn handle_upnp_playback_update(update: &UpdateSession) -> Pin<Box<dyn Future<Out
         log::debug!("Handling UPnP playback update={update:?}");
         let updated = {
             {
-                if UPNP_PLAYERS.write().await.get(&update.session_id).is_none() {
+                if UPNP_PLAYERS.read().await.get(&update.session_id).is_none() {
                     let mut players = UPNP_PLAYERS.write().await;
 
                     let db = {
