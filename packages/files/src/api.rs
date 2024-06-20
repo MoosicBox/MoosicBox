@@ -1,5 +1,5 @@
 use actix_web::{
-    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
+    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound, ErrorUnauthorized},
     route,
     web::{self, Json},
     HttpRequest, HttpResponse, Result,
@@ -26,16 +26,43 @@ use crate::files::{
 };
 
 impl From<TrackSourceError> for actix_web::Error {
-    fn from(err: TrackSourceError) -> Self {
-        log::error!("TrackSourceError {err:?}");
-        ErrorInternalServerError(err.to_string())
+    fn from(e: TrackSourceError) -> Self {
+        match e {
+            TrackSourceError::NotFound(e) => ErrorNotFound(e.to_string()),
+            TrackSourceError::InvalidSource => ErrorBadRequest(e.to_string()),
+            TrackSourceError::Db(_) => ErrorInternalServerError(e.to_string()),
+            TrackSourceError::TidalTrackUrl(e) => match e {
+                moosicbox_tidal::TidalTrackFileUrlError::AuthenticatedRequest(e) => {
+                    ErrorUnauthorized(e.to_string())
+                }
+                moosicbox_tidal::TidalTrackFileUrlError::Parse(_) => {
+                    ErrorInternalServerError(e.to_string())
+                }
+            },
+            TrackSourceError::QobuzTrackUrl(e) => match e {
+                moosicbox_qobuz::QobuzTrackFileUrlError::AuthenticatedRequest(_) => {
+                    ErrorUnauthorized(e.to_string())
+                }
+                moosicbox_qobuz::QobuzTrackFileUrlError::Database(_) => {
+                    ErrorInternalServerError(e.to_string())
+                }
+                moosicbox_qobuz::QobuzTrackFileUrlError::Db(_) => {
+                    ErrorInternalServerError(e.to_string())
+                }
+                moosicbox_qobuz::QobuzTrackFileUrlError::NoAppSecretAvailable => {
+                    ErrorInternalServerError(e.to_string())
+                }
+                moosicbox_qobuz::QobuzTrackFileUrlError::Parse(_) => {
+                    ErrorInternalServerError(e.to_string())
+                }
+            },
+        }
     }
 }
 
 impl From<TrackInfoError> for actix_web::Error {
-    fn from(err: TrackInfoError) -> Self {
-        log::error!("TrackInfoError {err:?}");
-        ErrorInternalServerError(err.to_string())
+    fn from(e: TrackInfoError) -> Self {
+        ErrorInternalServerError(e.to_string())
     }
 }
 
@@ -44,25 +71,24 @@ impl From<TrackInfoError> for actix_web::Error {
 pub struct GetTrackVisualizationQuery {
     pub track_id: i32,
     pub max: Option<u16>,
+    pub source: Option<TrackApiSource>,
 }
 
 #[route("/track/visualization", method = "GET")]
 pub async fn track_visualization_endpoint(
-    req: HttpRequest,
     query: web::Query<GetTrackVisualizationQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<Vec<u8>>> {
-    let method = req.method();
-
-    let source = get_track_id_source(query.track_id, &**data.database, None, None).await?;
-
-    log::debug!(
-        "{method} /track/visualization track_id={} source={source:?}",
-        query.track_id
-    );
+    let source = get_track_id_source(
+        query.track_id,
+        &**data.database,
+        None,
+        query.source.unwrap_or(TrackApiSource::Local),
+    )
+    .await?;
 
     Ok(Json(
-        get_or_init_track_visualization(query.track_id, &source, query.max.unwrap_or(333)).await?,
+        get_or_init_track_visualization(&source, query.max.unwrap_or(333)).await?,
     ))
 }
 
@@ -105,7 +131,7 @@ pub async fn track_endpoint(
         query.track_id as i32,
         &**data.database,
         query.quality,
-        query.source,
+        query.source.unwrap_or(TrackApiSource::Local),
     )
     .await?;
 

@@ -194,80 +194,81 @@ pub async fn get_track_id_source(
     track_id: i32,
     db: &dyn Database,
     quality: Option<TrackAudioQuality>,
-    source: Option<TrackApiSource>,
+    source: TrackApiSource,
 ) -> Result<TrackSource, TrackSourceError> {
-    log::debug!("get_track_id_source: {track_id} quality={quality:?} source={source:?}",);
+    log::debug!("get_track_id_source: track_id={track_id} quality={quality:?} source={source:?}",);
 
-    let track = get_track(db, track_id as u64)
-        .await?
-        .ok_or(TrackSourceError::NotFound(track_id))?;
+    match source {
+        TrackApiSource::Local => {
+            let track = get_track(db, track_id as u64)
+                .await?
+                .ok_or(TrackSourceError::NotFound(track_id))?;
 
-    get_track_source(&track, db, quality, source).await
+            get_track_source(track_id, Some(track).as_ref(), db, quality, source).await
+        }
+        _ => get_track_source(track_id, None, db, quality, source).await,
+    }
 }
 
 pub async fn get_track_source(
-    track: &LibraryTrack,
+    track_id: i32,
+    track: Option<&LibraryTrack>,
     db: &dyn Database,
     quality: Option<TrackAudioQuality>,
-    source: Option<TrackApiSource>,
+    source: TrackApiSource,
 ) -> Result<TrackSource, TrackSourceError> {
     log::debug!(
-        "get_track_source: {} quality={quality:?} source={source:?}",
-        track.id,
+        "get_track_source: track_id={:?} quality={quality:?} source={source:?}",
+        track.map(|x| x.id),
     );
-
-    let source = source.unwrap_or(track.source);
 
     log::debug!("Got track {track:?}. Getting source={source:?}");
 
     match source {
-        TrackApiSource::Local => match &track.file {
-            Some(file) => match env::consts::OS {
-                "windows" => Ok(TrackSource::LocalFilePath {
-                    path: Regex::new(r"/mnt/(\w+)")
-                        .unwrap()
-                        .replace(file, |caps: &Captures| {
-                            format!("{}:", caps[1].to_uppercase())
-                        })
-                        .replace('/', "\\"),
-                    format: track.format.unwrap_or(AudioFormat::Source),
-                    track_id: Some(track.id.try_into().expect("Invalid track id")),
-                }),
-                _ => Ok(TrackSource::LocalFilePath {
-                    path: file.to_string(),
-                    format: track.format.unwrap_or(AudioFormat::Source),
-                    track_id: Some(track.id.try_into().expect("Invalid track id")),
-                }),
-            },
-            None => Err(TrackSourceError::InvalidSource),
-        },
+        TrackApiSource::Local => {
+            let track = track.expect("Missing track");
+            match &track.file {
+                Some(file) => match env::consts::OS {
+                    "windows" => Ok(TrackSource::LocalFilePath {
+                        path: Regex::new(r"/mnt/(\w+)")
+                            .unwrap()
+                            .replace(file, |caps: &Captures| {
+                                format!("{}:", caps[1].to_uppercase())
+                            })
+                            .replace('/', "\\"),
+                        format: track.format.unwrap_or(AudioFormat::Source),
+                        track_id: Some(track.id.try_into().expect("Invalid track id")),
+                    }),
+                    _ => Ok(TrackSource::LocalFilePath {
+                        path: file.to_string(),
+                        format: track.format.unwrap_or(AudioFormat::Source),
+                        track_id: Some(track.id.try_into().expect("Invalid track id")),
+                    }),
+                },
+                None => Err(TrackSourceError::InvalidSource),
+            }
+        }
         TrackApiSource::Tidal => {
             let quality = quality.map(|q| q.into()).unwrap_or(TidalAudioQuality::High);
-            let track_id = track
-                .tidal_id
-                .ok_or(TrackSourceError::InvalidSource)?
-                .into();
+            let track_id = (track_id as u64).into();
             Ok(TrackSource::Tidal {
                 url: moosicbox_tidal::track_file_url(db, quality, &track_id, None)
                     .await?
                     .first()
                     .unwrap()
                     .to_string(),
-                format: track.format.unwrap_or(AudioFormat::Source),
-                track_id: Some(track.id.try_into().expect("Invalid track id")),
+                format: track.and_then(|x| x.format).unwrap_or(AudioFormat::Source),
+                track_id: Some(track_id.into()),
             })
         }
         TrackApiSource::Qobuz => {
             let quality = quality.map(|q| q.into()).unwrap_or(QobuzAudioQuality::Low);
-            let track_id = track
-                .qobuz_id
-                .ok_or(TrackSourceError::InvalidSource)?
-                .into();
+            let track_id = (track_id as u64).into();
             Ok(TrackSource::Qobuz {
                 url: moosicbox_qobuz::track_file_url(db, &track_id, quality, None, None, None)
                     .await?,
-                format: track.format.unwrap_or(AudioFormat::Source),
-                track_id: Some(track.id.try_into().expect("Invalid track id")),
+                format: track.and_then(|x| x.format).unwrap_or(AudioFormat::Source),
+                track_id: Some(track_id.into()),
             })
         }
     }
@@ -754,11 +755,13 @@ where
 }
 
 pub async fn get_or_init_track_visualization(
-    track_id: i32,
     source: &TrackSource,
     max: u16,
 ) -> Result<Vec<u8>, TrackInfoError> {
-    log::debug!("Getting track visualization {track_id} max={max}");
+    log::debug!(
+        "Getting track visualization track_id={:?} max={max}",
+        source.track_id()
+    );
 
     let viz = Arc::new(RwLock::new(vec![]));
     let inner_viz = viz.clone();

@@ -12,7 +12,7 @@ use futures_util::future::ready;
 use futures_util::{future, pin_mut, Future, Stream, StreamExt};
 use lazy_static::lazy_static;
 use moosicbox_auth::FetchSignatureError;
-use moosicbox_core::sqlite::models::{AlbumId, ApiSource};
+use moosicbox_core::sqlite::models::{AlbumId, ApiSource, TrackApiSource};
 use moosicbox_core::types::AudioFormat;
 use moosicbox_database::Database;
 use moosicbox_env_utils::default_env_usize;
@@ -1130,7 +1130,7 @@ impl TunnelSender {
                         query.track_id,
                         &**database,
                         query.quality,
-                        query.source,
+                        query.source.unwrap_or(TrackApiSource::Local),
                     )
                     .await
                     {
