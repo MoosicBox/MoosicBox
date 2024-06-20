@@ -191,11 +191,13 @@ pub async fn track_endpoint(
                 }
                 #[cfg(not(feature = "flac"))]
                 {
-                    log::warn!("No valid CONTENT_TYPE available for audio format {format:?}");
+                    moosicbox_assert::die_or_warn!(
+                        "No valid CONTENT_TYPE available for audio format {format:?}"
+                    );
                 }
             }
             _ => {
-                log::warn!("Failed to get CONTENT_TYPE for track source");
+                moosicbox_assert::die_or_warn!("Failed to get CONTENT_TYPE for track source");
             }
         }
     }
