@@ -3811,6 +3811,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_async_service",
  "moosicbox_core",
+ "moosicbox_database",
  "moosicbox_json_utils",
  "moosicbox_player",
  "moosicbox_stream_utils",

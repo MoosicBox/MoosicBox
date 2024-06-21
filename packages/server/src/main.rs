@@ -687,6 +687,7 @@ fn handle_upnp_playback_update(update: &UpdateSession) -> Pin<Box<dyn Future<Out
                             .expect("Failed to get device and service");
 
                     let mut player = moosicbox_upnp::player::UpnpPlayer::new(
+                        DB.read().unwrap().clone().unwrap(),
                         device,
                         service,
                         PlayerSource::Local,
