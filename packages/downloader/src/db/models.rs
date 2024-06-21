@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use moosicbox_core::sqlite::models::{AsId, TrackApiSource};
+use moosicbox_core::sqlite::models::{ApiSource, AsId, TrackApiSource};
 use moosicbox_database::DatabaseValue;
 use moosicbox_files::files::track::TrackAudioQuality;
 use moosicbox_json_utils::{
@@ -98,6 +98,15 @@ impl ToValueType<DownloadTaskState> for Value {
 pub enum DownloadApiSource {
     Tidal,
     Qobuz,
+}
+
+impl From<DownloadApiSource> for ApiSource {
+    fn from(value: DownloadApiSource) -> Self {
+        match value {
+            DownloadApiSource::Tidal => ApiSource::Tidal,
+            DownloadApiSource::Qobuz => ApiSource::Qobuz,
+        }
+    }
 }
 
 impl From<DownloadApiSource> for TrackApiSource {
