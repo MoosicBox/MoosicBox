@@ -285,6 +285,7 @@ pub async fn get_track_url(
         }
 
         serializer.append_pair("trackId", &track_id.to_string());
+        serializer.append_pair("source", api_source.as_ref());
 
         match api_source {
             ApiSource::Library => {
