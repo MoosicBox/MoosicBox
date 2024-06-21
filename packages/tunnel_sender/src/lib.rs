@@ -1,7 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 use bytes::Bytes;
-use moosicbox_core::{sqlite::models::TrackApiSource, types::AudioFormat};
+use moosicbox_core::{sqlite::models::ApiSource, types::AudioFormat};
 use moosicbox_files::files::track::TrackAudioQuality;
 use moosicbox_ws::WebsocketMessageError;
 use serde::Deserialize;
@@ -61,7 +61,7 @@ struct GetTrackQuery {
     track_id: i32,
     format: Option<AudioFormat>,
     quality: Option<TrackAudioQuality>,
-    source: Option<TrackApiSource>,
+    source: Option<ApiSource>,
 }
 
 #[derive(Debug, Deserialize)]

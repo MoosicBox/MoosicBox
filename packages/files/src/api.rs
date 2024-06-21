@@ -8,7 +8,7 @@ use futures::StreamExt;
 use moosicbox_core::{
     app::AppState,
     integer_range::{parse_integer_ranges, ParseIntegersError},
-    sqlite::models::{AlbumId, ApiSource, ArtistId, TrackApiSource},
+    sqlite::models::{AlbumId, ApiSource, ArtistId},
     types::AudioFormat,
 };
 use serde::Deserialize;
@@ -71,7 +71,7 @@ impl From<TrackInfoError> for actix_web::Error {
 pub struct GetTrackVisualizationQuery {
     pub track_id: i32,
     pub max: Option<u16>,
-    pub source: Option<TrackApiSource>,
+    pub source: Option<ApiSource>,
 }
 
 #[route("/track/visualization", method = "GET")]
@@ -83,7 +83,7 @@ pub async fn track_visualization_endpoint(
         query.track_id,
         &**data.database,
         None,
-        query.source.unwrap_or(TrackApiSource::Local),
+        query.source.unwrap_or(ApiSource::Library),
     )
     .await?;
 
@@ -117,7 +117,7 @@ pub struct GetTrackQuery {
     pub track_id: u64,
     pub format: Option<AudioFormat>,
     pub quality: Option<TrackAudioQuality>,
-    pub source: Option<TrackApiSource>,
+    pub source: Option<ApiSource>,
 }
 
 #[route("/track", method = "GET", method = "HEAD")]
@@ -132,7 +132,7 @@ pub async fn track_endpoint(
         query.track_id as i32,
         &**data.database,
         query.quality,
-        query.source.unwrap_or(TrackApiSource::Local),
+        query.source.unwrap_or(ApiSource::Library),
     )
     .await?;
 

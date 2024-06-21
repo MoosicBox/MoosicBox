@@ -14,7 +14,7 @@ use lazy_static::lazy_static;
 use moosicbox_core::{
     sqlite::{
         db::{get_track, get_track_size, get_tracks, set_track_size, DbError, SetTrackSize},
-        models::{LibraryTrack, TrackApiSource},
+        models::{ApiSource, LibraryTrack, TrackApiSource},
     },
     types::{AudioFormat, PlaybackQuality},
 };
@@ -30,6 +30,7 @@ use moosicbox_symphonia_player::{
     play_file_path_str, play_media_source, PlaybackError,
 };
 use moosicbox_tidal::{TidalAudioQuality, TidalTrackFileUrlError};
+use once_cell::sync::Lazy;
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
@@ -201,12 +202,12 @@ pub async fn get_track_id_source(
     track_id: i32,
     db: &dyn Database,
     quality: Option<TrackAudioQuality>,
-    source: TrackApiSource,
+    source: ApiSource,
 ) -> Result<TrackSource, TrackSourceError> {
     log::debug!("get_track_id_source: track_id={track_id} quality={quality:?} source={source:?}",);
 
     match source {
-        TrackApiSource::Local => {
+        ApiSource::Library => {
             let track = get_track(db, track_id as u64)
                 .await?
                 .ok_or(TrackSourceError::NotFound(track_id))?;
@@ -222,8 +223,10 @@ pub async fn get_track_source(
     track: Option<&LibraryTrack>,
     db: &dyn Database,
     quality: Option<TrackAudioQuality>,
-    source: TrackApiSource,
+    source: ApiSource,
 ) -> Result<TrackSource, TrackSourceError> {
+    static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
+
     log::debug!(
         "get_track_source: track_id={:?} quality={quality:?} source={source:?}",
         track.map(|x| x.id),
@@ -231,33 +234,54 @@ pub async fn get_track_source(
 
     log::debug!("Got track {track:?}. Getting source={source:?}");
 
+    let (track_id, source, file, format) = if source == ApiSource::Library {
+        let track = track.ok_or_else(|| TrackSourceError::NotFound(track_id))?;
+        (
+            match track.source {
+                TrackApiSource::Local => track.id as u64,
+                TrackApiSource::Tidal => track.tidal_id.ok_or(TrackSourceError::InvalidSource)?,
+                TrackApiSource::Qobuz => track.qobuz_id.ok_or(TrackSourceError::InvalidSource)?,
+            },
+            track.source,
+            track.file.clone(),
+            track.format.unwrap_or(AudioFormat::Source),
+        )
+    } else {
+        (
+            track_id as u64,
+            match source {
+                ApiSource::Library => unreachable!(),
+                ApiSource::Tidal => TrackApiSource::Tidal,
+                ApiSource::Qobuz => TrackApiSource::Qobuz,
+            },
+            None,
+            AudioFormat::Source,
+        )
+    };
+
     match source {
         TrackApiSource::Local => {
-            let track = track.expect("Missing track");
-            match &track.file {
-                Some(file) => match env::consts::OS {
-                    "windows" => Ok(TrackSource::LocalFilePath {
-                        path: Regex::new(r"/mnt/(\w+)")
-                            .unwrap()
-                            .replace(file, |caps: &Captures| {
-                                format!("{}:", caps[1].to_uppercase())
-                            })
-                            .replace('/', "\\"),
-                        format: track.format.unwrap_or(AudioFormat::Source),
-                        track_id: Some(track.id.try_into().expect("Invalid track id")),
-                    }),
-                    _ => Ok(TrackSource::LocalFilePath {
-                        path: file.to_string(),
-                        format: track.format.unwrap_or(AudioFormat::Source),
-                        track_id: Some(track.id.try_into().expect("Invalid track id")),
-                    }),
-                },
-                None => Err(TrackSourceError::InvalidSource),
+            let mut path = file
+                .ok_or_else(|| TrackSourceError::InvalidSource)?
+                .to_string();
+
+            if env::consts::OS == "windows" {
+                path = REGEX
+                    .replace(&path, |caps: &Captures| {
+                        format!("{}:", caps[1].to_uppercase())
+                    })
+                    .replace('/', "\\");
             }
+
+            Ok(TrackSource::LocalFilePath {
+                path,
+                format,
+                track_id: Some(track_id),
+            })
         }
         TrackApiSource::Tidal => {
             let quality = quality.map(|q| q.into()).unwrap_or(TidalAudioQuality::High);
-            let track_id = (track_id as u64).into();
+            let track_id = track_id.into();
             Ok(TrackSource::Tidal {
                 url: moosicbox_tidal::track_file_url(db, quality, &track_id, None)
                     .await?
@@ -270,7 +294,7 @@ pub async fn get_track_source(
         }
         TrackApiSource::Qobuz => {
             let quality = quality.map(|q| q.into()).unwrap_or(QobuzAudioQuality::Low);
-            let track_id = (track_id as u64).into();
+            let track_id = track_id.into();
             Ok(TrackSource::Qobuz {
                 url: moosicbox_qobuz::track_file_url(db, &track_id, quality, None, None, None)
                     .await?,
