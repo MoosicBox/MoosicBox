@@ -93,7 +93,7 @@ impl RemoteByteStreamFetcher {
             log::debug!("Fetching byte stream with range {bytes_range}");
 
             let response = Client::new()
-                .get(url.clone())
+                .get(&url)
                 .header("Range", bytes_range)
                 .send()
                 .await;
