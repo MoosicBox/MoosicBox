@@ -14,7 +14,6 @@ use moosicbox_core::{
     sqlite::models::ApiSource,
     types::{AudioFormat, PlaybackQuality},
 };
-use moosicbox_database::Database;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 
@@ -73,7 +72,7 @@ impl From<PlayerError> for actix_web::Error {
 static PLAYER_CACHE: Lazy<Arc<Mutex<HashMap<String, LocalPlayer>>>> =
     Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
-fn get_player(db: Arc<Box<dyn Database>>, host: Option<&str>) -> LocalPlayer {
+fn get_player(host: Option<&str>) -> LocalPlayer {
     PLAYER_CACHE
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -83,7 +82,6 @@ fn get_player(db: Arc<Box<dyn Database>>, host: Option<&str>) -> LocalPlayer {
         })
         .or_insert(if let Some(host) = host {
             LocalPlayer::new(
-                db,
                 PlayerSource::Remote {
                     host: host.to_string(),
                     query: None,
@@ -92,7 +90,7 @@ fn get_player(db: Arc<Box<dyn Database>>, host: Option<&str>) -> LocalPlayer {
                 Some(super::player::PlaybackType::Stream),
             )
         } else {
-            LocalPlayer::new(db, PlayerSource::Local, None)
+            LocalPlayer::new(PlayerSource::Local, None)
         })
         .clone()
 }
@@ -120,7 +118,7 @@ pub async fn play_album_endpoint(
     data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(
-        get_player(data.database.clone(), query.host.as_deref())
+        get_player(query.host.as_deref())
             .play_album(
                 &**data.database,
                 query.session_id,
@@ -169,7 +167,7 @@ pub async fn play_track_endpoint(
     )))?;
 
     Ok(Json(
-        get_player(data.database.clone(), query.host.as_deref())
+        get_player(query.host.as_deref())
             .play_track(
                 &**data.database,
                 query.session_id,
@@ -212,7 +210,7 @@ pub async fn play_tracks_endpoint(
     .await?;
 
     Ok(Json(
-        get_player(data.database.clone(), query.host.as_deref())
+        get_player(query.host.as_deref())
             .play_tracks(
                 &**data.database,
                 query.session_id,
@@ -238,13 +236,9 @@ pub struct StopTrackQuery {
 #[post("/player/stop")]
 pub async fn stop_track_endpoint(
     query: web::Query<StopTrackQuery>,
-    data: web::Data<AppState>,
+    _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
-    Ok(Json(
-        get_player(data.database.clone(), query.host.as_deref())
-            .stop_track()
-            .await?,
-    ))
+    Ok(Json(get_player(query.host.as_deref()).stop_track().await?))
 }
 
 #[derive(Deserialize, Clone)]
@@ -257,10 +251,10 @@ pub struct SeekTrackQuery {
 #[post("/player/seek")]
 pub async fn seek_track_endpoint(
     query: web::Query<SeekTrackQuery>,
-    data: web::Data<AppState>,
+    _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(
-        get_player(data.database.clone(), query.host.as_deref())
+        get_player(query.host.as_deref())
             .seek_track(query.seek, Some(DEFAULT_PLAYBACK_RETRY_OPTIONS))
             .await?,
     ))
@@ -302,7 +296,7 @@ pub async fn update_playback_endpoint(
     };
 
     Ok(Json(
-        get_player(data.database.clone(), query.host.as_deref())
+        get_player(query.host.as_deref())
             .update_playback(
                 query.play,
                 query.stop,
@@ -330,10 +324,10 @@ pub struct NextTrackQuery {
 #[post("/player/next-track")]
 pub async fn next_track_endpoint(
     query: web::Query<NextTrackQuery>,
-    data: web::Data<AppState>,
+    _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(
-        get_player(data.database.clone(), query.host.as_deref())
+        get_player(query.host.as_deref())
             .next_track(query.seek, Some(DEFAULT_PLAYBACK_RETRY_OPTIONS))
             .await?,
     ))
@@ -348,12 +342,10 @@ pub struct PauseQuery {
 #[post("/player/pause")]
 pub async fn pause_playback_endpoint(
     query: web::Query<PauseQuery>,
-    data: web::Data<AppState>,
+    _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(
-        get_player(data.database.clone(), query.host.as_deref())
-            .pause_playback()
-            .await?,
+        get_player(query.host.as_deref()).pause_playback().await?,
     ))
 }
 
@@ -366,10 +358,10 @@ pub struct ResumeQuery {
 #[post("/player/resume")]
 pub async fn resume_playback_endpoint(
     query: web::Query<ResumeQuery>,
-    data: web::Data<AppState>,
+    _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(
-        get_player(data.database.clone(), query.host.as_deref())
+        get_player(query.host.as_deref())
             .resume_playback(Some(DEFAULT_PLAYBACK_RETRY_OPTIONS))
             .await?,
     ))
@@ -385,10 +377,10 @@ pub struct PreviousTrackQuery {
 #[post("/player/previous-track")]
 pub async fn previous_track_endpoint(
     query: web::Query<PreviousTrackQuery>,
-    data: web::Data<AppState>,
+    _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     Ok(Json(
-        get_player(data.database.clone(), query.host.as_deref())
+        get_player(query.host.as_deref())
             .previous_track(query.seek, Some(DEFAULT_PLAYBACK_RETRY_OPTIONS))
             .await?,
     ))
@@ -403,9 +395,6 @@ pub struct PlayerStatusQuery {
 #[get("/player/status")]
 pub async fn player_status_endpoint(
     query: web::Query<PlayerStatusQuery>,
-    data: web::Data<AppState>,
 ) -> Result<Json<ApiPlaybackStatus>> {
-    Ok(Json(
-        get_player(data.database.clone(), query.host.as_deref()).player_status()?,
-    ))
+    Ok(Json(get_player(query.host.as_deref()).player_status()?))
 }

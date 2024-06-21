@@ -7,7 +7,6 @@ use moosicbox_core::{
     sqlite::models::{ApiSource, ToApi, TrackApiSource, UpdateSession},
     types::PlaybackQuality,
 };
-use moosicbox_database::Database;
 use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;
 use moosicbox_symphonia_player::{
     media_sources::remote_bytestream::RemoteByteStreamMediaSource,
@@ -28,7 +27,6 @@ use crate::player::{
 
 #[derive(Clone)]
 pub struct LocalPlayer {
-    db: Arc<Box<dyn Database>>,
     pub id: usize,
     playback_type: PlaybackType,
     source: PlayerSource,
@@ -530,7 +528,6 @@ impl Player for LocalPlayer {
         quality: PlaybackQuality,
     ) -> Result<PlayableTrack, PlayerError> {
         let (url, headers) = get_track_url(
-            &**self.db,
             track_id.try_into().unwrap(),
             source,
             &self.source,
@@ -618,13 +615,8 @@ impl Player for LocalPlayer {
 }
 
 impl LocalPlayer {
-    pub fn new(
-        db: Arc<Box<dyn Database>>,
-        source: PlayerSource,
-        playback_type: Option<PlaybackType>,
-    ) -> LocalPlayer {
+    pub fn new(source: PlayerSource, playback_type: Option<PlaybackType>) -> LocalPlayer {
         LocalPlayer {
-            db,
             id: thread_rng().gen::<usize>(),
             playback_type: playback_type.unwrap_or_default(),
             source,

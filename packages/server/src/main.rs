@@ -564,7 +564,6 @@ fn handle_server_playback_update(
                     };
 
                     let mut player = moosicbox_player::player::local::LocalPlayer::new(
-                        db.clone(),
                         PlayerSource::Local,
                         None,
                     );
@@ -688,7 +687,6 @@ fn handle_upnp_playback_update(update: &UpdateSession) -> Pin<Box<dyn Future<Out
                             .expect("Failed to get device and service");
 
                     let mut player = moosicbox_upnp::player::UpnpPlayer::new(
-                        DB.read().unwrap().clone().unwrap(),
                         device,
                         service,
                         PlayerSource::Local,
