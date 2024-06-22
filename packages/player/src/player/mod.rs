@@ -404,8 +404,9 @@ pub trait Player {
     async fn init_from_session(
         &mut self,
         db: &dyn Database,
-        session_id: i32,
+        init: &UpdateSession,
     ) -> Result<(), PlayerError> {
+        let session_id = init.session_id;
         log::trace!("Searching for existing session id {}", session_id);
         if let Ok(session) = moosicbox_core::sqlite::db::get_session(db, session_id).await {
             if let Some(session) = session {
@@ -414,10 +415,12 @@ pub trait Player {
                     .update_playback(
                         None,
                         None,
-                        Some(session.playing),
-                        session.position.map(|x| x.try_into().unwrap()),
-                        session.seek.map(std::convert::Into::into),
-                        session.volume,
+                        init.playing.or(Some(session.playing)),
+                        init.position
+                            .or(session.position)
+                            .map(|x| x.try_into().unwrap()),
+                        init.seek.map(std::convert::Into::into),
+                        init.volume.or(session.volume),
                         Some(
                             session
                                 .playlist

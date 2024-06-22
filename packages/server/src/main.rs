@@ -568,7 +568,7 @@ fn handle_server_playback_update(
                         None,
                     );
 
-                    if let Err(e) = player.init_from_session(&**db, update.session_id).await {
+                    if let Err(e) = player.init_from_session(&**db, &update).await {
                         moosicbox_assert::die_or_error!(
                             "Failed to create new player from session: {e:?}"
                         );
@@ -694,7 +694,7 @@ fn handle_upnp_playback_update(update: &UpdateSession) -> Pin<Box<dyn Future<Out
                         UPNP_LISTENER_HANDLE.get().unwrap().clone(),
                     );
 
-                    if let Err(e) = player.init_from_session(&**db, update.session_id).await {
+                    if let Err(e) = player.init_from_session(&**db, &update).await {
                         moosicbox_assert::die_or_error!(
                             "Failed to create new player from session: {e:?}"
                         );
