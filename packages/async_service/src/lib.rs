@@ -66,7 +66,9 @@ macro_rules! async_service_body {
                         command = self.receiver.recv_async() => { Ok(command) }
                     ) {
                         log::trace!("Received Service command");
-                        Self::process_command(&mut self.ctx, command.cmd).await?;
+                        if let Err(e) = Self::process_command(&mut self.ctx, command.cmd).await{
+                            log::error!("Failed to process command: {e:?}");
+                        }
                         if let Some(tx) = command.tx {
                             tx.send_async(()).await?;
                         }
