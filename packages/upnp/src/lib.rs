@@ -280,12 +280,20 @@ pub async fn set_av_transport_uri(
             </item>
         </DIDL-Lite>
         "###,
-        title = title.map_or("".to_string(), |x| format!("<dc:title>{x}</dc:title>")),
-        creator = creator.map_or("".to_string(), |x| format!("<dc:creator>{x}</dc:creator>")),
-        artist = artist.map_or("".to_string(), |x| format!(
-            "<upnp:artist>{x}</upnp:artist>"
-        )),
-        album = album.map_or("".to_string(), |x| format!("<upnp:album>{x}</upnp:album>")),
+        title = title
+            .map(xml::escape::escape_str_attribute)
+            .map_or("".to_string(), |x| format!("<dc:title>{x}</dc:title>")),
+        creator = creator
+            .map(xml::escape::escape_str_attribute)
+            .map_or("".to_string(), |x| format!("<dc:creator>{x}</dc:creator>")),
+        artist = artist
+            .map(xml::escape::escape_str_attribute)
+            .map_or("".to_string(), |x| format!(
+                "<upnp:artist>{x}</upnp:artist>"
+            )),
+        album = album
+            .map(xml::escape::escape_str_attribute)
+            .map_or("".to_string(), |x| format!("<upnp:album>{x}</upnp:album>")),
         original_track_number = original_track_number.map_or("".to_string(), |x| format!(
             "<upnp:originalTrackNumber>{x}</upnp:originalTrackNumber>"
         )),
