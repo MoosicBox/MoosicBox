@@ -226,7 +226,11 @@ pub async fn track_endpoint(
         ),
     ));
 
-    log::debug!("Got bytes with size={:?}", bytes.size);
+    log::debug!(
+        "Got bytes with size={:?} original_size={:?}",
+        bytes.size,
+        bytes.original_size
+    );
 
     let stream = bytes.stream.filter_map(|x| async { x.ok() });
 
@@ -274,6 +278,7 @@ pub async fn track_endpoint(
         log::debug!("Returning stream body with size={:?}", size);
         Ok(response.body(actix_web::body::SizedStream::new(size, stream)))
     } else {
+        log::debug!("No size was found for stream");
         Ok(response.streaming(stream))
     }
 }
