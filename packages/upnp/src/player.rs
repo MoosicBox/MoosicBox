@@ -347,6 +347,11 @@ impl Player for UpnpPlayer {
         log::info!("Stopping playback");
         let playback = self.get_playback()?;
 
+        if !playback.playing {
+            log::debug!("Playback not playing: {playback:?}");
+            return Ok(playback);
+        }
+
         if let Err(e) = self.wait_for_expected_transport_state().await {
             log::warn!("Playback not in a stoppable state: {e:?}");
         }
