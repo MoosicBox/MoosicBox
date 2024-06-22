@@ -39,6 +39,7 @@ pub struct UpnpPlayer {
     pub id: usize,
     source: PlayerSource,
     pub active_playback: Arc<RwLock<Option<Playback>>>,
+    play_lock: Arc<tokio::sync::Semaphore>,
     receiver: Arc<RwLock<Option<Receiver<()>>>>,
     handle: Handle,
     device: Device,
@@ -180,6 +181,18 @@ impl Player for UpnpPlayer {
         let abort = self.get_playback().unwrap().abort.clone();
 
         while !abort.is_cancelled() {
+            log::debug!("Beginning a new playback, locking play_lock");
+            let (start_tx, start_rx) = unbounded();
+            let semaphore = self.play_lock.clone();
+            tokio::spawn(async move {
+                let permit = semaphore.acquire().await?;
+                if let Err(e) = start_rx.recv_async().await {
+                    log::error!("Failed to recv: {e:?}");
+                }
+                log::debug!("Playback has started, releasing play_lock");
+                drop(permit);
+                Ok::<_, tokio::sync::AcquireError>(())
+            });
             if retry_count > 0 {
                 sleep(retry_options.unwrap().retry_delay).await;
             }
@@ -362,6 +375,11 @@ impl Player for UpnpPlayer {
             ",
             self.source
         );
+
+        log::debug!("Waiting for play_lock...");
+        let permit = self.play_lock.acquire().await?;
+        log::debug!("Allowed to play");
+        drop(permit);
 
         if stop.unwrap_or(false) {
             return Ok(PlaybackStatus {
