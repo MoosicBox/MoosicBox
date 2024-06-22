@@ -525,6 +525,20 @@ pub async fn update_session(
                     })
                     .collect::<Vec<_>>();
 
+                if log::log_enabled!(log::Level::Trace) {
+                    log::trace!(
+                        "Running player actions on existing session id={} count_of_funcs={} payload={payload:?} session={session:?}",
+                        session.id, 
+                        funcs.len(),
+                    );
+                } else {
+                    log::debug!(
+                        "Running player actions on existing id={} count_of_funcs={}",
+                        session.id,
+                        funcs.len(),
+                    );
+                }
+
                 for func in funcs {
                     func(payload).await;
                 }
@@ -532,6 +546,11 @@ pub async fn update_session(
         }
     }
 
+    if log::log_enabled!(log::Level::Trace) {
+        log::trace!("Updating session id={} payload={payload:?}", payload.session_id);
+    } else {
+        log::debug!("Updating session id={}", payload.session_id);
+    }
     moosicbox_core::sqlite::db::update_session(db, payload).await?;
 
     let playlist = if payload.playlist.is_some() {
