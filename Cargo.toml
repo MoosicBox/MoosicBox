@@ -106,7 +106,7 @@ image = "0.25.1"
 io-streams = "0.16.1"
 itertools = "0.13.0"
 kanal = "0.1.0-pre8"
-lazy_static = "1.4.0"
+lazy_static = "1.5.0"
 libpulse-binding = "2.28.1"
 libpulse-simple-binding = "2.28.1"
 libvips = { git = "https://github.com/BSteffaniak/libvips-rust-bindings.git", branch = "support-windows-shallow" }
