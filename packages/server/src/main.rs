@@ -584,6 +584,7 @@ fn handle_server_playback_update(
                     .expect("No player")
             }
             .update_playback(
+                true,
                 update.play,
                 update.stop,
                 update.playing,
@@ -710,6 +711,7 @@ fn handle_upnp_playback_update(update: &UpdateSession) -> Pin<Box<dyn Future<Out
                     .expect("No player")
             }
             .update_playback(
+                true,
                 update.play,
                 update.stop,
                 update.playing,

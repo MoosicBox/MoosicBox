@@ -67,6 +67,8 @@ pub enum PlayerError {
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
     #[error(transparent)]
+    Acquire(#[from] tokio::sync::AcquireError),
+    #[error(transparent)]
     IO(#[from] std::io::Error),
     #[error("Format not supported: {0:?}")]
     UnsupportedFormat(AudioFormat),
@@ -80,6 +82,8 @@ pub enum PlayerError {
     TrackNotFound(i32),
     #[error("Track not locally stored: {0}")]
     TrackNotLocal(i32),
+    #[error("Failed to seek: {0}")]
+    Seek(String),
     #[error("No players playing")]
     NoPlayersPlaying,
     #[error("Position out of bounds: {0}")]
@@ -413,6 +417,7 @@ pub trait Player {
                 log::debug!("Got session {session:?}");
                 if let Err(err) = self
                     .update_playback(
+                        false,
                         None,
                         None,
                         init.playing.or(Some(session.playing)),
@@ -647,6 +652,7 @@ pub trait Player {
         }
 
         self.update_playback(
+            true,
             Some(true),
             None,
             None,
@@ -675,6 +681,7 @@ pub trait Player {
         }
 
         self.update_playback(
+            true,
             Some(true),
             None,
             None,
@@ -693,6 +700,7 @@ pub trait Player {
     #[allow(clippy::too_many_arguments)]
     async fn update_playback(
         &self,
+        modify_playback: bool,
         play: Option<bool>,
         stop: Option<bool>,
         playing: Option<bool>,

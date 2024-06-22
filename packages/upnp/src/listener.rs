@@ -8,12 +8,20 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{MediaInfo, PositionInfo, TransportInfo};
 
+impl From<flume::SendError<usize>> for ListenerError {
+    fn from(_value: flume::SendError<usize>) -> Self {
+        Self::Send
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum ListenerError {
     #[error(transparent)]
     Join(#[from] JoinError),
     #[error(transparent)]
     Rupnp(#[from] rupnp::Error),
+    #[error("Failed to send")]
+    Send,
 }
 
 #[derive(AsRefStr)]
@@ -24,11 +32,7 @@ pub enum UpnpCommand {
         udn: String,
         service_id: String,
         action: MediaInfoSubscriptionAction,
-    },
-    UnsubscribeMediaInfo {
-        instance_id: u32,
-        udn: String,
-        service_id: String,
+        tx: flume::Sender<usize>,
     },
     SubscribePositionInfo {
         interval: Duration,
@@ -36,11 +40,7 @@ pub enum UpnpCommand {
         udn: String,
         service_id: String,
         action: PositionInfoSubscriptionAction,
-    },
-    UnsubscribePositionInfo {
-        instance_id: u32,
-        udn: String,
-        service_id: String,
+        tx: flume::Sender<usize>,
     },
     SubscribeTransportInfo {
         interval: Duration,
@@ -48,11 +48,10 @@ pub enum UpnpCommand {
         udn: String,
         service_id: String,
         action: TransportInfoSubscriptionAction,
+        tx: flume::Sender<usize>,
     },
-    UnsubscribeTransportInfo {
-        instance_id: u32,
-        udn: String,
-        service_id: String,
+    Unsubscribe {
+        subscription_id: usize,
     },
 }
 
@@ -65,9 +64,10 @@ impl Display for UpnpCommand {
 #[derive(Default)]
 pub struct UpnpContext {
     #[allow(clippy::type_complexity)]
-    status_join_handles: HashMap<String, JoinHandle<Result<(), ListenerError>>>,
-    status_tokens: HashMap<String, CancellationToken>,
+    status_join_handles: HashMap<usize, JoinHandle<Result<(), ListenerError>>>,
+    status_tokens: HashMap<usize, CancellationToken>,
     token: Option<CancellationToken>,
+    subscription_id: usize,
 }
 
 impl UpnpContext {
@@ -77,6 +77,72 @@ impl UpnpContext {
 }
 
 moosicbox_async_service::async_service!(UpnpCommand, UpnpContext, ListenerError);
+
+impl Handle {
+    pub async fn subscribe_media_info(
+        &self,
+        interval: Duration,
+        instance_id: u32,
+        udn: String,
+        service_id: String,
+        action: MediaInfoSubscriptionAction,
+    ) -> Result<usize, CommanderError> {
+        let (tx, rx) = flume::bounded(1);
+        self.send_command(UpnpCommand::SubscribeMediaInfo {
+            interval,
+            instance_id,
+            udn,
+            service_id,
+            action,
+            tx,
+        })?;
+        Ok(rx.recv_async().await?)
+    }
+
+    pub async fn subscribe_position_info(
+        &self,
+        interval: Duration,
+        instance_id: u32,
+        udn: String,
+        service_id: String,
+        action: PositionInfoSubscriptionAction,
+    ) -> Result<usize, CommanderError> {
+        let (tx, rx) = flume::bounded(1);
+        self.send_command(UpnpCommand::SubscribePositionInfo {
+            interval,
+            instance_id,
+            udn,
+            service_id,
+            action,
+            tx,
+        })?;
+        Ok(rx.recv_async().await?)
+    }
+
+    pub async fn subscribe_transport_info(
+        &self,
+        interval: Duration,
+        instance_id: u32,
+        udn: String,
+        service_id: String,
+        action: TransportInfoSubscriptionAction,
+    ) -> Result<usize, CommanderError> {
+        let (tx, rx) = flume::bounded(1);
+        self.send_command(UpnpCommand::SubscribeTransportInfo {
+            interval,
+            instance_id,
+            udn,
+            service_id,
+            action,
+            tx,
+        })?;
+        Ok(rx.recv_async().await?)
+    }
+
+    pub fn unsubscribe(&self, subscription_id: usize) -> Result<(), CommanderError> {
+        self.send_command(UpnpCommand::Unsubscribe { subscription_id })
+    }
+}
 
 #[moosicbox_async_service::async_trait]
 impl Processor for Service {
@@ -106,50 +172,48 @@ impl Processor for Service {
                 udn,
                 service_id,
                 action,
+                tx,
             } => {
                 let action = Arc::new(action);
-                let key = format!("MediaInfo:{instance_id}:{udn}:{service_id}");
-                subscribe(
-                    ctx,
-                    interval,
-                    key,
-                    Box::new(move || {
-                        let action = action.clone();
-                        let udn = udn.clone();
-                        let service_id = service_id.clone();
-                        Box::pin(async move {
-                            if let Ok(device) = super::get_device(&udn) {
-                                if let Ok(service) = super::get_service(&udn, &service_id) {
-                                    match super::get_media_info(&service, device.url(), instance_id)
+                tx.send_async(
+                    subscribe(
+                        ctx,
+                        interval,
+                        Box::new(move || {
+                            let action = action.clone();
+                            let udn = udn.clone();
+                            let service_id = service_id.clone();
+                            Box::pin(async move {
+                                if let Ok(device) = super::get_device(&udn) {
+                                    if let Ok(service) = super::get_service(&udn, &service_id) {
+                                        match super::get_media_info(
+                                            &service,
+                                            device.url(),
+                                            instance_id,
+                                        )
                                         .await
-                                    {
-                                        Ok(info) => {
-                                            action(info).await;
+                                        {
+                                            Ok(info) => {
+                                                action(info).await;
+                                            }
+                                            Err(e) => {
+                                                log::error!("Failed to get_media_info: {e:?}");
+                                            }
                                         }
-                                        Err(e) => {
-                                            log::error!("Failed to get_media_info: {e:?}");
-                                        }
-                                    }
-                                } else {
-                                    log::debug!(
+                                    } else {
+                                        log::debug!(
                                         "No service with device_udn={udn} service_id={service_id}"
                                     );
+                                    }
+                                } else {
+                                    log::debug!("No device with udn={udn}");
                                 }
-                            } else {
-                                log::debug!("No device with udn={udn}");
-                            }
-                        })
-                    }),
+                            })
+                        }),
+                    )
+                    .await?,
                 )
                 .await?;
-            }
-            UpnpCommand::UnsubscribeMediaInfo {
-                instance_id,
-                udn,
-                service_id,
-            } => {
-                let key = format!("MediaInfo:{instance_id}:{udn}:{service_id}");
-                unsubscribe(ctx, key).await?;
             }
             UpnpCommand::SubscribePositionInfo {
                 interval,
@@ -157,54 +221,48 @@ impl Processor for Service {
                 udn,
                 service_id,
                 action,
+                tx,
             } => {
                 let action = Arc::new(action);
-                let key = format!("PositionInfo:{instance_id}:{udn}:{service_id}");
-                subscribe(
-                    ctx,
-                    interval,
-                    key,
-                    Box::new(move || {
-                        let action = action.clone();
-                        let udn = udn.clone();
-                        let service_id = service_id.clone();
-                        Box::pin(async move {
-                            if let Ok(device) = super::get_device(&udn) {
-                                if let Ok(service) = super::get_service(&udn, &service_id) {
-                                    match super::get_position_info(
-                                        &service,
-                                        device.url(),
-                                        instance_id,
-                                    )
-                                    .await
-                                    {
-                                        Ok(info) => {
-                                            action(info).await;
+                tx.send_async(
+                    subscribe(
+                        ctx,
+                        interval,
+                        Box::new(move || {
+                            let action = action.clone();
+                            let udn = udn.clone();
+                            let service_id = service_id.clone();
+                            Box::pin(async move {
+                                if let Ok(device) = super::get_device(&udn) {
+                                    if let Ok(service) = super::get_service(&udn, &service_id) {
+                                        match super::get_position_info(
+                                            &service,
+                                            device.url(),
+                                            instance_id,
+                                        )
+                                        .await
+                                        {
+                                            Ok(info) => {
+                                                action(info).await;
+                                            }
+                                            Err(e) => {
+                                                log::error!("Failed to get_position_info: {e:?}");
+                                            }
                                         }
-                                        Err(e) => {
-                                            log::error!("Failed to get_position_info: {e:?}");
-                                        }
-                                    }
-                                } else {
-                                    log::debug!(
+                                    } else {
+                                        log::debug!(
                                         "No service with device_udn={udn} service_id={service_id}"
                                     );
+                                    }
+                                } else {
+                                    log::debug!("No device with udn={udn}");
                                 }
-                            } else {
-                                log::debug!("No device with udn={udn}");
-                            }
-                        })
-                    }),
+                            })
+                        }),
+                    )
+                    .await?,
                 )
                 .await?;
-            }
-            UpnpCommand::UnsubscribePositionInfo {
-                instance_id,
-                udn,
-                service_id,
-            } => {
-                let key = format!("PositionInfo:{instance_id}:{udn}:{service_id}");
-                unsubscribe(ctx, key).await?;
             }
             UpnpCommand::SubscribeTransportInfo {
                 interval,
@@ -212,54 +270,51 @@ impl Processor for Service {
                 udn,
                 service_id,
                 action,
+                tx,
             } => {
                 let action = Arc::new(action);
-                let key = format!("TransportInfo:{instance_id}:{udn}:{service_id}");
-                subscribe(
-                    ctx,
-                    interval,
-                    key,
-                    Box::new(move || {
-                        let action = action.clone();
-                        let udn = udn.clone();
-                        let service_id = service_id.clone();
-                        Box::pin(async move {
-                            if let Ok(device) = super::get_device(&udn) {
-                                if let Ok(service) = super::get_service(&udn, &service_id) {
-                                    match super::get_transport_info(
-                                        &service,
-                                        device.url(),
-                                        instance_id,
-                                    )
-                                    .await
-                                    {
-                                        Ok(info) => {
-                                            action(info).await;
+                tx.send_async(
+                    subscribe(
+                        ctx,
+                        interval,
+                        Box::new(move || {
+                            let action = action.clone();
+                            let udn = udn.clone();
+                            let service_id = service_id.clone();
+                            Box::pin(async move {
+                                if let Ok(device) = super::get_device(&udn) {
+                                    if let Ok(service) = super::get_service(&udn, &service_id) {
+                                        match super::get_transport_info(
+                                            &service,
+                                            device.url(),
+                                            instance_id,
+                                        )
+                                        .await
+                                        {
+                                            Ok(info) => {
+                                                action(info).await;
+                                            }
+                                            Err(e) => {
+                                                log::error!("Failed to get_transport_info: {e:?}");
+                                            }
                                         }
-                                        Err(e) => {
-                                            log::error!("Failed to get_transport_info: {e:?}");
-                                        }
-                                    }
-                                } else {
-                                    log::debug!(
+                                    } else {
+                                        log::debug!(
                                         "No service with device_udn={udn} service_id={service_id}"
                                     );
+                                    }
+                                } else {
+                                    log::debug!("No device with udn={udn}");
                                 }
-                            } else {
-                                log::debug!("No device with udn={udn}");
-                            }
-                        })
-                    }),
+                            })
+                        }),
+                    )
+                    .await?,
                 )
                 .await?;
             }
-            UpnpCommand::UnsubscribeTransportInfo {
-                instance_id,
-                udn,
-                service_id,
-            } => {
-                let key = format!("TransportInfo:{instance_id}:{udn}:{service_id}");
-                unsubscribe(ctx, key).await?;
+            UpnpCommand::Unsubscribe { subscription_id } => {
+                unsubscribe(ctx, subscription_id).await?;
             }
         }
         Ok(())
@@ -269,14 +324,16 @@ impl Processor for Service {
 async fn subscribe(
     ctx: &mut UpnpContext,
     interval: Duration,
-    key: String,
     action: SubscriptionAction,
-) -> Result<(), ListenerError> {
+) -> Result<usize, ListenerError> {
+    let subscription_id = ctx.subscription_id;
+    ctx.subscription_id += 1;
     let token = ctx.token.clone().unwrap();
     let status_token = CancellationToken::new();
-    ctx.status_tokens.insert(key.clone(), status_token.clone());
+    ctx.status_tokens
+        .insert(subscription_id, status_token.clone());
     ctx.status_join_handles.insert(
-        key.clone(),
+        subscription_id,
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(interval);
 
@@ -286,7 +343,7 @@ async fn subscribe(
                     Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "Cancelled"))
                 }
                 () = status_token.cancelled() => {
-                    log::debug!("Subscription was cancelled for key={key}");
+                    log::debug!("Subscription was cancelled for subscription_id={subscription_id}");
                     Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "Cancelled"))
                 }
                 _ = interval.tick() => { Ok(()) }
@@ -301,20 +358,20 @@ async fn subscribe(
         }),
     );
 
-    Ok(())
+    Ok(subscription_id)
 }
 
-async fn unsubscribe(ctx: &mut UpnpContext, key: String) -> Result<(), ListenerError> {
-    log::debug!("Unsubscribing key={key}");
-    if let Some(token) = ctx.status_tokens.remove(&key) {
+async fn unsubscribe(ctx: &mut UpnpContext, subscription_id: usize) -> Result<(), ListenerError> {
+    log::debug!("Unsubscribing subscription_id={subscription_id}");
+    if let Some(token) = ctx.status_tokens.remove(&subscription_id) {
         token.cancel();
-        if let Some(handle) = ctx.status_join_handles.remove(&key) {
+        if let Some(handle) = ctx.status_join_handles.remove(&subscription_id) {
             handle.await??;
         } else {
-            log::debug!("No status_join_handle with key={key}");
+            log::debug!("No status_join_handle with subscription_id={subscription_id}");
         }
     } else {
-        log::debug!("No token with key={key}");
+        log::debug!("No token with subscription_id={subscription_id}");
     }
 
     Ok(())

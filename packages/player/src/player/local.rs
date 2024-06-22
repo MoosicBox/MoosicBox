@@ -364,6 +364,7 @@ impl Player for LocalPlayer {
     #[allow(clippy::too_many_arguments)]
     async fn update_playback(
         &self,
+        modify_playback: bool,
         play: Option<bool>,
         stop: Option<bool>,
         playing: Option<bool>,
@@ -378,8 +379,9 @@ impl Player for LocalPlayer {
     ) -> Result<PlaybackStatus, PlayerError> {
         log::debug!(
             "\
-            source={:?}\n\t\
             update_playback:\n\t\
+            source={:?}\n\t\
+            modify_playback={modify_playback:?}\n\t\
             play={play:?}\n\t\
             stop={stop:?}\n\t\
             playing={playing:?}\n\t\
@@ -400,7 +402,7 @@ impl Player for LocalPlayer {
             });
         }
 
-        let mut should_play = play.unwrap_or(false);
+        let mut should_play = modify_playback && play.unwrap_or(false);
 
         let playback = if let Ok(playback) = self.get_playback() {
             log::trace!("update_playback: existing playback={playback:?}");
@@ -409,13 +411,13 @@ impl Player for LocalPlayer {
                     self.pause_playback().await?;
                 }
             } else {
-                should_play = should_play || playing.unwrap_or(false);
+                should_play = modify_playback && (should_play || playing.unwrap_or(false));
             }
 
             playback
         } else {
             log::trace!("update_playback: no existing playback");
-            should_play = should_play || playing.unwrap_or(false);
+            should_play = modify_playback && (should_play || playing.unwrap_or(false));
 
             Playback::new(
                 tracks.clone().unwrap_or_default(),
@@ -427,7 +429,7 @@ impl Player for LocalPlayer {
             )
         };
 
-        log::debug!("update_playback: should_play={should_play}");
+        log::debug!("update_playback: modify_playback={modify_playback} should_play={should_play}");
 
         let original = playback.clone();
 

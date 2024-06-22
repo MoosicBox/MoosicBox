@@ -64,6 +64,8 @@ impl From<PlayerError> for actix_web::Error {
             PlayerError::IO(err) => ErrorInternalServerError(err),
             PlayerError::InvalidSession { .. } => ErrorInternalServerError(err.to_string()),
             PlayerError::Join { .. } => ErrorInternalServerError(err.to_string()),
+            PlayerError::Acquire(err) => ErrorInternalServerError(err),
+            PlayerError::Seek(err) => ErrorInternalServerError(err),
             PlayerError::NoAudioOutputs => ErrorInternalServerError(err),
         }
     }
@@ -298,6 +300,7 @@ pub async fn update_playback_endpoint(
     Ok(Json(
         get_player(query.host.as_deref())
             .update_playback(
+                true,
                 query.play,
                 query.stop,
                 query.playing,
