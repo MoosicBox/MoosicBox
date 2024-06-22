@@ -599,30 +599,35 @@ async fn request_audio_bytes_from_file(
         file.seek(std::io::SeekFrom::Start(start)).await?;
     }
 
-    let original_size = size;
-    let size = if let (Some(start), Some(end)) = (start, end) {
-        Some(end - start)
-    } else if let Some(start) = start {
-        size.map(|size| size - start)
-    } else if let Some(end) = end {
-        Some(end)
-    } else {
+    let original_size = if let Some(size) = size {
         size
-    };
-
-    log::debug!("request_audio_bytes_from_file calculated size={size:?}");
-
-    let framed_read = if let Some(size) = size {
-        FramedRead::with_capacity(file, BytesCodec::new(), size as usize)
     } else {
-        FramedRead::new(file, BytesCodec::new())
+        file.metadata().await?.len()
     };
+
+    let size = if let (Some(start), Some(end)) = (start, end) {
+        end - start
+    } else if let Some(start) = start {
+        original_size - start
+    } else if let Some(end) = end {
+        end
+    } else if let Some(size) = size {
+        size
+    } else {
+        original_size
+    };
+
+    log::debug!(
+        "request_audio_bytes_from_file calculated size={size} original_size={original_size}"
+    );
+
+    let framed_read = FramedRead::with_capacity(file, BytesCodec::new(), size as usize);
 
     Ok(TrackBytes {
         id: new_byte_writer_id(),
         stream: StalledReadMonitor::new(framed_read.map_ok(BytesMut::freeze).boxed()),
-        size,
-        original_size,
+        size: Some(size),
+        original_size: Some(original_size),
         format,
         filename: filename_from_path_str(&path),
     })
