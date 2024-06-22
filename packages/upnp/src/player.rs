@@ -56,10 +56,6 @@ impl Player for UpnpPlayer {
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<PlaybackStatus, PlayerError> {
         log::info!("Playing playback...");
-        if let Ok(playback) = self.get_playback() {
-            log::debug!("Stopping existing playback {}", playback.id);
-            self.stop().await?;
-        }
 
         if playback.tracks.is_empty() {
             log::debug!("No tracks to play for {playback:?}");
