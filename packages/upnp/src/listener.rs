@@ -308,22 +308,8 @@ async fn unsubscribe(ctx: &mut UpnpContext, key: String) -> Result<(), ListenerE
     log::debug!("Unsubscribing key={key}");
     if let Some(token) = ctx.status_tokens.remove(&key) {
         token.cancel();
-        log::debug!("Cancelled token for key={key}");
         if let Some(handle) = ctx.status_join_handles.remove(&key) {
-            log::debug!("Joining handle for key={key}");
-            tokio::spawn(async move {
-                match handle.await {
-                    Ok(Ok(())) => {
-                        log::debug!("Successfully awaited join handle for key={key}");
-                    }
-                    Err(e) => {
-                        log::error!("Failed to await join handle for key={key}: {e:?}");
-                    }
-                    Ok(Err(e)) => {
-                        log::error!("Error from join handle for key={key}: {e:?}");
-                    }
-                }
-            });
+            handle.await??;
         } else {
             log::debug!("No status_join_handle with key={key}");
         }
