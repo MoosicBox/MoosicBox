@@ -1094,6 +1094,7 @@ impl UpdateSession {
             || self.playing.is_some()
             || self.position.is_some()
             || self.volume.is_some()
+            || self.seek.is_some()
             || self.playlist.is_some()
     }
 }
