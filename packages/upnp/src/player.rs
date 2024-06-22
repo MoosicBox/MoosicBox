@@ -28,6 +28,11 @@ use moosicbox_player::player::{
 
 use crate::listener::{Commander, Handle, UpnpCommand};
 
+pub const DEFAULT_SEEK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
+    max_retry_count: 10,
+    retry_delay: std::time::Duration::from_millis(100),
+};
+
 #[derive(Clone)]
 pub struct UpnpPlayer {
     pub db: Arc<Box<dyn Database>>,
@@ -251,18 +256,10 @@ impl Player for UpnpPlayer {
             let seek = { current_seek.read().unwrap().as_ref().cloned() };
 
             if let Some(seek) = seek {
-                let _ = crate::seek(
-                    &self.service,
-                    self.device.url(),
-                    self.instance_id,
-                    "ABS_TIME",
-                    seek as u32,
-                )
-                .await
-                .map_err(|e| {
-                    log::error!("seek failed: {e:?}");
-                    PlayerError::NoPlayersPlaying
-                });
+                if seek > 0.0 {
+                    self.seek_track(seek, Some(DEFAULT_SEEK_RETRY_OPTIONS))
+                        .await?;
+                }
             }
 
             crate::play(&self.service, self.device.url(), self.instance_id, 1.0)
