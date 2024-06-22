@@ -44,6 +44,7 @@ log             = { workspace = true }
 once_cell       = { workspace = true }
 pin-utils       = { workspace = true }
 regex           = { workspace = true }
+roxmltree       = { workspace = true }
 rupnp           = { workspace = true }
 serde           = { workspace = true }
 serde_json      = { workspace = true }

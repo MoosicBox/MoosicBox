@@ -23,6 +23,9 @@ impl From<ActionError> for actix_web::Error {
                 ErrorFailedDependency(format!("UPnP error: {rupnp_err:?}"))
             }
             ActionError::MissingProperty(_property) => ErrorInternalServerError(e.to_string()),
+            ActionError::Roxml(roxmltree_err) => {
+                ErrorFailedDependency(format!("roxmltree error: {roxmltree_err:?}"))
+            }
         }
     }
 }

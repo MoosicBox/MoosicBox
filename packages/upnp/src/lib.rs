@@ -192,6 +192,8 @@ pub fn get_device_and_service_from_url(
 #[derive(Debug, Error)]
 pub enum ActionError {
     #[error(transparent)]
+    Roxml(#[from] roxmltree::Error),
+    #[error(transparent)]
     Rupnp(#[from] rupnp::Error),
     #[error("Missing property \"{0}\"")]
     MissingProperty(String),
@@ -236,6 +238,11 @@ pub fn duration_to_string(duration: u32) -> String {
     )
 }
 
+static DIDL_LITE_NS: &str = "urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/";
+static UPNP_NS: &str = "urn:schemas-upnp-org:metadata-1-0/upnp/";
+static DC_NS: &str = "http://purl.org/dc/elements/1.1/";
+static SEC_NS: &str = "http://www.sec.co.kr/";
+
 #[allow(clippy::too_many_arguments)]
 pub async fn set_av_transport_uri(
     service: &Service,
@@ -258,10 +265,10 @@ pub async fn set_av_transport_uri(
     let metadata = format!(
         r###"
         <DIDL-Lite
-            xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"
-            xmlns:dc="http://purl.org/dc/elements/1.1/"
-            xmlns:sec="http://www.sec.co.kr/"
-            xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">
+            xmlns="{DIDL_LITE_NS}"
+            xmlns:dc="{DC_NS}"
+            xmlns:sec="{SEC_NS}"
+            xmlns:upnp="{UPNP_NS}">
             <item id="0" parentID="-1" restricted="false">
                 <upnp:class>object.item.audioItem.musicTrack</upnp:class>
                 {title}
@@ -329,6 +336,105 @@ pub async fn set_av_transport_uri(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TrackMetadata {
+    items: Vec<TrackMetadataItem>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackMetadataItem {
+    upnp_class: Option<String>,
+    upnp_artist: Option<String>,
+    upnp_album: Option<String>,
+    upnp_original_track_number: Option<String>,
+    dc_title: Option<String>,
+    dc_creator: Option<String>,
+    res: TrackMetadataItemResource,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackMetadataItemResource {
+    duration: Option<u32>,
+    protocol_info: Option<String>,
+    source: String,
+}
+
+// "<DIDL-Lite xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:sec=\"http://www.sec.co.kr/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\">
+//     <item id=\"0\" parentID=\"-1\" restricted=\"false\">
+//         <upnp:class>object.item.audioItem.musicTrack</upnp:class>
+//         <dc:title>Friday</dc:title>
+//         <dc:creator>Rebecca Black</dc:creator>
+//         <upnp:artist>Rebecca Black</upnp:artist>
+//         <upnp:album>Friday</upnp:album>
+//         <upnp:originalTrackNumber>1</upnp:originalTrackNumber>
+//         <res duration=\"00:03:31\" protocolInfo=\"http-get:*:audio/flac:*\">http://192.168.254.137:8001/track?trackId=12911&amp;source=LIBRARY</res>
+//     </item>
+// </DIDL-Lite>"
+fn parse_track_metadata(track_metadata: &str) -> Result<TrackMetadata, ActionError> {
+    let doc = roxmltree::Document::parse(track_metadata)?;
+
+    let items = doc
+        .descendants()
+        .filter(|x| x.tag_name().name().to_lowercase() == "item")
+        .map(|x| {
+            let upnp_class = x.descendants().find(|x| {
+                x.tag_name().namespace().is_some_and(|n| n == UPNP_NS)
+                    && x.tag_name().name().to_lowercase() == "class"
+            });
+            let upnp_artist = x.descendants().find(|x| {
+                x.tag_name().namespace().is_some_and(|n| n == UPNP_NS)
+                    && x.tag_name().name().to_lowercase() == "artist"
+            });
+            let upnp_album = x.descendants().find(|x| {
+                x.tag_name().namespace().is_some_and(|n| n == UPNP_NS)
+                    && x.tag_name().name().to_lowercase() == "album"
+            });
+            let upnp_original_track_number = x.descendants().find(|x| {
+                x.tag_name().namespace().is_some_and(|n| n == UPNP_NS)
+                    && x.tag_name().name().to_lowercase() == "originaltracknumber"
+            });
+            let dc_title = x.descendants().find(|x| {
+                x.tag_name().namespace().is_some_and(|n| n == DC_NS)
+                    && x.tag_name().name().to_lowercase() == "title"
+            });
+            let dc_creator = x.descendants().find(|x| {
+                x.tag_name().namespace().is_some_and(|n| n == DC_NS)
+                    && x.tag_name().name().to_lowercase() == "creator"
+            });
+            let res = x
+                .descendants()
+                .find(|x| {
+                    x.tag_name().namespace().is_some_and(|n| n == DIDL_LITE_NS)
+                        && x.tag_name().name().to_lowercase() == "res"
+                })
+                .ok_or_else(|| ActionError::MissingProperty("Missing res".into()))?;
+            Ok(TrackMetadataItem {
+                upnp_class: upnp_class.and_then(|x| x.text()).map(|x| x.to_owned()),
+                upnp_artist: upnp_artist.and_then(|x| x.text()).map(|x| x.to_owned()),
+                upnp_album: upnp_album.and_then(|x| x.text()).map(|x| x.to_owned()),
+                upnp_original_track_number: upnp_original_track_number
+                    .and_then(|x| x.text())
+                    .map(|x| x.to_owned()),
+                dc_title: dc_title.and_then(|x| x.text()).map(|x| x.to_owned()),
+                dc_creator: dc_creator.and_then(|x| x.text()).map(|x| x.to_owned()),
+                res: TrackMetadataItemResource {
+                    duration: res.attribute("duration").map(str_to_duration),
+                    protocol_info: res.attribute("protocolInfo").map(|x| x.to_owned()),
+                    source: res
+                        .text()
+                        .ok_or_else(|| ActionError::MissingProperty("Missing res value".into()))?
+                        .to_owned(),
+                },
+            })
+        })
+        .collect::<Result<Vec<_>, ActionError>>();
+
+    Ok(TrackMetadata { items: items? })
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TransportInfo {
     current_transport_status: String,
     current_transport_state: String,
@@ -373,7 +479,7 @@ pub struct PositionInfo {
     rel_time: u32,
     abs_time: u32,
     track_uri: String,
-    track_metadata: String,
+    track_metadata: TrackMetadata,
     rel_count: u32,
     abs_count: u32,
     track_duration: u32,
@@ -424,10 +530,10 @@ pub async fn get_position_info(
             .get("TrackURI")
             .ok_or(ActionError::MissingProperty("TrackURI".into()))?
             .to_string(),
-        track_metadata: map
-            .get("TrackMetaData")
-            .ok_or(ActionError::MissingProperty("TrackMetaData".into()))?
-            .to_string(),
+        track_metadata: parse_track_metadata(
+            map.get("TrackMetaData")
+                .ok_or(ActionError::MissingProperty("TrackMetaData".into()))?,
+        )?,
     })
 }
 
@@ -493,7 +599,7 @@ pub struct MediaInfo {
     media_duration: u32,
     record_medium: String,
     write_status: String,
-    current_uri_metadata: String,
+    current_uri_metadata: TrackMetadata,
     nr_tracks: u32,
     play_medium: String,
     current_uri: String,
@@ -525,10 +631,10 @@ pub async fn get_media_info(
             .get("WriteStatus")
             .ok_or(ActionError::MissingProperty("WriteStatus".into()))?
             .to_string(),
-        current_uri_metadata: map
-            .get("CurrentURIMetaData")
-            .ok_or(ActionError::MissingProperty("CurrentURIMetaData".into()))?
-            .to_string(),
+        current_uri_metadata: parse_track_metadata(
+            map.get("CurrentURIMetaData")
+                .ok_or(ActionError::MissingProperty("CurrentURIMetaData".into()))?,
+        )?,
         nr_tracks: map
             .get("NrTracks")
             .ok_or(ActionError::MissingProperty("NrTracks".into()))?
