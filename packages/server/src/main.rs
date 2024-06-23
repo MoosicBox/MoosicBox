@@ -313,6 +313,7 @@ fn main() -> std::io::Result<()> {
                 .service(moosicbox_auth::api::get_magic_token_endpoint)
                 .service(moosicbox_auth::api::create_magic_token_endpoint)
                 .service(moosicbox_downloader::api::download_endpoint)
+                .service(moosicbox_downloader::api::retry_download_endpoint)
                 .service(moosicbox_downloader::api::download_tasks_endpoint)
                 .service(moosicbox_menu::api::get_artists_endpoint)
                 .service(moosicbox_menu::api::get_artist_endpoint)

@@ -17,6 +17,7 @@ use crate::GetCreateDownloadTasksError;
 use crate::GetDownloadPathError;
 use crate::MoosicboxDownloader;
 use actix_web::error::ErrorInternalServerError;
+use actix_web::error::ErrorNotFound;
 use actix_web::{
     route,
     web::{self, Json},
@@ -127,6 +128,32 @@ pub async fn download_endpoint(
     let mut download_queue = queue.write().await;
 
     download_queue.add_tasks_to_queue(tasks).await;
+    download_queue.process();
+
+    Ok(Json(serde_json::json!({"success": true})))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RetryDownloadQuery {
+    task_id: u64,
+}
+
+#[route("/retry-download", method = "POST")]
+pub async fn retry_download_endpoint(
+    query: web::Query<RetryDownloadQuery>,
+    data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<Value>> {
+    let tasks = get_download_tasks(&**data.database).await?;
+    let task = tasks
+        .into_iter()
+        .find(|x| x.id == query.task_id)
+        .ok_or_else(|| ErrorNotFound(format!("Task not found with ID {}", query.task_id)))?;
+
+    let mut download_queue = DownloadQueue::new();
+    download_queue.with_database(data.database.clone());
+    download_queue.with_downloader(Box::new(MoosicboxDownloader::new(data.database.clone())));
+    download_queue.add_tasks_to_queue(vec![task]).await;
     download_queue.process();
 
     Ok(Json(serde_json::json!({"success": true})))
