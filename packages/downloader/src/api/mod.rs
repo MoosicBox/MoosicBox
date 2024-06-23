@@ -213,7 +213,7 @@ pub async fn download_tasks_endpoint(
 
     let mut items = tasks
         .into_iter()
-        .map(|task| to_api_download_task(task, &tracks, &albums, &artists))
+        .filter_map(|task| to_api_download_task(task, &tracks, &albums, &artists).transpose())
         .collect::<Result<Vec<_>, _>>()
         .map_err(|err| {
             ErrorInternalServerError(format!("Failed to get download tasks: {err:?}"))
