@@ -24,7 +24,7 @@ use tokio_util::sync::CancellationToken;
 
 use moosicbox_player::player::{
     get_track_url, send_playback_event, trigger_playback_event, ApiPlaybackStatus, PlayableTrack,
-    Playback, PlaybackRetryOptions, PlaybackStatus, Player, PlayerError, PlayerSource, TrackOrId,
+    Playback, PlaybackRetryOptions, Player, PlayerError, PlayerSource, TrackOrId,
 };
 
 use crate::listener::Handle;
@@ -159,8 +159,7 @@ impl Player for UpnpPlayer {
         if let Some(seek) = seek {
             if seek > 0.0 {
                 log::debug!("trigger_play: Seeking track to seek={seek}");
-                self.seek_track(seek, Some(DEFAULT_SEEK_RETRY_OPTIONS))
-                    .await?;
+                self.seek(seek, Some(DEFAULT_SEEK_RETRY_OPTIONS)).await?;
             }
         }
 
@@ -201,7 +200,7 @@ impl Player for UpnpPlayer {
         Ok(())
     }
 
-    async fn stop(&self) -> Result<Playback, PlayerError> {
+    async fn trigger_stop(&self) -> Result<Playback, PlayerError> {
         log::info!("Stopping playback");
         let playback = self.get_playback()?;
 
@@ -216,7 +215,7 @@ impl Player for UpnpPlayer {
         crate::stop(&self.service, self.device.url(), self.instance_id)
             .await
             .map_err(|e| {
-                log::error!("pause failed: {e:?}");
+                log::error!("stop failed: {e:?}");
                 PlayerError::NoPlayersPlaying
             })?;
 
@@ -269,7 +268,7 @@ impl Player for UpnpPlayer {
         session_id: Option<usize>,
         session_playlist_id: Option<usize>,
         retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<PlaybackStatus, PlayerError> {
+    ) -> Result<(), PlayerError> {
         log::debug!(
             "\
             update_playback:\n\t\
@@ -296,10 +295,7 @@ impl Player for UpnpPlayer {
         drop(permit);
 
         if stop.unwrap_or(false) {
-            return Ok(PlaybackStatus {
-                success: true,
-                playback_id: self.stop().await?.id,
-            });
+            return Ok(());
         }
 
         let mut should_play = modify_playback && play.unwrap_or(false);
@@ -374,7 +370,6 @@ impl Player for UpnpPlayer {
 
         trigger_playback_event(&playback, &original);
 
-        let playback_id = playback.id;
         let progress = if playback.progress != 0.0 {
             Some(playback.progress)
         } else {
@@ -382,7 +377,7 @@ impl Player for UpnpPlayer {
         };
 
         if should_resume {
-            match self.resume_playback(retry_options).await {
+            match self.resume(retry_options).await {
                 Ok(status) => Ok(status),
                 Err(e) => {
                     log::error!("Failed to resume playback: {e:?}");
@@ -393,12 +388,11 @@ impl Player for UpnpPlayer {
             self.play_playback(playback, progress, retry_options).await
         } else {
             if should_pause {
-                self.pause_playback().await?;
+                self.pause(retry_options).await?;
             } else if should_seek {
                 if let Some(seek) = seek {
                     log::debug!("update_playback: Seeking track to seek={seek}");
-                    self.seek_track(seek, Some(DEFAULT_SEEK_RETRY_OPTIONS))
-                        .await?;
+                    self.seek(seek, Some(DEFAULT_SEEK_RETRY_OPTIONS)).await?;
                 }
             }
             log::debug!("update_playback: updating active playback to {playback:?}");
@@ -407,25 +401,14 @@ impl Player for UpnpPlayer {
                 .unwrap()
                 .replace(playback.clone());
 
-            Ok(PlaybackStatus {
-                success: true,
-                playback_id,
-            })
+            Ok(())
         }
     }
 
-    async fn seek_track(
-        &self,
-        seek: f64,
-        retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<PlaybackStatus, PlayerError> {
+    async fn trigger_seek(&self, seek: f64) -> Result<(), PlayerError> {
         log::debug!("seek_track seek={seek}");
-        let playback = self.get_playback()?;
-        let playback_id = playback.id;
 
-        let mut attempt = 1;
-
-        while let Err(e) = crate::seek(
+        crate::seek(
             &self.service,
             self.device.url(),
             self.instance_id,
@@ -433,36 +416,17 @@ impl Player for UpnpPlayer {
             seek as u32,
         )
         .await
-        .map_err(|e| PlayerError::Seek(format!("{e:?}")))
-        {
-            log::debug!("Seek failed: {e:?}");
-            if let Some(retry_options) = retry_options {
-                if attempt < retry_options.max_retry_count {
-                    attempt += 1;
-                    log::debug!(
-                        "Retrying attempt {attempt}/{}",
-                        retry_options.max_retry_count
-                    );
-                    tokio::time::sleep(retry_options.retry_delay).await;
-                    continue;
-                }
-            }
-            moosicbox_assert::die_or_error!("Failed to seek: {e:?}");
-            return Err(e);
-        }
+        .map_err(|e| PlayerError::Seek(format!("{e:?}")))?;
 
-        Ok(PlaybackStatus {
-            success: true,
-            playback_id,
-        })
+        Ok(())
     }
 
-    async fn pause_playback(&self) -> Result<PlaybackStatus, PlayerError> {
-        log::info!("pause_playback: pausing playback");
+    async fn trigger_pause(&self) -> Result<(), PlayerError> {
+        log::info!("trigger_pause: pausing playback");
         let mut playback = self.get_playback()?;
 
         let id = playback.id;
-        log::debug!("pause_playback: playback id={id}");
+        log::debug!("trigger_pause: playback id={id}");
 
         if !playback.playing {
             return Err(PlayerError::PlaybackNotPlaying(id));
@@ -478,10 +442,7 @@ impl Player for UpnpPlayer {
 
         if let Err(e) = self.wait_for_expected_transport_state().await {
             log::error!("Playback not in a pauseable state: {e:?}");
-            return Ok(PlaybackStatus {
-                success: false,
-                playback_id: id,
-            });
+            return Ok(());
         }
         crate::pause(&self.service, self.device.url(), self.instance_id)
             .await
@@ -499,18 +460,12 @@ impl Player for UpnpPlayer {
             self.wait_for_expected_transport_state().await,
             "Failed to wait_for_transport_state",
         );
-        log::debug!("pause_playback: playback paused id={id}");
+        log::debug!("trigger_pause: playback paused id={id}");
 
-        Ok(PlaybackStatus {
-            success: true,
-            playback_id: id,
-        })
+        Ok(())
     }
 
-    async fn resume_playback(
-        &self,
-        _retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<PlaybackStatus, PlayerError> {
+    async fn trigger_resume(&self) -> Result<(), PlayerError> {
         log::info!("Resuming playback id");
         let mut playback = self.get_playback()?;
 
@@ -535,7 +490,7 @@ impl Player for UpnpPlayer {
             .replace("PLAYING".to_string());
 
         self.wait_for_expected_transport_state().await?;
-        log::debug!("resume_playback: playback resumed id={id}");
+        log::debug!("trigger_resume: playback resumed id={id}");
 
         playback.playing = true;
 
@@ -545,10 +500,7 @@ impl Player for UpnpPlayer {
             .unwrap()
             .replace(playback);
 
-        Ok(PlaybackStatus {
-            success: true,
-            playback_id: id,
-        })
+        Ok(())
     }
 
     async fn track_id_to_playable_stream(

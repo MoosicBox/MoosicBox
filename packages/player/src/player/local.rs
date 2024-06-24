@@ -18,8 +18,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::player::{
     get_track_url, send_playback_event, trigger_playback_event, ApiPlaybackStatus, PlayableTrack,
-    Playback, PlaybackRetryOptions, PlaybackStatus, PlaybackType, Player, PlayerError,
-    PlayerSource, TrackOrId,
+    Playback, PlaybackRetryOptions, PlaybackType, Player, PlayerError, PlayerSource, TrackOrId,
 };
 
 #[derive(Clone)]
@@ -167,7 +166,7 @@ impl Player for LocalPlayer {
         Ok(())
     }
 
-    async fn stop(&self) -> Result<Playback, PlayerError> {
+    async fn trigger_stop(&self) -> Result<Playback, PlayerError> {
         log::info!("Stopping playback");
         let playback = self.get_playback()?;
 
@@ -215,7 +214,7 @@ impl Player for LocalPlayer {
         session_id: Option<usize>,
         session_playlist_id: Option<usize>,
         retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<PlaybackStatus, PlayerError> {
+    ) -> Result<(), PlayerError> {
         log::debug!(
             "\
             update_playback:\n\t\
@@ -235,10 +234,7 @@ impl Player for LocalPlayer {
         );
 
         if stop.unwrap_or(false) {
-            return Ok(PlaybackStatus {
-                success: true,
-                playback_id: self.stop().await?.id,
-            });
+            self.stop(retry_options).await?;
         }
 
         let mut should_play = modify_playback && play.unwrap_or(false);
@@ -247,7 +243,7 @@ impl Player for LocalPlayer {
             log::trace!("update_playback: existing playback={playback:?}");
             if playback.playing {
                 if let Some(false) = playing {
-                    self.pause_playback().await?;
+                    self.pause(retry_options).await?;
                 }
             } else {
                 should_play = modify_playback && (should_play || playing.unwrap_or(false));
@@ -301,7 +297,6 @@ impl Player for LocalPlayer {
 
         trigger_playback_event(&playback, &original);
 
-        let playback_id = playback.id;
         let seek = if playback.progress != 0.0 {
             Some(playback.progress)
         } else {
@@ -317,14 +312,11 @@ impl Player for LocalPlayer {
                 .unwrap()
                 .replace(playback.clone());
 
-            Ok(PlaybackStatus {
-                success: true,
-                playback_id,
-            })
+            Ok(())
         }
     }
 
-    async fn pause_playback(&self) -> Result<PlaybackStatus, PlayerError> {
+    async fn trigger_pause(&self) -> Result<(), PlayerError> {
         log::info!("Pausing playback id");
         let mut playback = self.get_playback()?;
 
@@ -356,10 +348,30 @@ impl Player for LocalPlayer {
             .unwrap()
             .replace(playback);
 
-        Ok(PlaybackStatus {
-            success: true,
-            playback_id: id,
-        })
+        Ok(())
+    }
+
+    async fn trigger_resume(&self) -> Result<(), PlayerError> {
+        let mut playback = self.get_playback()?;
+
+        let id = playback.id;
+
+        if playback.playing {
+            return Err(PlayerError::PlaybackAlreadyPlaying(id));
+        }
+
+        let seek = Some(playback.progress);
+
+        playback.playing = true;
+        playback.abort = CancellationToken::new();
+
+        self.trigger_play(seek).await
+    }
+
+    async fn trigger_seek(&self, seek: f64) -> Result<(), PlayerError> {
+        self.trigger_stop().await?;
+        self.trigger_play(Some(seek)).await?;
+        Ok(())
     }
 
     async fn track_id_to_playable_stream(

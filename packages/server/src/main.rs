@@ -457,7 +457,7 @@ fn main() -> std::io::Result<()> {
                 let players = SERVER_PLAYERS.write().await.drain().collect::<Vec<_>>();
                 for (id, player) in players {
                     log::debug!("Shutting down player id={}", id);
-                    if let Err(err) = player.stop().await {
+                    if let Err(err) = player.trigger_stop().await {
                         log::error!("Failed to stop player id={}: {err:?}", id);
                     } else {
                         log::debug!("Successfully shut down player id={}", id);
@@ -470,7 +470,7 @@ fn main() -> std::io::Result<()> {
                     let players = UPNP_PLAYERS.write().await.drain().collect::<Vec<_>>();
                     for (id, player) in players {
                         log::debug!("Shutting down player id={}", id);
-                        if let Err(err) = player.stop().await {
+                        if let Err(err) = player.trigger_stop().await {
                             log::error!("Failed to stop player id={}: {err:?}", id);
                         } else {
                             log::debug!("Successfully shut down player id={}", id);

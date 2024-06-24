@@ -8,7 +8,7 @@ use std::{
 use async_trait::async_trait;
 use atomic_float::AtomicF64;
 use crossbeam_channel::{bounded, Receiver, SendError};
-use futures::{StreamExt as _, TryStreamExt as _};
+use futures::{Future, StreamExt as _, TryStreamExt as _};
 use lazy_static::lazy_static;
 use local_ip_address::local_ip;
 use moosicbox_core::{
@@ -176,7 +176,6 @@ pub struct ApiPlaybackStatus {
 #[derive(Serialize, Debug, Clone, Copy)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaybackStatus {
-    pub playback_id: usize,
     pub success: bool,
 }
 
@@ -475,7 +474,7 @@ pub trait Player: Clone + Send + 'static {
         volume: Option<f64>,
         quality: PlaybackQuality,
         retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<PlaybackStatus, PlayerError> {
+    ) -> Result<(), PlayerError> {
         let tracks = {
             get_album_tracks(db, album_id as u64)
                 .await
@@ -513,7 +512,7 @@ pub trait Player: Clone + Send + 'static {
         volume: Option<f64>,
         quality: PlaybackQuality,
         retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<PlaybackStatus, PlayerError> {
+    ) -> Result<(), PlayerError> {
         self.play_tracks(
             db,
             session_id,
@@ -527,6 +526,59 @@ pub trait Player: Clone + Send + 'static {
         .await
     }
 
+    async fn handle_retry<
+        T,
+        E: std::fmt::Debug + Into<PlayerError>,
+        F: Future<Output = Result<T, E>> + Send,
+    >(
+        &self,
+        retry_options: Option<PlaybackRetryOptions>,
+        func: impl Fn() -> F + Send,
+    ) -> Result<T, PlayerError> {
+        let mut retry_count = 0;
+        let abort = self.get_playback().unwrap().abort.clone();
+
+        loop {
+            if retry_count > 0 {
+                tokio::time::sleep(retry_options.unwrap().retry_delay).await;
+            }
+
+            tokio::select! {
+                value = func() => {
+                    match value {
+                        Ok(value) => {
+                            log::info!("Finished action");
+                            return Ok(value);
+                        }
+                        Err(e) => {
+                            log::error!("Action failed: {e:?}");
+                            if let Some(retry_options) = retry_options {
+                                retry_count += 1;
+                                if retry_count > retry_options.max_retry_count {
+                                    log::error!(
+                                        "Action retry failed after {retry_count} attempts. Not retrying"
+                                    );
+                                    return Err(e.into());
+                                }
+                                log::info!(
+                                    "Retrying action attempt {}/{}",
+                                    retry_count + 1,
+                                    retry_options.max_retry_count
+                                );
+                                continue;
+                            } else {
+                                log::debug!("No retry options");
+                            }
+                        }
+                    }
+                }
+                _ = abort.cancelled() => {
+                    return Err(PlayerError::NoPlayersPlaying)
+                }
+            }
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     async fn play_tracks(
         &self,
@@ -538,10 +590,10 @@ pub trait Player: Clone + Send + 'static {
         volume: Option<f64>,
         quality: PlaybackQuality,
         retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<PlaybackStatus, PlayerError> {
+    ) -> Result<(), PlayerError> {
         if let Ok(playback) = self.get_playback() {
             log::debug!("Stopping existing playback {}", playback.id);
-            self.stop().await?;
+            self.stop(retry_options).await?;
         }
 
         let tracks = {
@@ -603,15 +655,12 @@ pub trait Player: Clone + Send + 'static {
         mut playback: Playback,
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<PlaybackStatus, PlayerError> {
+    ) -> Result<(), PlayerError> {
         log::info!("Playing playback...");
 
         if playback.tracks.is_empty() {
             log::debug!("No tracks to play for {playback:?}");
-            return Ok(PlaybackStatus {
-                success: true,
-                playback_id: playback.id,
-            });
+            return Ok(());
         }
 
         let (tx, rx) = bounded(1);
@@ -637,7 +686,6 @@ pub trait Player: Clone + Send + 'static {
                 .map(|t| t.to_id())
                 .collect::<Vec<_>>()
         );
-        let playback_id = playback.id;
 
         RT.spawn(async move {
             let mut seek = seek;
@@ -709,10 +757,7 @@ pub trait Player: Clone + Send + 'static {
             Ok::<_, PlayerError>(0)
         });
 
-        Ok(PlaybackStatus {
-            success: true,
-            playback_id,
-        })
+        Ok(())
     }
 
     async fn play(
@@ -721,78 +766,70 @@ pub trait Player: Clone + Send + 'static {
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
         log::debug!("play: seek={seek:?}");
-        let mut retry_count = 0;
-        let abort = self.get_playback().unwrap().abort.clone();
 
-        while !abort.is_cancelled() {
-            if retry_count > 0 {
-                tokio::time::sleep(retry_options.unwrap().retry_delay).await;
+        self.handle_retry(retry_options, {
+            let this = self.clone();
+
+            move || {
+                let this = this.clone();
+                async move { this.trigger_play(seek).await }
             }
-
-            if let Err(e) = self.trigger_play(seek).await {
-                log::error!("Playback failed: {e:?}");
-                if let Some(retry_options) = retry_options {
-                    retry_count += 1;
-                    if retry_count > retry_options.max_retry_count {
-                        log::error!(
-                            "Playback retry failed after {retry_count} attempts. Not retrying"
-                        );
-                        break;
-                    }
-                    log::info!(
-                        "Retrying playback attempt {}/{}",
-                        retry_count + 1,
-                        retry_options.max_retry_count
-                    );
-                    continue;
-                } else {
-                    log::debug!("No retry options");
-                }
-            }
-
-            log::info!("Finished playback");
-            break;
-        }
+        })
+        .await?;
 
         Ok(())
     }
 
+    #[doc(hidden)]
     async fn trigger_play(&self, seek: Option<f64>) -> Result<(), PlayerError>;
 
-    async fn stop_track(&self) -> Result<PlaybackStatus, PlayerError> {
-        log::debug!("stop_track called");
-        let playback = self.stop().await?;
+    async fn stop(&self, retry_options: Option<PlaybackRetryOptions>) -> Result<(), PlayerError> {
+        log::debug!("stop: Stopping playback");
 
-        Ok(PlaybackStatus {
-            success: true,
-            playback_id: playback.id,
+        self.handle_retry(retry_options, {
+            let this = self.clone();
+
+            move || {
+                let this = this.clone();
+                async move { this.trigger_stop().await }
+            }
         })
+        .await?;
+
+        Ok(())
     }
 
-    async fn stop(&self) -> Result<Playback, PlayerError>;
+    #[doc(hidden)]
+    async fn trigger_stop(&self) -> Result<Playback, PlayerError>;
 
-    async fn seek_track(
+    async fn seek(
         &self,
         seek: f64,
         retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<PlaybackStatus, PlayerError> {
-        log::debug!("seek_track seek={seek}");
-        let playback = self.stop().await?;
-        let playback_id = playback.id;
-        self.play_playback(playback, Some(seek), retry_options)
-            .await?;
+    ) -> Result<(), PlayerError> {
+        log::debug!("seek: seek={seek:?}");
 
-        Ok(PlaybackStatus {
-            success: true,
-            playback_id,
+        self.handle_retry(retry_options, {
+            let this = self.clone();
+
+            move || {
+                let this = this.clone();
+                async move { this.trigger_seek(seek).await }
+            }
         })
+        .await?;
+
+        Ok(())
     }
+
+    #[doc(hidden)]
+    async fn trigger_seek(&self, seek: f64) -> Result<(), PlayerError>;
 
     async fn next_track(
         &self,
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<PlaybackStatus, PlayerError> {
+    ) -> Result<(), PlayerError> {
         log::info!("Playing next track seek {seek:?}");
         let playback = self.get_playback()?;
 
@@ -823,7 +860,7 @@ pub trait Player: Clone + Send + 'static {
         &self,
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<PlaybackStatus, PlayerError> {
+    ) -> Result<(), PlayerError> {
         log::info!("Playing next track seek {seek:?}");
         let playback = self.get_playback()?;
 
@@ -863,30 +900,43 @@ pub trait Player: Clone + Send + 'static {
         session_id: Option<usize>,
         session_playlist_id: Option<usize>,
         retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<PlaybackStatus, PlayerError>;
+    ) -> Result<(), PlayerError>;
 
-    async fn pause_playback(&self) -> Result<PlaybackStatus, PlayerError>;
+    async fn pause(&self, retry_options: Option<PlaybackRetryOptions>) -> Result<(), PlayerError> {
+        log::debug!("pause: Pausing playback");
 
-    async fn resume_playback(
-        &self,
-        retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<PlaybackStatus, PlayerError> {
-        log::info!("Resuming playback");
-        let mut playback = self.get_playback()?;
+        self.handle_retry(retry_options, {
+            let this = self.clone();
 
-        let id = playback.id;
+            move || {
+                let this = this.clone();
+                async move { this.trigger_pause().await }
+            }
+        })
+        .await?;
 
-        if playback.playing {
-            return Err(PlayerError::PlaybackAlreadyPlaying(id));
-        }
-
-        let seek = Some(playback.progress);
-
-        playback.playing = true;
-        playback.abort = CancellationToken::new();
-
-        self.play_playback(playback, seek, retry_options).await
+        Ok(())
     }
+
+    async fn trigger_pause(&self) -> Result<(), PlayerError>;
+
+    async fn resume(&self, retry_options: Option<PlaybackRetryOptions>) -> Result<(), PlayerError> {
+        log::debug!("resume: Resuming playback");
+
+        self.handle_retry(retry_options, {
+            let this = self.clone();
+
+            move || {
+                let this = this.clone();
+                async move { this.trigger_resume().await }
+            }
+        })
+        .await?;
+
+        Ok(())
+    }
+
+    async fn trigger_resume(&self) -> Result<(), PlayerError>;
 
     async fn track_to_playable_file(
         &self,
