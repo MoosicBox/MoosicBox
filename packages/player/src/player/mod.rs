@@ -57,7 +57,7 @@ lazy_static! {
 }
 
 pub const DEFAULT_SEEK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
-    max_retry_count: 10,
+    max_attempts: 10,
     retry_delay: std::time::Duration::from_millis(100),
 };
 
@@ -397,7 +397,7 @@ pub enum PlaybackType {
 
 #[derive(Copy, Clone)]
 pub struct PlaybackRetryOptions {
-    pub max_retry_count: u32,
+    pub max_attempts: u32,
     pub retry_delay: std::time::Duration,
 }
 
@@ -563,7 +563,7 @@ pub trait Player: Clone + Send + 'static {
                             log::error!("Action failed: {e:?}");
                             if let Some(retry_options) = retry_options {
                                 retry_count += 1;
-                                if retry_count > retry_options.max_retry_count {
+                                if retry_count >= retry_options.max_attempts {
                                     log::error!(
                                         "Action retry failed after {retry_count} attempts. Not retrying"
                                     );
@@ -572,7 +572,7 @@ pub trait Player: Clone + Send + 'static {
                                 log::info!(
                                     "Retrying action attempt {}/{}",
                                     retry_count + 1,
-                                    retry_options.max_retry_count
+                                    retry_options.max_attempts
                                 );
                                 continue;
                             } else {

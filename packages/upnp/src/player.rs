@@ -22,7 +22,7 @@ use moosicbox_player::player::{
 use crate::listener::Handle;
 
 pub const DEFAULT_SEEK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
-    max_retry_count: 10,
+    max_attempts: 10,
     retry_delay: std::time::Duration::from_millis(100),
 };
 

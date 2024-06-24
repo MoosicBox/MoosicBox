@@ -98,7 +98,7 @@ fn get_player(host: Option<&str>) -> LocalPlayer {
 }
 
 pub const DEFAULT_PLAYBACK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
-    max_retry_count: 10,
+    max_attempts: 10,
     retry_delay: std::time::Duration::from_millis(1000),
 };
 
