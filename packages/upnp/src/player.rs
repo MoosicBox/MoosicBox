@@ -6,6 +6,7 @@ use std::{
 use async_trait::async_trait;
 use crossbeam_channel::Receiver;
 use flume::{unbounded, Sender};
+use moosicbox_async_service::CancellationToken;
 use moosicbox_core::sqlite::{
     db::get_track,
     models::{ToApi, UpdateSession},
@@ -184,6 +185,7 @@ impl Player for UpnpPlayer {
             retry = finished_rx.recv_async() => {
                 self.unsubscribe().await?;
                 if !retry.is_ok_and(|x| !x) {
+                    log::debug!("Retrying playback");
                     return Err(PlayerError::NoPlayersPlaying);
                 }
             }
@@ -192,14 +194,9 @@ impl Player for UpnpPlayer {
         Ok(())
     }
 
-    async fn trigger_stop(&self) -> Result<Playback, PlayerError> {
+    async fn trigger_stop(&self) -> Result<(), PlayerError> {
         log::info!("Stopping playback");
-        let playback = self.get_playback()?;
-
-        if !playback.playing {
-            log::debug!("Playback not playing: {playback:?}");
-            return Ok(playback);
-        }
+        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
 
         if let Err(e) = self.wait_for_expected_transport_state().await {
             log::warn!("Playback not in a stoppable state: {e:?}");
@@ -219,11 +216,6 @@ impl Player for UpnpPlayer {
         log::debug!("Aborting playback {playback:?} for stop");
         playback.abort.cancel();
 
-        if !playback.playing {
-            log::debug!("Playback not playing: {playback:?}");
-            return Ok(playback);
-        }
-
         log::trace!("Waiting for playback completion response");
         if let Some(receiver) = self.receiver.write().unwrap().take() {
             if let Err(err) = receiver.recv_timeout(std::time::Duration::from_secs(5)) {
@@ -242,7 +234,9 @@ impl Player for UpnpPlayer {
             log::debug!("No receiver to wait for completion response with");
         }
 
-        Ok(playback)
+        self.active_playback_write().as_mut().unwrap().abort = CancellationToken::new();
+
+        Ok(())
     }
 
     async fn before_update_playback(&self) -> Result<(), PlayerError> {
@@ -272,22 +266,10 @@ impl Player for UpnpPlayer {
 
     async fn trigger_pause(&self) -> Result<(), PlayerError> {
         log::info!("trigger_pause: pausing playback");
-        let mut playback = self.get_playback()?;
+        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
 
         let id = playback.id;
         log::debug!("trigger_pause: playback id={id}");
-
-        if !playback.playing {
-            return Err(PlayerError::PlaybackNotPlaying(id));
-        }
-
-        playback.playing = false;
-
-        self.active_playback
-            .clone()
-            .write()
-            .unwrap()
-            .replace(playback);
 
         if let Err(e) = self.wait_for_expected_transport_state().await {
             log::error!("Playback not in a pauseable state: {e:?}");
@@ -316,14 +298,9 @@ impl Player for UpnpPlayer {
 
     async fn trigger_resume(&self) -> Result<(), PlayerError> {
         log::info!("Resuming playback id");
-        let mut playback = self.get_playback()?;
+        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
 
         let id = playback.id;
-
-        if playback.playing {
-            log::debug!("Playback already playing");
-            return Err(PlayerError::PlaybackAlreadyPlaying(id));
-        }
 
         self.wait_for_expected_transport_state().await?;
         crate::play(&self.service, self.device.url(), self.instance_id, 1.0)
@@ -341,14 +318,6 @@ impl Player for UpnpPlayer {
         self.wait_for_expected_transport_state().await?;
         log::debug!("trigger_resume: playback resumed id={id}");
 
-        playback.playing = true;
-
-        self.active_playback
-            .clone()
-            .write()
-            .unwrap()
-            .replace(playback);
-
         Ok(())
     }
 
@@ -364,13 +333,8 @@ impl Player for UpnpPlayer {
         })
     }
 
-    fn get_playback(&self) -> Result<Playback, PlayerError> {
-        log::trace!("Getting Playback");
-        if let Some(playback) = self.active_playback.read().unwrap().as_ref() {
-            Ok(playback.clone())
-        } else {
-            Err(PlayerError::NoPlayersPlaying)
-        }
+    fn get_playback(&self) -> Option<Playback> {
+        self.active_playback.read().unwrap().clone()
     }
 
     fn get_source(&self) -> &PlayerSource {
@@ -404,12 +368,10 @@ impl UpnpPlayer {
     }
 
     async fn wait_for_expected_transport_state(&self) -> Result<(), PlayerError> {
-        let expected_state = self
-            .expected_state
-            .read()
-            .unwrap()
-            .clone()
-            .ok_or(PlayerError::NoPlayersPlaying)?;
+        let expected_state = self.expected_state.read().unwrap().clone().ok_or_else(|| {
+            log::error!("State not set");
+            PlayerError::NoPlayersPlaying
+        })?;
 
         self.wait_for_transport_state(&expected_state).await?;
 
@@ -431,6 +393,7 @@ impl UpnpPlayer {
             info.current_transport_state.clone_into(&mut state);
 
             if attempt >= 10 {
+                log::error!("Failed to wait for transport_state to be {desired_state}");
                 return Err(PlayerError::NoPlayersPlaying);
             }
             tokio::time::sleep(Duration::from_millis(300)).await;

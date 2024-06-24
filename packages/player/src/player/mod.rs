@@ -105,6 +105,8 @@ pub enum PlayerError {
     PlaybackAlreadyPlaying(usize),
     #[error("Invalid Playback Type")]
     InvalidPlaybackType,
+    #[error("Playback cancelled")]
+    Cancelled,
     #[error("Invalid session with id {session_id}: {message}")]
     InvalidSession { session_id: i32, message: String },
 }
@@ -545,44 +547,41 @@ pub trait Player: Clone + Send + 'static {
         func: impl Fn() -> F + Send,
     ) -> Result<T, PlayerError> {
         let mut retry_count = 0;
-        let abort = self.get_playback().unwrap().abort.clone();
 
         loop {
             if retry_count > 0 {
                 tokio::time::sleep(retry_options.unwrap().retry_delay).await;
             }
 
-            tokio::select! {
-                value = func() => {
-                    match value {
-                        Ok(value) => {
-                            log::info!("Finished action");
-                            return Ok(value);
-                        }
-                        Err(e) => {
-                            log::error!("Action failed: {e:?}");
-                            if let Some(retry_options) = retry_options {
-                                retry_count += 1;
-                                if retry_count >= retry_options.max_attempts {
-                                    log::error!(
-                                        "Action retry failed after {retry_count} attempts. Not retrying"
-                                    );
-                                    return Err(e.into());
-                                }
-                                log::info!(
-                                    "Retrying action attempt {}/{}",
-                                    retry_count + 1,
-                                    retry_options.max_attempts
-                                );
-                                continue;
-                            } else {
-                                log::debug!("No retry options");
-                            }
-                        }
-                    }
+            match func().await {
+                Ok(value) => {
+                    log::trace!("Finished action");
+                    return Ok(value);
                 }
-                _ = abort.cancelled() => {
-                    return Err(PlayerError::NoPlayersPlaying)
+                Err(e) => {
+                    let e = e.into();
+                    if let PlayerError::Cancelled = e {
+                        log::debug!("Action cancelled");
+                        return Err(e);
+                    }
+                    log::error!("Action failed: {e:?}");
+                    if let Some(retry_options) = retry_options {
+                        retry_count += 1;
+                        if retry_count >= retry_options.max_attempts {
+                            log::error!(
+                                "Action retry failed after {retry_count} attempts. Not retrying"
+                            );
+                            return Err(e);
+                        }
+                        log::info!(
+                            "Retrying action attempt {}/{}",
+                            retry_count + 1,
+                            retry_options.max_attempts
+                        );
+                        continue;
+                    } else {
+                        log::debug!("No retry options");
+                    }
                 }
             }
         }
@@ -600,7 +599,7 @@ pub trait Player: Clone + Send + 'static {
         quality: PlaybackQuality,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
-        if let Ok(playback) = self.get_playback() {
+        if let Some(playback) = self.get_playback() {
             log::debug!("Stopping existing playback {}", playback.id);
             self.stop(retry_options).await?;
         }
@@ -809,7 +808,7 @@ pub trait Player: Clone + Send + 'static {
     }
 
     #[doc(hidden)]
-    async fn trigger_stop(&self) -> Result<Playback, PlayerError>;
+    async fn trigger_stop(&self) -> Result<(), PlayerError>;
 
     async fn seek(
         &self,
@@ -840,7 +839,7 @@ pub trait Player: Clone + Send + 'static {
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
         log::info!("Playing next track seek {seek:?}");
-        let playback = self.get_playback()?;
+        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
 
         if playback.position + 1 >= playback.tracks.len() as u16 {
             return Err(PlayerError::PositionOutOfBounds(
@@ -871,7 +870,7 @@ pub trait Player: Clone + Send + 'static {
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
         log::info!("Playing next track seek {seek:?}");
-        let playback = self.get_playback()?;
+        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
 
         if playback.position == 0 {
             return Err(PlayerError::PositionOutOfBounds(-1));
@@ -932,71 +931,33 @@ pub trait Player: Clone + Send + 'static {
 
         self.before_update_playback().await?;
 
-        if stop.unwrap_or(false) {
-            self.stop(retry_options).await?;
-        }
-
-        let mut should_play = modify_playback && play.unwrap_or(false);
-        let mut should_resume = false;
-        let mut should_pause = false;
-        let mut should_seek = false;
-
-        let playback = if let Ok(playback) = self.get_playback() {
-            log::trace!("update_playback: existing playback={playback:?}");
-
-            if playback.playing {
-                should_seek = modify_playback
-                    && seek.is_some()
-                    && same_active_track(position, tracks.as_deref(), &playback);
-                should_play = should_play && !should_seek;
-                if let Some(false) = playing {
-                    should_pause = modify_playback;
-                }
-            } else if position.is_none() || tracks.is_some() {
-                should_resume = modify_playback
-                    && (seek.is_none()
-                        && same_active_track(position, tracks.as_deref(), &playback)
-                        && (should_resume || playing.unwrap_or(false)));
-            }
-
-            playback
-        } else {
-            log::trace!("update_playback: no existing playback");
-            should_play = modify_playback
-                && (should_play || (play.unwrap_or(true) && playing.unwrap_or(false)));
-
-            Playback::new(
-                tracks.clone().unwrap_or_default(),
-                position,
-                AtomicF64::new(volume.unwrap_or(1.0)),
-                quality.unwrap_or_default(),
-                session_id,
-                session_playlist_id,
-            )
-        };
-
-        log::debug!("update_playback: modify_playback={modify_playback} should_play={should_play} should_resume={should_resume} should_pause={should_pause} should_seek={should_seek}");
-
-        let original = playback.clone();
+        let original = self.get_playback().unwrap_or(Playback::new(
+            tracks.clone().unwrap_or_default(),
+            position,
+            AtomicF64::new(volume.unwrap_or(1.0)),
+            quality.unwrap_or_default(),
+            session_id,
+            session_playlist_id,
+        ));
 
         let playback = Playback {
-            id: playback.id,
-            session_id: playback.session_id,
-            session_playlist_id: playback.session_playlist_id,
-            tracks: tracks.unwrap_or_else(|| playback.tracks.clone()),
-            playing: playing.unwrap_or(playback.playing),
-            quality: quality.unwrap_or(playback.quality),
-            position: position.unwrap_or(playback.position),
+            id: original.id,
+            session_id: original.session_id,
+            session_playlist_id: original.session_playlist_id,
+            tracks: tracks.clone().unwrap_or_else(|| original.tracks.clone()),
+            playing: playing.unwrap_or(original.playing),
+            quality: quality.unwrap_or(original.quality),
+            position: position.unwrap_or(original.position),
             progress: if play.unwrap_or(false) {
                 seek.unwrap_or(0.0)
             } else {
-                seek.unwrap_or(playback.progress)
+                seek.unwrap_or(original.progress)
             },
-            volume: playback.volume,
-            abort: if should_play {
+            volume: original.volume.clone(),
+            abort: if original.abort.is_cancelled() {
                 CancellationToken::new()
             } else {
-                playback.abort
+                original.abort.clone()
             },
         };
 
@@ -1006,6 +967,36 @@ pub trait Player: Clone + Send + 'static {
                 .store(volume, std::sync::atomic::Ordering::SeqCst);
         }
 
+        log::debug!("update_playback: updating active playback to {playback:?}");
+        self.active_playback_write().replace(playback.clone());
+
+        if !modify_playback {
+            return Ok(());
+        }
+
+        let mut should_play = play.unwrap_or(false);
+        let mut should_resume = false;
+        let mut should_pause = false;
+        let mut should_seek = false;
+        let should_stop = stop.unwrap_or(false);
+
+        log::trace!("update_playback: existing playback={playback:?}");
+
+        if original.playing {
+            should_seek =
+                seek.is_some() && same_active_track(position, tracks.as_deref(), &playback);
+            should_play = should_play && !should_seek;
+            if let Some(false) = playing {
+                should_pause = true;
+            }
+        } else if position.is_none() || tracks.is_some() {
+            should_resume = seek.is_none()
+                && same_active_track(position, tracks.as_deref(), &playback)
+                && (should_resume || playing.unwrap_or(false));
+        }
+
+        log::debug!("update_playback: should_play={should_play} should_resume={should_resume} should_pause={should_pause} should_seek={should_seek}");
+
         trigger_playback_event(&playback, &original);
 
         let progress = if playback.progress != 0.0 {
@@ -1014,30 +1005,25 @@ pub trait Player: Clone + Send + 'static {
             None
         };
 
-        if should_resume {
-            match self.resume(retry_options).await {
-                Ok(status) => Ok(status),
-                Err(e) => {
-                    log::error!("Failed to resume playback: {e:?}");
-                    self.play_playback(playback, progress, retry_options).await
-                }
+        if should_stop {
+            self.stop(retry_options).await?;
+        } else if should_resume {
+            if let Err(e) = self.resume(retry_options).await {
+                log::error!("Failed to resume playback: {e:?}");
+                self.play(progress, retry_options).await?;
             }
         } else if should_play {
-            self.play_playback(playback, progress, retry_options).await
-        } else {
-            if should_pause {
-                self.pause(retry_options).await?;
-            } else if should_seek {
-                if let Some(seek) = seek {
-                    log::debug!("update_playback: Seeking track to seek={seek}");
-                    self.seek(seek, Some(DEFAULT_SEEK_RETRY_OPTIONS)).await?;
-                }
+            self.play(progress, retry_options).await?;
+        } else if should_pause {
+            self.pause(retry_options).await?;
+        } else if should_seek {
+            if let Some(seek) = seek {
+                log::debug!("update_playback: Seeking track to seek={seek}");
+                self.seek(seek, Some(DEFAULT_SEEK_RETRY_OPTIONS)).await?;
             }
-            log::debug!("update_playback: updating active playback to {playback:?}");
-            self.active_playback_write().replace(playback.clone());
-
-            Ok(())
         }
+
+        Ok(())
     }
 
     async fn pause(&self, retry_options: Option<PlaybackRetryOptions>) -> Result<(), PlayerError> {
@@ -1346,7 +1332,7 @@ pub trait Player: Clone + Send + 'static {
 
     fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError>;
 
-    fn get_playback(&self) -> Result<Playback, PlayerError>;
+    fn get_playback(&self) -> Option<Playback>;
 
     fn get_source(&self) -> &PlayerSource;
 }

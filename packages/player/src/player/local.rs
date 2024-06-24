@@ -150,7 +150,7 @@ impl Player for LocalPlayer {
 
         if let Err(e) = response {
             log::error!("Failed to play playback: {e:?}");
-            return Err(PlayerError::NoPlayersPlaying);
+            return Err(e);
         }
 
         log::info!("Finished playback for track_id={}", track_id);
@@ -158,17 +158,12 @@ impl Player for LocalPlayer {
         Ok(())
     }
 
-    async fn trigger_stop(&self) -> Result<Playback, PlayerError> {
+    async fn trigger_stop(&self) -> Result<(), PlayerError> {
         log::info!("Stopping playback");
-        let playback = self.get_playback()?;
+        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
 
         log::debug!("Aborting playback {playback:?} for stop");
         playback.abort.cancel();
-
-        if !playback.playing {
-            log::debug!("Playback not playing: {playback:?}");
-            return Ok(playback);
-        }
 
         log::trace!("Waiting for playback completion response");
         if let Some(receiver) = self.receiver.write().unwrap().take() {
@@ -188,21 +183,19 @@ impl Player for LocalPlayer {
             log::debug!("No receiver to wait for completion response with");
         }
 
-        Ok(playback)
+        self.active_playback_write().as_mut().unwrap().abort = CancellationToken::new();
+
+        Ok(())
     }
 
     async fn trigger_pause(&self) -> Result<(), PlayerError> {
         log::info!("Pausing playback id");
-        let mut playback = self.get_playback()?;
+        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
 
         let id = playback.id;
 
         log::info!("Aborting playback id {id} for pause");
         playback.abort.cancel();
-
-        if !playback.playing {
-            return Err(PlayerError::PlaybackNotPlaying(id));
-        }
 
         log::trace!("Waiting for playback completion response");
         if let Some(receiver) = self.receiver.write().unwrap().take() {
@@ -212,36 +205,25 @@ impl Player for LocalPlayer {
         } else {
             log::debug!("No receiver to wait for completion response with");
         }
-        log::trace!("Playback successfully stopped");
+        log::trace!("Playback successfully paused");
 
-        playback.playing = false;
-        playback.abort = CancellationToken::new();
-
-        self.active_playback_write().replace(playback);
+        self.active_playback_write().as_mut().unwrap().abort = CancellationToken::new();
 
         Ok(())
     }
 
     async fn trigger_resume(&self) -> Result<(), PlayerError> {
-        let mut playback = self.get_playback()?;
+        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
 
-        let id = playback.id;
+        self.trigger_play(Some(playback.progress)).await?;
 
-        if playback.playing {
-            return Err(PlayerError::PlaybackAlreadyPlaying(id));
-        }
-
-        let seek = Some(playback.progress);
-
-        playback.playing = true;
-        playback.abort = CancellationToken::new();
-
-        self.trigger_play(seek).await
+        Ok(())
     }
 
     async fn trigger_seek(&self, seek: f64) -> Result<(), PlayerError> {
         self.trigger_stop().await?;
         self.trigger_play(Some(seek)).await?;
+
         Ok(())
     }
 
@@ -257,13 +239,8 @@ impl Player for LocalPlayer {
         })
     }
 
-    fn get_playback(&self) -> Result<Playback, PlayerError> {
-        log::trace!("Getting Playback");
-        if let Some(playback) = self.active_playback.read().unwrap().clone() {
-            Ok(playback.clone())
-        } else {
-            Err(PlayerError::NoPlayersPlaying)
-        }
+    fn get_playback(&self) -> Option<Playback> {
+        self.active_playback.read().unwrap().clone()
     }
 
     fn get_source(&self) -> &PlayerSource {
