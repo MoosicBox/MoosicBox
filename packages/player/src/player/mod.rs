@@ -23,9 +23,13 @@ use moosicbox_core::{
 };
 use moosicbox_database::Database;
 use moosicbox_json_utils::{serde_json::ToValue as _, ParseError};
-use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
+use moosicbox_stream_utils::{
+    remote_bytestream::RemoteByteStream, stalled_monitor::StalledReadMonitor,
+};
 use moosicbox_symphonia_player::{
-    media_sources::bytestream_source::ByteStreamSource,
+    media_sources::{
+        bytestream_source::ByteStreamSource, remote_bytestream::RemoteByteStreamMediaSource,
+    },
     signal_chain::{SignalChain, SignalChainError},
     PlaybackError,
 };
@@ -51,6 +55,11 @@ lazy_static! {
         .build()
         .unwrap();
 }
+
+pub const DEFAULT_SEEK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
+    max_retry_count: 10,
+    retry_delay: std::time::Duration::from_millis(100),
+};
 
 pub static CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
 
@@ -408,7 +417,7 @@ pub trait Player: Clone + Send + 'static {
     fn receiver_write(&self) -> RwLockWriteGuard<'_, Option<Receiver<()>>>;
 
     async fn init_from_session(
-        &mut self,
+        &self,
         db: &dyn Database,
         init: &UpdateSession,
     ) -> Result<(), PlayerError> {
@@ -885,6 +894,10 @@ pub trait Player: Clone + Send + 'static {
         .await
     }
 
+    async fn before_update_playback(&self) -> Result<(), PlayerError> {
+        Ok(())
+    }
+
     #[allow(clippy::too_many_arguments)]
     async fn update_playback(
         &self,
@@ -900,7 +913,132 @@ pub trait Player: Clone + Send + 'static {
         session_id: Option<usize>,
         session_playlist_id: Option<usize>,
         retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<(), PlayerError>;
+    ) -> Result<(), PlayerError> {
+        log::debug!(
+            "\
+            update_playback:\n\t\
+            modify_playback={modify_playback:?}\n\t\
+            play={play:?}\n\t\
+            stop={stop:?}\n\t\
+            playing={playing:?}\n\t\
+            position={position:?}\n\t\
+            seek={seek:?}\n\t\
+            volume={volume:?}\n\t\
+            tracks={tracks:?}\n\t\
+            quality={quality:?}\n\t\
+            session_id={session_id:?}\
+            ",
+        );
+
+        self.before_update_playback().await?;
+
+        if stop.unwrap_or(false) {
+            self.stop(retry_options).await?;
+        }
+
+        let mut should_play = modify_playback && play.unwrap_or(false);
+        let mut should_resume = false;
+        let mut should_pause = false;
+        let mut should_seek = false;
+
+        let playback = if let Ok(playback) = self.get_playback() {
+            log::trace!("update_playback: existing playback={playback:?}");
+
+            if playback.playing {
+                should_seek = modify_playback
+                    && seek.is_some()
+                    && same_active_track(position, tracks.as_deref(), &playback);
+                should_play = should_play && !should_seek;
+                if let Some(false) = playing {
+                    should_pause = modify_playback;
+                }
+            } else if position.is_none() || tracks.is_some() {
+                should_resume = modify_playback
+                    && (seek.is_none()
+                        && same_active_track(position, tracks.as_deref(), &playback)
+                        && (should_resume || playing.unwrap_or(false)));
+            }
+
+            playback
+        } else {
+            log::trace!("update_playback: no existing playback");
+            should_play = modify_playback
+                && (should_play || (play.unwrap_or(true) && playing.unwrap_or(false)));
+
+            Playback::new(
+                tracks.clone().unwrap_or_default(),
+                position,
+                AtomicF64::new(volume.unwrap_or(1.0)),
+                quality.unwrap_or_default(),
+                session_id,
+                session_playlist_id,
+            )
+        };
+
+        log::debug!("update_playback: modify_playback={modify_playback} should_play={should_play} should_resume={should_resume} should_pause={should_pause} should_seek={should_seek}");
+
+        let original = playback.clone();
+
+        let playback = Playback {
+            id: playback.id,
+            session_id: playback.session_id,
+            session_playlist_id: playback.session_playlist_id,
+            tracks: tracks.unwrap_or_else(|| playback.tracks.clone()),
+            playing: playing.unwrap_or(playback.playing),
+            quality: quality.unwrap_or(playback.quality),
+            position: position.unwrap_or(playback.position),
+            progress: if play.unwrap_or(false) {
+                seek.unwrap_or(0.0)
+            } else {
+                seek.unwrap_or(playback.progress)
+            },
+            volume: playback.volume,
+            abort: if should_play {
+                CancellationToken::new()
+            } else {
+                playback.abort
+            },
+        };
+
+        if let Some(volume) = volume {
+            playback
+                .volume
+                .store(volume, std::sync::atomic::Ordering::SeqCst);
+        }
+
+        trigger_playback_event(&playback, &original);
+
+        let progress = if playback.progress != 0.0 {
+            Some(playback.progress)
+        } else {
+            None
+        };
+
+        if should_resume {
+            match self.resume(retry_options).await {
+                Ok(status) => Ok(status),
+                Err(e) => {
+                    log::error!("Failed to resume playback: {e:?}");
+                    self.play_playback(playback, progress, retry_options).await
+                }
+            }
+        } else if should_play {
+            self.play_playback(playback, progress, retry_options).await
+        } else {
+            if should_pause {
+                self.pause(retry_options).await?;
+            } else if should_seek {
+                if let Some(seek) = seek {
+                    log::debug!("update_playback: Seeking track to seek={seek}");
+                    self.seek(seek, Some(DEFAULT_SEEK_RETRY_OPTIONS)).await?;
+                }
+            }
+            log::debug!("update_playback: updating active playback to {playback:?}");
+            self.active_playback_write().replace(playback.clone());
+
+            Ok(())
+        }
+    }
 
     async fn pause(&self, retry_options: Option<PlaybackRetryOptions>) -> Result<(), PlayerError> {
         log::debug!("pause: Pausing playback");
@@ -1096,7 +1234,69 @@ pub trait Player: Clone + Send + 'static {
         track_id: i32,
         source: ApiSource,
         quality: PlaybackQuality,
-    ) -> Result<PlayableTrack, PlayerError>;
+    ) -> Result<PlayableTrack, PlayerError> {
+        let (url, headers) = get_track_url(
+            track_id.try_into().unwrap(),
+            source,
+            self.get_source(),
+            quality,
+            false,
+        )
+        .await?;
+
+        log::debug!("Fetching track bytes from url: {url}");
+
+        let mut client = reqwest::Client::new().head(&url);
+
+        if let Some(headers) = headers {
+            for (key, value) in headers {
+                client = client.header(key, value);
+            }
+        }
+
+        let res = client.send().await.unwrap();
+        let headers = res.headers();
+        let size = headers
+            .get("content-length")
+            .map(|length| length.to_str().unwrap().parse::<u64>().unwrap());
+
+        let source: RemoteByteStreamMediaSource = RemoteByteStream::new(
+            url,
+            size,
+            true,
+            #[cfg(feature = "flac")]
+            {
+                quality.format == moosicbox_core::types::AudioFormat::Flac
+            },
+            #[cfg(not(feature = "flac"))]
+            false,
+            self.get_playback()
+                .as_ref()
+                .map(|p| p.abort.clone())
+                .unwrap_or_default(),
+        )
+        .into();
+
+        let mut hint = Hint::new();
+
+        if let Some(Ok(content_type)) = headers
+            .get(actix_web::http::header::CONTENT_TYPE.to_string())
+            .map(|x| x.to_str())
+        {
+            if let Some(audio_type) = content_type.strip_prefix("audio/") {
+                log::debug!("Setting hint extension to {audio_type}");
+                hint.with_extension(audio_type);
+            } else {
+                log::warn!("Invalid audio content_type: {content_type}");
+            }
+        }
+
+        Ok(PlayableTrack {
+            track_id,
+            source: Box::new(source),
+            hint,
+        })
+    }
 
     async fn track_or_id_to_playable(
         &self,
@@ -1147,6 +1347,35 @@ pub trait Player: Clone + Send + 'static {
     fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError>;
 
     fn get_playback(&self) -> Result<Playback, PlayerError>;
+
+    fn get_source(&self) -> &PlayerSource;
+}
+
+fn same_active_track(
+    position: Option<u16>,
+    tracks: Option<&[TrackOrId]>,
+    playback: &Playback,
+) -> bool {
+    match (position, tracks) {
+        (None, None) => true,
+        (Some(position), None) => playback.position == position,
+        (None, Some(tracks)) => {
+            tracks
+                .get(playback.position as usize)
+                .map(|x: &TrackOrId| x.to_id())
+                == playback
+                    .tracks
+                    .get(playback.position as usize)
+                    .map(|x: &TrackOrId| x.to_id())
+        }
+        (Some(position), Some(tracks)) => {
+            tracks.get(position as usize).map(|x: &TrackOrId| x.to_id())
+                == playback
+                    .tracks
+                    .get(playback.position as usize)
+                    .map(|x: &TrackOrId| x.to_id())
+        }
+    }
 }
 
 pub static SERVICE_PORT: Lazy<RwLock<Option<u16>>> = Lazy::new(|| RwLock::new(None));

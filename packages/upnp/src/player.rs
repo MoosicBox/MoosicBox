@@ -4,27 +4,19 @@ use std::{
 };
 
 use async_trait::async_trait;
-use atomic_float::AtomicF64;
 use crossbeam_channel::Receiver;
 use flume::{unbounded, Sender};
-use moosicbox_core::{
-    sqlite::{
-        db::get_track,
-        models::{ApiSource, ToApi, UpdateSession},
-    },
-    types::PlaybackQuality,
+use moosicbox_core::sqlite::{
+    db::get_track,
+    models::{ToApi, UpdateSession},
 };
 use moosicbox_database::Database;
-use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;
-use moosicbox_symphonia_player::media_sources::remote_bytestream::RemoteByteStreamMediaSource;
 use rand::{thread_rng, Rng as _};
 use rupnp::{Device, Service};
-use symphonia::core::probe::Hint;
-use tokio_util::sync::CancellationToken;
 
 use moosicbox_player::player::{
-    get_track_url, send_playback_event, trigger_playback_event, ApiPlaybackStatus, PlayableTrack,
-    Playback, PlaybackRetryOptions, Player, PlayerError, PlayerSource, TrackOrId,
+    get_track_url, send_playback_event, trigger_playback_event, ApiPlaybackStatus, Playback,
+    PlaybackRetryOptions, Player, PlayerError, PlayerSource,
 };
 
 use crate::listener::Handle;
@@ -253,156 +245,13 @@ impl Player for UpnpPlayer {
         Ok(playback)
     }
 
-    #[allow(clippy::too_many_arguments)]
-    async fn update_playback(
-        &self,
-        modify_playback: bool,
-        play: Option<bool>,
-        stop: Option<bool>,
-        playing: Option<bool>,
-        position: Option<u16>,
-        seek: Option<f64>,
-        volume: Option<f64>,
-        tracks: Option<Vec<TrackOrId>>,
-        quality: Option<PlaybackQuality>,
-        session_id: Option<usize>,
-        session_playlist_id: Option<usize>,
-        retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<(), PlayerError> {
-        log::debug!(
-            "\
-            update_playback:\n\t\
-            source={:?}\n\t\
-            modify_playback={modify_playback:?}\n\t\
-            play={play:?}\n\t\
-            stop={stop:?}\n\t\
-            playing={playing:?}\n\t\
-            position={position:?}\n\t\
-            seek={seek:?}\n\t\
-            volume={volume:?}\n\t\
-            tracks={tracks:?}\n\t\
-            quality={quality:?}\n\t\
-            session_id={session_id:?}\
-            {}
-            ",
-            self.source,
-            std::backtrace::Backtrace::force_capture()
-        );
-
+    async fn before_update_playback(&self) -> Result<(), PlayerError> {
         log::debug!("Waiting for play_lock...");
         let permit = self.play_lock.acquire().await?;
         log::debug!("Allowed to play");
         drop(permit);
 
-        if stop.unwrap_or(false) {
-            return Ok(());
-        }
-
-        let mut should_play = modify_playback && play.unwrap_or(false);
-        let mut should_resume = false;
-        let mut should_pause = false;
-        let mut should_seek = false;
-
-        let playback = if let Ok(playback) = self.get_playback() {
-            log::trace!("update_playback: existing playback={playback:?}");
-
-            if playback.playing {
-                should_seek = modify_playback
-                    && seek.is_some()
-                    && same_active_track(position, tracks.as_deref(), &playback);
-                should_play = should_play && !should_seek;
-                if let Some(false) = playing {
-                    should_pause = modify_playback;
-                }
-            } else if position.is_none() || tracks.is_some() {
-                should_resume = modify_playback
-                    && (seek.is_none()
-                        && same_active_track(position, tracks.as_deref(), &playback)
-                        && (should_resume || playing.unwrap_or(false)));
-            }
-
-            playback
-        } else {
-            log::trace!("update_playback: no existing playback");
-            should_play = modify_playback
-                && (should_play || (play.unwrap_or(true) && playing.unwrap_or(false)));
-
-            Playback::new(
-                tracks.clone().unwrap_or_default(),
-                position,
-                AtomicF64::new(volume.unwrap_or(1.0)),
-                quality.unwrap_or_default(),
-                session_id,
-                session_playlist_id,
-            )
-        };
-
-        log::debug!("update_playback: modify_playback={modify_playback} should_play={should_play} should_resume={should_resume} should_pause={should_pause} should_seek={should_seek}");
-
-        let original = playback.clone();
-
-        let playback = Playback {
-            id: playback.id,
-            session_id: playback.session_id,
-            session_playlist_id: playback.session_playlist_id,
-            tracks: tracks.unwrap_or_else(|| playback.tracks.clone()),
-            playing: playing.unwrap_or(playback.playing),
-            quality: quality.unwrap_or(playback.quality),
-            position: position.unwrap_or(playback.position),
-            progress: if play.unwrap_or(false) {
-                seek.unwrap_or(0.0)
-            } else {
-                seek.unwrap_or(playback.progress)
-            },
-            volume: playback.volume,
-            abort: if should_play {
-                CancellationToken::new()
-            } else {
-                playback.abort
-            },
-        };
-
-        if let Some(volume) = volume {
-            playback
-                .volume
-                .store(volume, std::sync::atomic::Ordering::SeqCst);
-        }
-
-        trigger_playback_event(&playback, &original);
-
-        let progress = if playback.progress != 0.0 {
-            Some(playback.progress)
-        } else {
-            None
-        };
-
-        if should_resume {
-            match self.resume(retry_options).await {
-                Ok(status) => Ok(status),
-                Err(e) => {
-                    log::error!("Failed to resume playback: {e:?}");
-                    self.play_playback(playback, progress, retry_options).await
-                }
-            }
-        } else if should_play {
-            self.play_playback(playback, progress, retry_options).await
-        } else {
-            if should_pause {
-                self.pause(retry_options).await?;
-            } else if should_seek {
-                if let Some(seek) = seek {
-                    log::debug!("update_playback: Seeking track to seek={seek}");
-                    self.seek(seek, Some(DEFAULT_SEEK_RETRY_OPTIONS)).await?;
-                }
-            }
-            log::debug!("update_playback: updating active playback to {playback:?}");
-            self.active_playback
-                .write()
-                .unwrap()
-                .replace(playback.clone());
-
-            Ok(())
-        }
+        Ok(())
     }
 
     async fn trigger_seek(&self, seek: f64) -> Result<(), PlayerError> {
@@ -503,77 +352,6 @@ impl Player for UpnpPlayer {
         Ok(())
     }
 
-    async fn track_id_to_playable_stream(
-        &self,
-        track_id: i32,
-        source: ApiSource,
-        quality: PlaybackQuality,
-    ) -> Result<PlayableTrack, PlayerError> {
-        let (url, headers) = get_track_url(
-            track_id.try_into().unwrap(),
-            source,
-            &self.source,
-            quality,
-            true,
-        )
-        .await?;
-
-        log::debug!("Fetching track bytes from url: {url}");
-
-        let mut client = reqwest::Client::new().head(&url);
-
-        if let Some(headers) = headers {
-            for (key, value) in headers {
-                client = client.header(key, value);
-            }
-        }
-
-        let res = client.send().await.unwrap();
-        let headers = res.headers();
-        let size = headers
-            .get("content-length")
-            .map(|length| length.to_str().unwrap().parse::<u64>().unwrap());
-
-        let source: RemoteByteStreamMediaSource = RemoteByteStream::new(
-            url,
-            size,
-            true,
-            #[cfg(feature = "flac")]
-            {
-                quality.format == AudioFormat::Flac
-            },
-            #[cfg(not(feature = "flac"))]
-            false,
-            self.active_playback
-                .read()
-                .unwrap()
-                .as_ref()
-                .map(|p| p.abort.clone())
-                .unwrap_or_default(),
-        )
-        .into();
-
-        let mut hint = Hint::new();
-
-        if let Some(Ok(content_type)) = headers
-            .get(actix_web::http::header::CONTENT_TYPE.to_string())
-            .map(|x| x.to_str())
-        {
-            if let Some(audio_type) = content_type.strip_prefix("audio/") {
-                log::debug!("Setting hint extension to {audio_type}");
-                hint.with_extension(audio_type);
-            } else {
-                log::warn!("Invalid audio content_type: {content_type}");
-            }
-        }
-
-        Ok(PlayableTrack {
-            track_id,
-            source: Box::new(source),
-            hint,
-        })
-    }
-
     fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
         Ok(ApiPlaybackStatus {
             active_playbacks: self
@@ -594,32 +372,9 @@ impl Player for UpnpPlayer {
             Err(PlayerError::NoPlayersPlaying)
         }
     }
-}
 
-fn same_active_track(
-    position: Option<u16>,
-    tracks: Option<&[TrackOrId]>,
-    playback: &Playback,
-) -> bool {
-    match (position, tracks) {
-        (None, None) => true,
-        (Some(position), None) => playback.position == position,
-        (None, Some(tracks)) => {
-            tracks
-                .get(playback.position as usize)
-                .map(|x: &TrackOrId| x.to_id())
-                == playback
-                    .tracks
-                    .get(playback.position as usize)
-                    .map(|x: &TrackOrId| x.to_id())
-        }
-        (Some(position), Some(tracks)) => {
-            tracks.get(position as usize).map(|x: &TrackOrId| x.to_id())
-                == playback
-                    .tracks
-                    .get(playback.position as usize)
-                    .map(|x: &TrackOrId| x.to_id())
-        }
+    fn get_source(&self) -> &PlayerSource {
+        &self.source
     }
 }
 

@@ -1,24 +1,16 @@
 use std::sync::{atomic::AtomicBool, Arc, RwLock, RwLockWriteGuard};
 
 use async_trait::async_trait;
-use atomic_float::AtomicF64;
 use crossbeam_channel::Receiver;
-use moosicbox_core::{
-    sqlite::models::{ApiSource, ToApi, TrackApiSource, UpdateSession},
-    types::PlaybackQuality,
-};
-use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;
-use moosicbox_symphonia_player::{
-    media_sources::remote_bytestream::RemoteByteStreamMediaSource, output::AudioOutputHandler,
-    volume_mixer::mix_volume,
-};
+use moosicbox_core::sqlite::models::{ToApi, TrackApiSource, UpdateSession};
+use moosicbox_symphonia_player::{output::AudioOutputHandler, volume_mixer::mix_volume};
 use rand::{thread_rng, Rng as _};
-use symphonia::core::{io::MediaSourceStream, probe::Hint};
+use symphonia::core::io::MediaSourceStream;
 use tokio_util::sync::CancellationToken;
 
 use crate::player::{
-    get_track_url, send_playback_event, trigger_playback_event, ApiPlaybackStatus, PlayableTrack,
-    Playback, PlaybackRetryOptions, PlaybackType, Player, PlayerError, PlayerSource, TrackOrId,
+    send_playback_event, trigger_playback_event, ApiPlaybackStatus, Playback, PlaybackType, Player,
+    PlayerError, PlayerSource,
 };
 
 #[derive(Clone)]
@@ -199,123 +191,6 @@ impl Player for LocalPlayer {
         Ok(playback)
     }
 
-    #[allow(clippy::too_many_arguments)]
-    async fn update_playback(
-        &self,
-        modify_playback: bool,
-        play: Option<bool>,
-        stop: Option<bool>,
-        playing: Option<bool>,
-        position: Option<u16>,
-        seek: Option<f64>,
-        volume: Option<f64>,
-        tracks: Option<Vec<TrackOrId>>,
-        quality: Option<PlaybackQuality>,
-        session_id: Option<usize>,
-        session_playlist_id: Option<usize>,
-        retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<(), PlayerError> {
-        log::debug!(
-            "\
-            update_playback:\n\t\
-            source={:?}\n\t\
-            modify_playback={modify_playback:?}\n\t\
-            play={play:?}\n\t\
-            stop={stop:?}\n\t\
-            playing={playing:?}\n\t\
-            position={position:?}\n\t\
-            seek={seek:?}\n\t\
-            volume={volume:?}\n\t\
-            tracks={tracks:?}\n\t\
-            quality={quality:?}\n\t\
-            session_id={session_id:?}\
-            ",
-            self.source
-        );
-
-        if stop.unwrap_or(false) {
-            self.stop(retry_options).await?;
-        }
-
-        let mut should_play = modify_playback && play.unwrap_or(false);
-
-        let playback = if let Ok(playback) = self.get_playback() {
-            log::trace!("update_playback: existing playback={playback:?}");
-            if playback.playing {
-                if let Some(false) = playing {
-                    self.pause(retry_options).await?;
-                }
-            } else {
-                should_play = modify_playback && (should_play || playing.unwrap_or(false));
-            }
-
-            playback
-        } else {
-            log::trace!("update_playback: no existing playback");
-            should_play = modify_playback && (should_play || playing.unwrap_or(false));
-
-            Playback::new(
-                tracks.clone().unwrap_or_default(),
-                position,
-                AtomicF64::new(volume.unwrap_or(1.0)),
-                quality.unwrap_or_default(),
-                session_id,
-                session_playlist_id,
-            )
-        };
-
-        log::debug!("update_playback: modify_playback={modify_playback} should_play={should_play}");
-
-        let original = playback.clone();
-
-        let playback = Playback {
-            id: playback.id,
-            session_id: playback.session_id,
-            session_playlist_id: playback.session_playlist_id,
-            tracks: tracks.unwrap_or_else(|| playback.tracks.clone()),
-            playing: playing.unwrap_or(playback.playing),
-            quality: quality.unwrap_or(playback.quality),
-            position: position.unwrap_or(playback.position),
-            progress: if play.unwrap_or(false) {
-                seek.unwrap_or(0.0)
-            } else {
-                seek.unwrap_or(playback.progress)
-            },
-            volume: playback.volume,
-            abort: if should_play {
-                CancellationToken::new()
-            } else {
-                playback.abort
-            },
-        };
-
-        if let Some(volume) = volume {
-            playback
-                .volume
-                .store(volume, std::sync::atomic::Ordering::SeqCst);
-        }
-
-        trigger_playback_event(&playback, &original);
-
-        let seek = if playback.progress != 0.0 {
-            Some(playback.progress)
-        } else {
-            None
-        };
-
-        if should_play {
-            self.play_playback(playback, seek, retry_options).await
-        } else {
-            log::debug!("update_playback: updating active playback to {playback:?}");
-            self.active_playback
-                .write()
-                .unwrap()
-                .replace(playback.clone());
-
-            Ok(())
-        }
-    }
-
     async fn trigger_pause(&self) -> Result<(), PlayerError> {
         log::info!("Pausing playback id");
         let mut playback = self.get_playback()?;
@@ -342,11 +217,7 @@ impl Player for LocalPlayer {
         playback.playing = false;
         playback.abort = CancellationToken::new();
 
-        self.active_playback
-            .clone()
-            .write()
-            .unwrap()
-            .replace(playback);
+        self.active_playback_write().replace(playback);
 
         Ok(())
     }
@@ -374,77 +245,6 @@ impl Player for LocalPlayer {
         Ok(())
     }
 
-    async fn track_id_to_playable_stream(
-        &self,
-        track_id: i32,
-        source: ApiSource,
-        quality: PlaybackQuality,
-    ) -> Result<PlayableTrack, PlayerError> {
-        let (url, headers) = get_track_url(
-            track_id.try_into().unwrap(),
-            source,
-            &self.source,
-            quality,
-            false,
-        )
-        .await?;
-
-        log::debug!("Fetching track bytes from url: {url}");
-
-        let mut client = reqwest::Client::new().head(&url);
-
-        if let Some(headers) = headers {
-            for (key, value) in headers {
-                client = client.header(key, value);
-            }
-        }
-
-        let res = client.send().await.unwrap();
-        let headers = res.headers();
-        let size = headers
-            .get("content-length")
-            .map(|length| length.to_str().unwrap().parse::<u64>().unwrap());
-
-        let source: RemoteByteStreamMediaSource = RemoteByteStream::new(
-            url,
-            size,
-            true,
-            #[cfg(feature = "flac")]
-            {
-                quality.format == moosicbox_core::types::AudioFormat::Flac
-            },
-            #[cfg(not(feature = "flac"))]
-            false,
-            self.active_playback
-                .read()
-                .unwrap()
-                .as_ref()
-                .map(|p| p.abort.clone())
-                .unwrap_or_default(),
-        )
-        .into();
-
-        let mut hint = Hint::new();
-
-        if let Some(Ok(content_type)) = headers
-            .get(actix_web::http::header::CONTENT_TYPE.to_string())
-            .map(|x| x.to_str())
-        {
-            if let Some(audio_type) = content_type.strip_prefix("audio/") {
-                log::debug!("Setting hint extension to {audio_type}");
-                hint.with_extension(audio_type);
-            } else {
-                log::warn!("Invalid audio content_type: {content_type}");
-            }
-        }
-
-        Ok(PlayableTrack {
-            track_id,
-            source: Box::new(source),
-            hint,
-        })
-    }
-
     fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
         Ok(ApiPlaybackStatus {
             active_playbacks: self
@@ -464,6 +264,10 @@ impl Player for LocalPlayer {
         } else {
             Err(PlayerError::NoPlayersPlaying)
         }
+    }
+
+    fn get_source(&self) -> &PlayerSource {
+        &self.source
     }
 }
 
