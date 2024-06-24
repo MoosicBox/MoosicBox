@@ -49,9 +49,7 @@ pub struct UpnpPlayer {
     device: Device,
     service: Service,
     instance_id: u32,
-    media_info_subscription_id: Arc<tokio::sync::RwLock<usize>>,
     position_info_subscription_id: Arc<tokio::sync::RwLock<usize>>,
-    transport_info_subscription_id: Arc<tokio::sync::RwLock<usize>>,
     expected_state: Arc<RwLock<Option<String>>>,
 }
 
@@ -834,9 +832,7 @@ impl UpnpPlayer {
             service,
             instance_id: 1,
             expected_state: Arc::new(RwLock::new(None)),
-            media_info_subscription_id: Arc::new(tokio::sync::RwLock::new(0)),
             position_info_subscription_id: Arc::new(tokio::sync::RwLock::new(0)),
-            transport_info_subscription_id: Arc::new(tokio::sync::RwLock::new(0)),
         }
     }
 
@@ -888,44 +884,16 @@ impl UpnpPlayer {
         log::debug!("subscribe: Subscribing events");
         let unsubscribe = {
             let handle = self.handle.clone();
-            let media_info_subscription_id = *self.media_info_subscription_id.read().await;
             let position_info_subscription_id = *self.position_info_subscription_id.read().await;
-            let transport_info_subscription_id = *self.transport_info_subscription_id.read().await;
 
             move || {
                 let handle = handle.clone();
 
-                Self::unsubscribe_events(
-                    &handle,
-                    media_info_subscription_id,
-                    position_info_subscription_id,
-                    transport_info_subscription_id,
-                )
+                Self::unsubscribe_events(&handle, position_info_subscription_id)
             }
         };
 
         unsubscribe()?;
-
-        let transport_sub = self
-            .handle
-            .subscribe_transport_info(
-                Duration::from_millis(1000),
-                self.instance_id,
-                self.device.udn().to_owned(),
-                self.service.service_id().to_owned(),
-                Box::new({
-                    |transport_info| {
-                        Box::pin(async move {
-                            log::debug!("transport_info={transport_info:?}");
-                        })
-                    }
-                }),
-            )
-            .await
-            .map_err(|e| {
-                log::error!("subscribe_position_info failed: {e:?}");
-                PlayerError::NoPlayersPlaying
-            })?;
 
         let position_sub = self
             .handle
@@ -1028,54 +996,21 @@ impl UpnpPlayer {
                 PlayerError::NoPlayersPlaying
             })?;
 
-        let media_sub = self
-            .handle
-            .subscribe_media_info(
-                Duration::from_millis(1000),
-                self.instance_id,
-                self.device.udn().to_owned(),
-                self.service.service_id().to_owned(),
-                Box::new(|media| {
-                    Box::pin(async move {
-                        log::debug!("media={media:?}");
-                    })
-                }),
-            )
-            .await
-            .map_err(|e| {
-                log::error!("subscribe_media_info failed: {e:?}");
-                PlayerError::NoPlayersPlaying
-            })?;
-
-        *self.media_info_subscription_id.write().await = media_sub;
         *self.position_info_subscription_id.write().await = position_sub;
-        *self.transport_info_subscription_id.write().await = transport_sub;
 
-        log::debug!("subscribe: Subscribed media_sub={media_sub} position_sub={position_sub} transport_sub={transport_sub}");
+        log::debug!("subscribe: Subscribed position_sub={position_sub}");
 
         Ok(())
     }
 
     fn unsubscribe_events(
         handle: &Handle,
-        media_info_subscription_id: usize,
         position_info_subscription_id: usize,
-        transport_info_subscription_id: usize,
     ) -> Result<(), PlayerError> {
-        if let Err(e) = handle.unsubscribe(media_info_subscription_id) {
-            log::error!("unsubscribe_media_info error: {e:?}");
-        } else {
-            log::debug!("unsubscribed media info");
-        }
         if let Err(e) = handle.unsubscribe(position_info_subscription_id) {
             log::error!("unsubscribe_position_info error: {e:?}");
         } else {
             log::debug!("unsubscribed position info");
-        }
-        if let Err(e) = handle.unsubscribe(transport_info_subscription_id) {
-            log::error!("unsubscribe_transport_info error: {e:?}");
-        } else {
-            log::debug!("unsubscribed transport info");
         }
 
         log::debug!("unsubscribe_events: unsubscribed");
@@ -1085,9 +1020,7 @@ impl UpnpPlayer {
     async fn unsubscribe(&self) -> Result<(), PlayerError> {
         Self::unsubscribe_events(
             &self.handle,
-            *self.media_info_subscription_id.read().await,
             *self.position_info_subscription_id.read().await,
-            *self.transport_info_subscription_id.read().await,
         )
     }
 }
