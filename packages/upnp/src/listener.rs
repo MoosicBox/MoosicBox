@@ -61,7 +61,6 @@ impl Display for UpnpCommand {
     }
 }
 
-#[derive(Default)]
 pub struct UpnpContext {
     #[allow(clippy::type_complexity)]
     status_join_handles: HashMap<usize, JoinHandle<Result<(), ListenerError>>>,
@@ -73,6 +72,17 @@ pub struct UpnpContext {
 impl UpnpContext {
     pub fn new() -> Self {
         Self::default()
+    }
+}
+
+impl Default for UpnpContext {
+    fn default() -> Self {
+        Self {
+            status_join_handles: Default::default(),
+            status_tokens: Default::default(),
+            token: Default::default(),
+            subscription_id: 1,
+        }
     }
 }
 
