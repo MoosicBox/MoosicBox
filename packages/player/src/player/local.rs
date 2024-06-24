@@ -1,28 +1,25 @@
-use std::sync::{atomic::AtomicBool, Arc, RwLock};
+use std::sync::{atomic::AtomicBool, Arc, RwLock, RwLockWriteGuard};
 
 use async_trait::async_trait;
 use atomic_float::AtomicF64;
-use crossbeam_channel::{bounded, Receiver};
+use crossbeam_channel::Receiver;
 use moosicbox_core::{
     sqlite::models::{ApiSource, ToApi, TrackApiSource, UpdateSession},
     types::PlaybackQuality,
 };
 use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;
 use moosicbox_symphonia_player::{
-    media_sources::remote_bytestream::RemoteByteStreamMediaSource,
-    output::{AudioOutputError, AudioOutputHandler},
+    media_sources::remote_bytestream::RemoteByteStreamMediaSource, output::AudioOutputHandler,
     volume_mixer::mix_volume,
-    PlaybackError,
 };
 use rand::{thread_rng, Rng as _};
 use symphonia::core::{io::MediaSourceStream, probe::Hint};
-use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 
 use crate::player::{
     get_track_url, send_playback_event, trigger_playback_event, ApiPlaybackStatus, PlayableTrack,
     Playback, PlaybackRetryOptions, PlaybackStatus, PlaybackType, Player, PlayerError,
-    PlayerSource, TrackOrId, RT,
+    PlayerSource, TrackOrId,
 };
 
 #[derive(Clone)]
@@ -36,294 +33,136 @@ pub struct LocalPlayer {
 
 #[async_trait]
 impl Player for LocalPlayer {
-    async fn play_playback(
-        &self,
-        mut playback: Playback,
-        seek: Option<f64>,
-        retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<PlaybackStatus, PlayerError> {
-        log::info!("Playing playback...");
-        if let Ok(playback) = self.get_playback() {
-            log::debug!("Stopping existing playback {}", playback.id);
-            self.stop().await?;
-        }
-
-        if playback.tracks.is_empty() {
-            log::debug!("No tracks to play for {playback:?}");
-            return Ok(PlaybackStatus {
-                success: true,
-                playback_id: playback.id,
-            });
-        }
-
-        let (tx, rx) = bounded(1);
-
-        self.receiver.write().unwrap().replace(rx);
-
-        let old = playback.clone();
-
-        playback.playing = true;
-
-        trigger_playback_event(&playback, &old);
-
-        self.active_playback
-            .write()
-            .unwrap()
-            .replace(playback.clone());
-
-        let player = self.clone();
-
-        log::debug!(
-            "Playing playback: position={} tracks={:?}",
-            playback.position,
-            playback
-                .tracks
-                .iter()
-                .map(|t| t.to_id())
-                .collect::<Vec<_>>()
-        );
-        let playback_id = playback.id;
-
-        RT.spawn(async move {
-            let mut seek = seek;
-            let mut playback = playback.clone();
-            let abort = playback.abort.clone();
-
-            while !abort.is_cancelled()
-                && playback.playing
-                && (playback.position as usize) < playback.tracks.len()
-            {
-                let track_or_id = &playback.tracks[playback.position as usize];
-                log::debug!("track {track_or_id:?} {seek:?}");
-
-                let seek = if seek.is_some() { seek.take() } else { None };
-
-                if let Err(err) = player.start_playback(seek, retry_options).await {
-                    log::error!("Playback error occurred: {err:?}");
-
-                    let mut binding = player.active_playback.write().unwrap();
-                    let active = binding.as_mut().unwrap();
-                    let old = active.clone();
-                    active.playing = false;
-                    trigger_playback_event(active, &old);
-
-                    tx.send(())?;
-                    return Err(err);
-                }
-
-                if abort.is_cancelled() {
-                    log::debug!("Playback cancelled. Breaking");
-                    break;
-                }
-
-                let mut binding = player.active_playback.write().unwrap();
-                let active = binding.as_mut().unwrap();
-
-                if ((active.position + 1) as usize) >= active.tracks.len() {
-                    log::debug!("Playback position at end of tracks. Breaking");
-                    break;
-                }
-
-                let old = active.clone();
-                active.position += 1;
-                active.progress = 0.0;
-                trigger_playback_event(active, &old);
-
-                playback = active.clone();
-            }
-
-            log::debug!(
-                "Finished playback on all tracks. aborted={} playing={} position={} len={}",
-                abort.is_cancelled(),
-                playback.playing,
-                playback.position,
-                playback.tracks.len()
-            );
-
-            let mut binding = player.active_playback.write().unwrap();
-            let active = binding.as_mut().unwrap();
-            let old = active.clone();
-            active.playing = false;
-
-            if !abort.is_cancelled() {
-                trigger_playback_event(active, &old);
-            }
-
-            tx.send(())?;
-
-            Ok::<_, PlayerError>(0)
-        });
-
-        Ok(PlaybackStatus {
-            success: true,
-            playback_id,
-        })
+    fn active_playback_write(&self) -> RwLockWriteGuard<'_, Option<Playback>> {
+        self.active_playback.write().unwrap()
     }
 
-    async fn start_playback(
-        &self,
-        seek: Option<f64>,
-        retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<(), PlayerError> {
-        log::debug!("start_playback: seek={seek:?}");
-        let mut current_seek = seek;
-        let mut retry_count = 0;
-        let abort = self
-            .active_playback
-            .read()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .abort
-            .clone();
+    fn receiver_write(&self) -> RwLockWriteGuard<'_, Option<Receiver<()>>> {
+        self.receiver.write().unwrap()
+    }
 
-        while !abort.is_cancelled() {
-            if retry_count > 0 {
-                sleep(retry_options.unwrap().retry_delay).await;
+    async fn trigger_play(&self, seek: Option<f64>) -> Result<(), PlayerError> {
+        let (quality, volume, abort, track_or_id) = {
+            let binding = self.active_playback.read().unwrap();
+            let playback = binding.as_ref().unwrap();
+            (
+                playback.quality,
+                playback.volume.clone(),
+                playback.abort.clone(),
+                playback.tracks[playback.position as usize].clone(),
+            )
+        };
+        let track_id = track_or_id.id();
+        log::info!(
+            "Playing track with Symphonia: {} {abort:?} {track_or_id:?}",
+            track_id
+        );
+
+        let playback_type = match track_or_id.track_source() {
+            TrackApiSource::Local => self.playback_type,
+            _ => PlaybackType::Stream,
+        };
+
+        let playable_track = self
+            .track_or_id_to_playable(playback_type, &track_or_id, quality)
+            .await?;
+        let mss = MediaSourceStream::new(playable_track.source, Default::default());
+
+        let active_playback = self.active_playback.clone();
+        let sent_playback_start_event = AtomicBool::new(false);
+
+        let response: Result<i32, PlayerError> = tokio::task::spawn_blocking(move || {
+            let mut audio_output_handler = AudioOutputHandler::new()
+                .with_filter(Box::new({
+                    let active_playback = active_playback.clone();
+                    move |_decoded, packet, track| {
+                        if let Some(tb) = track.codec_params.time_base {
+                            let ts = packet.ts();
+                            let t = tb.calc_time(ts);
+                            let secs = f64::from(t.seconds as u32) + t.frac;
+
+                            let mut binding = active_playback.write().unwrap();
+                            if let Some(playback) = binding.as_mut() {
+                                if !sent_playback_start_event
+                                    .load(std::sync::atomic::Ordering::SeqCst)
+                                {
+                                    if let Some(session_id) = playback.session_id {
+                                        sent_playback_start_event
+                                            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+                                        let update = UpdateSession {
+                                            session_id: session_id as i32,
+                                            play: None,
+                                            stop: None,
+                                            name: None,
+                                            active: None,
+                                            playing: Some(true),
+                                            position: None,
+                                            seek: Some(secs),
+                                            volume: None,
+                                            playlist: None,
+                                        };
+                                        send_playback_event(&update, playback);
+                                    }
+                                }
+
+                                let old = playback.clone();
+                                playback.progress = secs;
+                                trigger_playback_event(playback, &old);
+                            }
+                        }
+                        Ok(())
+                    }
+                }))
+                .with_filter(Box::new(move |decoded, _packet, _track| {
+                    mix_volume(decoded, volume.load(std::sync::atomic::Ordering::SeqCst));
+                    Ok(())
+                }))
+                .with_cancellation_token(abort.clone());
+
+            #[cfg(feature = "cpal")]
+            {
+                audio_output_handler = audio_output_handler.with_output(Box::new(
+                    moosicbox_symphonia_player::output::cpal::player::try_open,
+                ));
             }
-            let (quality, volume, abort, track_or_id) = {
-                let binding = self.active_playback.read().unwrap();
-                let playback = binding.as_ref().unwrap();
-                (
-                    playback.quality,
-                    playback.volume.clone(),
-                    playback.abort.clone(),
-                    playback.tracks[playback.position as usize].clone(),
-                )
-            };
-            let track_id = track_or_id.id();
-            log::info!(
-                "Playing track with Symphonia: {} {abort:?} {track_or_id:?}",
-                track_id
+            #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
+            {
+                audio_output_handler = audio_output_handler.with_output(Box::new(
+                    moosicbox_symphonia_player::output::pulseaudio::simple::try_open,
+                ));
+            }
+            #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
+            {
+                audio_output_handler = audio_output_handler.with_output(Box::new(
+                    moosicbox_symphonia_player::output::pulseaudio::standard::try_open,
+                ));
+            }
+
+            moosicbox_assert::assert_or_err!(
+                audio_output_handler.contains_outputs_to_open(),
+                PlayerError::NoAudioOutputs,
+                "No outputs set for the audio_output_handler"
             );
 
-            let playback_type = match track_or_id.track_source() {
-                TrackApiSource::Local => self.playback_type,
-                _ => PlaybackType::Stream,
-            };
+            Ok(moosicbox_symphonia_player::play_media_source(
+                mss,
+                &playable_track.hint,
+                &mut audio_output_handler,
+                true,
+                true,
+                None,
+                seek,
+            )?)
+        })
+        .await?;
 
-            let playable_track = self
-                .track_or_id_to_playable(playback_type, &track_or_id, quality)
-                .await?;
-            let mss = MediaSourceStream::new(playable_track.source, Default::default());
-
-            let active_playback = self.active_playback.clone();
-            let sent_playback_start_event = AtomicBool::new(false);
-
-            let retry = tokio::task::spawn_blocking(move || {
-                let mut audio_output_handler = AudioOutputHandler::new()
-                    .with_filter(Box::new({
-                        let active_playback = active_playback.clone();
-                        move |_decoded, packet, track| {
-                            if let Some(tb) = track.codec_params.time_base {
-                                let ts = packet.ts();
-                                let t = tb.calc_time(ts);
-                                let secs = f64::from(t.seconds as u32) + t.frac;
-
-                                let mut binding = active_playback.write().unwrap();
-                                if let Some(playback) = binding.as_mut() {
-                                    if !sent_playback_start_event.load(std::sync::atomic::Ordering::SeqCst)
-                                    {
-                                        if let Some(session_id) = playback.session_id {
-                                            sent_playback_start_event
-                                                .store(true, std::sync::atomic::Ordering::SeqCst);
-
-                                            let update = UpdateSession {
-                                                session_id: session_id as i32,
-                                                play: None,
-                                                stop: None,
-                                                name: None,
-                                                active: None,
-                                                playing: Some(true),
-                                                position: None,
-                                                seek: Some(secs),
-                                                volume: None,
-                                                playlist: None,
-                                            };
-                                            send_playback_event(&update, playback);
-                                        }
-                                    }
-
-                                    let old = playback.clone();
-                                    playback.progress = secs;
-                                    trigger_playback_event(playback, &old);
-                                }
-                            }
-                            Ok(())
-                        }
-                    }))
-                    .with_filter(Box::new(move |decoded, _packet, _track| {
-                        mix_volume(decoded, volume.load(std::sync::atomic::Ordering::SeqCst));
-                        Ok(())
-                    }))
-                    .with_cancellation_token(abort.clone());
-
-                #[cfg(feature = "cpal")]
-                {
-                    audio_output_handler = audio_output_handler.with_output(Box::new(
-                        moosicbox_symphonia_player::output::cpal::player::try_open,
-                    ));
-                }
-                #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
-                {
-                    audio_output_handler = audio_output_handler.with_output(Box::new(
-                        moosicbox_symphonia_player::output::pulseaudio::simple::try_open,
-                    ));
-                }
-                #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
-                {
-                    audio_output_handler = audio_output_handler.with_output(Box::new(
-                        moosicbox_symphonia_player::output::pulseaudio::standard::try_open,
-                    ));
-                }
-
-                moosicbox_assert::assert_or_err!(
-                    audio_output_handler.contains_outputs_to_open(),
-                    PlayerError::NoAudioOutputs,
-                    "No outputs set for the audio_output_handler"
-                );
-
-                if let Err(err) = moosicbox_symphonia_player::play_media_source(
-                    mss,
-                    &playable_track.hint,
-                    &mut audio_output_handler,
-                    true,
-                    true,
-                    None,
-                    current_seek,
-                ) {
-                    if retry_options.is_none() {
-                        log::error!("Track playback failed and no retry options: {err:?}");
-                        return Err(PlayerError::PlaybackError(err));
-                    }
-
-                    let retry_options = retry_options.unwrap();
-
-                    if let PlaybackError::AudioOutput(AudioOutputError::Interrupt) = err {
-                        retry_count += 1;
-                        if retry_count > retry_options.max_retry_count {
-                            log::error!(
-                                "Playback retry failed after {retry_count} attempts. Not retrying"
-                            );
-                            return Ok(false);
-                        }
-                        let binding = active_playback.read().unwrap();
-                        let playback = binding.as_ref().unwrap();
-                        current_seek = Some(playback.progress);
-                        log::warn!("Playback interrupted. Trying again at position {current_seek:?} (attempt {retry_count}/{})", retry_options.max_retry_count);
-                        return Ok(true);
-                    }
-                }
-                Ok(false)
-            }).await??;
-
-            if retry {
-                continue;
-            }
-
-            log::info!("Finished playback for track {}", track_id);
-            break;
+        if let Err(e) = response {
+            log::error!("Failed to play playback: {e:?}");
+            return Err(PlayerError::NoPlayersPlaying);
         }
+
+        log::info!("Finished playback for track_id={}", track_id);
 
         Ok(())
     }

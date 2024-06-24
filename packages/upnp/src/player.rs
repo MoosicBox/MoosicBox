@@ -1,11 +1,11 @@
 use std::{
-    sync::{atomic::AtomicBool, Arc, RwLock},
+    sync::{atomic::AtomicBool, Arc, RwLock, RwLockWriteGuard},
     time::Duration,
 };
 
 use async_trait::async_trait;
 use atomic_float::AtomicF64;
-use crossbeam_channel::{bounded, Receiver};
+use crossbeam_channel::Receiver;
 use flume::{unbounded, Sender};
 use moosicbox_core::{
     sqlite::{
@@ -20,13 +20,11 @@ use moosicbox_symphonia_player::media_sources::remote_bytestream::RemoteByteStre
 use rand::{thread_rng, Rng as _};
 use rupnp::{Device, Service};
 use symphonia::core::probe::Hint;
-use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 
 use moosicbox_player::player::{
     get_track_url, send_playback_event, trigger_playback_event, ApiPlaybackStatus, PlayableTrack,
     Playback, PlaybackRetryOptions, PlaybackStatus, Player, PlayerError, PlayerSource, TrackOrId,
-    RT,
 };
 
 use crate::listener::Handle;
@@ -55,288 +53,150 @@ pub struct UpnpPlayer {
 
 #[async_trait]
 impl Player for UpnpPlayer {
-    async fn play_playback(
-        &self,
-        mut playback: Playback,
-        seek: Option<f64>,
-        retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<PlaybackStatus, PlayerError> {
-        log::info!("Playing playback...");
-
-        if playback.tracks.is_empty() {
-            log::debug!("No tracks to play for {playback:?}");
-            return Ok(PlaybackStatus {
-                success: true,
-                playback_id: playback.id,
-            });
-        }
-
-        let (tx, rx) = bounded(1);
-
-        self.receiver.write().unwrap().replace(rx);
-
-        let old = playback.clone();
-
-        playback.playing = true;
-
-        trigger_playback_event(&playback, &old);
-
-        self.active_playback
-            .write()
-            .unwrap()
-            .replace(playback.clone());
-
-        let player = self.clone();
-
-        log::debug!(
-            "Playing playback: position={} tracks={:?}",
-            playback.position,
-            playback
-                .tracks
-                .iter()
-                .map(|t| t.to_id())
-                .collect::<Vec<_>>()
-        );
-        let playback_id = playback.id;
-
-        RT.spawn(async move {
-            let mut seek = seek;
-            let mut playback = playback.clone();
-            let abort = playback.abort.clone();
-
-            while !abort.is_cancelled()
-                && playback.playing
-                && (playback.position as usize) < playback.tracks.len()
-            {
-                let track_or_id = &playback.tracks[playback.position as usize];
-                log::debug!("track {track_or_id:?} {seek:?}");
-
-                let seek = if seek.is_some() { seek.take() } else { None };
-
-                if let Err(err) = player.start_playback(seek, retry_options).await {
-                    log::error!("Playback error occurred: {err:?}");
-
-                    let mut binding = player.active_playback.write().unwrap();
-                    let active = binding.as_mut().unwrap();
-                    let old = active.clone();
-                    active.playing = false;
-                    trigger_playback_event(active, &old);
-
-                    tx.send(())?;
-                    return Err(err);
-                }
-
-                if abort.is_cancelled() {
-                    log::debug!("Playback cancelled. Breaking");
-                    break;
-                }
-
-                let mut binding = player.active_playback.write().unwrap();
-                let active = binding.as_mut().unwrap();
-
-                if ((active.position + 1) as usize) >= active.tracks.len() {
-                    log::debug!("Playback position at end of tracks. Breaking");
-                    break;
-                }
-
-                let old = active.clone();
-                active.position += 1;
-                active.progress = 0.0;
-                trigger_playback_event(active, &old);
-
-                playback = active.clone();
-            }
-
-            log::debug!(
-                "Finished playback on all tracks. aborted={} playing={} position={} len={}",
-                abort.is_cancelled(),
-                playback.playing,
-                playback.position,
-                playback.tracks.len()
-            );
-
-            let mut binding = player.active_playback.write().unwrap();
-            let active = binding.as_mut().unwrap();
-            let old = active.clone();
-            active.playing = false;
-
-            if !abort.is_cancelled() {
-                trigger_playback_event(active, &old);
-            }
-
-            tx.send(())?;
-
-            Ok::<_, PlayerError>(0)
-        });
-
-        Ok(PlaybackStatus {
-            success: true,
-            playback_id,
-        })
+    fn active_playback_write(&self) -> RwLockWriteGuard<'_, Option<Playback>> {
+        self.active_playback.write().unwrap()
     }
 
-    async fn start_playback(
-        &self,
-        seek: Option<f64>,
-        retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<(), PlayerError> {
-        log::debug!("start_playback: seek={seek:?}");
+    fn receiver_write(&self) -> RwLockWriteGuard<'_, Option<Receiver<()>>> {
+        self.receiver.write().unwrap()
+    }
+
+    async fn trigger_play(&self, seek: Option<f64>) -> Result<(), PlayerError> {
         let current_seek = Arc::new(RwLock::new(seek));
-        let mut retry_count = 0;
-        let abort = self.get_playback().unwrap().abort.clone();
 
-        while !abort.is_cancelled() {
-            log::debug!("Beginning a new playback, locking play_lock");
-            let (start_tx, start_rx) = unbounded();
-            let semaphore = self.play_lock.clone();
-            tokio::spawn(async move {
-                let permit = semaphore.acquire().await?;
-                if let Err(e) = start_rx.recv_async().await {
-                    log::error!("Failed to recv: {e:?}");
-                }
-                log::debug!("Playback has started, releasing play_lock");
-                drop(permit);
-                Ok::<_, tokio::sync::AcquireError>(())
-            });
-            self.unsubscribe().await?;
-
-            if retry_count > 0 {
-                sleep(retry_options.unwrap().retry_delay).await;
+        log::debug!("Beginning a new playback, locking play_lock");
+        let (start_tx, start_rx) = unbounded();
+        let semaphore = self.play_lock.clone();
+        tokio::spawn(async move {
+            let permit = semaphore.acquire().await?;
+            if let Err(e) = start_rx.recv_async().await {
+                log::error!("Failed to recv: {e:?}");
             }
-            let (quality, _volume, abort, track_or_id) = {
-                let binding = self.active_playback.read().unwrap();
-                let playback = binding.as_ref().unwrap();
-                (
-                    playback.quality,
-                    playback.volume.clone(),
-                    playback.abort.clone(),
-                    playback.tracks[playback.position as usize].clone(),
-                )
-            };
-            let track_id = track_or_id.id();
-            log::info!(
-                "Playing track with UPnP: {} {abort:?} {track_or_id:?}",
-                track_id
-            );
+            log::debug!("Playback has started, releasing play_lock");
+            drop(permit);
+            Ok::<_, tokio::sync::AcquireError>(())
+        });
+        self.unsubscribe().await?;
 
-            let (finished_tx, finished_rx) = unbounded();
-
-            let sent_playback_start_event = Arc::new(AtomicBool::new(false));
-
-            let (transport_uri, headers) = get_track_url(
-                track_id.try_into().unwrap(),
-                track_or_id.api_source(),
-                &self.source,
-                quality,
-                true,
+        let (quality, _volume, abort, track_or_id) = {
+            let binding = self.active_playback.read().unwrap();
+            let playback = binding.as_ref().unwrap();
+            (
+                playback.quality,
+                playback.volume.clone(),
+                playback.abort.clone(),
+                playback.tracks[playback.position as usize].clone(),
             )
-            .await?;
-            self.transport_uri
-                .write()
-                .await
-                .replace(transport_uri.clone());
-            log::debug!("start_playback: Set transport_uri={transport_uri}");
-            let format = "flac";
+        };
+        let track_id = track_or_id.id();
+        log::info!(
+            "Playing track with UPnP: {} {abort:?} {track_or_id:?}",
+            track_id
+        );
 
-            let mut client = reqwest::Client::new().head(&transport_uri);
+        let (finished_tx, finished_rx) = unbounded();
 
-            if let Some(headers) = headers {
-                for (key, value) in headers {
-                    client = client.header(key, value);
-                }
+        let sent_playback_start_event = Arc::new(AtomicBool::new(false));
+
+        let (transport_uri, headers) = get_track_url(
+            track_id.try_into().unwrap(),
+            track_or_id.api_source(),
+            &self.source,
+            quality,
+            true,
+        )
+        .await?;
+        self.transport_uri
+            .write()
+            .await
+            .replace(transport_uri.clone());
+        log::debug!("trigger_play: Set transport_uri={transport_uri}");
+        let format = "flac";
+
+        let mut client = reqwest::Client::new().head(&transport_uri);
+
+        if let Some(headers) = headers {
+            for (key, value) in headers {
+                client = client.header(key, value);
             }
+        }
 
-            let res = client.send().await.unwrap();
-            let headers = res.headers();
-            let size = headers
-                .get("content-length")
-                .map(|length| length.to_str().unwrap().parse::<u64>().unwrap());
-            let track = get_track(&**self.db, track_or_id.id().try_into().unwrap()).await?;
-            let duration = track.as_ref().map(|x| x.duration.ceil() as u32);
-            let title = track.as_ref().map(|x| x.title.to_owned());
-            let artist = track.as_ref().map(|x| x.artist.to_owned());
-            let album = track.as_ref().map(|x| x.album.to_owned());
-            let track_number = track.map(|x| x.number as u32);
+        let res = client.send().await.unwrap();
+        let headers = res.headers();
+        let size = headers
+            .get("content-length")
+            .map(|length| length.to_str().unwrap().parse::<u64>().unwrap());
+        let track = get_track(&**self.db, track_or_id.id().try_into().unwrap()).await?;
+        let duration = track.as_ref().map(|x| x.duration.ceil() as u32);
+        let title = track.as_ref().map(|x| x.title.to_owned());
+        let artist = track.as_ref().map(|x| x.artist.to_owned());
+        let album = track.as_ref().map(|x| x.album.to_owned());
+        let track_number = track.map(|x| x.number as u32);
 
-            crate::set_av_transport_uri(
-                &self.service,
-                self.device.url(),
-                self.instance_id,
-                &transport_uri,
-                format,
-                title.as_deref(),
-                artist.as_deref(),
-                artist.as_deref(),
-                album.as_deref(),
-                track_number,
-                duration,
-                size,
-            )
+        crate::set_av_transport_uri(
+            &self.service,
+            self.device.url(),
+            self.instance_id,
+            &transport_uri,
+            format,
+            title.as_deref(),
+            artist.as_deref(),
+            artist.as_deref(),
+            album.as_deref(),
+            track_number,
+            duration,
+            size,
+        )
+        .await
+        .map_err(|e| {
+            log::error!("set_av_transport_uri failed: {e:?}");
+            PlayerError::NoPlayersPlaying
+        })?;
+
+        let current_seek = current_seek.clone();
+        let seek = { current_seek.read().unwrap().as_ref().cloned() };
+
+        if let Some(seek) = seek {
+            if seek > 0.0 {
+                log::debug!("trigger_play: Seeking track to seek={seek}");
+                self.seek_track(seek, Some(DEFAULT_SEEK_RETRY_OPTIONS))
+                    .await?;
+            }
+        }
+
+        crate::play(&self.service, self.device.url(), self.instance_id, 1.0)
             .await
             .map_err(|e| {
-                log::error!("set_av_transport_uri failed: {e:?}");
+                log::error!("play failed: {e:?}");
                 PlayerError::NoPlayersPlaying
             })?;
 
-            let current_seek = current_seek.clone();
-            let seek = { current_seek.read().unwrap().as_ref().cloned() };
+        self.expected_state
+            .write()
+            .unwrap()
+            .replace("PLAYING".to_string());
 
-            if let Some(seek) = seek {
-                if seek > 0.0 {
-                    log::debug!("start_playback: Seeking track to seek={seek}");
-                    self.seek_track(seek, Some(DEFAULT_SEEK_RETRY_OPTIONS))
-                        .await?;
+        self.subscribe(
+            start_tx,
+            finished_tx,
+            transport_uri,
+            current_seek,
+            sent_playback_start_event,
+        )
+        .await?;
+
+        tokio::select! {
+            _ = abort.cancelled() => {
+                log::debug!("playback cancelled");
+                self.unsubscribe().await?;
+            }
+            retry = finished_rx.recv_async() => {
+                self.unsubscribe().await?;
+                if !retry.is_ok_and(|x| !x) {
+                    return Err(PlayerError::NoPlayersPlaying);
                 }
             }
-
-            crate::play(&self.service, self.device.url(), self.instance_id, 1.0)
-                .await
-                .map_err(|e| {
-                    log::error!("play failed: {e:?}");
-                    PlayerError::NoPlayersPlaying
-                })?;
-
-            self.expected_state
-                .write()
-                .unwrap()
-                .replace("PLAYING".to_string());
-
-            self.subscribe(
-                start_tx,
-                finished_tx,
-                transport_uri,
-                current_seek,
-                sent_playback_start_event,
-            )
-            .await?;
-
-            tokio::select! {
-                _ = abort.cancelled() => {
-                    log::debug!("playback cancelled");
-                    self.unsubscribe().await?;
-                }
-                retry = finished_rx.recv_async() => {
-                    self.unsubscribe().await?;
-                    if !retry.is_ok_and(|x| !x) {
-                        if let Some(retry_options) = retry_options{
-                            retry_count += 1;
-                            if retry_count > retry_options.max_retry_count {
-                                log::error!(
-                                    "Playback retry failed after {retry_count} attempts. Not retrying"
-                                );
-                                break;
-                            }
-                            continue;
-                        } else {
-                            log::debug!("No retry options");
-                        }
-                    }
-                }
-            };
-
-            log::info!("Finished playback for track {}", track_id);
-            break;
-        }
+        };
 
         Ok(())
     }

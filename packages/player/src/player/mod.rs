@@ -2,12 +2,12 @@ use std::{
     collections::HashMap,
     fs::File,
     path::Path,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, RwLockWriteGuard},
 };
 
 use async_trait::async_trait;
 use atomic_float::AtomicF64;
-use crossbeam_channel::SendError;
+use crossbeam_channel::{bounded, Receiver, SendError};
 use futures::{StreamExt as _, TryStreamExt as _};
 use lazy_static::lazy_static;
 use local_ip_address::local_ip;
@@ -404,7 +404,10 @@ pub enum PlayerSource {
 }
 
 #[async_trait]
-pub trait Player {
+pub trait Player: Clone + Send + 'static {
+    fn active_playback_write(&self) -> RwLockWriteGuard<'_, Option<Playback>>;
+    fn receiver_write(&self) -> RwLockWriteGuard<'_, Option<Receiver<()>>>;
+
     async fn init_from_session(
         &mut self,
         db: &dyn Database,
@@ -597,16 +600,164 @@ pub trait Player {
 
     async fn play_playback(
         &self,
-        playback: Playback,
+        mut playback: Playback,
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<PlaybackStatus, PlayerError>;
+    ) -> Result<PlaybackStatus, PlayerError> {
+        log::info!("Playing playback...");
 
-    async fn start_playback(
+        if playback.tracks.is_empty() {
+            log::debug!("No tracks to play for {playback:?}");
+            return Ok(PlaybackStatus {
+                success: true,
+                playback_id: playback.id,
+            });
+        }
+
+        let (tx, rx) = bounded(1);
+
+        self.receiver_write().replace(rx);
+
+        let old = playback.clone();
+
+        playback.playing = true;
+
+        trigger_playback_event(&playback, &old);
+
+        self.active_playback_write().replace(playback.clone());
+
+        let player = self.clone();
+
+        log::debug!(
+            "Playing playback: position={} tracks={:?}",
+            playback.position,
+            playback
+                .tracks
+                .iter()
+                .map(|t| t.to_id())
+                .collect::<Vec<_>>()
+        );
+        let playback_id = playback.id;
+
+        RT.spawn(async move {
+            let mut seek = seek;
+            let mut playback = playback.clone();
+            let abort = playback.abort.clone();
+
+            while !abort.is_cancelled()
+                && playback.playing
+                && (playback.position as usize) < playback.tracks.len()
+            {
+                let track_or_id = &playback.tracks[playback.position as usize];
+                log::debug!("track {track_or_id:?} {seek:?}");
+
+                let seek = if seek.is_some() { seek.take() } else { None };
+
+                if let Err(err) = player.play(seek, retry_options).await {
+                    log::error!("Playback error occurred: {err:?}");
+
+                    let mut binding = player.active_playback_write();
+                    let active = binding.as_mut().unwrap();
+                    let old = active.clone();
+                    active.playing = false;
+                    trigger_playback_event(active, &old);
+
+                    tx.send(())?;
+                    return Err(err);
+                }
+
+                if abort.is_cancelled() {
+                    log::debug!("Playback cancelled. Breaking");
+                    break;
+                }
+
+                let mut binding = player.active_playback_write();
+                let active = binding.as_mut().unwrap();
+
+                if ((active.position + 1) as usize) >= active.tracks.len() {
+                    log::debug!("Playback position at end of tracks. Breaking");
+                    break;
+                }
+
+                let old = active.clone();
+                active.position += 1;
+                active.progress = 0.0;
+                trigger_playback_event(active, &old);
+
+                playback = active.clone();
+            }
+
+            log::debug!(
+                "Finished playback on all tracks. aborted={} playing={} position={} len={}",
+                abort.is_cancelled(),
+                playback.playing,
+                playback.position,
+                playback.tracks.len()
+            );
+
+            let mut binding = player.active_playback_write();
+            let active = binding.as_mut().unwrap();
+            let old = active.clone();
+            active.playing = false;
+
+            if !abort.is_cancelled() {
+                trigger_playback_event(active, &old);
+            }
+
+            tx.send(())?;
+
+            Ok::<_, PlayerError>(0)
+        });
+
+        Ok(PlaybackStatus {
+            success: true,
+            playback_id,
+        })
+    }
+
+    async fn play(
         &self,
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
-    ) -> Result<(), PlayerError>;
+    ) -> Result<(), PlayerError> {
+        log::debug!("play: seek={seek:?}");
+        let mut retry_count = 0;
+        let abort = self.get_playback().unwrap().abort.clone();
+
+        while !abort.is_cancelled() {
+            if retry_count > 0 {
+                tokio::time::sleep(retry_options.unwrap().retry_delay).await;
+            }
+
+            if let Err(e) = self.trigger_play(seek).await {
+                log::error!("Playback failed: {e:?}");
+                if let Some(retry_options) = retry_options {
+                    retry_count += 1;
+                    if retry_count > retry_options.max_retry_count {
+                        log::error!(
+                            "Playback retry failed after {retry_count} attempts. Not retrying"
+                        );
+                        break;
+                    }
+                    log::info!(
+                        "Retrying playback attempt {}/{}",
+                        retry_count + 1,
+                        retry_options.max_retry_count
+                    );
+                    continue;
+                } else {
+                    log::debug!("No retry options");
+                }
+            }
+
+            log::info!("Finished playback");
+            break;
+        }
+
+        Ok(())
+    }
+
+    async fn trigger_play(&self, seek: Option<f64>) -> Result<(), PlayerError>;
 
     async fn stop_track(&self) -> Result<PlaybackStatus, PlayerError> {
         log::debug!("stop_track called");
