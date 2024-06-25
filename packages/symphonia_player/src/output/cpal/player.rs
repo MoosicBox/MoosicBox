@@ -55,10 +55,10 @@ impl CpalAudioOutput {
         );
 
         for output in device.supported_output_configs().unwrap() {
-            println!("\toutput: {output:?}",);
+            log::debug!("\toutput: {output:?}",);
         }
         for input in device.supported_input_configs().unwrap() {
-            println!("\tinput: {input:?}",);
+            log::debug!("\tinput: {input:?}",);
         }
 
         let config = match device.default_output_config() {
@@ -69,7 +69,7 @@ impl CpalAudioOutput {
             }
         };
 
-        println!("Using default output: {config:?} with spec {spec:?}");
+        log::debug!("Using default output: {config:?} with spec {spec:?}");
 
         // Select proper playback routine based on sample format.
         match config.sample_format() {
@@ -137,7 +137,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
                 .config()
         };
 
-        println!("Using default output: {config:?} with spec {spec:?}");
+        log::debug!("Using default output: {config:?} with spec {spec:?}");
 
         // Create a ring buffer with a capacity for up-to 200ms of audio.
         let ring_len = ((200 * config.sample_rate.0 as usize) / 1000) * num_channels;
@@ -257,12 +257,12 @@ impl<T: AudioOutputSample> AudioOutput for CpalAudioOutputImpl<T> {
 #[allow(unused)]
 fn list_devices(host: &Host) {
     for dv in host.output_devices().unwrap() {
-        println!("device: {}", dv.name().unwrap());
+        log::debug!("device: {}", dv.name().unwrap());
         for output in dv.supported_output_configs().unwrap() {
-            println!("\toutput: {output:?}",);
+            log::debug!("\toutput: {output:?}",);
         }
         for input in dv.supported_input_configs().unwrap() {
-            println!("\tinput: {input:?}",);
+            log::debug!("\tinput: {input:?}",);
         }
     }
 }

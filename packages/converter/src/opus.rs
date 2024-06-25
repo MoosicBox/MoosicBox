@@ -124,7 +124,7 @@ pub fn read_write_ogg(mut read: std::fs::File, mut write: std::fs::File) {
                 };
                 let stream_serial = pck.stream_serial();
                 let absgp_page = pck.absgp_page();
-                println!(
+                log::debug!(
                     "stream_serial={} absgp_page={} len={} inf_d={inf_d}",
                     stream_serial,
                     absgp_page,
@@ -236,7 +236,7 @@ impl std::io::Write for OpusWrite<'_> {
                 PacketWriteEndInfo::NormalPacket => "normal",
                 PacketWriteEndInfo::EndStream => "end_stream",
             };
-            println!(
+            log::debug!(
                 "writing stream_serial={} absgp_page={}, len={}, info_d={} packet_num={} page_num={}",
                 self.serial,
                 packet.absgp,
@@ -260,7 +260,7 @@ impl std::io::Write for OpusWrite<'_> {
                 PacketWriteEndInfo::NormalPacket => "normal",
                 PacketWriteEndInfo::EndStream => "end_stream",
             };
-            println!(
+            log::debug!(
                 "writing stream_serial={} absgp_page={}, len={}, info_d={} packet_num={} page_num={}",
                 self.serial,
                 packet.absgp,
