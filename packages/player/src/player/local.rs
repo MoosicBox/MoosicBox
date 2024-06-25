@@ -207,7 +207,7 @@ impl Player for LocalPlayer {
         log::trace!("Waiting for playback completion response");
         if let Some(receiver) = self.receiver.write().unwrap().take() {
             if let Err(err) = receiver.recv() {
-                log::error!("Sender correlated with receiver has dropped: {err:?}");
+                log::trace!("Sender correlated with receiver has dropped: {err:?}");
             }
         } else {
             log::debug!("No receiver to wait for completion response with");

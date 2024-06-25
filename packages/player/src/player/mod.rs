@@ -105,6 +105,10 @@ pub enum PlayerError {
     PlaybackAlreadyPlaying(usize),
     #[error("Invalid Playback Type")]
     InvalidPlaybackType,
+    #[error("Invalid state")]
+    InvalidState,
+    #[error("Playback retry requested")]
+    RetryRequested,
     #[error("Playback cancelled")]
     Cancelled,
     #[error("Invalid session with id {session_id}: {message}")]
@@ -710,7 +714,7 @@ pub trait Player: Clone + Send + 'static {
 
             while playback.playing && (playback.position as usize) < playback.tracks.len() {
                 let track_or_id = &playback.tracks[playback.position as usize];
-                log::debug!("track {track_or_id:?} {seek:?}");
+                log::debug!("play_playback: track={track_or_id:?} seek={seek:?}");
 
                 let seek = if seek.is_some() { seek.take() } else { None };
 
@@ -734,6 +738,8 @@ pub trait Player: Clone + Send + 'static {
                         }
                     }
                 }
+
+                log::debug!("play_playback: playback finished track={track_or_id:?}");
 
                 let mut binding = player.active_playback_write();
                 let active = binding.as_mut().unwrap();
@@ -952,20 +958,21 @@ pub trait Player: Clone + Send + 'static {
         ));
 
         let playing = playing.unwrap_or(original.playing);
-        let should_start_playback = play.unwrap_or(false) || !original.playing && playing;
-        let should_stop = stop.unwrap_or(false);
-        let should_play = (playing || should_start_playback) && !should_stop;
         let same_track = same_active_track(position, tracks.as_deref(), &original);
+        let should_seek = same_track && seek.is_some();
+        let wants_to_play = play.unwrap_or(false) || playing;
+        let should_start = wants_to_play && (!original.playing || !same_track);
+        let should_stop = stop.unwrap_or(false);
+        let is_playing = (playing || should_start) && !should_stop;
         let should_resume = same_track && !original.playing && playing && seek.is_none();
         let should_pause = same_track && original.playing && !playing;
-        let should_seek = same_track && seek.is_some();
 
         let playback = Playback {
             id: original.id,
             session_id: original.session_id,
             session_playlist_id: original.session_playlist_id,
             tracks: tracks.clone().unwrap_or_else(|| original.tracks.clone()),
-            playing: should_play,
+            playing: is_playing,
             quality: quality.unwrap_or(original.quality),
             position: position.unwrap_or(original.position),
             progress: if play.unwrap_or(false) {
@@ -997,8 +1004,8 @@ pub trait Player: Clone + Send + 'static {
         log::debug!(
             "\
             update_playback:\n\t\
-            should_start_playback={should_start_playback}\n\t\
-            should_play={should_play}\n\t\
+            should_start_playback={should_start}\n\t\
+            should_stop={should_stop}\n\t\
             should_resume={should_resume}\n\t\
             should_pause={should_pause}\n\t\
             should_seek={should_seek}\
@@ -1018,14 +1025,15 @@ pub trait Player: Clone + Send + 'static {
                 log::debug!("update_playback: Seeking track to seek={seek}");
                 self.seek(seek, Some(DEFAULT_SEEK_RETRY_OPTIONS)).await?;
             }
-        } else if should_stop {
+        }
+        if should_stop {
             self.stop(retry_options).await?;
         } else if should_resume {
             if let Err(e) = self.resume(retry_options).await {
                 log::error!("Failed to resume playback: {e:?}");
                 self.play_playback(progress, retry_options).await?;
             }
-        } else if should_start_playback {
+        } else if should_start {
             self.play_playback(progress, retry_options).await?;
         } else if should_pause {
             self.pause(retry_options).await?;

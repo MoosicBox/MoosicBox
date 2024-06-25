@@ -1,5 +1,8 @@
 use std::{
-    sync::{atomic::AtomicBool, Arc, RwLock, RwLockWriteGuard},
+    sync::{
+        atomic::{AtomicBool, AtomicUsize},
+        Arc, RwLock, RwLockWriteGuard,
+    },
     time::Duration,
 };
 
@@ -34,7 +37,6 @@ pub struct UpnpPlayer {
     source: PlayerSource,
     transport_uri: Arc<tokio::sync::RwLock<Option<String>>>,
     pub active_playback: Arc<RwLock<Option<Playback>>>,
-    play_lock: Arc<tokio::sync::Semaphore>,
     receiver: Arc<RwLock<Option<Receiver<()>>>>,
     handle: Handle,
     device: Device,
@@ -54,100 +56,21 @@ impl Player for UpnpPlayer {
         self.receiver.write().unwrap()
     }
 
-    async fn trigger_play(&self, seek: Option<f64>) -> Result<(), PlayerError> {
-        let current_seek = Arc::new(RwLock::new(seek));
-
-        log::debug!("Beginning a new playback, locking play_lock");
-        let (start_tx, start_rx) = unbounded();
-        let semaphore = self.play_lock.clone();
-        tokio::spawn(async move {
-            let permit = semaphore.acquire().await?;
-            if let Err(e) = start_rx.recv_async().await {
-                log::error!("Failed to recv: {e:?}");
-            }
-            log::debug!("Playback has started, releasing play_lock");
-            drop(permit);
-            Ok::<_, tokio::sync::AcquireError>(())
-        });
-        self.unsubscribe().await?;
-
-        let (quality, _volume, abort, track_or_id) = {
-            let binding = self.active_playback.read().unwrap();
-            let playback = binding.as_ref().unwrap();
-            (
-                playback.quality,
-                playback.volume.clone(),
-                playback.abort.clone(),
-                playback.tracks[playback.position as usize].clone(),
-            )
-        };
-        let track_id = track_or_id.id();
-        log::info!(
-            "Playing track with UPnP: {} {abort:?} {track_or_id:?}",
-            track_id
-        );
-
-        let (finished_tx, finished_rx) = unbounded();
-
-        let sent_playback_start_event = Arc::new(AtomicBool::new(false));
-
-        let (transport_uri, headers) = get_track_url(
-            track_id.try_into().unwrap(),
-            track_or_id.api_source(),
-            &self.source,
-            quality,
-            true,
-        )
-        .await?;
-        self.transport_uri
-            .write()
-            .await
-            .replace(transport_uri.clone());
-        log::debug!("trigger_play: Set transport_uri={transport_uri}");
-        let format = "flac";
-
-        let mut client = reqwest::Client::new().head(&transport_uri);
-
-        if let Some(headers) = headers {
-            for (key, value) in headers {
-                client = client.header(key, value);
-            }
+    async fn before_play_playback(&self, seek: Option<f64>) -> Result<(), PlayerError> {
+        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
+        log::trace!("before_play_playback: playback={playback:?} seek={seek:?}");
+        if playback.playing {
+            playback.abort.cancel();
+            self.active_playback_write().as_mut().unwrap().abort = CancellationToken::new();
         }
 
-        let res = client.send().await.unwrap();
-        let headers = res.headers();
-        let size = headers
-            .get("content-length")
-            .map(|length| length.to_str().unwrap().parse::<u64>().unwrap());
-        let track = get_track(&**self.db, track_or_id.id().try_into().unwrap()).await?;
-        let duration = track.as_ref().map(|x| x.duration.ceil() as u32);
-        let title = track.as_ref().map(|x| x.title.to_owned());
-        let artist = track.as_ref().map(|x| x.artist.to_owned());
-        let album = track.as_ref().map(|x| x.album.to_owned());
-        let track_number = track.map(|x| x.number as u32);
+        Ok(())
+    }
 
-        crate::set_av_transport_uri(
-            &self.service,
-            self.device.url(),
-            self.instance_id,
-            &transport_uri,
-            format,
-            title.as_deref(),
-            artist.as_deref(),
-            artist.as_deref(),
-            album.as_deref(),
-            track_number,
-            duration,
-            size,
-        )
-        .await
-        .map_err(|e| {
-            log::error!("set_av_transport_uri failed: {e:?}");
-            PlayerError::NoPlayersPlaying
-        })?;
+    async fn trigger_play(&self, seek: Option<f64>) -> Result<(), PlayerError> {
+        let transport_uri = self.update_av_transport().await?;
 
-        let current_seek = current_seek.clone();
-        let seek = { current_seek.read().unwrap().as_ref().cloned() };
+        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
 
         if let Some(seek) = seek {
             if seek > 0.0 {
@@ -168,25 +91,36 @@ impl Player for UpnpPlayer {
             .unwrap()
             .replace("PLAYING".to_string());
 
-        self.subscribe(
-            start_tx,
-            finished_tx,
-            transport_uri,
-            current_seek,
-            sent_playback_start_event,
-        )
-        .await?;
+        let (finished_tx, finished_rx) = unbounded();
+        let sent_playback_start_event = Arc::new(AtomicBool::new(false));
+
+        let sub_id = self
+            .subscribe(
+                finished_tx,
+                transport_uri,
+                Arc::new(RwLock::new(seek)),
+                sent_playback_start_event,
+            )
+            .await?;
 
         tokio::select! {
-            _ = abort.cancelled() => {
+            _ = playback.abort.cancelled() => {
                 log::debug!("playback cancelled");
-                self.unsubscribe().await?;
+                self.unsubscribe(sub_id)?;
             }
             retry = finished_rx.recv_async() => {
-                self.unsubscribe().await?;
-                if !retry.is_ok_and(|x| !x) {
-                    log::debug!("Retrying playback");
-                    return Err(PlayerError::NoPlayersPlaying);
+                self.unsubscribe(sub_id)?;
+                match retry {
+                    Ok(false) => {
+                        log::debug!("Playback finished and retry wasn't requested");
+                    }
+                    Ok(true) => {
+                        log::debug!("Retrying playback");
+                        return Err(PlayerError::RetryRequested);
+                    }
+                    Err(_e) => {
+                        log::debug!("Playback end requested");
+                    }
                 }
             }
         };
@@ -239,17 +173,18 @@ impl Player for UpnpPlayer {
         Ok(())
     }
 
-    async fn before_update_playback(&self) -> Result<(), PlayerError> {
-        log::debug!("Waiting for play_lock...");
-        let permit = self.play_lock.acquire().await?;
-        log::debug!("Allowed to play");
-        drop(permit);
-
-        Ok(())
-    }
-
     async fn trigger_seek(&self, seek: f64) -> Result<(), PlayerError> {
-        log::debug!("seek_track seek={seek}");
+        log::info!("trigger_seek: seek={seek}");
+
+        if self.expected_state.read().unwrap().is_none() {
+            log::debug!("trigger_seek: State not set. Initializing AV Transport URI");
+            self.update_av_transport().await?;
+            self.init_transport_state().await?;
+        }
+        if let Some("STOPPED") = self.expected_state.read().unwrap().as_deref() {
+            log::debug!("trigger_seek: In STOPPED state. not seeking");
+            return Ok(());
+        }
 
         crate::seek(
             &self.service,
@@ -271,7 +206,7 @@ impl Player for UpnpPlayer {
         let id = playback.id;
         log::debug!("trigger_pause: playback id={id}");
 
-        if let Err(e) = self.wait_for_expected_transport_state().await {
+        if let Err(e) = self.wait_for_transport_state("PLAYING").await {
             log::error!("Playback not in a pauseable state: {e:?}");
             return Ok(());
         }
@@ -356,7 +291,6 @@ impl UpnpPlayer {
             source,
             transport_uri: Arc::new(tokio::sync::RwLock::new(None)),
             active_playback: Arc::new(RwLock::new(None)),
-            play_lock: Arc::new(tokio::sync::Semaphore::new(1)),
             receiver: Arc::new(RwLock::new(None)),
             handle,
             device,
@@ -367,10 +301,99 @@ impl UpnpPlayer {
         }
     }
 
+    async fn update_av_transport(&self) -> Result<String, PlayerError> {
+        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
+        let track_or_id = &playback.tracks[playback.position as usize];
+        let track_id = track_or_id.id();
+        log::info!(
+            "Updating UPnP AV Transport URI: {} {:?} {track_or_id:?}",
+            track_id,
+            playback.abort,
+        );
+
+        let (transport_uri, headers) = get_track_url(
+            track_id.try_into().unwrap(),
+            track_or_id.api_source(),
+            &self.source,
+            playback.quality,
+            true,
+        )
+        .await?;
+
+        self.transport_uri
+            .write()
+            .await
+            .replace(transport_uri.clone());
+
+        log::debug!("update_av_transport: Set transport_uri={transport_uri}");
+        let format = "flac";
+
+        let mut client = reqwest::Client::new().head(&transport_uri);
+
+        if let Some(headers) = headers {
+            for (key, value) in headers {
+                client = client.header(key, value);
+            }
+        }
+
+        let res = client.send().await.unwrap();
+        let headers = res.headers();
+        let size = headers
+            .get("content-length")
+            .map(|length| length.to_str().unwrap().parse::<u64>().unwrap());
+        let track = get_track(&**self.db, track_or_id.id().try_into().unwrap()).await?;
+        let duration = track.as_ref().map(|x| x.duration.ceil() as u32);
+        let title = track.as_ref().map(|x| x.title.to_owned());
+        let artist = track.as_ref().map(|x| x.artist.to_owned());
+        let album = track.as_ref().map(|x| x.album.to_owned());
+        let track_number = track.map(|x| x.number as u32);
+
+        crate::set_av_transport_uri(
+            &self.service,
+            self.device.url(),
+            self.instance_id,
+            &transport_uri,
+            format,
+            title.as_deref(),
+            artist.as_deref(),
+            artist.as_deref(),
+            album.as_deref(),
+            track_number,
+            duration,
+            size,
+        )
+        .await
+        .map_err(|e| {
+            log::error!("set_av_transport_uri failed: {e:?}");
+            PlayerError::InvalidState
+        })?;
+
+        Ok(transport_uri)
+    }
+
+    async fn init_transport_state(&self) -> Result<(), PlayerError> {
+        let transport_info =
+            crate::get_transport_info(&self.service, self.device.url(), self.instance_id)
+                .await
+                .map_err(|e| {
+                    log::error!("get_transport_info failed: {e:?}");
+                    PlayerError::InvalidState
+                })?;
+
+        log::trace!("update_av_transport: transport_info={transport_info:?}");
+
+        self.expected_state
+            .write()
+            .unwrap()
+            .replace(transport_info.current_transport_state);
+
+        Ok(())
+    }
+
     async fn wait_for_expected_transport_state(&self) -> Result<(), PlayerError> {
         let expected_state = self.expected_state.read().unwrap().clone().ok_or_else(|| {
             log::error!("State not set");
-            PlayerError::NoPlayersPlaying
+            PlayerError::InvalidState
         })?;
 
         self.wait_for_transport_state(&expected_state).await?;
@@ -405,25 +428,14 @@ impl UpnpPlayer {
 
     async fn subscribe(
         &self,
-        start_tx: Sender<()>,
         finished_tx: Sender<bool>,
         _track_url: String,
         current_seek: Arc<RwLock<Option<f64>>>,
         sent_playback_start_event: Arc<AtomicBool>,
-    ) -> Result<(), PlayerError> {
+    ) -> Result<usize, PlayerError> {
         log::debug!("subscribe: Subscribing events");
-        let unsubscribe = {
-            let handle = self.handle.clone();
-            let position_info_subscription_id = *self.position_info_subscription_id.read().await;
 
-            move || {
-                let handle = handle.clone();
-
-                Self::unsubscribe_events(&handle, position_info_subscription_id)
-            }
-        };
-
-        unsubscribe()?;
+        let this_sub = Arc::new(AtomicUsize::new(0));
 
         let position_sub = self
             .handle
@@ -434,16 +446,17 @@ impl UpnpPlayer {
                 self.service.service_id().to_owned(),
                 Box::new({
                     let active_playback = self.active_playback.clone();
-                    let unsubscribe = unsubscribe.clone();
                     let transport_uri = self.transport_uri.read().await.clone();
+                    let handle = self.handle.clone();
+                    let this_sub = this_sub.clone();
                     move |position_info| {
                         let active_playback = active_playback.clone();
-                        let unsubscribe = unsubscribe.clone();
                         let current_seek = current_seek.clone();
-                        let start_tx = start_tx.clone();
                         let finished_tx = finished_tx.clone();
                         let sent_playback_start_event = sent_playback_start_event.clone();
                         let transport_uri = transport_uri.clone();
+                        let handle = handle.clone();
+                        let this_sub = this_sub.clone();
 
                         Box::pin(async move {
                             if log::log_enabled!(log::Level::Trace) {
@@ -457,16 +470,20 @@ impl UpnpPlayer {
                             if position_info.track == 0
                                 || transport_uri.as_ref().map(|x| xml::escape::escape_str_attribute(x).to_string()).is_some_and(|x| x != position_info.track_uri)
                             {
+                                let sub_id = this_sub.load(std::sync::atomic::Ordering::SeqCst);
                                 log::debug!(
-                                    "playback finished. unsubscribing. track={} track_uri=(expected={:?} actual={:?})",
+                                    "playback finished. unsubscribing position_sub={sub_id}. track={} track_uri=(expected={:?} actual={:?})",
                                     position_info.track,
                                     transport_uri,
                                     Some(position_info.track_uri),
                                 );
                                 if let Err(e) = finished_tx.send_async(false).await {
-                                    log::error!("send error: {e:?}");
+                                    log::trace!("send error: {e:?}");
                                 }
-                                if let Err(e) = unsubscribe() {
+                                if let Err(e) = UpnpPlayer::unsubscribe_events(
+                                    &handle,
+                                    sub_id
+                                ) {
                                     log::error!("Failed to unsubscribe: {e:?}");
                                 }
                                 return;
@@ -475,13 +492,6 @@ impl UpnpPlayer {
                             if position_info.track_duration == 0 {
                                 log::debug!("Waiting for track duration...");
                                 return;
-                            }
-
-                            if !sent_playback_start_event.load(std::sync::atomic::Ordering::SeqCst)
-                            {
-                                if let Err(e) = start_tx.send_async(()).await {
-                                    log::error!("send error: {e:?}");
-                                }
                             }
 
                             let position = position_info.abs_time;
@@ -526,11 +536,12 @@ impl UpnpPlayer {
                 PlayerError::NoPlayersPlaying
             })?;
 
+        this_sub.store(position_sub, std::sync::atomic::Ordering::SeqCst);
         *self.position_info_subscription_id.write().await = position_sub;
 
         log::debug!("subscribe: Subscribed position_sub={position_sub}");
 
-        Ok(())
+        Ok(position_sub)
     }
 
     fn unsubscribe_events(
@@ -547,10 +558,7 @@ impl UpnpPlayer {
         Ok(())
     }
 
-    async fn unsubscribe(&self) -> Result<(), PlayerError> {
-        Self::unsubscribe_events(
-            &self.handle,
-            *self.position_info_subscription_id.read().await,
-        )
+    fn unsubscribe(&self, position_info_subscription_id: usize) -> Result<(), PlayerError> {
+        Self::unsubscribe_events(&self.handle, position_info_subscription_id)
     }
 }

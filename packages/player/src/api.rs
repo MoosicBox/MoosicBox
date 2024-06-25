@@ -68,6 +68,8 @@ impl From<PlayerError> for actix_web::Error {
             PlayerError::Seek(err) => ErrorInternalServerError(err),
             PlayerError::NoAudioOutputs => ErrorInternalServerError(err),
             PlayerError::Cancelled => ErrorInternalServerError(err),
+            PlayerError::RetryRequested => ErrorInternalServerError(err),
+            PlayerError::InvalidState => ErrorInternalServerError(err),
         }
     }
 }
