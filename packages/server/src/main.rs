@@ -414,6 +414,63 @@ fn main() -> std::io::Result<()> {
             async move {
                 let resp = http_server.await;
 
+                log::debug!("Shutting down server players...");
+                let players = SERVER_PLAYERS.write().await.drain().collect::<Vec<_>>();
+                for (id, player) in players {
+                    log::debug!("Shutting down player id={}", id);
+                    if let Err(err) = player
+                        .update_playback(
+                            true,
+                            None,
+                            Some(true),
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                        )
+                        .await
+                    {
+                        log::error!("Failed to stop player id={}: {err:?}", id);
+                    } else {
+                        log::debug!("Successfully shut down player id={}", id);
+                    }
+                }
+
+                #[cfg(feature = "upnp")]
+                {
+                    log::debug!("Shutting down UPnP players...");
+                    let players = UPNP_PLAYERS.write().await.drain().collect::<Vec<_>>();
+                    for (id, player) in players {
+                        log::debug!("Shutting down player id={}", id);
+                        if let Err(err) = player
+                            .update_playback(
+                                true,
+                                None,
+                                Some(true),
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                            )
+                            .await
+                        {
+                            log::error!("Failed to stop player id={}: {err:?}", id);
+                        } else {
+                            log::debug!("Successfully shut down player id={}", id);
+                        }
+                    }
+                }
+
                 log::debug!("Shutting down ws server...");
                 if let Some(x) = CHAT_SERVER_HANDLE.write().unwrap().take() {
                     x.shutdown();
@@ -451,31 +508,6 @@ fn main() -> std::io::Result<()> {
                 log::debug!("Shutting down TrackPool...");
                 if let Err(e) = track_pool_handle.shutdown() {
                     log::error!("Failed to shut down TrackPool: {e:?}");
-                }
-
-                log::debug!("Shutting down server players...");
-                let players = SERVER_PLAYERS.write().await.drain().collect::<Vec<_>>();
-                for (id, player) in players {
-                    log::debug!("Shutting down player id={}", id);
-                    if let Err(err) = player.trigger_stop().await {
-                        log::error!("Failed to stop player id={}: {err:?}", id);
-                    } else {
-                        log::debug!("Successfully shut down player id={}", id);
-                    }
-                }
-
-                #[cfg(feature = "upnp")]
-                {
-                    log::debug!("Shutting down UPnP players...");
-                    let players = UPNP_PLAYERS.write().await.drain().collect::<Vec<_>>();
-                    for (id, player) in players {
-                        log::debug!("Shutting down player id={}", id);
-                        if let Err(err) = player.trigger_stop().await {
-                            log::error!("Failed to stop player id={}: {err:?}", id);
-                        } else {
-                            log::debug!("Successfully shut down player id={}", id);
-                        }
-                    }
                 }
 
                 #[cfg(feature = "upnp")]
@@ -734,8 +766,8 @@ fn handle_upnp_playback_update(update: &UpdateSession) -> Pin<Box<dyn Future<Out
         };
 
         match updated {
-            Ok(status) => {
-                log::debug!("Updated UPnP player playback: {status:?}");
+            Ok(()) => {
+                log::debug!("Updated UPnP player playback");
             }
             Err(err) => {
                 log::error!("Failed to update UPnP player playback: {err:?}");
