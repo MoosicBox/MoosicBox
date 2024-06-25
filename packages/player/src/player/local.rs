@@ -32,21 +32,25 @@ impl Player for LocalPlayer {
         self.receiver.write().unwrap()
     }
 
+    async fn before_play_playback(&self, seek: Option<f64>) -> Result<(), PlayerError> {
+        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
+        log::trace!("before_play_playback: playback={playback:?} seek={seek:?}");
+        if playback.playing {
+            self.trigger_stop().await?;
+        }
+
+        Ok(())
+    }
+
     async fn trigger_play(&self, seek: Option<f64>) -> Result<(), PlayerError> {
-        let (quality, volume, abort, track_or_id) = {
-            let binding = self.active_playback.read().unwrap();
-            let playback = binding.as_ref().unwrap();
-            (
-                playback.quality,
-                playback.volume.clone(),
-                playback.abort.clone(),
-                playback.tracks[playback.position as usize].clone(),
-            )
-        };
+        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
+
+        let track_or_id = &playback.tracks[playback.position as usize];
         let track_id = track_or_id.id();
         log::info!(
-            "Playing track with Symphonia: {} {abort:?} {track_or_id:?}",
-            track_id
+            "Playing track with Symphonia: {} {:?} {track_or_id:?}",
+            track_id,
+            playback.abort,
         );
 
         let playback_type = match track_or_id.track_source() {
@@ -55,7 +59,7 @@ impl Player for LocalPlayer {
         };
 
         let playable_track = self
-            .track_or_id_to_playable(playback_type, &track_or_id, quality)
+            .track_or_id_to_playable(playback_type, track_or_id, playback.quality)
             .await?;
         let mss = MediaSourceStream::new(playable_track.source, Default::default());
 
@@ -106,10 +110,13 @@ impl Player for LocalPlayer {
                     }
                 }))
                 .with_filter(Box::new(move |decoded, _packet, _track| {
-                    mix_volume(decoded, volume.load(std::sync::atomic::Ordering::SeqCst));
+                    mix_volume(
+                        decoded,
+                        playback.volume.load(std::sync::atomic::Ordering::SeqCst),
+                    );
                     Ok(())
                 }))
-                .with_cancellation_token(abort.clone());
+                .with_cancellation_token(playback.abort.clone());
 
             #[cfg(feature = "cpal")]
             {
@@ -215,14 +222,19 @@ impl Player for LocalPlayer {
     async fn trigger_resume(&self) -> Result<(), PlayerError> {
         let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
 
-        self.trigger_play(Some(playback.progress)).await?;
+        self.play_playback(Some(playback.progress), None).await?;
 
         Ok(())
     }
 
     async fn trigger_seek(&self, seek: f64) -> Result<(), PlayerError> {
-        self.trigger_stop().await?;
-        self.trigger_play(Some(seek)).await?;
+        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
+
+        if !playback.playing {
+            return Ok(());
+        }
+
+        self.play_playback(Some(seek), None).await?;
 
         Ok(())
     }
