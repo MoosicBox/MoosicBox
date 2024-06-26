@@ -373,7 +373,8 @@ fn main() -> std::io::Result<()> {
                 .service(moosicbox_qobuz::api::album_tracks_endpoint)
                 .service(moosicbox_qobuz::api::album_endpoint)
                 .service(moosicbox_qobuz::api::artist_endpoint)
-                .service(moosicbox_qobuz::api::track_endpoint);
+                .service(moosicbox_qobuz::api::track_endpoint)
+                .service(moosicbox_qobuz::api::search_endpoint);
 
             #[cfg(feature = "upnp")]
             {

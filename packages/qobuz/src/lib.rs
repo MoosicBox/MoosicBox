@@ -17,7 +17,7 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
 use moosicbox_core::sqlite::models::{
-    qobuz::{QobuzAlbum, QobuzArtist, QobuzImage, QobuzRelease, QobuzTrack},
+    qobuz::{QobuzAlbum, QobuzArtist, QobuzImage, QobuzRelease, QobuzSearchResults, QobuzTrack},
     Album, ApiSource, Artist, LibraryAlbum, Track,
 };
 use moosicbox_json_utils::{
@@ -417,6 +417,7 @@ enum QobuzApiEndpoint {
     Favorites,
     AddFavorites,
     RemoveFavorites,
+    Search,
 }
 
 impl ToUrl for QobuzApiEndpoint {
@@ -435,6 +436,7 @@ impl ToUrl for QobuzApiEndpoint {
             Self::Favorites => format!("{QOBUZ_API_BASE_URL}/favorite/getUserFavorites"),
             Self::AddFavorites => format!("{QOBUZ_API_BASE_URL}/favorite/create"),
             Self::RemoveFavorites => format!("{QOBUZ_API_BASE_URL}/favorite/delete"),
+            Self::Search => format!("{QOBUZ_API_BASE_URL}/catalog/search"),
         }
     }
 }
@@ -1473,6 +1475,55 @@ pub async fn track_file_url(
     let url = value.to_value("url")?;
 
     Ok(url)
+}
+
+#[derive(Debug, Error)]
+pub enum QobuzSearchError {
+    #[error(transparent)]
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    Db(#[from] DbError),
+    #[error("No app secret available")]
+    NoAppSecretAvailable,
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn search(
+    #[cfg(feature = "db")] db: &dyn Database,
+    query: &str,
+    offset: Option<usize>,
+    limit: Option<usize>,
+    access_token: Option<String>,
+    app_id: Option<String>,
+) -> Result<QobuzSearchResults, QobuzSearchError> {
+    let url = qobuz_api_endpoint!(
+        Search,
+        &[],
+        &[
+            ("query", query),
+            ("offset", &offset.unwrap_or(0).to_string()),
+            ("limit", &limit.unwrap_or(10).to_string()),
+        ]
+    );
+
+    let value = authenticated_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        app_id,
+        access_token,
+    )
+    .await?;
+
+    log::trace!("Received search response: {value:?}");
+
+    Ok(value.to_value_type()?)
 }
 
 #[derive(Debug, Error)]

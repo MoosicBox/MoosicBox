@@ -4,7 +4,7 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, Result,
 };
-use moosicbox_core::sqlite::models::ToApi;
+use moosicbox_core::sqlite::models::{qobuz::QobuzSearchResults, ToApi};
 use moosicbox_paging::Page;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -12,11 +12,11 @@ use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
     album, album_tracks, artist, artist_albums, favorite_albums, favorite_artists, favorite_tracks,
-    format_title, track, track_file_url, user_login, QobuzAlbum, QobuzAlbumError, QobuzAlbumOrder,
-    QobuzAlbumReleaseType, QobuzAlbumSort, QobuzAlbumTracksError, QobuzArtist,
+    format_title, search, track, track_file_url, user_login, QobuzAlbum, QobuzAlbumError,
+    QobuzAlbumOrder, QobuzAlbumReleaseType, QobuzAlbumSort, QobuzAlbumTracksError, QobuzArtist,
     QobuzArtistAlbumsError, QobuzArtistError, QobuzAudioQuality, QobuzFavoriteAlbumsError,
-    QobuzFavoriteArtistsError, QobuzFavoriteTracksError, QobuzRelease, QobuzTrack, QobuzTrackError,
-    QobuzTrackFileUrlError, QobuzUserLoginError,
+    QobuzFavoriteArtistsError, QobuzFavoriteTracksError, QobuzRelease, QobuzSearchError,
+    QobuzTrack, QobuzTrackError, QobuzTrackFileUrlError, QobuzUserLoginError,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -605,4 +605,42 @@ pub async fn track_file_url_endpoint(
         )
         .await?,
     })))
+}
+
+impl From<QobuzSearchError> for actix_web::Error {
+    fn from(err: QobuzSearchError) -> Self {
+        ErrorInternalServerError(err.to_string())
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QobuzSearchQuery {
+    query: String,
+    offset: Option<usize>,
+    limit: Option<usize>,
+}
+
+#[route("/qobuz/search", method = "GET")]
+pub async fn search_endpoint(
+    req: HttpRequest,
+    query: web::Query<QobuzSearchQuery>,
+    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<QobuzSearchResults>> {
+    Ok(Json(
+        search(
+            #[cfg(feature = "db")]
+            &**data.database,
+            &query.query,
+            query.offset,
+            query.limit,
+            req.headers()
+                .get(QOBUZ_ACCESS_TOKEN_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+            req.headers()
+                .get(QOBUZ_APP_ID_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+        )
+        .await?,
+    ))
 }

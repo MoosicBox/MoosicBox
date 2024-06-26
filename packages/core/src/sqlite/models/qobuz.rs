@@ -449,3 +449,58 @@ impl From<&QobuzTrack> for Track {
         Track::Qobuz(value.clone())
     }
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct QobuzSearchResultList<T> {
+    pub items: Vec<T>,
+    pub offset: usize,
+    pub limit: usize,
+    pub total: usize,
+}
+
+impl<'a, T> ToValueType<QobuzSearchResultList<T>> for &'a Value
+where
+    Value: AsModelResult<QobuzSearchResultList<T>, ParseError>,
+{
+    fn to_value_type(self) -> Result<QobuzSearchResultList<T>, ParseError> {
+        self.as_model()
+    }
+}
+
+impl<T> AsModelResult<QobuzSearchResultList<T>, ParseError> for Value
+where
+    for<'a> &'a Value: ToValueType<T>,
+    for<'a> &'a Value: ToValueType<usize>,
+{
+    fn as_model(&self) -> Result<QobuzSearchResultList<T>, ParseError> {
+        Ok(QobuzSearchResultList {
+            items: self.to_value("items")?,
+            offset: self.to_value("offset")?,
+            limit: self.to_value("limit")?,
+            total: self.to_value("total")?,
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct QobuzSearchResults {
+    pub albums: QobuzSearchResultList<QobuzAlbum>,
+    pub artists: QobuzSearchResultList<QobuzArtist>,
+    pub tracks: QobuzSearchResultList<QobuzTrack>,
+}
+
+impl ToValueType<QobuzSearchResults> for &Value {
+    fn to_value_type(self) -> Result<QobuzSearchResults, ParseError> {
+        self.as_model()
+    }
+}
+
+impl AsModelResult<QobuzSearchResults, ParseError> for Value {
+    fn as_model(&self) -> Result<QobuzSearchResults, ParseError> {
+        Ok(QobuzSearchResults {
+            albums: self.to_value("albums")?,
+            artists: self.to_value("artists")?,
+            tracks: self.to_value("tracks")?,
+        })
+    }
+}
