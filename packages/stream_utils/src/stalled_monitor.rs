@@ -10,6 +10,7 @@ pub struct StalledReadMonitor<T, R: futures::Stream<Item = T>> {
     #[pin]
     inner: R,
     sleeper: Option<tokio::time::Interval>,
+    throttler: Option<tokio::time::Interval>,
 }
 
 impl<T, R: futures::Stream<Item = T>> StalledReadMonitor<T, R> {
@@ -17,6 +18,7 @@ impl<T, R: futures::Stream<Item = T>> StalledReadMonitor<T, R> {
         Self {
             inner,
             sleeper: None,
+            throttler: None,
         }
     }
 
@@ -27,6 +29,18 @@ impl<T, R: futures::Stream<Item = T>> StalledReadMonitor<T, R> {
         Self {
             inner: self.inner,
             sleeper: Some(sleeper),
+            throttler: self.throttler,
+        }
+    }
+
+    pub fn with_throttle(self, throttle_duration: Duration) -> Self {
+        let mut throttler = tokio::time::interval(throttle_duration);
+        throttler.reset();
+
+        Self {
+            inner: self.inner,
+            sleeper: self.sleeper,
+            throttler: Some(throttler),
         }
     }
 }
@@ -46,9 +60,24 @@ impl<T, R: futures::Stream<Item = T>> futures::Stream for StalledReadMonitor<T, 
     ) -> Poll<Option<Self::Item>> {
         let this = self.project();
 
+        if let Some(throttler) = this.throttler {
+            match throttler.poll_tick(cx) {
+                Poll::Ready(instant) => {
+                    log::debug!("StalledReadMonitor throttled for {instant:?}");
+                }
+                Poll::Pending => {
+                    log::trace!("Received throttle pending response");
+                    return Poll::Pending;
+                }
+            }
+        }
+
         let response = this.inner.poll_next(cx);
 
         match response {
+            Poll::Ready(None) => {
+                log::trace!("Received stream poll finished response");
+            }
             Poll::Ready(Some(_)) => {
                 log::trace!("Received stream poll response");
 
@@ -56,7 +85,7 @@ impl<T, R: futures::Stream<Item = T>> futures::Stream for StalledReadMonitor<T, 
                     sleeper.reset();
                 }
             }
-            Poll::Ready(None) | Poll::Pending => {
+            Poll::Pending => {
                 if let Some(sleeper) = this.sleeper {
                     if let Poll::Ready(instant) = sleeper.poll_tick(cx) {
                         log::debug!("StalledReadMonitor timed out at {instant:?}");
