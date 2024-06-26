@@ -9,7 +9,6 @@ use async_trait::async_trait;
 use atomic_float::AtomicF64;
 use crossbeam_channel::{bounded, Receiver, SendError};
 use futures::{Future, StreamExt as _, TryStreamExt as _};
-use lazy_static::lazy_static;
 use local_ip_address::local_ip;
 use moosicbox_core::{
     sqlite::{
@@ -39,7 +38,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use symphonia::core::{io::MediaSource, probe::Hint};
 use thiserror::Error;
-use tokio::runtime::{self, Runtime};
 use tokio_util::{
     codec::{BytesCodec, FramedRead},
     sync::CancellationToken,
@@ -47,14 +45,6 @@ use tokio_util::{
 
 #[cfg(feature = "local")]
 pub mod local;
-
-lazy_static! {
-    pub static ref RT: Runtime = runtime::Builder::new_multi_thread()
-        .enable_all()
-        .max_blocking_threads(4)
-        .build()
-        .unwrap();
-}
 
 pub const DEFAULT_SEEK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
     max_attempts: 10,
@@ -707,7 +697,7 @@ pub trait Player: Clone + Send + 'static {
                 .collect::<Vec<_>>()
         );
 
-        RT.spawn(async move {
+        tokio::spawn(async move {
             let mut seek = seek;
             let mut playback = playback.clone();
             let abort = playback.abort.clone();
