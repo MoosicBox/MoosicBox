@@ -244,9 +244,12 @@ impl service::Processor for service::Service {
                 end,
             } => {
                 if let Some(track_bytes_source) = ctx.pool.get_mut(&key) {
-                    track_bytes_source
-                        .start_fetch_track_bytes(key, stream, size, start, end)
-                        .await?;
+                    let mut track_bytes_source = track_bytes_source.clone();
+                    tokio::spawn(async move {
+                        track_bytes_source
+                            .start_fetch_track_bytes(key, stream, size, start, end)
+                            .await
+                    });
                 }
             }
         }
@@ -254,6 +257,7 @@ impl service::Processor for service::Service {
     }
 }
 
+#[derive(Clone)]
 struct TrackBytesSource {
     key: String,
     writers: Arc<Mutex<Vec<ByteWriter>>>,
