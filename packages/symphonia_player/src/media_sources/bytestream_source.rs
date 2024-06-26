@@ -83,7 +83,7 @@ impl ByteStreamSourceFetcher {
                 }
                 log::trace!("Received more bytes from stream");
                 let bytes = item.unwrap();
-                if let Err(err) = sender.send(bytes) {
+                if let Err(err) = sender.send_async(bytes).await {
                     log::info!("Aborted byte stream read: {err:?}");
                     return;
                 }
@@ -91,12 +91,14 @@ impl ByteStreamSourceFetcher {
 
             if abort.is_cancelled() || stream_abort.is_cancelled() {
                 log::debug!("ABORTED");
-                if let Err(err) = sender.send(Bytes::new()) {
+                if let Err(err) = sender.send_async(Bytes::new()).await {
                     log::warn!("Failed to send empty bytes: {err:?}");
                 }
             } else {
                 log::debug!("Finished reading from stream");
-                if sender.send(Bytes::new()).is_ok() && ready_receiver.recv().is_err() {
+                if sender.send_async(Bytes::new()).await.is_ok()
+                    && ready_receiver.recv_async().await.is_err()
+                {
                     log::info!("Byte stream read has been aborted");
                 }
             }
