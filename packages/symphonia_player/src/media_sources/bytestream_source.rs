@@ -2,7 +2,7 @@ use std::cmp::min;
 use std::io::{Read, Seek};
 
 use bytes::Bytes;
-use crossbeam_channel::{bounded, Receiver, Sender};
+use flume::{bounded, Receiver, Sender};
 use futures::{Stream, StreamExt};
 use lazy_static::lazy_static;
 use symphonia::core::io::MediaSource;

@@ -24,7 +24,6 @@ tokio-util              = { workspace = true, optional = true }
 # Player Dependencies
 async-trait = { workspace = true, optional = true }
 atomic_float = { workspace = true, optional = true }
-crossbeam-channel = { workspace = true, optional = true }
 moosicbox_core = { path = "../core", optional = true }
 moosicbox_database = { path = "../database", optional = true }
 moosicbox_json_utils = { path = "../json_utils", optional = true }
@@ -65,7 +64,6 @@ listener = ["dep:flume", "dep:tokio", "dep:tokio-util"]
 player = [
     "dep:async-trait",
     "dep:atomic_float",
-    "dep:crossbeam-channel",
     "dep:moosicbox_async_service",
     "dep:moosicbox_core",
     "dep:moosicbox_database",

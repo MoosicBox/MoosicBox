@@ -2,7 +2,7 @@ use std::io::{Read, Seek};
 use std::sync::atomic::AtomicBool;
 use std::thread;
 
-use crossbeam_channel::{bounded, Receiver, Sender};
+use flume::{bounded, Receiver, Sender};
 use log::debug;
 use rangemap::RangeSet;
 use reqwest::blocking::Client;

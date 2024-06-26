@@ -17,7 +17,6 @@ moosicbox_assert = { path = "../assert", default-features = false }
 base64 = { workspace = true, optional = true }
 
 bytes             = { workspace = true }
-crossbeam-channel = { workspace = true }
 futures-util      = { workspace = true }
 log               = { workspace = true }
 rand              = { workspace = true }

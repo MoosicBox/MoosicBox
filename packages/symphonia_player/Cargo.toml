@@ -21,7 +21,6 @@ atomic_float            = { workspace = true }
 bytes                   = { workspace = true }
 clap                    = { workspace = true }
 cpal                    = { workspace = true, optional = true }
-crossbeam-channel       = { workspace = true }
 fdk-aac                 = { workspace = true, optional = true }
 flume                   = { workspace = true }
 futures                 = { workspace = true }

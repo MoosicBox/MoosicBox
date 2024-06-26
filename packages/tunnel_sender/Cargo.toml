@@ -36,7 +36,6 @@ moosicbox_ws = { path = "../ws" }
 base64 = { workspace = true, optional = true }
 
 bytes             = { workspace = true }
-crossbeam-channel = { workspace = true }
 futures-channel   = { workspace = true }
 futures-util      = { workspace = true }
 lazy_static       = { workspace = true }

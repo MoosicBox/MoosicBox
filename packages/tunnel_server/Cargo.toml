@@ -42,7 +42,6 @@ aws-config        = { workspace = true }
 aws-sdk-ssm       = { workspace = true }
 bytes             = { workspace = true }
 chrono            = { workspace = true }
-crossbeam-channel = { workspace = true }
 env_logger        = { workspace = true }
 futures-util      = { workspace = true }
 hex               = { workspace = true }

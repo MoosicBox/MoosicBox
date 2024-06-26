@@ -1,7 +1,7 @@
 use std::io::{Read, Seek};
 use std::sync::atomic::AtomicBool;
 
-use crossbeam_channel::{bounded, Receiver, Sender};
+use flume::{bounded, Receiver, Sender};
 use log::debug;
 use rangemap::RangeSet;
 use reqwest::Client;
@@ -57,7 +57,7 @@ impl StreamableFileAsync {
             .unwrap()
             .to_vec();
 
-        tx.send((start, chunk)).unwrap();
+        tx.send_async((start, chunk)).await.unwrap();
     }
 
     /// Polls all receivers.
