@@ -10,7 +10,6 @@ use bytes::{Bytes, BytesMut};
 use flume::RecvError;
 use futures::{prelude::*, StreamExt};
 use futures_core::Stream;
-use lazy_static::lazy_static;
 use moosicbox_core::{
     sqlite::{
         db::{get_track, get_track_size, get_tracks, set_track_size, DbError, SetTrackSize},
@@ -55,14 +54,6 @@ use crate::files::{
 };
 
 use super::track_pool::service::CommanderError;
-
-lazy_static! {
-    static ref RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .max_blocking_threads(4)
-        .build()
-        .unwrap();
-}
 
 #[derive(Clone, Debug)]
 pub enum TrackSource {
@@ -448,7 +439,7 @@ pub async fn get_audio_bytes(
                 } else {
                     let source_send = source.clone();
 
-                    RT.spawn_blocking(move || {
+                    tokio::task::spawn_blocking(move || {
                         let source = source_send;
 
                         let audio_output_handler =
