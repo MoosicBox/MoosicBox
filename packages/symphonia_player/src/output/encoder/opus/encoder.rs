@@ -5,7 +5,6 @@ use crate::play_file_path_str;
 use crate::resampler::Resampler;
 
 use bytes::Bytes;
-use lazy_static::lazy_static;
 use moosicbox_converter::opus::{
     encoder_opus, OPUS_STREAM_COMMENTS_HEADER, OPUS_STREAM_IDENTIFICATION_HEADER,
 };
@@ -13,14 +12,6 @@ use moosicbox_stream_utils::{ByteStream, ByteWriter};
 use ogg::{PacketWriteEndInfo, PacketWriter};
 use symphonia::core::audio::*;
 use symphonia::core::units::Duration;
-
-lazy_static! {
-    static ref RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .max_blocking_threads(4)
-        .build()
-        .unwrap();
-}
 
 const STEREO_20MS: usize = 48000 * 2 * 20 / 1000;
 
@@ -337,7 +328,7 @@ pub fn encode_opus_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     writer: T,
 ) -> tokio::task::JoinHandle<()> {
     let path = path.clone();
-    RT.spawn(async move { encode_opus(path, writer) })
+    tokio::task::spawn_blocking(move || encode_opus(path, writer))
 }
 
 pub fn encode_opus<T: std::io::Write + Send + Sync + Clone + 'static>(path: String, writer: T) {

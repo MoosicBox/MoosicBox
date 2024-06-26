@@ -5,19 +5,10 @@ use crate::play_file_path_str;
 use crate::resampler::Resampler;
 
 use bytes::Bytes;
-use lazy_static::lazy_static;
 use moosicbox_converter::flac::{encoder_flac, Encoder};
 use moosicbox_stream_utils::{ByteStream, ByteWriter};
 use symphonia::core::audio::*;
 use symphonia::core::units::Duration;
-
-lazy_static! {
-    static ref RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .max_blocking_threads(4)
-        .build()
-        .unwrap();
-}
 
 pub struct FlacEncoder {
     resampler: Option<RwLock<Resampler<i16>>>,
@@ -213,7 +204,7 @@ pub fn encode_aac_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     writer: T,
 ) -> tokio::task::JoinHandle<()> {
     let path = path.clone();
-    RT.spawn(async move { encode_aac(path, writer) })
+    tokio::task::spawn_blocking(move || encode_aac(path, writer))
 }
 
 pub fn encode_aac<T: std::io::Write + Send + Sync + Clone + 'static>(path: String, writer: T) {
