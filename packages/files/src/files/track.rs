@@ -351,6 +351,19 @@ pub struct TrackBytes {
     pub filename: Option<String>,
 }
 
+impl std::fmt::Debug for TrackBytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TrackBytes")
+            .field("id", &self.id)
+            .field("stream", &"{{stream}}")
+            .field("size", &self.size)
+            .field("original_size", &self.original_size)
+            .field("format", &self.format)
+            .field("filename", &self.filename)
+            .finish()
+    }
+}
+
 pub async fn get_track_bytes(
     db: &dyn Database,
     track_id: u64,
