@@ -2,20 +2,11 @@ use std::io::{Read, Seek};
 use std::sync::atomic::AtomicBool;
 
 use crossbeam_channel::{bounded, Receiver, Sender};
-use lazy_static::lazy_static;
 use log::debug;
 use rangemap::RangeSet;
 use reqwest::Client;
 use symphonia::core::io::MediaSource;
-use tokio::runtime::{self, Runtime};
 
-lazy_static! {
-    static ref RT: Runtime = runtime::Builder::new_multi_thread()
-        .enable_all()
-        .max_blocking_threads(4)
-        .build()
-        .unwrap();
-}
 // Used in cpal_output.rs to mute the stream when buffering.
 pub static IS_STREAM_BUFFERING: AtomicBool = AtomicBool::new(false);
 
@@ -167,7 +158,7 @@ impl Read for StreamableFileAsync {
                 .as_millis();
             self.receivers.push((id, rx));
 
-            RT.spawn(async move {
+            tokio::spawn(async move {
                 Self::read_chunk(tx, url, chunk_write_pos, file_size).await;
             });
         }
