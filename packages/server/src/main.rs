@@ -364,6 +364,7 @@ fn main() -> std::io::Result<()> {
                 .service(moosicbox_tidal::api::album_endpoint)
                 .service(moosicbox_tidal::api::artist_endpoint)
                 .service(moosicbox_tidal::api::track_endpoint)
+                .service(moosicbox_tidal::api::search_endpoint)
                 .service(moosicbox_qobuz::api::user_login_endpoint)
                 .service(moosicbox_qobuz::api::track_file_url_endpoint)
                 .service(moosicbox_qobuz::api::favorite_artists_endpoint)

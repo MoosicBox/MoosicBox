@@ -13,7 +13,7 @@ use moosicbox_database::{Database, DatabaseError};
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use moosicbox_core::sqlite::models::{
-    tidal::{TidalAlbum, TidalArtist, TidalTrack},
+    tidal::{TidalAlbum, TidalArtist, TidalSearchResults, TidalTrack},
     Album, ApiSource, Artist, AsModelResult, LibraryAlbum, Track,
 };
 use moosicbox_json_utils::{serde_json::ToValue, ParseError};
@@ -62,6 +62,7 @@ enum TidalApiEndpoint {
     AlbumTracks,
     TrackUrl,
     TrackPlaybackInfo,
+    Search,
 }
 
 static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| reqwest::Client::builder().build().unwrap());
@@ -106,6 +107,7 @@ impl ToUrl for TidalApiEndpoint {
             Self::AlbumTracks => format!("{TIDAL_API_BASE_URL}/albums/:albumId/tracks"),
             Self::TrackUrl => format!("{TIDAL_API_BASE_URL}/tracks/:trackId/urlpostpaywall"),
             Self::TrackPlaybackInfo => format!("{TIDAL_API_BASE_URL}/tracks/:trackId/playbackinfo"),
+            Self::Search => format!("{TIDAL_API_BASE_URL}/search/top-hits"),
         }
     }
 }
@@ -1735,6 +1737,127 @@ pub async fn track(
     .await?;
 
     log::trace!("Received track response: {value:?}");
+
+    Ok(value.as_model()?)
+}
+
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, EnumString, AsRefStr)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum SearchType {
+    Artists,
+    Albums,
+    Tracks,
+    Videos,
+    Playlists,
+    UserProfiles,
+}
+
+impl From<SearchType> for TidalSearchType {
+    fn from(value: SearchType) -> Self {
+        match value {
+            SearchType::Artists => TidalSearchType::Artists,
+            SearchType::Albums => TidalSearchType::Albums,
+            SearchType::Tracks => TidalSearchType::Tracks,
+            SearchType::Videos => TidalSearchType::Videos,
+            SearchType::Playlists => TidalSearchType::Playlists,
+            SearchType::UserProfiles => TidalSearchType::UserProfiles,
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, EnumString, AsRefStr)]
+#[serde(rename_all = "UPPERCASE")]
+#[strum(serialize_all = "UPPERCASE")]
+pub enum TidalSearchType {
+    Artists,
+    Albums,
+    Tracks,
+    Videos,
+    Playlists,
+    UserProfiles,
+}
+
+#[derive(Debug, Error)]
+pub enum TidalSearchError {
+    #[error(transparent)]
+    AuthenticatedRequest(#[from] AuthenticatedRequestError),
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn search(
+    #[cfg(feature = "db")] db: &dyn Database,
+    query: &str,
+    offset: Option<usize>,
+    limit: Option<usize>,
+    include_contributions: Option<bool>,
+    include_did_you_mean: Option<bool>,
+    include_user_playlists: Option<bool>,
+    supports_user_data: Option<bool>,
+    types: Option<Vec<TidalSearchType>>,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+    access_token: Option<String>,
+) -> Result<TidalSearchResults, TidalSearchError> {
+    static DEFAULT_TYPES: [TidalSearchType; 3] = [
+        TidalSearchType::Artists,
+        TidalSearchType::Albums,
+        TidalSearchType::Tracks,
+    ];
+
+    let url = tidal_api_endpoint!(
+        Search,
+        &[],
+        &[
+            ("query", query),
+            ("offset", &offset.unwrap_or(0).to_string()),
+            ("limit", &limit.unwrap_or(3).to_string()),
+            (
+                "includeContributions",
+                &include_contributions.unwrap_or(false).to_string()
+            ),
+            (
+                "includeDidYouMean",
+                &include_did_you_mean.unwrap_or(false).to_string()
+            ),
+            (
+                "includeUserPlaylists",
+                &include_user_playlists.unwrap_or(false).to_string()
+            ),
+            (
+                "supportsUserData",
+                &supports_user_data.unwrap_or(false).to_string()
+            ),
+            (
+                "types",
+                &types
+                    .unwrap_or(DEFAULT_TYPES.to_vec())
+                    .iter()
+                    .map(|x| x.as_ref())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
+            ("countryCode", &country_code.clone().unwrap_or("US".into())),
+            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "deviceType",
+                device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
+            ),
+        ]
+    );
+
+    let value = authenticated_request(
+        #[cfg(feature = "db")]
+        db,
+        &url,
+        access_token,
+    )
+    .await?;
+
+    log::trace!("Received search response: {value:?}");
 
     Ok(value.as_model()?)
 }

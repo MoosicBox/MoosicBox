@@ -4,7 +4,7 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, Result,
 };
-use moosicbox_core::sqlite::models::ToApi;
+use moosicbox_core::sqlite::models::{tidal::TidalSearchResults, ToApi};
 use moosicbox_paging::Page;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -14,16 +14,16 @@ use crate::{
     add_favorite_album, add_favorite_artist, add_favorite_track, album, album_tracks, artist,
     artist_albums, device_authorization, device_authorization_token, favorite_albums,
     favorite_artists, favorite_tracks, remove_favorite_album, remove_favorite_artist,
-    remove_favorite_track, track, track_file_url, track_playback_info, AuthenticatedRequestError,
-    TidalAddFavoriteAlbumError, TidalAddFavoriteArtistError, TidalAddFavoriteTrackError,
-    TidalAlbum, TidalAlbumError, TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumTracksError,
-    TidalAlbumType, TidalArtist, TidalArtistAlbumsError, TidalArtistError, TidalArtistOrder,
-    TidalArtistOrderDirection, TidalAudioQuality, TidalDeviceAuthorizationError,
-    TidalDeviceAuthorizationTokenError, TidalDeviceType, TidalFavoriteAlbumsError,
-    TidalFavoriteArtistsError, TidalFavoriteTracksError, TidalRemoveFavoriteAlbumError,
-    TidalRemoveFavoriteArtistError, TidalRemoveFavoriteTrackError, TidalTrack, TidalTrackError,
-    TidalTrackFileUrlError, TidalTrackOrder, TidalTrackOrderDirection, TidalTrackPlaybackInfo,
-    TidalTrackPlaybackInfoError,
+    remove_favorite_track, search, track, track_file_url, track_playback_info,
+    AuthenticatedRequestError, SearchType, TidalAddFavoriteAlbumError, TidalAddFavoriteArtistError,
+    TidalAddFavoriteTrackError, TidalAlbum, TidalAlbumError, TidalAlbumOrder,
+    TidalAlbumOrderDirection, TidalAlbumTracksError, TidalAlbumType, TidalArtist,
+    TidalArtistAlbumsError, TidalArtistError, TidalArtistOrder, TidalArtistOrderDirection,
+    TidalAudioQuality, TidalDeviceAuthorizationError, TidalDeviceAuthorizationTokenError,
+    TidalDeviceType, TidalFavoriteAlbumsError, TidalFavoriteArtistsError, TidalFavoriteTracksError,
+    TidalRemoveFavoriteAlbumError, TidalRemoveFavoriteArtistError, TidalRemoveFavoriteTrackError,
+    TidalSearchError, TidalTrack, TidalTrackError, TidalTrackFileUrlError, TidalTrackOrder,
+    TidalTrackOrderDirection, TidalTrackPlaybackInfo, TidalTrackPlaybackInfoError,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -905,4 +905,58 @@ pub async fn track_endpoint(
     .await?;
 
     Ok(Json(track.to_api()))
+}
+
+impl From<TidalSearchError> for actix_web::Error {
+    fn from(err: TidalSearchError) -> Self {
+        ErrorInternalServerError(err.to_string())
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalSearchQuery {
+    query: String,
+    offset: Option<usize>,
+    limit: Option<usize>,
+    include_contributions: Option<bool>,
+    include_did_you_mean: Option<bool>,
+    include_user_playlists: Option<bool>,
+    supports_user_data: Option<bool>,
+    types: Option<Vec<SearchType>>,
+    country_code: Option<String>,
+    locale: Option<String>,
+    device_type: Option<TidalDeviceType>,
+}
+
+#[route("/tidal/search", method = "GET")]
+pub async fn search_endpoint(
+    req: HttpRequest,
+    query: web::Query<TidalSearchQuery>,
+    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<TidalSearchResults>> {
+    Ok(Json(
+        search(
+            #[cfg(feature = "db")]
+            &**data.database,
+            &query.query,
+            query.offset,
+            query.limit,
+            query.include_contributions,
+            query.include_did_you_mean,
+            query.include_user_playlists,
+            query.supports_user_data,
+            query
+                .types
+                .clone()
+                .map(|x| x.into_iter().map(|x| x.into()).collect::<Vec<_>>()),
+            query.country_code.clone(),
+            query.locale.clone(),
+            query.device_type,
+            req.headers()
+                .get(TIDAL_ACCESS_TOKEN_HEADER)
+                .map(|x| x.to_str().unwrap().to_string()),
+        )
+        .await?,
+    ))
 }
