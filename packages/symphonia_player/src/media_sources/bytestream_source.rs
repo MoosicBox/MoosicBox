@@ -4,19 +4,9 @@ use std::io::{Read, Seek};
 use bytes::Bytes;
 use flume::{bounded, Receiver, Sender};
 use futures::{Stream, StreamExt};
-use lazy_static::lazy_static;
 use symphonia::core::io::MediaSource;
-use tokio::runtime::{self, Runtime};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-
-lazy_static! {
-    static ref RT: Runtime = runtime::Builder::new_multi_thread()
-        .enable_all()
-        .max_blocking_threads(4)
-        .build()
-        .unwrap();
-}
 
 type ByteStreamType =
     Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send + std::marker::Unpin>;
@@ -83,7 +73,7 @@ impl ByteStreamSourceFetcher {
         let end = self.end;
         log::debug!("Starting fetch for byte stream with range start={start} end={end:?}");
 
-        self.abort_handle = Some(RT.spawn(async move {
+        self.abort_handle = Some(tokio::spawn(async move {
             log::debug!("Fetching byte stream with range start={start} end={end:?}");
 
             while let Some(item) = stream.next().await {
