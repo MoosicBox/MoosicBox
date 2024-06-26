@@ -143,8 +143,9 @@ impl Context {
         let bytes = Arc::new(RwLock::new(vec![]));
         let finished = Arc::new(AtomicBool::new(false));
 
-        log::debug!("Fetching track bytes for key={key}");
+        log::debug!("fetch_track_bytes: Fetching track bytes for key={key}");
         let track_bytes = fetch(start, end, size).await?;
+        log::debug!("fetch_track_bytes: Fetched track bytes for key={key} bytes={track_bytes:?}");
         let bytes_source = TrackBytesSource {
             key: key.clone(),
             writers: writers.clone(),
@@ -437,10 +438,13 @@ pub async fn get_or_fetch_track(
         + Send
         + 'static,
 ) -> Result<TrackBytes, GetTrackBytesError> {
+    log::debug!("get_or_fetch_track: start={start:?} end={end:?} size={size:?}");
     if start.is_some_and(|x| x != 0) || end.is_some_and(|x| !size.is_some_and(|s| s == x)) {
+        log::debug!("get_or_fetch_track: Requested a specific range, eagerly fetching bytes");
         return fetch(start, end, size).await;
     }
 
+    log::debug!("get_or_fetch_track: Fetching bytes from cache");
     let (tx, rx) = bounded(1);
     HANDLE
         .get()
@@ -456,5 +460,9 @@ pub async fn get_or_fetch_track(
         })
         .await?;
 
-    Ok(rx.recv_async().await?)
+    let bytes = rx.recv_async().await?;
+
+    log::debug!("get_or_fetch_track: Fetched bytes from cache: bytes={bytes:?}");
+
+    Ok(bytes)
 }
