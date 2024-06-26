@@ -7,8 +7,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use crossbeam_channel::Receiver;
-use flume::{unbounded, Sender};
+use flume::{unbounded, Receiver, Sender};
 use moosicbox_async_service::CancellationToken;
 use moosicbox_core::sqlite::{
     db::get_track,
@@ -37,7 +36,7 @@ pub struct UpnpPlayer {
     source: PlayerSource,
     transport_uri: Arc<tokio::sync::RwLock<Option<String>>>,
     pub active_playback: Arc<RwLock<Option<Playback>>>,
-    receiver: Arc<RwLock<Option<Receiver<()>>>>,
+    receiver: Arc<tokio::sync::RwLock<Option<Receiver<()>>>>,
     handle: Handle,
     device: Device,
     service: Service,
@@ -52,8 +51,8 @@ impl Player for UpnpPlayer {
         self.active_playback.write().unwrap()
     }
 
-    fn receiver_write(&self) -> RwLockWriteGuard<'_, Option<Receiver<()>>> {
-        self.receiver.write().unwrap()
+    async fn receiver_write(&self) -> tokio::sync::RwLockWriteGuard<'_, Option<Receiver<()>>> {
+        self.receiver.write().await
     }
 
     async fn before_play_playback(&self, seek: Option<f64>) -> Result<(), PlayerError> {
@@ -151,18 +150,21 @@ impl Player for UpnpPlayer {
         playback.abort.cancel();
 
         log::trace!("Waiting for playback completion response");
-        if let Some(receiver) = self.receiver.write().unwrap().take() {
-            if let Err(err) = receiver.recv_timeout(std::time::Duration::from_secs(5)) {
-                match err {
-                    crossbeam_channel::RecvTimeoutError::Timeout => {
-                        log::error!("Playback timed out waiting for abort completion")
-                    }
-                    crossbeam_channel::RecvTimeoutError::Disconnected => {
-                        log::info!("Sender associated with playback disconnected")
+        if let Some(receiver) = self.receiver_write().await.take() {
+            tokio::select! {
+                resp = receiver.recv_async() => {
+                    match resp {
+                        Ok(()) => {
+                            log::trace!("Playback successfully stopped");
+                        }
+                        Err(e) => {
+                            log::info!("Sender associated with playback disconnected: {e:?}");
+                        }
                     }
                 }
-            } else {
-                log::trace!("Playback successfully stopped");
+                _ = tokio::time::sleep(std::time::Duration::from_millis(5000)) => {
+                    log::error!("Playback timed out waiting for abort completion");
+                }
             }
         } else {
             log::debug!("No receiver to wait for completion response with");
@@ -291,7 +293,7 @@ impl UpnpPlayer {
             source,
             transport_uri: Arc::new(tokio::sync::RwLock::new(None)),
             active_playback: Arc::new(RwLock::new(None)),
-            receiver: Arc::new(RwLock::new(None)),
+            receiver: Arc::new(tokio::sync::RwLock::new(None)),
             handle,
             device,
             service,

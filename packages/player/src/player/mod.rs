@@ -7,7 +7,7 @@ use std::{
 
 use async_trait::async_trait;
 use atomic_float::AtomicF64;
-use crossbeam_channel::{bounded, Receiver, SendError};
+use flume::{bounded, Receiver, SendError};
 use futures::{Future, StreamExt as _, TryStreamExt as _};
 use local_ip_address::local_ip;
 use moosicbox_core::{
@@ -410,7 +410,7 @@ pub enum PlayerSource {
 #[async_trait]
 pub trait Player: Clone + Send + 'static {
     fn active_playback_write(&self) -> RwLockWriteGuard<'_, Option<Playback>>;
-    fn receiver_write(&self) -> RwLockWriteGuard<'_, Option<Receiver<()>>>;
+    async fn receiver_write(&self) -> tokio::sync::RwLockWriteGuard<'_, Option<Receiver<()>>>;
 
     async fn init_from_session(
         &self,
@@ -675,7 +675,7 @@ pub trait Player: Clone + Send + 'static {
 
         let (tx, rx) = bounded(1);
 
-        self.receiver_write().replace(rx);
+        self.receiver_write().await.replace(rx);
 
         let old = playback.clone();
 
@@ -717,13 +717,15 @@ pub trait Player: Clone + Send + 'static {
                         if let Err(err) = resp {
                             log::error!("Playback error occurred: {err:?}");
 
-                            let mut binding = player.active_playback_write();
-                            let active = binding.as_mut().unwrap();
-                            let old = active.clone();
-                            active.playing = false;
-                            trigger_playback_event(active, &old);
+                            {
+                                let mut binding = player.active_playback_write();
+                                let active = binding.as_mut().unwrap();
+                                let old = active.clone();
+                                active.playing = false;
+                                trigger_playback_event(active, &old);
+                            }
 
-                            tx.send(())?;
+                            tx.send_async(()).await?;
                             return Err(err);
                         }
                     }
@@ -754,14 +756,16 @@ pub trait Player: Clone + Send + 'static {
                 playback.tracks.len()
             );
 
-            let mut binding = player.active_playback_write();
-            let active = binding.as_mut().unwrap();
-            let old = active.clone();
-            active.playing = false;
+            {
+                let mut binding = player.active_playback_write();
+                let active = binding.as_mut().unwrap();
+                let old = active.clone();
+                active.playing = false;
 
-            trigger_playback_event(active, &old);
+                trigger_playback_event(active, &old);
+            }
 
-            tx.send(())?;
+            tx.send_async(()).await?;
 
             Ok::<_, PlayerError>(0)
         });

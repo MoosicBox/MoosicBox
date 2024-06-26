@@ -3440,6 +3440,7 @@ dependencies = [
  "awc",
  "bytes",
  "crossbeam-channel",
+ "flume",
  "futures",
  "lazy_static",
  "local-ip-address",

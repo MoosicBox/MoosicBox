@@ -31,6 +31,7 @@ atomic_float      = { workspace = true }
 awc               = { workspace = true }
 bytes             = { workspace = true }
 crossbeam-channel = { workspace = true }
+flume             = { workspace = true }
 futures           = { workspace = true }
 lazy_static       = { workspace = true }
 local-ip-address  = { workspace = true }

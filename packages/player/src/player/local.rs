@@ -1,7 +1,7 @@
 use std::sync::{atomic::AtomicBool, Arc, RwLock, RwLockWriteGuard};
 
 use async_trait::async_trait;
-use crossbeam_channel::Receiver;
+use flume::Receiver;
 use moosicbox_core::sqlite::models::{ToApi, TrackApiSource, UpdateSession};
 use moosicbox_symphonia_player::{output::AudioOutputHandler, volume_mixer::mix_volume};
 use rand::{thread_rng, Rng as _};
@@ -19,7 +19,7 @@ pub struct LocalPlayer {
     playback_type: PlaybackType,
     source: PlayerSource,
     pub active_playback: Arc<RwLock<Option<Playback>>>,
-    receiver: Arc<RwLock<Option<Receiver<()>>>>,
+    receiver: Arc<tokio::sync::RwLock<Option<Receiver<()>>>>,
 }
 
 #[async_trait]
@@ -28,8 +28,8 @@ impl Player for LocalPlayer {
         self.active_playback.write().unwrap()
     }
 
-    fn receiver_write(&self) -> RwLockWriteGuard<'_, Option<Receiver<()>>> {
-        self.receiver.write().unwrap()
+    async fn receiver_write(&self) -> tokio::sync::RwLockWriteGuard<'_, Option<Receiver<()>>> {
+        self.receiver.write().await
     }
 
     async fn before_play_playback(&self, seek: Option<f64>) -> Result<(), PlayerError> {
@@ -173,18 +173,21 @@ impl Player for LocalPlayer {
         playback.abort.cancel();
 
         log::trace!("Waiting for playback completion response");
-        if let Some(receiver) = self.receiver.write().unwrap().take() {
-            if let Err(err) = receiver.recv_timeout(std::time::Duration::from_secs(5)) {
-                match err {
-                    crossbeam_channel::RecvTimeoutError::Timeout => {
-                        log::error!("Playback timed out waiting for abort completion")
-                    }
-                    crossbeam_channel::RecvTimeoutError::Disconnected => {
-                        log::info!("Sender associated with playback disconnected")
+        if let Some(receiver) = self.receiver_write().await.take() {
+            tokio::select! {
+                resp = receiver.recv_async() => {
+                    match resp {
+                        Ok(()) => {
+                            log::trace!("Playback successfully stopped");
+                        }
+                        Err(e) => {
+                            log::info!("Sender associated with playback disconnected: {e:?}");
+                        }
                     }
                 }
-            } else {
-                log::trace!("Playback successfully stopped");
+                _ = tokio::time::sleep(std::time::Duration::from_millis(5000)) => {
+                    log::error!("Playback timed out waiting for abort completion");
+                }
             }
         } else {
             log::debug!("No receiver to wait for completion response with");
@@ -205,8 +208,8 @@ impl Player for LocalPlayer {
         playback.abort.cancel();
 
         log::trace!("Waiting for playback completion response");
-        if let Some(receiver) = self.receiver.write().unwrap().take() {
-            if let Err(err) = receiver.recv() {
+        if let Some(receiver) = self.receiver_write().await.take() {
+            if let Err(err) = receiver.recv_async().await {
                 log::trace!("Sender correlated with receiver has dropped: {err:?}");
             }
         } else {
@@ -267,7 +270,7 @@ impl LocalPlayer {
             playback_type: playback_type.unwrap_or_default(),
             source,
             active_playback: Arc::new(RwLock::new(None)),
-            receiver: Arc::new(RwLock::new(None)),
+            receiver: Arc::new(tokio::sync::RwLock::new(None)),
         }
     }
 }
