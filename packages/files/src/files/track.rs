@@ -8,7 +8,7 @@ use std::{
 
 use bytes::{Bytes, BytesMut};
 use flume::RecvError;
-use futures::{prelude::*, StreamExt};
+use futures::prelude::*;
 use futures_core::Stream;
 use moosicbox_core::{
     sqlite::{
@@ -385,6 +385,8 @@ pub async fn get_track_bytes(
     } else {
         None
     };
+
+    log::debug!("get_track_bytes: Got track size: size={size:?} track_id={track_id}");
 
     let track = moosicbox_core::sqlite::db::get_track(db, track_id)
         .await?
@@ -934,43 +936,51 @@ pub async fn get_or_init_track_size(
         return Ok(size);
     }
 
-    let bytes = match source {
-        TrackSource::LocalFilePath { ref path, .. } => match quality.format {
-            #[cfg(feature = "aac")]
-            AudioFormat::Aac => {
-                let writer = moosicbox_stream_utils::ByteWriter::default();
-                moosicbox_symphonia_player::output::encoder::aac::encoder::encode_aac(
-                    path.to_string(),
-                    writer.clone(),
-                );
-                writer.bytes_written()
-            }
-            #[cfg(feature = "flac")]
-            AudioFormat::Flac => return Err(TrackInfoError::UnsupportedFormat(quality.format)),
-            #[cfg(feature = "mp3")]
-            AudioFormat::Mp3 => {
-                let writer = moosicbox_stream_utils::ByteWriter::default();
-                moosicbox_symphonia_player::output::encoder::mp3::encoder::encode_mp3(
-                    path.to_string(),
-                    writer.clone(),
-                );
-                writer.bytes_written()
-            }
-            #[cfg(feature = "opus")]
-            AudioFormat::Opus => {
-                let writer = moosicbox_stream_utils::ByteWriter::default();
-                moosicbox_symphonia_player::output::encoder::opus::encoder::encode_opus(
-                    path.to_string(),
-                    writer.clone(),
-                );
-                writer.bytes_written()
-            }
-            AudioFormat::Source => File::open(path).unwrap().metadata().unwrap().len(),
-        },
-        TrackSource::Tidal { .. } | TrackSource::Qobuz { .. } => {
-            return Err(TrackInfoError::UnsupportedSource(source.clone()))
+    let bytes = tokio::task::spawn_blocking({
+        let source = source.to_owned();
+        move || {
+            Ok(match source {
+                TrackSource::LocalFilePath { ref path, .. } => match quality.format {
+                    #[cfg(feature = "aac")]
+                    AudioFormat::Aac => {
+                        let writer = moosicbox_stream_utils::ByteWriter::default();
+                        moosicbox_symphonia_player::output::encoder::aac::encoder::encode_aac(
+                            path.to_string(),
+                            writer.clone(),
+                        );
+                        writer.bytes_written()
+                    }
+                    #[cfg(feature = "flac")]
+                    AudioFormat::Flac => {
+                        return Err(TrackInfoError::UnsupportedFormat(quality.format))
+                    }
+                    #[cfg(feature = "mp3")]
+                    AudioFormat::Mp3 => {
+                        let writer = moosicbox_stream_utils::ByteWriter::default();
+                        moosicbox_symphonia_player::output::encoder::mp3::encoder::encode_mp3(
+                            path.to_string(),
+                            writer.clone(),
+                        );
+                        writer.bytes_written()
+                    }
+                    #[cfg(feature = "opus")]
+                    AudioFormat::Opus => {
+                        let writer = moosicbox_stream_utils::ByteWriter::default();
+                        moosicbox_symphonia_player::output::encoder::opus::encoder::encode_opus(
+                            path.to_string(),
+                            writer.clone(),
+                        );
+                        writer.bytes_written()
+                    }
+                    AudioFormat::Source => File::open(path).unwrap().metadata().unwrap().len(),
+                },
+                TrackSource::Tidal { .. } | TrackSource::Qobuz { .. } => {
+                    return Err(TrackInfoError::UnsupportedSource(source))
+                }
+            })
         }
-    };
+    })
+    .await??;
 
     set_track_size(
         db,
