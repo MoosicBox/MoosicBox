@@ -2,21 +2,11 @@ use std::cmp::min;
 use std::io::{Read, Seek};
 
 use bytes::Bytes;
-use flume::{bounded, Receiver, Sender};
+use flume::{bounded, unbounded, Receiver, Sender};
 use futures::StreamExt;
-use lazy_static::lazy_static;
 use reqwest::Client;
-use tokio::runtime::{self, Runtime};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-
-lazy_static! {
-    static ref RT: Runtime = runtime::Builder::new_multi_thread()
-        .enable_all()
-        .max_blocking_threads(4)
-        .build()
-        .unwrap();
-}
 
 pub struct RemoteByteStream {
     url: String,
@@ -50,7 +40,7 @@ impl RemoteByteStreamFetcher {
         autostart: bool,
         stream_abort: CancellationToken,
     ) -> Self {
-        let (tx, rx) = bounded(1);
+        let (tx, rx) = unbounded();
         let (tx_ready, rx_ready) = bounded(1);
 
         let mut fetcher = RemoteByteStreamFetcher {
@@ -89,7 +79,7 @@ impl RemoteByteStreamFetcher {
         );
         log::debug!("Starting fetch for byte stream with range {bytes_range}");
 
-        self.abort_handle = Some(RT.spawn(async move {
+        self.abort_handle = Some(tokio::spawn(async move {
             log::debug!("Fetching byte stream with range {bytes_range}");
 
             let response = Client::new()
@@ -102,7 +92,7 @@ impl RemoteByteStreamFetcher {
                 Ok(response) => response,
                 Err(err) => {
                     log::error!("Failed to get stream response: {err:?}");
-                    if let Err(err) = sender.send(Bytes::new()) {
+                    if let Err(err) = sender.send_async(Bytes::new()).await {
                         log::warn!("Failed to send empty bytes: {err:?}");
                     }
                     return;
@@ -117,7 +107,7 @@ impl RemoteByteStreamFetcher {
                         response.status(),
                         response.text().await
                     );
-                    if let Err(err) = sender.send(Bytes::new()) {
+                    if let Err(err) = sender.send_async(Bytes::new()).await {
                         log::warn!("Failed to send empty bytes: {err:?}");
                     }
                     return;
@@ -139,7 +129,7 @@ impl RemoteByteStreamFetcher {
                         return;
                     }
                 };
-                if let Err(err) = sender.send(bytes) {
+                if let Err(err) = sender.send_async(bytes).await {
                     log::info!("Aborted byte stream read: {err:?}");
                     return;
                 }
@@ -147,12 +137,14 @@ impl RemoteByteStreamFetcher {
 
             if abort.is_cancelled() || stream_abort.is_cancelled() {
                 log::debug!("ABORTED");
-                if let Err(err) = sender.send(Bytes::new()) {
+                if let Err(err) = sender.send_async(Bytes::new()).await {
                     log::warn!("Failed to send empty bytes: {err:?}");
                 }
             } else {
                 log::debug!("Finished reading from stream");
-                if sender.send(Bytes::new()).is_ok() && ready_receiver.recv().is_err() {
+                if sender.send_async(Bytes::new()).await.is_ok()
+                    && ready_receiver.recv_async().await.is_err()
+                {
                     log::info!("Byte stream read has been aborted");
                 }
             }
