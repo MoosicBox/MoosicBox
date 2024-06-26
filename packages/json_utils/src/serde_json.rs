@@ -132,6 +132,14 @@ impl ToValueType<u64> for &Value {
     }
 }
 
+impl ToValueType<usize> for &Value {
+    fn to_value_type(self) -> Result<usize, ParseError> {
+        self.as_u64()
+            .map(|x| x as usize)
+            .ok_or_else(|| ParseError::ConvertType("usize".into()))
+    }
+}
+
 pub trait ToValue {
     fn to_value<'a, T>(&'a self, index: &str) -> Result<T, ParseError>
     where
