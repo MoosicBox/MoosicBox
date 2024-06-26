@@ -5,20 +5,11 @@ use std::{
 };
 
 use bytes::Bytes;
-use lazy_static::lazy_static;
 use symphonia::core::io::MediaSource;
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt as _;
 
 use super::track::TrackBytes;
-
-lazy_static! {
-    static ref RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .max_blocking_threads(4)
-        .build()
-        .unwrap();
-}
 
 pub struct TrackBytesMediaSource {
     pub id: usize,
@@ -49,7 +40,7 @@ impl TrackBytesMediaSource {
         let sender = self.sender.clone();
         let id = self.id;
 
-        RT.spawn(async move {
+        tokio::spawn(async move {
             log::trace!("Starting stream listen for track bytes for writer id={id}");
             loop {
                 log::debug!("Acquiring lock for inner bytes for writer id={id}");
