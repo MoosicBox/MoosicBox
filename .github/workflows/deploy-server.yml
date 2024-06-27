@@ -21,7 +21,7 @@ jobs:
                   token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
             - name: Save DigitalOcean kubeconfig
-              run: doctl kubernetes cluster kubeconfig save moosicbox-tunnel-prod
+              run: doctl kubernetes cluster kubeconfig save moosicbox-prod
 
             - name: Deploy
               shell: bash
