@@ -358,6 +358,12 @@ jobs:
                       cargo: --no-default-features
                       features: tidal
 
+                    - name: scan-api
+                      path: packages/scan
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: api
+
                     - name: tidal
                       path: packages/tidal
                       os: ubuntu-latest
