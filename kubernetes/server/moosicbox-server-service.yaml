@@ -4,7 +4,7 @@ metadata:
     annotations:
         kompose.cmd: kompose convert -f compose.yaml
         kompose.version: 1.32.0 (765fde254)
-        service.beta.kubernetes.io/do-loadbalancer-certificate-id: "79917ef0-5766-4646-af08-8ee6eca759dd"
+        service.beta.kubernetes.io/do-loadbalancer-certificate-id: "e3002def-46e4-4f6a-85a2-aefc0f3700f9"
         service.beta.kubernetes.io/do-loadbalancer-protocol: "http"
         service.beta.kubernetes.io/do-loadbalancer-tls-ports: "443"
         service.beta.kubernetes.io/do-loadbalancer-redirect-http-to-https: "true"
