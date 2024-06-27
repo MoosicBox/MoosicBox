@@ -10,7 +10,6 @@ use bytes::Bytes;
 use futures_channel::mpsc::UnboundedSender;
 use futures_util::future::ready;
 use futures_util::{future, pin_mut, Future, Stream, StreamExt};
-use lazy_static::lazy_static;
 use moosicbox_auth::FetchSignatureError;
 use moosicbox_core::sqlite::models::{AlbumId, ApiSource};
 use moosicbox_core::types::AudioFormat;
@@ -36,7 +35,6 @@ use serde_json::Value;
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::probe::Hint;
 use thiserror::Error;
-use tokio::runtime::{self, Runtime};
 use tokio::select;
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -52,14 +50,6 @@ use super::{
     TunnelRequestError,
 };
 use crate::websocket_sender::TunnelWebsocketSender;
-
-lazy_static! {
-    static ref RT: Runtime = runtime::Builder::new_multi_thread()
-        .enable_all()
-        .max_blocking_threads(64)
-        .build()
-        .unwrap();
-}
 
 #[derive(Debug, Error)]
 pub enum CloseError {
@@ -267,7 +257,7 @@ impl TunnelSender {
         let abort_request_tokens = self.abort_request_tokens.clone();
         let cancellation_token = self.cancellation_token.clone();
 
-        RT.spawn(async move {
+        tokio::spawn(async move {
             let mut just_retried = false;
             log::debug!("Fetching signature token...");
             let token = loop {
@@ -280,10 +270,10 @@ impl TunnelSender {
                     Ok(Some(token)) => break token,
                     Err(FetchSignatureError::Unauthorized) => {
                         log::error!("Unauthorized response from fetch_signature_token");
-                    },
+                    }
                     Err(err) => {
                         log::error!("Failed to fetch signature token: {err:?}");
-                    },
+                    }
                     _ => {}
                 }
 
@@ -1185,7 +1175,7 @@ impl TunnelSender {
                             let writer = ByteWriter::default();
                             let stream = writer.stream();
 
-                            RT.spawn_blocking(move || {
+                            tokio::task::spawn_blocking(move || {
                                 let mut audio_output_handler = AudioOutputHandler::new();
 
                                 let format = match query.format {
