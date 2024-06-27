@@ -23,6 +23,7 @@ moosicbox_env_utils        = { version = "0.1.0", path = "../env_utils", default
 moosicbox_files            = { version = "0.1.0", path = "../files", default-features = false }
 moosicbox_image            = { version = "0.1.0", path = "../image", default-features = false }
 moosicbox_json_utils       = { version = "0.1.0", path = "../json_utils", default-features = false }
+moosicbox_load_balancer    = { version = "0.1.0", path = "../load_balancer", default-features = false }
 moosicbox_menu             = { version = "0.1.0", path = "../menu", default-features = false }
 moosicbox_music_api        = { version = "0.1.0", path = "../music_api", default-features = false }
 moosicbox_paging           = { version = "0.1.0", path = "../paging", default-features = false }

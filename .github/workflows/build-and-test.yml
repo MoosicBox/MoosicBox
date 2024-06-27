@@ -126,6 +126,10 @@ jobs:
                       path: packages/json_utils
                       os: ubuntu-latest
 
+                    - name: load_balancer
+                      path: packages/load_balancer
+                      os: ubuntu-latest
+
                     - name: menu
                       path: packages/menu
                       os: ubuntu-latest

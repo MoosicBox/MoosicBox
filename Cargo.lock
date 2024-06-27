@@ -3074,6 +3074,7 @@ dependencies = [
  "moosicbox_files",
  "moosicbox_image",
  "moosicbox_json_utils",
+ "moosicbox_load_balancer",
  "moosicbox_menu",
  "moosicbox_music_api",
  "moosicbox_paging",
@@ -3350,6 +3351,13 @@ dependencies = [
  "serde_json",
  "tantivy",
  "thiserror",
+]
+
+[[package]]
+name = "moosicbox_load_balancer"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_assert",
 ]
 
 [[package]]
