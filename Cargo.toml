@@ -129,6 +129,7 @@ openssl = { version = "0.10.64", features = ["v110"] }
 opus = "0.3.0"
 pin-project = "1.1.5"
 pin-utils = "0.1.0"
+pingora = "0.2.0"
 postgres-native-tls = "0.5.0"
 postgres-openssl = "0.5.0"
 postgres-protocol = "0.6.6"

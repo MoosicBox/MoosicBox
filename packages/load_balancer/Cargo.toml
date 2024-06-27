@@ -13,5 +13,7 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
 
+pingora = { workspace = true }
+
 [features]
 fail-on-warnings = []
