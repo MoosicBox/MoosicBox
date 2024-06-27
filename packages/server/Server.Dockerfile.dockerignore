@@ -12,7 +12,6 @@
 !/packages/files
 !/packages/image
 !/packages/json_utils
-!/packages/load_balancer
 !/packages/menu
 !/packages/middleware
 !/packages/music_api
