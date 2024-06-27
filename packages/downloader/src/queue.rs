@@ -49,7 +49,9 @@ pub enum ProcessDownloadQueueError {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct ProcessDownloadTaskResponse {}
+struct ProcessDownloadTaskResponse {
+    task_id: u64,
+}
 
 #[derive(Debug)]
 struct DownloadQueueState {
@@ -373,7 +375,7 @@ impl DownloadQueue {
         self.update_task_state(task, DownloadTaskState::Finished)
             .await?;
 
-        Ok(ProcessDownloadTaskResponse {})
+        Ok(ProcessDownloadTaskResponse { task_id: task.id })
     }
 }
 
@@ -550,7 +552,10 @@ mod tests {
             .map(|result| result.as_ref().ok().cloned())
             .collect::<Vec<_>>();
 
-        assert_eq!(responses, vec![Some(ProcessDownloadTaskResponse {})]);
+        assert_eq!(
+            responses,
+            vec![Some(ProcessDownloadTaskResponse { task_id: 1 })]
+        );
     }
 
     #[test_log::test(tokio::test)]
@@ -603,8 +608,8 @@ mod tests {
         assert_eq!(
             responses,
             vec![
-                Some(ProcessDownloadTaskResponse {}),
-                Some(ProcessDownloadTaskResponse {})
+                Some(ProcessDownloadTaskResponse { task_id: 1 }),
+                Some(ProcessDownloadTaskResponse { task_id: 2 })
             ]
         );
     }
@@ -656,7 +661,10 @@ mod tests {
             .map(|result| result.as_ref().ok().cloned())
             .collect::<Vec<_>>();
 
-        assert_eq!(responses, vec![Some(ProcessDownloadTaskResponse {}),]);
+        assert_eq!(
+            responses,
+            vec![Some(ProcessDownloadTaskResponse { task_id: 1 })]
+        );
     }
 
     #[test_log::test(tokio::test)]
@@ -679,7 +687,7 @@ mod tests {
             })
             .await;
 
-        queue.process().await.unwrap().unwrap();
+        queue.process();
 
         queue
             .add_task_to_queue(DownloadTask {
@@ -697,6 +705,8 @@ mod tests {
             })
             .await;
 
+        tokio::time::sleep(std::time::Duration::from_millis(0)).await;
+
         queue.shutdown().await.unwrap();
 
         let responses = queue
@@ -711,8 +721,8 @@ mod tests {
         assert_eq!(
             responses,
             vec![
-                Some(ProcessDownloadTaskResponse {}),
-                Some(ProcessDownloadTaskResponse {})
+                Some(ProcessDownloadTaskResponse { task_id: 1 }),
+                Some(ProcessDownloadTaskResponse { task_id: 2 })
             ]
         );
     }
