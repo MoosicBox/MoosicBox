@@ -287,15 +287,14 @@ fn main() -> std::io::Result<()> {
                 .supports_credentials()
                 .max_age(3600);
 
-            let app = App::new()
-                .wrap(cors)
-                .wrap(moosicbox_middleware::api_logger::ApiLogger::default())
-                .wrap(middleware::Compress::default());
+            let app = App::new().wrap(cors).wrap(middleware::Compress::default());
 
             #[cfg(feature = "static-token-auth")]
             let app = app.wrap(crate::auth::StaticTokenAuth::new(
                 std::env!("STATIC_TOKEN").into(),
             ));
+
+            let app = app.wrap(moosicbox_middleware::api_logger::ApiLogger::default());
 
             #[allow(unused_mut)]
             let mut app = app
