@@ -115,12 +115,12 @@ ENV STATIC_TOKEN=${STATIC_TOKEN}
 RUN echo 'Acquire::http::Timeout "10";' >>/etc/apt/apt.conf.d/httpproxy && \
   echo 'Acquire::ftp::Timeout "10";' >>/etc/apt/apt.conf.d/httpproxy
 RUN apt-get update && apt-get -y install libasound2-dev cmake
-RUN cargo build --package moosicbox_server --release --no-default-features --features=cpal,static-token-auth
+RUN cargo build --package moosicbox_server --release --no-default-features --features=cpal,flac,static-token-auth
 
 COPY packages packages
 
 RUN rm target/release/deps/moosicbox*
-RUN cargo build --package moosicbox_server --release --no-default-features --features=cpal,static-token-auth
+RUN cargo build --package moosicbox_server --release --no-default-features --features=cpal,flac,static-token-auth
 
 RUN cargo install diesel_cli --no-default-features --features sqlite
 COPY migrations/server/sqlite migrations/server/sqlite
