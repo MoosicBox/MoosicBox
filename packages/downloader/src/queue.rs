@@ -15,11 +15,6 @@ use crate::{
 };
 
 lazy_static! {
-    static ref RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .max_blocking_threads(4)
-        .build()
-        .unwrap();
     static ref TIMEOUT_DURATION: Option<Duration> = Some(Duration::from_secs(30));
 }
 
@@ -177,7 +172,7 @@ impl DownloadQueue {
         let join_handle = self.join_handle.clone();
         let mut this = self.clone();
 
-        tokio::task::spawn(async move {
+        tokio::spawn(async move {
             let mut handle = join_handle.lock().await;
 
             if let Some(handle) = handle.as_mut() {
@@ -186,7 +181,7 @@ impl DownloadQueue {
                 }
             }
 
-            handle.replace(RT.spawn(async move {
+            handle.replace(tokio::spawn(async move {
                 this.process_inner().await?;
                 Ok(())
             }));
