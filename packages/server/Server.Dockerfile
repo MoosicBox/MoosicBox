@@ -112,6 +112,7 @@ RUN mkdir packages/server/src && \
 
 ARG STATIC_TOKEN
 ENV STATIC_TOKEN=${STATIC_TOKEN}
+ENV RUST_LOG=info,moosicbox=debug,moosicbox_middleware::api_logger=trace
 RUN echo 'Acquire::http::Timeout "10";' >>/etc/apt/apt.conf.d/httpproxy && \
   echo 'Acquire::ftp::Timeout "10";' >>/etc/apt/apt.conf.d/httpproxy
 RUN apt-get update && apt-get -y install libasound2-dev cmake
