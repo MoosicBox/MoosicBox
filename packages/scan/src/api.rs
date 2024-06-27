@@ -12,10 +12,7 @@ use moosicbox_core::app::AppState;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::{
-    add_scan_path, disable_scan_origin, enable_scan_origin, get_scan_origins, get_scan_paths,
-    remove_scan_path, scan, ScanOrigin, CANCELLATION_TOKEN,
-};
+use crate::{disable_scan_origin, enable_scan_origin, get_scan_origins, scan, ScanOrigin};
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -51,6 +48,7 @@ pub async fn run_scan_endpoint(
     Ok(Json(serde_json::json!({"success": true})))
 }
 
+#[cfg(feature = "local")]
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanPathQuery {
@@ -67,7 +65,7 @@ pub async fn run_scan_path_endpoint(
     crate::local::scan(
         &query.path,
         data.database.clone(),
-        CANCELLATION_TOKEN.clone(),
+        crate::CANCELLATION_TOKEN.clone(),
     )
     .await
     .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
@@ -130,55 +128,61 @@ pub async fn disable_scan_origin_endpoint(
     Ok(Json(serde_json::json!({"success": true})))
 }
 
+#[cfg(feature = "local")]
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetScanPathsQuery {}
 
+#[cfg(feature = "local")]
 #[get("/scan-paths")]
 pub async fn get_scan_paths_endpoint(
     _query: web::Query<GetScanPathsQuery>,
     data: web::Data<AppState>,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    let paths = get_scan_paths(&**data.database)
+    let paths = crate::get_scan_paths(&**data.database)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to get scan paths: {e:?}")))?;
 
     Ok(Json(serde_json::json!({"paths": paths})))
 }
 
+#[cfg(feature = "local")]
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AddScanPathQuery {
     path: String,
 }
 
+#[cfg(feature = "local")]
 #[post("/scan-paths")]
 pub async fn add_scan_path_endpoint(
     query: web::Query<AddScanPathQuery>,
     data: web::Data<AppState>,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    add_scan_path(&**data.database, &query.path)
+    crate::add_scan_path(&**data.database, &query.path)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to add scan path: {e:?}")))?;
 
     Ok(Json(serde_json::json!({"success": true})))
 }
 
+#[cfg(feature = "local")]
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoveScanPathQuery {
     path: String,
 }
 
+#[cfg(feature = "local")]
 #[delete("/scan-paths")]
 pub async fn remove_scan_path_endpoint(
     query: web::Query<RemoveScanPathQuery>,
     data: web::Data<AppState>,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    remove_scan_path(&**data.database, &query.path)
+    crate::remove_scan_path(&**data.database, &query.path)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to remove scan path: {e:?}")))?;
 
