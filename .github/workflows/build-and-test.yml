@@ -352,6 +352,12 @@ jobs:
                       cargo: --no-default-features
                       features: local
 
+                    - name: scan-qobuz
+                      path: packages/scan
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: qobuz
+
                     - name: scan-tidal
                       path: packages/scan
                       os: ubuntu-latest
