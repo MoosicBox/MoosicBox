@@ -140,7 +140,7 @@ ARG WS_HOST
 ENV WS_HOST=${WS_HOST}
 ARG TUNNEL_ACCESS_TOKEN
 ENV TUNNEL_ACCESS_TOKEN=${TUNNEL_ACCESS_TOKEN}
-ENV RUST_LOG=info,moosicbox=debug
+ENV RUST_LOG=info,moosicbox=debug,moosicbox_middleware::api_logger=trace
 ENV MAX_THREADS=64
 ENV ACTIX_WORKERS=32
 CMD ["./moosicbox_server", "8010"]
