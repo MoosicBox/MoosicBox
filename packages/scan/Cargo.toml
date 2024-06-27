@@ -24,7 +24,8 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
 moosicbox_search = { path = "../search" }
 
 # API Dependencies
-actix-web = { workspace = true, optional = true }
+actix-web      = { workspace = true, optional = true }
+moosicbox_auth = { path = "../auth", default-features = false, optional = true }
 
 # Qobuz Dependencies
 moosicbox_qobuz = { path = "../qobuz", optional = true }
@@ -56,7 +57,7 @@ default = ["aac", "api", "flac", "local", "mp3", "opus", "qobuz", "tidal"]
 
 fail-on-warnings = []
 
-api   = ["dep:actix-web"]
+api   = ["dep:actix-web", "dep:moosicbox_auth"]
 local = ["dep:audiotags", "dep:lofty", "dep:mp3-duration"]
 qobuz = ["dep:moosicbox_qobuz"]
 tidal = ["dep:moosicbox_tidal"]

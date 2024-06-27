@@ -7,6 +7,7 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
+use moosicbox_auth::NonTunnelRequestAuthorized;
 use moosicbox_core::app::AppState;
 use serde::Deserialize;
 use serde_json::Value;
@@ -26,6 +27,7 @@ pub struct ScanQuery {
 pub async fn run_scan_endpoint(
     query: web::Query<ScanQuery>,
     data: web::Data<AppState>,
+    _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
     let origins = query
         .origins
@@ -60,6 +62,7 @@ pub struct ScanPathQuery {
 pub async fn run_scan_path_endpoint(
     query: web::Query<ScanPathQuery>,
     data: web::Data<AppState>,
+    _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
     crate::local::scan(
         &query.path,
@@ -80,6 +83,7 @@ pub struct GetScanOriginsQuery {}
 pub async fn get_scan_origins_endpoint(
     _query: web::Query<GetScanOriginsQuery>,
     data: web::Data<AppState>,
+    _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
     let origins = get_scan_origins(&**data.database)
         .await
@@ -98,6 +102,7 @@ pub struct EnableScanOriginQuery {
 pub async fn enable_scan_origin_endpoint(
     query: web::Query<EnableScanOriginQuery>,
     data: web::Data<AppState>,
+    _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
     enable_scan_origin(&**data.database, query.origin)
         .await
@@ -116,6 +121,7 @@ pub struct DisableScanOriginQuery {
 pub async fn disable_scan_origin_endpoint(
     query: web::Query<DisableScanOriginQuery>,
     data: web::Data<AppState>,
+    _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
     disable_scan_origin(&**data.database, query.origin)
         .await
@@ -132,6 +138,7 @@ pub struct GetScanPathsQuery {}
 pub async fn get_scan_paths_endpoint(
     _query: web::Query<GetScanPathsQuery>,
     data: web::Data<AppState>,
+    _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
     let paths = get_scan_paths(&**data.database)
         .await
@@ -150,6 +157,7 @@ pub struct AddScanPathQuery {
 pub async fn add_scan_path_endpoint(
     query: web::Query<AddScanPathQuery>,
     data: web::Data<AppState>,
+    _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
     add_scan_path(&**data.database, &query.path)
         .await
@@ -168,6 +176,7 @@ pub struct RemoveScanPathQuery {
 pub async fn remove_scan_path_endpoint(
     query: web::Query<RemoveScanPathQuery>,
     data: web::Data<AppState>,
+    _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
     remove_scan_path(&**data.database, &query.path)
         .await

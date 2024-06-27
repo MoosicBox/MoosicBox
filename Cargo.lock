@@ -3513,6 +3513,7 @@ dependencies = [
  "lofty",
  "log",
  "moosicbox_assert",
+ "moosicbox_auth",
  "moosicbox_config",
  "moosicbox_core",
  "moosicbox_database",
