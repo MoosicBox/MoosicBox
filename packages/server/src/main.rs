@@ -18,7 +18,10 @@ use moosicbox_core::{
     sqlite::models::{RegisterConnection, RegisterPlayer, UpdateSession},
 };
 use moosicbox_database::Database;
-use moosicbox_downloader::{api::models::ApiProgressEvent, queue::ProgressEvent};
+use moosicbox_downloader::{
+    api::models::ApiProgressEvent,
+    queue::{ProgressEvent, ProgressListenerRefFut},
+};
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 use moosicbox_files::files::track_pool::service::Commander as _;
 use moosicbox_player::{
@@ -48,20 +51,12 @@ static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken
 static UPNP_LISTENER_HANDLE: std::sync::OnceLock<moosicbox_upnp::listener::Handle> =
     std::sync::OnceLock::new();
 
-static CHAT_SERVER_HANDLE: Lazy<std::sync::RwLock<Option<ws::server::ChatServerHandle>>> =
-    Lazy::new(|| std::sync::RwLock::new(None));
+static CHAT_SERVER_HANDLE: Lazy<tokio::sync::RwLock<Option<ws::server::ChatServerHandle>>> =
+    Lazy::new(|| tokio::sync::RwLock::new(None));
 
 #[allow(clippy::type_complexity)]
 static DB: Lazy<std::sync::RwLock<Option<Arc<Box<dyn Database>>>>> =
     Lazy::new(|| std::sync::RwLock::new(None));
-
-static WS_SERVER_RT: Lazy<tokio::runtime::Runtime> = Lazy::new(|| {
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .max_blocking_threads(1)
-        .build()
-        .unwrap()
-});
 
 #[allow(clippy::too_many_lines)]
 fn main() -> std::io::Result<()> {
@@ -157,47 +152,50 @@ fn main() -> std::io::Result<()> {
         DB.write().unwrap().replace(database.clone());
 
         let bytes_throttle = Arc::new(Mutex::new(Throttle::new(Duration::from_millis(200), 1)));
-        let bytes_buf = AtomicUsize::new(0);
+        let bytes_buf = Arc::new(AtomicUsize::new(0));
 
         moosicbox_downloader::api::add_progress_listener_to_download_queue(Box::new(
             move |event| {
-                let event = if let ProgressEvent::BytesRead { task, read, total } = event {
-                    if bytes_throttle.lock().unwrap().accept().is_err() {
-                        bytes_buf.fetch_add(*read, std::sync::atomic::Ordering::SeqCst);
-                        return;
+                let bytes_throttle = bytes_throttle.clone();
+                let bytes_buf = bytes_buf.clone();
+                let event = event.clone();
+                Box::pin(async move {
+                    let event = if let ProgressEvent::BytesRead { task, read, total } = event {
+                        if bytes_throttle.lock().unwrap().accept().is_err() {
+                            bytes_buf.fetch_add(read, std::sync::atomic::Ordering::SeqCst);
+                            return;
+                        }
+
+                        let bytes = bytes_buf.load(std::sync::atomic::Ordering::SeqCst);
+                        bytes_buf.store(0, std::sync::atomic::Ordering::SeqCst);
+                        ProgressEvent::BytesRead {
+                            task,
+                            read: read + bytes,
+                            total,
+                        }
+                    } else {
+                        event.clone()
+                    };
+
+                    let api_event: ApiProgressEvent = event.into();
+
+                    if let Err(err) = send_download_event(
+                        CHAT_SERVER_HANDLE.read().await.as_ref().unwrap(),
+                        None,
+                        api_event,
+                    )
+                    .await
+                    {
+                        log::error!("Failed to broadcast download event: {err:?}");
                     }
-
-                    let bytes = bytes_buf.load(std::sync::atomic::Ordering::SeqCst);
-                    bytes_buf.store(0, std::sync::atomic::Ordering::SeqCst);
-                    ProgressEvent::BytesRead {
-                        task: task.clone(),
-                        read: *read + bytes,
-                        total: *total,
-                    }
-                } else {
-                    event.clone()
-                };
-
-                let api_event: ApiProgressEvent = event.into();
-
-                if let Err(err) = send_download_event(
-                    CHAT_SERVER_HANDLE
-                        .read()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .as_ref()
-                        .unwrap(),
-                    None,
-                    api_event,
-                ) {
-                    log::error!("Failed to broadcast download event: {err:?}");
-                }
+                }) as ProgressListenerRefFut
             },
         ))
         .await;
 
         let (mut chat_server, server_tx) = WsServer::new(database.clone());
         let handle = server_tx.clone();
-        CHAT_SERVER_HANDLE.write().unwrap().replace(server_tx);
+        CHAT_SERVER_HANDLE.write().await.replace(server_tx);
 
         let playback_event_service =
             playback_session::service::Service::new(playback_session::Context::new(handle.clone()));
@@ -222,7 +220,7 @@ fn main() -> std::io::Result<()> {
             chat_server.add_sender(Box::new(tunnel_handle.clone()));
         }
 
-        let chat_server_handle = WS_SERVER_RT.spawn(chat_server.run());
+        let chat_server_handle = tokio::spawn(chat_server.run());
 
         if let Err(err) =
             register_server_player(&**database.clone(), handle.clone(), &tunnel_handle).await
@@ -473,7 +471,7 @@ fn main() -> std::io::Result<()> {
                 }
 
                 log::debug!("Shutting down ws server...");
-                if let Some(x) = CHAT_SERVER_HANDLE.write().unwrap().take() {
+                if let Some(x) = CHAT_SERVER_HANDLE.write().await.take() {
                     x.shutdown();
                 }
 
@@ -672,7 +670,7 @@ async fn register_server_player(
 
     let handle = CHAT_SERVER_HANDLE
         .read()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .await
         .clone()
         .ok_or(WebsocketSendError::Unknown("No chat server handle".into()))?;
 
@@ -685,7 +683,8 @@ async fn register_server_player(
             "No player on connection".into(),
         ))?;
 
-    ws.add_player_action(player.id, handle_server_playback_update);
+    ws.add_player_action(player.id, handle_server_playback_update)
+        .await;
 
     if let Some(handle) = tunnel_handle {
         handle.add_player_action(player.id, handle_server_playback_update);
@@ -796,14 +795,15 @@ async fn register_upnp_players(
 
     let handle = CHAT_SERVER_HANDLE
         .read()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .await
         .clone()
         .ok_or(WebsocketSendError::Unknown("No chat server handle".into()))?;
 
     let players = moosicbox_ws::register_players(db, &handle, &context, &payload).await?;
 
     for player in players {
-        ws.add_player_action(player.id, handle_upnp_playback_update);
+        ws.add_player_action(player.id, handle_upnp_playback_update)
+            .await;
 
         if let Some(handle) = tunnel_handle {
             handle.add_player_action(player.id, handle_server_playback_update);

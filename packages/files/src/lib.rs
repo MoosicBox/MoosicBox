@@ -13,7 +13,8 @@ use atomic_float::AtomicF64;
 use audiotags::AudioTag;
 use bytes::Bytes;
 use futures::{StreamExt, TryStreamExt};
-use futures_core::Stream;
+use futures_core::{Future, Stream};
+use moosicbox_async_service::Arc;
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use once_cell::sync::Lazy;
 use thiserror::Error;
@@ -127,53 +128,70 @@ pub async fn save_bytes_stream_to_file<S: Stream<Item = Result<Bytes, std::io::E
     save_bytes_stream_to_file_with_progress_listener(stream, path, start, None).await
 }
 
+type OnSpeed = Box<dyn (FnMut(f64) -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
+// type OnProgress = Box<dyn FnMut(usize, usize) + Send + Sync>;
+type OnProgressFut = Pin<Box<dyn Future<Output = ()> + Send>>;
+type OnProgress = Box<dyn (FnMut(usize, usize) -> OnProgressFut) + Send>;
+
 pub async fn save_bytes_stream_to_file_with_speed_listener<
     S: Stream<Item = Result<Bytes, std::io::Error>>,
 >(
     stream: S,
     path: &Path,
     start: Option<u64>,
-    mut on_speed: Box<dyn FnMut(f64) + Send>,
-    on_progress: Option<Box<dyn FnMut(usize, usize) + Send>>,
+    on_speed: OnSpeed,
+    on_progress: Option<OnProgress>,
 ) -> Result<(), SaveBytesStreamToFileError> {
-    let last_instant = std::sync::Arc::new(std::sync::Mutex::new(Instant::now()));
-    let bytes_since_last_interval = AtomicUsize::new(0);
-    let speed = AtomicF64::new(0.0);
+    let last_instant = Arc::new(tokio::sync::Mutex::new(Instant::now()));
+    let bytes_since_last_interval = Arc::new(AtomicUsize::new(0));
+    let speed = Arc::new(AtomicF64::new(0.0));
 
     let has_on_progress = on_progress.is_some();
-    let mut on_progress = if let Some(on_progress) = on_progress {
-        on_progress
-    } else {
-        Box::new(|_, _| {})
-    };
+    let on_progress = Arc::new(tokio::sync::Mutex::new(
+        if let Some(on_progress) = on_progress {
+            on_progress
+        } else {
+            Box::new(|_, _| Box::pin(async move {}) as OnProgressFut)
+        },
+    ));
+    let on_speed = Arc::new(tokio::sync::Mutex::new(on_speed));
 
     save_bytes_stream_to_file_with_progress_listener(
         stream,
         path,
         start,
-        Some(Box::new(move |read, total| {
-            if has_on_progress {
-                on_progress(read, total);
-            }
+        Some(Box::new({
+            move |read, total| {
+                let last_instant = last_instant.clone();
+                let bytes_since_last_interval = bytes_since_last_interval.clone();
+                let speed = speed.clone();
+                let on_progress = on_progress.clone();
+                let on_speed = on_speed.clone();
+                Box::pin(async move {
+                    if has_on_progress {
+                        (on_progress.lock().await)(read, total).await;
+                    }
 
-            let mut last_instant = last_instant.lock().unwrap();
-            let bytes = bytes_since_last_interval
-                .fetch_add(read, std::sync::atomic::Ordering::SeqCst)
-                + read;
-            let now = Instant::now();
-            let millis = now.duration_since(*last_instant).as_millis();
+                    let mut last_instant = last_instant.lock().await;
+                    let bytes = bytes_since_last_interval
+                        .fetch_add(read, std::sync::atomic::Ordering::SeqCst)
+                        + read;
+                    let now = Instant::now();
+                    let millis = now.duration_since(*last_instant).as_millis();
 
-            if millis >= 1000 {
-                let speed_millis = (bytes as f64) * (millis as f64 / 1000.0);
-                speed.store(speed_millis, std::sync::atomic::Ordering::SeqCst);
-                log::debug!(
-                    "Speed: {speed_millis} b/s {} KiB/s {} MiB/s",
-                    speed_millis / 1024.0,
-                    speed_millis / 1024.0 / 1024.0,
-                );
-                on_speed(speed_millis);
-                *last_instant = now;
-                bytes_since_last_interval.store(0, std::sync::atomic::Ordering::SeqCst)
+                    if millis >= 1000 {
+                        let speed_millis = (bytes as f64) * (millis as f64 / 1000.0);
+                        speed.store(speed_millis, std::sync::atomic::Ordering::SeqCst);
+                        log::debug!(
+                            "Speed: {speed_millis} b/s {} KiB/s {} MiB/s",
+                            speed_millis / 1024.0,
+                            speed_millis / 1024.0 / 1024.0,
+                        );
+                        (on_speed.lock().await)(speed_millis).await;
+                        *last_instant = now;
+                        bytes_since_last_interval.store(0, std::sync::atomic::Ordering::SeqCst)
+                    }
+                }) as Pin<Box<dyn Future<Output = ()> + Send>>
             }
         })),
     )
@@ -186,7 +204,7 @@ pub async fn save_bytes_stream_to_file_with_progress_listener<
     stream: S,
     path: &Path,
     start: Option<u64>,
-    on_progress: Option<Box<dyn FnMut(usize, usize) + Send>>,
+    on_progress: Option<OnProgress>,
 ) -> Result<(), SaveBytesStreamToFileError> {
     std::fs::create_dir_all(path.parent().expect("No parent directory"))?;
 
@@ -211,7 +229,7 @@ pub async fn save_bytes_stream_to_file_with_progress_listener<
     let mut on_progress = if let Some(on_progress) = on_progress {
         on_progress
     } else {
-        Box::new(|_, _| {})
+        Box::new(|_, _| Box::pin(async move {}) as Pin<Box<dyn Future<Output = ()> + Send>>)
     };
 
     while let Some(bytes) = stream.next().await {
@@ -235,7 +253,7 @@ pub async fn save_bytes_stream_to_file_with_progress_listener<
             })?;
 
         if has_on_progress {
-            on_progress(len, read);
+            on_progress(len, read).await;
         }
     }
 

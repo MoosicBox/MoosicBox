@@ -103,7 +103,7 @@ pub async fn setup_tunnel(
                                         TunnelRequest::Ws(request) => {
                                             let sender = CHAT_SERVER_HANDLE
                                                 .read()
-                                                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                                .await
                                                 .as_ref()
                                                 .ok_or("Failed to get chat server handle")?
                                                 .clone();

@@ -361,7 +361,7 @@ pub async fn download_track_id(
     track_id: u64,
     quality: TrackAudioQuality,
     source: DownloadApiSource,
-    on_progress: Arc<std::sync::Mutex<ProgressListener>>,
+    on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadTrackError> {
@@ -394,7 +394,7 @@ async fn download_track(
     quality: TrackAudioQuality,
     source: DownloadApiSource,
     start: Option<u64>,
-    on_progress: Arc<std::sync::Mutex<ProgressListener>>,
+    on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadTrackError> {
@@ -477,7 +477,7 @@ async fn download_track_inner(
     quality: TrackAudioQuality,
     source: DownloadApiSource,
     start: Option<u64>,
-    on_progress: Arc<std::sync::Mutex<ProgressListener>>,
+    on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadTrackInnerError> {
@@ -540,7 +540,7 @@ async fn download_track_inner(
 
     log::debug!("Got track size: {size:?}");
 
-    (on_progress.lock().unwrap())(GenericProgressEvent::Size { bytes: size });
+    (on_progress.lock().await)(GenericProgressEvent::Size { bytes: size }).await;
 
     let mut bytes = get_track_bytes(
         db,
@@ -588,14 +588,23 @@ async fn download_track_inner(
                 let speed = speed.clone();
                 let speed_progress = on_progress.clone();
                 move |x| {
-                    (speed_progress.lock().unwrap())(GenericProgressEvent::Speed {
-                        bytes_per_second: x,
-                    });
-                    speed.store(x, std::sync::atomic::Ordering::SeqCst)
+                    let speed = speed.clone();
+                    let speed_progress = speed_progress.clone();
+                    Box::pin(async move {
+                        (speed_progress.lock().await)(GenericProgressEvent::Speed {
+                            bytes_per_second: x,
+                        })
+                        .await;
+                        speed.store(x, std::sync::atomic::Ordering::SeqCst)
+                    })
                 }
             }),
             Some(Box::new(move |read, total| {
-                (on_progress.lock().unwrap())(GenericProgressEvent::BytesRead { read, total });
+                let on_progress = on_progress.clone();
+                Box::pin(async move {
+                    (on_progress.lock().await)(GenericProgressEvent::BytesRead { read, total })
+                        .await;
+                })
             })),
         )
         .await;
@@ -686,7 +695,7 @@ pub async fn download_album_id(
     try_download_artist_cover: bool,
     quality: TrackAudioQuality,
     source: DownloadApiSource,
-    on_progress: Arc<std::sync::Mutex<ProgressListener>>,
+    on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadAlbumError> {
@@ -731,7 +740,7 @@ pub async fn download_album_cover(
     db: &dyn Database,
     path: &str,
     album_id: u64,
-    on_progress: Arc<std::sync::Mutex<ProgressListener>>,
+    on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
 ) -> Result<(), DownloadAlbumError> {
     log::debug!("Downloading album cover path={path}");
@@ -760,7 +769,7 @@ pub async fn download_album_cover(
 
     log::debug!("Got album cover size: {:?}", bytes.size);
 
-    (on_progress.lock().unwrap())(GenericProgressEvent::Size { bytes: bytes.size });
+    (on_progress.lock().await)(GenericProgressEvent::Size { bytes: bytes.size }).await;
 
     log::debug!("Saving album cover to {cover_path:?}");
 
@@ -773,7 +782,10 @@ pub async fn download_album_cover(
         None,
         Box::new({
             let speed = speed.clone();
-            move |x| speed.store(x, std::sync::atomic::Ordering::SeqCst)
+            move |x| {
+                let speed = speed.clone();
+                Box::pin(async move { speed.store(x, std::sync::atomic::Ordering::SeqCst) })
+            }
         }),
         None,
     )
@@ -792,7 +804,7 @@ pub async fn download_artist_cover(
     db: &dyn Database,
     path: &str,
     album_id: u64,
-    on_progress: Arc<std::sync::Mutex<ProgressListener>>,
+    on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
 ) -> Result<(), DownloadAlbumError> {
     log::debug!("Downloading artist cover path={path}");
@@ -823,7 +835,7 @@ pub async fn download_artist_cover(
 
     log::debug!("Got artist cover size: {:?}", bytes.size);
 
-    (on_progress.lock().unwrap())(GenericProgressEvent::Size { bytes: bytes.size });
+    (on_progress.lock().await)(GenericProgressEvent::Size { bytes: bytes.size }).await;
 
     log::debug!("Saving artist cover to {cover_path:?}");
 
@@ -836,7 +848,10 @@ pub async fn download_artist_cover(
         None,
         Box::new({
             let speed = speed.clone();
-            move |x| speed.store(x, std::sync::atomic::Ordering::SeqCst)
+            move |x| {
+                let speed = speed.clone();
+                Box::pin(async move { speed.store(x, std::sync::atomic::Ordering::SeqCst) })
+            }
         }),
         None,
     )
@@ -917,7 +932,7 @@ impl Downloader for MoosicboxDownloader {
             track_id,
             quality,
             source,
-            Arc::new(std::sync::Mutex::new(on_progress)),
+            Arc::new(tokio::sync::Mutex::new(on_progress)),
             self.speed.clone(),
             timeout_duration,
         )
@@ -934,7 +949,7 @@ impl Downloader for MoosicboxDownloader {
             &**self.db,
             path,
             album_id,
-            Arc::new(std::sync::Mutex::new(on_progress)),
+            Arc::new(tokio::sync::Mutex::new(on_progress)),
             self.speed.clone(),
         )
         .await
@@ -950,7 +965,7 @@ impl Downloader for MoosicboxDownloader {
             &**self.db,
             path,
             album_id,
-            Arc::new(std::sync::Mutex::new(on_progress)),
+            Arc::new(tokio::sync::Mutex::new(on_progress)),
             self.speed.clone(),
         )
         .await

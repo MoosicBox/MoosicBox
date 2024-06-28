@@ -1,5 +1,6 @@
-use std::{sync::Arc, time::Duration};
+use std::{pin::Pin, sync::Arc, time::Duration};
 
+use futures::Future;
 use lazy_static::lazy_static;
 use moosicbox_core::sqlite::db::DbError;
 use moosicbox_database::{query::*, Database, DatabaseError, DatabaseValue, Row};
@@ -109,8 +110,12 @@ pub enum ProgressEvent {
     },
 }
 
-pub type ProgressListener = Box<dyn FnMut(GenericProgressEvent) + Send + Sync>;
-pub type ProgressListenerRef = Box<dyn Fn(&ProgressEvent) + Send + Sync>;
+pub type ProgressListenerFut = Pin<Box<dyn Future<Output = ()> + Send>>;
+pub type ProgressListener =
+    Box<dyn (FnMut(GenericProgressEvent) -> ProgressListenerFut) + Send + Sync>;
+pub type ProgressListenerRefFut = Pin<Box<dyn Future<Output = ()> + Send>>;
+pub type ProgressListenerRef =
+    Box<dyn (Fn(&ProgressEvent) -> ProgressListenerRefFut) + Send + Sync>;
 
 #[derive(Clone)]
 pub struct DownloadQueue {
@@ -250,7 +255,8 @@ impl DownloadQueue {
             listener(&ProgressEvent::State {
                 task: task.clone(),
                 state,
-            });
+            })
+            .await;
         }
 
         row
@@ -291,47 +297,52 @@ impl DownloadQueue {
         let send_task = task.clone();
 
         let on_progress = Box::new(move |event: GenericProgressEvent| {
-            match event.clone() {
-                GenericProgressEvent::Size { bytes, .. } => {
-                    log::debug!("Got size of task: {bytes:?}");
-                    if let Some(size) = bytes {
-                        task_size.replace(size);
-                        let database = database.clone();
-                        tokio::task::spawn(async move {
-                            if let Err(err) = database
-                                .update("download_tasks")
-                                .where_eq("id", task_id)
-                                .value("total_bytes", size)
-                                .execute_first(&**database)
-                                .await
-                            {
-                                log::error!("Failed to set DownloadTask total_bytes: {err:?}");
-                            }
-                        });
+            let database = database.clone();
+            let send_task = send_task.clone();
+            let listeners = listeners.clone();
+            Box::pin(async move {
+                match event.clone() {
+                    GenericProgressEvent::Size { bytes, .. } => {
+                        log::debug!("Got size of task: {bytes:?}");
+                        if let Some(size) = bytes {
+                            task_size.replace(size);
+                            let database = database.clone();
+                            tokio::task::spawn(async move {
+                                if let Err(err) = database
+                                    .update("download_tasks")
+                                    .where_eq("id", task_id)
+                                    .value("total_bytes", size)
+                                    .execute_first(&**database)
+                                    .await
+                                {
+                                    log::error!("Failed to set DownloadTask total_bytes: {err:?}");
+                                }
+                            });
+                        }
                     }
+                    GenericProgressEvent::Speed { .. } => {}
+                    GenericProgressEvent::BytesRead { .. } => {}
                 }
-                GenericProgressEvent::Speed { .. } => {}
-                GenericProgressEvent::BytesRead { .. } => {}
-            }
 
-            let event = match event {
-                GenericProgressEvent::Size { bytes } => ProgressEvent::Size {
-                    task: send_task.clone(),
-                    bytes,
-                },
-                GenericProgressEvent::Speed { bytes_per_second } => ProgressEvent::Speed {
-                    task: send_task.clone(),
-                    bytes_per_second,
-                },
-                GenericProgressEvent::BytesRead { read, total } => ProgressEvent::BytesRead {
-                    task: send_task.clone(),
-                    read,
-                    total,
-                },
-            };
-            for listener in listeners.iter() {
-                listener(&event);
-            }
+                let event = match event {
+                    GenericProgressEvent::Size { bytes } => ProgressEvent::Size {
+                        task: send_task.clone(),
+                        bytes,
+                    },
+                    GenericProgressEvent::Speed { bytes_per_second } => ProgressEvent::Speed {
+                        task: send_task.clone(),
+                        bytes_per_second,
+                    },
+                    GenericProgressEvent::BytesRead { read, total } => ProgressEvent::BytesRead {
+                        task: send_task.clone(),
+                        read,
+                        total,
+                    },
+                };
+                for listener in listeners.iter() {
+                    listener(&event).await;
+                }
+            }) as ProgressListenerFut
         });
 
         let downloader = self

@@ -27,8 +27,7 @@ pub async fn websocket(
     spawn_local(handler::chat_ws(
         CHAT_SERVER_HANDLE
             .read()
-            .as_ref()
-            .unwrap()
+            .await
             .as_ref()
             .expect("No ChatServerHandle available")
             .clone(),

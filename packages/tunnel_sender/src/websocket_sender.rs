@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use futures_channel::mpsc::{TrySendError, UnboundedSender};
 use moosicbox_ws::{WebsocketSendError, WebsocketSender};
 use serde_json::{json, Value};
@@ -45,11 +46,12 @@ where
     }
 }
 
+#[async_trait]
 impl<T> WebsocketSender for TunnelWebsocketSender<T>
 where
     T: WebsocketSender + Send + Sync,
 {
-    fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
+    async fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
         let id = connection_id.parse::<usize>().unwrap();
 
         if id == self.id {
@@ -60,23 +62,27 @@ where
                 log::error!("Failed to send tunnel message");
             }
         } else {
-            self.root_sender.send(connection_id, data)?;
+            self.root_sender.send(connection_id, data).await?;
         }
 
         Ok(())
     }
 
-    fn send_all(&self, data: &str) -> Result<(), WebsocketSendError> {
+    async fn send_all(&self, data: &str) -> Result<(), WebsocketSendError> {
         if self.send_tunnel(data, true, None, None).is_err() {
             log::error!("Failed to send tunnel message");
         }
 
-        self.root_sender.send_all(data)?;
+        self.root_sender.send_all(data).await?;
 
         Ok(())
     }
 
-    fn send_all_except(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
+    async fn send_all_except(
+        &self,
+        connection_id: &str,
+        data: &str,
+    ) -> Result<(), WebsocketSendError> {
         let id = connection_id.parse::<usize>().unwrap();
 
         if id != self.propagate_id
@@ -87,7 +93,9 @@ where
             log::error!("Failed to send tunnel message");
         }
 
-        self.root_sender.send_all_except(connection_id, data)?;
+        self.root_sender
+            .send_all_except(connection_id, data)
+            .await?;
 
         Ok(())
     }

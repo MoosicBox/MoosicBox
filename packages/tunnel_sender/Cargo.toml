@@ -35,6 +35,7 @@ moosicbox_ws = { path = "../ws" }
 # Base64 dependencies
 base64 = { workspace = true, optional = true }
 
+async-trait       = { workspace = true }
 bytes             = { workspace = true }
 futures-channel   = { workspace = true }
 futures-util      = { workspace = true }

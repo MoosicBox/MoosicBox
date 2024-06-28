@@ -4,6 +4,7 @@ use std::io::Cursor;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+use async_trait::async_trait;
 #[cfg(feature = "base64")]
 use base64::{engine::general_purpose, Engine as _};
 use bytes::Bytes;
@@ -81,8 +82,13 @@ fn wrap_to_500<E: std::error::Error + 'static>(e: E) -> TunnelRequestError {
     TunnelRequestError::InternalServerError(Box::new(e))
 }
 
+#[async_trait]
 impl WebsocketSender for TunnelSenderHandle {
-    fn send(&self, conn_id: &str, data: &str) -> Result<(), moosicbox_ws::WebsocketSendError> {
+    async fn send(
+        &self,
+        conn_id: &str,
+        data: &str,
+    ) -> Result<(), moosicbox_ws::WebsocketSendError> {
         if let Some(sender) = self.sender.read().unwrap().as_ref() {
             sender
                 .unbounded_send(TunnelResponseMessage::Ws(TunnelResponseWs {
@@ -95,7 +101,7 @@ impl WebsocketSender for TunnelSenderHandle {
         Ok(())
     }
 
-    fn send_all(&self, data: &str) -> Result<(), moosicbox_ws::WebsocketSendError> {
+    async fn send_all(&self, data: &str) -> Result<(), moosicbox_ws::WebsocketSendError> {
         if let Some(sender) = self.sender.read().unwrap().as_ref() {
             sender
                 .unbounded_send(TunnelResponseMessage::Ws(TunnelResponseWs {
@@ -108,7 +114,7 @@ impl WebsocketSender for TunnelSenderHandle {
         Ok(())
     }
 
-    fn send_all_except(
+    async fn send_all_except(
         &self,
         conn_id: &str,
         data: &str,
