@@ -59,32 +59,19 @@ pub(crate) async fn resize_image_path(
     };
     #[cfg(feature = "image")]
     {
-        use moosicbox_image::{image::try_resize_local_file, Encoding};
-        let resized = if let Ok(Some(resized)) = tokio::task::spawn_blocking({
-            let path = path.to_owned();
-            move || {
-                Ok::<_, ResizeImageError>(
-                    try_resize_local_file(width, height, &path, Encoding::Webp, 80)
-                        .map_err(|e| ResizeImageError::File(path.to_string(), e.to_string())),
-                )
-            }
-        })
-        .await??
+        use moosicbox_image::{image::try_resize_local_file_async, Encoding};
+        let resized = if let Ok(Some(resized)) =
+            try_resize_local_file_async(width, height, path, Encoding::Webp, 80)
+                .await
+                .map_err(|e| ResizeImageError::File(path.to_string(), e.to_string()))
         {
             resized
         } else {
             image_type = "jpeg";
-            tokio::task::spawn_blocking({
-                let path = path.to_owned();
-                move || {
-                    Ok::<_, ResizeImageError>(
-                        try_resize_local_file(width, height, &path, Encoding::Jpeg, 80)
-                            .map_err(|e| ResizeImageError::File(path.to_string(), e.to_string()))?
-                            .expect("Failed to resize to jpeg image"),
-                    )
-                }
-            })
-            .await??
+            try_resize_local_file_async(width, height, path, Encoding::Jpeg, 80)
+                .await
+                .map_err(|e| ResizeImageError::File(path.to_string(), e.to_string()))?
+                .expect("Failed to resize to jpeg image")
         };
 
         use actix_web::http::header::{CacheControl, CacheDirective};

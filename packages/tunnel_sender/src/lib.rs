@@ -39,7 +39,7 @@ pub enum TunnelRequestError {
     #[error("Unsupported Route")]
     UnsupportedRoute,
     #[error("Internal server error: {0:?}")]
-    InternalServerError(Box<dyn std::error::Error>),
+    InternalServerError(Box<dyn std::error::Error + Send>),
     #[error("Websocket Message Error")]
     WebsocketMessage(#[from] WebsocketMessageError),
     #[error(transparent)]

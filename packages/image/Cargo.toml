@@ -39,5 +39,5 @@ default = ["image", "libvips"]
 fail-on-warnings = []
 
 build-binary = ["dep:tokio", "image"]
-image        = ["dep:image", "dep:webp"]
+image        = ["dep:image", "dep:tokio", "dep:webp"]
 libvips      = ["dep:libvips", "dep:once_cell"]

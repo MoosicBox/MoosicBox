@@ -78,7 +78,7 @@ impl TunnelSenderHandle {
 }
 
 #[allow(unused)]
-fn wrap_to_500<E: std::error::Error + 'static>(e: E) -> TunnelRequestError {
+fn wrap_to_500<E: std::error::Error + Send + 'static>(e: E) -> TunnelRequestError {
     TunnelRequestError::InternalServerError(Box::new(e))
 }
 
@@ -1361,15 +1361,16 @@ impl TunnelSender {
                                     let mut headers = HashMap::new();
                                     let resized = {
                                         use moosicbox_image::{
-                                            image::try_resize_local_file, Encoding,
+                                            image::try_resize_local_file_async, Encoding,
                                         };
-                                        if let Some(resized) = try_resize_local_file(
+                                        if let Some(resized) = try_resize_local_file_async(
                                             width,
                                             height,
                                             &path,
                                             Encoding::Webp,
                                             80,
                                         )
+                                        .await
                                         .map_err(|e| {
                                             TunnelRequestError::InternalServerError(Box::new(
                                                 AlbumCoverError::File(path.clone(), e.to_string()),
@@ -1385,13 +1386,14 @@ impl TunnelSender {
                                                 "content-type".to_string(),
                                                 "image/jpeg".to_string(),
                                             );
-                                            try_resize_local_file(
+                                            try_resize_local_file_async(
                                                 width,
                                                 height,
                                                 &path,
                                                 Encoding::Jpeg,
                                                 80,
                                             )
+                                            .await
                                             .map_err(|e| {
                                                 TunnelRequestError::InternalServerError(Box::new(
                                                     AlbumCoverError::File(

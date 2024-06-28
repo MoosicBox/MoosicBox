@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use image::{codecs::jpeg::JpegEncoder, imageops::FilterType};
+use thiserror::Error;
 
 use crate::Encoding;
 
@@ -29,4 +30,26 @@ pub fn try_resize_local_file(
             }
         }
     }
+}
+
+#[derive(Debug, Error)]
+pub enum ResizeImageError {
+    #[error(transparent)]
+    Image(#[from] image::error::ImageError),
+    #[error(transparent)]
+    Join(#[from] tokio::task::JoinError),
+}
+
+pub async fn try_resize_local_file_async(
+    width: u32,
+    height: u32,
+    path: &str,
+    encoding: Encoding,
+    quality: u8,
+) -> Result<Option<Bytes>, ResizeImageError> {
+    let path = path.to_owned();
+    Ok(tokio::task::spawn_blocking(move || {
+        try_resize_local_file(width, height, &path, encoding, quality)
+    })
+    .await??)
 }
