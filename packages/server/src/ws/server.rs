@@ -18,7 +18,7 @@ use moosicbox_ws::{
 };
 use rand::{thread_rng, Rng as _};
 use serde_json::Value;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 
 use crate::ws::{ConnId, Msg, RoomId};
@@ -205,7 +205,7 @@ impl WsServer {
     }
 
     async fn on_message(
-        &mut self,
+        &self,
         id: ConnId,
         msg: impl Into<String> + Send,
     ) -> Result<(), WebsocketMessageError> {
@@ -306,22 +306,28 @@ impl WsServer {
         self.send_system_message(room, conn_id, "Someone connected");
     }
 
-    pub async fn process_command(&mut self, cmd: Command) -> io::Result<()> {
+    async fn process_command(ctx: Arc<RwLock<Self>>, cmd: Command) -> io::Result<()> {
         match cmd {
             Command::AddPlayerAction { id, action } => {
-                self.add_player_action(id, action);
+                ctx.write().await.add_player_action(id, action);
                 log::debug!("Added a player action with id={id}");
             }
 
-            Command::Connect { conn_tx, res_tx } => match self.connect(conn_tx) {
-                Ok(conn_id) => res_tx.send(conn_id).await.map_err(|e| {
-                    std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send: {e:?}"))
-                })?,
-                Err(e) => moosicbox_assert::die_or_error!("Failed to connect: {e:?}"),
-            },
+            Command::Connect { conn_tx, res_tx } => {
+                let result = ctx.write().await.connect(conn_tx);
+                match result {
+                    Ok(conn_id) => res_tx.send(conn_id).await.map_err(|e| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            format!("Failed to send: {e:?}"),
+                        )
+                    })?,
+                    Err(e) => moosicbox_assert::die_or_error!("Failed to connect: {e:?}"),
+                }
+            }
 
             Command::Disconnect { conn } => {
-                if let Err(error) = self.disconnect(conn).await {
+                if let Err(error) = ctx.write().await.disconnect(conn).await {
                     moosicbox_assert::die_or_error!(
                         "Failed to disconnect connection {conn}: {:?}",
                         error
@@ -330,16 +336,16 @@ impl WsServer {
             }
 
             Command::List { res_tx } => {
-                let _ = res_tx.send(self.list_rooms()).await;
+                let _ = res_tx.send(ctx.write().await.list_rooms()).await;
             }
 
             Command::Join { conn, room, res_tx } => {
-                self.join_room(conn, &room);
+                ctx.write().await.join_room(conn, &room);
                 let _ = res_tx.send(()).await;
             }
 
             Command::Send { msg, conn, res_tx } => {
-                if let Err(error) = self.send(&conn.to_string(), &msg).await {
+                if let Err(error) = ctx.read().await.send(&conn.to_string(), &msg).await {
                     moosicbox_assert::die_or_error!(
                         "Failed to send message to {conn} {msg:?}: {error:?}",
                     );
@@ -348,7 +354,7 @@ impl WsServer {
             }
 
             Command::Broadcast { msg, res_tx } => {
-                if let Err(error) = self.send_all(&msg).await {
+                if let Err(error) = ctx.read().await.send_all(&msg).await {
                     moosicbox_assert::die_or_error!(
                         "Failed to broadcast message {msg:?}: {error:?}",
                     );
@@ -357,7 +363,12 @@ impl WsServer {
             }
 
             Command::BroadcastExcept { msg, conn, res_tx } => {
-                if let Err(error) = self.send_all_except(&conn.to_string(), &msg).await {
+                if let Err(error) = ctx
+                    .read()
+                    .await
+                    .send_all_except(&conn.to_string(), &msg)
+                    .await
+                {
                     moosicbox_assert::die_or_error!(
                         "Failed to broadcast message {msg:?}: {error:?}",
                     );
@@ -366,7 +377,7 @@ impl WsServer {
             }
 
             Command::Message { conn, msg, res_tx } => {
-                if let Err(error) = self.on_message(conn, msg.clone()).await {
+                if let Err(error) = ctx.read().await.on_message(conn, msg.clone()).await {
                     if log::log_enabled!(log::Level::Debug) {
                         moosicbox_assert::die_or_error!(
                             "Failed to process message from {}: {msg:?}: {error:?}",
@@ -387,16 +398,20 @@ impl WsServer {
         Ok(())
     }
 
-    pub async fn run(mut self) -> io::Result<()> {
+    pub async fn run(self) -> io::Result<()> {
+        let token = self.token.clone();
+        let cmd_rx = self.cmd_rx.clone();
+        let ctx = Arc::new(RwLock::new(self));
         while let Ok(Ok(cmd)) = tokio::select!(
-            () = self.token.cancelled() => {
+            () = token.cancelled() => {
                 log::debug!("WsServer was cancelled");
                 Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "Cancelled"))
             }
-            cmd = self.cmd_rx.recv_async() => { Ok(cmd) }
+            cmd = cmd_rx.recv_async() => { Ok(cmd) }
         ) {
             log::trace!("Received WsServer command");
-            self.process_command(cmd).await?;
+            tokio::spawn(Self::process_command(ctx.clone(), cmd));
+            // Self::process_command(ctx, cmd).await?;
         }
 
         log::debug!("Stopped WsServer");
@@ -449,7 +464,7 @@ impl WebsocketSender for ChatServerHandle {
 }
 
 impl ChatServerHandle {
-    pub async fn add_player_action(&mut self, id: i32, action: PlayerAction) {
+    pub async fn add_player_action(&self, id: i32, action: PlayerAction) {
         log::trace!("Sending AddPlayerAction command");
 
         if let Err(e) = self

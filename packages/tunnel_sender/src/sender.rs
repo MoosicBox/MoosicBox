@@ -396,10 +396,14 @@ impl TunnelSender {
                                 }
                             };
 
-                            if let Err(e) = handler(tx.clone(), m).await {
-                                log::error!("Handler Send Loop error: {e:?}");
-                                close_token.cancel();
-                            }
+                            let tx = tx.clone();
+                            let close_token = close_token.clone();
+                            tokio::spawn(async move {
+                                if let Err(e) = handler(tx.clone(), m).await {
+                                    log::error!("Handler Send Loop error: {e:?}");
+                                    close_token.cancel();
+                                }
+                            });
                         });
 
                         pin_mut!(ws_writer, ws_reader);

@@ -8,7 +8,7 @@ use moosicbox_tunnel_sender::{
     TunnelMessage,
 };
 use thiserror::Error;
-use tokio::{spawn, task::JoinHandle};
+use tokio::task::JoinHandle;
 use url::Url;
 
 use crate::{CANCELLATION_TOKEN, CHAT_SERVER_HANDLE};
@@ -71,7 +71,7 @@ pub async fn setup_tunnel(
             let database_send = database.clone();
             Ok((
                 Some(host),
-                Some(spawn(async move {
+                Some(tokio::spawn(async move {
                     let mut rx = tunnel.start();
 
                     while let Some(m) = rx.recv().await {
@@ -80,7 +80,7 @@ pub async fn setup_tunnel(
                                 log::debug!("Received text TunnelMessage {}", &m);
                                 let tunnel = tunnel.clone();
                                 let database_send = database_send.clone();
-                                spawn(async move {
+                                tokio::spawn(async move {
                                     match serde_json::from_str(&m).unwrap() {
                                         TunnelRequest::Http(request) => {
                                             if let Err(err) = tunnel

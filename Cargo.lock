@@ -3990,6 +3990,7 @@ dependencies = [
  "bytes",
  "chrono",
  "env_logger 0.11.3",
+ "flume",
  "futures-util",
  "hex",
  "lazy_static",

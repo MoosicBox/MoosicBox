@@ -650,7 +650,7 @@ fn handle_server_playback_update(
 
 async fn register_server_player(
     db: &dyn Database,
-    mut ws: ChatServerHandle,
+    ws: ChatServerHandle,
     tunnel_handle: &Option<TunnelSenderHandle>,
 ) -> Result<(), WebsocketSendError> {
     let connection_id = "self";
@@ -779,7 +779,7 @@ fn handle_upnp_playback_update(update: &UpdateSession) -> Pin<Box<dyn Future<Out
 #[cfg(feature = "upnp")]
 async fn register_upnp_players(
     db: &dyn Database,
-    mut ws: ChatServerHandle,
+    ws: ChatServerHandle,
     tunnel_handle: &Option<TunnelSenderHandle>,
 ) -> Result<(), WebsocketSendError> {
     let connection_id = "self";

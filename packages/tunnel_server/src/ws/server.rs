@@ -19,7 +19,7 @@ use strum_macros::EnumString;
 use thiserror::Error;
 use tokio::sync::{
     mpsc::{self, error::SendError, UnboundedSender},
-    oneshot,
+    oneshot, RwLock,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -74,7 +74,6 @@ enum Command {
     Message {
         msg: Msg,
         conn: ConnId,
-        res_tx: oneshot::Sender<()>,
     },
 }
 
@@ -102,7 +101,7 @@ pub struct ChatServer {
     visitor_count: Arc<AtomicUsize>,
 
     /// Command receiver.
-    cmd_rx: mpsc::UnboundedReceiver<Command>,
+    cmd_rx: flume::Receiver<Command>,
 
     ws_requests: HashMap<usize, ConnId>,
 }
@@ -130,7 +129,7 @@ pub enum WebsocketMessageError {
 
 impl ChatServer {
     pub fn new() -> (Self, ChatServerHandle) {
-        let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
+        let (cmd_tx, cmd_rx) = flume::unbounded();
 
         (
             Self {
@@ -258,62 +257,104 @@ impl ChatServer {
         Ok(())
     }
 
-    pub async fn run(mut self) -> io::Result<()> {
-        while let Some(cmd) = self.cmd_rx.recv().await {
-            match cmd {
-                Command::Connect {
-                    client_id,
-                    conn_tx,
-                    res_tx,
-                    sender,
-                } => match self.connect(client_id, sender, conn_tx).await {
-                    Ok(id) => {
-                        if let Err(error) = res_tx.send(id) {
-                            log::error!("Failed to connect {error:?}");
+    pub async fn run(self) -> io::Result<()> {
+        let cmd_rx = self.cmd_rx.clone();
+        let ctx = Arc::new(RwLock::new(self));
+        while let Ok(cmd) = cmd_rx.recv_async().await {
+            let ctx = ctx.clone();
+            tokio::spawn(async move {
+                match cmd {
+                    Command::Connect {
+                        client_id,
+                        conn_tx,
+                        res_tx,
+                        sender,
+                    } => {
+                        let mut binding = ctx.write().await;
+                        let response = binding.connect(client_id, sender, conn_tx).await;
+                        drop(binding);
+                        match response {
+                            Ok(id) => {
+                                log::info!("Successfully connected id={id}");
+                                if let Err(error) = res_tx.send(id) {
+                                    log::error!("Failed to connect {error:?}");
+                                }
+                            }
+                            Err(err) => log::error!("Failed to connect {err:?}"),
                         }
                     }
-                    Err(err) => log::error!("Failed to connect {err:?}"),
-                },
 
-                Command::Disconnect { conn } => {
-                    if let Err(err) = self.disconnect(conn).await {
-                        log::error!("Failed to disconnect {err:?}");
+                    Command::Disconnect { conn } => {
+                        let mut binding = ctx.write().await;
+                        let response = binding.disconnect(conn).await;
+                        drop(binding);
+                        if let Err(err) = response {
+                            log::error!("Failed to disconnect {err:?}");
+                        }
                     }
-                }
 
-                Command::RequestStart {
-                    request_id,
-                    sender,
-                    headers_sender,
-                    abort_request_token,
-                } => {
-                    self.senders.insert(request_id, sender);
-                    self.headers_senders.insert(request_id, headers_sender);
-                    self.abort_request_tokens
-                        .insert(request_id, abort_request_token);
-                }
+                    Command::RequestStart {
+                        request_id,
+                        sender,
+                        headers_sender,
+                        abort_request_token,
+                    } => {
+                        let mut ctx = ctx.write().await;
+                        ctx.senders.insert(request_id, sender);
+                        ctx.headers_senders.insert(request_id, headers_sender);
+                        ctx.abort_request_tokens
+                            .insert(request_id, abort_request_token);
+                        drop(ctx);
+                    }
 
-                Command::RequestEnd { request_id } => {
-                    self.senders.remove(&request_id);
-                    self.headers_senders.remove(&request_id);
-                    self.abort_request_tokens.remove(&request_id);
-                }
+                    Command::RequestEnd { request_id } => {
+                        let mut ctx = ctx.write().await;
+                        ctx.senders.remove(&request_id);
+                        ctx.headers_senders.remove(&request_id);
+                        ctx.abort_request_tokens.remove(&request_id);
+                        drop(ctx);
+                    }
 
-                Command::Response { response, conn_id } => {
-                    let request_id = response.request_id;
+                    Command::Response { response, conn_id } => {
+                        let request_id = response.request_id;
 
-                    if let (Some(status), Some(headers)) = (response.status, &response.headers) {
-                        if let Some(sender) = self.headers_senders.remove(&request_id) {
-                            if sender
-                                .send(RequestHeaders {
-                                    status,
-                                    headers: headers.clone(),
-                                })
-                                .is_err()
-                            {
-                                log::warn!("Header sender dropped for request {}", request_id);
-                                self.headers_senders.remove(&request_id);
-                                if let Err(err) = self.abort_request(conn_id, request_id).await {
+                        if let (Some(status), Some(headers)) = (response.status, &response.headers)
+                        {
+                            let mut ctx = ctx.write().await;
+                            let headers_senders = ctx.headers_senders.remove(&request_id);
+                            if let Some(sender) = headers_senders {
+                                if sender
+                                    .send(RequestHeaders {
+                                        status,
+                                        headers: headers.clone(),
+                                    })
+                                    .is_err()
+                                {
+                                    log::warn!("Header sender dropped for request {}", request_id);
+                                    ctx.headers_senders.remove(&request_id);
+                                    if let Err(err) = ctx.abort_request(conn_id, request_id).await {
+                                        log::error!("Failed to abort request {request_id} {err:?}");
+                                    }
+                                }
+                            } else {
+                                log::error!(
+                                    "unexpected binary message {} (size {})",
+                                    request_id,
+                                    response.bytes.len()
+                                );
+                            }
+                            drop(ctx);
+                        }
+
+                        if let Some(sender) = ctx.read().await.senders.get(&request_id) {
+                            if sender.send(response).is_err() {
+                                log::debug!("Sender dropped for request {}", request_id);
+                                let mut binding = ctx.write().await;
+                                binding.senders.remove(&request_id);
+                                drop(binding);
+                                if let Err(err) =
+                                    ctx.read().await.abort_request(conn_id, request_id).await
+                                {
                                     log::error!("Failed to abort request {request_id} {err:?}");
                                 }
                             }
@@ -326,93 +367,105 @@ impl ChatServer {
                         }
                     }
 
-                    if let Some(sender) = self.senders.get(&request_id) {
-                        if sender.send(response).is_err() {
-                            log::debug!("Sender dropped for request {}", request_id);
-                            self.senders.remove(&request_id);
-                            if let Err(err) = self.abort_request(conn_id, request_id).await {
-                                log::error!("Failed to abort request {request_id} {err:?}");
+                    Command::WsRequest {
+                        conn_id,
+                        client_id,
+                        request_id,
+                        body,
+                    } => match get_connection_id(&client_id).await {
+                        Ok(client_conn_id) => {
+                            let value: Value = serde_json::from_str(&body).unwrap();
+                            let body = TunnelRequest::Ws(TunnelWsRequest {
+                                conn_id,
+                                request_id,
+                                body: value,
+                                connection_id: None,
+                            });
+                            let binding = ctx.read().await;
+                            let response = binding
+                                .send_message_to(
+                                    client_conn_id,
+                                    serde_json::to_string(&body).unwrap(),
+                                )
+                                .await;
+                            drop(binding);
+
+                            if let Err(error) = response {
+                                log::error!(
+                                    "Failed to send WsRequest to {client_conn_id}: {error:?}"
+                                );
+                            }
+                            let mut binding = ctx.write().await;
+                            binding.ws_requests.insert(request_id, conn_id);
+                            drop(binding);
+                        }
+                        Err(err) => {
+                            log::error!("Failed to get connection id: {err:?}");
+                        }
+                    },
+
+                    Command::WsMessage { message } => {
+                        if let Some(to_connection_ids) = message.to_connection_ids {
+                            for conn_id in to_connection_ids {
+                                let binding = ctx.read().await;
+                                let response = binding
+                                    .send_message_to(conn_id, message.body.to_string())
+                                    .await;
+                                drop(binding);
+                                if let Err(error) = response {
+                                    log::error!(
+                                        "Failed to send WsResponse to {conn_id}: {error:?}"
+                                    );
+                                }
+                            }
+                        } else if let Some(exclude_connection_ids) = message.exclude_connection_ids
+                        {
+                            let binding = ctx.read().await;
+                            let response = binding
+                                .broadcast_except(&exclude_connection_ids, message.body.to_string())
+                                .await;
+                            drop(binding);
+                            if let Err(error) = response {
+                                log::error!("Failed to broadcast_except WsMessage: {error:?}");
+                            }
+                        } else {
+                            let binding = ctx.read().await;
+                            let response = binding.broadcast(message.body.to_string()).await;
+                            drop(binding);
+                            if let Err(error) = response {
+                                log::error!("Failed to broadcast WsMessage: {error:?}");
                             }
                         }
-                    } else {
-                        log::error!(
-                            "unexpected binary message {} (size {})",
-                            request_id,
-                            response.bytes.len()
-                        );
                     }
-                }
 
-                Command::WsRequest {
-                    conn_id,
-                    client_id,
-                    request_id,
-                    body,
-                } => match get_connection_id(&client_id).await {
-                    Ok(client_conn_id) => {
-                        let value: Value = serde_json::from_str(&body).unwrap();
-                        let body = TunnelRequest::Ws(TunnelWsRequest {
-                            conn_id,
-                            request_id,
-                            body: value,
-                            connection_id: None,
-                        });
-
-                        if let Err(error) = self
-                            .send_message_to(client_conn_id, serde_json::to_string(&body).unwrap())
-                            .await
-                        {
-                            log::error!("Failed to send WsRequest to {client_conn_id}: {error:?}");
-                        }
-                        self.ws_requests.insert(request_id, conn_id);
-                    }
-                    Err(err) => {
-                        log::error!("Failed to get connection id: {err:?}");
-                    }
-                },
-
-                Command::WsMessage { message } => {
-                    if let Some(to_connection_ids) = message.to_connection_ids {
-                        for conn_id in to_connection_ids {
-                            if let Err(error) = self
-                                .send_message_to(conn_id, message.body.to_string())
-                                .await
-                            {
-                                log::error!("Failed to send WsResponse to {conn_id}: {error:?}");
+                    Command::WsResponse { response } => {
+                        let binding = ctx.read().await;
+                        let ws_id = binding.ws_requests.get(&response.request_id).cloned();
+                        drop(binding);
+                        if let Some(ws_id) = ws_id {
+                            let binding = ctx.read().await;
+                            let response = binding
+                                .send_message_to(ws_id, response.body.to_string())
+                                .await;
+                            drop(binding);
+                            if let Err(error) = response {
+                                log::error!("Failed to send WsResponse to {ws_id}: {error:?}");
                             }
+                        } else {
+                            log::error!("unexpected ws response {}", response.request_id,);
                         }
-                    } else if let Some(exclude_connection_ids) = message.exclude_connection_ids {
-                        if let Err(error) = self
-                            .broadcast_except(&exclude_connection_ids, message.body.to_string())
-                            .await
-                        {
-                            log::error!("Failed to broadcast_except WsMessage: {error:?}");
-                        }
-                    } else if let Err(error) = self.broadcast(message.body.to_string()).await {
-                        log::error!("Failed to broadcast WsMessage: {error:?}");
                     }
-                }
 
-                Command::WsResponse { response } => {
-                    if let Some(ws_id) = self.ws_requests.get(&response.request_id) {
-                        if let Err(error) = self
-                            .send_message_to(*ws_id, response.body.to_string())
-                            .await
-                        {
-                            log::error!("Failed to send WsResponse to {ws_id}: {error:?}");
+                    Command::Message { conn, msg } => {
+                        let binding = ctx.read().await;
+                        let response = binding.send_message_to(conn, &msg).await;
+                        drop(binding);
+                        if let Err(error) = response {
+                            log::error!("Failed to send message to {conn}: {msg:?}: {error:?}");
                         }
-                    } else {
-                        log::error!("unexpected ws response {}", response.request_id,);
                     }
                 }
-
-                Command::Message { conn, msg, res_tx } => {
-                    if let Err(error) = self.send_message_to(conn, &msg).await {
-                        log::error!("Failed to send message to {conn}: {msg:?}: {error:?}");
-                    }
-                    let _ = res_tx.send(());
-                }
-            }
+            });
         }
 
         Ok(())
@@ -443,7 +496,7 @@ static CACHE_CONNECTIONS_MAP: once_cell::sync::Lazy<std::sync::RwLock<HashMap<St
 /// Reduces boilerplate of setting up response channels in WebSocket handlers.
 #[derive(Debug, Clone)]
 pub struct ChatServerHandle {
-    cmd_tx: mpsc::UnboundedSender<Command>,
+    cmd_tx: flume::Sender<Command>,
 }
 
 impl ChatServerHandle {
@@ -472,19 +525,13 @@ impl ChatServerHandle {
 
     /// Broadcast message to current room.
     pub async fn send_message(&self, conn: ConnId, msg: impl Into<String>) {
-        let (res_tx, res_rx) = oneshot::channel();
-
         // unwrap: chat server should not have been dropped
         self.cmd_tx
             .send(Command::Message {
                 msg: msg.into(),
                 conn,
-                res_tx,
             })
             .unwrap();
-
-        // unwrap: chat server does not drop our response channel
-        res_rx.await.unwrap();
     }
 
     pub async fn ws_request(
