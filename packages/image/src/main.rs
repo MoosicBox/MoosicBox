@@ -52,11 +52,14 @@ async fn main() {
         encoding,
         args.quality,
     )
+    .await
     .expect("Failed to compress image");
 }
 
 #[derive(Error, Debug)]
 pub enum ResizeLocalFileError {
+    #[error(transparent)]
+    ResizeImage(#[from] image::ResizeImageError),
     #[error(transparent)]
     Image(#[from] ::image::error::ImageError),
     #[error(transparent)]
@@ -65,7 +68,7 @@ pub enum ResizeLocalFileError {
     Failed,
 }
 
-fn try_resize_local_file(
+async fn try_resize_local_file(
     width: Option<u32>,
     height: Option<u32>,
     path: &str,
@@ -113,7 +116,8 @@ fn try_resize_local_file(
 
     log::debug!("Resizing local image file path={path} width={width} height={height} encoding={encoding} quality={quality}");
 
-    let bytes = image::try_resize_local_file(width, height, path, encoding, quality)?
+    let bytes = image::try_resize_local_file_async(width, height, path, encoding, quality)
+        .await?
         .ok_or(ResizeLocalFileError::Failed)?;
 
     save_bytes_to_file(&bytes, output, None)?;
