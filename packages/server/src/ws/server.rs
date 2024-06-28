@@ -9,8 +9,7 @@ use std::{
     },
 };
 
-use kanal::OneshotSender;
-use log::{debug, error, info};
+use kanal::OneshotAsyncSender;
 use moosicbox_async_service::async_trait;
 use moosicbox_database::Database;
 use moosicbox_ws::{
@@ -28,7 +27,7 @@ use crate::ws::{ConnId, Msg, RoomId};
 impl WebsocketSender for WsServer {
     async fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
         let id = connection_id.parse::<usize>().unwrap();
-        debug!("Sending to {id}");
+        log::debug!("Sending to {id}");
         self.send_message_to(id, data.to_string());
         for sender in &self.senders {
             sender.send(connection_id, data).await?;
@@ -71,7 +70,7 @@ pub enum Command {
 
     Connect {
         conn_tx: mpsc::UnboundedSender<Msg>,
-        res_tx: OneshotSender<ConnId>,
+        res_tx: OneshotAsyncSender<ConnId>,
     },
 
     Disconnect {
@@ -79,36 +78,36 @@ pub enum Command {
     },
 
     List {
-        res_tx: OneshotSender<Vec<RoomId>>,
+        res_tx: OneshotAsyncSender<Vec<RoomId>>,
     },
 
     Join {
         conn: ConnId,
         room: RoomId,
-        res_tx: OneshotSender<()>,
+        res_tx: OneshotAsyncSender<()>,
     },
 
     Send {
         msg: Msg,
         conn: ConnId,
-        res_tx: OneshotSender<()>,
+        res_tx: OneshotAsyncSender<()>,
     },
 
     Broadcast {
         msg: Msg,
-        res_tx: OneshotSender<()>,
+        res_tx: OneshotAsyncSender<()>,
     },
 
     BroadcastExcept {
         msg: Msg,
         conn: ConnId,
-        res_tx: OneshotSender<()>,
+        res_tx: OneshotAsyncSender<()>,
     },
 
     Message {
         msg: Msg,
         conn: ConnId,
-        res_tx: OneshotSender<()>,
+        res_tx: OneshotAsyncSender<()>,
     },
 }
 
@@ -230,7 +229,7 @@ impl WsServer {
 
     /// Register new session and assign unique ID to this session
     fn connect(&mut self, tx: mpsc::UnboundedSender<Msg>) -> Result<ConnId, WebsocketConnectError> {
-        info!("Someone joined");
+        log::info!("Someone joined");
 
         // register session with random connection ID
         let id = thread_rng().gen::<usize>();
@@ -240,7 +239,7 @@ impl WsServer {
         self.rooms.entry("main".to_owned()).or_default().insert(id);
 
         let count = self.visitor_count.fetch_add(1, Ordering::SeqCst);
-        debug!("Visitor count: {}", count + 1);
+        log::debug!("Visitor count: {}", count + 1);
 
         let connection_id = id.to_string();
         let context = WebsocketContext {
@@ -256,9 +255,9 @@ impl WsServer {
 
     /// Unregister connection from room map and invoke ws api disconnect.
     async fn disconnect(&mut self, conn_id: ConnId) -> Result<(), WebsocketDisconnectError> {
-        info!("Someone disconnected {conn_id}");
+        log::info!("Someone disconnected {conn_id}");
         let count = self.visitor_count.fetch_sub(1, Ordering::SeqCst);
-        debug!("Visitor count: {}", count - 1);
+        log::debug!("Visitor count: {}", count - 1);
 
         // remove sender
         if self.sessions.remove(&conn_id).is_some() {
@@ -314,63 +313,74 @@ impl WsServer {
                 log::debug!("Added a player action with id={id}");
             }
 
-            Command::Connect { conn_tx, res_tx } => {
-                if let Err(error) = self.connect(conn_tx).map(|conn_id| res_tx.send(conn_id)) {
-                    error!("Failed to connect: {:?}", error);
-                }
-            }
+            Command::Connect { conn_tx, res_tx } => match self.connect(conn_tx) {
+                Ok(conn_id) => res_tx.send(conn_id).await.map_err(|e| {
+                    std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send: {e:?}"))
+                })?,
+                Err(e) => moosicbox_assert::die_or_error!("Failed to connect: {e:?}"),
+            },
 
             Command::Disconnect { conn } => {
                 if let Err(error) = self.disconnect(conn).await {
-                    error!("Failed to disconnect connection {conn}: {:?}", error);
+                    moosicbox_assert::die_or_error!(
+                        "Failed to disconnect connection {conn}: {:?}",
+                        error
+                    );
                 }
             }
 
             Command::List { res_tx } => {
-                let _ = res_tx.send(self.list_rooms());
+                let _ = res_tx.send(self.list_rooms()).await;
             }
 
             Command::Join { conn, room, res_tx } => {
                 self.join_room(conn, &room);
-                let _ = res_tx.send(());
+                let _ = res_tx.send(()).await;
             }
 
             Command::Send { msg, conn, res_tx } => {
                 if let Err(error) = self.send(&conn.to_string(), &msg).await {
-                    error!("Failed to send message to {conn} {msg:?}: {error:?}",);
+                    moosicbox_assert::die_or_error!(
+                        "Failed to send message to {conn} {msg:?}: {error:?}",
+                    );
                 }
-                let _ = res_tx.send(());
+                let _ = res_tx.send(()).await;
             }
 
             Command::Broadcast { msg, res_tx } => {
                 if let Err(error) = self.send_all(&msg).await {
-                    error!("Failed to broadcast message {msg:?}: {error:?}",);
+                    moosicbox_assert::die_or_error!(
+                        "Failed to broadcast message {msg:?}: {error:?}",
+                    );
                 }
-                let _ = res_tx.send(());
+                let _ = res_tx.send(()).await;
             }
 
             Command::BroadcastExcept { msg, conn, res_tx } => {
                 if let Err(error) = self.send_all_except(&conn.to_string(), &msg).await {
-                    error!("Failed to broadcast message {msg:?}: {error:?}",);
+                    moosicbox_assert::die_or_error!(
+                        "Failed to broadcast message {msg:?}: {error:?}",
+                    );
                 }
-                let _ = res_tx.send(());
+                let _ = res_tx.send(()).await;
             }
 
             Command::Message { conn, msg, res_tx } => {
                 if let Err(error) = self.on_message(conn, msg.clone()).await {
                     if log::log_enabled!(log::Level::Debug) {
-                        error!(
+                        moosicbox_assert::die_or_error!(
                             "Failed to process message from {}: {msg:?}: {error:?}",
                             conn
                         );
                     } else {
-                        error!(
+                        moosicbox_assert::die_or_error!(
                             "Failed to process message from {}: {msg:?}: {error:?} ({:?})",
-                            conn, msg
+                            conn,
+                            msg
                         );
                     }
                 }
-                let _ = res_tx.send(());
+                let _ = res_tx.send(()).await;
             }
         }
 
@@ -454,7 +464,8 @@ impl ChatServerHandle {
     /// Register client message sender and obtain connection ID.
     pub async fn connect(&self, conn_tx: mpsc::UnboundedSender<String>) -> ConnId {
         log::trace!("Sending Connect command");
-        let (res_tx, res_rx) = kanal::oneshot();
+
+        let (res_tx, res_rx) = kanal::oneshot_async();
 
         if let Err(e) = self
             .cmd_tx
@@ -464,7 +475,7 @@ impl ChatServerHandle {
             moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
         }
 
-        res_rx.recv().unwrap_or_else(|e| {
+        res_rx.recv().await.unwrap_or_else(|e| {
             moosicbox_assert::die_or_panic!("Failed to recv response from ws server: {e:?}")
         })
     }
@@ -472,13 +483,13 @@ impl ChatServerHandle {
     /// List all created rooms.
     pub async fn list_rooms(&self) -> Vec<String> {
         log::trace!("Sending List command");
-        let (res_tx, res_rx) = kanal::oneshot();
+        let (res_tx, res_rx) = kanal::oneshot_async();
 
         if let Err(e) = self.cmd_tx.send_async(Command::List { res_tx }).await {
             moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
         }
 
-        res_rx.recv().unwrap_or_else(|e| {
+        res_rx.recv().await.unwrap_or_else(|e| {
             moosicbox_assert::die_or_panic!("Failed to recv response from ws server: {e:?}")
         })
     }
@@ -486,7 +497,7 @@ impl ChatServerHandle {
     /// Join `room`, creating it if it does not exist.
     pub async fn join_room(&self, conn: ConnId, room: impl Into<String> + Send) {
         log::trace!("Sending Join command");
-        let (res_tx, res_rx) = kanal::oneshot();
+        let (res_tx, res_rx) = kanal::oneshot_async();
 
         if let Err(e) = self
             .cmd_tx
@@ -500,14 +511,14 @@ impl ChatServerHandle {
             moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
         }
 
-        res_rx.recv().unwrap_or_else(|e| {
+        res_rx.recv().await.unwrap_or_else(|e| {
             moosicbox_assert::die_or_error!("Failed to recv response from ws server: {e:?}");
         });
     }
 
     pub async fn send(&self, conn: ConnId, msg: impl Into<String> + Send) {
         log::trace!("Sending Send command");
-        let (res_tx, res_rx) = kanal::oneshot();
+        let (res_tx, res_rx) = kanal::oneshot_async();
 
         if let Err(e) = self
             .cmd_tx
@@ -521,14 +532,14 @@ impl ChatServerHandle {
             moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
         }
 
-        res_rx.recv().unwrap_or_else(|e| {
+        res_rx.recv().await.unwrap_or_else(|e| {
             moosicbox_assert::die_or_error!("Failed to recv response from ws server: {e:?}");
         });
     }
 
     pub async fn broadcast(&self, msg: impl Into<String> + Send) {
         log::trace!("Sending Broadcast command");
-        let (res_tx, res_rx) = kanal::oneshot();
+        let (res_tx, res_rx) = kanal::oneshot_async();
 
         if let Err(e) = self
             .cmd_tx
@@ -541,14 +552,14 @@ impl ChatServerHandle {
             moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
         };
 
-        res_rx.recv().unwrap_or_else(|e| {
+        res_rx.recv().await.unwrap_or_else(|e| {
             moosicbox_assert::die_or_error!("Failed to recv response from ws server: {e:?}");
         });
     }
 
     pub async fn broadcast_except(&self, conn: ConnId, msg: impl Into<String> + Send) {
         log::trace!("Sending BroadcastExcept command");
-        let (res_tx, res_rx) = kanal::oneshot();
+        let (res_tx, res_rx) = kanal::oneshot_async();
 
         if let Err(e) = self
             .cmd_tx
@@ -562,7 +573,7 @@ impl ChatServerHandle {
             moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
         }
 
-        res_rx.recv().unwrap_or_else(|e| {
+        res_rx.recv().await.unwrap_or_else(|e| {
             moosicbox_assert::die_or_error!("Failed to recv response from ws server: {e:?}");
         });
     }
@@ -570,7 +581,7 @@ impl ChatServerHandle {
     /// Broadcast message to current room.
     pub async fn send_message(&self, conn: ConnId, msg: impl Into<String> + Send) {
         log::trace!("Sending Message command");
-        let (res_tx, res_rx) = kanal::oneshot();
+        let (res_tx, res_rx) = kanal::oneshot_async();
 
         if let Err(e) = self
             .cmd_tx
@@ -584,7 +595,7 @@ impl ChatServerHandle {
             moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
         }
 
-        res_rx.recv().unwrap_or_else(|e| {
+        res_rx.recv().await.unwrap_or_else(|e| {
             moosicbox_assert::die_or_error!("Failed to recv response from ws server: {e:?}");
         });
     }
