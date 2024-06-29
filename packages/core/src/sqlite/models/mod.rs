@@ -170,6 +170,16 @@ pub enum TrackApiSource {
     Qobuz,
 }
 
+impl From<AlbumSource> for TrackApiSource {
+    fn from(value: AlbumSource) -> Self {
+        match value {
+            AlbumSource::Local => Self::Local,
+            AlbumSource::Tidal => Self::Tidal,
+            AlbumSource::Qobuz => Self::Qobuz,
+        }
+    }
+}
+
 impl ToValueType<TrackApiSource> for &serde_json::Value {
     fn to_value_type(self) -> Result<TrackApiSource, ParseError> {
         TrackApiSource::from_str(
@@ -996,6 +1006,16 @@ pub enum AlbumSource {
     Local,
     Tidal,
     Qobuz,
+}
+
+impl From<TrackApiSource> for AlbumSource {
+    fn from(value: TrackApiSource) -> Self {
+        match value {
+            TrackApiSource::Local => Self::Local,
+            TrackApiSource::Tidal => Self::Tidal,
+            TrackApiSource::Qobuz => Self::Qobuz,
+        }
+    }
 }
 
 impl FromStr for AlbumSource {
