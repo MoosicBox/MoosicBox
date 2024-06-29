@@ -990,7 +990,7 @@ impl ToApi<ApiAlbum> for LibraryAlbum {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Eq, PartialEq, Default)]
 pub enum AlbumSource {
     #[default]
     Local,
