@@ -650,6 +650,8 @@ pub async fn refavorite_album(
 
 #[cfg(test)]
 mod test {
+    use moosicbox_core::sqlite::models::AlbumVersionQuality;
+
     use super::*;
 
     #[test]
@@ -686,7 +688,10 @@ mod test {
             title: "".to_string(),
             artist: "".to_string(),
             artwork: None,
-            source: AlbumSource::Local,
+            versions: vec![AlbumVersionQuality {
+                source: TrackApiSource::Local,
+                ..Default::default()
+            }],
             ..Default::default()
         };
         let tidal = LibraryAlbum {
@@ -694,7 +699,10 @@ mod test {
             title: "".to_string(),
             artist: "".to_string(),
             artwork: None,
-            source: AlbumSource::Tidal,
+            versions: vec![AlbumVersionQuality {
+                source: TrackApiSource::Tidal,
+                ..Default::default()
+            }],
             ..Default::default()
         };
         let qobuz = LibraryAlbum {
@@ -702,7 +710,10 @@ mod test {
             title: "".to_string(),
             artist: "".to_string(),
             artwork: None,
-            source: AlbumSource::Qobuz,
+            versions: vec![AlbumVersionQuality {
+                source: TrackApiSource::Qobuz,
+                ..Default::default()
+            }],
             ..Default::default()
         };
         let albums = vec![local.clone(), tidal, qobuz];
