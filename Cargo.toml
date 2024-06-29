@@ -82,7 +82,7 @@ chrono = { version = "0.4.38", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.7", features = ["derive"] }
+clap = { version = "4.5.8", features = ["derive"] }
 cpal = "0.15.3"
 debounce = "0.2.2"
 derive_more = "0.99.18"
