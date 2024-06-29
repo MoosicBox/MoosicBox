@@ -79,10 +79,10 @@ pub fn filter_albums<'a>(
                 .is_some_and(|id| !album.qobuz_artist_id.is_some_and(|x| x == *id))
         })
         .filter(|album| {
-            !request
-                .sources
-                .as_ref()
-                .is_some_and(|s| !s.contains(&album.source))
+            !request.sources.as_ref().is_some_and(|s| {
+                !s.iter()
+                    .any(|source| album.versions.iter().any(|v| v.source == (*source).into()))
+            })
         })
         .filter(|album| {
             !request
