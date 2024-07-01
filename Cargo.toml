@@ -101,7 +101,7 @@ futures-util = { version = "0.3.30", default-features = false, features = [
 ] }
 hex = "0.4.3"
 home = "0.5.9"
-id3 = "1.13.1"
+id3 = "1.14.0"
 image = "0.25.1"
 io-streams = "0.16.1"
 itertools = "0.13.0"
@@ -156,7 +156,7 @@ rusqlite = { version = "0.31.0", features = ["bundled"] }
 rustls = "0.23"
 serde = { version = "1", features = ["derive"] }
 serde-aux = "4.5.0"
-serde_json = "1.0.118"
+serde_json = "1.0.119"
 serial_test = "3.1.1"
 sha2 = "0.10.8"
 sqlx = { version = "0.7", default-features = false, features = [
