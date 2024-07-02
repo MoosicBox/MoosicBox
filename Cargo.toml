@@ -156,7 +156,7 @@ rusqlite = { version = "0.31.0", features = ["bundled"] }
 rustls = "0.23"
 serde = { version = "1", features = ["derive"] }
 serde-aux = "4.5.0"
-serde_json = "1.0.119"
+serde_json = "1.0.120"
 serial_test = "3.1.1"
 sha2 = "0.10.8"
 sqlx = { version = "0.7", default-features = false, features = [
