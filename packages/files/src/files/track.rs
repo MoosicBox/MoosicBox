@@ -26,7 +26,7 @@ use moosicbox_stream_utils::{
 };
 use moosicbox_symphonia_player::{
     media_sources::remote_bytestream::RemoteByteStreamMediaSource, output::AudioOutputHandler,
-    play_file_path_str, play_media_source, PlaybackError,
+    play_file_path_str_async, play_media_source_async, PlaybackError,
 };
 use moosicbox_tidal::{TidalAudioQuality, TidalTrackFileUrlError};
 use once_cell::sync::Lazy;
@@ -439,114 +439,98 @@ pub async fn get_audio_bytes(
                         }
                     }
                 } else {
-                    let source_send = source.clone();
+                    let get_handler = move || {
+                        Ok(match format {
+                            #[cfg(feature = "aac")]
+                            AudioFormat::Aac => {
+                                use moosicbox_symphonia_player::output::encoder::aac::encoder::AacEncoder;
+                                moosicbox_symphonia_player::output::AudioOutputHandler::new()
+                                    .with_output(Box::new(move |spec, duration| {
+                                        Ok(Box::new(
+                                            AacEncoder::with_writer(writer.clone())
+                                                .open(spec, duration),
+                                        ))
+                                    }))
+                            }
+                            #[cfg(feature = "flac")]
+                            AudioFormat::Flac => {
+                                use moosicbox_symphonia_player::output::encoder::flac::encoder::FlacEncoder;
+                                moosicbox_symphonia_player::output::AudioOutputHandler::new()
+                                    .with_output(Box::new(move |spec, duration| {
+                                        Ok(Box::new(
+                                            FlacEncoder::with_writer(writer.clone())
+                                                .open(spec, duration),
+                                        ))
+                                    }))
+                            }
+                            #[cfg(feature = "mp3")]
+                            AudioFormat::Mp3 => {
+                                use moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder;
+                                let encoder_writer = writer.clone();
+                                moosicbox_symphonia_player::output::AudioOutputHandler::new()
+                                    .with_output(Box::new(move |spec, duration| {
+                                        Ok(Box::new(
+                                            Mp3Encoder::with_writer(encoder_writer.clone())
+                                                .open(spec, duration),
+                                        ))
+                                    }))
+                            }
+                            #[cfg(feature = "opus")]
+                            AudioFormat::Opus => {
+                                use moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder;
+                                let encoder_writer = writer.clone();
+                                moosicbox_symphonia_player::output::AudioOutputHandler::new()
+                                    .with_output(Box::new(move |spec, duration| {
+                                        Ok(Box::new(
+                                            OpusEncoder::with_writer(encoder_writer.clone())
+                                                .open(spec, duration),
+                                        ))
+                                    }))
+                            }
+                            AudioFormat::Source => return Err(moosicbox_symphonia_player::PlaybackError::InvalidSource),
+                        })
+                    };
 
-                    tokio::task::spawn_blocking(move || {
-                        let source = source_send;
-
-                        let audio_output_handler =
-                            match format {
-                                #[cfg(feature = "aac")]
-                                AudioFormat::Aac => {
-                                    use moosicbox_symphonia_player::output::encoder::aac::encoder::AacEncoder;
-                                    Some(
-                                        moosicbox_symphonia_player::output::AudioOutputHandler::new()
-                                            .with_output(Box::new(move |spec, duration| {
-                                                Ok(Box::new(
-                                                    AacEncoder::with_writer(writer.clone())
-                                                        .open(spec, duration),
-                                                ))
-                                            })),
-                                    )
-                                }
-                                #[cfg(feature = "flac")]
-                                AudioFormat::Flac => {
-                                    use moosicbox_symphonia_player::output::encoder::flac::encoder::FlacEncoder;
-                                    Some(
-                                        moosicbox_symphonia_player::output::AudioOutputHandler::new()
-                                            .with_output(Box::new(move |spec, duration| {
-                                                Ok(Box::new(
-                                                    FlacEncoder::with_writer(writer.clone())
-                                                        .open(spec, duration),
-                                                ))
-                                            })),
-                                    )
-                                }
-                                #[cfg(feature = "mp3")]
-                                AudioFormat::Mp3 => {
-                                    use moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder;
-                                    let encoder_writer = writer.clone();
-                                    Some(
-                                        moosicbox_symphonia_player::output::AudioOutputHandler::new()
-                                            .with_output(Box::new(move |spec, duration| {
-                                                Ok(Box::new(
-                                                    Mp3Encoder::with_writer(encoder_writer.clone())
-                                                        .open(spec, duration),
-                                                ))
-                                            })),
-                                    )
-                                }
-                                #[cfg(feature = "opus")]
-                                AudioFormat::Opus => {
-                                    use moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder;
-                                    let encoder_writer = writer.clone();
-                                    Some(
-                                        moosicbox_symphonia_player::output::AudioOutputHandler::new()
-                                            .with_output(Box::new(move |spec, duration| {
-                                                Ok(Box::new(
-                                                    OpusEncoder::with_writer(encoder_writer.clone())
-                                                        .open(spec, duration),
-                                                ))
-                                            })),
-                                    )
-                                }
-                                AudioFormat::Source => None,
-                            };
-
-                        if let Some(mut audio_output_handler) = audio_output_handler {
-                            match source {
-                                TrackSource::LocalFilePath { ref path, .. } => {
-                                    if let Err(err) = play_file_path_str(
-                                        path,
-                                        &mut audio_output_handler,
-                                        true,
-                                        true,
-                                        None,
-                                        None,
-                                    ) {
-                                        log::error!("Failed to encode to aac: {err:?}");
-                                    }
-                                }
-                                TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } => {
-                                    let source: RemoteByteStreamMediaSource = RemoteByteStream::new(
-                                        url,
-                                        size,
-                                        true,
-                                        #[cfg(feature = "flac")]
-                                        {
-                                            format == AudioFormat::Flac
-                                        },
-                                        #[cfg(not(feature = "flac"))]
-                                        false,
-                                        CancellationToken::new(),
-                                    )
-                                    .into();
-                                    if let Err(err) = play_media_source(
-                                        MediaSourceStream::new(Box::new(source), Default::default()),
-                                        &Hint::new(),
-                                        &mut audio_output_handler,
-                                        true,
-                                        true,
-                                        None,
-                                        None,
-                                    ) {
-                                        log::error!("Failed to encode to aac: {err:?}");
-                                    }
-                                }
+                    match source {
+                        TrackSource::LocalFilePath { ref path, .. } => {
+                            if let Err(err) = play_file_path_str_async(
+                                path,
+                                get_handler,
+                                true,
+                                true,
+                                None,
+                                None,
+                            ).await {
+                                log::error!("Failed to encode to aac: {err:?}");
                             }
                         }
-                    })
-                    .await?;
+                        TrackSource::Tidal { ref url, .. } | TrackSource::Qobuz { ref url, .. } => {
+                            let source: RemoteByteStreamMediaSource = RemoteByteStream::new(
+                                url.to_string(),
+                                size,
+                                true,
+                                #[cfg(feature = "flac")]
+                                {
+                                    format == AudioFormat::Flac
+                                },
+                                #[cfg(not(feature = "flac"))]
+                                false,
+                                CancellationToken::new(),
+                            )
+                            .into();
+                            if let Err(err) = play_media_source_async(
+                                MediaSourceStream::new(Box::new(source), Default::default()),
+                                &Hint::new(),
+                                get_handler,
+                                true,
+                                true,
+                                None,
+                                None,
+                            ).await {
+                                log::error!("Failed to encode to aac: {err:?}");
+                            }
+                        }
+                    }
 
                     match source {
                         TrackSource::LocalFilePath { path, .. } => match format {
@@ -816,31 +800,23 @@ pub async fn get_or_init_track_visualization(
         .await
         .map_err(Box::new)?;
 
-    tokio::task::spawn_blocking(move || {
-        let mut audio_output_handler =
+    let get_handler = move || {
+        Ok(
             AudioOutputHandler::new().with_filter(Box::new(move |decoded, _packet, _track| {
                 inner_viz
                     .write()
                     .unwrap()
                     .extend_from_slice(&visualize(decoded));
                 Ok(())
-            }));
-
-        let hint = Hint::new();
-        let media_source = TrackBytesMediaSource::new(bytes);
-        let mss = MediaSourceStream::new(Box::new(media_source), Default::default());
-
-        play_media_source(
-            mss,
-            &hint,
-            &mut audio_output_handler,
-            true,
-            true,
-            None,
-            None,
+            })),
         )
-    })
-    .await??;
+    };
+
+    let hint = Hint::new();
+    let media_source = TrackBytesMediaSource::new(bytes);
+    let mss = MediaSourceStream::new(Box::new(media_source), Default::default());
+
+    play_media_source_async(mss, &hint, get_handler, true, true, None, None).await?;
 
     let viz = viz.read().unwrap();
     let count = std::cmp::min(max as usize, viz.len());

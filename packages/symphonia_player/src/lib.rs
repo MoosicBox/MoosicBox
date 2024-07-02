@@ -15,6 +15,7 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::core::units::Time;
 use thiserror::Error;
+use tokio::task::JoinError;
 
 pub mod media_sources;
 pub mod output;
@@ -35,10 +36,39 @@ pub enum PlaybackError {
     AudioOutput(#[from] AudioOutputError),
     #[error(transparent)]
     Symphonia(#[from] Error),
+    #[error(transparent)]
+    Join(#[from] JoinError),
+    #[error("No audio outputs")]
+    NoAudioOutputs,
+    #[error("Invalid source")]
+    InvalidSource,
+}
+
+pub async fn play_file_path_str_async(
+    path_str: &str,
+    get_audio_output_handler: impl FnOnce() -> GetAudioOutputHandlerRet + Send + 'static,
+    enable_gapless: bool,
+    verify: bool,
+    track_num: Option<usize>,
+    seek: Option<f64>,
+) -> Result<i32, PlaybackError> {
+    let path_str = path_str.to_owned();
+    tokio::task::spawn_blocking(move || {
+        let mut handler = get_audio_output_handler()?;
+        play_file_path_str(
+            &path_str,
+            &mut handler,
+            enable_gapless,
+            verify,
+            track_num,
+            seek,
+        )
+    })
+    .await?
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn play_file_path_str(
+fn play_file_path_str(
     path_str: &str,
     audio_output_handler: &mut AudioOutputHandler,
     enable_gapless: bool,
@@ -74,8 +104,35 @@ pub fn play_file_path_str(
     )
 }
 
+pub type GetAudioOutputHandlerRet = Result<AudioOutputHandler, PlaybackError>;
+
+pub async fn play_media_source_async(
+    media_source_stream: MediaSourceStream,
+    hint: &Hint,
+    get_audio_output_handler: impl FnOnce() -> GetAudioOutputHandlerRet + Send + 'static,
+    enable_gapless: bool,
+    verify: bool,
+    track_num: Option<usize>,
+    seek: Option<f64>,
+) -> Result<i32, PlaybackError> {
+    let hint = hint.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut handler = get_audio_output_handler()?;
+        play_media_source(
+            media_source_stream,
+            &hint,
+            &mut handler,
+            enable_gapless,
+            verify,
+            track_num,
+            seek,
+        )
+    })
+    .await?
+}
+
 #[allow(clippy::too_many_arguments)]
-pub fn play_media_source(
+fn play_media_source(
     media_source_stream: MediaSourceStream,
     hint: &Hint,
     audio_output_handler: &mut AudioOutputHandler,

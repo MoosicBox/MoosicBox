@@ -66,7 +66,7 @@ impl Player for LocalPlayer {
         let active_playback = self.active_playback.clone();
         let sent_playback_start_event = AtomicBool::new(false);
 
-        let response: Result<i32, PlayerError> = tokio::task::spawn_blocking(move || {
+        let get_handler = move || {
             let mut audio_output_handler = AudioOutputHandler::new()
                 .with_filter(Box::new({
                     let active_playback = active_playback.clone();
@@ -139,25 +139,27 @@ impl Player for LocalPlayer {
 
             moosicbox_assert::assert_or_err!(
                 audio_output_handler.contains_outputs_to_open(),
-                PlayerError::NoAudioOutputs,
+                moosicbox_symphonia_player::PlaybackError::NoAudioOutputs,
                 "No outputs set for the audio_output_handler"
             );
 
-            Ok(moosicbox_symphonia_player::play_media_source(
-                mss,
-                &playable_track.hint,
-                &mut audio_output_handler,
-                true,
-                true,
-                None,
-                seek,
-            )?)
-        })
-        .await?;
+            Ok(audio_output_handler)
+        };
+
+        let response = moosicbox_symphonia_player::play_media_source_async(
+            mss,
+            &playable_track.hint,
+            get_handler,
+            true,
+            true,
+            None,
+            seek,
+        )
+        .await;
 
         if let Err(e) = response {
             log::error!("Failed to play playback: {e:?}");
-            return Err(e);
+            return Err(e.into());
         }
 
         log::info!("Finished playback for track_id={}", track_id);
