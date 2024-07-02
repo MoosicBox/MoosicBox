@@ -297,7 +297,7 @@ impl AudioOutput for OpusEncoder<'_> {
                     Ok(bytes) => bytes,
                     Err(e) => {
                         log::error!("Failed to write: {e:?}");
-                        break;
+                        return Err(AudioOutputError::StreamClosed);
                     }
                 };
                 if count >= bytes.len() {
