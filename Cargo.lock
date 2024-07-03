@@ -3571,6 +3571,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_config",
  "moosicbox_env_utils",
+ "once_cell",
  "pingora",
  "pingora-core",
  "pingora-http",

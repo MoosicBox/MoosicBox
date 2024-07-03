@@ -23,6 +23,7 @@ moosicbox_env_utils = { path = "../env_utils", default-features = false }
 async-trait            = { workspace = true }
 free_log_client        = { workspace = true }
 log                    = { workspace = true }
+once_cell              = { workspace = true }
 pingora                = { workspace = true }
 pingora-core           = { workspace = true }
 pingora-http           = { workspace = true }

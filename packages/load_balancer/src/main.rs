@@ -1,10 +1,10 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
-use std::fs::create_dir_all;
+use std::{collections::HashMap, fs::create_dir_all};
 
 use moosicbox_config::get_config_dir_path;
 use moosicbox_env_utils::default_env;
-use moosicbox_load_balancer::LB;
+use moosicbox_load_balancer::{Router, PORT};
 use pingora::prelude::*;
 use pingora_load_balancing::{health_check::TcpHealthCheck, LoadBalancer};
 use pingora_proxy::http_proxy_service;
@@ -42,21 +42,43 @@ fn main() {
     let mut my_server = Server::new(None).unwrap();
     my_server.bootstrap();
 
-    let ips = std::env::var("IPS").expect("Must pass IPS environment variable");
-    let ips = ips.split(',').collect::<Vec<_>>();
-    let mut upstreams = LoadBalancer::try_from_iter(ips).unwrap();
+    let clusters = std::env::var("CLUSTERS").expect("Must pass CLUSTERS environment variable");
+    let clusters = clusters
+        .split(';')
+        .flat_map(|x| {
+            let (names, ips) = x.split_once(':').expect("Invalid cluster");
+            let names = names.split(',').collect::<Vec<_>>();
+            let ips = ips.split(',').collect::<Vec<_>>();
 
-    let hc = TcpHealthCheck::new();
-    upstreams.set_health_check(hc);
-    upstreams.health_check_frequency = Some(std::time::Duration::from_secs(1));
+            names.into_iter().map(move |x| (x.to_owned(), ips.clone()))
+        })
+        .map(|(name, ips)| {
+            let mut upstreams = LoadBalancer::try_from_iter(ips).unwrap();
 
-    let background = background_service("health check", upstreams);
-    let upstreams = background.task();
+            let hc = TcpHealthCheck::new();
+            upstreams.set_health_check(hc);
+            upstreams.health_check_frequency = Some(std::time::Duration::from_secs(10));
 
-    let mut lb = http_proxy_service(&my_server.configuration, LB::new(upstreams));
-    lb.add_tcp("0.0.0.0:6188");
+            let background = background_service("health check", upstreams);
+            (name, background)
+        })
+        .collect::<HashMap<_, _>>();
 
-    my_server.add_service(background);
+    let mut lb = http_proxy_service(
+        &my_server.configuration,
+        Router::new(
+            clusters
+                .iter()
+                .map(|x| (x.0.to_owned(), x.1.task()))
+                .collect::<HashMap<_, _>>(),
+        ),
+    );
+
+    lb.add_tcp(&format!("0.0.0.0:{}", *PORT));
+
+    for (_, service) in clusters {
+        my_server.add_service(service);
+    }
 
     my_server.add_service(lb);
     my_server.run_forever();
