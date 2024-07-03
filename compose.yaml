@@ -22,3 +22,13 @@ services:
                 AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
         ports:
             - "8004:8004"
+
+    moosicbox-tunnel-server-lb:
+        image: moosicbox-tunnel-server-lb
+        build:
+            context: .
+            dockerfile: packages/load_balancer/LoadBalancer.Dockerfile
+            args:
+                CLUSTERS: "${CLUSTERS}"
+        ports:
+            - "8007:8007"
