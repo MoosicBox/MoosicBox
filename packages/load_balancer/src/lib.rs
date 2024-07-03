@@ -32,7 +32,7 @@ impl ProxyHttp for Router {
 
     async fn upstream_peer(&self, session: &mut Session, _ctx: &mut ()) -> Result<Box<HttpPeer>> {
         let raw_path = std::str::from_utf8(session.req_header().raw_path()).map_err(|e| {
-            log::error!("Failed to parse path: {e:?}");
+            log::error!("upstream_peer: Failed to parse path: {e:?}");
             pingora_core::Error::new_str("Failed to parse path")
         })?;
         let headers = &session.req_header().headers;
@@ -42,7 +42,7 @@ impl ProxyHttp for Router {
             .unwrap_or_default();
 
         log::debug!(
-            "upstream_peer raw_path={raw_path} headers={:?} client={:?} server={:?}",
+            "upstream_peer: upstream_peer raw_path={raw_path} headers={:?} client={:?} server={:?}",
             headers,
             session.client_addr(),
             session.server_addr(),
@@ -52,30 +52,30 @@ impl ProxyHttp for Router {
             .0
             .get(host)
             .map(|x| {
-                log::debug!("Using cluster name={host}");
+                log::debug!("upstream_peer: Using cluster name={host}");
                 x
             })
             .or_else(|| match self.0.get("*") {
                 Some(fallback) => {
-                    log::debug!("Unsupported host={host} Falling back to *");
+                    log::debug!("upstream_peer: Unsupported host={host} Falling back to *");
                     Some(fallback)
                 }
                 None => {
-                    log::debug!("Unsupported host={host}");
+                    log::debug!("upstream_peer: Unsupported host={host}");
                     None
                 }
             })
             .ok_or_else(|| {
-                log::error!("Failed to select a cluster");
-                pingora_core::Error::new(pingora_core::ErrorType::UnknownError)
+                log::error!("upstream_peer: Failed to select a cluster");
+                pingora_core::Error::new_str("Failed to select a cluster")
             })?
             .select(b"", 256) // hash doesn't matter
             .ok_or_else(|| {
-                log::error!("Failed to select an upstream");
-                pingora_core::Error::new(pingora_core::ErrorType::UnknownError)
+                log::error!("upstream_peer: Failed to select an upstream");
+                pingora_core::Error::new_str("Failed to select an upstream")
             })?;
 
-        log::info!("upstream peer is: {:?}", upstream);
+        log::info!("upstream_peer: upstream peer is: {:?}", upstream);
 
         Ok(Box::new(HttpPeer::new(upstream, false, SNI.to_string())))
     }
@@ -89,7 +89,7 @@ impl ProxyHttp for Router {
         let sni: &str = &SNI;
         upstream_request.insert_header("Host", sni).unwrap();
         log::debug!(
-            "upstream_request_filter path={} headers={:?} client={:?} server={:?}",
+            "upstream_request_filter: path={} headers={:?} client={:?} server={:?}",
             std::str::from_utf8(upstream_request.raw_path()).map_err(|e| {
                 log::error!("Failed to parse path: {e:?}");
                 pingora_core::Error::new_str("Failed to parse path")
