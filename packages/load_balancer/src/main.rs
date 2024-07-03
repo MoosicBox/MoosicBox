@@ -53,7 +53,8 @@ fn main() {
             names.into_iter().map(move |x| (x.to_owned(), ips.clone()))
         })
         .map(|(name, ips)| {
-            let mut upstreams = LoadBalancer::try_from_iter(ips).unwrap();
+            let mut upstreams = LoadBalancer::try_from_iter(&ips)
+                .unwrap_or_else(|e| panic!("Invalid IPs '{ips:?}': {e:?}"));
 
             let hc = TcpHealthCheck::new();
             upstreams.set_health_check(hc);
