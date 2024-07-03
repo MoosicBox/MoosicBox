@@ -20,6 +20,7 @@ spec:
             labels:
                 io.kompose.network/moosicboxserver-default: "true"
                 io.kompose.service: moosicbox-tunnel-server
+                run: moosicbox-tunnel-service
         spec:
             containers:
                 - image: registry.digitalocean.com/moosicbox/moosicbox-tunnel-server
@@ -27,6 +28,5 @@ spec:
                   name: moosicbox-tunnel-server
                   ports:
                       - containerPort: 8004
-                        hostPort: 8004
                         protocol: TCP
             restartPolicy: Always

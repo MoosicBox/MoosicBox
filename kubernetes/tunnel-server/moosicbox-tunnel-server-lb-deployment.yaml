@@ -5,13 +5,18 @@ metadata:
         kompose.cmd: kompose convert -f compose.yaml
         kompose.version: 1.32.0 (765fde254)
     labels:
-        io.kompose.service: moosicbox-server
-    name: moosicbox-server
+        io.kompose.service: moosicbox-tunnel-server-lb
+    name: moosicbox-tunnel-server-lb
 spec:
     replicas: 1
     selector:
         matchLabels:
-            io.kompose.service: moosicbox-server
+            io.kompose.service: moosicbox-tunnel-server-lb
+    strategy:
+        type: RollingUpdate
+        rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 1
     template:
         metadata:
             annotations:
@@ -19,14 +24,14 @@ spec:
                 kompose.version: 1.32.0 (765fde254)
             labels:
                 io.kompose.network/moosicboxserver-default: "true"
-                io.kompose.service: moosicbox-server
-                run: moosicbox-service
+                io.kompose.service: moosicbox-tunnel-server-lb
         spec:
             containers:
-                - image: registry.digitalocean.com/moosicbox/moosicbox-server
+                - image: registry.digitalocean.com/moosicbox/moosicbox-tunnel-server-lb
                   imagePullPolicy: Always
-                  name: moosicbox-server
+                  name: moosicbox-tunnel-server-lb
                   ports:
-                      - containerPort: 8010
+                      - containerPort: 8007
+                        hostPort: 80
                         protocol: TCP
             restartPolicy: Always
