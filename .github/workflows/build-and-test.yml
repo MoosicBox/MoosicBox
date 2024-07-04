@@ -130,6 +130,10 @@ jobs:
                       path: packages/load_balancer
                       os: ubuntu-latest
 
+                    - name: logging
+                      path: packages/logging
+                      os: ubuntu-latest
+
                     - name: menu
                       path: packages/menu
                       os: ubuntu-latest

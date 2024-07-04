@@ -3580,6 +3580,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_logging"
+version = "0.1.0"
+dependencies = [
+ "free_log_client",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_config",
+ "moosicbox_env_utils",
+ "thiserror",
+]
+
+[[package]]
 name = "moosicbox_menu"
 version = "0.1.0"
 dependencies = [

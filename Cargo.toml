@@ -14,6 +14,7 @@ members = [
     "packages/image",
     "packages/json_utils",
     "packages/load_balancer",
+    "packages/logging",
     "packages/menu",
     "packages/middleware",
     "packages/moosicbox",
