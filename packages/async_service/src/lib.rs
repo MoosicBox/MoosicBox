@@ -66,13 +66,17 @@ macro_rules! async_service_body {
                         }
                         command = self.receiver.recv_async() => { Ok(command) }
                     ) {
-                        log::trace!("Received Service command");
-                        if let Err(e) = Self::process_command(ctx.clone(), command.cmd).await{
-                            log::error!("Failed to process command: {e:?}");
-                        }
-                        if let Some(tx) = command.tx {
-                            tx.send_async(()).await?;
-                        }
+                        let ctx = ctx.clone();
+                        $crate::tokio::spawn(async move {
+                            log::trace!("Received Service command");
+                            if let Err(e) = Self::process_command(ctx, command.cmd).await{
+                                log::error!("Failed to process command: {e:?}");
+                            }
+                            if let Some(tx) = command.tx {
+                                tx.send_async(()).await?;
+                            }
+                            Ok::<_, Error>(())
+                        });
                     }
 
                     Self::on_shutdown(ctx).await?;
