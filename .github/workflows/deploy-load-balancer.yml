@@ -35,3 +35,4 @@ jobs:
                   CLUSTERS: "tunnel.moosicbox.com:moosicbox-tunnel-service:8004;cloud.moosicbox.com:moosicbox-service:8010;${{ github.event.inputs.extra_clusters }}"
               run: |
                   ./do-deploy.sh moosicbox-tunnel-server-lb kubernetes/tunnel-server
+                  kubectl apply -f kubernetes/cert-manager.yaml
