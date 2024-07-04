@@ -22,6 +22,12 @@ pub static SSL_PORT: Lazy<u16> = Lazy::new(|| {
         .expect("Invalid SSL_PORT")
 });
 
+pub static SSL_CRT_PATH: Lazy<String> =
+    Lazy::new(|| std::env::var("SSL_CRT_PATH").unwrap_or("/etc/pingora/ssl/tls.crt".to_string()));
+
+pub static SSL_KEY_PATH: Lazy<String> =
+    Lazy::new(|| std::env::var("SSL_KEY_PATH").unwrap_or("/etc/pingora/ssl/tls.key".to_string()));
+
 static SNI: Lazy<String> = Lazy::new(|| format!("127.0.0.1:{}", *SSL_PORT));
 
 pub struct Router(HashMap<String, Arc<LoadBalancer<RoundRobin>>>);
