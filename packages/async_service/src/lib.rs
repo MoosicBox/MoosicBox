@@ -19,7 +19,7 @@ macro_rules! async_service_body {
             type Error;
 
             async fn process_command(
-                ctx: &mut $context,
+                ctx: $crate::Arc<$crate::tokio::sync::RwLock<$context>>,
                 command: $command,
             ) -> Result<(), Self::Error>;
 
@@ -30,14 +30,14 @@ macro_rules! async_service_body {
 
             #[allow(unused_variables)]
             async fn on_shutdown(
-                ctx: &mut $context,
+                ctx: $crate::Arc<$crate::tokio::sync::RwLock<$context>>,
             ) -> Result<(), Self::Error> {
                 Ok(())
             }
         }
 
         pub struct Service {
-            pub ctx: $context,
+            pub ctx: $crate::Arc<$crate::tokio::sync::RwLock<$context>>,
             pub token: $crate::CancellationToken,
             sender: $crate::Sender<Command>,
             receiver: $crate::Receiver<Command>,
@@ -47,7 +47,7 @@ macro_rules! async_service_body {
             pub fn new(ctx: $context) -> Self {
                 let (tx, rx) = $crate::unbounded();
                 Self {
-                    ctx,
+                    ctx: $crate::Arc::new($crate::tokio::sync::RwLock::new(ctx)),
                     sender: tx,
                     receiver: rx,
                     token: $crate::CancellationToken::new(),
@@ -57,6 +57,7 @@ macro_rules! async_service_body {
             pub fn start(mut self) -> $crate::JoinHandle<Result<(), Error>> {
                 $crate::tokio::spawn(async move {
                     self.on_start().await?;
+                    let ctx = self.ctx;
 
                     while let Ok(Ok(command)) = $crate::tokio::select!(
                         () = self.token.cancelled() => {
@@ -66,7 +67,7 @@ macro_rules! async_service_body {
                         command = self.receiver.recv_async() => { Ok(command) }
                     ) {
                         log::trace!("Received Service command");
-                        if let Err(e) = Self::process_command(&mut self.ctx, command.cmd).await{
+                        if let Err(e) = Self::process_command(ctx.clone(), command.cmd).await{
                             log::error!("Failed to process command: {e:?}");
                         }
                         if let Some(tx) = command.tx {
@@ -74,7 +75,7 @@ macro_rules! async_service_body {
                         }
                     }
 
-                    Self::on_shutdown(&mut self.ctx).await?;
+                    Self::on_shutdown(ctx).await?;
 
                     $crate::log::debug!("Stopped Service");
 
@@ -214,8 +215,11 @@ macro_rules! async_service {
 
 #[cfg(test)]
 mod test {
+    use std::sync::Arc;
+
     use async_trait::async_trait;
     use pretty_assertions::assert_eq;
+    use tokio::sync::RwLock;
 
     pub enum ExampleCommand {
         TestCommand { value: String },
@@ -235,15 +239,15 @@ mod test {
         type Error = example::Error;
 
         async fn process_command(
-            ctx: &mut ExampleContext,
+            ctx: Arc<RwLock<ExampleContext>>,
             command: ExampleCommand,
         ) -> Result<(), Self::Error> {
             match command {
                 ExampleCommand::TestCommand { value } => {
-                    ctx.value.clone_from(&value);
+                    ctx.write().await.value.clone_from(&value);
                 }
                 ExampleCommand::TestCommand2 => {
-                    assert_eq!(ctx.value, "hey".to_string());
+                    assert_eq!(ctx.read().await.value, "hey".to_string());
                 }
             }
             Ok(())

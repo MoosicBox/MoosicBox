@@ -210,16 +210,20 @@ impl service::Processor for service::Service {
     type Error = TrackPoolError;
 
     async fn on_start(&mut self) -> Result<(), Self::Error> {
-        self.ctx.token.replace(self.token.clone());
-        self.ctx.handle.replace(self.handle());
+        let mut ctx = self.ctx.write().await;
+        ctx.token.replace(self.token.clone());
+        ctx.handle.replace(self.handle());
         Ok(())
     }
 
-    async fn on_shutdown(_ctx: &mut Context) -> Result<(), Self::Error> {
+    async fn on_shutdown(_ctx: Arc<RwLock<Context>>) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    async fn process_command(ctx: &mut Context, command: Command) -> Result<(), Self::Error> {
+    async fn process_command(
+        ctx: Arc<RwLock<Context>>,
+        command: Command,
+    ) -> Result<(), Self::Error> {
         match command {
             Command::FetchTrackBytes {
                 tx,
@@ -231,7 +235,9 @@ impl service::Processor for service::Service {
                 fetch,
             } => {
                 tx.send_async(
-                    ctx.fetch_track_bytes(source, output_format, size, start, end, fetch)
+                    ctx.write()
+                        .await
+                        .fetch_track_bytes(source, output_format, size, start, end, fetch)
                         .await?,
                 )
                 .await?;
@@ -243,7 +249,7 @@ impl service::Processor for service::Service {
                 start,
                 end,
             } => {
-                if let Some(track_bytes_source) = ctx.pool.get_mut(&key) {
+                if let Some(track_bytes_source) = ctx.read().await.pool.get(&key) {
                     let mut track_bytes_source = track_bytes_source.clone();
                     tokio::spawn(async move {
                         track_bytes_source

@@ -1,10 +1,12 @@
 use std::{fmt::Display, sync::OnceLock};
 
+use moosicbox_async_service::Arc;
 use moosicbox_core::sqlite::models::UpdateSession;
 use moosicbox_player::player::Playback;
 use moosicbox_ws::{update_session, WebsocketSender};
 use service::Commander as _;
 use strum_macros::{AsRefStr, EnumString};
+use tokio::sync::RwLock;
 
 use crate::{ws::server::ChatServerHandle, DB};
 
@@ -44,11 +46,29 @@ impl service::Processor for service::Service {
     type Error = service::Error;
 
     async fn process_command(
-        ctx: &mut Context<ChatServerHandle>,
+        ctx: Arc<RwLock<Context<ChatServerHandle>>>,
         command: Command,
     ) -> Result<(), Self::Error> {
         log::debug!("process_command command={command}");
-        ctx.process_command(command).await?;
+        match command {
+            Command::UpdateSession { update } => {
+                log::debug!("Received UpdateSession command: {update:?}");
+
+                let db = if let Some(db) = DB.read().unwrap().as_ref() {
+                    db.clone()
+                } else {
+                    log::error!("No DB connection");
+                    return Err(
+                        std::io::Error::new(std::io::ErrorKind::Other, "No DB connection").into(),
+                    );
+                };
+                if let Err(err) =
+                    update_session(&**db, &ctx.read().await.sender, None, &update).await
+                {
+                    moosicbox_assert::die_or_error!("Failed to update_session: {err:?}");
+                }
+            }
+        }
         Ok(())
     }
 }
@@ -60,28 +80,5 @@ pub struct Context<Sender: WebsocketSender> {
 impl<Sender: WebsocketSender> Context<Sender> {
     pub const fn new(sender: Sender) -> Self {
         Self { sender }
-    }
-
-    async fn process_command(&self, cmd: Command) -> Result<(), std::io::Error> {
-        match cmd {
-            Command::UpdateSession { update } => {
-                log::debug!("Received UpdateSession command: {update:?}");
-
-                let db = if let Some(db) = DB.read().unwrap().as_ref() {
-                    db.clone()
-                } else {
-                    log::error!("No DB connection");
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "No DB connection",
-                    ));
-                };
-                if let Err(err) = update_session(&**db, &self.sender, None, &update).await {
-                    moosicbox_assert::die_or_error!("Failed to update_session: {err:?}");
-                }
-            }
-        }
-
-        Ok(())
     }
 }

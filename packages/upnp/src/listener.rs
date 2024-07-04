@@ -3,7 +3,10 @@ use std::{collections::HashMap, fmt::Display, pin::Pin, sync::Arc, time::Duratio
 use futures::Future;
 use strum_macros::AsRefStr;
 use thiserror::Error;
-use tokio::task::{JoinError, JoinHandle};
+use tokio::{
+    sync::RwLock,
+    task::{JoinError, JoinHandle},
+};
 use tokio_util::sync::CancellationToken;
 
 use crate::{MediaInfo, PositionInfo, TransportInfo};
@@ -159,19 +162,19 @@ impl Processor for Service {
     type Error = ListenerError;
 
     async fn on_start(&mut self) -> Result<(), Self::Error> {
-        self.ctx.token.replace(self.token.clone());
+        self.ctx.write().await.token.replace(self.token.clone());
         Ok(())
     }
 
-    async fn on_shutdown(ctx: &mut UpnpContext) -> Result<(), Self::Error> {
-        for (_, handle) in ctx.status_join_handles.drain() {
+    async fn on_shutdown(ctx: Arc<RwLock<UpnpContext>>) -> Result<(), Self::Error> {
+        for (_, handle) in ctx.write().await.status_join_handles.drain() {
             handle.await??;
         }
         Ok(())
     }
 
     async fn process_command(
-        ctx: &mut UpnpContext,
+        ctx: Arc<RwLock<UpnpContext>>,
         command: UpnpCommand,
     ) -> Result<(), Self::Error> {
         log::debug!("process_command command={command}");
@@ -332,10 +335,11 @@ impl Processor for Service {
 }
 
 async fn subscribe(
-    ctx: &mut UpnpContext,
+    ctx: Arc<RwLock<UpnpContext>>,
     interval: Duration,
     action: SubscriptionAction,
 ) -> Result<usize, ListenerError> {
+    let mut ctx = ctx.write().await;
     let subscription_id = ctx.subscription_id;
     ctx.subscription_id += 1;
     let token = ctx.token.clone().unwrap();
@@ -371,7 +375,11 @@ async fn subscribe(
     Ok(subscription_id)
 }
 
-async fn unsubscribe(ctx: &mut UpnpContext, subscription_id: usize) -> Result<(), ListenerError> {
+async fn unsubscribe(
+    ctx: Arc<RwLock<UpnpContext>>,
+    subscription_id: usize,
+) -> Result<(), ListenerError> {
+    let mut ctx = ctx.write().await;
     log::debug!("Unsubscribing subscription_id={subscription_id}");
     if let Some(token) = ctx.status_tokens.remove(&subscription_id) {
         token.cancel();
