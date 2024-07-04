@@ -154,10 +154,13 @@ macro_rules! async_service_body {
 
             async fn send_command_and_wait_async(&self, command: $command) -> Result<(), Self::Error> {
                 let (tx, rx) = $crate::unbounded();
-                self.sender.send_async(Command {
-                    cmd: command,
-                    tx: Some(tx)
-                }).await?;
+                let sender = self.sender.clone();
+                $crate::tokio::spawn(async move {
+                    sender.send_async(Command {
+                        cmd: command,
+                        tx: Some(tx)
+                    }).await
+                });
                 Ok(rx.recv_async().await?)
             }
 
