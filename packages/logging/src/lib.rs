@@ -7,6 +7,8 @@ use moosicbox_config::get_config_dir_path;
 use moosicbox_env_utils::default_env;
 use thiserror::Error;
 
+pub use free_log_client;
+
 #[derive(Debug, Error)]
 pub enum InitError {
     #[error(transparent)]
