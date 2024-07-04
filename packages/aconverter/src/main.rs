@@ -39,10 +39,7 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    free_log_client::init(
-        free_log_client::LogsConfig::builder().log_level(free_log_client::Level::Warn),
-    )
-    .expect("Failed to initialize FreeLog client");
+    moosicbox_logging::init("moosicbox_aconverter.log").expect("Failed to initialize FreeLog");
 
     let args = Args::parse();
 

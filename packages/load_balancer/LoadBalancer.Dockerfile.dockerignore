@@ -4,3 +4,4 @@
 !/packages/config
 !/packages/env_utils
 !/packages/load_balancer
+!/packages/logging

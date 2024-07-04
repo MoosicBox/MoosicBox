@@ -12,6 +12,7 @@ RUN cat Cargo.toml | \
     \"packages\/database\",\r\
     \"packages\/env_utils\",\r\
     \"packages\/json_utils\",\r\
+    \"packages\/logging\",\r\
     \"packages\/middleware\",\r\
     \"packages\/tunnel\",\r\
     \"packages\/tunnel_server\",\r\
@@ -23,6 +24,7 @@ COPY packages/assert/Cargo.toml packages/assert/Cargo.toml
 COPY packages/database/Cargo.toml packages/database/Cargo.toml
 COPY packages/env_utils/Cargo.toml packages/env_utils/Cargo.toml
 COPY packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
+COPY packages/logging/Cargo.toml packages/logging/Cargo.toml
 COPY packages/middleware/Cargo.toml packages/middleware/Cargo.toml
 COPY packages/tunnel/Cargo.toml packages/tunnel/Cargo.toml
 COPY packages/tunnel_server/Cargo.toml packages/tunnel_server/Cargo.toml
@@ -37,6 +39,7 @@ packages/assert|\
 packages/database|\
 packages/env_utils|\
 packages/json_utils|\
+packages/logging|\
 packages/middleware|\
 packages/tunnel|\
 packages/tunnel_server|\

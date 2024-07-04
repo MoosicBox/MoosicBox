@@ -30,6 +30,7 @@ moosicbox_files = { path = "../files", default-features = false, features = [
     "range",
     "track-range",
 ] }
+moosicbox_logging = { path = "../logging" }
 moosicbox_menu = { path = "../menu" }
 moosicbox_middleware = { path = "../middleware" }
 moosicbox_player = { path = "../player", default-features = false, features = [
@@ -78,7 +79,6 @@ actix-ws        = { workspace = true }
 awc             = { workspace = true }
 enum-as-inner   = { workspace = true }
 flume           = { workspace = true }
-free_log_client = { workspace = true }
 futures         = { workspace = true }
 futures-util    = { workspace = true }
 kanal           = { workspace = true }

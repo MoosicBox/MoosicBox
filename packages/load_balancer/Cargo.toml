@@ -19,9 +19,9 @@ required-features = []
 moosicbox_assert    = { path = "../assert", default-features = false }
 moosicbox_config    = { path = "../config", default-features = false }
 moosicbox_env_utils = { path = "../env_utils", default-features = false }
+moosicbox_logging   = { path = "../logging", default-features = false }
 
 async-trait            = { workspace = true }
-free_log_client        = { workspace = true }
 log                    = { workspace = true }
 once_cell              = { workspace = true }
 pingora                = { workspace = true }

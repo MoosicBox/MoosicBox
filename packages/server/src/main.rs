@@ -12,7 +12,6 @@ mod ws;
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App};
 use futures_util::Future;
-use moosicbox_config::get_config_dir_path;
 use moosicbox_core::{
     app::AppState,
     sqlite::models::{RegisterConnection, RegisterPlayer, UpdateSession},
@@ -34,7 +33,6 @@ use once_cell::sync::Lazy;
 use std::{
     collections::HashMap,
     env,
-    fs::create_dir_all,
     pin::Pin,
     sync::{atomic::AtomicUsize, Arc, Mutex},
     time::Duration,
@@ -60,41 +58,7 @@ static DB: Lazy<std::sync::RwLock<Option<Arc<Box<dyn Database>>>>> =
 
 #[allow(clippy::too_many_lines)]
 fn main() -> std::io::Result<()> {
-    #[cfg(debug_assertions)]
-    const DEFAULT_LOG_LEVEL: &str = "moosicbox=trace";
-    #[cfg(not(debug_assertions))]
-    const DEFAULT_LOG_LEVEL: &str = "moosicbox=info";
-
-    let mut logs_config = free_log_client::LogsConfig::builder()
-        .with_api_writer(
-            free_log_client::ApiWriterConfig::builder()
-                .user_agent("moosicbox_app")
-                .api_url("https://logs.moosicbox.com")
-                .log_level(free_log_client::Level::Warn),
-        )
-        .expect("Failed to initialize api writer");
-
-    if let Some(log_dir) = get_config_dir_path().map(|p| p.join("logs")) {
-        if create_dir_all(&log_dir).is_ok() {
-            logs_config = logs_config
-                .with_file_writer(
-                    free_log_client::FileWriterConfig::builder()
-                        .file_path(log_dir.join("moosicbox_app.log"))
-                        .log_level(free_log_client::Level::Debug),
-                )
-                .expect("Failed to initialize file writer");
-        } else {
-            log::warn!("Could not create directory path for logs files at {log_dir:?}");
-        }
-    } else {
-        log::warn!("Could not get config dir to put the logs into");
-    }
-
-    free_log_client::init(logs_config.env_filter(default_env!(
-        "MOOSICBOX_LOG",
-        default_env!("RUST_LOG", DEFAULT_LOG_LEVEL)
-    )))
-    .expect("Failed to initialize FreeLog");
+    moosicbox_logging::init("moosicbox_server.log").expect("Failed to initialize FreeLog");
 
     let args: Vec<String> = env::args().collect();
 

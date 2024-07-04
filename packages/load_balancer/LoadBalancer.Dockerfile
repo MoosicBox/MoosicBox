@@ -12,6 +12,7 @@ RUN cat Cargo.toml | \
     \"packages\/config\",\r\
     \"packages\/env_utils\",\r\
     \"packages\/load_balancer\",\r\
+    \"packages\/logging\",\r\
 ]/" | tr '\r' '\n' \
     > Cargo2.toml && \
     mv Cargo2.toml Cargo.toml
@@ -20,6 +21,7 @@ COPY packages/assert/Cargo.toml packages/assert/Cargo.toml
 COPY packages/config/Cargo.toml packages/config/Cargo.toml
 COPY packages/env_utils/Cargo.toml packages/env_utils/Cargo.toml
 COPY packages/load_balancer/Cargo.toml packages/load_balancer/Cargo.toml
+COPY packages/logging/Cargo.toml packages/logging/Cargo.toml
 
 RUN touch temp_lib.rs
 
@@ -31,6 +33,7 @@ packages/assert|\
 packages/config|\
 packages/env_utils|\
 packages/load_balancer|\
+packages/logging|\
 )/Cargo.toml$"); \
     do printf "\n\n[lib]\npath=\"../../temp_lib.rs\"" >> "$file"; \
   done

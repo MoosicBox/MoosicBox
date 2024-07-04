@@ -4,6 +4,7 @@
 !/packages/database
 !/packages/env_utils
 !/packages/json_utils
+!/packages/logging
 !/packages/middleware
 !/packages/tunnel
 !/packages/tunnel_server

@@ -12,6 +12,7 @@
 !/packages/files
 !/packages/image
 !/packages/json_utils
+!/packages/logging
 !/packages/menu
 !/packages/middleware
 !/packages/music_api
