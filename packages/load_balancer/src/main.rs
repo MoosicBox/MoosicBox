@@ -46,6 +46,8 @@ fn main() {
     let clusters = std::env::var("CLUSTERS").expect("Must pass CLUSTERS environment variable");
     let clusters = clusters
         .split(';')
+        .map(|x| x.trim())
+        .filter(|x| !x.is_empty())
         .flat_map(|x| {
             let (names, ips) = x.split_once(':').expect("Invalid cluster");
             let names = names.split(',').collect::<Vec<_>>();
