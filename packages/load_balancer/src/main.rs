@@ -4,7 +4,7 @@ use std::{collections::HashMap, fs::create_dir_all};
 
 use moosicbox_config::get_config_dir_path;
 use moosicbox_env_utils::default_env;
-use moosicbox_load_balancer::{Router, PORT};
+use moosicbox_load_balancer::{Router, PORT, SSL_PORT};
 use pingora::prelude::*;
 use pingora_load_balancing::{health_check::TcpHealthCheck, LoadBalancer};
 use pingora_proxy::http_proxy_service;
@@ -60,8 +60,7 @@ fn main() {
             upstreams.set_health_check(hc);
             upstreams.health_check_frequency = Some(std::time::Duration::from_secs(10));
 
-            let background = background_service("health check", upstreams);
-            (name, background)
+            (name, background_service("health check", upstreams))
         })
         .collect::<HashMap<_, _>>();
 
@@ -75,7 +74,18 @@ fn main() {
         ),
     );
 
-    lb.add_tcp(&format!("0.0.0.0:{}", *PORT));
+    let addr = format!("0.0.0.0:{}", *PORT);
+
+    lb.add_tcp(&addr);
+
+    let cert_path = "/etc/pingora/ssl/tls.crt";
+    let key_path = "/etc/pingora/ssl/tls.key";
+
+    let mut tls_settings =
+        pingora_core::listeners::TlsSettings::intermediate(cert_path, key_path).unwrap();
+    tls_settings.enable_h2();
+    let ssl_addr = format!("0.0.0.0:{}", *SSL_PORT);
+    lb.add_tls_with_settings(&ssl_addr, None, tls_settings);
 
     for (_, service) in clusters {
         my_server.add_service(service);

@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+    name: moosicbox-tunnel-server-ingress
+    annotations:
+        nginx.ingress.kubernetes.io/rewrite-target: /
+        cert-manager.io/issuer: moosicbox-tunnel-server-issuer
+spec:
+    ingressClassName: moosicbox-tunnel-server-ingress
+    rules:
+        - http:
+              paths:
+                  - path: /
+                    pathType: Prefix
+                    backend:
+                        service:
+                            name: moosicbox-tunnel-server-ingress
+                            port:
+                                number: 80

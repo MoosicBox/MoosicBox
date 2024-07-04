@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Service
+metadata:
+    annotations:
+        service.beta.kubernetes.io/do-loadbalancer-enable-proxy-protocol: "true"
+        service.beta.kubernetes.io/do-loadbalancer-hostname: "tunnel.moosicbox.com"
+    labels:
+        app.kubernetes.io/component: controller
+        app.kubernetes.io/instance: moosicbox-tunnel-server-ingress
+        app.kubernetes.io/name: moosicbox-tunnel-server-ingress
+        app.kubernetes.io/part-of: moosicbox-tunnel-server-ingress
+        app.kubernetes.io/version: 1.10.1
+    name: moosicbox-tunnel-server-ingress-controller
+spec:
+    type: NodePort
+    ipFamilies:
+        - IPv4
+    ipFamilyPolicy: SingleStack
+    ports:
+        - appProtocol: http
+          name: http
+          port: 80
+          protocol: TCP
+          targetPort: http
+        - appProtocol: https
+          name: https
+          port: 443
+          protocol: TCP
+          targetPort: https
+    selector:
+        app.kubernetes.io/component: controller
+        app.kubernetes.io/instance: moosicbox-tunnel-server-ingress
+        app.kubernetes.io/name: moosicbox-tunnel-server-ingress

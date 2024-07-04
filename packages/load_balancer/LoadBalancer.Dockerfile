@@ -56,4 +56,5 @@ ENV RUST_LOG=info,moosicbox=debug
 ARG CLUSTERS
 ENV CLUSTERS=${CLUSTERS}
 ENV PORT=8007
+ENV SSL_PORT=8008
 CMD ["./moosicbox_lb"]

@@ -1,0 +1,15 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+    name: moosicbox-tunnel-server-cert
+spec:
+    secretName: moosicbox-tunnel-server-cert
+    privateKey:
+        rotationPolicy: Always
+    additionalOutputFormats:
+        - type: CombinedPEM
+    issuerRef:
+        kind: ClusterIssuer
+        name: moosicbox-tunnel-server-issuer
+    dnsNames:
+        - tunnel.moosicbox.com
