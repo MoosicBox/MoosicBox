@@ -6,6 +6,7 @@ use moosicbox_config::get_config_dir_path;
 use moosicbox_env_utils::default_env;
 use moosicbox_load_balancer::{Router, PORT, SSL_PORT};
 use pingora::prelude::*;
+use pingora_core::listeners::TlsSettings;
 use pingora_load_balancing::{health_check::TcpHealthCheck, LoadBalancer};
 use pingora_proxy::http_proxy_service;
 
@@ -75,15 +76,15 @@ fn main() {
     );
 
     let addr = format!("0.0.0.0:{}", *PORT);
-
     lb.add_tcp(&addr);
 
-    let cert_path = "/etc/pingora/ssl/tls.crt";
-    let key_path = "/etc/pingora/ssl/tls.key";
+    let cert_dir = "/etc/pingora/ssl";
+    let cert_path = format!("{cert_dir}/tls.crt");
+    let key_path = format!("{cert_dir}/tls.key");
 
-    let mut tls_settings =
-        pingora_core::listeners::TlsSettings::intermediate(cert_path, key_path).unwrap();
+    let mut tls_settings = TlsSettings::intermediate(&cert_path, &key_path).unwrap();
     tls_settings.enable_h2();
+
     let ssl_addr = format!("0.0.0.0:{}", *SSL_PORT);
     lb.add_tls_with_settings(&ssl_addr, None, tls_settings);
 
