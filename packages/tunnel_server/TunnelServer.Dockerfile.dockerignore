@@ -1,6 +1,7 @@
 /packages/*
 
 !/packages/assert
+!/packages/config
 !/packages/database
 !/packages/env_utils
 !/packages/json_utils
