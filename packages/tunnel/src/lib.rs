@@ -4,7 +4,6 @@ use std::{collections::HashMap, fmt::Display, task::Poll, time::SystemTime};
 
 use bytes::Bytes;
 use futures_util::{Future, Stream};
-use log::debug;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::EnumString;
@@ -276,7 +275,7 @@ fn return_polled_bytes<F: Future<Output = ()>>(
 
     stream.packet_count += 1;
 
-    debug!(
+    log::debug!(
         "Received packet for {} {} {} bytes last={}",
         stream.request_id,
         stream.packet_count,
@@ -307,7 +306,7 @@ impl<F: Future<Output = ()>> Stream for TunnelStream<'_, F> {
         if stream.done {
             let end = SystemTime::now();
 
-            debug!(
+            log::debug!(
                 "Byte count: {} (received {} packet{}, took {}ms total, {}ms to first byte)",
                 stream.byte_count,
                 stream.packet_count,
@@ -325,15 +324,15 @@ impl<F: Future<Output = ()>> Stream for TunnelStream<'_, F> {
             return Poll::Ready(None);
         }
 
-        debug!("Waiting for next packet");
+        log::debug!("Waiting for next packet");
         let response = match stream.rx.poll_recv(cx) {
             Poll::Ready(Some(response)) => response,
             Poll::Pending => {
-                debug!("Pending...");
+                log::debug!("Pending...");
                 return Poll::Pending;
             }
             Poll::Ready(None) => {
-                debug!("Finished");
+                log::debug!("Finished");
                 return Poll::Ready(None);
             }
         };
@@ -349,12 +348,12 @@ impl<F: Future<Output = ()>> Stream for TunnelStream<'_, F> {
             .is_some_and(|n| n)
         {
             let response = stream.packet_queue.remove(0);
-            debug!("Sending queued packet {}", response.packet_id);
+            log::debug!("Sending queued packet {}", response.packet_id);
             return return_polled_bytes(stream, response);
         }
 
         if response.packet_id > stream.packet_count + 1 {
-            debug!(
+            log::debug!(
                 "Received future packet {}. Waiting for packet {} before continuing",
                 response.packet_id,
                 stream.packet_count + 1
