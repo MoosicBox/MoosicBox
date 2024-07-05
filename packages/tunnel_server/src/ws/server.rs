@@ -224,7 +224,7 @@ impl ChatServer {
         self.sessions.insert(id, tx.clone());
 
         if sender {
-            log::info!("connect: Adding connection client_id={client_id} conn_id={id}");
+            log::info!("connect: Adding sender connection client_id={client_id} conn_id={id}");
             upsert_connection(&client_id, &id.to_string()).await?;
             CACHE_CONNECTIONS_MAP.write().unwrap().insert(client_id, id);
         } else {
@@ -252,11 +252,13 @@ impl ChatServer {
             .unwrap()
             .retain(|client_id, id| {
                 if *id == conn_id {
-                    log::info!("disconnect: Removed connection client_id={client_id} conn_id={id}");
+                    log::info!(
+                        "disconnect: Removed sender connection client_id={client_id} conn_id={id}"
+                    );
                     false
                 } else {
                     log::trace!(
-                        "disconnect: Retained connection client_id={client_id} conn_id={id}"
+                        "disconnect: Retained sender connection client_id={client_id} conn_id={id}"
                     );
                     true
                 }
