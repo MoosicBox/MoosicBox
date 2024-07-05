@@ -18,7 +18,12 @@ static WS_SERVER_HANDLE: once_cell::sync::Lazy<
 > = once_cell::sync::Lazy::new(|| tokio::sync::RwLock::new(None));
 
 fn main() -> Result<(), std::io::Error> {
-    moosicbox_logging::init("moosicbox_tunnel_server.log").expect("Failed to initialize FreeLog");
+    if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {
+        console_subscriber::init();
+    } else {
+        moosicbox_logging::init("moosicbox_tunnel_server.log")
+            .expect("Failed to initialize FreeLog");
+    }
 
     let service_port = {
         let args: Vec<String> = env::args().collect();
