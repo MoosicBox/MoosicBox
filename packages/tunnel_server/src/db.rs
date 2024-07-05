@@ -548,6 +548,8 @@ pub async fn select_connection(client_id: &str) -> Result<Option<Connection>, Da
 }
 
 pub async fn delete_connection(tunnel_ws_id: &str) -> Result<(), DatabaseError> {
+    log::debug!("delete_connection: tunnel_ws_id={tunnel_ws_id}");
+
     let tunnel_ws_id = tunnel_ws_id.to_owned();
 
     resilient_exec(Box::new(move || {

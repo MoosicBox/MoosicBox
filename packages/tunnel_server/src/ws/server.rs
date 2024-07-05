@@ -219,11 +219,12 @@ impl ChatServer {
         // register session with random connection ID
         let id = thread_rng().gen::<usize>();
 
-        log::info!("Someone joined {id} sender={sender}");
+        log::debug!("Someone joined {id} sender={sender}");
 
         self.sessions.insert(id, tx.clone());
 
         if sender {
+            log::info!("Adding connection client_id={client_id} conn_id={id}");
             upsert_connection(&client_id, &id.to_string()).await?;
             CACHE_CONNECTIONS_MAP.write().unwrap().insert(client_id, id);
         } else {
@@ -248,7 +249,15 @@ impl ChatServer {
         CACHE_CONNECTIONS_MAP
             .write()
             .unwrap()
-            .retain(|_, id| *id != conn_id);
+            .retain(|client_id, id| {
+                if *id == conn_id {
+                    log::info!("Removing connection client_id={client_id} conn_id={id}");
+                    false
+                } else {
+                    log::trace!("Retaining connection client_id={client_id} conn_id={id}");
+                    true
+                }
+            });
 
         // remove sender
         self.sessions.remove(&conn_id);
