@@ -1,10 +1,11 @@
 [build]
+rustflags  = ["--cfg", "tokio_unstable"]
 target-dir = "target"
 
 [alias]
-"server:debug" = "run"
+server           = "server:release"
+"server:debug"   = "run"
 "server:release" = "run --release"
-server = "server:release"
 
 [env]
 RUST_LOG = "info"

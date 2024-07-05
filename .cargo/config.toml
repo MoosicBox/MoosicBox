@@ -1,3 +1,6 @@
+[build]
+rustflags = ["--cfg", "tokio_unstable"]
+
 [alias]
 server                                     = "server:release"
 "server:cpal"                              = "run --package moosicbox_server --release --no-default-features --features=cpal,aac,flac,mp3,opus,upnp"
