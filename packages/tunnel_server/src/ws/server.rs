@@ -219,20 +219,21 @@ impl ChatServer {
         // register session with random connection ID
         let id = thread_rng().gen::<usize>();
 
-        log::debug!("Someone joined {id} sender={sender}");
+        log::debug!("connect: Someone joined {id} sender={sender}");
 
         self.sessions.insert(id, tx.clone());
 
         if sender {
-            log::info!("Adding connection client_id={client_id} conn_id={id}");
+            log::info!("connect: Adding connection client_id={client_id} conn_id={id}");
             upsert_connection(&client_id, &id.to_string()).await?;
             CACHE_CONNECTIONS_MAP.write().unwrap().insert(client_id, id);
         } else {
+            log::info!("connect: Adding client connection client_id={client_id} conn_id={id}");
             self.clients.insert(id, tx.clone());
         }
 
         let count = self.visitor_count.fetch_add(1, Ordering::SeqCst) + 1;
-        log::debug!("Visitor count: {count}");
+        log::debug!("connect: Visitor count: {count}");
 
         // send id back
         Ok(id)
@@ -240,9 +241,9 @@ impl ChatServer {
 
     /// Unregister connection from room map and invoke ws api disconnect.
     async fn disconnect(&mut self, conn_id: ConnId) -> Result<(), DatabaseError> {
-        log::info!("Someone disconnected {conn_id}");
+        log::debug!("disconnect: Someone disconnected {conn_id}");
         let count = self.visitor_count.fetch_sub(1, Ordering::SeqCst) - 1;
-        log::debug!("Visitor count: {count}");
+        log::debug!("disconnect: Visitor count: {count}");
 
         delete_connection(&conn_id.to_string()).await?;
 
@@ -251,17 +252,23 @@ impl ChatServer {
             .unwrap()
             .retain(|client_id, id| {
                 if *id == conn_id {
-                    log::info!("Removing connection client_id={client_id} conn_id={id}");
+                    log::info!("disconnect: Removed connection client_id={client_id} conn_id={id}");
                     false
                 } else {
-                    log::trace!("Retaining connection client_id={client_id} conn_id={id}");
+                    log::trace!(
+                        "disconnect: Retained connection client_id={client_id} conn_id={id}"
+                    );
                     true
                 }
             });
 
         // remove sender
-        self.sessions.remove(&conn_id);
-        self.clients.remove(&conn_id);
+        if self.sessions.remove(&conn_id).is_some() {
+            log::debug!("disconnect: Removed client session conn_id={conn_id}");
+        };
+        if self.clients.remove(&conn_id).is_some() {
+            log::info!("disconnect: Removed client connection conn_id={conn_id}");
+        }
 
         Ok(())
     }
