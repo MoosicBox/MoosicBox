@@ -40,7 +40,7 @@ use std::{
 use throttle::Throttle;
 use tokio::try_join;
 use tokio_util::sync::CancellationToken;
-use ws::server::{ChatServerHandle, WsServer};
+use ws::server::{WsServer, WsServerHandle};
 
 use crate::playback_session::{service::Commander, PLAYBACK_EVENT_HANDLE};
 
@@ -49,7 +49,7 @@ static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken
 static UPNP_LISTENER_HANDLE: std::sync::OnceLock<moosicbox_upnp::listener::Handle> =
     std::sync::OnceLock::new();
 
-static CHAT_SERVER_HANDLE: Lazy<tokio::sync::RwLock<Option<ws::server::ChatServerHandle>>> =
+static WS_SERVER_HANDLE: Lazy<tokio::sync::RwLock<Option<ws::server::WsServerHandle>>> =
     Lazy::new(|| tokio::sync::RwLock::new(None));
 
 #[allow(clippy::type_complexity)]
@@ -144,7 +144,7 @@ fn main() -> std::io::Result<()> {
                     let api_event: ApiProgressEvent = event.into();
 
                     if let Err(err) = send_download_event(
-                        CHAT_SERVER_HANDLE.read().await.as_ref().unwrap(),
+                        WS_SERVER_HANDLE.read().await.as_ref().unwrap(),
                         None,
                         api_event,
                     )
@@ -157,9 +157,9 @@ fn main() -> std::io::Result<()> {
         ))
         .await;
 
-        let (mut chat_server, server_tx) = WsServer::new(database.clone());
+        let (mut ws_server, server_tx) = WsServer::new(database.clone());
         let handle = server_tx.clone();
-        CHAT_SERVER_HANDLE.write().await.replace(server_tx);
+        WS_SERVER_HANDLE.write().await.replace(server_tx);
 
         let playback_event_service =
             playback_session::service::Service::new(playback_session::Context::new(handle.clone()));
@@ -181,10 +181,10 @@ fn main() -> std::io::Result<()> {
                 .expect("Failed to setup tunnel connection");
 
         if let Some(ref tunnel_handle) = tunnel_handle {
-            chat_server.add_sender(Box::new(tunnel_handle.clone()));
+            ws_server.add_sender(Box::new(tunnel_handle.clone()));
         }
 
-        let chat_server_handle = tokio::spawn(chat_server.run());
+        let ws_server_handle = tokio::spawn(ws_server.run());
 
         if let Err(err) =
             register_server_player(&**database.clone(), handle.clone(), &tunnel_handle).await
@@ -435,7 +435,7 @@ fn main() -> std::io::Result<()> {
                 }
 
                 log::debug!("Shutting down ws server...");
-                if let Some(x) = CHAT_SERVER_HANDLE.write().await.take() {
+                if let Some(x) = WS_SERVER_HANDLE.write().await.take() {
                     x.shutdown();
                 }
 
@@ -487,9 +487,9 @@ fn main() -> std::io::Result<()> {
                 resp
             },
             async move {
-                let resp = chat_server_handle
+                let resp = ws_server_handle
                     .await
-                    .expect("Failed to shut down chat server");
+                    .expect("Failed to shut down ws server");
                 log::debug!("Ws server connection closed");
                 resp
             },
@@ -614,7 +614,7 @@ fn handle_server_playback_update(
 
 async fn register_server_player(
     db: &dyn Database,
-    ws: ChatServerHandle,
+    ws: WsServerHandle,
     tunnel_handle: &Option<TunnelSenderHandle>,
 ) -> Result<(), WebsocketSendError> {
     let connection_id = "self";
@@ -632,11 +632,11 @@ async fn register_server_player(
         }],
     };
 
-    let handle = CHAT_SERVER_HANDLE
+    let handle = WS_SERVER_HANDLE
         .read()
         .await
         .clone()
-        .ok_or(WebsocketSendError::Unknown("No chat server handle".into()))?;
+        .ok_or(WebsocketSendError::Unknown("No ws server handle".into()))?;
 
     let connection = moosicbox_ws::register_connection(db, &handle, &context, &payload).await?;
 
@@ -743,7 +743,7 @@ fn handle_upnp_playback_update(update: &UpdateSession) -> Pin<Box<dyn Future<Out
 #[cfg(feature = "upnp")]
 async fn register_upnp_players(
     db: &dyn Database,
-    ws: ChatServerHandle,
+    ws: WsServerHandle,
     tunnel_handle: &Option<TunnelSenderHandle>,
 ) -> Result<(), WebsocketSendError> {
     let connection_id = "self";
@@ -757,11 +757,11 @@ async fn register_upnp_players(
         r#type: "SYMPHONIA".into(),
     }];
 
-    let handle = CHAT_SERVER_HANDLE
+    let handle = WS_SERVER_HANDLE
         .read()
         .await
         .clone()
-        .ok_or(WebsocketSendError::Unknown("No chat server handle".into()))?;
+        .ok_or(WebsocketSendError::Unknown("No ws server handle".into()))?;
 
     let players = moosicbox_ws::register_players(db, &handle, &context, &payload).await?;
 

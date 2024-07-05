@@ -29,7 +29,7 @@ use crate::db::{
     insert_client_access_token, insert_magic_token, insert_signature_token, select_magic_token,
 };
 use crate::ws::server::{ConnectionIdError, RequestHeaders};
-use crate::CHAT_SERVER_HANDLE;
+use crate::WS_SERVER_HANDLE;
 
 #[route("/health", method = "GET")]
 pub async fn health_endpoint() -> Result<Json<Value>> {
@@ -275,7 +275,7 @@ async fn handle_request(
 
     let tunnel_stream = TunnelStream::new(request_id, rx, abort_token, &|request_id| async move {
         debug!("Request {request_id} ended");
-        CHAT_SERVER_HANDLE
+        WS_SERVER_HANDLE
             .read()
             .await
             .as_ref()
@@ -324,22 +324,22 @@ fn request(
 
     tokio::spawn(async move {
         debug!("Sending server request {request_id}");
-        let chat_server = CHAT_SERVER_HANDLE.read().await.as_ref().unwrap().clone();
-        chat_server
+        let ws_server = WS_SERVER_HANDLE.read().await.as_ref().unwrap().clone();
+        ws_server
             .request_start(request_id, tx, headers_tx, abort_token)
             .await;
 
-        let conn_id = match chat_server.get_connection_id(&client_id).await {
+        let conn_id = match ws_server.get_connection_id(&client_id).await {
             Ok(conn_id) => conn_id,
             Err(err) => {
                 log::error!("Failed to get connection id for request_id={request_id} client_id={client_id}: {err:?}");
-                chat_server.request_end(request_id).await;
+                ws_server.request_end(request_id).await;
                 return Err(err);
             }
         };
 
         debug!("Sending server request {request_id} to {conn_id}");
-        chat_server
+        ws_server
             .send_message(
                 conn_id,
                 &serde_json::to_value(TunnelRequest::Http(TunnelHttpRequest {

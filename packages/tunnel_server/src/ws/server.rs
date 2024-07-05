@@ -1,5 +1,3 @@
-//! A multi-room chat server.
-
 use std::{
     collections::HashMap,
     fmt, io,
@@ -27,7 +25,7 @@ use tokio_util::sync::CancellationToken;
 use crate::db::{delete_connection, select_connection, upsert_connection, DatabaseError};
 use crate::ws::{ConnId, Msg};
 
-/// A command received by the [`ChatServer`].
+/// A command received by the [`WsServer`].
 #[derive(Debug)]
 enum Command {
     Connect {
@@ -84,13 +82,13 @@ pub struct RequestHeaders {
     pub headers: HashMap<String, String>,
 }
 
-/// A multi-room chat server.
+/// A multi-room ws server.
 ///
-/// Contains the logic of how connections chat with each other plus room management.
+/// Contains the logic of how connections ws with each other plus room management.
 ///
 /// Call and spawn [`run`](Self::run) to start processing commands.
 #[derive(Debug)]
-pub struct ChatServer {
+pub struct WsServer {
     /// Map of connection IDs to their message receivers.
     sessions: HashMap<ConnId, mpsc::UnboundedSender<Msg>>,
     clients: HashMap<ConnId, mpsc::UnboundedSender<Msg>>,
@@ -128,8 +126,8 @@ pub enum WebsocketMessageError {
     WebsocketSend(#[from] SendError<String>),
 }
 
-impl ChatServer {
-    pub fn new() -> (Self, ChatServerHandle) {
+impl WsServer {
+    pub fn new() -> (Self, WsServerHandle) {
         let (cmd_tx, cmd_rx) = flume::unbounded();
 
         (
@@ -143,7 +141,7 @@ impl ChatServer {
                 cmd_rx,
                 ws_requests: HashMap::new(),
             },
-            ChatServerHandle { cmd_tx },
+            WsServerHandle { cmd_tx },
         )
     }
 
@@ -519,15 +517,15 @@ pub enum ConnectionIdError {
 static CACHE_CONNECTIONS_MAP: once_cell::sync::Lazy<std::sync::RwLock<HashMap<String, usize>>> =
     once_cell::sync::Lazy::new(|| std::sync::RwLock::new(HashMap::new()));
 
-/// Handle and command sender for chat server.
+/// Handle and command sender for ws server.
 ///
 /// Reduces boilerplate of setting up response channels in WebSocket handlers.
 #[derive(Debug, Clone)]
-pub struct ChatServerHandle {
+pub struct WsServerHandle {
     cmd_tx: flume::Sender<Command>,
 }
 
-impl ChatServerHandle {
+impl WsServerHandle {
     /// Register client message sender and obtain connection ID.
     pub async fn connect(
         &self,
@@ -537,7 +535,7 @@ impl ChatServerHandle {
     ) -> ConnId {
         let (res_tx, res_rx) = oneshot::channel();
 
-        // unwrap: chat server should not have been dropped
+        // unwrap: ws server should not have been dropped
         self.cmd_tx
             .send_async(Command::Connect {
                 conn_tx,
@@ -548,13 +546,13 @@ impl ChatServerHandle {
             .await
             .unwrap();
 
-        // unwrap: chat server does not drop out response channel
+        // unwrap: ws server does not drop out response channel
         res_rx.await.unwrap()
     }
 
     /// Broadcast message to current room.
     pub async fn send_message(&self, conn: ConnId, msg: impl Into<String>) {
-        // unwrap: chat server should not have been dropped
+        // unwrap: ws server should not have been dropped
         self.cmd_tx
             .send_async(Command::Message {
                 msg: msg.into(),
@@ -604,7 +602,7 @@ impl ChatServerHandle {
 
     /// Unregister message sender and broadcast disconnection message to current room.
     pub async fn disconnect(&self, conn: ConnId) {
-        // unwrap: chat server should not have been dropped
+        // unwrap: ws server should not have been dropped
         self.cmd_tx
             .send_async(Command::Disconnect { conn })
             .await

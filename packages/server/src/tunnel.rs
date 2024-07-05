@@ -11,7 +11,7 @@ use thiserror::Error;
 use tokio::task::JoinHandle;
 use url::Url;
 
-use crate::{CANCELLATION_TOKEN, CHAT_SERVER_HANDLE};
+use crate::{CANCELLATION_TOKEN, WS_SERVER_HANDLE};
 
 #[derive(Debug, Error)]
 pub enum SetupTunnelError {
@@ -101,11 +101,11 @@ pub async fn setup_tunnel(
                                             }
                                         }
                                         TunnelRequest::Ws(request) => {
-                                            let sender = CHAT_SERVER_HANDLE
+                                            let sender = WS_SERVER_HANDLE
                                                 .read()
                                                 .await
                                                 .as_ref()
-                                                .ok_or("Failed to get chat server handle")?
+                                                .ok_or("Failed to get ws server handle")?
                                                 .clone();
                                             if let Err(err) = tunnel
                                                 .ws_request(

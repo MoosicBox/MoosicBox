@@ -1,5 +1,3 @@
-//! A multi-room chat server.
-
 use std::{
     collections::{HashMap, HashSet},
     io,
@@ -60,7 +58,7 @@ impl WebsocketSender for WsServer {
     }
 }
 
-/// A command received by the [`ChatServer`].
+/// A command received by the [`WsServer`].
 #[derive(Debug)]
 pub enum Command {
     AddPlayerAction {
@@ -111,9 +109,9 @@ pub enum Command {
     },
 }
 
-/// A multi-room chat server.
+/// A multi-room ws server.
 ///
-/// Contains the logic of how connections chat with each other plus room management.
+/// Contains the logic of how connections ws with each other plus room management.
 ///
 /// Call and spawn [`run`](Self::run) to start processing commands.
 #[allow(clippy::module_name_repetitions)]
@@ -141,7 +139,7 @@ pub struct WsServer {
 }
 
 impl WsServer {
-    pub fn new(db: Arc<Box<dyn Database>>) -> (Self, ChatServerHandle) {
+    pub fn new(db: Arc<Box<dyn Database>>) -> (Self, WsServerHandle) {
         // create empty server
         let mut rooms = HashMap::with_capacity(4);
 
@@ -150,7 +148,7 @@ impl WsServer {
 
         let (cmd_tx, cmd_rx) = flume::unbounded();
         let token = CancellationToken::new();
-        let handle = ChatServerHandle {
+        let handle = WsServerHandle {
             cmd_tx,
             token: token.clone(),
         };
@@ -420,17 +418,17 @@ impl WsServer {
     }
 }
 
-/// Handle and command sender for chat server.
+/// Handle and command sender for ws server.
 ///
 /// Reduces boilerplate of setting up response channels in `WebSocket` handlers.
 #[derive(Debug, Clone)]
-pub struct ChatServerHandle {
+pub struct WsServerHandle {
     cmd_tx: flume::Sender<Command>,
     token: CancellationToken,
 }
 
 #[async_trait]
-impl WebsocketSender for ChatServerHandle {
+impl WebsocketSender for WsServerHandle {
     async fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
         let id = connection_id.parse::<usize>().unwrap();
         self.send(id, data.to_string()).await;
@@ -463,7 +461,7 @@ impl WebsocketSender for ChatServerHandle {
     }
 }
 
-impl ChatServerHandle {
+impl WsServerHandle {
     pub async fn add_player_action(&self, id: i32, action: PlayerAction) {
         log::trace!("Sending AddPlayerAction command");
 
