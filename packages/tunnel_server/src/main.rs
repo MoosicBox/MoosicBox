@@ -13,8 +13,8 @@ use moosicbox_tunnel_server::CANCELLATION_TOKEN;
 use std::env;
 use tokio::try_join;
 
-static CHAT_SERVER_HANDLE: once_cell::sync::Lazy<
-    tokio::sync::RwLock<Option<ws::server::ChatServerHandle>>,
+static WS_SERVER_HANDLE: once_cell::sync::Lazy<
+    tokio::sync::RwLock<Option<ws::server::WsServerHandle>>,
 > = once_cell::sync::Lazy::new(|| tokio::sync::RwLock::new(None));
 
 fn main() -> Result<(), std::io::Error> {
@@ -52,10 +52,10 @@ fn main() -> Result<(), std::io::Error> {
             .await
             .expect("Failed to init postgres DB");
 
-        let (chat_server, server_tx) = ws::server::ChatServer::new();
-        let chat_server = tokio::task::spawn(chat_server.run());
+        let (ws_server, server_tx) = ws::server::WsServer::new();
+        let ws_server = tokio::task::spawn(ws_server.run());
 
-        CHAT_SERVER_HANDLE.write().await.replace(server_tx.clone());
+        WS_SERVER_HANDLE.write().await.replace(server_tx.clone());
 
         let app = move || {
             let cors = Cors::default()
@@ -102,7 +102,7 @@ fn main() -> Result<(), std::io::Error> {
                 CANCELLATION_TOKEN.cancel();
 
                 log::debug!("Shutting down ws server...");
-                CHAT_SERVER_HANDLE.write().await.take();
+                WS_SERVER_HANDLE.write().await.take();
 
                 log::debug!("Shutting down db client...");
                 db::DB.lock().await.take();
@@ -121,10 +121,10 @@ fn main() -> Result<(), std::io::Error> {
                 resp
             },
             async move {
-                match chat_server.await {
+                match ws_server.await {
                     Ok(value) => value,
                     Err(err) => {
-                        panic!("Failed to shut down chat server: {err:?}");
+                        panic!("Failed to shut down ws server: {err:?}");
                     }
                 }
             }

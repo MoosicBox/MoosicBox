@@ -8,7 +8,7 @@ use futures_util::{
 use moosicbox_tunnel::TunnelWsResponse;
 use tokio::{pin, sync::mpsc, time::interval};
 
-use crate::ws::server::ChatServerHandle;
+use crate::ws::server::WsServerHandle;
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -18,8 +18,8 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Echo text & binary messages received from the client, respond to ping messages, and monitor
 /// connection health to detect network issues and free up resources.
-pub async fn chat_ws(
-    chat_server: ChatServerHandle,
+pub async fn handle_ws(
+    ws_server: WsServerHandle,
     mut session: actix_ws::Session,
     mut msg_stream: actix_ws::MessageStream,
     client_id: String,
@@ -32,8 +32,8 @@ pub async fn chat_ws(
 
     let (conn_tx, mut conn_rx) = mpsc::unbounded_channel();
 
-    // unwrap: chat server is not dropped before the HTTP server
-    let conn_id = chat_server.connect(&client_id, sender, conn_tx).await;
+    // unwrap: ws server is not dropped before the HTTP server
+    let conn_id = ws_server.connect(&client_id, sender, conn_tx).await;
 
     log::info!("Connection id: {conn_id}");
 
@@ -71,7 +71,7 @@ pub async fn chat_ws(
 
                     #[cfg(feature = "base64")]
                     if let Ok(response) = text.try_into() {
-                        chat_server.response(conn_id, response).await;
+                        ws_server.response(conn_id, response).await;
                         finished = true
                     }
 
@@ -80,14 +80,14 @@ pub async fn chat_ws(
                             if let Ok(response) = serde_json::from_str::<TunnelWsResponse>(text) {
                                 if response.request_id == 0 {
                                     log::debug!("Propagating ws message {text}");
-                                    if let Err(err) = chat_server.ws_message(response).await {
+                                    if let Err(err) = ws_server.ws_message(response).await {
                                         log::error!(
                                             "Failed to propagate ws message from tunnel_server: {err:?}"
                                         );
                                     }
                                 } else {
                                     log::debug!("Propagating ws response");
-                                    if let Err(err) = chat_server.ws_response(response).await {
+                                    if let Err(err) = ws_server.ws_response(response).await {
                                         log::error!(
                                             "Failed to propagate ws response from tunnel_server: {err:?}"
                                         );
@@ -97,7 +97,7 @@ pub async fn chat_ws(
                                 log::error!("Invalid TunnelWsResponse: {text}");
                             }
                         } else if let Err(err) =
-                            chat_server.ws_request(conn_id, &client_id, text).await
+                            ws_server.ws_request(conn_id, &client_id, text).await
                         {
                             log::error!(
                                 "Failed to propagate ws request from tunnel_server: {err:?}"
@@ -109,7 +109,7 @@ pub async fn chat_ws(
                 Message::Binary(bytes) => {
                     last_heartbeat = Instant::now();
 
-                    chat_server.response(conn_id, bytes.into()).await;
+                    ws_server.response(conn_id, bytes.into()).await;
                 }
 
                 Message::Close(reason) => break reason,
@@ -131,16 +131,16 @@ pub async fn chat_ws(
                 break None;
             }
 
-            // chat messages received from other room participants
-            Either::Left((Either::Right((Some(chat_msg), _)), _)) => {
-                if let Err(err) = session.text(chat_msg).await {
+            // ws messages received from other room participants
+            Either::Left((Either::Right((Some(ws_msg), _)), _)) => {
+                if let Err(err) = session.text(ws_msg).await {
                     log::error!("Failed to send text message to conn_id='{conn_id}' client_id='{client_id}': {err:?}");
                 }
             }
 
             // all connection's message senders were dropped
             Either::Left((Either::Right((None, _)), _)) => unreachable!(
-                "all connection message senders were dropped; chat server may have panicked"
+                "all connection message senders were dropped; ws server may have panicked"
             ),
 
             // heartbeat internal tick
@@ -159,7 +159,7 @@ pub async fn chat_ws(
         };
     };
 
-    chat_server.disconnect(conn_id).await;
+    ws_server.disconnect(conn_id).await;
 
     // attempt to close connection gracefully
     let _ = session.close(close_reason).await;

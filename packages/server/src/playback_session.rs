@@ -8,7 +8,7 @@ use service::Commander as _;
 use strum_macros::{AsRefStr, EnumString};
 use tokio::sync::RwLock;
 
-use crate::{ws::server::ChatServerHandle, DB};
+use crate::{ws::server::WsServerHandle, DB};
 
 pub static PLAYBACK_EVENT_HANDLE: OnceLock<service::Handle> = OnceLock::new();
 
@@ -36,9 +36,9 @@ impl Display for Command {
 }
 
 pub mod service {
-    use crate::ws::server::ChatServerHandle;
+    use crate::ws::server::WsServerHandle;
 
-    moosicbox_async_service::async_service!(super::Command, super::Context<ChatServerHandle>);
+    moosicbox_async_service::async_service!(super::Command, super::Context<WsServerHandle>);
 }
 
 #[moosicbox_async_service::async_trait]
@@ -46,7 +46,7 @@ impl service::Processor for service::Service {
     type Error = service::Error;
 
     async fn process_command(
-        ctx: Arc<RwLock<Context<ChatServerHandle>>>,
+        ctx: Arc<RwLock<Context<WsServerHandle>>>,
         command: Command,
     ) -> Result<(), Self::Error> {
         log::debug!("process_command command={command}");

@@ -1,4 +1,4 @@
-use crate::{ws::handler, CHAT_SERVER_HANDLE};
+use crate::{ws::handler, WS_SERVER_HANDLE};
 use actix_web::{
     get,
     web::{self, Json},
@@ -24,12 +24,12 @@ pub async fn websocket(
     let (response, session, msg_stream) = actix_ws::handle(&req, stream)?;
 
     // spawn websocket handler (and don't await it) so that the response is returned immediately
-    spawn_local(handler::chat_ws(
-        CHAT_SERVER_HANDLE
+    spawn_local(handler::handle_ws(
+        WS_SERVER_HANDLE
             .read()
             .await
             .as_ref()
-            .expect("No ChatServerHandle available")
+            .expect("No WsServerHandle available")
             .clone(),
         session,
         msg_stream,

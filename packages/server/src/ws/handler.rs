@@ -7,7 +7,7 @@ use futures_util::{
 };
 use tokio::{pin, sync::mpsc, time::interval};
 
-use crate::ws::{server::ChatServerHandle, ConnId};
+use crate::ws::{server::WsServerHandle, ConnId};
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -18,8 +18,8 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 /// Echo text & binary messages received from the client, respond to ping messages, and monitor
 /// connection health to detect network issues and free up resources.
 #[allow(clippy::future_not_send)]
-pub async fn chat_ws(
-    chat_server: ChatServerHandle,
+pub async fn handle_ws(
+    ws_server: WsServerHandle,
     mut session: actix_ws::Session,
     mut msg_stream: actix_ws::MessageStream,
 ) {
@@ -31,7 +31,7 @@ pub async fn chat_ws(
 
     let (conn_tx, mut conn_rx) = mpsc::unbounded_channel();
 
-    let conn_id = chat_server.connect(conn_tx).await;
+    let conn_id = ws_server.connect(conn_tx).await;
 
     let close_reason = loop {
         // most of the futures we process need to be stack-pinned to work with select()
@@ -59,7 +59,7 @@ pub async fn chat_ws(
                 }
 
                 Message::Text(text) => {
-                    process_text_msg(&chat_server, &mut session, &text, conn_id, &mut name).await;
+                    process_text_msg(&ws_server, &mut session, &text, conn_id, &mut name).await;
                 }
 
                 Message::Binary(_bin) => {
@@ -82,16 +82,16 @@ pub async fn chat_ws(
             // client WebSocket stream ended
             Either::Left((Either::Left((None, _)), _)) => break None,
 
-            // chat messages received from other room participants
-            Either::Left((Either::Right((Some(chat_msg), _)), _)) => {
-                if let Err(err) = session.text(chat_msg).await {
+            // ws messages received from other room participants
+            Either::Left((Either::Right((Some(ws_msg), _)), _)) => {
+                if let Err(err) = session.text(ws_msg).await {
                     log::error!("Failed to send text message: {err:?}");
                 }
             }
 
             // all connection's message senders were dropped
             Either::Left((Either::Right((None, _)), _)) => unreachable!(
-                "all connection message senders were dropped; chat server may have panicked"
+                "all connection message senders were dropped; ws server may have panicked"
             ),
 
             // heartbeat internal tick
@@ -110,14 +110,14 @@ pub async fn chat_ws(
         };
     };
 
-    chat_server.disconnect(conn_id).await;
+    ws_server.disconnect(conn_id).await;
 
     // attempt to close connection gracefully
     let _ = session.close(close_reason).await;
 }
 
 async fn process_text_msg(
-    chat_server: &ChatServerHandle,
+    ws_server: &WsServerHandle,
     session: &mut actix_ws::Session,
     text: &str,
     conn: ConnId,
@@ -135,7 +135,7 @@ async fn process_text_msg(
             "/list" => {
                 log::info!("conn {conn}: listing rooms");
 
-                let rooms = chat_server.list_rooms().await;
+                let rooms = ws_server.list_rooms().await;
 
                 for room in rooms {
                     session.text(room).await.unwrap();
@@ -146,7 +146,7 @@ async fn process_text_msg(
                 Some(room) => {
                     log::info!("conn {conn}: joining room {room}");
 
-                    chat_server.join_room(conn, room).await;
+                    ws_server.join_room(conn, room).await;
 
                     session.text(format!("joined {room}")).await.unwrap();
                 }
@@ -179,6 +179,6 @@ async fn process_text_msg(
             .as_mut()
             .map_or_else(|| msg.to_owned(), |name| format!("{name}: {msg}"));
 
-        chat_server.send_message(conn, msg).await;
+        ws_server.send_message(conn, msg).await;
     }
 }
