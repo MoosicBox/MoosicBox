@@ -12,6 +12,7 @@ use std::{
 use moosicbox_tunnel::{
     TunnelAbortRequest, TunnelRequest, TunnelResponse, TunnelWsRequest, TunnelWsResponse,
 };
+use moosicbox_tunnel_server::CANCELLATION_TOKEN;
 use rand::{thread_rng, Rng as _};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -278,7 +279,16 @@ impl ChatServer {
     pub async fn run(self) -> io::Result<()> {
         let cmd_rx = self.cmd_rx.clone();
         let ctx = Arc::new(RwLock::new(self));
-        while let Ok(cmd) = cmd_rx.recv_async().await {
+        while let Some(Ok(cmd)) = {
+            tokio::select! {
+                cmd = cmd_rx.recv_async() => {
+                    Some(cmd)
+                }
+                _ = CANCELLATION_TOKEN.cancelled() => {
+                    None
+                }
+            }
+        } {
             let ctx = ctx.clone();
             tokio::spawn(async move {
                 match cmd {

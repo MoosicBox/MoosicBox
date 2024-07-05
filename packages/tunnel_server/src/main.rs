@@ -9,6 +9,7 @@ use actix_cors::Cors;
 use actix_web::{http, middleware, App};
 use api::health_endpoint;
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
+use moosicbox_tunnel_server::CANCELLATION_TOKEN;
 use std::env;
 use tokio::try_join;
 
@@ -96,6 +97,9 @@ fn main() -> Result<(), std::io::Error> {
         if let Err(err) = try_join!(
             async move {
                 let resp = http_server.await;
+
+                log::debug!("Cancelling token...");
+                CANCELLATION_TOKEN.cancel();
 
                 log::debug!("Shutting down ws server...");
                 CHAT_SERVER_HANDLE.write().await.take();
