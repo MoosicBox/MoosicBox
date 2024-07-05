@@ -159,8 +159,10 @@ pub async fn handle_ws(
         };
     };
 
+    log::debug!("handle_ws: disconnecting connection");
     ws_server.disconnect(conn_id).await;
 
     // attempt to close connection gracefully
+    log::debug!("handle_ws: closing connection");
     let _ = session.close(close_reason).await;
 }
