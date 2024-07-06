@@ -9,6 +9,7 @@ RUN cat Cargo.toml | \
     tr '\n' '\r' | \
     sed -E "s/members = \[[^]]+\]/members = [\r\
     \"packages\/assert\",\r\
+    \"packages\/async_service\",\r\
     \"packages\/config\",\r\
     \"packages\/database\",\r\
     \"packages\/env_utils\",\r\
@@ -22,6 +23,7 @@ RUN cat Cargo.toml | \
     mv Cargo2.toml Cargo.toml
 
 COPY packages/assert/Cargo.toml packages/assert/Cargo.toml
+COPY packages/async_service/Cargo.toml packages/async_service/Cargo.toml
 COPY packages/config/Cargo.toml packages/config/Cargo.toml
 COPY packages/database/Cargo.toml packages/database/Cargo.toml
 COPY packages/env_utils/Cargo.toml packages/env_utils/Cargo.toml
@@ -38,6 +40,7 @@ RUN for file in $(\
       do printf "$file\n"; \
     done | grep -E "^(\
 packages/assert|\
+packages/async_service|\
 packages/config|\
 packages/database|\
 packages/env_utils|\
