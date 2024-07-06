@@ -230,7 +230,7 @@ pub enum TunnelStreamError {
     Aborted,
 }
 
-pub struct TunnelStream<'a, F: Future<Output = ()>> {
+pub struct TunnelStream<'a, F: Future<Output = Result<(), Box<dyn std::error::Error>>>> {
     start: SystemTime,
     request_id: usize,
     time_to_first_byte: Option<SystemTime>,
@@ -243,7 +243,7 @@ pub struct TunnelStream<'a, F: Future<Output = ()>> {
     abort_token: CancellationToken,
 }
 
-impl<'a, F: Future<Output = ()>> TunnelStream<'a, F> {
+impl<'a, F: Future<Output = Result<(), Box<dyn std::error::Error>>>> TunnelStream<'a, F> {
     pub fn new(
         request_id: usize,
         rx: UnboundedReceiver<TunnelResponse>,
@@ -265,7 +265,7 @@ impl<'a, F: Future<Output = ()>> TunnelStream<'a, F> {
     }
 }
 
-fn return_polled_bytes<F: Future<Output = ()>>(
+fn return_polled_bytes<F: Future<Output = Result<(), Box<dyn std::error::Error>>>>(
     stream: &mut TunnelStream<F>,
     response: TunnelResponse,
 ) -> std::task::Poll<Option<Result<Bytes, TunnelStreamError>>> {
@@ -292,7 +292,7 @@ fn return_polled_bytes<F: Future<Output = ()>>(
     Poll::Ready(Some(Ok(response.bytes)))
 }
 
-impl<F: Future<Output = ()>> Stream for TunnelStream<'_, F> {
+impl<F: Future<Output = Result<(), Box<dyn std::error::Error>>>> Stream for TunnelStream<'_, F> {
     type Item = Result<Bytes, TunnelStreamError>;
 
     fn poll_next(

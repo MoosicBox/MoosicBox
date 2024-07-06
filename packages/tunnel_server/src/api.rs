@@ -17,6 +17,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::str::FromStr;
+use thiserror::Error;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
@@ -28,7 +29,8 @@ use crate::auth::{
 use crate::db::{
     insert_client_access_token, insert_magic_token, insert_signature_token, select_magic_token,
 };
-use crate::ws::server::{ConnectionIdError, RequestHeaders};
+use crate::ws::server::service::{Commander, CommanderError};
+use crate::ws::server::{get_connection_id, ConnectionIdError, RequestHeaders};
 use crate::WS_SERVER_HANDLE;
 
 #[route("/health", method = "GET")]
@@ -280,8 +282,9 @@ async fn handle_request(
             .await
             .as_ref()
             .unwrap()
-            .request_end(request_id)
-            .await;
+            .send_command_async(crate::ws::server::Command::RequestEnd { request_id })
+            .await?;
+        Ok(())
     });
 
     match response_type {
@@ -298,6 +301,14 @@ async fn handle_request(
             Ok(builder.body(body))
         }
     }
+}
+
+#[derive(Error, Debug)]
+pub enum RequestError {
+    #[error(transparent)]
+    ConnectionId(#[from] ConnectionIdError),
+    #[error(transparent)]
+    Commander(#[from] CommanderError),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -326,23 +337,29 @@ fn request(
         debug!("Sending server request {request_id}");
         let ws_server = WS_SERVER_HANDLE.read().await.as_ref().unwrap().clone();
         ws_server
-            .request_start(request_id, tx, headers_tx, abort_token)
-            .await;
+            .send_command_async(crate::ws::server::Command::RequestStart {
+                request_id,
+                sender: tx,
+                headers_sender: headers_tx,
+                abort_request_token: abort_token,
+            })
+            .await?;
 
-        let conn_id = match ws_server.get_connection_id(&client_id).await {
+        let conn_id = match get_connection_id(&client_id).await {
             Ok(conn_id) => conn_id,
             Err(err) => {
                 log::error!("Failed to get connection id for request_id={request_id} client_id={client_id}: {err:?}");
-                ws_server.request_end(request_id).await;
-                return Err(err);
+                ws_server
+                    .send_command_async(crate::ws::server::Command::RequestEnd { request_id })
+                    .await?;
+                return Err(err.into());
             }
         };
 
         debug!("Sending server request {request_id} to {conn_id}");
         ws_server
-            .send_message(
-                conn_id,
-                &serde_json::to_value(TunnelRequest::Http(TunnelHttpRequest {
+            .send_command_async(crate::ws::server::Command::Message {
+                msg: serde_json::to_value(TunnelRequest::Http(TunnelHttpRequest {
                     request_id,
                     method: method.clone(),
                     path: path.to_string(),
@@ -353,10 +370,11 @@ fn request(
                 }))
                 .unwrap()
                 .to_string(),
-            )
-            .await;
+                conn: conn_id,
+            })
+            .await?;
         debug!("Sent server request {request_id} to {conn_id}");
-        Ok::<_, ConnectionIdError>(())
+        Ok::<_, RequestError>(())
     });
 
     Ok((headers_rx, rx))

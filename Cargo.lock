@@ -4124,6 +4124,7 @@ dependencies = [
  "lazy_static",
  "log",
  "moosicbox_assert",
+ "moosicbox_async_service",
  "moosicbox_database",
  "moosicbox_env_utils",
  "moosicbox_json_utils",

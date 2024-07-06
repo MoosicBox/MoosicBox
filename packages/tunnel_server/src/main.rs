@@ -14,7 +14,7 @@ use std::env;
 use tokio::try_join;
 
 static WS_SERVER_HANDLE: once_cell::sync::Lazy<
-    tokio::sync::RwLock<Option<ws::server::WsServerHandle>>,
+    tokio::sync::RwLock<Option<ws::server::service::Handle>>,
 > = once_cell::sync::Lazy::new(|| tokio::sync::RwLock::new(None));
 
 fn main() -> Result<(), std::io::Error> {
@@ -57,10 +57,15 @@ fn main() -> Result<(), std::io::Error> {
             .await
             .expect("Failed to init postgres DB");
 
-        let (ws_server, server_tx) = ws::server::WsServer::new();
-        let ws_server = tokio::task::spawn(ws_server.run());
+        let ws_server = ws::server::WsServer::new();
+        let ws_service = ws::server::service::Service::new(ws_server);
+        let ws_service_handle = ws_service.handle();
+        let ws_service = ws_service.start();
 
-        WS_SERVER_HANDLE.write().await.replace(server_tx.clone());
+        WS_SERVER_HANDLE
+            .write()
+            .await
+            .replace(ws_service_handle.clone());
 
         let app = move || {
             let cors = Cors::default()
@@ -126,13 +131,13 @@ fn main() -> Result<(), std::io::Error> {
                 resp
             },
             async move {
-                match ws_server.await {
-                    Ok(value) => value,
-                    Err(err) => {
-                        panic!("Failed to shut down ws server: {err:?}");
-                    }
-                }
-            }
+                let resp = ws_service
+                    .await
+                    .expect("Failed to shut down ws server")
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
+                log::debug!("WsServer connection closed");
+                resp
+            },
         ) {
             log::error!("Error on shutdown: {err:?}");
             return Err(err);

@@ -8,7 +8,7 @@ use futures_util::{
 use moosicbox_tunnel::TunnelWsResponse;
 use tokio::{pin, sync::mpsc, time::interval};
 
-use crate::ws::server::WsServerHandle;
+use super::server::service::CommanderError;
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -19,12 +19,12 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 /// Echo text & binary messages received from the client, respond to ping messages, and monitor
 /// connection health to detect network issues and free up resources.
 pub async fn handle_ws(
-    ws_server: WsServerHandle,
+    ws_server: super::server::service::Handle,
     mut session: actix_ws::Session,
     mut msg_stream: actix_ws::MessageStream,
     client_id: String,
     sender: bool,
-) {
+) -> Result<(), CommanderError> {
     log::info!("Connected");
 
     let mut last_heartbeat = Instant::now();
@@ -33,7 +33,7 @@ pub async fn handle_ws(
     let (conn_tx, mut conn_rx) = mpsc::unbounded_channel();
 
     // unwrap: ws server is not dropped before the HTTP server
-    let conn_id = ws_server.connect(&client_id, sender, conn_tx).await;
+    let conn_id = ws_server.connect(&client_id, sender, conn_tx).await?;
 
     log::info!("Connection id: {conn_id}");
 
@@ -165,4 +165,6 @@ pub async fn handle_ws(
     // attempt to close connection gracefully
     log::debug!("handle_ws: closing connection");
     let _ = session.close(close_reason).await;
+
+    Ok(())
 }
