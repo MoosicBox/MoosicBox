@@ -156,10 +156,16 @@ impl service::Processor for service::Service {
 
             Command::Response { response, conn_id } => {
                 let request_id = response.request_id;
+                log::debug!("process_command: Handling response for request_id={request_id}");
 
                 if let (Some(status), Some(headers)) = (response.status, &response.headers) {
-                    let mut ctx = ctx.write().await;
-                    let headers_senders = ctx.headers_senders.remove(&request_id);
+                    log::debug!("process_command: Response request_id={request_id} status={status} headers={headers:?}");
+                    let headers_senders = {
+                        let mut ctx = ctx.write().await;
+                        let headers_senders = ctx.headers_senders.remove(&request_id);
+                        drop(ctx);
+                        headers_senders
+                    };
                     if let Some(sender) = headers_senders {
                         if sender
                             .send(RequestHeaders {
@@ -168,39 +174,52 @@ impl service::Processor for service::Service {
                             })
                             .is_err()
                         {
-                            log::warn!("Header sender dropped for request {}", request_id);
-                            ctx.headers_senders.remove(&request_id);
-                            if let Err(err) = ctx.abort_request(conn_id, request_id).await {
-                                log::error!("Failed to abort request {request_id} {err:?}");
+                            log::warn!(
+                                "process_command: Header sender dropped for request_id={request_id}"
+                            );
+                            {
+                                let mut ctx = ctx.write().await;
+                                ctx.headers_senders.remove(&request_id);
+                                drop(ctx);
+                            }
+                            if let Err(err) =
+                                ctx.read().await.abort_request(conn_id, request_id).await
+                            {
+                                log::error!("process_command: Failed to abort request_id={request_id}: {err:?}");
                             }
                         }
                     } else {
                         log::error!(
-                            "unexpected binary message {} (size {})",
-                            request_id,
+                            "process_command: unexpected binary message request_id={request_id} (size {})",
                             response.bytes.len()
                         );
                     }
-                    drop(ctx);
                 }
 
                 let sender = ctx.read().await.senders.get(&request_id).cloned();
 
                 if let Some(sender) = sender {
+                    let packet_id = response.packet_id;
+                    let last = response.last;
+                    let status = response.status;
+                    log::trace!("process_command: Sending response for request_id={request_id} packet_id={packet_id} last={last} status={status:?}");
                     if sender.send(response).is_err() {
-                        log::debug!("Sender dropped for request {}", request_id);
+                        log::debug!("process_command: Sender dropped for request_id={request_id}");
                         let mut binding = ctx.write().await;
                         binding.senders.remove(&request_id);
                         drop(binding);
                         if let Err(err) = ctx.read().await.abort_request(conn_id, request_id).await
                         {
-                            log::error!("Failed to abort request {request_id} {err:?}");
+                            log::error!(
+                                "process_command: Failed to abort request_id={request_id} {err:?}"
+                            );
                         }
+                    } else {
+                        log::trace!("process_command: Sent response for request_id={request_id} packet_id={packet_id} last={last} status={status:?}");
                     }
                 } else {
                     log::error!(
-                        "unexpected binary message {} (size {})",
-                        request_id,
+                        "process_command: unexpected binary message request_id={request_id} (size {})",
                         response.bytes.len()
                     );
                 }
