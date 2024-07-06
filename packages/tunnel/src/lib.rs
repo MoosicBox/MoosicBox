@@ -299,10 +299,15 @@ impl<F: Future<Output = Result<(), Box<dyn std::error::Error>>>> Stream for Tunn
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
+        log::trace!("poll_next: TunnelStream poll");
+
         let stream = self.get_mut();
+
         if stream.abort_token.is_cancelled() {
+            log::debug!("Stream is cancelled");
             return Poll::Ready(Some(Err(TunnelStreamError::Aborted)));
         }
+
         if stream.done {
             let end = SystemTime::now();
 
@@ -333,6 +338,7 @@ impl<F: Future<Output = Result<(), Box<dyn std::error::Error>>>> Stream for Tunn
             }
             Poll::Ready(None) => {
                 log::debug!("Finished");
+                moosicbox_assert::assert!(!stream.done, "Stream is not finished");
                 return Poll::Ready(None);
             }
         };
