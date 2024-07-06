@@ -13,7 +13,7 @@ pub use tokio_util::sync::CancellationToken;
 
 #[macro_export]
 macro_rules! async_service_body {
-    ($command:path, $context:path $(,)?) => {
+    ($command:path, $context:path, $sync:expr $(,)?) => {
         #[$crate::async_trait]
         pub trait Processor {
             type Error;
@@ -66,17 +66,27 @@ macro_rules! async_service_body {
                         }
                         command = self.receiver.recv_async() => { Ok(command) }
                     ) {
-                        let ctx = ctx.clone();
-                        $crate::tokio::spawn(async move {
+                        if $sync {
                             log::trace!("Received Service command");
-                            if let Err(e) = Self::process_command(ctx, command.cmd).await{
+                            if let Err(e) = Self::process_command(ctx.clone(), command.cmd).await {
                                 log::error!("Failed to process command: {e:?}");
                             }
                             if let Some(tx) = command.tx {
                                 tx.send_async(()).await?;
                             }
-                            Ok::<_, Error>(())
-                        });
+                        } else {
+                            let ctx = ctx.clone();
+                            $crate::tokio::spawn(async move {
+                                log::trace!("Received Service command");
+                                if let Err(e) = Self::process_command(ctx, command.cmd).await {
+                                    log::error!("Failed to process command: {e:?}");
+                                }
+                                if let Some(tx) = command.tx {
+                                    tx.send_async(()).await?;
+                                }
+                                Ok::<_, Error>(())
+                            });
+                        }
                     }
 
                     Self::on_shutdown(ctx).await?;
@@ -174,7 +184,7 @@ macro_rules! async_service_body {
 }
 
 #[macro_export]
-macro_rules! async_service {
+macro_rules! async_service_sync {
     ($command:path, $context:path $(,)?) => {
         impl From<$crate::SendError<()>> for Error {
             fn from(_value: $crate::SendError<()>) -> Self {
@@ -193,7 +203,7 @@ macro_rules! async_service {
             IO(#[from] std::io::Error),
         }
 
-        $crate::async_service_body!($command, $context);
+        $crate::async_service_body!($command, $context, true);
     };
 
     ($command:path, $context:path, $error:path $(,)?) => {
@@ -216,7 +226,54 @@ macro_rules! async_service {
             Process(#[from] $error),
         }
 
-        $crate::async_service_body!($command, $context);
+        $crate::async_service_body!($command, $context, true);
+    };
+}
+
+#[macro_export]
+macro_rules! async_service {
+    ($command:path, $context:path $(,)?) => {
+        impl From<$crate::SendError<()>> for Error {
+            fn from(_value: $crate::SendError<()>) -> Self {
+                Self::Send
+            }
+        }
+
+        #[derive(Debug, $crate::Error)]
+        pub enum Error {
+            #[error(transparent)]
+            Join(#[from] $crate::JoinError),
+            #[error("Failed to send")]
+            Send,
+            #[allow(unused)]
+            #[error(transparent)]
+            IO(#[from] std::io::Error),
+        }
+
+        $crate::async_service_body!($command, $context, false);
+    };
+
+    ($command:path, $context:path, $error:path $(,)?) => {
+        impl From<$crate::SendError<()>> for Error {
+            fn from(_value: $crate::SendError<()>) -> Self {
+                Self::Send
+            }
+        }
+
+        #[derive(Debug, $crate::Error)]
+        pub enum Error {
+            #[error(transparent)]
+            Join(#[from] $crate::JoinError),
+            #[error("Failed to send")]
+            Send,
+            #[allow(unused)]
+            #[error(transparent)]
+            IO(#[from] std::io::Error),
+            #[error(transparent)]
+            Process(#[from] $error),
+        }
+
+        $crate::async_service_body!($command, $context, false);
     };
 }
 
