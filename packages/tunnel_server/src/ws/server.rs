@@ -85,7 +85,7 @@ impl std::fmt::Display for Command {
 }
 
 pub mod service {
-    moosicbox_async_service::async_service_sync!(super::Command, super::WsServer);
+    moosicbox_async_service::async_service_sequential!(super::Command, super::WsServer);
 }
 
 #[moosicbox_async_service::async_trait]

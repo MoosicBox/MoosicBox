@@ -13,7 +13,7 @@ pub use tokio_util::sync::CancellationToken;
 
 #[macro_export]
 macro_rules! async_service_body {
-    ($command:path, $context:path, $sync:expr $(,)?) => {
+    ($command:path, $context:path, $sequential:expr $(,)?) => {
         #[$crate::async_trait]
         pub trait Processor {
             type Error;
@@ -66,7 +66,7 @@ macro_rules! async_service_body {
                         }
                         command = self.receiver.recv_async() => { Ok(command) }
                     ) {
-                        if $sync {
+                        if $sequential {
                             log::trace!("Received Service command");
                             if let Err(e) = Self::process_command(ctx.clone(), command.cmd).await {
                                 log::error!("Failed to process command: {e:?}");
@@ -184,7 +184,7 @@ macro_rules! async_service_body {
 }
 
 #[macro_export]
-macro_rules! async_service_sync {
+macro_rules! async_service_sequential {
     ($command:path, $context:path $(,)?) => {
         impl From<$crate::SendError<()>> for Error {
             fn from(_value: $crate::SendError<()>) -> Self {
