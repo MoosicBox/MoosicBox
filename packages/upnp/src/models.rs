@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UpnpDevice {
     pub name: String,
+    pub udn: String,
     pub volume: Option<String>,
     pub services: Vec<UpnpService>,
 }
@@ -12,6 +13,7 @@ impl From<&DeviceSpec> for UpnpDevice {
     fn from(value: &DeviceSpec) -> Self {
         Self {
             name: value.friendly_name().to_string(),
+            udn: value.udn().to_string(),
             volume: None,
             services: vec![],
         }
