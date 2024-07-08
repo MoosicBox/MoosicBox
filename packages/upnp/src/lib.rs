@@ -11,6 +11,7 @@ pub mod models;
 
 use async_recursion::async_recursion;
 use futures::prelude::*;
+use itertools::Itertools;
 use models::{UpnpDevice, UpnpService};
 use once_cell::sync::Lazy;
 pub use rupnp::{http::Uri, ssdp::SearchTarget, Device, DeviceSpec, Service};
@@ -843,5 +844,8 @@ pub async fn scan_devices() -> Result<Vec<UpnpDevice>, ScanError> {
         log::debug!("No UPnP devices discovered");
     }
 
-    Ok(upnp_devices)
+    Ok(upnp_devices
+        .into_iter()
+        .unique_by(|x| x.udn.clone())
+        .collect::<Vec<_>>())
 }

@@ -39,6 +39,7 @@ url = { workspace = true, optional = true }
 
 async-recursion = { workspace = true }
 futures         = { workspace = true }
+itertools       = { workspace = true }
 log             = { workspace = true }
 once_cell       = { workspace = true }
 pin-utils       = { workspace = true }

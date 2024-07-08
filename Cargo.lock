@@ -4161,6 +4161,7 @@ dependencies = [
  "atomic_float",
  "flume",
  "futures",
+ "itertools 0.13.0",
  "log",
  "moosicbox_assert",
  "moosicbox_async_service",
