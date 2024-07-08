@@ -228,6 +228,8 @@ impl TryFrom<String> for TunnelResponse {
 pub enum TunnelStreamError {
     #[error("TunnelStream aborted")]
     Aborted,
+    #[error("TunnelStream end of stream")]
+    EndOfStream,
 }
 
 pub struct TunnelStream<'a, F: Future<Output = Result<(), Box<dyn std::error::Error>>>> {
@@ -237,6 +239,7 @@ pub struct TunnelStream<'a, F: Future<Output = Result<(), Box<dyn std::error::Er
     packet_count: u32,
     byte_count: usize,
     done: bool,
+    end_of_stream: bool,
     rx: UnboundedReceiver<TunnelResponse>,
     on_end: &'a dyn Fn(usize) -> F,
     packet_queue: Vec<TunnelResponse>,
@@ -257,10 +260,31 @@ impl<'a, F: Future<Output = Result<(), Box<dyn std::error::Error>>>> TunnelStrea
             packet_count: 0,
             byte_count: 0,
             done: false,
+            end_of_stream: false,
             rx,
             on_end,
             packet_queue: vec![],
             abort_token,
+        }
+    }
+
+    fn process_queued_packet(
+        &mut self,
+    ) -> Option<std::task::Poll<Option<Result<Bytes, TunnelStreamError>>>> {
+        if self
+            .packet_queue
+            .first()
+            .is_some_and(|x| x.packet_id == self.packet_count + 1)
+        {
+            let response = self.packet_queue.remove(0);
+            log::debug!(
+                "poll_next: Sending queued packet_id={} for request_id={}",
+                response.packet_id,
+                self.request_id,
+            );
+            Some(return_polled_bytes(self, response))
+        } else {
+            None
         }
     }
 }
@@ -276,7 +300,7 @@ fn return_polled_bytes<F: Future<Output = Result<(), Box<dyn std::error::Error>>
     stream.packet_count += 1;
 
     log::debug!(
-        "Received packet for {} {} {} bytes last={}",
+        "return_polled_bytes: Received packet for request_id={} packet_count={} {} bytes last={}",
         stream.request_id,
         stream.packet_count,
         response.bytes.len(),
@@ -296,23 +320,38 @@ impl<F: Future<Output = Result<(), Box<dyn std::error::Error>>>> Stream for Tunn
     type Item = Result<Bytes, TunnelStreamError>;
 
     fn poll_next(
-        self: std::pin::Pin<&mut Self>,
+        mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
-        log::trace!("poll_next: TunnelStream poll");
+        let request_id = {
+            let mut stream = self.as_mut();
+            let request_id = stream.request_id;
 
-        let stream = self.get_mut();
+            log::trace!(
+                "poll_next: TunnelStream poll for request_id={request_id} packet_count={}",
+                stream.packet_count,
+            );
 
-        if stream.abort_token.is_cancelled() {
-            log::debug!("Stream is cancelled");
-            return Poll::Ready(Some(Err(TunnelStreamError::Aborted)));
-        }
+            if stream.end_of_stream {
+                log::trace!(
+                    "poll_next: End of stream for request_id={request_id} packet_count={}",
+                    stream.packet_count,
+                );
+                return stream
+                    .process_queued_packet()
+                    .unwrap_or(Poll::Ready(Some(Err(TunnelStreamError::EndOfStream))));
+            }
 
-        if stream.done {
-            let end = SystemTime::now();
+            if stream.abort_token.is_cancelled() {
+                log::debug!("poll_next: Stream is cancelled for request_id={request_id}",);
+                return Poll::Ready(Some(Err(TunnelStreamError::Aborted)));
+            }
 
-            log::debug!(
-                "Byte count: {} (received {} packet{}, took {}ms total, {}ms to first byte)",
+            if stream.done {
+                let end = SystemTime::now();
+
+                log::debug!(
+                "poll_next: Byte count: {} for request_id={request_id} (received {} packet{}, took {}ms total, {}ms to first byte)",
                 stream.byte_count,
                 stream.packet_count,
                 if stream.packet_count == 1 { "" } else { "s" },
@@ -324,46 +363,71 @@ impl<F: Future<Output = Result<(), Box<dyn std::error::Error>>>> Stream for Tunn
                     .unwrap_or("N/A".into())
             );
 
-            (stream.on_end)(stream.request_id);
+                (stream.on_end)(stream.request_id);
 
-            return Poll::Ready(None);
-        }
-
-        log::debug!("Waiting for next packet");
-        let response = match stream.rx.poll_recv(cx) {
-            Poll::Ready(Some(response)) => response,
-            Poll::Pending => {
-                log::debug!("Pending...");
-                return Poll::Pending;
-            }
-            Poll::Ready(None) => {
-                log::debug!("Finished");
-                moosicbox_assert::assert!(!stream.done, "Stream is not finished");
                 return Poll::Ready(None);
             }
-        };
 
-        if response.packet_id == 1 && response.last {
-            return return_polled_bytes(stream, response);
-        }
-
-        if stream
-            .packet_queue
-            .first()
-            .map(|n| n.packet_id == stream.packet_count + 1)
-            .is_some_and(|n| n)
-        {
-            let response = stream.packet_queue.remove(0);
-            log::debug!("Sending queued packet {}", response.packet_id);
-            return return_polled_bytes(stream, response);
-        }
-
-        if response.packet_id > stream.packet_count + 1 {
             log::debug!(
-                "Received future packet {}. Waiting for packet {} before continuing",
-                response.packet_id,
-                stream.packet_count + 1
+                "poll_next: Waiting for next packet for request_id={request_id} packet_count={}",
+                stream.packet_count,
             );
+            let response = match stream.rx.poll_recv(cx) {
+                Poll::Ready(Some(response)) => response,
+                Poll::Pending => {
+                    log::debug!("poll_next: Pending for request_id={request_id}...");
+                    return stream.process_queued_packet().unwrap_or(Poll::Pending);
+                }
+                Poll::Ready(None) => {
+                    log::debug!("poll_next: Finished");
+                    moosicbox_assert::assert!(
+                        !stream.done,
+                        "Stream is not finished for request_id={request_id}"
+                    );
+                    stream.end_of_stream = true;
+                    return stream.process_queued_packet().unwrap_or(Poll::Ready(None));
+                }
+            };
+            log::debug!(
+            "poll_next: Received next packet for request_id={request_id} packet_count={}: packet_id={} status={:?} last={}",
+            stream.packet_count,
+            response.packet_id,
+            response.status,
+            response.last,
+        );
+
+            if response.packet_id == 1 && response.last {
+                log::debug!(
+                    "poll_next: Received first and final packet for request_id={request_id}"
+                );
+                return return_polled_bytes(&mut stream, response);
+            }
+
+            if response.packet_id == stream.packet_count + 1 {
+                return return_polled_bytes(&mut stream, response);
+            }
+
+            log::debug!(
+                "poll_next: Received future packet_id={} for request_id={request_id}. Waiting for packet {} before continuing",
+                response.packet_id,
+                stream.packet_count + 1,
+            );
+
+            let queued_response = if stream
+                .packet_queue
+                .first()
+                .is_some_and(|x| x.packet_id == stream.packet_count + 1)
+            {
+                let response = stream.packet_queue.remove(0);
+                log::debug!(
+                    "poll_next: Sending queued packet_id={} for request_id={request_id}",
+                    response.packet_id,
+                );
+                Some(return_polled_bytes(&mut stream, response))
+            } else {
+                None
+            };
+
             if let Some(pos) = stream
                 .packet_queue
                 .iter()
@@ -373,9 +437,16 @@ impl<F: Future<Output = Result<(), Box<dyn std::error::Error>>>> Stream for Tunn
             } else {
                 stream.packet_queue.push(response);
             }
-            return Poll::Pending;
-        }
 
-        return_polled_bytes(stream, response)
+            if let Some(response) = queued_response {
+                log::debug!("poll_next: Sending queued response for request_id={request_id}");
+                return response;
+            }
+
+            request_id
+        };
+
+        log::debug!("poll_next: Re-polling for response for request_id={request_id}");
+        self.poll_next(cx)
     }
 }
