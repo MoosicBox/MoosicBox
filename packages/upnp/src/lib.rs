@@ -822,10 +822,21 @@ pub async fn scan_devices() -> Result<Vec<UpnpDevice>, ScanError> {
 
     let mut upnp_devices = vec![];
 
-    while let Some(device) = devices.try_next().await? {
-        cache::insert_device(device.clone());
-        let spec: &DeviceSpec = &device;
-        upnp_devices.extend_from_slice(&scan_device(Some(device.clone()), spec, None).await?);
+    loop {
+        match devices.try_next().await {
+            Ok(Some(device)) => {
+                cache::insert_device(device.clone());
+                let spec: &DeviceSpec = &device;
+                upnp_devices
+                    .extend_from_slice(&scan_device(Some(device.clone()), spec, None).await?);
+            }
+            Ok(None) => {
+                break;
+            }
+            Err(e) => {
+                log::error!("Received error device response: {e:?}");
+            }
+        }
     }
 
     if upnp_devices.is_empty() {
