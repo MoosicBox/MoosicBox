@@ -21,7 +21,7 @@ log         = { workspace = true }
 pin-project = { workspace = true }
 reqwest     = { workspace = true }
 thiserror   = { workspace = true }
-tokio       = { workspace = true, features = ["time", "rt-multi-thread"] }
+tokio       = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 tokio-util  = { workspace = true }
 
 [features]

@@ -398,11 +398,13 @@ where
                     let fun = fun.clone();
                     std::thread::spawn(|| async move {
                         for p in batch {
-                            if token.is_cancelled() {
-                                break;
+                            tokio::select! {
+                                resp = process_dir_entry(p, output.clone(), token.clone(), fun.clone()) => resp?,
+                                _ = token.cancelled() => {
+                                    log::debug!("Scan cancelled");
+                                    break;
+                                }
                             }
-                            process_dir_entry(p, output.clone(), token.clone(), fun.clone())
-                                .await?;
                         }
                         Ok::<_, ScanError>(())
                     })
@@ -414,10 +416,13 @@ where
             }
         } else {
             while let Some(entry) = dir.next_entry().await? {
-                if token.is_cancelled() {
-                    break;
+                tokio::select! {
+                    resp = process_dir_entry(entry, output.clone(), token.clone(), fun.clone()) => resp?,
+                    _ = token.cancelled() => {
+                        log::debug!("Scan cancelled");
+                        break;
+                    }
                 }
-                process_dir_entry(entry, output.clone(), token.clone(), fun.clone()).await?;
             }
         }
 

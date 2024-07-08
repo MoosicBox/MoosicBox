@@ -43,7 +43,7 @@ pub async fn scan(db: Arc<Box<dyn Database>>, token: CancellationToken) -> Resul
     let limit = 100;
     let mut offset = 0;
 
-    while !token.is_cancelled() {
+    loop {
         log::debug!("Fetching Tidal albums offset={offset} limit={limit}");
 
         let albums_resp = moosicbox_tidal::favorite_albums(
@@ -196,7 +196,7 @@ pub async fn scan_albums(
         let limit = 100;
         let mut offset = 0;
 
-        while !token.is_cancelled() {
+        loop {
             log::debug!(
                 "Fetching Tidal tracks for album album_id={} offset={offset} limit={limit}",
                 album.id

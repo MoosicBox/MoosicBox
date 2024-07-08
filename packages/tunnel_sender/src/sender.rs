@@ -267,26 +267,30 @@ impl TunnelSender {
             let mut just_retried = false;
             log::debug!("Fetching signature token...");
             let token = loop {
-                if cancellation_token.is_cancelled() {
-                    log::debug!("Closing tunnel");
-                    return;
-                }
-                match moosicbox_auth::fetch_signature_token(&host, &client_id, &access_token).await
-                {
+                match select!(
+                    resp = moosicbox_auth::fetch_signature_token(&host, &client_id, &access_token) => resp,
+                    _ = cancellation_token.cancelled() => {
+                        log::debug!("Cancelling fetch");
+                        return;
+                    }
+                ) {
                     Ok(Some(token)) => break token,
+                    Ok(None) => {
+                        log::error!("Failed to fetch token, no response");
+                    }
                     Err(FetchSignatureError::Unauthorized) => {
                         log::error!("Unauthorized response from fetch_signature_token");
                     }
                     Err(err) => {
                         log::error!("Failed to fetch signature token: {err:?}");
                     }
-                    _ => {}
                 }
 
                 select!(
                     _ = sleep(Duration::from_millis(5000)) => {}
                     _ = cancellation_token.cancelled() => {
-                        log::debug!("Cancelling retry")
+                        log::debug!("Cancelling retry");
+                        return;
                     }
                 );
             };
@@ -294,21 +298,18 @@ impl TunnelSender {
             loop {
                 let close_token = CancellationToken::new();
 
-                if cancellation_token.is_cancelled() {
-                    log::debug!("Closing tunnel");
-                    break;
-                }
                 let (txf, rxf) = futures_channel::mpsc::unbounded();
 
                 sender_arc.write().unwrap().replace(txf.clone());
 
                 log::debug!("Connecting to websocket...");
-                match connect_async(format!(
-                    "{}?clientId={}&sender=true&signature={token}",
-                    url, client_id
-                ))
-                .await
-                {
+                match select!(
+                    resp = connect_async(format!("{url}?clientId={client_id}&sender=true&signature={token}")) => resp,
+                    _ = cancellation_token.cancelled() => {
+                        log::debug!("Cancelling connect");
+                        break;
+                    }
+                ) {
                     Ok((ws_stream, _)) => {
                         log::debug!("WebSocket handshake has been successfully completed");
 
@@ -432,7 +433,8 @@ impl TunnelSender {
                     select!(
                         _ = sleep(Duration::from_millis(5000)) => {}
                         _ = cancellation_token.cancelled() => {
-                            log::debug!("Cancelling retry")
+                            log::debug!("Cancelling retry");
+                            break;
                         }
                     );
                 } else {

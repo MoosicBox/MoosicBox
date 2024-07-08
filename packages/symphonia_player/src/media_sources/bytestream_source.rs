@@ -76,11 +76,17 @@ impl ByteStreamSourceFetcher {
         self.abort_handle = Some(tokio::spawn(async move {
             log::debug!("Fetching byte stream with range start={start} end={end:?}");
 
-            while let Some(item) = stream.next().await {
-                if abort.is_cancelled() || stream_abort.is_cancelled() {
-                    log::debug!("ABORTING");
-                    break;
+            while let Some(item) = tokio::select! {
+                resp = stream.next() => resp,
+                _ = abort.cancelled() => {
+                    log::debug!("Aborted");
+                    None
                 }
+                _ = stream_abort.cancelled() => {
+                    log::debug!("Stream aborted");
+                    None
+                }
+            } {
                 log::trace!("Received more bytes from stream");
                 let bytes = item.unwrap();
                 if let Err(err) = sender.send_async(bytes).await {
@@ -89,18 +95,11 @@ impl ByteStreamSourceFetcher {
                 }
             }
 
-            if abort.is_cancelled() || stream_abort.is_cancelled() {
-                log::debug!("ABORTED");
-                if let Err(err) = sender.send_async(Bytes::new()).await {
-                    log::warn!("Failed to send empty bytes: {err:?}");
-                }
-            } else {
-                log::debug!("Finished reading from stream");
-                if sender.send_async(Bytes::new()).await.is_ok()
-                    && ready_receiver.recv_async().await.is_err()
-                {
-                    log::info!("Byte stream read has been aborted");
-                }
+            log::debug!("Finished reading from stream");
+            if sender.send_async(Bytes::new()).await.is_ok()
+                && ready_receiver.recv_async().await.is_err()
+            {
+                log::info!("Byte stream read has been aborted");
             }
         }));
     }
