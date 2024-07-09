@@ -83,7 +83,7 @@ chrono = { version = "0.4.38", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.8", features = ["derive"] }
+clap = { version = "4.5.9", features = ["derive"] }
 console-subscriber = "0.3.0"
 cpal = "0.15.3"
 debounce = "0.2.2"
@@ -187,6 +187,6 @@ tokio-stream = "0.1.15"
 tokio-tungstenite = { version = "0.23.1", features = ["native-tls-vendored"] }
 tokio-util = "0.7.11"
 url = "2.5.2"
-uuid = { version = "1.9.1", features = ["v4"] }
+uuid = { version = "1.10.0", features = ["v4"] }
 webp = "0.3.0"
 xml = "0.8.20"
