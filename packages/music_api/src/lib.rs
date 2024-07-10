@@ -196,6 +196,7 @@ impl From<ArtistId> for Id {
             ArtistId::Library(value) => Id::Number(value as u64),
             ArtistId::Tidal(value) => Id::Number(value),
             ArtistId::Qobuz(value) => Id::Number(value),
+            ArtistId::Yt(value) => Id::Number(value),
         }
     }
 }
@@ -206,6 +207,7 @@ impl From<&ArtistId> for Id {
             ArtistId::Library(value) => Id::Number(*value as u64),
             ArtistId::Tidal(value) => Id::Number(*value),
             ArtistId::Qobuz(value) => Id::Number(*value),
+            ArtistId::Yt(value) => Id::Number(*value),
         }
     }
 }
@@ -216,6 +218,7 @@ impl From<AlbumId> for Id {
             AlbumId::Library(value) => Id::Number(value as u64),
             AlbumId::Tidal(value) => Id::Number(value),
             AlbumId::Qobuz(value) => Id::String(value.clone()),
+            AlbumId::Yt(value) => Id::String(value.clone()),
         }
     }
 }
@@ -226,6 +229,7 @@ impl From<&AlbumId> for Id {
             AlbumId::Library(value) => Id::Number(*value as u64),
             AlbumId::Tidal(value) => Id::Number(*value),
             AlbumId::Qobuz(value) => Id::String(value.clone()),
+            AlbumId::Yt(value) => Id::String(value.clone()),
         }
     }
 }
@@ -236,6 +240,7 @@ impl From<Artist> for Id {
             Artist::Library(value) => Id::Number(value.id as u64),
             Artist::Tidal(value) => Id::Number(value.id),
             Artist::Qobuz(value) => Id::Number(value.id),
+            Artist::Yt(value) => Id::Number(value.id),
         }
     }
 }
@@ -246,6 +251,7 @@ impl From<Album> for Id {
             Album::Library(value) => Id::Number(value.id as u64),
             Album::Tidal(value) => Id::Number(value.id),
             Album::Qobuz(value) => Id::String(value.id),
+            Album::Yt(value) => Id::String(value.id),
         }
     }
 }
@@ -256,6 +262,7 @@ impl From<Track> for Id {
             Track::Library(value) => Id::Number(value.id as u64),
             Track::Tidal(value) => Id::Number(value.id),
             Track::Qobuz(value) => Id::Number(value.id),
+            Track::Yt(value) => Id::Number(value.id),
         }
     }
 }

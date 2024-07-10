@@ -22,6 +22,7 @@ moosicbox_qobuz = { path = "../qobuz", default-features = false }
 moosicbox_scan = { path = "../scan", default-features = false }
 moosicbox_search = { path = "../search", default-features = false }
 moosicbox_tidal = { path = "../tidal", default-features = false }
+moosicbox_yt = { path = "../yt", default-features = false }
 
 actix-cors      = { workspace = true }
 actix-files     = { workspace = true }
@@ -36,10 +37,11 @@ thiserror       = { workspace = true }
 tokio           = { workspace = true }
 
 [features]
-default = ["local", "qobuz", "tidal"]
+default = ["local", "qobuz", "tidal", "yt"]
 
 fail-on-warnings = []
 
 local = ["moosicbox_scan/local"]
 qobuz = ["moosicbox_scan/qobuz"]
 tidal = ["moosicbox_scan/tidal"]
+yt    = ["moosicbox_scan/yt"]

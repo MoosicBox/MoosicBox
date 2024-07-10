@@ -27,6 +27,7 @@ use moosicbox_music_api::MusicApi;
 use moosicbox_paging::{Page, PagingRequest};
 use moosicbox_qobuz::QobuzMusicApi;
 use moosicbox_tidal::TidalMusicApi;
+use moosicbox_yt::YtMusicApi;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
@@ -46,6 +47,7 @@ fn album_id_for_source(id: &str, source: ApiSource) -> Result<AlbumId, actix_web
                 .map_err(|_| ErrorBadRequest(format!("Bad Tidal album_id {id}")))?,
         ),
         ApiSource::Qobuz => AlbumId::Qobuz(id.to_string()),
+        ApiSource::Yt => AlbumId::Yt(id.to_string()),
         ApiSource::Library => AlbumId::Library(
             id.parse::<i32>()
                 .map_err(|_| ErrorBadRequest(format!("Bad Tidal album_id {id}")))?,
@@ -57,6 +59,7 @@ fn music_api_from_source(db: Arc<Box<dyn Database>>, source: ApiSource) -> Box<d
     match source {
         ApiSource::Tidal => Box::new(TidalMusicApi::new(db.clone())),
         ApiSource::Qobuz => Box::new(QobuzMusicApi::new(db.clone())),
+        ApiSource::Yt => Box::new(YtMusicApi::new(db.clone())),
         ApiSource::Library => unimplemented!(),
     }
 }

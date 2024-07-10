@@ -533,7 +533,8 @@ async fn download_track_inner(
             }
         }
         moosicbox_files::files::track::TrackSource::Tidal { url, .. }
-        | moosicbox_files::files::track::TrackSource::Qobuz { url, .. } => {
+        | moosicbox_files::files::track::TrackSource::Qobuz { url, .. }
+        | moosicbox_files::files::track::TrackSource::Yt { url, .. } => {
             get_content_length(url, start, None).await?
         }
     };

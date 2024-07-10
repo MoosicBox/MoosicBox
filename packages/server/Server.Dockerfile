@@ -37,6 +37,7 @@ RUN cat Cargo.toml | \
     \"packages\/tunnel_sender\",\r\
     \"packages\/upnp\",\r\
     \"packages\/ws\",\r\
+    \"packages\/yt\",\r\
 ]/" | tr '\r' '\n' \
     > Cargo2.toml && \
     mv Cargo2.toml Cargo.toml
@@ -70,6 +71,7 @@ COPY packages/tunnel/Cargo.toml packages/tunnel/Cargo.toml
 COPY packages/tunnel_sender/Cargo.toml packages/tunnel_sender/Cargo.toml
 COPY packages/upnp/Cargo.toml packages/upnp/Cargo.toml
 COPY packages/ws/Cargo.toml packages/ws/Cargo.toml
+COPY packages/yt/Cargo.toml packages/yt/Cargo.toml
 
 RUN touch temp_lib.rs
 
@@ -106,6 +108,7 @@ packages/tunnel|\
 packages/tunnel_sender|\
 packages/upnp|\
 packages/ws|\
+packages/yt|\
 )/Cargo.toml$"); \
     do printf "\n\n[lib]\npath=\"../../temp_lib.rs\"" >> "$file"; \
   done

@@ -56,6 +56,14 @@ impl From<TrackSourceError> for actix_web::Error {
                     ErrorInternalServerError(e.to_string())
                 }
             },
+            TrackSourceError::YtTrackUrl(e) => match e {
+                moosicbox_yt::YtTrackFileUrlError::AuthenticatedRequest(e) => {
+                    ErrorUnauthorized(e.to_string())
+                }
+                moosicbox_yt::YtTrackFileUrlError::Parse(_) => {
+                    ErrorInternalServerError(e.to_string())
+                }
+            },
         }
     }
 }
@@ -182,7 +190,7 @@ pub async fn track_endpoint(
         response.insert_header((actix_web::http::header::CONTENT_TYPE, content_type));
     } else {
         match &source {
-            TrackSource::Tidal { .. } | TrackSource::Qobuz { .. } => {
+            TrackSource::Tidal { .. } | TrackSource::Qobuz { .. } | TrackSource::Yt { .. } => {
                 #[cfg(feature = "flac")]
                 {
                     response.insert_header((
@@ -351,6 +359,7 @@ pub async fn artist_source_artwork_endpoint(
         ApiSource::Library => artist_id_string.parse::<i32>().map(ArtistId::Library),
         ApiSource::Tidal => artist_id_string.parse::<u64>().map(ArtistId::Tidal),
         ApiSource::Qobuz => artist_id_string.parse::<u64>().map(ArtistId::Qobuz),
+        ApiSource::Yt => artist_id_string.parse::<u64>().map(ArtistId::Yt),
     }
     .map_err(|_e| ErrorBadRequest("Invalid artist_id"))?;
 
@@ -384,6 +393,7 @@ pub async fn artist_cover_endpoint(
         ApiSource::Library => artist_id_string.parse::<i32>().map(ArtistId::Library),
         ApiSource::Tidal => artist_id_string.parse::<u64>().map(ArtistId::Tidal),
         ApiSource::Qobuz => artist_id_string.parse::<u64>().map(ArtistId::Qobuz),
+        ApiSource::Yt => artist_id_string.parse::<u64>().map(ArtistId::Yt),
     }
     .map_err(|_e| ErrorBadRequest("Invalid artist_id"))?;
 
@@ -437,6 +447,7 @@ pub async fn album_source_artwork_endpoint(
         ApiSource::Library => album_id_string.parse::<i32>().map(AlbumId::Library),
         ApiSource::Tidal => album_id_string.parse::<u64>().map(AlbumId::Tidal),
         ApiSource::Qobuz => Ok(AlbumId::Qobuz(album_id_string)),
+        ApiSource::Yt => Ok(AlbumId::Yt(album_id_string)),
     }
     .map_err(|_e| ErrorBadRequest("Invalid album_id"))?;
 
@@ -470,6 +481,7 @@ pub async fn album_artwork_endpoint(
         ApiSource::Library => album_id_string.parse::<i32>().map(AlbumId::Library),
         ApiSource::Tidal => album_id_string.parse::<u64>().map(AlbumId::Tidal),
         ApiSource::Qobuz => Ok(AlbumId::Qobuz(album_id_string)),
+        ApiSource::Yt => Ok(AlbumId::Yt(album_id_string)),
     }
     .map_err(|_e| ErrorBadRequest("Invalid album_id"))?;
 

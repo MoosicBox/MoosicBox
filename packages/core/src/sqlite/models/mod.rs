@@ -11,6 +11,7 @@ use crate::types::AudioFormat;
 use self::{
     qobuz::{QobuzAlbum, QobuzArtist, QobuzTrack},
     tidal::{TidalAlbum, TidalArtist, TidalTrack},
+    yt::{YtAlbum, YtArtist, YtTrack},
 };
 
 use super::db::{
@@ -20,6 +21,7 @@ use super::db::{
 
 pub mod qobuz;
 pub mod tidal;
+pub mod yt;
 
 pub trait AsModel<T> {
     fn as_model(&self) -> T;
@@ -168,6 +170,7 @@ pub enum TrackApiSource {
     Local,
     Tidal,
     Qobuz,
+    Yt,
 }
 
 impl From<AlbumSource> for TrackApiSource {
@@ -176,6 +179,7 @@ impl From<AlbumSource> for TrackApiSource {
             AlbumSource::Local => Self::Local,
             AlbumSource::Tidal => Self::Tidal,
             AlbumSource::Qobuz => Self::Qobuz,
+            AlbumSource::Yt => Self::Yt,
         }
     }
 }
@@ -207,6 +211,7 @@ pub enum Track {
     Library(LibraryTrack),
     Tidal(TidalTrack),
     Qobuz(QobuzTrack),
+    Yt(YtTrack),
 }
 
 impl From<LibraryTrack> for Track {
@@ -241,6 +246,7 @@ pub struct LibraryTrack {
     pub source: TrackApiSource,
     pub qobuz_id: Option<u64>,
     pub tidal_id: Option<u64>,
+    pub yt_id: Option<u64>,
 }
 
 impl LibraryTrack {
@@ -292,6 +298,7 @@ impl ToValueType<LibraryTrack> for &moosicbox_database::Row {
                 .expect("Missing source"),
             qobuz_id: self.to_value("qobuz_id")?,
             tidal_id: self.to_value("tidal_id")?,
+            yt_id: self.to_value("yt_id")?,
         })
     }
 }
@@ -330,6 +337,7 @@ impl AsModelResult<LibraryTrack, ParseError> for &moosicbox_database::Row {
                 .expect("Missing source"),
             qobuz_id: self.to_value("qobuz_id")?,
             tidal_id: self.to_value("tidal_id")?,
+            yt_id: self.to_value("yt_id")?,
         })
     }
 }
@@ -347,6 +355,7 @@ enum ApiTrackInner {
     Library(ApiLibraryTrack),
     Tidal(serde_json::Value),
     Qobuz(serde_json::Value),
+    Yt(serde_json::Value),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -360,6 +369,10 @@ pub enum ApiTrack {
         data: serde_json::Value,
     },
     Qobuz {
+        track_id: u64,
+        data: serde_json::Value,
+    },
+    Yt {
         track_id: u64,
         data: serde_json::Value,
     },
@@ -378,8 +391,9 @@ impl Serialize for ApiTrack {
                 ApiTrackInner::Tidal(data.clone()).serialize(serializer)
             }
             ApiTrack::Qobuz { data, .. } => {
-                ApiTrackInner::Tidal(data.clone()).serialize(serializer)
+                ApiTrackInner::Qobuz(data.clone()).serialize(serializer)
             }
+            ApiTrack::Yt { data, .. } => ApiTrackInner::Yt(data.clone()).serialize(serializer),
         }
     }
 }
@@ -410,6 +424,14 @@ impl<'de> Deserialize<'de> for ApiTrack {
                     .unwrap(),
                 data,
             },
+            ApiTrackInner::Yt(data) => ApiTrack::Yt {
+                track_id: data
+                    .get("id")
+                    .expect("Failed to get yt track id")
+                    .as_u64()
+                    .unwrap(),
+                data,
+            },
         })
     }
 }
@@ -420,6 +442,7 @@ impl ApiTrack {
             ApiTrack::Library { track_id, .. } => *track_id,
             ApiTrack::Tidal { track_id, .. } => *track_id,
             ApiTrack::Qobuz { track_id, .. } => *track_id,
+            ApiTrack::Yt { track_id, .. } => *track_id,
         }
     }
 
@@ -428,6 +451,7 @@ impl ApiTrack {
             ApiTrack::Library { .. } => ApiSource::Library,
             ApiTrack::Tidal { .. } => ApiSource::Tidal,
             ApiTrack::Qobuz { .. } => ApiSource::Qobuz,
+            ApiTrack::Yt { .. } => ApiSource::Yt,
         }
     }
 }
@@ -494,6 +518,7 @@ pub enum ArtistId {
     Library(i32),
     Tidal(u64),
     Qobuz(u64),
+    Yt(u64),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -502,6 +527,7 @@ pub enum Artist {
     Library(LibraryArtist),
     Tidal(TidalArtist),
     Qobuz(QobuzArtist),
+    Yt(YtArtist),
 }
 
 impl Artist {
@@ -510,6 +536,7 @@ impl Artist {
             Artist::Library(value) => ArtistId::Library(value.id),
             Artist::Tidal(value) => ArtistId::Tidal(value.id),
             Artist::Qobuz(value) => ArtistId::Qobuz(value.id),
+            Artist::Yt(value) => ArtistId::Yt(value.id),
         }
     }
 
@@ -518,6 +545,7 @@ impl Artist {
             Artist::Library(value) => value.title.clone(),
             Artist::Tidal(value) => value.name.clone(),
             Artist::Qobuz(value) => value.name.clone(),
+            Artist::Yt(value) => value.name.clone(),
         }
     }
 }
@@ -529,6 +557,7 @@ pub struct LibraryArtist {
     pub cover: Option<String>,
     pub tidal_id: Option<u64>,
     pub qobuz_id: Option<u64>,
+    pub yt_id: Option<u64>,
 }
 
 impl AsModel<LibraryArtist> for &moosicbox_database::Row {
@@ -545,6 +574,7 @@ impl ToValueType<LibraryArtist> for &moosicbox_database::Row {
             cover: self.to_value("cover")?,
             tidal_id: self.to_value("tidal_id")?,
             qobuz_id: self.to_value("qobuz_id")?,
+            yt_id: self.to_value("yt_id")?,
         })
     }
 }
@@ -557,6 +587,7 @@ impl AsModelResult<LibraryArtist, ParseError> for &moosicbox_database::Row {
             cover: self.to_value("cover")?,
             tidal_id: self.to_value("tidal_id")?,
             qobuz_id: self.to_value("qobuz_id")?,
+            yt_id: self.to_value("yt_id")?,
         })
     }
 }
@@ -593,6 +624,7 @@ pub struct ApiLibraryArtist {
     pub contains_cover: bool,
     pub tidal_id: Option<u64>,
     pub qobuz_id: Option<u64>,
+    pub yt_id: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -610,6 +642,7 @@ impl ToApi<ApiArtist> for LibraryArtist {
             contains_cover: self.cover.is_some(),
             tidal_id: self.tidal_id,
             qobuz_id: self.qobuz_id,
+            yt_id: self.yt_id,
         })
     }
 }
@@ -689,6 +722,7 @@ pub enum AlbumId {
     Library(i32),
     Tidal(u64),
     Qobuz(String),
+    Yt(String),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -697,6 +731,7 @@ pub enum Album {
     Library(LibraryAlbum),
     Tidal(TidalAlbum),
     Qobuz(QobuzAlbum),
+    Yt(YtAlbum),
 }
 
 impl Album {
@@ -705,6 +740,7 @@ impl Album {
             Album::Library(value) => AlbumId::Library(value.id),
             Album::Tidal(value) => AlbumId::Tidal(value.id),
             Album::Qobuz(value) => AlbumId::Qobuz(value.id.clone()),
+            Album::Yt(value) => AlbumId::Yt(value.id.clone()),
         }
     }
 
@@ -713,6 +749,7 @@ impl Album {
             Album::Library(value) => ArtistId::Library(value.artist_id),
             Album::Tidal(value) => ArtistId::Tidal(value.artist_id),
             Album::Qobuz(value) => ArtistId::Qobuz(value.artist_id),
+            Album::Yt(value) => ArtistId::Yt(value.artist_id),
         }
     }
 
@@ -721,6 +758,7 @@ impl Album {
             Album::Library(value) => value.title.clone(),
             Album::Tidal(value) => value.title.clone(),
             Album::Qobuz(value) => value.title.clone(),
+            Album::Yt(value) => value.title.clone(),
         }
     }
 }
@@ -740,8 +778,10 @@ pub struct LibraryAlbum {
     pub versions: Vec<AlbumVersionQuality>,
     pub tidal_id: Option<u64>,
     pub qobuz_id: Option<String>,
+    pub yt_id: Option<u64>,
     pub tidal_artist_id: Option<u64>,
     pub qobuz_artist_id: Option<u64>,
+    pub yt_artist_id: Option<u64>,
 }
 
 impl AsModel<LibraryAlbum> for &moosicbox_database::Row {
@@ -767,8 +807,10 @@ impl ToValueType<LibraryAlbum> for &moosicbox_database::Row {
             versions: vec![],
             tidal_id: self.to_value("tidal_id")?,
             qobuz_id: self.to_value("qobuz_id")?,
+            yt_id: self.to_value("yt_id")?,
             tidal_artist_id: self.to_value("tidal_artist_id")?,
             qobuz_artist_id: self.to_value("qobuz_artist_id")?,
+            yt_artist_id: self.to_value("yt_artist_id")?,
         })
     }
 }
@@ -789,8 +831,10 @@ impl AsModelResult<LibraryAlbum, ParseError> for &moosicbox_database::Row {
             versions: vec![],
             tidal_id: self.to_value("tidal_id")?,
             qobuz_id: self.to_value("qobuz_id")?,
+            yt_id: self.to_value("yt_id")?,
             tidal_artist_id: self.to_value("tidal_artist_id")?,
             qobuz_artist_id: self.to_value("qobuz_artist_id")?,
+            yt_artist_id: self.to_value("yt_artist_id")?,
         })
     }
 }
@@ -800,6 +844,7 @@ pub fn track_source_to_u8(source: TrackApiSource) -> u8 {
         TrackApiSource::Local => 1,
         TrackApiSource::Tidal => 2,
         TrackApiSource::Qobuz => 3,
+        TrackApiSource::Yt => 4,
     }
 }
 
@@ -897,6 +942,20 @@ impl AsModelResultMapped<LibraryAlbum, DbError> for Vec<moosicbox_database::Row>
                             album.versions.len()
                         );
                     }
+                    if album.yt_id.is_some() {
+                        album.versions.push(AlbumVersionQuality {
+                            format: None,
+                            bit_depth: None,
+                            sample_rate: None,
+                            channels: None,
+                            source: TrackApiSource::Yt,
+                        });
+                        log::trace!(
+                            "Added Yt version to album id={} count={}",
+                            album.id,
+                            album.versions.len()
+                        );
+                    }
                 }
             }
         }
@@ -935,8 +994,10 @@ impl AsModelQuery<LibraryAlbum> for &moosicbox_database::Row {
             versions: get_album_version_qualities(db, id).await?,
             tidal_id: self.to_value("tidal_id")?,
             qobuz_id: self.to_value("qobuz_id")?,
+            yt_id: self.to_value("yt_id")?,
             tidal_artist_id: self.to_value("tidal_artist_id")?,
             qobuz_artist_id: self.to_value("qobuz_artist_id")?,
+            yt_artist_id: self.to_value("yt_artist_id")?,
         })
     }
 }
@@ -979,6 +1040,7 @@ pub struct ApiLibraryAlbum {
     pub versions: Vec<ApiAlbumVersionQuality>,
     pub tidal_id: Option<u64>,
     pub qobuz_id: Option<String>,
+    pub yt_id: Option<u64>,
 }
 
 impl ToApi<ApiAlbum> for LibraryAlbum {
@@ -996,6 +1058,7 @@ impl ToApi<ApiAlbum> for LibraryAlbum {
             versions: self.versions.iter().map(|v| v.to_api()).collect(),
             tidal_id: self.tidal_id,
             qobuz_id: self.qobuz_id,
+            yt_id: self.yt_id,
         })
     }
 }
@@ -1006,6 +1069,7 @@ pub enum AlbumSource {
     Local,
     Tidal,
     Qobuz,
+    Yt,
 }
 
 impl From<TrackApiSource> for AlbumSource {
@@ -1014,6 +1078,7 @@ impl From<TrackApiSource> for AlbumSource {
             TrackApiSource::Local => Self::Local,
             TrackApiSource::Tidal => Self::Tidal,
             TrackApiSource::Qobuz => Self::Qobuz,
+            TrackApiSource::Yt => Self::Yt,
         }
     }
 }
@@ -1026,6 +1091,7 @@ impl FromStr for AlbumSource {
             "local" => Ok(AlbumSource::Local),
             "tidal" => Ok(AlbumSource::Tidal),
             "qobuz" => Ok(AlbumSource::Qobuz),
+            "yt" => Ok(AlbumSource::Yt),
             _ => Err(()),
         }
     }
@@ -1143,6 +1209,7 @@ pub enum ApiSource {
     Library,
     Tidal,
     Qobuz,
+    Yt,
 }
 
 impl Display for ApiSource {
@@ -1219,6 +1286,20 @@ impl ToApi<ApiTrack> for SessionPlaylistTrack {
                         .expect("Failed to parse UpdateSessionPlaylistTrack data"),
                 },
                 None => ApiTrack::Qobuz {
+                    track_id: self.id,
+                    data: serde_json::json!({
+                        "id": self.id,
+                        "type": self.r#type,
+                    }),
+                },
+            },
+            ApiSource::Yt => match &self.data {
+                Some(data) => ApiTrack::Yt {
+                    track_id: self.id,
+                    data: serde_json::from_str(data)
+                        .expect("Failed to parse UpdateSessionPlaylistTrack data"),
+                },
+                None => ApiTrack::Yt {
                     track_id: self.id,
                     data: serde_json::json!({
                         "id": self.id,
@@ -1428,6 +1509,7 @@ impl AsModelResultMappedQuery<ApiTrack, DbError> for Vec<SessionPlaylistTrack> {
                         .to_api(),
                     ApiSource::Tidal => t.to_api(),
                     ApiSource::Qobuz => t.to_api(),
+                    ApiSource::Yt => t.to_api(),
                 })
             })
             .collect::<Result<Vec<_>, DbError>>()?)

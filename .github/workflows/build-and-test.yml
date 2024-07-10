@@ -368,6 +368,12 @@ jobs:
                       cargo: --no-default-features
                       features: tidal
 
+                    - name: scan-yt
+                      path: packages/scan
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: yt
+
                     - name: scan-api
                       path: packages/scan
                       os: ubuntu-latest
@@ -471,6 +477,22 @@ jobs:
                       path: packages/symphonia_player
                       os: macos-latest
                       dependencies: brew install pulseaudio
+
+                    - name: yt
+                      path: packages/yt
+                      os: ubuntu-latest
+
+                    - name: yt-api
+                      path: packages/yt
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: api
+
+                    - name: yt-db
+                      path: packages/yt
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: db
 
         steps:
             - uses: actions/checkout@v4

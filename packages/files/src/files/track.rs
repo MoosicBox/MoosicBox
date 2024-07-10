@@ -29,6 +29,7 @@ use moosicbox_symphonia_player::{
     play_file_path_str_async, play_media_source_async, PlaybackError,
 };
 use moosicbox_tidal::{TidalAudioQuality, TidalTrackFileUrlError};
+use moosicbox_yt::{YtAudioQuality, YtTrackFileUrlError};
 use once_cell::sync::Lazy;
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
@@ -72,6 +73,11 @@ pub enum TrackSource {
         format: AudioFormat,
         track_id: Option<u64>,
     },
+    Yt {
+        url: String,
+        format: AudioFormat,
+        track_id: Option<u64>,
+    },
 }
 
 impl TrackSource {
@@ -80,6 +86,7 @@ impl TrackSource {
             TrackSource::LocalFilePath { format, .. } => *format,
             TrackSource::Tidal { format, .. } => *format,
             TrackSource::Qobuz { format, .. } => *format,
+            TrackSource::Yt { format, .. } => *format,
         }
     }
 
@@ -88,6 +95,7 @@ impl TrackSource {
             TrackSource::LocalFilePath { track_id, .. } => *track_id,
             TrackSource::Tidal { track_id, .. } => *track_id,
             TrackSource::Qobuz { track_id, .. } => *track_id,
+            TrackSource::Yt { track_id, .. } => *track_id,
         }
     }
 }
@@ -175,6 +183,17 @@ impl From<TrackAudioQuality> for QobuzAudioQuality {
     }
 }
 
+impl From<TrackAudioQuality> for YtAudioQuality {
+    fn from(value: TrackAudioQuality) -> Self {
+        match value {
+            TrackAudioQuality::Low => YtAudioQuality::High,
+            TrackAudioQuality::FlacLossless => YtAudioQuality::Lossless,
+            TrackAudioQuality::FlacHiRes => YtAudioQuality::HiResLossless,
+            TrackAudioQuality::FlacHighestRes => YtAudioQuality::HiResLossless,
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum TrackSourceError {
     #[error("Track not found: {0}")]
@@ -187,6 +206,8 @@ pub enum TrackSourceError {
     TidalTrackUrl(#[from] TidalTrackFileUrlError),
     #[error(transparent)]
     QobuzTrackUrl(#[from] QobuzTrackFileUrlError),
+    #[error(transparent)]
+    YtTrackUrl(#[from] YtTrackFileUrlError),
 }
 
 pub async fn get_track_id_source(
@@ -232,6 +253,7 @@ pub async fn get_track_source(
                 TrackApiSource::Local => track.id as u64,
                 TrackApiSource::Tidal => track.tidal_id.ok_or(TrackSourceError::InvalidSource)?,
                 TrackApiSource::Qobuz => track.qobuz_id.ok_or(TrackSourceError::InvalidSource)?,
+                TrackApiSource::Yt => track.yt_id.ok_or(TrackSourceError::InvalidSource)?,
             },
             track.source,
             track.file.clone(),
@@ -244,6 +266,7 @@ pub async fn get_track_source(
                 ApiSource::Library => unreachable!(),
                 ApiSource::Tidal => TrackApiSource::Tidal,
                 ApiSource::Qobuz => TrackApiSource::Qobuz,
+                ApiSource::Yt => TrackApiSource::Yt,
             },
             None,
             AudioFormat::Source,
@@ -289,6 +312,19 @@ pub async fn get_track_source(
             Ok(TrackSource::Qobuz {
                 url: moosicbox_qobuz::track_file_url(db, &track_id, quality, None, None, None)
                     .await?,
+                format: track.and_then(|x| x.format).unwrap_or(AudioFormat::Source),
+                track_id: Some(track_id.into()),
+            })
+        }
+        TrackApiSource::Yt => {
+            let quality = quality.map(|q| q.into()).unwrap_or(YtAudioQuality::High);
+            let track_id = track_id.into();
+            Ok(TrackSource::Yt {
+                url: moosicbox_yt::track_file_url(db, quality, &track_id, None)
+                    .await?
+                    .first()
+                    .unwrap()
+                    .to_string(),
                 format: track.and_then(|x| x.format).unwrap_or(AudioFormat::Source),
                 track_id: Some(track_id.into()),
             })
@@ -434,7 +470,7 @@ pub async fn get_audio_bytes(
                         TrackSource::LocalFilePath { path, .. } => {
                             request_audio_bytes_from_file(path, format, size, start, end).await?
                         }
-                        TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } => {
+                        TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } | TrackSource::Yt { url, .. } => {
                             request_track_bytes_from_url(&url, start, end, format, size).await?
                         }
                     }
@@ -504,7 +540,7 @@ pub async fn get_audio_bytes(
                                 log::error!("Failed to encode to aac: {err:?}");
                             }
                         }
-                        TrackSource::Tidal { ref url, .. } | TrackSource::Qobuz { ref url, .. } => {
+                        TrackSource::Tidal { ref url, .. } | TrackSource::Qobuz { ref url, .. } | TrackSource::Yt { ref url, .. } => {
                             let source: RemoteByteStreamMediaSource = RemoteByteStream::new(
                                 url.to_string(),
                                 size,
@@ -548,7 +584,7 @@ pub async fn get_audio_bytes(
                                 filename: filename_from_path_str(&path),
                             },
                         },
-                        TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } => {
+                        TrackSource::Tidal { url, .. } | TrackSource::Qobuz { url, .. } | TrackSource::Yt { url, .. } => {
                             match format {
                                 AudioFormat::Source => {
                                     request_track_bytes_from_url(&url, start, end, format, size)
@@ -950,7 +986,7 @@ pub async fn get_or_init_track_size(
                     }
                     AudioFormat::Source => File::open(path).unwrap().metadata().unwrap().len(),
                 },
-                TrackSource::Tidal { .. } | TrackSource::Qobuz { .. } => {
+                TrackSource::Tidal { .. } | TrackSource::Qobuz { .. } | TrackSource::Yt { .. } => {
                     return Err(TrackInfoError::UnsupportedSource(source))
                 }
             })

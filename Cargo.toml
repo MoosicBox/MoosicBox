@@ -33,6 +33,7 @@ members = [
     "packages/tunnel_server",
     "packages/upnp",
     "packages/ws",
+    "packages/yt",
 ]
 
 resolver = "2"

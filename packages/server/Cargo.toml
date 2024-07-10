@@ -43,6 +43,7 @@ moosicbox_scan = { path = "../scan", default-features = false, features = [
     "local",
     "qobuz",
     "tidal",
+    "yt",
 ] }
 moosicbox_search = { path = "../search" }
 moosicbox_tidal = { path = "../tidal" }
@@ -54,6 +55,7 @@ moosicbox_upnp = { path = "../upnp", optional = true, default-features = false, 
     "player",
 ] }
 moosicbox_ws = { path = "../ws" }
+moosicbox_yt = { path = "../yt" }
 
 # Postgres
 aws-config = { workspace = true, optional = true }
@@ -72,31 +74,31 @@ tokio-postgres = { workspace = true, optional = true, features = [] }
 # auth
 qstring = { workspace = true, optional = true }
 
-actix-cors      = { workspace = true }
-actix-files     = { workspace = true }
-actix-web       = { workspace = true }
-actix-ws        = { workspace = true }
-awc             = { workspace = true }
-enum-as-inner   = { workspace = true }
-flume           = { workspace = true }
-futures         = { workspace = true }
-futures-util    = { workspace = true }
-kanal           = { workspace = true }
-lazy_static     = { workspace = true }
-log             = { workspace = true }
-once_cell       = { workspace = true }
-rand            = { workspace = true }
-regex           = { workspace = true }
-rusqlite        = { workspace = true }
-serde           = { workspace = true, features = ["derive"] }
-serde_json      = { workspace = true }
-strum           = { workspace = true }
-strum_macros    = { workspace = true }
-thiserror       = { workspace = true }
-throttle        = { workspace = true }
-tokio           = { workspace = true, features = ["macros", "rt", "time"] }
-tokio-util      = { workspace = true }
-url             = { workspace = true }
+actix-cors    = { workspace = true }
+actix-files   = { workspace = true }
+actix-web     = { workspace = true }
+actix-ws      = { workspace = true }
+awc           = { workspace = true }
+enum-as-inner = { workspace = true }
+flume         = { workspace = true }
+futures       = { workspace = true }
+futures-util  = { workspace = true }
+kanal         = { workspace = true }
+lazy_static   = { workspace = true }
+log           = { workspace = true }
+once_cell     = { workspace = true }
+rand          = { workspace = true }
+regex         = { workspace = true }
+rusqlite      = { workspace = true }
+serde         = { workspace = true, features = ["derive"] }
+serde_json    = { workspace = true }
+strum         = { workspace = true }
+strum_macros  = { workspace = true }
+thiserror     = { workspace = true }
+throttle      = { workspace = true }
+tokio         = { workspace = true, features = ["macros", "rt", "time"] }
+tokio-util    = { workspace = true }
+url           = { workspace = true }
 
 [features]
 default = [

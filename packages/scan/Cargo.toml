@@ -33,6 +33,9 @@ moosicbox_qobuz = { path = "../qobuz", optional = true }
 # Tidal Dependencies
 moosicbox_tidal = { path = "../tidal", optional = true }
 
+# Yt Dependencies
+moosicbox_yt = { path = "../yt", optional = true }
+
 # Local Dependencies
 audiotags    = { workspace = true, optional = true }
 lofty        = { workspace = true, optional = true }
@@ -53,7 +56,7 @@ tokio        = { workspace = true, features = ["macros"] }
 tokio-util   = { workspace = true }
 
 [features]
-default = ["aac", "api", "flac", "local", "mp3", "opus", "qobuz", "tidal"]
+default = ["aac", "api", "flac", "local", "mp3", "opus", "qobuz", "tidal", "yt"]
 
 fail-on-warnings = []
 
@@ -61,6 +64,7 @@ api   = ["dep:actix-web", "dep:moosicbox_auth"]
 local = ["dep:audiotags", "dep:lofty", "dep:mp3-duration"]
 qobuz = ["dep:moosicbox_qobuz"]
 tidal = ["dep:moosicbox_tidal"]
+yt    = ["dep:moosicbox_yt"]
 
 aac  = ["moosicbox_core/aac"]
 flac = ["moosicbox_core/flac"]

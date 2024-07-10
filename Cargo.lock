@@ -3411,6 +3411,7 @@ dependencies = [
  "moosicbox_tunnel_sender",
  "moosicbox_upnp",
  "moosicbox_ws",
+ "moosicbox_yt",
 ]
 
 [[package]]
@@ -3627,6 +3628,7 @@ dependencies = [
  "moosicbox_stream_utils",
  "moosicbox_symphonia_player",
  "moosicbox_tidal",
+ "moosicbox_yt",
  "once_cell",
  "regex",
  "reqwest 0.12.5",
@@ -3725,6 +3727,7 @@ dependencies = [
  "moosicbox_scan",
  "moosicbox_search",
  "moosicbox_tidal",
+ "moosicbox_yt",
  "serde",
  "serde_json",
  "thiserror",
@@ -3867,6 +3870,7 @@ dependencies = [
  "moosicbox_qobuz",
  "moosicbox_search",
  "moosicbox_tidal",
+ "moosicbox_yt",
  "mp3-duration",
  "once_cell",
  "regex",
@@ -3944,6 +3948,7 @@ dependencies = [
  "moosicbox_tunnel_sender",
  "moosicbox_upnp",
  "moosicbox_ws",
+ "moosicbox_yt",
  "native-tls",
  "once_cell",
  "openssl",
@@ -4216,6 +4221,35 @@ dependencies = [
  "strum",
  "strum_macros",
  "thiserror",
+]
+
+[[package]]
+name = "moosicbox_yt"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "async-recursion",
+ "async-trait",
+ "futures",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_core",
+ "moosicbox_database",
+ "moosicbox_json_utils",
+ "moosicbox_music_api",
+ "moosicbox_paging",
+ "once_cell",
+ "open",
+ "reqwest 0.12.5",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "strum",
+ "strum_macros",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "url",
 ]
 
 [[package]]

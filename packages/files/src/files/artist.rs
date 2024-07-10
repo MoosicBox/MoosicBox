@@ -12,6 +12,7 @@ use moosicbox_core::sqlite::{
     models::{
         qobuz::{QobuzArtist, QobuzImageSize},
         tidal::{TidalArtist, TidalArtistImageSize},
+        yt::{YtArtist, YtArtistImageSize},
         ArtistId,
     },
 };
@@ -19,6 +20,7 @@ use moosicbox_database::{query::*, Database, DatabaseError};
 use moosicbox_qobuz::QobuzArtistError;
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use moosicbox_tidal::TidalArtistError;
+use moosicbox_yt::YtArtistError;
 use once_cell::sync::Lazy;
 use thiserror::Error;
 use tokio_util::codec::{BytesCodec, FramedRead};
@@ -121,6 +123,8 @@ pub enum ArtistCoverError {
     TidalArtist(#[from] moosicbox_tidal::TidalArtistError),
     #[error(transparent)]
     QobuzArtist(#[from] moosicbox_qobuz::QobuzArtistError),
+    #[error(transparent)]
+    YtArtist(#[from] moosicbox_yt::YtArtistError),
     #[error("Failed to read file with path: {0} ({1})")]
     File(String, String),
 }
@@ -158,6 +162,9 @@ pub async fn get_artist_cover_bytes(
         ArtistId::Qobuz(qobuz_artist_id) => {
             get_qobuz_artist_cover_bytes(*qobuz_artist_id, db, size, try_to_get_stream_size).await?
         }
+        ArtistId::Yt(yt_artist_id) => {
+            get_yt_artist_cover_bytes(*yt_artist_id, db, size, try_to_get_stream_size).await?
+        }
     })
 }
 
@@ -177,6 +184,7 @@ pub async fn get_artist_cover(
         ArtistId::Qobuz(qobuz_artist_id) => {
             get_qobuz_artist_cover(*qobuz_artist_id, db, size).await?
         }
+        ArtistId::Yt(yt_artist_id) => get_yt_artist_cover(*yt_artist_id, db, size).await?,
     };
 
     Ok(ArtistCoverSource::LocalFilePath(path))
@@ -432,5 +440,92 @@ async fn get_qobuz_artist_cover_request(
     Ok(ArtistCoverRequest {
         url,
         file_path: get_artist_cover_path(&size.to_string(), "qobuz", artist.id, &artist.name),
+    })
+}
+
+pub async fn get_yt_artist_cover_bytes(
+    yt_artist_id: u64,
+    db: &dyn Database,
+    size: Option<u32>,
+    try_to_get_stream_size: bool,
+) -> Result<CoverBytes, ArtistCoverError> {
+    let request = get_yt_artist_cover_request(yt_artist_id, db, size).await?;
+
+    Ok(get_or_fetch_cover_bytes_from_remote_url(
+        &request.url,
+        &request.file_path,
+        try_to_get_stream_size,
+    )
+    .await?)
+}
+
+pub async fn get_yt_artist_cover(
+    yt_artist_id: u64,
+    db: &dyn Database,
+    size: Option<u32>,
+) -> Result<String, ArtistCoverError> {
+    let request = get_yt_artist_cover_request(yt_artist_id, db, size).await?;
+
+    Ok(get_or_fetch_cover_from_remote_url(&request.url, &request.file_path).await?)
+}
+
+async fn get_yt_artist_cover_request(
+    yt_artist_id: u64,
+    db: &dyn Database,
+    size: Option<u32>,
+) -> Result<ArtistCoverRequest, ArtistCoverError> {
+    static ARTIST_CACHE: Lazy<RwLock<HashMap<u64, Option<YtArtist>>>> =
+        Lazy::new(|| RwLock::new(HashMap::new()));
+
+    let artist = if let Some(artist) = {
+        let binding = ARTIST_CACHE.read().unwrap();
+        binding.get(&yt_artist_id).cloned()
+    } {
+        artist
+    } else {
+        use moosicbox_yt::AuthenticatedRequestError;
+
+        let artist =
+            match moosicbox_yt::artist(db, &yt_artist_id.into(), None, None, None, None).await {
+                Ok(album) => Ok(Some(album)),
+                Err(err) => match err {
+                    YtArtistError::AuthenticatedRequest(
+                        AuthenticatedRequestError::RequestFailed(404, _),
+                    ) => Ok(None),
+                    _ => Err(err),
+                },
+            }?;
+
+        ARTIST_CACHE
+            .write()
+            .as_mut()
+            .unwrap()
+            .insert(yt_artist_id, artist.clone());
+
+        artist
+    }
+    .ok_or_else(|| ArtistCoverError::NotFound(ArtistId::Yt(yt_artist_id)))?;
+
+    let size = size
+        .map(|size| (size as u16).into())
+        .unwrap_or(YtArtistImageSize::Max);
+
+    log::debug!(
+        "Getting Yt artist picture from url={:?} size={size}",
+        artist.picture_url(size)
+    );
+
+    let url = artist
+        .picture_url(size)
+        .ok_or(ArtistCoverError::NotFound(ArtistId::Yt(yt_artist_id)))?;
+
+    log::debug!(
+        "Got Yt artist picture from url={:?} size={size}: {url}",
+        artist.picture_url(size)
+    );
+
+    Ok(ArtistCoverRequest {
+        url,
+        file_path: get_artist_cover_path(&size.to_string(), "yt", artist.id, &artist.name),
     })
 }

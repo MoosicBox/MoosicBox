@@ -14,8 +14,8 @@ use moosicbox_core::{
     sqlite::{
         db::{get_album_tracks, get_session_playlist, get_tracks, DbError},
         models::{
-            qobuz::QobuzTrack, tidal::TidalTrack, ApiSource, LibraryTrack, ToApi, Track,
-            TrackApiSource, UpdateSession, UpdateSessionPlaylistTrack,
+            qobuz::QobuzTrack, tidal::TidalTrack, yt::YtTrack, ApiSource, LibraryTrack, ToApi,
+            Track, TrackApiSource, UpdateSession, UpdateSessionPlaylistTrack,
         },
     },
     types::{AudioFormat, PlaybackQuality},
@@ -197,6 +197,7 @@ impl TrackOrId {
                 Track::Library(_) => ApiSource::Library,
                 Track::Tidal(_) => ApiSource::Tidal,
                 Track::Qobuz(_) => ApiSource::Qobuz,
+                Track::Yt(_) => ApiSource::Yt,
             },
             TrackOrId::Id(_id, source) => *source,
         }
@@ -208,11 +209,13 @@ impl TrackOrId {
                 Track::Library(track) => track.source,
                 Track::Tidal(_) => TrackApiSource::Tidal,
                 Track::Qobuz(_) => TrackApiSource::Qobuz,
+                Track::Yt(_) => TrackApiSource::Yt,
             },
             TrackOrId::Id(_id, source) => match source {
                 ApiSource::Library => TrackApiSource::Local,
                 ApiSource::Tidal => TrackApiSource::Tidal,
                 ApiSource::Qobuz => TrackApiSource::Qobuz,
+                ApiSource::Yt => TrackApiSource::Yt,
             },
         }
     }
@@ -230,6 +233,7 @@ impl TrackOrId {
                 Track::Library(track) => track.id,
                 Track::Tidal(track) => track.id as i32,
                 Track::Qobuz(track) => track.id as i32,
+                Track::Yt(track) => track.id as i32,
             },
             TrackOrId::Id(id, _) => *id,
         }
@@ -241,6 +245,7 @@ impl TrackOrId {
                 Track::Library(track) => TrackOrId::Id(track.id, ApiSource::Library),
                 Track::Tidal(track) => TrackOrId::Id(track.id as i32, ApiSource::Library),
                 Track::Qobuz(track) => TrackOrId::Id(track.id as i32, ApiSource::Library),
+                Track::Yt(track) => TrackOrId::Id(track.id as i32, ApiSource::Library),
             },
             TrackOrId::Id(_, _) => self.clone(),
         }
@@ -307,6 +312,9 @@ pub async fn get_track_url(
             ApiSource::Qobuz => {
                 serializer.append_pair("audioQuality", "LOW");
             }
+            ApiSource::Yt => {
+                serializer.append_pair("audioQuality", "LOW");
+            }
         }
 
         serializer.finish()
@@ -333,6 +341,18 @@ pub async fn get_track_url(
         }
         ApiSource::Qobuz => {
             let url = format!("{host}/qobuz/track/url{query_string}");
+            log::debug!("Fetching track file url from {url}");
+
+            Ok(CLIENT
+                .get(url)
+                .send()
+                .await?
+                .json::<Value>()
+                .await?
+                .to_value::<String>("url")?)
+        }
+        ApiSource::Yt => {
+            let url = format!("{host}/yt/track/url{query_string}");
             log::debug!("Fetching track file url from {url}");
 
             Ok(CLIENT
@@ -631,6 +651,10 @@ pub trait Player: Clone + Send + 'static {
                             ..Default::default()
                         }))),
                         ApiSource::Qobuz => TrackOrId::Track(Box::new(Track::Qobuz(QobuzTrack {
+                            id: *track_id as u64,
+                            ..Default::default()
+                        }))),
+                        ApiSource::Yt => TrackOrId::Track(Box::new(Track::Yt(YtTrack {
                             id: *track_id as u64,
                             ..Default::default()
                         }))),
@@ -1214,11 +1238,13 @@ pub trait Player: Clone + Send + 'static {
                 Track::Library(track) => track.id,
                 Track::Tidal(track) => track.id as i32,
                 Track::Qobuz(track) => track.id as i32,
+                Track::Yt(track) => track.id as i32,
             },
             match track {
                 Track::Library(_) => ApiSource::Library,
                 Track::Tidal(_) => ApiSource::Tidal,
                 Track::Qobuz(_) => ApiSource::Qobuz,
+                Track::Yt(_) => ApiSource::Yt,
             },
             quality,
         )
@@ -1314,6 +1340,10 @@ pub trait Player: Clone + Send + 'static {
                         self.track_to_playable_stream(&Track::Qobuz(track), quality)
                             .await?
                     }
+                    Track::Yt(track) => {
+                        self.track_to_playable_stream(&Track::Yt(track), quality)
+                            .await?
+                    }
                 },
             },
             PlaybackType::Stream => {
@@ -1333,6 +1363,10 @@ pub trait Player: Clone + Send + 'static {
                     }
                     Track::Qobuz(track) => {
                         self.track_to_playable_stream(&Track::Qobuz(track), quality)
+                            .await?
+                    }
+                    Track::Yt(track) => {
+                        self.track_to_playable_stream(&Track::Yt(track), quality)
                             .await?
                     }
                 },

@@ -137,6 +137,7 @@ impl Context {
             TrackSource::LocalFilePath { path, .. } => filename_from_path_str(&path),
             TrackSource::Tidal { .. } => None,
             TrackSource::Qobuz { .. } => None,
+            TrackSource::Yt { .. } => None,
         };
 
         let writers = Arc::new(Mutex::new(vec![]));
@@ -426,6 +427,17 @@ pub fn track_key(source: &TrackSource, output_format: AudioFormat) -> String {
             track_id,
         } => format!(
             "qobuz:{format}:{id}:{output_format}",
+            id = track_id
+                .map(|x| format!("id:{x}"))
+                .as_deref()
+                .unwrap_or(url)
+        ),
+        TrackSource::Yt {
+            format,
+            url,
+            track_id,
+        } => format!(
+            "yt:{format}:{id}:{output_format}",
             id = track_id
                 .map(|x| format!("id:{x}"))
                 .as_deref()

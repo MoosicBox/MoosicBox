@@ -13,6 +13,7 @@ use moosicbox_core::sqlite::{
     models::{
         qobuz::{QobuzAlbum, QobuzImageSize},
         tidal::{TidalAlbum, TidalAlbumImageSize},
+        yt::{YtAlbum, YtAlbumImageSize},
         AlbumId,
     },
 };
@@ -20,6 +21,7 @@ use moosicbox_database::{query::*, Database, DatabaseError};
 use moosicbox_qobuz::QobuzAlbumError;
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use moosicbox_tidal::TidalAlbumError;
+use moosicbox_yt::YtAlbumError;
 use once_cell::sync::Lazy;
 use thiserror::Error;
 use tokio_util::codec::{BytesCodec, FramedRead};
@@ -181,6 +183,8 @@ pub enum AlbumCoverError {
     TidalAlbum(#[from] moosicbox_tidal::TidalAlbumError),
     #[error(transparent)]
     QobuzAlbum(#[from] moosicbox_qobuz::QobuzAlbumError),
+    #[error(transparent)]
+    YtAlbum(#[from] moosicbox_yt::YtAlbumError),
     #[error("Failed to read file with path: {0} ({1})")]
     File(String, String),
 }
@@ -218,6 +222,9 @@ pub async fn get_album_cover_bytes(
         AlbumId::Qobuz(qobuz_album_id) => {
             get_qobuz_album_cover_bytes(qobuz_album_id, db, size, try_to_get_stream_size).await?
         }
+        AlbumId::Yt(yt_album_id) => {
+            get_yt_album_cover_bytes(yt_album_id, db, size, try_to_get_stream_size).await?
+        }
     })
 }
 
@@ -233,6 +240,7 @@ pub async fn get_album_cover(
         }
         AlbumId::Tidal(tidal_album_id) => get_tidal_album_cover(*tidal_album_id, db, size).await?,
         AlbumId::Qobuz(qobuz_album_id) => get_qobuz_album_cover(qobuz_album_id, db, size).await?,
+        AlbumId::Yt(yt_album_id) => get_yt_album_cover(yt_album_id, db, size).await?,
     };
 
     Ok(AlbumCoverSource::LocalFilePath(path))
@@ -474,6 +482,90 @@ async fn get_qobuz_album_cover_bytes(
     try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, AlbumCoverError> {
     let request = get_qobuz_album_cover_request(qobuz_album_id, db, size).await?;
+
+    Ok(get_or_fetch_cover_bytes_from_remote_url(
+        &request.url,
+        &request.file_path,
+        try_to_get_stream_size,
+    )
+    .await?)
+}
+
+async fn get_yt_album_cover_request(
+    yt_album_id: &str,
+    db: &dyn Database,
+    size: Option<u32>,
+) -> Result<AlbumCoverRequest, AlbumCoverError> {
+    static ALBUM_CACHE: Lazy<RwLock<HashMap<String, Option<YtAlbum>>>> =
+        Lazy::new(|| RwLock::new(HashMap::new()));
+
+    let album = if let Some(album) = {
+        let binding = ALBUM_CACHE.read().unwrap();
+        binding.get(yt_album_id).cloned()
+    } {
+        album
+    } else {
+        use moosicbox_yt::AuthenticatedRequestError;
+
+        let album =
+            match moosicbox_yt::album(db, &yt_album_id.into(), None, None, None, None).await {
+                Ok(album) => Ok(Some(album)),
+                Err(err) => match err {
+                    YtAlbumError::AuthenticatedRequest(
+                        AuthenticatedRequestError::RequestFailed(404, _),
+                    ) => Ok(None),
+                    _ => Err(err),
+                },
+            }?;
+
+        ALBUM_CACHE
+            .write()
+            .as_mut()
+            .unwrap()
+            .insert(yt_album_id.to_owned(), album.clone());
+
+        album
+    }
+    .ok_or_else(|| AlbumCoverError::NotFound(AlbumId::Yt(yt_album_id.to_owned())))?;
+
+    let size = size
+        .map(|size| (size as u16).into())
+        .unwrap_or(YtAlbumImageSize::Max);
+
+    let url = album
+        .cover_url(size)
+        .ok_or(AlbumCoverError::NotFound(AlbumId::Yt(
+            yt_album_id.to_owned(),
+        )))?;
+
+    let file_path = get_album_cover_path(
+        &size.to_string(),
+        "yt",
+        &album.id.to_string(),
+        &album.artist,
+        &album.title,
+    );
+
+    Ok(AlbumCoverRequest { url, file_path })
+}
+
+async fn get_yt_album_cover(
+    yt_album_id: &str,
+    db: &dyn Database,
+    size: Option<u32>,
+) -> Result<String, AlbumCoverError> {
+    let request = get_yt_album_cover_request(yt_album_id, db, size).await?;
+
+    Ok(get_or_fetch_cover_from_remote_url(&request.url, &request.file_path).await?)
+}
+
+async fn get_yt_album_cover_bytes(
+    yt_album_id: &str,
+    db: &dyn Database,
+    size: Option<u32>,
+    try_to_get_stream_size: bool,
+) -> Result<CoverBytes, AlbumCoverError> {
+    let request = get_yt_album_cover_request(yt_album_id, db, size).await?;
 
     Ok(get_or_fetch_cover_bytes_from_remote_url(
         &request.url,

@@ -38,6 +38,7 @@ moosicbox_tunnel           = { version = "0.1.0", path = "../tunnel", default-fe
 moosicbox_tunnel_sender    = { version = "0.1.0", path = "../tunnel_sender", default-features = false }
 moosicbox_upnp             = { version = "0.1.0", path = "../upnp", default-features = false }
 moosicbox_ws               = { version = "0.1.0", path = "../ws", default-features = false }
+moosicbox_yt               = { version = "0.1.0", path = "../yt", default-features = false }
 
 [features]
 fail-on-warnings = []

@@ -1185,7 +1185,8 @@ impl TunnelSender {
                                 }
                             }
                             Ok(TrackSource::Tidal { url, .. })
-                            | Ok(TrackSource::Qobuz { url, .. }) => {
+                            | Ok(TrackSource::Qobuz { url, .. })
+                            | Ok(TrackSource::Yt { url, .. }) => {
                                 let writer = ByteWriter::default();
                                 let stream = writer.stream();
 
@@ -1365,6 +1366,7 @@ impl TunnelSender {
                                     album_id_string.parse::<u64>().map(AlbumId::Tidal)
                                 }
                                 ApiSource::Qobuz => Ok(AlbumId::Qobuz(album_id_string.to_string())),
+                                ApiSource::Yt => Ok(AlbumId::Yt(album_id_string.to_string())),
                             }
                             .map_err(|_| {
                                 TunnelRequestError::BadRequest("Invalid album_id".into())
