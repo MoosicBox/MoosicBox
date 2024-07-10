@@ -28,6 +28,7 @@ In progress:
 
 - UPnP/DLNA support
 - Opus decoder
+- YouTube Music integration
 
 To-do (in no particular order):
 
