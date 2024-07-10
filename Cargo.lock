@@ -4181,7 +4181,7 @@ dependencies = [
  "rand",
  "regex",
  "reqwest 0.12.5",
- "roxmltree",
+ "roxmltree 0.20.0",
  "rupnp",
  "serde",
  "serde_json",
@@ -4263,9 +4263,9 @@ dependencies = [
 
 [[package]]
 name = "mp3lame-encoder"
-version = "0.1.5"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64622e64e2f9ee2a2fee97a6f53bd8b0301fa0fd15f2f4152f910091949689c7"
+checksum = "290fd44f3de10efaeac471fa8436a959ea4d8bb15b4eadd0cf1e77ab4cff6cc9"
 dependencies = [
  "libc",
  "mp3lame-sys",
@@ -5803,6 +5803,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "roxmltree"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
+
+[[package]]
 name = "rsa"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5847,7 +5853,7 @@ dependencies = [
  "get_if_addrs",
  "http 0.2.12",
  "hyper 0.14.30",
- "roxmltree",
+ "roxmltree 0.18.1",
  "ssdp-client",
  "tokio",
 ]

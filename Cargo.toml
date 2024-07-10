@@ -118,7 +118,7 @@ lofty = { git = "https://github.com/BSteffaniak/lofty-rs.git", branch = "master-
 log = { version = "0.4", features = ["release_max_level_trace"] }
 md5 = "0.7.0"
 mp3-duration = "0.1.10"
-mp3lame-encoder = "0.1.5"
+mp3lame-encoder = "0.2.0"
 mysql = { version = "25.0.1", features = [
     "default-rustls",
     "rustls-tls",
@@ -152,7 +152,7 @@ reqwest = { version = "0.12.5", default-features = false, features = [
     "rustls-tls",
     "stream",
 ] }
-roxmltree = "0.18"
+roxmltree = "0.20"
 rubato = "=0.12.0"
 rupnp = { version = "2.0.0", features = ["full_device_spec"] }
 rusqlite = { version = "0.31.0", features = ["bundled"] }

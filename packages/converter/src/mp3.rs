@@ -6,6 +6,8 @@ use crate::EncodeInfo;
 pub enum EncoderError {
     #[error("Encoder error")]
     Encoder(mp3lame_encoder::EncodeError),
+    #[error("Encoder error")]
+    Id3Tag(mp3lame_encoder::Id3TagError),
     #[error("Build error")]
     Build(mp3lame_encoder::BuildError),
 }
@@ -13,6 +15,12 @@ pub enum EncoderError {
 impl From<mp3lame_encoder::EncodeError> for EncoderError {
     fn from(value: mp3lame_encoder::EncodeError) -> Self {
         EncoderError::Encoder(value)
+    }
+}
+
+impl From<mp3lame_encoder::Id3TagError> for EncoderError {
+    fn from(value: mp3lame_encoder::Id3TagError) -> Self {
+        EncoderError::Id3Tag(value)
     }
 }
 
@@ -37,12 +45,13 @@ pub fn encoder_mp3() -> Result<mp3lame_encoder::Encoder, EncoderError> {
         .set_quality(mp3lame_encoder::Quality::Best)
         .expect("set quality");
     mp3_encoder.set_id3_tag(Id3Tag {
+        album_art: &[],
         title: b"My title",
         artist: &[],
         album: b"My album",
         year: b"Current year",
         comment: b"Just my comment",
-    });
+    })?;
     let mp3_encoder = mp3_encoder.build()?;
     Ok(mp3_encoder)
 }
