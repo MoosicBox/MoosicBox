@@ -360,6 +360,7 @@ pub enum AddAlbumError {
 pub async fn add_album(
     db: Arc<Box<dyn Database>>,
     album_id: &Id,
+    source: ApiSource,
     api: &dyn MusicApi,
 ) -> Result<LibraryAlbum, AddAlbumError> {
     log::debug!(
@@ -378,16 +379,28 @@ pub async fn add_album(
 
     api.add_album(album_id).await?;
 
-    match album {
+    match source {
         #[cfg(feature = "tidal")]
-        moosicbox_core::sqlite::models::Album::Tidal(album) => {
-            moosicbox_scan::tidal::scan_albums(&[album], 1, db.clone(), output.clone(), None)
-                .await?;
+        ApiSource::Tidal => {
+            moosicbox_scan::tidal::scan_albums(
+                &[album.into()],
+                1,
+                db.clone(),
+                output.clone(),
+                None,
+            )
+            .await?;
         }
         #[cfg(feature = "qobuz")]
-        moosicbox_core::sqlite::models::Album::Qobuz(album) => {
-            moosicbox_scan::qobuz::scan_albums(&[album], 1, db.clone(), output.clone(), None)
-                .await?;
+        ApiSource::Qobuz => {
+            moosicbox_scan::qobuz::scan_albums(
+                &[album.into()],
+                1,
+                db.clone(),
+                output.clone(),
+                None,
+            )
+            .await?;
         }
         _ => {}
     }
@@ -410,7 +423,7 @@ pub async fn add_album(
 
     for album in &results.albums {
         if let Some(album) =
-            moosicbox_core::sqlite::menu::get_album(&**db, Some(album.id as u64), None, None)
+            moosicbox_core::sqlite::menu::get_album(&**db, &album.id.into(), ApiSource::Library)
                 .await?
         {
             albums.push(album);
@@ -598,6 +611,7 @@ pub enum ReFavoriteAlbumError {
 pub async fn refavorite_album(
     db: Arc<Box<dyn Database>>,
     album_id: &Id,
+    source: ApiSource,
     api: &dyn MusicApi,
 ) -> Result<LibraryAlbum, ReFavoriteAlbumError> {
     log::debug!(
@@ -613,25 +627,25 @@ pub async fn refavorite_album(
 
     let album = favorite_albums
         .iter()
-        .find(|album| &Into::<Id>::into(album.id()) == album_id)
+        .find(|album| &album.id == album_id)
         .ok_or(ReFavoriteAlbumError::NoAlbum)?;
 
     let artist = api
-        .artist(&album.artist_id().into())
+        .artist(&album.artist_id)
         .await?
         .ok_or(ReFavoriteAlbumError::NoArtist)?;
 
     let new_album_id = api
-        .artist_albums(&artist.id().into(), AlbumType::All, None, None, None, None)
+        .artist_albums(&artist.id, AlbumType::All, None, None, None, None)
         .await?
         .with_rest_of_items()
         .await?
         .iter()
         .find(|x| {
-            x.artist_id() == album.artist_id()
-                && x.title().to_lowercase().trim() == album.title().to_lowercase().trim()
+            x.artist_id == album.artist_id
+                && x.title.to_lowercase().trim() == album.title.to_lowercase().trim()
         })
-        .map(|x| x.id());
+        .map(|x| x.id.clone());
 
     let new_album_id = if let Some(album_id) = new_album_id {
         album_id
@@ -643,7 +657,7 @@ pub async fn refavorite_album(
     log::debug!("Re-favoriting with ids album_id={album_id} new_album_id={new_album_id:?}");
 
     remove_album(&**db, album_id, api).await?;
-    let album = add_album(db, &new_album_id.into(), api).await?;
+    let album = add_album(db, &new_album_id, source, api).await?;
 
     Ok(album)
 }

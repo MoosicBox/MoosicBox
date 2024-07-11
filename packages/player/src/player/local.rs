@@ -46,7 +46,7 @@ impl Player for LocalPlayer {
         let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
 
         let track_or_id = &playback.tracks[playback.position as usize];
-        let track_id = track_or_id.id();
+        let track_id = &track_or_id.id;
         log::info!(
             "Playing track with Symphonia: {} {:?} {track_or_id:?}",
             track_id,

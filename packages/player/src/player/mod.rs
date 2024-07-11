@@ -12,10 +12,10 @@ use futures::{Future, StreamExt as _, TryStreamExt as _};
 use local_ip_address::local_ip;
 use moosicbox_core::{
     sqlite::{
-        db::{get_album_tracks, get_session_playlist, get_tracks, DbError},
+        db::{get_album_tracks, get_session_playlist, DbError},
         models::{
-            qobuz::QobuzTrack, tidal::TidalTrack, yt::YtTrack, ApiSource, ApiTrack, Id,
-            LibraryTrack, ToApi, Track, TrackApiSource, UpdateSession, UpdateSessionPlaylistTrack,
+            ApiSource, ApiTrack, Id, LibraryTrack, ToApi, TrackApiSource, UpdateSession,
+            UpdateSessionPlaylistTrack,
         },
     },
     types::{AudioFormat, PlaybackQuality},
@@ -119,7 +119,7 @@ pub struct Playback {
     pub id: usize,
     pub session_id: Option<usize>,
     pub session_playlist_id: Option<usize>,
-    pub tracks: Vec<TrackOrId>,
+    pub tracks: Vec<Track>,
     pub playing: bool,
     pub position: u16,
     pub quality: PlaybackQuality,
@@ -130,7 +130,7 @@ pub struct Playback {
 
 impl Playback {
     pub fn new(
-        tracks: Vec<TrackOrId>,
+        tracks: Vec<Track>,
         position: Option<u16>,
         volume: AtomicF64,
         quality: PlaybackQuality,
@@ -164,7 +164,7 @@ pub struct ApiPlayback {
 impl ToApi<ApiPlayback> for Playback {
     fn to_api(self) -> ApiPlayback {
         ApiPlayback {
-            track_ids: self.tracks.iter().map(|t| t.id().to_string()).collect(),
+            track_ids: self.tracks.iter().map(|t| t.id.to_string()).collect(),
             playing: self.playing,
             position: self.position,
             seek: self.progress,
@@ -184,10 +184,29 @@ pub struct PlaybackStatus {
     pub success: bool,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum TrackOrId {
-    Track(Box<Track>),
-    Id(Id, ApiSource),
+#[derive(Debug, Clone)]
+pub struct Track {
+    pub id: Id,
+    pub source: ApiSource,
+    pub data: Option<Value>,
+}
+
+impl Track {
+    pub fn track_source(&self) -> TrackApiSource {
+        match self.source {
+            ApiSource::Library => self
+                .data
+                .as_ref()
+                .and_then(|x| x.get("source"))
+                .map(|x| serde_json::from_value(x.clone()))
+                .transpose()
+                .expect("Missing source")
+                .unwrap_or(TrackApiSource::Local),
+            ApiSource::Tidal => TrackApiSource::Tidal,
+            ApiSource::Qobuz => TrackApiSource::Qobuz,
+            ApiSource::Yt => TrackApiSource::Yt,
+        }
+    }
 }
 
 pub fn track_id(track: &ApiTrack) -> Id {
@@ -196,72 +215,6 @@ pub fn track_id(track: &ApiTrack) -> Id {
         ApiTrack::Tidal { track_id, .. } => Id::Number(*track_id),
         ApiTrack::Qobuz { track_id, .. } => Id::Number(*track_id),
         ApiTrack::Yt { track_id, .. } => Id::String(track_id.clone()),
-    }
-}
-
-impl TrackOrId {
-    pub fn api_source(&self) -> ApiSource {
-        match self {
-            TrackOrId::Track(track) => match track.as_ref() {
-                Track::Library(_) => ApiSource::Library,
-                Track::Tidal(_) => ApiSource::Tidal,
-                Track::Qobuz(_) => ApiSource::Qobuz,
-                Track::Yt(_) => ApiSource::Yt,
-            },
-            TrackOrId::Id(_id, source) => *source,
-        }
-    }
-
-    pub fn track_source(&self) -> TrackApiSource {
-        match self {
-            TrackOrId::Track(track) => match track.as_ref() {
-                Track::Library(track) => track.source,
-                Track::Tidal(_) => TrackApiSource::Tidal,
-                Track::Qobuz(_) => TrackApiSource::Qobuz,
-                Track::Yt(_) => TrackApiSource::Yt,
-            },
-            TrackOrId::Id(_id, source) => match source {
-                ApiSource::Library => TrackApiSource::Local,
-                ApiSource::Tidal => TrackApiSource::Tidal,
-                ApiSource::Qobuz => TrackApiSource::Qobuz,
-                ApiSource::Yt => TrackApiSource::Yt,
-            },
-        }
-    }
-
-    pub fn track(&self) -> Option<&Track> {
-        match self {
-            TrackOrId::Track(track) => Some(track),
-            TrackOrId::Id(_id, _) => None,
-        }
-    }
-
-    pub fn id(&self) -> Id {
-        match self {
-            TrackOrId::Track(track) => match track.as_ref() {
-                Track::Library(track) => Id::Number(track.id as u64),
-                Track::Tidal(track) => Id::Number(track.id),
-                Track::Qobuz(track) => Id::Number(track.id),
-                Track::Yt(track) => Id::String(track.id.to_owned()),
-            },
-            TrackOrId::Id(id, _) => id.clone(),
-        }
-    }
-
-    pub fn to_id(&self) -> TrackOrId {
-        match self {
-            TrackOrId::Track(track) => match track.as_ref() {
-                Track::Library(track) => {
-                    TrackOrId::Id(Id::Number(track.id as u64), ApiSource::Library)
-                }
-                Track::Tidal(track) => TrackOrId::Id(Id::Number(track.id), ApiSource::Library),
-                Track::Qobuz(track) => TrackOrId::Id(Id::Number(track.id), ApiSource::Library),
-                Track::Yt(track) => {
-                    TrackOrId::Id(Id::String(track.id.to_owned()), ApiSource::Library)
-                }
-            },
-            TrackOrId::Id(_, _) => self.clone(),
-        }
     }
 }
 
@@ -381,13 +334,14 @@ pub async fn get_track_url(
     Ok((url, headers))
 }
 
-impl From<TrackOrId> for UpdateSessionPlaylistTrack {
-    fn from(value: TrackOrId) -> Self {
+impl From<Track> for UpdateSessionPlaylistTrack {
+    fn from(value: Track) -> Self {
         UpdateSessionPlaylistTrack {
-            id: value.id().to_string(),
-            r#type: value.api_source(),
+            id: value.id.to_string(),
+            r#type: value.source,
             data: value
-                .track()
+                .data
+                .as_ref()
                 .map(|t| serde_json::to_string(t).expect("Failed to stringify track")),
         }
     }
@@ -471,7 +425,11 @@ pub trait Player: Clone + Send + 'static {
                                 .playlist
                                 .tracks
                                 .iter()
-                                .map(|x| TrackOrId::Id(track_id(x), x.api_source()))
+                                .map(|x| Track {
+                                    id: track_id(x),
+                                    source: x.api_source(),
+                                    data: Some(x.data()),
+                                })
                                 .collect::<Vec<_>>(),
                         ),
                         None,
@@ -519,9 +477,11 @@ pub trait Player: Clone + Send + 'static {
                     PlayerError::AlbumFetchFailed(album_id)
                 })?
                 .into_iter()
-                .map(Track::Library)
-                .map(Box::new)
-                .map(TrackOrId::Track)
+                .map(|x| Track {
+                    id: Id::Number(x.id as u64),
+                    source: ApiSource::Library,
+                    data: Some(serde_json::to_value(x).unwrap()),
+                })
                 .collect()
         };
 
@@ -543,7 +503,7 @@ pub trait Player: Clone + Send + 'static {
         &self,
         db: &dyn Database,
         session_id: Option<usize>,
-        track: TrackOrId,
+        track: Track,
         seek: Option<f64>,
         volume: Option<f64>,
         quality: PlaybackQuality,
@@ -617,7 +577,7 @@ pub trait Player: Clone + Send + 'static {
         &self,
         db: &dyn Database,
         session_id: Option<usize>,
-        tracks: Vec<TrackOrId>,
+        tracks: Vec<Track>,
         position: Option<u16>,
         seek: Option<f64>,
         volume: Option<f64>,
@@ -628,64 +588,6 @@ pub trait Player: Clone + Send + 'static {
             log::debug!("Stopping existing playback {}", playback.id);
             self.stop(retry_options).await?;
         }
-
-        let tracks = {
-            let library_tracks = {
-                get_tracks(
-                    db,
-                    Some(
-                        &tracks
-                            .iter()
-                            .filter(|t| t.api_source() == ApiSource::Library)
-                            .map(|t| t.id().into())
-                            .collect::<Vec<u64>>(),
-                    ),
-                )
-                .await?
-            };
-
-            tracks
-                .iter()
-                .map(|track| match track {
-                    TrackOrId::Id(track_id, source) => match *source {
-                        ApiSource::Library => {
-                            log::debug!("Fetching track {track_id}",);
-                            let track = library_tracks
-                                .iter()
-                                .find(|t| match track_id {
-                                    Id::Number(id) => t.id as u64 == *id,
-                                    Id::String(_id) => false,
-                                })
-                                .expect("Track doesn't exist");
-                            log::debug!("Got track {track:?}");
-                            TrackOrId::Track(Box::new(Track::Library(track.clone())))
-                        }
-                        ApiSource::Tidal => TrackOrId::Track(Box::new(Track::Tidal(TidalTrack {
-                            id: match track_id {
-                                Id::Number(id) => *id,
-                                Id::String(_id) => unreachable!(),
-                            },
-                            ..Default::default()
-                        }))),
-                        ApiSource::Qobuz => TrackOrId::Track(Box::new(Track::Qobuz(QobuzTrack {
-                            id: match track_id {
-                                Id::Number(id) => *id,
-                                Id::String(_id) => unreachable!(),
-                            },
-                            ..Default::default()
-                        }))),
-                        ApiSource::Yt => TrackOrId::Track(Box::new(Track::Yt(YtTrack {
-                            id: match track_id {
-                                Id::Number(_id) => unreachable!(),
-                                Id::String(id) => id.to_owned(),
-                            },
-                            ..Default::default()
-                        }))),
-                    },
-                    TrackOrId::Track(track) => TrackOrId::Track(track.clone()),
-                })
-                .collect()
-        };
 
         let playback = Playback::new(
             tracks,
@@ -737,11 +639,7 @@ pub trait Player: Clone + Send + 'static {
         log::debug!(
             "Playing playback: position={} tracks={:?}",
             playback.position,
-            playback
-                .tracks
-                .iter()
-                .map(|t| t.to_id())
-                .collect::<Vec<_>>()
+            playback.tracks.iter().map(|t| &t.id).collect::<Vec<_>>()
         );
 
         tokio::spawn(async move {
@@ -959,7 +857,7 @@ pub trait Player: Clone + Send + 'static {
         position: Option<u16>,
         seek: Option<f64>,
         volume: Option<f64>,
-        tracks: Option<Vec<TrackOrId>>,
+        tracks: Option<Vec<Track>>,
         quality: Option<PlaybackQuality>,
         session_id: Option<usize>,
         session_playlist_id: Option<usize>,
@@ -1237,40 +1135,13 @@ pub trait Player: Clone + Send + 'static {
         })
     }
 
-    async fn track_or_id_to_playable_stream(
-        &self,
-        track_or_id: &TrackOrId,
-        quality: PlaybackQuality,
-    ) -> Result<PlayableTrack, PlayerError> {
-        match track_or_id {
-            TrackOrId::Id(id, source) => {
-                self.track_id_to_playable_stream(id, *source, quality).await
-            }
-            TrackOrId::Track(track) => self.track_to_playable_stream(track, quality).await,
-        }
-    }
-
     async fn track_to_playable_stream(
         &self,
         track: &Track,
         quality: PlaybackQuality,
     ) -> Result<PlayableTrack, PlayerError> {
-        self.track_id_to_playable_stream(
-            &match track {
-                Track::Library(track) => Id::Number(track.id as u64),
-                Track::Tidal(track) => Id::Number(track.id),
-                Track::Qobuz(track) => Id::Number(track.id),
-                Track::Yt(track) => Id::String(track.id.clone()),
-            },
-            match track {
-                Track::Library(_) => ApiSource::Library,
-                Track::Tidal(_) => ApiSource::Tidal,
-                Track::Qobuz(_) => ApiSource::Qobuz,
-                Track::Yt(_) => ApiSource::Yt,
-            },
-            quality,
-        )
-        .await
+        self.track_id_to_playable_stream(&track.id, track.source, quality)
+            .await
     }
 
     async fn track_id_to_playable_stream(
@@ -1339,53 +1210,47 @@ pub trait Player: Clone + Send + 'static {
     async fn track_or_id_to_playable(
         &self,
         playback_type: PlaybackType,
-        track_or_id: &TrackOrId,
+        track: &Track,
         quality: PlaybackQuality,
     ) -> Result<PlayableTrack, PlayerError> {
-        log::trace!("track_or_id_to_playable playback_type={playback_type:?} track_or_id={track_or_id:?} quality={quality:?}");
+        log::trace!("track_or_id_to_playable playback_type={playback_type:?} track={track:?} quality={quality:?}");
         Ok(match playback_type {
-            PlaybackType::File => match track_or_id.clone() {
-                TrackOrId::Id(_id, _) => return Err(PlayerError::InvalidPlaybackType),
-                TrackOrId::Track(track) => match *track {
-                    Track::Library(track) => self.track_to_playable_file(&track, quality).await?,
-                    Track::Tidal(track) => {
-                        self.track_to_playable_stream(&Track::Tidal(track), quality)
-                            .await?
-                    }
-                    Track::Qobuz(track) => {
-                        self.track_to_playable_stream(&Track::Qobuz(track), quality)
-                            .await?
-                    }
-                    Track::Yt(track) => {
-                        self.track_to_playable_stream(&Track::Yt(track), quality)
-                            .await?
-                    }
-                },
-            },
-            PlaybackType::Stream => {
-                self.track_or_id_to_playable_stream(track_or_id, quality)
+            PlaybackType::File => match track.source {
+                ApiSource::Library => {
+                    self.track_to_playable_file(
+                        &serde_json::from_value(
+                            track
+                                .data
+                                .clone()
+                                .ok_or(PlayerError::TrackNotFound((&track.id).into()))?,
+                        )
+                        .map_err(|_| PlayerError::TrackNotFound((&track.id).into()))?,
+                        quality,
+                    )
                     .await?
-            }
-            PlaybackType::Default => match track_or_id.clone() {
-                TrackOrId::Id(id, source) => {
-                    self.track_id_to_playable_stream(&id, source, quality)
-                        .await?
                 }
-                TrackOrId::Track(track) => match *track {
-                    Track::Library(track) => self.track_to_playable_file(&track, quality).await?,
-                    Track::Tidal(track) => {
-                        self.track_to_playable_stream(&Track::Tidal(track), quality)
-                            .await?
-                    }
-                    Track::Qobuz(track) => {
-                        self.track_to_playable_stream(&Track::Qobuz(track), quality)
-                            .await?
-                    }
-                    Track::Yt(track) => {
-                        self.track_to_playable_stream(&Track::Yt(track), quality)
-                            .await?
-                    }
-                },
+                ApiSource::Tidal => self.track_to_playable_stream(track, quality).await?,
+                ApiSource::Qobuz => self.track_to_playable_stream(track, quality).await?,
+                ApiSource::Yt => self.track_to_playable_stream(track, quality).await?,
+            },
+            PlaybackType::Stream => self.track_to_playable_stream(track, quality).await?,
+            PlaybackType::Default => match track.source {
+                ApiSource::Library => {
+                    self.track_to_playable_file(
+                        &serde_json::from_value(
+                            track
+                                .data
+                                .clone()
+                                .ok_or(PlayerError::TrackNotFound((&track.id).into()))?,
+                        )
+                        .map_err(|_| PlayerError::TrackNotFound((&track.id).into()))?,
+                        quality,
+                    )
+                    .await?
+                }
+                ApiSource::Tidal => self.track_to_playable_stream(track, quality).await?,
+                ApiSource::Qobuz => self.track_to_playable_stream(track, quality).await?,
+                ApiSource::Yt => self.track_to_playable_stream(track, quality).await?,
             },
         })
     }
@@ -1397,29 +1262,25 @@ pub trait Player: Clone + Send + 'static {
     fn get_source(&self) -> &PlayerSource;
 }
 
-fn same_active_track(
-    position: Option<u16>,
-    tracks: Option<&[TrackOrId]>,
-    playback: &Playback,
-) -> bool {
+fn same_active_track(position: Option<u16>, tracks: Option<&[Track]>, playback: &Playback) -> bool {
     match (position, tracks) {
         (None, None) => true,
         (Some(position), None) => playback.position == position,
         (None, Some(tracks)) => {
             tracks
                 .get(playback.position as usize)
-                .map(|x: &TrackOrId| x.to_id())
+                .map(|x: &Track| &x.id)
                 == playback
                     .tracks
                     .get(playback.position as usize)
-                    .map(|x: &TrackOrId| x.to_id())
+                    .map(|x: &Track| &x.id)
         }
         (Some(position), Some(tracks)) => {
-            tracks.get(position as usize).map(|x: &TrackOrId| x.to_id())
+            tracks.get(position as usize).map(|x: &Track| &x.id)
                 == playback
                     .tracks
                     .get(playback.position as usize)
-                    .map(|x: &TrackOrId| x.to_id())
+                    .map(|x: &Track| &x.id)
         }
     }
 }

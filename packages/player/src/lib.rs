@@ -7,7 +7,7 @@ use moosicbox_core::{
     sqlite::{db::get_tracks, models::ApiSource},
 };
 use moosicbox_database::Database;
-use player::TrackOrId;
+use player::Track;
 
 #[cfg(feature = "api")]
 pub mod api;
@@ -19,7 +19,7 @@ pub async fn get_track_or_ids_from_track_id_ranges(
     track_ids: &str,
     source: Option<ApiSource>,
     host: Option<&str>,
-) -> Result<Vec<TrackOrId>> {
+) -> Result<Vec<Track>> {
     let track_ids = parse_integer_ranges(track_ids).map_err(|e| match e {
         ParseIntegersError::ParseId(id) => {
             ErrorBadRequest(format!("Could not parse trackId '{id}'"))
@@ -37,12 +37,20 @@ pub async fn get_track_or_ids_from_track_id_ranges(
             get_tracks(db, Some(track_ids.as_ref()))
                 .await?
                 .into_iter()
-                .map(|track| TrackOrId::Track(Box::new(track.into())))
+                .map(|track| Track {
+                    id: track.id.into(),
+                    source: ApiSource::Library,
+                    data: Some(serde_json::to_value(track).unwrap()),
+                })
                 .collect()
         } else {
             track_ids
                 .into_iter()
-                .map(|id| TrackOrId::Id(id.into(), source.unwrap_or(ApiSource::Library)))
+                .map(|id| Track {
+                    id: id.into(),
+                    source: source.unwrap_or(ApiSource::Library),
+                    data: None,
+                })
                 .collect()
         },
     )

@@ -12,7 +12,7 @@ use futures_channel::mpsc::UnboundedSender;
 use futures_util::future::ready;
 use futures_util::{future, pin_mut, Future, Stream, StreamExt};
 use moosicbox_auth::FetchSignatureError;
-use moosicbox_core::sqlite::models::{AlbumId, ApiSource, Id};
+use moosicbox_core::sqlite::models::{ApiSource, Id};
 use moosicbox_core::types::AudioFormat;
 use moosicbox_database::Database;
 use moosicbox_env_utils::default_env_usize;
@@ -1358,15 +1358,14 @@ impl TunnelSender {
                                 .ok_or(TunnelRequestError::BadRequest("Invalid album_id".into()))?
                                 .as_str();
 
-                            let album_id = match query.source.unwrap_or(ApiSource::Library) {
+                            let source = query.source.unwrap_or(ApiSource::Library);
+                            let album_id = match source {
                                 ApiSource::Library => {
-                                    album_id_string.parse::<i32>().map(AlbumId::Library)
+                                    album_id_string.parse::<u64>().map(Id::Number)
                                 }
-                                ApiSource::Tidal => {
-                                    album_id_string.parse::<u64>().map(AlbumId::Tidal)
-                                }
-                                ApiSource::Qobuz => Ok(AlbumId::Qobuz(album_id_string.to_string())),
-                                ApiSource::Yt => Ok(AlbumId::Yt(album_id_string.to_string())),
+                                ApiSource::Tidal => album_id_string.parse::<u64>().map(Id::Number),
+                                ApiSource::Qobuz => album_id_string.parse::<u64>().map(Id::Number),
+                                ApiSource::Yt => Ok(Id::String(album_id_string.to_owned())),
                             }
                             .map_err(|_| {
                                 TunnelRequestError::BadRequest("Invalid album_id".into())
@@ -1387,6 +1386,7 @@ impl TunnelSender {
 
                             match get_album_cover(
                                 album_id,
+                                source,
                                 &**database,
                                 Some(std::cmp::max(width, height)),
                             )

@@ -190,6 +190,59 @@ pub struct QobuzAlbum {
     pub maximum_sampling_rate: f32,
 }
 
+impl From<QobuzAlbum> for Album {
+    fn from(value: QobuzAlbum) -> Self {
+        let artwork = value.cover_url();
+        Self {
+            id: value.id.into(),
+            title: value.title,
+            artist: value.artist,
+            artist_id: value.artist_id.into(),
+            date_released: Some(value.release_date_original),
+            date_added: None,
+            artwork,
+            directory: None,
+            blur: false,
+            versions: vec![],
+        }
+    }
+}
+
+impl From<Album> for QobuzAlbum {
+    fn from(value: Album) -> Self {
+        Self {
+            id: value.id.clone().into(),
+            title: value.title,
+            artist: value.artist,
+            artist_id: value.artist_id.into(),
+            maximum_bit_depth: 0,
+            image: value.artwork.map(|x| QobuzImage {
+                thumbnail: None,
+                small: None,
+                medium: None,
+                large: None,
+                extralarge: None,
+                mega: Some(x),
+            }),
+            version: None,
+            qobuz_id: value.id.into(),
+            released_at: 0,
+            release_date_original: value.date_released.unwrap_or_default(),
+            duration: 0,
+            parental_warning: false,
+            popularity: 0,
+            tracks_count: 0,
+            genre: QobuzGenre {
+                id: 0,
+                name: "".to_string(),
+                slug: "".to_string(),
+            },
+            maximum_channel_count: 0,
+            maximum_sampling_rate: 0.0,
+        }
+    }
+}
+
 impl QobuzAlbum {
     pub fn cover_url(&self) -> Option<String> {
         self.image.as_ref().and_then(|image| image.cover_url())
@@ -306,6 +359,35 @@ pub struct QobuzTrack {
     pub version: Option<String>,
 }
 
+impl From<QobuzTrack> for Track {
+    fn from(value: QobuzTrack) -> Self {
+        let artwork = value.cover_url();
+        Self {
+            id: value.id.into(),
+            number: value.track_number as i32,
+            title: value.title,
+            duration: value.duration as f64,
+            album: value.album,
+            album_id: value.album_id.into(),
+            date_released: None,
+            date_added: None,
+            artist: value.artist,
+            artist_id: value.artist_id.into(),
+            file: None,
+            artwork,
+            blur: false,
+            bytes: 0,
+            format: None,
+            bit_depth: None,
+            audio_bitrate: None,
+            overall_bitrate: None,
+            sample_rate: None,
+            channels: None,
+            source: super::TrackApiSource::Qobuz,
+        }
+    }
+}
+
 impl QobuzTrack {
     pub fn cover_url(&self) -> Option<String> {
         self.image.as_ref().and_then(|image| image.cover_url())
@@ -373,6 +455,17 @@ pub struct QobuzArtist {
     pub name: String,
 }
 
+impl From<QobuzArtist> for Artist {
+    fn from(value: QobuzArtist) -> Self {
+        let cover = value.cover_url();
+        Self {
+            id: value.id.into(),
+            title: value.name,
+            cover,
+        }
+    }
+}
+
 impl QobuzArtist {
     pub fn cover_url(&self) -> Option<String> {
         self.image.clone().and_then(|image| image.cover_url())
@@ -395,12 +488,6 @@ impl AsModelResult<QobuzArtist, ParseError> for Value {
     }
 }
 
-impl From<QobuzArtist> for Artist {
-    fn from(value: QobuzArtist) -> Self {
-        Artist::Qobuz(value)
-    }
-}
-
 impl From<QobuzRelease> for QobuzAlbum {
     fn from(value: QobuzRelease) -> Self {
         QobuzAlbum {
@@ -418,35 +505,6 @@ impl From<QobuzRelease> for QobuzAlbum {
             maximum_sampling_rate: value.maximum_sampling_rate,
             ..Default::default()
         }
-    }
-}
-
-impl From<QobuzAlbum> for Album {
-    fn from(value: QobuzAlbum) -> Self {
-        Album::Qobuz(value)
-    }
-}
-
-impl From<QobuzTrack> for Track {
-    fn from(value: QobuzTrack) -> Self {
-        Track::Qobuz(value)
-    }
-}
-impl From<&QobuzArtist> for Artist {
-    fn from(value: &QobuzArtist) -> Self {
-        Artist::Qobuz(value.clone())
-    }
-}
-
-impl From<&QobuzAlbum> for Album {
-    fn from(value: &QobuzAlbum) -> Self {
-        Album::Qobuz(value.clone())
-    }
-}
-
-impl From<&QobuzTrack> for Track {
-    fn from(value: &QobuzTrack) -> Self {
-        Track::Qobuz(value.clone())
     }
 }
 

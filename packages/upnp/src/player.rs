@@ -306,7 +306,7 @@ impl UpnpPlayer {
     async fn update_av_transport(&self) -> Result<String, PlayerError> {
         let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
         let track_or_id = &playback.tracks[playback.position as usize];
-        let track_id = track_or_id.id();
+        let track_id = &track_or_id.id;
         log::info!(
             "Updating UPnP AV Transport URI: {} {:?} {track_or_id:?}",
             track_id,
@@ -314,8 +314,8 @@ impl UpnpPlayer {
         );
 
         let (transport_uri, headers) = get_track_url(
-            &track_id,
-            track_or_id.api_source(),
+            track_id,
+            track_or_id.source,
             &self.source,
             playback.quality,
             true,
@@ -343,7 +343,7 @@ impl UpnpPlayer {
         let size = headers
             .get("content-length")
             .map(|length| length.to_str().unwrap().parse::<u64>().unwrap());
-        let track = get_track(&**self.db, track_or_id.id().into()).await?;
+        let track = get_track(&**self.db, track_id.into()).await?;
         let duration = track.as_ref().map(|x| x.duration.ceil() as u32);
         let title = track.as_ref().map(|x| x.title.to_owned());
         let artist = track.as_ref().map(|x| x.artist.to_owned());

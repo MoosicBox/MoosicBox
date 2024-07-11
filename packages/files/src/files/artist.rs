@@ -12,15 +12,17 @@ use moosicbox_core::sqlite::{
     models::{
         qobuz::{QobuzArtist, QobuzImageSize},
         tidal::{TidalArtist, TidalArtistImageSize},
-        yt::{YtArtist, YtArtistImageSize},
-        ArtistId,
+        ApiSource, Id,
     },
 };
 use moosicbox_database::{query::*, Database, DatabaseError};
 use moosicbox_qobuz::QobuzArtistError;
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use moosicbox_tidal::TidalArtistError;
-use moosicbox_yt::YtArtistError;
+use moosicbox_yt::{
+    db::models::{YtArtist, YtArtistImageSize},
+    YtArtistError,
+};
 use once_cell::sync::Lazy;
 use thiserror::Error;
 use tokio_util::codec::{BytesCodec, FramedRead};
@@ -110,7 +112,7 @@ async fn fetch_local_artist_cover_bytes(
 #[derive(Debug, Error)]
 pub enum ArtistCoverError {
     #[error("Artist cover not found for artist: {0:?}")]
-    NotFound(ArtistId),
+    NotFound(Id),
     #[error("Invalid source")]
     InvalidSource,
     #[error(transparent)]
@@ -147,44 +149,40 @@ async fn copy_streaming_cover_to_local(
 
 #[async_recursion]
 pub async fn get_artist_cover_bytes(
-    artist_id: ArtistId,
+    artist_id: Id,
+    source: ApiSource,
     db: &dyn Database,
     size: Option<u32>,
     try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, ArtistCoverError> {
-    Ok(match &artist_id {
-        ArtistId::Library(library_artist_id) => {
-            get_library_artist_cover_bytes(*library_artist_id, db, try_to_get_stream_size).await?
+    Ok(match source {
+        ApiSource::Library => {
+            get_library_artist_cover_bytes(artist_id.into(), db, try_to_get_stream_size).await?
         }
-        ArtistId::Tidal(tidal_artist_id) => {
-            get_tidal_artist_cover_bytes(*tidal_artist_id, db, size, try_to_get_stream_size).await?
+        ApiSource::Tidal => {
+            get_tidal_artist_cover_bytes(artist_id.into(), db, size, try_to_get_stream_size).await?
         }
-        ArtistId::Qobuz(qobuz_artist_id) => {
-            get_qobuz_artist_cover_bytes(*qobuz_artist_id, db, size, try_to_get_stream_size).await?
+        ApiSource::Qobuz => {
+            get_qobuz_artist_cover_bytes(artist_id.into(), db, size, try_to_get_stream_size).await?
         }
-        ArtistId::Yt(yt_artist_id) => {
-            get_yt_artist_cover_bytes(yt_artist_id, db, size, try_to_get_stream_size).await?
+        ApiSource::Yt => {
+            get_yt_artist_cover_bytes((&artist_id).into(), db, size, try_to_get_stream_size).await?
         }
     })
 }
 
 #[async_recursion]
 pub async fn get_artist_cover(
-    artist_id: ArtistId,
+    artist_id: Id,
+    source: ApiSource,
     db: &dyn Database,
     size: Option<u32>,
 ) -> Result<ArtistCoverSource, ArtistCoverError> {
-    let path = match &artist_id {
-        ArtistId::Library(library_artist_id) => {
-            get_library_artist_cover(*library_artist_id, db).await?
-        }
-        ArtistId::Tidal(tidal_artist_id) => {
-            get_tidal_artist_cover(*tidal_artist_id, db, size).await?
-        }
-        ArtistId::Qobuz(qobuz_artist_id) => {
-            get_qobuz_artist_cover(*qobuz_artist_id, db, size).await?
-        }
-        ArtistId::Yt(yt_artist_id) => get_yt_artist_cover(yt_artist_id, db, size).await?,
+    let path = match source {
+        ApiSource::Library => get_library_artist_cover(artist_id.into(), db).await?,
+        ApiSource::Tidal => get_tidal_artist_cover(artist_id.into(), db, size).await?,
+        ApiSource::Qobuz => get_qobuz_artist_cover(artist_id.into(), db, size).await?,
+        ApiSource::Yt => get_yt_artist_cover((&artist_id).into(), db, size).await?,
     };
 
     Ok(ArtistCoverSource::LocalFilePath(path))
@@ -196,9 +194,7 @@ pub async fn get_library_artist_cover(
 ) -> Result<String, ArtistCoverError> {
     let artist = get_artist(db, "id", library_artist_id as u64)
         .await?
-        .ok_or(ArtistCoverError::NotFound(ArtistId::Library(
-            library_artist_id,
-        )))?;
+        .ok_or(ArtistCoverError::NotFound(library_artist_id.into()))?;
 
     log::debug!("Looking for local artist cover");
     if let Ok(cover) = fetch_local_artist_cover(artist.cover) {
@@ -209,7 +205,7 @@ pub async fn get_library_artist_cover(
     log::debug!("Looking for Tidal artist cover");
     if let Some(tidal_id) = artist.tidal_id {
         if let Ok(ArtistCoverSource::LocalFilePath(cover)) =
-            get_artist_cover(ArtistId::Tidal(tidal_id), db, None).await
+            get_artist_cover(tidal_id.into(), ApiSource::Tidal, db, None).await
         {
             log::debug!("Found Tidal artist cover");
             return copy_streaming_cover_to_local(db, artist.id, cover).await;
@@ -219,7 +215,7 @@ pub async fn get_library_artist_cover(
     log::debug!("Looking for Qobuz artist cover");
     if let Some(qobuz_id) = artist.qobuz_id {
         if let Ok(ArtistCoverSource::LocalFilePath(cover)) =
-            get_artist_cover(ArtistId::Qobuz(qobuz_id), db, None).await
+            get_artist_cover(qobuz_id.into(), ApiSource::Qobuz, db, None).await
         {
             log::debug!("Found Qobuz artist cover");
             return copy_streaming_cover_to_local(db, artist.id, cover).await;
@@ -227,9 +223,7 @@ pub async fn get_library_artist_cover(
     }
 
     log::debug!("No artist covers found");
-    Err(ArtistCoverError::NotFound(ArtistId::Library(
-        library_artist_id,
-    )))
+    Err(ArtistCoverError::NotFound(library_artist_id.into()))
 }
 
 pub async fn get_library_artist_cover_bytes(
@@ -239,35 +233,41 @@ pub async fn get_library_artist_cover_bytes(
 ) -> Result<CoverBytes, ArtistCoverError> {
     let artist = get_artist(db, "id", library_artist_id as u64)
         .await?
-        .ok_or(ArtistCoverError::NotFound(ArtistId::Library(
-            library_artist_id,
-        )))?;
+        .ok_or(ArtistCoverError::NotFound(library_artist_id.into()))?;
 
     if let Ok(bytes) = fetch_local_artist_cover_bytes(artist.cover).await {
         return Ok(bytes);
     }
 
     if let Some(tidal_id) = artist.tidal_id {
-        if let Ok(bytes) =
-            get_artist_cover_bytes(ArtistId::Tidal(tidal_id), db, None, try_to_get_stream_size)
-                .await
+        if let Ok(bytes) = get_artist_cover_bytes(
+            tidal_id.into(),
+            ApiSource::Tidal,
+            db,
+            None,
+            try_to_get_stream_size,
+        )
+        .await
         {
             return Ok(bytes);
         }
     }
 
     if let Some(qobuz_id) = artist.qobuz_id {
-        if let Ok(bytes) =
-            get_artist_cover_bytes(ArtistId::Qobuz(qobuz_id), db, None, try_to_get_stream_size)
-                .await
+        if let Ok(bytes) = get_artist_cover_bytes(
+            qobuz_id.into(),
+            ApiSource::Qobuz,
+            db,
+            None,
+            try_to_get_stream_size,
+        )
+        .await
         {
             return Ok(bytes);
         }
     }
 
-    Err(ArtistCoverError::NotFound(ArtistId::Library(
-        library_artist_id,
-    )))
+    Err(ArtistCoverError::NotFound(library_artist_id.into()))
 }
 
 struct ArtistCoverRequest {
@@ -339,7 +339,7 @@ async fn get_tidal_artist_cover_request(
 
             artist
         }
-        .ok_or_else(|| ArtistCoverError::NotFound(ArtistId::Tidal(tidal_artist_id)))?;
+        .ok_or_else(|| ArtistCoverError::NotFound(tidal_artist_id.into()))?;
 
     let size = size
         .map(|size| (size as u16).into())
@@ -352,7 +352,7 @@ async fn get_tidal_artist_cover_request(
 
     let url = artist
         .picture_url(size)
-        .ok_or(ArtistCoverError::NotFound(ArtistId::Tidal(tidal_artist_id)))?;
+        .ok_or(ArtistCoverError::NotFound(tidal_artist_id.into()))?;
 
     log::debug!(
         "Got Tidal artist picture from url={:?} size={size}: {url}",
@@ -430,7 +430,7 @@ async fn get_qobuz_artist_cover_request(
 
         artist
     }
-    .ok_or_else(|| ArtistCoverError::NotFound(ArtistId::Qobuz(qobuz_artist_id)))?;
+    .ok_or_else(|| ArtistCoverError::NotFound(qobuz_artist_id.into()))?;
 
     let size = size
         .map(|size| (size as u16).into())
@@ -440,7 +440,7 @@ async fn get_qobuz_artist_cover_request(
         .image
         .as_ref()
         .and_then(|image| image.cover_url_for_size(size))
-        .ok_or(ArtistCoverError::NotFound(ArtistId::Qobuz(qobuz_artist_id)))?;
+        .ok_or(ArtistCoverError::NotFound(qobuz_artist_id.into()))?;
 
     Ok(ArtistCoverRequest {
         url,
@@ -514,7 +514,7 @@ async fn get_yt_artist_cover_request(
 
         artist
     }
-    .ok_or_else(|| ArtistCoverError::NotFound(ArtistId::Yt(yt_artist_id.to_owned())))?;
+    .ok_or_else(|| ArtistCoverError::NotFound(Id::String(yt_artist_id.to_owned())))?;
 
     let size = size
         .map(|size| (size as u16).into())
@@ -528,7 +528,7 @@ async fn get_yt_artist_cover_request(
     let url = artist
         .picture
         .as_ref()
-        .ok_or(ArtistCoverError::NotFound(ArtistId::Yt(
+        .ok_or(ArtistCoverError::NotFound(Id::String(
             yt_artist_id.to_owned(),
         )))?;
 

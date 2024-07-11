@@ -4,7 +4,7 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, Result,
 };
-use moosicbox_core::sqlite::models::{yt::YtSearchResultsFormatted, ToApi};
+use moosicbox_core::sqlite::models::ToApi;
 use moosicbox_paging::Page;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -12,17 +12,18 @@ use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
     add_favorite_album, add_favorite_artist, add_favorite_track, album, album_tracks, artist,
-    artist_albums, device_authorization, device_authorization_token, favorite_albums,
-    favorite_artists, favorite_tracks, remove_favorite_album, remove_favorite_artist,
-    remove_favorite_track, search, track, track_file_url, track_playback_info,
-    AuthenticatedRequestError, YtAddFavoriteAlbumError, YtAddFavoriteArtistError,
-    YtAddFavoriteTrackError, YtAlbum, YtAlbumError, YtAlbumOrder, YtAlbumOrderDirection,
-    YtAlbumTracksError, YtAlbumType, YtArtist, YtArtistAlbumsError, YtArtistError, YtArtistOrder,
-    YtArtistOrderDirection, YtAudioQuality, YtDeviceAuthorizationError,
-    YtDeviceAuthorizationTokenError, YtDeviceType, YtFavoriteAlbumsError, YtFavoriteArtistsError,
-    YtFavoriteTracksError, YtRemoveFavoriteAlbumError, YtRemoveFavoriteArtistError,
-    YtRemoveFavoriteTrackError, YtSearchError, YtTrack, YtTrackError, YtTrackFileUrlError,
-    YtTrackOrder, YtTrackOrderDirection, YtTrackPlaybackInfo, YtTrackPlaybackInfoError,
+    artist_albums, db::models::YtSearchResultsFormatted, device_authorization,
+    device_authorization_token, favorite_albums, favorite_artists, favorite_tracks,
+    remove_favorite_album, remove_favorite_artist, remove_favorite_track, search, track,
+    track_file_url, track_playback_info, AuthenticatedRequestError, YtAddFavoriteAlbumError,
+    YtAddFavoriteArtistError, YtAddFavoriteTrackError, YtAlbum, YtAlbumError, YtAlbumOrder,
+    YtAlbumOrderDirection, YtAlbumTracksError, YtAlbumType, YtArtist, YtArtistAlbumsError,
+    YtArtistError, YtArtistOrder, YtArtistOrderDirection, YtAudioQuality,
+    YtDeviceAuthorizationError, YtDeviceAuthorizationTokenError, YtDeviceType,
+    YtFavoriteAlbumsError, YtFavoriteArtistsError, YtFavoriteTracksError,
+    YtRemoveFavoriteAlbumError, YtRemoveFavoriteArtistError, YtRemoveFavoriteTrackError,
+    YtSearchError, YtTrack, YtTrackError, YtTrackFileUrlError, YtTrackOrder, YtTrackOrderDirection,
+    YtTrackPlaybackInfo, YtTrackPlaybackInfoError,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

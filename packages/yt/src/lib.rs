@@ -7,13 +7,13 @@ pub mod db;
 
 use std::{fmt::Display, sync::Arc};
 
+use db::models::{YtAlbum, YtArtist, YtSearchResults, YtTrack};
 #[cfg(feature = "db")]
 use moosicbox_database::{Database, DatabaseError};
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use moosicbox_core::sqlite::models::{
-    yt::{YtAlbum, YtArtist, YtSearchResults, YtTrack},
     Album, ApiSource, Artist, AsModelResult, Id, LibraryAlbum, Track,
 };
 use moosicbox_json_utils::{serde_json::ToValue, ParseError};
@@ -2386,7 +2386,7 @@ impl MusicApi for YtMusicApi {
         album_id: &Id,
     ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
         Ok(
-            moosicbox_core::sqlite::menu::get_album(&**self.db, None, Some(album_id.into()), None)
+            moosicbox_core::sqlite::menu::get_album(&**self.db, album_id, ApiSource::Yt)
                 .await
                 .map_err(|err| LibraryAlbumError::Other(Box::new(err)))?,
         )

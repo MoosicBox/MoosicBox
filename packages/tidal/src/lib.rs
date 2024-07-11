@@ -2362,7 +2362,7 @@ impl MusicApi for TidalMusicApi {
         album_id: &Id,
     ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
         Ok(
-            moosicbox_core::sqlite::menu::get_album(&**self.db, None, Some(album_id.into()), None)
+            moosicbox_core::sqlite::menu::get_album(&**self.db, album_id, ApiSource::Tidal)
                 .await
                 .map_err(|err| LibraryAlbumError::Other(Box::new(err)))?,
         )

@@ -1963,7 +1963,7 @@ impl MusicApi for QobuzMusicApi {
         album_id: &Id,
     ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
         Ok(
-            moosicbox_core::sqlite::menu::get_album(&**self.db, None, None, Some(album_id.into()))
+            moosicbox_core::sqlite::menu::get_album(&**self.db, album_id, ApiSource::Qobuz)
                 .await
                 .map_err(|err| LibraryAlbumError::Other(Box::new(err)))?,
         )

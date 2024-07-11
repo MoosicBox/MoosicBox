@@ -8,7 +8,7 @@ use futures::StreamExt;
 use moosicbox_core::{
     app::AppState,
     integer_range::{parse_integer_ranges, ParseIntegersError},
-    sqlite::models::{AlbumId, ApiSource, ArtistId, Id},
+    sqlite::models::{ApiSource, Id},
     types::AudioFormat,
 };
 use serde::Deserialize;
@@ -355,15 +355,16 @@ pub async fn artist_source_artwork_endpoint(
     let paths = path.into_inner();
 
     let artist_id_string = paths;
-    let artist_id = match query.source.unwrap_or(ApiSource::Library) {
-        ApiSource::Library => artist_id_string.parse::<i32>().map(ArtistId::Library),
-        ApiSource::Tidal => artist_id_string.parse::<u64>().map(ArtistId::Tidal),
-        ApiSource::Qobuz => artist_id_string.parse::<u64>().map(ArtistId::Qobuz),
-        ApiSource::Yt => Ok(ArtistId::Yt(artist_id_string)),
+    let source = query.source.unwrap_or(ApiSource::Library);
+    let artist_id = match source {
+        ApiSource::Library => artist_id_string.parse::<u64>().map(Id::Number),
+        ApiSource::Tidal => artist_id_string.parse::<u64>().map(Id::Number),
+        ApiSource::Qobuz => artist_id_string.parse::<u64>().map(Id::Number),
+        ApiSource::Yt => Ok(Id::String(artist_id_string)),
     }
     .map_err(|_e| ErrorBadRequest("Invalid artist_id"))?;
 
-    match get_artist_cover(artist_id, &**data.database, None).await? {
+    match get_artist_cover(artist_id, source, &**data.database, None).await? {
         ArtistCoverSource::LocalFilePath(path) => {
             let path_buf = std::path::PathBuf::from(path);
             let file_path = path_buf.as_path();
@@ -389,11 +390,12 @@ pub async fn artist_cover_endpoint(
     let paths = path.into_inner();
 
     let artist_id_string = paths.0;
-    let artist_id = match query.source.unwrap_or(ApiSource::Library) {
-        ApiSource::Library => artist_id_string.parse::<i32>().map(ArtistId::Library),
-        ApiSource::Tidal => artist_id_string.parse::<u64>().map(ArtistId::Tidal),
-        ApiSource::Qobuz => artist_id_string.parse::<u64>().map(ArtistId::Qobuz),
-        ApiSource::Yt => Ok(ArtistId::Yt(artist_id_string)),
+    let source = query.source.unwrap_or(ApiSource::Library);
+    let artist_id = match source {
+        ApiSource::Library => artist_id_string.parse::<u64>().map(Id::Number),
+        ApiSource::Tidal => artist_id_string.parse::<u64>().map(Id::Number),
+        ApiSource::Qobuz => artist_id_string.parse::<u64>().map(Id::Number),
+        ApiSource::Yt => Ok(Id::String(artist_id_string)),
     }
     .map_err(|_e| ErrorBadRequest("Invalid artist_id"))?;
 
@@ -411,6 +413,7 @@ pub async fn artist_cover_endpoint(
 
     let ArtistCoverSource::LocalFilePath(path) = get_artist_cover(
         artist_id,
+        source,
         &**data.database,
         Some(std::cmp::max(width, height)),
     )
@@ -443,15 +446,16 @@ pub async fn album_source_artwork_endpoint(
     let paths = path.into_inner();
 
     let album_id_string = paths;
-    let album_id = match query.source.unwrap_or(ApiSource::Library) {
-        ApiSource::Library => album_id_string.parse::<i32>().map(AlbumId::Library),
-        ApiSource::Tidal => album_id_string.parse::<u64>().map(AlbumId::Tidal),
-        ApiSource::Qobuz => Ok(AlbumId::Qobuz(album_id_string)),
-        ApiSource::Yt => Ok(AlbumId::Yt(album_id_string)),
+    let source = query.source.unwrap_or(ApiSource::Library);
+    let album_id = match source {
+        ApiSource::Library => album_id_string.parse::<u64>().map(Id::Number),
+        ApiSource::Tidal => album_id_string.parse::<u64>().map(Id::Number),
+        ApiSource::Qobuz => album_id_string.parse::<u64>().map(Id::Number),
+        ApiSource::Yt => Ok(Id::String(album_id_string)),
     }
     .map_err(|_e| ErrorBadRequest("Invalid album_id"))?;
 
-    match get_album_cover(album_id, &**data.database, None).await? {
+    match get_album_cover(album_id, source, &**data.database, None).await? {
         AlbumCoverSource::LocalFilePath(path) => {
             let path_buf = std::path::PathBuf::from(path);
             let file_path = path_buf.as_path();
@@ -477,11 +481,12 @@ pub async fn album_artwork_endpoint(
     let paths = path.into_inner();
 
     let album_id_string = paths.0;
-    let album_id = match query.source.unwrap_or(ApiSource::Library) {
-        ApiSource::Library => album_id_string.parse::<i32>().map(AlbumId::Library),
-        ApiSource::Tidal => album_id_string.parse::<u64>().map(AlbumId::Tidal),
-        ApiSource::Qobuz => Ok(AlbumId::Qobuz(album_id_string)),
-        ApiSource::Yt => Ok(AlbumId::Yt(album_id_string)),
+    let source = query.source.unwrap_or(ApiSource::Library);
+    let album_id = match source {
+        ApiSource::Library => album_id_string.parse::<u64>().map(Id::Number),
+        ApiSource::Tidal => album_id_string.parse::<u64>().map(Id::Number),
+        ApiSource::Qobuz => album_id_string.parse::<u64>().map(Id::Number),
+        ApiSource::Yt => Ok(Id::String(album_id_string)),
     }
     .map_err(|_e| ErrorBadRequest("Invalid album_id"))?;
 
@@ -499,6 +504,7 @@ pub async fn album_artwork_endpoint(
 
     let AlbumCoverSource::LocalFilePath(path) = get_album_cover(
         album_id,
+        source,
         &**data.database,
         Some(std::cmp::max(width, height)),
     )

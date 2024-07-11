@@ -25,7 +25,7 @@ use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 use moosicbox_files::files::track_pool::service::Commander as _;
 use moosicbox_player::{
     api::DEFAULT_PLAYBACK_RETRY_OPTIONS,
-    player::{Player as _, PlayerSource, TrackOrId},
+    player::{Player as _, PlayerSource, Track},
 };
 use moosicbox_tunnel_sender::sender::TunnelSenderHandle;
 use moosicbox_ws::{send_download_event, WebsocketContext, WebsocketSendError};
@@ -609,7 +609,11 @@ fn handle_server_playback_update(
                 update.playlist.as_ref().map(|x| {
                     x.tracks
                         .iter()
-                        .map(|t| TrackOrId::Id(t.id.as_str().into(), t.r#type))
+                        .map(|t| Track {
+                            id: t.id.clone().into(),
+                            source: t.r#type,
+                            data: Some(serde_json::to_value(t).unwrap()),
+                        })
                         .collect::<Vec<_>>()
                 }),
                 None,
@@ -682,6 +686,8 @@ static UPNP_PLAYERS: Lazy<tokio::sync::RwLock<HashMap<i32, moosicbox_upnp::playe
 
 #[cfg(feature = "upnp")]
 fn handle_upnp_playback_update(update: &UpdateSession) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    use moosicbox_player::player::Track;
+
     let update = update.clone();
 
     Box::pin(async move {
@@ -737,7 +743,11 @@ fn handle_upnp_playback_update(update: &UpdateSession) -> Pin<Box<dyn Future<Out
                 update.playlist.as_ref().map(|x| {
                     x.tracks
                         .iter()
-                        .map(|t| TrackOrId::Id(t.id.as_str().into(), t.r#type))
+                        .map(|t| Track {
+                            id: t.id.clone().into(),
+                            source: t.r#type,
+                            data: Some(serde_json::to_value(t).unwrap()),
+                        })
                         .collect::<Vec<_>>()
                 }),
                 None,

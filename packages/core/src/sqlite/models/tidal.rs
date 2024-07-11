@@ -19,6 +19,16 @@ pub struct TidalArtist {
     pub name: String,
 }
 
+impl From<TidalArtist> for Artist {
+    fn from(value: TidalArtist) -> Self {
+        Self {
+            id: value.id.into(),
+            title: value.name,
+            cover: value.picture,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum TidalArtistImageSize {
     Max,    // 750
@@ -140,6 +150,44 @@ pub struct TidalAlbum {
     pub release_date: Option<String>,
     pub title: String,
     pub media_metadata_tags: Vec<String>,
+}
+
+impl From<TidalAlbum> for Album {
+    fn from(value: TidalAlbum) -> Self {
+        Self {
+            id: value.id.into(),
+            title: value.title,
+            artist: value.artist,
+            artist_id: value.artist_id.into(),
+            date_released: value.release_date,
+            date_added: None,
+            artwork: value.cover,
+            directory: None,
+            blur: false,
+            versions: vec![],
+        }
+    }
+}
+
+impl From<Album> for TidalAlbum {
+    fn from(value: Album) -> Self {
+        Self {
+            id: value.id.into(),
+            title: value.title,
+            artist: value.artist,
+            artist_id: value.artist_id.into(),
+            contains_cover: value.artwork.is_some(),
+            audio_quality: "N/A".to_string(),
+            copyright: None,
+            cover: value.artwork,
+            duration: 0,
+            explicit: false,
+            number_of_tracks: 0,
+            popularity: 0,
+            release_date: value.date_released,
+            media_metadata_tags: vec![],
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -291,6 +339,34 @@ pub struct TidalTrack {
     pub media_metadata_tags: Vec<String>,
 }
 
+impl From<TidalTrack> for Track {
+    fn from(value: TidalTrack) -> Self {
+        Self {
+            id: value.id.into(),
+            number: value.track_number as i32,
+            title: value.title,
+            duration: value.duration as f64,
+            album: value.album,
+            album_id: value.album_id.into(),
+            date_released: None,
+            date_added: None,
+            artist: value.artist,
+            artist_id: value.artist_id.into(),
+            file: None,
+            artwork: value.artist_cover,
+            blur: false,
+            bytes: 0,
+            format: None,
+            bit_depth: None,
+            audio_bitrate: None,
+            overall_bitrate: None,
+            sample_rate: None,
+            channels: None,
+            source: super::TrackApiSource::Tidal,
+        }
+    }
+}
+
 impl ToValueType<TidalTrack> for &serde_json::Value {
     fn to_value_type(self) -> Result<TidalTrack, ParseError> {
         self.as_model()
@@ -365,41 +441,6 @@ impl AsModelResult<TidalSearchTrack, ParseError> for serde_json::Value {
             title: self.to_value("title")?,
             media_metadata_tags: self.to_nested_value(&["mediaMetadata", "tags"])?,
         })
-    }
-}
-
-impl From<TidalArtist> for Artist {
-    fn from(value: TidalArtist) -> Self {
-        Artist::Tidal(value)
-    }
-}
-
-impl From<TidalAlbum> for Album {
-    fn from(value: TidalAlbum) -> Self {
-        Album::Tidal(value)
-    }
-}
-
-impl From<TidalTrack> for Track {
-    fn from(value: TidalTrack) -> Self {
-        Track::Tidal(value)
-    }
-}
-impl From<&TidalArtist> for Artist {
-    fn from(value: &TidalArtist) -> Self {
-        Artist::Tidal(value.clone())
-    }
-}
-
-impl From<&TidalAlbum> for Album {
-    fn from(value: &TidalAlbum) -> Self {
-        Album::Tidal(value.clone())
-    }
-}
-
-impl From<&TidalTrack> for Track {
-    fn from(value: &TidalTrack) -> Self {
-        Track::Tidal(value.clone())
     }
 }
 

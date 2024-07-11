@@ -9,7 +9,7 @@ use actix_web::{
 };
 use moosicbox_core::sqlite::{
     menu::get_artist_albums,
-    models::{AlbumId, ApiSource},
+    models::{ApiSource, Id},
 };
 use moosicbox_core::{
     app::AppState,
@@ -40,18 +40,19 @@ use crate::library::{
     artists::{get_all_artists, ArtistFilters, ArtistsRequest},
 };
 
-fn album_id_for_source(id: &str, source: ApiSource) -> Result<AlbumId, actix_web::Error> {
+fn album_id_for_source(id: &str, source: ApiSource) -> Result<Id, actix_web::Error> {
     Ok(match source {
-        ApiSource::Tidal => AlbumId::Tidal(
-            id.parse::<u64>()
-                .map_err(|_| ErrorBadRequest(format!("Bad Tidal album_id {id}")))?,
-        ),
-        ApiSource::Qobuz => AlbumId::Qobuz(id.to_string()),
-        ApiSource::Yt => AlbumId::Yt(id.to_string()),
-        ApiSource::Library => AlbumId::Library(
-            id.parse::<i32>()
-                .map_err(|_| ErrorBadRequest(format!("Bad Tidal album_id {id}")))?,
-        ),
+        ApiSource::Tidal => id
+            .parse::<u64>()
+            .map_err(|_| ErrorBadRequest(format!("Bad Tidal album_id {id}")))?
+            .into(),
+
+        ApiSource::Qobuz => id.to_string().into(),
+        ApiSource::Yt => id.to_string().into(),
+        ApiSource::Library => id
+            .parse::<i32>()
+            .map_err(|_| ErrorBadRequest(format!("Bad Tidal album_id {id}")))?
+            .into(),
     })
 }
 
@@ -341,16 +342,21 @@ pub async fn get_album_endpoint(
     query: web::Query<GetAlbumQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<ApiAlbum>> {
+    let (id, source) = if let Some(id) = query.album_id {
+        (id.into(), ApiSource::Library)
+    } else if let Some(id) = query.tidal_album_id {
+        (id.into(), ApiSource::Tidal)
+    } else if let Some(id) = &query.qobuz_album_id {
+        (id.into(), ApiSource::Qobuz)
+    } else {
+        return Err(ErrorNotFound("Album not found"));
+    };
+
     Ok(Json(
-        get_album(
-            &**data.database,
-            query.album_id,
-            query.tidal_album_id,
-            query.qobuz_album_id.clone(),
-        )
-        .await?
-        .ok_or(ErrorNotFound("Album not found"))?
-        .to_api(),
+        get_album(&**data.database, &id, source)
+            .await?
+            .ok_or(ErrorNotFound("Album not found"))?
+            .to_api(),
     ))
 }
 
@@ -369,7 +375,8 @@ pub async fn add_album_endpoint(
     Ok(Json(
         add_album(
             data.database.clone(),
-            &album_id_for_source(&query.album_id, query.source)?.into(),
+            &album_id_for_source(&query.album_id, query.source)?,
+            query.source,
             &*music_api_from_source(data.database.clone(), query.source),
         )
         .await
@@ -393,7 +400,7 @@ pub async fn remove_album_endpoint(
     Ok(Json(
         remove_album(
             &**data.database,
-            &album_id_for_source(&query.album_id, query.source)?.into(),
+            &album_id_for_source(&query.album_id, query.source)?,
             &*music_api_from_source(data.database.clone(), query.source),
         )
         .await
@@ -417,7 +424,8 @@ pub async fn refavorite_album_endpoint(
     Ok(Json(
         refavorite_album(
             data.database.clone(),
-            &album_id_for_source(&query.album_id, query.source)?.into(),
+            &album_id_for_source(&query.album_id, query.source)?,
+            query.source,
             &*music_api_from_source(data.database.clone(), query.source),
         )
         .await

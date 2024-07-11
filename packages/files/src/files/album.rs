@@ -13,15 +13,17 @@ use moosicbox_core::sqlite::{
     models::{
         qobuz::{QobuzAlbum, QobuzImageSize},
         tidal::{TidalAlbum, TidalAlbumImageSize},
-        yt::{YtAlbum, YtAlbumImageSize},
-        AlbumId,
+        ApiSource, Id,
     },
 };
 use moosicbox_database::{query::*, Database, DatabaseError};
 use moosicbox_qobuz::QobuzAlbumError;
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use moosicbox_tidal::TidalAlbumError;
-use moosicbox_yt::YtAlbumError;
+use moosicbox_yt::{
+    db::models::{YtAlbum, YtAlbumImageSize},
+    YtAlbumError,
+};
 use once_cell::sync::Lazy;
 use thiserror::Error;
 use tokio_util::codec::{BytesCodec, FramedRead};
@@ -165,8 +167,8 @@ async fn fetch_local_album_cover_bytes(
 
 #[derive(Debug, Error)]
 pub enum AlbumCoverError {
-    #[error("Album cover not found for album: {0:?}")]
-    NotFound(AlbumId),
+    #[error("Album cover not found for album: {0}")]
+    NotFound(Id),
     #[error(transparent)]
     FetchCover(#[from] FetchCoverError),
     #[error(transparent)]
@@ -207,40 +209,41 @@ async fn copy_streaming_cover_to_local(
 
 #[async_recursion]
 pub async fn get_album_cover_bytes(
-    album_id: AlbumId,
+    album_id: Id,
+    source: ApiSource,
     db: &dyn Database,
     size: Option<u32>,
     try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, AlbumCoverError> {
-    Ok(match &album_id {
-        AlbumId::Library(library_album_id) => {
-            get_library_album_cover_bytes(*library_album_id, db, try_to_get_stream_size).await?
+    Ok(match source {
+        ApiSource::Library => {
+            get_library_album_cover_bytes(album_id.into(), db, try_to_get_stream_size).await?
         }
-        AlbumId::Tidal(tidal_album_id) => {
-            get_tidal_album_cover_bytes(*tidal_album_id, db, size, try_to_get_stream_size).await?
+        ApiSource::Tidal => {
+            get_tidal_album_cover_bytes(album_id.into(), db, size, try_to_get_stream_size).await?
         }
-        AlbumId::Qobuz(qobuz_album_id) => {
-            get_qobuz_album_cover_bytes(qobuz_album_id, db, size, try_to_get_stream_size).await?
+        ApiSource::Qobuz => {
+            get_qobuz_album_cover_bytes((&album_id).into(), db, size, try_to_get_stream_size)
+                .await?
         }
-        AlbumId::Yt(yt_album_id) => {
-            get_yt_album_cover_bytes(yt_album_id, db, size, try_to_get_stream_size).await?
+        ApiSource::Yt => {
+            get_yt_album_cover_bytes((&album_id).into(), db, size, try_to_get_stream_size).await?
         }
     })
 }
 
 #[async_recursion]
 pub async fn get_album_cover(
-    album_id: AlbumId,
+    album_id: Id,
+    source: ApiSource,
     db: &dyn Database,
     size: Option<u32>,
 ) -> Result<AlbumCoverSource, AlbumCoverError> {
-    let path = match &album_id {
-        AlbumId::Library(library_album_id) => {
-            get_library_album_cover(*library_album_id, db).await?
-        }
-        AlbumId::Tidal(tidal_album_id) => get_tidal_album_cover(*tidal_album_id, db, size).await?,
-        AlbumId::Qobuz(qobuz_album_id) => get_qobuz_album_cover(qobuz_album_id, db, size).await?,
-        AlbumId::Yt(yt_album_id) => get_yt_album_cover(yt_album_id, db, size).await?,
+    let path = match source {
+        ApiSource::Library => get_library_album_cover(album_id.into(), db).await?,
+        ApiSource::Tidal => get_tidal_album_cover(album_id.into(), db, size).await?,
+        ApiSource::Qobuz => get_qobuz_album_cover((&album_id).into(), db, size).await?,
+        ApiSource::Yt => get_yt_album_cover((&album_id).into(), db, size).await?,
     };
 
     Ok(AlbumCoverSource::LocalFilePath(path))
@@ -250,11 +253,9 @@ pub async fn get_library_album_cover(
     library_album_id: i32,
     db: &dyn Database,
 ) -> Result<String, AlbumCoverError> {
-    let album = get_album(db, Some(library_album_id as u64), None, None)
+    let album = get_album(db, &library_album_id.into(), ApiSource::Library)
         .await?
-        .ok_or(AlbumCoverError::NotFound(AlbumId::Library(
-            library_album_id,
-        )))?;
+        .ok_or(AlbumCoverError::NotFound(library_album_id.into()))?;
 
     if let Ok(cover) = fetch_local_album_cover(db, album.artwork, album.id, album.directory).await {
         return Ok(cover);
@@ -262,7 +263,7 @@ pub async fn get_library_album_cover(
 
     if let Some(tidal_id) = album.tidal_id {
         if let Ok(AlbumCoverSource::LocalFilePath(cover)) =
-            get_album_cover(AlbumId::Tidal(tidal_id), db, None).await
+            get_album_cover(tidal_id.into(), ApiSource::Tidal, db, None).await
         {
             return copy_streaming_cover_to_local(db, album.id, cover).await;
         }
@@ -270,15 +271,13 @@ pub async fn get_library_album_cover(
 
     if let Some(qobuz_id) = album.qobuz_id {
         if let Ok(AlbumCoverSource::LocalFilePath(cover)) =
-            get_album_cover(AlbumId::Qobuz(qobuz_id), db, None).await
+            get_album_cover(qobuz_id.into(), ApiSource::Qobuz, db, None).await
         {
             return copy_streaming_cover_to_local(db, album.id, cover).await;
         }
     }
 
-    Err(AlbumCoverError::NotFound(AlbumId::Library(
-        library_album_id,
-    )))
+    Err(AlbumCoverError::NotFound(library_album_id.into()))
 }
 
 pub async fn get_library_album_cover_bytes(
@@ -286,11 +285,9 @@ pub async fn get_library_album_cover_bytes(
     db: &dyn Database,
     try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, AlbumCoverError> {
-    let album = get_album(db, Some(library_album_id as u64), None, None)
+    let album = get_album(db, &library_album_id.into(), ApiSource::Library)
         .await?
-        .ok_or(AlbumCoverError::NotFound(AlbumId::Library(
-            library_album_id,
-        )))?;
+        .ok_or(AlbumCoverError::NotFound(library_album_id.into()))?;
 
     if let Ok(bytes) =
         fetch_local_album_cover_bytes(db, album.artwork, album.id, album.directory).await
@@ -299,24 +296,34 @@ pub async fn get_library_album_cover_bytes(
     }
 
     if let Some(tidal_id) = album.tidal_id {
-        if let Ok(bytes) =
-            get_album_cover_bytes(AlbumId::Tidal(tidal_id), db, None, try_to_get_stream_size).await
+        if let Ok(bytes) = get_album_cover_bytes(
+            tidal_id.into(),
+            ApiSource::Tidal,
+            db,
+            None,
+            try_to_get_stream_size,
+        )
+        .await
         {
             return Ok(bytes);
         }
     }
 
     if let Some(qobuz_id) = album.qobuz_id {
-        if let Ok(bytes) =
-            get_album_cover_bytes(AlbumId::Qobuz(qobuz_id), db, None, try_to_get_stream_size).await
+        if let Ok(bytes) = get_album_cover_bytes(
+            qobuz_id.into(),
+            ApiSource::Qobuz,
+            db,
+            None,
+            try_to_get_stream_size,
+        )
+        .await
         {
             return Ok(bytes);
         }
     }
 
-    Err(AlbumCoverError::NotFound(AlbumId::Library(
-        library_album_id,
-    )))
+    Err(AlbumCoverError::NotFound(library_album_id.into()))
 }
 
 async fn get_tidal_album_cover_request(
@@ -355,7 +362,7 @@ async fn get_tidal_album_cover_request(
 
         album
     }
-    .ok_or_else(|| AlbumCoverError::NotFound(AlbumId::Tidal(tidal_album_id)))?;
+    .ok_or_else(|| AlbumCoverError::NotFound(tidal_album_id.into()))?;
 
     let size = size
         .map(|size| (size as u16).into())
@@ -363,7 +370,7 @@ async fn get_tidal_album_cover_request(
 
     let url = album
         .cover_url(size)
-        .ok_or(AlbumCoverError::NotFound(AlbumId::Tidal(tidal_album_id)))?;
+        .ok_or(AlbumCoverError::NotFound(tidal_album_id.into()))?;
 
     let file_path = get_album_cover_path(
         &size.to_string(),
@@ -440,7 +447,7 @@ async fn get_qobuz_album_cover_request(
 
         album
     }
-    .ok_or_else(|| AlbumCoverError::NotFound(AlbumId::Qobuz(qobuz_album_id.to_string())))?;
+    .ok_or_else(|| AlbumCoverError::NotFound(qobuz_album_id.into()))?;
 
     let size = size
         .map(|size| (size as u16).into())
@@ -450,9 +457,7 @@ async fn get_qobuz_album_cover_request(
         .image
         .as_ref()
         .and_then(|image| image.cover_url_for_size(size))
-        .ok_or(AlbumCoverError::NotFound(AlbumId::Qobuz(
-            qobuz_album_id.to_string(),
-        )))?;
+        .ok_or(AlbumCoverError::NotFound(qobuz_album_id.into()))?;
 
     let file_path = get_album_cover_path(
         &size.to_string(),
@@ -526,7 +531,7 @@ async fn get_yt_album_cover_request(
 
         album
     }
-    .ok_or_else(|| AlbumCoverError::NotFound(AlbumId::Yt(yt_album_id.to_owned())))?;
+    .ok_or_else(|| AlbumCoverError::NotFound(yt_album_id.into()))?;
 
     let size = size
         .map(|size| (size as u16).into())
@@ -534,9 +539,7 @@ async fn get_yt_album_cover_request(
 
     let url = album
         .cover_url(size)
-        .ok_or(AlbumCoverError::NotFound(AlbumId::Yt(
-            yt_album_id.to_owned(),
-        )))?;
+        .ok_or(AlbumCoverError::NotFound(yt_album_id.into()))?;
 
     let file_path = get_album_cover_path(
         &size.to_string(),

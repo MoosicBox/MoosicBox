@@ -13,12 +13,6 @@ use strum_macros::{AsRefStr, EnumString};
 
 use crate::types::AudioFormat;
 
-use self::{
-    qobuz::{QobuzAlbum, QobuzArtist, QobuzTrack},
-    tidal::{TidalAlbum, TidalArtist, TidalTrack},
-    yt::{YtAlbum, YtArtist, YtTrack},
-};
-
 use super::db::{
     get_album_version_qualities, get_players, get_session_active_players, get_session_playlist,
     get_session_playlist_tracks, get_tracks, DbError,
@@ -26,7 +20,6 @@ use super::db::{
 
 pub mod qobuz;
 pub mod tidal;
-pub mod yt;
 
 pub trait AsModel<T> {
     fn as_model(&self) -> T;
@@ -210,18 +203,57 @@ impl ToValueType<TrackApiSource> for rusqlite::types::Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
-pub enum Track {
-    Library(LibraryTrack),
-    Tidal(TidalTrack),
-    Qobuz(QobuzTrack),
-    Yt(YtTrack),
+pub struct Track {
+    pub id: Id,
+    pub number: i32,
+    pub title: String,
+    pub duration: f64,
+    pub album: String,
+    pub album_id: Id,
+    pub date_released: Option<String>,
+    pub date_added: Option<String>,
+    pub artist: String,
+    pub artist_id: Id,
+    pub file: Option<String>,
+    pub artwork: Option<String>,
+    pub blur: bool,
+    pub bytes: u64,
+    pub format: Option<AudioFormat>,
+    pub bit_depth: Option<u8>,
+    pub audio_bitrate: Option<u32>,
+    pub overall_bitrate: Option<u32>,
+    pub sample_rate: Option<u32>,
+    pub channels: Option<u8>,
+    pub source: TrackApiSource,
 }
 
 impl From<LibraryTrack> for Track {
     fn from(value: LibraryTrack) -> Self {
-        Track::Library(value)
+        Self {
+            id: value.id.into(),
+            number: value.number,
+            title: value.title,
+            duration: value.duration,
+            album: value.album,
+            album_id: value.album_id.into(),
+            date_released: value.date_released,
+            date_added: value.date_added,
+            artist: value.artist,
+            artist_id: value.artist_id.into(),
+            file: value.file,
+            artwork: value.artwork,
+            blur: value.blur,
+            bytes: value.bytes,
+            format: value.format,
+            bit_depth: value.bit_depth,
+            audio_bitrate: value.audio_bitrate,
+            overall_bitrate: value.overall_bitrate,
+            sample_rate: value.sample_rate,
+            channels: value.channels,
+            source: value.source,
+        }
     }
 }
 
@@ -451,6 +483,15 @@ impl ApiTrack {
             ApiTrack::Yt { .. } => ApiSource::Yt,
         }
     }
+
+    pub fn data(&self) -> serde_json::Value {
+        match self {
+            ApiTrack::Library { data, .. } => serde_json::to_value(data).unwrap(),
+            ApiTrack::Tidal { data, .. } => data.clone(),
+            ApiTrack::Qobuz { data, .. } => data.clone(),
+            ApiTrack::Yt { data, .. } => data.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
@@ -508,41 +549,19 @@ impl ToApi<ApiTrack> for LibraryTrack {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[serde(tag = "type")]
-pub enum ArtistId {
-    Library(i32),
-    Tidal(u64),
-    Qobuz(u64),
-    Yt(String),
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+pub struct Artist {
+    pub id: Id,
+    pub title: String,
+    pub cover: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub enum Artist {
-    Library(LibraryArtist),
-    Tidal(TidalArtist),
-    Qobuz(QobuzArtist),
-    Yt(YtArtist),
-}
-
-impl Artist {
-    pub fn id(&self) -> ArtistId {
-        match self {
-            Artist::Library(value) => ArtistId::Library(value.id),
-            Artist::Tidal(value) => ArtistId::Tidal(value.id),
-            Artist::Qobuz(value) => ArtistId::Qobuz(value.id),
-            Artist::Yt(value) => ArtistId::Yt(value.id.to_owned()),
-        }
-    }
-
-    pub fn title(&self) -> String {
-        match self {
-            Artist::Library(value) => value.title.clone(),
-            Artist::Tidal(value) => value.name.clone(),
-            Artist::Qobuz(value) => value.name.clone(),
-            Artist::Yt(value) => value.name.clone(),
+impl From<LibraryArtist> for Artist {
+    fn from(value: LibraryArtist) -> Self {
+        Self {
+            id: value.id.into(),
+            title: value.title,
+            cover: value.cover,
         }
     }
 }
@@ -712,50 +731,33 @@ impl AsModelResult<AlbumVersionQuality, ParseError> for &moosicbox_database::Row
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[serde(tag = "type")]
-pub enum AlbumId {
-    Library(i32),
-    Tidal(u64),
-    Qobuz(String),
-    Yt(String),
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+pub struct Album {
+    pub id: Id,
+    pub title: String,
+    pub artist: String,
+    pub artist_id: Id,
+    pub date_released: Option<String>,
+    pub date_added: Option<String>,
+    pub artwork: Option<String>,
+    pub directory: Option<String>,
+    pub blur: bool,
+    pub versions: Vec<AlbumVersionQuality>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub enum Album {
-    Library(LibraryAlbum),
-    Tidal(TidalAlbum),
-    Qobuz(QobuzAlbum),
-    Yt(YtAlbum),
-}
-
-impl Album {
-    pub fn id(&self) -> AlbumId {
-        match self {
-            Album::Library(value) => AlbumId::Library(value.id),
-            Album::Tidal(value) => AlbumId::Tidal(value.id),
-            Album::Qobuz(value) => AlbumId::Qobuz(value.id.clone()),
-            Album::Yt(value) => AlbumId::Yt(value.id.clone()),
-        }
-    }
-
-    pub fn artist_id(&self) -> ArtistId {
-        match self {
-            Album::Library(value) => ArtistId::Library(value.artist_id),
-            Album::Tidal(value) => ArtistId::Tidal(value.artist_id),
-            Album::Qobuz(value) => ArtistId::Qobuz(value.artist_id),
-            Album::Yt(value) => ArtistId::Yt(value.artist_id.to_owned()),
-        }
-    }
-
-    pub fn title(&self) -> String {
-        match self {
-            Album::Library(value) => value.title.clone(),
-            Album::Tidal(value) => value.title.clone(),
-            Album::Qobuz(value) => value.title.clone(),
-            Album::Yt(value) => value.title.clone(),
+impl From<LibraryAlbum> for Album {
+    fn from(value: LibraryAlbum) -> Self {
+        Self {
+            id: value.id.into(),
+            title: value.title,
+            artist: value.artist,
+            artist_id: value.artist_id.into(),
+            date_released: value.date_released,
+            date_added: value.date_added,
+            artwork: value.artwork,
+            directory: value.directory,
+            blur: value.blur,
+            versions: value.versions,
         }
     }
 }
@@ -1913,86 +1915,15 @@ impl AsId for TrackSize {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Id {
     String(String),
     Number(u64),
 }
 
-impl From<ArtistId> for Id {
-    fn from(value: ArtistId) -> Self {
-        match value {
-            ArtistId::Library(value) => Id::Number(value as u64),
-            ArtistId::Tidal(value) => Id::Number(value),
-            ArtistId::Qobuz(value) => Id::Number(value),
-            ArtistId::Yt(value) => Id::String(value),
-        }
-    }
-}
-
-impl From<&ArtistId> for Id {
-    fn from(value: &ArtistId) -> Self {
-        match value {
-            ArtistId::Library(value) => Id::Number(*value as u64),
-            ArtistId::Tidal(value) => Id::Number(*value),
-            ArtistId::Qobuz(value) => Id::Number(*value),
-            ArtistId::Yt(value) => Id::String(value.to_owned()),
-        }
-    }
-}
-
-impl From<AlbumId> for Id {
-    fn from(value: AlbumId) -> Self {
-        match value {
-            AlbumId::Library(value) => Id::Number(value as u64),
-            AlbumId::Tidal(value) => Id::Number(value),
-            AlbumId::Qobuz(value) => Id::String(value.clone()),
-            AlbumId::Yt(value) => Id::String(value.clone()),
-        }
-    }
-}
-
-impl From<&AlbumId> for Id {
-    fn from(value: &AlbumId) -> Self {
-        match value {
-            AlbumId::Library(value) => Id::Number(*value as u64),
-            AlbumId::Tidal(value) => Id::Number(*value),
-            AlbumId::Qobuz(value) => Id::String(value.clone()),
-            AlbumId::Yt(value) => Id::String(value.clone()),
-        }
-    }
-}
-
-impl From<Artist> for Id {
-    fn from(value: Artist) -> Self {
-        match value {
-            Artist::Library(value) => Id::Number(value.id as u64),
-            Artist::Tidal(value) => Id::Number(value.id),
-            Artist::Qobuz(value) => Id::Number(value.id),
-            Artist::Yt(value) => Id::String(value.id),
-        }
-    }
-}
-
-impl From<Album> for Id {
-    fn from(value: Album) -> Self {
-        match value {
-            Album::Library(value) => Id::Number(value.id as u64),
-            Album::Tidal(value) => Id::Number(value.id),
-            Album::Qobuz(value) => Id::String(value.id),
-            Album::Yt(value) => Id::String(value.id),
-        }
-    }
-}
-
-impl From<Track> for Id {
-    fn from(value: Track) -> Self {
-        match value {
-            Track::Library(value) => Id::Number(value.id as u64),
-            Track::Tidal(value) => Id::Number(value.id),
-            Track::Qobuz(value) => Id::Number(value.id),
-            Track::Yt(value) => Id::String(value.id),
-        }
+impl Default for Id {
+    fn default() -> Self {
+        Id::Number(0)
     }
 }
 
@@ -2068,6 +1999,26 @@ impl From<Id> for u64 {
             number
         } else {
             panic!("Not u64 Id type");
+        }
+    }
+}
+
+impl From<Id> for i32 {
+    fn from(value: Id) -> Self {
+        if let Id::Number(number) = value {
+            number as i32
+        } else {
+            panic!("Not i32 Id type");
+        }
+    }
+}
+
+impl From<&Id> for i32 {
+    fn from(value: &Id) -> Self {
+        if let Id::Number(number) = value {
+            *number as i32
+        } else {
+            panic!("Not i32 Id type");
         }
     }
 }

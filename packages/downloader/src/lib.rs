@@ -264,7 +264,7 @@ pub async fn get_create_download_tasks_for_album_ids(
                     .join(&sanitize_filename(&track.artist))
                     .join(&sanitize_filename(&track.album))
             } else {
-                let album = get_album(db, Some(*album_id), None, None)
+                let album = get_album(db, &album_id.into(), ApiSource::Library)
                     .await?
                     .ok_or(GetCreateDownloadTasksError::NotFound)?;
 

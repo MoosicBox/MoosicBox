@@ -12,7 +12,7 @@ use thiserror::Error;
 
 use super::{
     db::{self, DbError},
-    models::{LibraryAlbum, LibraryArtist},
+    models::{ApiSource, Id, LibraryAlbum, LibraryArtist},
 };
 
 #[derive(Debug, Error)]
@@ -174,37 +174,43 @@ impl From<GetAlbumError> for actix_web::Error {
 
 pub async fn get_album(
     db: &dyn Database,
-    album_id: Option<u64>,
-    tidal_album_id: Option<u64>,
-    qobuz_album_id: Option<String>,
+    album_id: &Id,
+    source: ApiSource,
 ) -> Result<Option<LibraryAlbum>, GetAlbumError> {
     let albums = get_albums(db).await?;
 
-    if let Some(album_id) = album_id {
-        return Ok(albums
+    Ok(match source {
+        ApiSource::Library => albums
             .iter()
-            .find(|album| album.id as u64 == album_id)
-            .cloned());
-    }
-    if let Some(tidal_album_id) = tidal_album_id {
-        return Ok(albums
+            .find(|album| &Into::<Id>::into(album.id) == album_id)
+            .cloned(),
+        ApiSource::Tidal => albums
             .iter()
-            .find(|album| album.tidal_id.is_some_and(|id| id == tidal_album_id))
-            .cloned());
-    }
-    if let Some(qobuz_album_id) = qobuz_album_id {
-        return Ok(albums
+            .find(|album| {
+                album
+                    .tidal_id
+                    .is_some_and(|id| &Into::<Id>::into(id) == album_id)
+            })
+            .cloned(),
+        ApiSource::Qobuz => albums
             .iter()
             .find(|album| {
                 album
                     .qobuz_id
                     .as_ref()
-                    .is_some_and(|id| id == &qobuz_album_id)
+                    .is_some_and(|id| &Into::<Id>::into(id) == album_id)
             })
-            .cloned());
-    }
-
-    Ok(None)
+            .cloned(),
+        ApiSource::Yt => albums
+            .iter()
+            .find(|album| {
+                album
+                    .yt_id
+                    .as_ref()
+                    .is_some_and(|id| &Into::<Id>::into(id) == album_id)
+            })
+            .cloned(),
+    })
 }
 
 #[derive(Debug, Error)]
