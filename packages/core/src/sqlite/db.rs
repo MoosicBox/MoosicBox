@@ -8,9 +8,9 @@ use thiserror::Error;
 use crate::types::{AudioFormat, PlaybackQuality};
 
 use super::models::{
-    AlbumVersionQuality, AsModelQuery as _, AsModelResultMapped as _, CreateSession, LibraryAlbum,
-    LibraryArtist, LibraryTrack, Player, Session, SessionPlaylist, SessionPlaylistTrack,
-    TrackApiSource, TrackSize, UpdateSession,
+    AlbumVersionQuality, AsModelQuery as _, AsModelResultMapped as _, CreateSession, Id,
+    LibraryAlbum, LibraryArtist, LibraryTrack, Player, Session, SessionPlaylist,
+    SessionPlaylistTrack, TrackApiSource, TrackSize, UpdateSession,
 };
 
 impl<T> From<PoisonError<T>> for DbError {
@@ -326,7 +326,7 @@ pub async fn update_session(db: &dyn Database, session: &UpdateSession) -> Resul
             log::trace!("update_session: Inserting track {track:?}");
             db.insert("session_playlist_tracks")
                 .value("session_playlist_id", playlist_id)
-                .value("track_id", track.id)
+                .value("track_id", track.id.clone())
                 .value("type", track.r#type.as_ref())
                 .value("data", track.data.clone())
                 .execute(db)
@@ -904,13 +904,13 @@ pub async fn set_track_sizes(
 
 pub async fn get_track_size(
     db: &dyn Database,
-    id: u64,
+    id: &Id,
     quality: &PlaybackQuality,
 ) -> Result<Option<u64>, DbError> {
     Ok(db
         .select("track_sizes")
         .columns(&["bytes"])
-        .where_eq("track_id", id)
+        .where_eq("track_id", id.to_string())
         .where_eq("format", quality.format.as_ref())
         .execute_first(db)
         .await?

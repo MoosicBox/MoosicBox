@@ -13,14 +13,14 @@ use moosicbox_core::{
         },
         menu::{get_albums, GetAlbumError},
         models::{
-            track_source_to_u8, AlbumSort, AlbumSource, ApiSource, ApiTrack, LibraryAlbum,
+            track_source_to_u8, AlbumSort, AlbumSource, ApiSource, ApiTrack, Id, LibraryAlbum,
             LibraryTrack, ToApi, TrackApiSource,
         },
     },
     types::AudioFormat,
 };
 use moosicbox_database::{query::*, Database, DatabaseError, DatabaseValue};
-use moosicbox_music_api::{AlbumType, Id, LibraryAlbumError, MusicApi};
+use moosicbox_music_api::{AlbumType, LibraryAlbumError, MusicApi};
 use moosicbox_paging::{PagingRequest, PagingResponse, PagingResult};
 use moosicbox_scan::output::ScanOutput;
 use moosicbox_search::{

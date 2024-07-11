@@ -20,32 +20,33 @@ moosicbox_database = { path = "../database", default-features = false, features 
 moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
     "serde_json",
 ] }
+moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
 moosicbox_symphonia_player = { path = "../symphonia_player", default-features = false }
 
-actix-cors        = { workspace = true }
-actix-files       = { workspace = true }
-actix-web         = { workspace = true }
-async-trait       = { workspace = true }
-atomic_float      = { workspace = true }
-awc               = { workspace = true }
-bytes             = { workspace = true }
-flume             = { workspace = true }
-futures           = { workspace = true }
-lazy_static       = { workspace = true }
-local-ip-address  = { workspace = true }
-log               = { workspace = true }
-ogg               = { workspace = true }
-once_cell         = { workspace = true }
-rand              = { workspace = true }
-reqwest           = { workspace = true, features = ["json"] }
-serde             = { workspace = true, features = ["derive"] }
-serde_json        = { workspace = true }
-symphonia         = { workspace = true }
-thiserror         = { workspace = true }
-tokio             = { workspace = true, features = ["macros", "rt", "time"] }
-tokio-util        = { workspace = true }
-url               = { workspace = true }
+actix-cors       = { workspace = true }
+actix-files      = { workspace = true }
+actix-web        = { workspace = true }
+async-trait      = { workspace = true }
+atomic_float     = { workspace = true }
+awc              = { workspace = true }
+bytes            = { workspace = true }
+flume            = { workspace = true }
+futures          = { workspace = true }
+lazy_static      = { workspace = true }
+local-ip-address = { workspace = true }
+log              = { workspace = true }
+ogg              = { workspace = true }
+once_cell        = { workspace = true }
+rand             = { workspace = true }
+reqwest          = { workspace = true, features = ["json"] }
+serde            = { workspace = true, features = ["derive"] }
+serde_json       = { workspace = true }
+symphonia        = { workspace = true }
+thiserror        = { workspace = true }
+tokio            = { workspace = true, features = ["macros", "rt", "time"] }
+tokio-util       = { workspace = true }
+url              = { workspace = true }
 
 [features]
 default = [

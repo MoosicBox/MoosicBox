@@ -14,13 +14,13 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 use moosicbox_core::sqlite::models::{
     yt::{YtAlbum, YtArtist, YtSearchResults, YtTrack},
-    Album, ApiSource, Artist, AsModelResult, LibraryAlbum, Track,
+    Album, ApiSource, Artist, AsModelResult, Id, LibraryAlbum, Track,
 };
 use moosicbox_json_utils::{serde_json::ToValue, ParseError};
 use moosicbox_music_api::{
     AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumOrder, AlbumOrderDirection,
     AlbumType, AlbumsError, ArtistAlbumsError, ArtistError, ArtistOrder, ArtistOrderDirection,
-    ArtistsError, Id, LibraryAlbumError, MusicApi, RemoveAlbumError, RemoveArtistError,
+    ArtistsError, LibraryAlbumError, MusicApi, RemoveAlbumError, RemoveArtistError,
     RemoveTrackError, TrackError, TrackOrder, TrackOrderDirection, TracksError,
 };
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
@@ -106,7 +106,7 @@ impl ToUrl for YtApiEndpoint {
             Self::AlbumTracks => format!("{YT_API_BASE_URL}/"),
             Self::TrackUrl => format!("{YT_API_BASE_URL}/"),
             Self::TrackPlaybackInfo => format!("{YT_API_BASE_URL}/"),
-            Self::Search => format!("{YT_API_BASE_URL}/"),
+            Self::Search => format!("{YT_API_BASE_URL}/music/get_search_suggestions"),
         }
     }
 }
@@ -187,6 +187,109 @@ pub async fn device_authorization(
         "url": url,
         "device_code": device_code,
     }))
+}
+
+#[derive(Debug, Error)]
+pub enum RequestError {
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[error("Unauthorized")]
+    Unauthorized,
+    #[error("Request failed (error {0})")]
+    RequestFailed(u16, String),
+    #[error("MaxFailedAttempts")]
+    MaxFailedAttempts,
+    #[error("No response body")]
+    NoResponseBody,
+}
+
+#[allow(unused)]
+async fn request(url: &str) -> Result<Value, RequestError> {
+    request_inner(Method::Get, url, None, None, 1)
+        .await?
+        .ok_or_else(|| RequestError::NoResponseBody)
+}
+
+async fn post_request(
+    url: &str,
+    body: Option<Value>,
+    form: Option<Vec<(&str, &str)>>,
+) -> Result<Option<Value>, RequestError> {
+    request_inner(
+        Method::Post,
+        url,
+        body,
+        form.map(|values| {
+            values
+                .iter()
+                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .collect::<Vec<_>>()
+        }),
+        1,
+    )
+    .await
+}
+
+#[allow(unused)]
+async fn delete_request(url: &str) -> Result<Option<Value>, RequestError> {
+    request_inner(Method::Delete, url, None, None, 1).await
+}
+
+#[async_recursion]
+async fn request_inner(
+    method: Method,
+    url: &str,
+    body: Option<Value>,
+    form: Option<Vec<(String, String)>>,
+    attempt: u8,
+) -> Result<Option<Value>, RequestError> {
+    if attempt > 3 {
+        log::error!("Max failed attempts for request reached");
+        return Err(RequestError::MaxFailedAttempts);
+    }
+
+    log::debug!("Making request to {url}");
+
+    let mut request = match method {
+        Method::Get => CLIENT.get(url),
+        Method::Post => CLIENT.post(url),
+        Method::Delete => CLIENT.delete(url),
+    };
+
+    if let Some(form) = &form {
+        request = request.form(form);
+    }
+    if let Some(body) = &body {
+        request = request.json(body);
+    }
+
+    log::debug!("Sending authenticated {method} request to {url}");
+    let response = request.send().await?;
+
+    let status: u16 = response.status().into();
+
+    log::debug!("Received authenticated request response status: {status}");
+
+    match status {
+        401 => {
+            log::debug!("Received unauthorized response");
+            Err(RequestError::Unauthorized)
+        }
+        400..=599 => Err(RequestError::RequestFailed(
+            status,
+            response.text().await.unwrap_or("".to_string()),
+        )),
+        _ => match response.json::<Value>().await {
+            Ok(value) => Ok(Some(value)),
+            Err(err) => {
+                if err.is_decode() {
+                    Ok(None)
+                } else {
+                    Err(RequestError::Reqwest(err))
+                }
+            }
+        },
+    }
 }
 
 #[derive(Debug, Error)]
@@ -1740,121 +1843,43 @@ pub async fn track(
     Ok(value.as_model()?)
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, EnumString, AsRefStr)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
-pub enum SearchType {
-    Artists,
-    Albums,
-    Tracks,
-    Videos,
-    Playlists,
-    UserProfiles,
-}
-
-impl From<SearchType> for YtSearchType {
-    fn from(value: SearchType) -> Self {
-        match value {
-            SearchType::Artists => YtSearchType::Artists,
-            SearchType::Albums => YtSearchType::Albums,
-            SearchType::Tracks => YtSearchType::Tracks,
-            SearchType::Videos => YtSearchType::Videos,
-            SearchType::Playlists => YtSearchType::Playlists,
-            SearchType::UserProfiles => YtSearchType::UserProfiles,
-        }
-    }
-}
-
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, EnumString, AsRefStr)]
-#[serde(rename_all = "UPPERCASE")]
-#[strum(serialize_all = "UPPERCASE")]
-pub enum YtSearchType {
-    Artists,
-    Albums,
-    Tracks,
-    Videos,
-    Playlists,
-    UserProfiles,
-}
-
 #[derive(Debug, Error)]
 pub enum YtSearchError {
     #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
+    Request(#[from] RequestError),
     #[error(transparent)]
     Parse(#[from] ParseError),
+    #[error("Empty response")]
+    EmptyResponse,
 }
 
 #[allow(clippy::too_many_arguments)]
 pub async fn search(
-    #[cfg(feature = "db")] db: &dyn Database,
     query: &str,
-    offset: Option<usize>,
-    limit: Option<usize>,
-    include_contributions: Option<bool>,
-    include_did_you_mean: Option<bool>,
-    include_user_playlists: Option<bool>,
-    supports_user_data: Option<bool>,
-    types: Option<Vec<YtSearchType>>,
-    country_code: Option<String>,
-    locale: Option<String>,
-    device_type: Option<YtDeviceType>,
-    access_token: Option<String>,
+    _offset: Option<usize>,
+    _limit: Option<usize>,
 ) -> Result<YtSearchResults, YtSearchError> {
-    static DEFAULT_TYPES: [YtSearchType; 3] = [
-        YtSearchType::Artists,
-        YtSearchType::Albums,
-        YtSearchType::Tracks,
-    ];
+    let url = yt_api_endpoint!(Search, &[], &[("prettyPrint", &false.to_string()),]);
 
-    let url = yt_api_endpoint!(
-        Search,
-        &[],
-        &[
-            ("query", query),
-            ("offset", &offset.unwrap_or(0).to_string()),
-            ("limit", &limit.unwrap_or(3).to_string()),
-            (
-                "includeContributions",
-                &include_contributions.unwrap_or(false).to_string()
-            ),
-            (
-                "includeDidYouMean",
-                &include_did_you_mean.unwrap_or(false).to_string()
-            ),
-            (
-                "includeUserPlaylists",
-                &include_user_playlists.unwrap_or(false).to_string()
-            ),
-            (
-                "supportsUserData",
-                &supports_user_data.unwrap_or(false).to_string()
-            ),
-            (
-                "types",
-                &types
-                    .unwrap_or(DEFAULT_TYPES.to_vec())
-                    .iter()
-                    .map(|x| x.as_ref())
-                    .collect::<Vec<_>>()
-                    .join(",")
-            ),
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
-            (
-                "deviceType",
-                device_type.unwrap_or(YtDeviceType::Browser).as_ref(),
-            ),
-        ]
-    );
+    let date = chrono::Local::now();
 
-    let value = authenticated_request(
-        #[cfg(feature = "db")]
-        db,
+    let value = post_request(
         &url,
-        access_token,
+        Some(serde_json::json!({
+            "input": query,
+            "context": {
+                "client": {
+                    "hl": "en",
+                    "gl": "US",
+                    "clientName": "WEB_REMIX",
+                    "clientVersion": format!("1.{}.00.01", date.format("%Y%m%d"))
+                }
+            }
+        })),
+        None,
     )
-    .await?;
+    .await?
+    .ok_or(YtSearchError::EmptyResponse)?;
 
     log::trace!("Received search response: {value:?}");
 

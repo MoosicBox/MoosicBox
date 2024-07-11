@@ -42,7 +42,7 @@ pub async fn get_track_or_ids_from_track_id_ranges(
         } else {
             track_ids
                 .into_iter()
-                .map(|id| TrackOrId::Id(id as i32, source.unwrap_or(ApiSource::Library)))
+                .map(|id| TrackOrId::Id(id.into(), source.unwrap_or(ApiSource::Library)))
                 .collect()
         },
     )

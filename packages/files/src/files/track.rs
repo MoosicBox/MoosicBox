@@ -13,7 +13,7 @@ use futures_core::Stream;
 use moosicbox_core::{
     sqlite::{
         db::{get_track, get_track_size, get_tracks, set_track_size, DbError, SetTrackSize},
-        models::{ApiSource, LibraryTrack, TrackApiSource},
+        models::{ApiSource, Id, LibraryTrack, TrackApiSource},
     },
     types::{AudioFormat, PlaybackQuality},
 };
@@ -76,7 +76,7 @@ pub enum TrackSource {
     Yt {
         url: String,
         format: AudioFormat,
-        track_id: Option<u64>,
+        track_id: Option<String>,
     },
 }
 
@@ -90,12 +90,12 @@ impl TrackSource {
         }
     }
 
-    pub fn track_id(&self) -> Option<u64> {
+    pub fn track_id(&self) -> Option<Id> {
         match self {
-            TrackSource::LocalFilePath { track_id, .. } => *track_id,
-            TrackSource::Tidal { track_id, .. } => *track_id,
-            TrackSource::Qobuz { track_id, .. } => *track_id,
-            TrackSource::Yt { track_id, .. } => *track_id,
+            TrackSource::LocalFilePath { track_id, .. } => track_id.map(Id::Number),
+            TrackSource::Tidal { track_id, .. } => track_id.map(Id::Number),
+            TrackSource::Qobuz { track_id, .. } => track_id.map(Id::Number),
+            TrackSource::Yt { track_id, .. } => track_id.as_ref().map(|x| Id::String(x.clone())),
         }
     }
 }
@@ -197,7 +197,7 @@ impl From<TrackAudioQuality> for YtAudioQuality {
 #[derive(Debug, Error)]
 pub enum TrackSourceError {
     #[error("Track not found: {0}")]
-    NotFound(i32),
+    NotFound(Id),
     #[error("Invalid source")]
     InvalidSource,
     #[error(transparent)]
@@ -211,7 +211,7 @@ pub enum TrackSourceError {
 }
 
 pub async fn get_track_id_source(
-    track_id: i32,
+    track_id: &Id,
     db: &dyn Database,
     quality: Option<TrackAudioQuality>,
     source: ApiSource,
@@ -220,9 +220,9 @@ pub async fn get_track_id_source(
 
     match source {
         ApiSource::Library => {
-            let track = get_track(db, track_id as u64)
+            let track = get_track(db, track_id.into())
                 .await?
-                .ok_or(TrackSourceError::NotFound(track_id))?;
+                .ok_or_else(|| TrackSourceError::NotFound(track_id.to_owned()))?;
 
             get_track_source(track_id, Some(track).as_ref(), db, quality, source).await
         }
@@ -231,7 +231,7 @@ pub async fn get_track_id_source(
 }
 
 pub async fn get_track_source(
-    track_id: i32,
+    track_id: &Id,
     track: Option<&LibraryTrack>,
     db: &dyn Database,
     quality: Option<TrackAudioQuality>,
@@ -247,13 +247,19 @@ pub async fn get_track_source(
     log::debug!("Got track {track:?}. Getting source={source:?}");
 
     let (track_id, source, file, format) = if source == ApiSource::Library {
-        let track = track.ok_or_else(|| TrackSourceError::NotFound(track_id))?;
+        let track = track.ok_or_else(|| TrackSourceError::NotFound(track_id.to_owned()))?;
         (
             match track.source {
-                TrackApiSource::Local => track.id as u64,
-                TrackApiSource::Tidal => track.tidal_id.ok_or(TrackSourceError::InvalidSource)?,
-                TrackApiSource::Qobuz => track.qobuz_id.ok_or(TrackSourceError::InvalidSource)?,
-                TrackApiSource::Yt => track.yt_id.ok_or(TrackSourceError::InvalidSource)?,
+                TrackApiSource::Local => (track.id as u64).into(),
+                TrackApiSource::Tidal => track
+                    .tidal_id
+                    .ok_or(TrackSourceError::InvalidSource)?
+                    .into(),
+                TrackApiSource::Qobuz => track
+                    .qobuz_id
+                    .ok_or(TrackSourceError::InvalidSource)?
+                    .into(),
+                TrackApiSource::Yt => track.yt_id.ok_or(TrackSourceError::InvalidSource)?.into(),
             },
             track.source,
             track.file.clone(),
@@ -261,7 +267,7 @@ pub async fn get_track_source(
         )
     } else {
         (
-            track_id as u64,
+            track_id.to_owned(),
             match source {
                 ApiSource::Library => unreachable!(),
                 ApiSource::Tidal => TrackApiSource::Tidal,
@@ -290,12 +296,11 @@ pub async fn get_track_source(
             Ok(TrackSource::LocalFilePath {
                 path,
                 format,
-                track_id: Some(track_id),
+                track_id: Some(track_id.into()),
             })
         }
         TrackApiSource::Tidal => {
             let quality = quality.map(|q| q.into()).unwrap_or(TidalAudioQuality::High);
-            let track_id = track_id.into();
             Ok(TrackSource::Tidal {
                 url: moosicbox_tidal::track_file_url(db, quality, &track_id, None)
                     .await?
@@ -308,7 +313,6 @@ pub async fn get_track_source(
         }
         TrackApiSource::Qobuz => {
             let quality = quality.map(|q| q.into()).unwrap_or(QobuzAudioQuality::Low);
-            let track_id = track_id.into();
             Ok(TrackSource::Qobuz {
                 url: moosicbox_qobuz::track_file_url(db, &track_id, quality, None, None, None)
                     .await?,
@@ -318,7 +322,6 @@ pub async fn get_track_source(
         }
         TrackApiSource::Yt => {
             let quality = quality.map(|q| q.into()).unwrap_or(YtAudioQuality::High);
-            let track_id = track_id.into();
             Ok(TrackSource::Yt {
                 url: moosicbox_yt::track_file_url(db, quality, &track_id, None)
                     .await?
@@ -393,7 +396,7 @@ impl std::fmt::Debug for TrackBytes {
 
 pub async fn get_track_bytes(
     db: &dyn Database,
-    track_id: u64,
+    track_id: &Id,
     source: TrackSource,
     format: AudioFormat,
     try_to_get_size: bool,
@@ -403,8 +406,7 @@ pub async fn get_track_bytes(
     log::debug!("Getting track bytes track_id={track_id} format={format:?} try_to_get_size={try_to_get_size} start={start:?} end={end:?}");
 
     let size = if try_to_get_size {
-        match get_or_init_track_size(track_id as i32, &source, PlaybackQuality { format }, db).await
-        {
+        match get_or_init_track_size(track_id, &source, PlaybackQuality { format }, db).await {
             Ok(size) => Some(size),
             Err(err) => match err {
                 TrackInfoError::UnsupportedFormat(_) | TrackInfoError::UnsupportedSource(_) => None,
@@ -424,9 +426,13 @@ pub async fn get_track_bytes(
 
     log::debug!("get_track_bytes: Got track size: size={size:?} track_id={track_id}");
 
-    let track = moosicbox_core::sqlite::db::get_track(db, track_id)
-        .await?
-        .ok_or(GetTrackBytesError::NotFound)?;
+    let track = if let Id::Number(track_id) = track_id {
+        moosicbox_core::sqlite::db::get_track(db, *track_id)
+            .await?
+            .ok_or(GetTrackBytesError::NotFound)?
+    } else {
+        return Err(GetTrackBytesError::UnsupportedFormat);
+    };
 
     let format = match format {
         #[cfg(feature = "flac")]
@@ -937,14 +943,14 @@ pub async fn get_or_init_track_visualization(
 }
 
 pub async fn get_or_init_track_size(
-    track_id: i32,
+    track_id: &Id,
     source: &TrackSource,
     quality: PlaybackQuality,
     db: &dyn Database,
 ) -> Result<u64, TrackInfoError> {
     log::debug!("Getting track size track_id={track_id}");
 
-    if let Some(size) = get_track_size(db, track_id as u64, &quality).await? {
+    if let Some(size) = get_track_size(db, track_id, &quality).await? {
         return Ok(size);
     }
 
@@ -993,6 +999,12 @@ pub async fn get_or_init_track_size(
         }
     })
     .await??;
+
+    let track_id = if let Id::Number(track_id) = track_id {
+        *track_id as i32
+    } else {
+        return Err(TrackInfoError::UnsupportedSource(source.to_owned()));
+    };
 
     set_track_size(
         db,

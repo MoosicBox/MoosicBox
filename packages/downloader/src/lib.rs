@@ -485,7 +485,9 @@ async fn download_track_inner(
         "Starting download for track={track:?} quality={quality:?} source={source:?} path={path} start={start:?}"
     );
 
-    let req = get_track_source(track.id, Some(track), db, Some(quality), ApiSource::Library);
+    let id = track.id.into();
+
+    let req = get_track_source(&id, Some(track), db, Some(quality), ApiSource::Library);
 
     let result = if let Some(timeout_duration) = timeout_duration {
         select! {
@@ -545,7 +547,7 @@ async fn download_track_inner(
 
     let mut bytes = get_track_bytes(
         db,
-        track.id as u64,
+        &track.id.into(),
         source,
         AudioFormat::Source,
         false,

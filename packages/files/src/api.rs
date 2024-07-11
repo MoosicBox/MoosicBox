@@ -8,7 +8,7 @@ use futures::StreamExt;
 use moosicbox_core::{
     app::AppState,
     integer_range::{parse_integer_ranges, ParseIntegersError},
-    sqlite::models::{AlbumId, ApiSource, ArtistId},
+    sqlite::models::{AlbumId, ApiSource, ArtistId, Id},
     types::AudioFormat,
 };
 use serde::Deserialize;
@@ -77,7 +77,7 @@ impl From<TrackInfoError> for actix_web::Error {
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTrackVisualizationQuery {
-    pub track_id: i32,
+    pub track_id: u64,
     pub max: Option<u16>,
     pub source: Option<ApiSource>,
 }
@@ -88,7 +88,7 @@ pub async fn track_visualization_endpoint(
     data: web::Data<AppState>,
 ) -> Result<Json<Vec<u8>>> {
     let source = get_track_id_source(
-        query.track_id,
+        &Id::Number(query.track_id),
         &**data.database,
         None,
         query.source.unwrap_or(ApiSource::Library),
@@ -137,7 +137,7 @@ pub async fn track_endpoint(
     let method = req.method();
 
     let source = get_track_id_source(
-        query.track_id as i32,
+        &Id::Number(query.track_id),
         &**data.database,
         query.quality,
         query.source.unwrap_or(ApiSource::Library),
@@ -215,7 +215,7 @@ pub async fn track_endpoint(
 
     let bytes = get_track_bytes(
         &**data.database,
-        query.track_id,
+        &Id::Number(query.track_id),
         source,
         format,
         true,
@@ -359,7 +359,7 @@ pub async fn artist_source_artwork_endpoint(
         ApiSource::Library => artist_id_string.parse::<i32>().map(ArtistId::Library),
         ApiSource::Tidal => artist_id_string.parse::<u64>().map(ArtistId::Tidal),
         ApiSource::Qobuz => artist_id_string.parse::<u64>().map(ArtistId::Qobuz),
-        ApiSource::Yt => artist_id_string.parse::<u64>().map(ArtistId::Yt),
+        ApiSource::Yt => Ok(ArtistId::Yt(artist_id_string)),
     }
     .map_err(|_e| ErrorBadRequest("Invalid artist_id"))?;
 
@@ -393,7 +393,7 @@ pub async fn artist_cover_endpoint(
         ApiSource::Library => artist_id_string.parse::<i32>().map(ArtistId::Library),
         ApiSource::Tidal => artist_id_string.parse::<u64>().map(ArtistId::Tidal),
         ApiSource::Qobuz => artist_id_string.parse::<u64>().map(ArtistId::Qobuz),
-        ApiSource::Yt => artist_id_string.parse::<u64>().map(ArtistId::Yt),
+        ApiSource::Yt => Ok(ArtistId::Yt(artist_id_string)),
     }
     .map_err(|_e| ErrorBadRequest("Invalid artist_id"))?;
 

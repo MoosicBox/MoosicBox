@@ -439,6 +439,7 @@ pub fn track_key(source: &TrackSource, output_format: AudioFormat) -> String {
         } => format!(
             "yt:{format}:{id}:{output_format}",
             id = track_id
+                .as_ref()
                 .map(|x| format!("id:{x}"))
                 .as_deref()
                 .unwrap_or(url)

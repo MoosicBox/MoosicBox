@@ -12,7 +12,7 @@ use futures_channel::mpsc::UnboundedSender;
 use futures_util::future::ready;
 use futures_util::{future, pin_mut, Future, Stream, StreamExt};
 use moosicbox_auth::FetchSignatureError;
-use moosicbox_core::sqlite::models::{AlbumId, ApiSource};
+use moosicbox_core::sqlite::models::{AlbumId, ApiSource, Id};
 use moosicbox_core::types::AudioFormat;
 use moosicbox_database::Database;
 use moosicbox_env_utils::default_env_usize;
@@ -1130,7 +1130,7 @@ impl TunnelSender {
                         response_headers.insert("accept-ranges".to_string(), "bytes".to_string());
 
                         match get_track_id_source(
-                            query.track_id,
+                            &Id::Number(query.track_id as u64),
                             &**database,
                             query.quality,
                             query.source.unwrap_or(ApiSource::Library),

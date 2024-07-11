@@ -4,7 +4,7 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, Result,
 };
-use moosicbox_core::sqlite::models::{yt::YtSearchResults, ToApi};
+use moosicbox_core::sqlite::models::{yt::YtSearchResultsFormatted, ToApi};
 use moosicbox_paging::Page;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -15,7 +15,7 @@ use crate::{
     artist_albums, device_authorization, device_authorization_token, favorite_albums,
     favorite_artists, favorite_tracks, remove_favorite_album, remove_favorite_artist,
     remove_favorite_track, search, track, track_file_url, track_playback_info,
-    AuthenticatedRequestError, SearchType, YtAddFavoriteAlbumError, YtAddFavoriteArtistError,
+    AuthenticatedRequestError, YtAddFavoriteAlbumError, YtAddFavoriteArtistError,
     YtAddFavoriteTrackError, YtAlbum, YtAlbumError, YtAlbumOrder, YtAlbumOrderDirection,
     YtAlbumTracksError, YtAlbumType, YtArtist, YtArtistAlbumsError, YtArtistError, YtArtistOrder,
     YtArtistOrderDirection, YtAudioQuality, YtDeviceAuthorizationError,
@@ -57,7 +57,7 @@ impl ToApi<ApiAlbum> for YtAlbum {
 pub struct ApiYtAlbum {
     pub id: String,
     pub artist: String,
-    pub artist_id: u64,
+    pub artist_id: String,
     pub contains_cover: bool,
     pub audio_quality: String,
     pub copyright: Option<String>,
@@ -102,12 +102,12 @@ impl ToApi<ApiTrack> for YtTrack {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiYtTrack {
-    pub id: u64,
+    pub id: String,
     pub number: u32,
     pub album: String,
-    pub album_id: u64,
+    pub album_id: String,
     pub artist: String,
-    pub artist_id: u64,
+    pub artist_id: String,
     pub contains_cover: bool,
     pub audio_quality: String,
     pub copyright: Option<String>,
@@ -140,7 +140,7 @@ impl ToApi<ApiArtist> for YtArtist {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiYtArtist {
-    pub id: u64,
+    pub id: String,
     pub contains_cover: bool,
     pub popularity: u32,
     pub title: String,
@@ -918,44 +918,15 @@ pub struct YtSearchQuery {
     query: String,
     offset: Option<usize>,
     limit: Option<usize>,
-    include_contributions: Option<bool>,
-    include_did_you_mean: Option<bool>,
-    include_user_playlists: Option<bool>,
-    supports_user_data: Option<bool>,
-    types: Option<Vec<SearchType>>,
-    country_code: Option<String>,
-    locale: Option<String>,
-    device_type: Option<YtDeviceType>,
 }
 
 #[route("/yt/search", method = "GET")]
 pub async fn search_endpoint(
-    req: HttpRequest,
     query: web::Query<YtSearchQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<YtSearchResults>> {
+) -> Result<Json<YtSearchResultsFormatted>> {
     Ok(Json(
-        search(
-            #[cfg(feature = "db")]
-            &**data.database,
-            &query.query,
-            query.offset,
-            query.limit,
-            query.include_contributions,
-            query.include_did_you_mean,
-            query.include_user_playlists,
-            query.supports_user_data,
-            query
-                .types
-                .clone()
-                .map(|x| x.into_iter().map(|x| x.into()).collect::<Vec<_>>()),
-            query.country_code.clone(),
-            query.locale.clone(),
-            query.device_type,
-            req.headers()
-                .get(TIDAL_ACCESS_TOKEN_HEADER)
-                .map(|x| x.to_str().unwrap().to_string()),
-        )
-        .await?,
+        search(&query.query, query.offset, query.limit)
+            .await?
+            .into(),
     ))
 }

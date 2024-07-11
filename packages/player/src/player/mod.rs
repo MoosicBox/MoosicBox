@@ -14,8 +14,8 @@ use moosicbox_core::{
     sqlite::{
         db::{get_album_tracks, get_session_playlist, get_tracks, DbError},
         models::{
-            qobuz::QobuzTrack, tidal::TidalTrack, yt::YtTrack, ApiSource, LibraryTrack, ToApi,
-            Track, TrackApiSource, UpdateSession, UpdateSessionPlaylistTrack,
+            qobuz::QobuzTrack, tidal::TidalTrack, yt::YtTrack, ApiSource, ApiTrack, Id,
+            LibraryTrack, ToApi, Track, TrackApiSource, UpdateSession, UpdateSessionPlaylistTrack,
         },
     },
     types::{AudioFormat, PlaybackQuality},
@@ -74,7 +74,7 @@ pub enum PlayerError {
     #[error(transparent)]
     PlaybackError(#[from] moosicbox_symphonia_player::PlaybackError),
     #[error("Track fetch failed: {0}")]
-    TrackFetchFailed(i32),
+    TrackFetchFailed(String),
     #[error("Album fetch failed: {0}")]
     AlbumFetchFailed(i32),
     #[error("Track not found: {0}")]
@@ -155,7 +155,7 @@ impl Playback {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiPlayback {
-    pub track_ids: Vec<i32>,
+    pub track_ids: Vec<String>,
     pub playing: bool,
     pub position: u16,
     pub seek: f64,
@@ -164,7 +164,7 @@ pub struct ApiPlayback {
 impl ToApi<ApiPlayback> for Playback {
     fn to_api(self) -> ApiPlayback {
         ApiPlayback {
-            track_ids: self.tracks.iter().map(|t| t.id()).collect(),
+            track_ids: self.tracks.iter().map(|t| t.id().to_string()).collect(),
             playing: self.playing,
             position: self.position,
             seek: self.progress,
@@ -187,7 +187,16 @@ pub struct PlaybackStatus {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TrackOrId {
     Track(Box<Track>),
-    Id(i32, ApiSource),
+    Id(Id, ApiSource),
+}
+
+pub fn track_id(track: &ApiTrack) -> Id {
+    match track {
+        ApiTrack::Library { track_id, .. } => Id::Number(*track_id),
+        ApiTrack::Tidal { track_id, .. } => Id::Number(*track_id),
+        ApiTrack::Qobuz { track_id, .. } => Id::Number(*track_id),
+        ApiTrack::Yt { track_id, .. } => Id::String(track_id.clone()),
+    }
 }
 
 impl TrackOrId {
@@ -227,25 +236,29 @@ impl TrackOrId {
         }
     }
 
-    pub fn id(&self) -> i32 {
+    pub fn id(&self) -> Id {
         match self {
             TrackOrId::Track(track) => match track.as_ref() {
-                Track::Library(track) => track.id,
-                Track::Tidal(track) => track.id as i32,
-                Track::Qobuz(track) => track.id as i32,
-                Track::Yt(track) => track.id as i32,
+                Track::Library(track) => Id::Number(track.id as u64),
+                Track::Tidal(track) => Id::Number(track.id),
+                Track::Qobuz(track) => Id::Number(track.id),
+                Track::Yt(track) => Id::String(track.id.to_owned()),
             },
-            TrackOrId::Id(id, _) => *id,
+            TrackOrId::Id(id, _) => id.clone(),
         }
     }
 
     pub fn to_id(&self) -> TrackOrId {
         match self {
             TrackOrId::Track(track) => match track.as_ref() {
-                Track::Library(track) => TrackOrId::Id(track.id, ApiSource::Library),
-                Track::Tidal(track) => TrackOrId::Id(track.id as i32, ApiSource::Library),
-                Track::Qobuz(track) => TrackOrId::Id(track.id as i32, ApiSource::Library),
-                Track::Yt(track) => TrackOrId::Id(track.id as i32, ApiSource::Library),
+                Track::Library(track) => {
+                    TrackOrId::Id(Id::Number(track.id as u64), ApiSource::Library)
+                }
+                Track::Tidal(track) => TrackOrId::Id(Id::Number(track.id), ApiSource::Library),
+                Track::Qobuz(track) => TrackOrId::Id(Id::Number(track.id), ApiSource::Library),
+                Track::Yt(track) => {
+                    TrackOrId::Id(Id::String(track.id.to_owned()), ApiSource::Library)
+                }
             },
             TrackOrId::Id(_, _) => self.clone(),
         }
@@ -253,7 +266,7 @@ impl TrackOrId {
 }
 
 pub async fn get_track_url(
-    track_id: u64,
+    track_id: &Id,
     api_source: ApiSource,
     player_source: &PlayerSource,
     quality: PlaybackQuality,
@@ -337,7 +350,7 @@ pub async fn get_track_url(
                 .to_value::<Vec<String>>("urls")?
                 .first()
                 .cloned()
-                .ok_or(PlayerError::TrackFetchFailed(track_id as i32))
+                .ok_or(PlayerError::TrackFetchFailed(track_id.to_string()))
         }
         ApiSource::Qobuz => {
             let url = format!("{host}/qobuz/track/url{query_string}");
@@ -371,7 +384,7 @@ pub async fn get_track_url(
 impl From<TrackOrId> for UpdateSessionPlaylistTrack {
     fn from(value: TrackOrId) -> Self {
         UpdateSessionPlaylistTrack {
-            id: value.id() as u64,
+            id: value.id().to_string(),
             r#type: value.api_source(),
             data: value
                 .track()
@@ -397,7 +410,7 @@ pub async fn get_session_playlist_id_from_session_id(
 }
 
 pub struct PlayableTrack {
-    pub track_id: i32,
+    pub track_id: Id,
     pub source: Box<dyn MediaSource>,
     pub hint: Hint,
 }
@@ -458,9 +471,7 @@ pub trait Player: Clone + Send + 'static {
                                 .playlist
                                 .tracks
                                 .iter()
-                                .map(|x| {
-                                    TrackOrId::Id(x.track_id().try_into().unwrap(), x.api_source())
-                                })
+                                .map(|x| TrackOrId::Id(track_id(x), x.api_source()))
                                 .collect::<Vec<_>>(),
                         ),
                         None,
@@ -626,8 +637,8 @@ pub trait Player: Clone + Send + 'static {
                         &tracks
                             .iter()
                             .filter(|t| t.api_source() == ApiSource::Library)
-                            .map(|t| t.id() as u64)
-                            .collect::<Vec<_>>(),
+                            .map(|t| t.id().into())
+                            .collect::<Vec<u64>>(),
                     ),
                 )
                 .await?
@@ -641,21 +652,33 @@ pub trait Player: Clone + Send + 'static {
                             log::debug!("Fetching track {track_id}",);
                             let track = library_tracks
                                 .iter()
-                                .find(|t| t.id == *track_id)
+                                .find(|t| match track_id {
+                                    Id::Number(id) => t.id as u64 == *id,
+                                    Id::String(_id) => false,
+                                })
                                 .expect("Track doesn't exist");
                             log::debug!("Got track {track:?}");
                             TrackOrId::Track(Box::new(Track::Library(track.clone())))
                         }
                         ApiSource::Tidal => TrackOrId::Track(Box::new(Track::Tidal(TidalTrack {
-                            id: *track_id as u64,
+                            id: match track_id {
+                                Id::Number(id) => *id,
+                                Id::String(_id) => unreachable!(),
+                            },
                             ..Default::default()
                         }))),
                         ApiSource::Qobuz => TrackOrId::Track(Box::new(Track::Qobuz(QobuzTrack {
-                            id: *track_id as u64,
+                            id: match track_id {
+                                Id::Number(id) => *id,
+                                Id::String(_id) => unreachable!(),
+                            },
                             ..Default::default()
                         }))),
                         ApiSource::Yt => TrackOrId::Track(Box::new(Track::Yt(YtTrack {
-                            id: *track_id as u64,
+                            id: match track_id {
+                                Id::Number(_id) => unreachable!(),
+                                Id::String(id) => id.to_owned(),
+                            },
                             ..Default::default()
                         }))),
                     },
@@ -1208,7 +1231,7 @@ pub trait Player: Clone + Send + 'static {
         };
 
         Ok(PlayableTrack {
-            track_id: track.id,
+            track_id: Id::Number(track.id as u64),
             source,
             hint,
         })
@@ -1221,8 +1244,7 @@ pub trait Player: Clone + Send + 'static {
     ) -> Result<PlayableTrack, PlayerError> {
         match track_or_id {
             TrackOrId::Id(id, source) => {
-                self.track_id_to_playable_stream(*id, *source, quality)
-                    .await
+                self.track_id_to_playable_stream(id, *source, quality).await
             }
             TrackOrId::Track(track) => self.track_to_playable_stream(track, quality).await,
         }
@@ -1234,11 +1256,11 @@ pub trait Player: Clone + Send + 'static {
         quality: PlaybackQuality,
     ) -> Result<PlayableTrack, PlayerError> {
         self.track_id_to_playable_stream(
-            match track {
-                Track::Library(track) => track.id,
-                Track::Tidal(track) => track.id as i32,
-                Track::Qobuz(track) => track.id as i32,
-                Track::Yt(track) => track.id as i32,
+            &match track {
+                Track::Library(track) => Id::Number(track.id as u64),
+                Track::Tidal(track) => Id::Number(track.id),
+                Track::Qobuz(track) => Id::Number(track.id),
+                Track::Yt(track) => Id::String(track.id.clone()),
             },
             match track {
                 Track::Library(_) => ApiSource::Library,
@@ -1253,18 +1275,12 @@ pub trait Player: Clone + Send + 'static {
 
     async fn track_id_to_playable_stream(
         &self,
-        track_id: i32,
+        track_id: &Id,
         source: ApiSource,
         quality: PlaybackQuality,
     ) -> Result<PlayableTrack, PlayerError> {
-        let (url, headers) = get_track_url(
-            track_id.try_into().unwrap(),
-            source,
-            self.get_source(),
-            quality,
-            false,
-        )
-        .await?;
+        let (url, headers) =
+            get_track_url(track_id, source, self.get_source(), quality, false).await?;
 
         log::debug!("Fetching track bytes from url: {url}");
 
@@ -1314,7 +1330,7 @@ pub trait Player: Clone + Send + 'static {
         }
 
         Ok(PlayableTrack {
-            track_id,
+            track_id: track_id.to_owned(),
             source: Box::new(source),
             hint,
         })
@@ -1352,7 +1368,7 @@ pub trait Player: Clone + Send + 'static {
             }
             PlaybackType::Default => match track_or_id.clone() {
                 TrackOrId::Id(id, source) => {
-                    self.track_id_to_playable_stream(id, source, quality)
+                    self.track_id_to_playable_stream(&id, source, quality)
                         .await?
                 }
                 TrackOrId::Track(track) => match *track {

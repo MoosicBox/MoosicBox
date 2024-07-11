@@ -1,4 +1,9 @@
-use std::{fmt::Display, path::PathBuf, str::FromStr, sync::Arc};
+use std::{
+    fmt::{Display, Formatter},
+    path::PathBuf,
+    str::FromStr,
+    sync::Arc,
+};
 
 use async_trait::async_trait;
 use moosicbox_database::{Database, DatabaseValue};
@@ -373,7 +378,7 @@ pub enum ApiTrack {
         data: serde_json::Value,
     },
     Yt {
-        track_id: u64,
+        track_id: String,
         data: serde_json::Value,
     },
 }
@@ -428,8 +433,9 @@ impl<'de> Deserialize<'de> for ApiTrack {
                 track_id: data
                     .get("id")
                     .expect("Failed to get yt track id")
-                    .as_u64()
-                    .unwrap(),
+                    .as_str()
+                    .unwrap()
+                    .to_string(),
                 data,
             },
         })
@@ -437,15 +443,6 @@ impl<'de> Deserialize<'de> for ApiTrack {
 }
 
 impl ApiTrack {
-    pub fn track_id(&self) -> u64 {
-        match self {
-            ApiTrack::Library { track_id, .. } => *track_id,
-            ApiTrack::Tidal { track_id, .. } => *track_id,
-            ApiTrack::Qobuz { track_id, .. } => *track_id,
-            ApiTrack::Yt { track_id, .. } => *track_id,
-        }
-    }
-
     pub fn api_source(&self) -> ApiSource {
         match self {
             ApiTrack::Library { .. } => ApiSource::Library,
@@ -518,7 +515,7 @@ pub enum ArtistId {
     Library(i32),
     Tidal(u64),
     Qobuz(u64),
-    Yt(u64),
+    Yt(String),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -536,7 +533,7 @@ impl Artist {
             Artist::Library(value) => ArtistId::Library(value.id),
             Artist::Tidal(value) => ArtistId::Tidal(value.id),
             Artist::Qobuz(value) => ArtistId::Qobuz(value.id),
-            Artist::Yt(value) => ArtistId::Yt(value.id),
+            Artist::Yt(value) => ArtistId::Yt(value.id.to_owned()),
         }
     }
 
@@ -749,7 +746,7 @@ impl Album {
             Album::Library(value) => ArtistId::Library(value.artist_id),
             Album::Tidal(value) => ArtistId::Tidal(value.artist_id),
             Album::Qobuz(value) => ArtistId::Qobuz(value.artist_id),
-            Album::Yt(value) => ArtistId::Yt(value.artist_id),
+            Album::Yt(value) => ArtistId::Yt(value.artist_id.to_owned()),
         }
     }
 
@@ -1239,7 +1236,7 @@ pub struct UpdateSessionPlaylist {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSessionPlaylistTrack {
-    pub id: u64,
+    pub id: String,
     pub r#type: ApiSource,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<String>,
@@ -1258,41 +1255,50 @@ impl From<UpdateSessionPlaylistTrack> for SessionPlaylistTrack {
 impl ToApi<ApiTrack> for SessionPlaylistTrack {
     fn to_api(self) -> ApiTrack {
         match self.r#type {
-            ApiSource::Library => ApiTrack::Library {
-                track_id: self.id,
-                data: ApiLibraryTrack {
-                    track_id: self.id as i32,
-                    ..Default::default()
-                },
-            },
-            ApiSource::Tidal => match &self.data {
-                Some(data) => ApiTrack::Tidal {
-                    track_id: self.id,
-                    data: serde_json::from_str(data)
-                        .expect("Failed to parse UpdateSessionPlaylistTrack data"),
-                },
-                None => ApiTrack::Tidal {
-                    track_id: self.id,
-                    data: serde_json::json!({
-                        "id": self.id,
-                        "type": self.r#type,
-                    }),
-                },
-            },
-            ApiSource::Qobuz => match &self.data {
-                Some(data) => ApiTrack::Qobuz {
-                    track_id: self.id,
-                    data: serde_json::from_str(data)
-                        .expect("Failed to parse UpdateSessionPlaylistTrack data"),
-                },
-                None => ApiTrack::Qobuz {
-                    track_id: self.id,
-                    data: serde_json::json!({
-                        "id": self.id,
-                        "type": self.r#type,
-                    }),
-                },
-            },
+            ApiSource::Library => {
+                let id = self.id.parse::<u64>().expect("Invalid Library Track ID");
+                ApiTrack::Library {
+                    track_id: id,
+                    data: ApiLibraryTrack {
+                        track_id: id as i32,
+                        ..Default::default()
+                    },
+                }
+            }
+            ApiSource::Tidal => {
+                let id = self.id.parse::<u64>().expect("Invalid Tidal Track ID");
+                match &self.data {
+                    Some(data) => ApiTrack::Tidal {
+                        track_id: id,
+                        data: serde_json::from_str(data)
+                            .expect("Failed to parse UpdateSessionPlaylistTrack data"),
+                    },
+                    None => ApiTrack::Tidal {
+                        track_id: id,
+                        data: serde_json::json!({
+                            "id": id,
+                            "type": self.r#type,
+                        }),
+                    },
+                }
+            }
+            ApiSource::Qobuz => {
+                let id = self.id.parse::<u64>().expect("Invalid Qobuz Track ID");
+                match &self.data {
+                    Some(data) => ApiTrack::Qobuz {
+                        track_id: id,
+                        data: serde_json::from_str(data)
+                            .expect("Failed to parse UpdateSessionPlaylistTrack data"),
+                    },
+                    None => ApiTrack::Qobuz {
+                        track_id: id,
+                        data: serde_json::json!({
+                            "id": id,
+                            "type": self.r#type,
+                        }),
+                    },
+                }
+            }
             ApiSource::Yt => match &self.data {
                 Some(data) => ApiTrack::Yt {
                     track_id: self.id,
@@ -1300,7 +1306,7 @@ impl ToApi<ApiTrack> for SessionPlaylistTrack {
                         .expect("Failed to parse UpdateSessionPlaylistTrack data"),
                 },
                 None => ApiTrack::Yt {
-                    track_id: self.id,
+                    track_id: self.id.clone(),
                     data: serde_json::json!({
                         "id": self.id,
                         "type": self.r#type,
@@ -1314,7 +1320,7 @@ impl ToApi<ApiTrack> for SessionPlaylistTrack {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiUpdateSessionPlaylistTrack {
-    pub id: u64,
+    pub id: String,
     pub r#type: ApiSource,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<String>,
@@ -1492,7 +1498,7 @@ impl AsModelResultMappedQuery<ApiTrack, DbError> for Vec<SessionPlaylistTrack> {
         let library_track_ids = tracks
             .iter()
             .filter(|t| t.r#type == ApiSource::Library)
-            .map(|t| t.id)
+            .filter_map(|t| t.id.parse::<u64>().ok())
             .collect::<Vec<_>>();
 
         log::trace!("Fetching tracks by ids: {library_track_ids:?}");
@@ -1504,7 +1510,7 @@ impl AsModelResultMappedQuery<ApiTrack, DbError> for Vec<SessionPlaylistTrack> {
                 Ok(match t.r#type {
                     ApiSource::Library => library_tracks
                         .iter()
-                        .find(|lib| (lib.id as u64) == t.id)
+                        .find(|lib| lib.id.to_string() == t.id)
                         .ok_or(DbError::Unknown)?
                         .to_api(),
                     ApiSource::Tidal => t.to_api(),
@@ -1539,7 +1545,7 @@ impl AsId for SessionPlaylist {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionPlaylistTrack {
-    pub id: u64,
+    pub id: String,
     pub r#type: ApiSource,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<String>,
@@ -1568,7 +1574,7 @@ impl AsModelResult<SessionPlaylistTrack, ParseError> for &moosicbox_database::Ro
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiSessionPlaylistTrack {
-    pub id: u64,
+    pub id: String,
     pub r#type: ApiSource,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<String>,
@@ -1904,5 +1910,189 @@ impl AsModelResult<TrackSize, ParseError> for &moosicbox_database::Row {
 impl AsId for TrackSize {
     fn as_id(&self) -> DatabaseValue {
         DatabaseValue::Number(self.id as i64)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Id {
+    String(String),
+    Number(u64),
+}
+
+impl From<ArtistId> for Id {
+    fn from(value: ArtistId) -> Self {
+        match value {
+            ArtistId::Library(value) => Id::Number(value as u64),
+            ArtistId::Tidal(value) => Id::Number(value),
+            ArtistId::Qobuz(value) => Id::Number(value),
+            ArtistId::Yt(value) => Id::String(value),
+        }
+    }
+}
+
+impl From<&ArtistId> for Id {
+    fn from(value: &ArtistId) -> Self {
+        match value {
+            ArtistId::Library(value) => Id::Number(*value as u64),
+            ArtistId::Tidal(value) => Id::Number(*value),
+            ArtistId::Qobuz(value) => Id::Number(*value),
+            ArtistId::Yt(value) => Id::String(value.to_owned()),
+        }
+    }
+}
+
+impl From<AlbumId> for Id {
+    fn from(value: AlbumId) -> Self {
+        match value {
+            AlbumId::Library(value) => Id::Number(value as u64),
+            AlbumId::Tidal(value) => Id::Number(value),
+            AlbumId::Qobuz(value) => Id::String(value.clone()),
+            AlbumId::Yt(value) => Id::String(value.clone()),
+        }
+    }
+}
+
+impl From<&AlbumId> for Id {
+    fn from(value: &AlbumId) -> Self {
+        match value {
+            AlbumId::Library(value) => Id::Number(*value as u64),
+            AlbumId::Tidal(value) => Id::Number(*value),
+            AlbumId::Qobuz(value) => Id::String(value.clone()),
+            AlbumId::Yt(value) => Id::String(value.clone()),
+        }
+    }
+}
+
+impl From<Artist> for Id {
+    fn from(value: Artist) -> Self {
+        match value {
+            Artist::Library(value) => Id::Number(value.id as u64),
+            Artist::Tidal(value) => Id::Number(value.id),
+            Artist::Qobuz(value) => Id::Number(value.id),
+            Artist::Yt(value) => Id::String(value.id),
+        }
+    }
+}
+
+impl From<Album> for Id {
+    fn from(value: Album) -> Self {
+        match value {
+            Album::Library(value) => Id::Number(value.id as u64),
+            Album::Tidal(value) => Id::Number(value.id),
+            Album::Qobuz(value) => Id::String(value.id),
+            Album::Yt(value) => Id::String(value.id),
+        }
+    }
+}
+
+impl From<Track> for Id {
+    fn from(value: Track) -> Self {
+        match value {
+            Track::Library(value) => Id::Number(value.id as u64),
+            Track::Tidal(value) => Id::Number(value.id),
+            Track::Qobuz(value) => Id::Number(value.id),
+            Track::Yt(value) => Id::String(value.id),
+        }
+    }
+}
+
+impl From<&String> for Id {
+    fn from(value: &String) -> Self {
+        Id::String(value.clone())
+    }
+}
+
+impl From<String> for Id {
+    fn from(value: String) -> Self {
+        Id::String(value)
+    }
+}
+
+impl From<Id> for String {
+    fn from(value: Id) -> Self {
+        if let Id::String(string) = value {
+            string
+        } else {
+            panic!("Not String Id type");
+        }
+    }
+}
+
+impl From<&Id> for String {
+    fn from(value: &Id) -> Self {
+        if let Id::String(string) = value {
+            string.to_string()
+        } else {
+            panic!("Not String Id type");
+        }
+    }
+}
+
+impl<'a> From<&'a Id> for &'a str {
+    fn from(value: &'a Id) -> Self {
+        if let Id::String(string) = value {
+            string
+        } else {
+            panic!("Not String Id type");
+        }
+    }
+}
+
+impl From<&str> for Id {
+    fn from(value: &str) -> Self {
+        Id::String(value.to_string())
+    }
+}
+
+impl From<i32> for Id {
+    fn from(value: i32) -> Self {
+        Id::Number(value as u64)
+    }
+}
+
+impl From<&i32> for Id {
+    fn from(value: &i32) -> Self {
+        Id::Number(*value as u64)
+    }
+}
+
+impl From<u64> for Id {
+    fn from(value: u64) -> Self {
+        Id::Number(value)
+    }
+}
+
+impl From<Id> for u64 {
+    fn from(value: Id) -> Self {
+        if let Id::Number(number) = value {
+            number
+        } else {
+            panic!("Not u64 Id type");
+        }
+    }
+}
+
+impl From<&Id> for u64 {
+    fn from(value: &Id) -> Self {
+        if let Id::Number(number) = value {
+            *number
+        } else {
+            panic!("Not u64 Id type");
+        }
+    }
+}
+
+impl From<&u64> for Id {
+    fn from(value: &u64) -> Self {
+        Id::Number(*value)
+    }
+}
+
+impl Display for Id {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Id::String(string) => f.write_str(string),
+            Id::Number(number) => f.write_fmt(format_args!("{number}")),
+        }
     }
 }

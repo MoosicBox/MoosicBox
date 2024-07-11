@@ -609,7 +609,7 @@ fn handle_server_playback_update(
                 update.playlist.as_ref().map(|x| {
                     x.tracks
                         .iter()
-                        .map(|t| TrackOrId::Id(t.id.try_into().unwrap(), t.r#type))
+                        .map(|t| TrackOrId::Id(t.id.as_str().into(), t.r#type))
                         .collect::<Vec<_>>()
                 }),
                 None,
@@ -737,7 +737,7 @@ fn handle_upnp_playback_update(update: &UpdateSession) -> Pin<Box<dyn Future<Out
                 update.playlist.as_ref().map(|x| {
                     x.tracks
                         .iter()
-                        .map(|t| TrackOrId::Id(t.id.try_into().unwrap(), t.r#type))
+                        .map(|t| TrackOrId::Id(t.id.as_str().into(), t.r#type))
                         .collect::<Vec<_>>()
                 }),
                 None,
