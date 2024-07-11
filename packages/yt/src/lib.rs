@@ -5,9 +5,11 @@ pub mod api;
 #[cfg(feature = "db")]
 pub mod db;
 
+pub mod models;
+
 use std::{fmt::Display, sync::Arc};
 
-use db::models::{YtAlbum, YtArtist, YtSearchResults, YtTrack};
+use models::{YtAlbum, YtArtist, YtSearchResults, YtTrack};
 #[cfg(feature = "db")]
 use moosicbox_database::{Database, DatabaseError};
 

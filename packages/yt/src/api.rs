@@ -12,10 +12,10 @@ use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
     add_favorite_album, add_favorite_artist, add_favorite_track, album, album_tracks, artist,
-    artist_albums, db::models::YtSearchResultsFormatted, device_authorization,
-    device_authorization_token, favorite_albums, favorite_artists, favorite_tracks,
-    remove_favorite_album, remove_favorite_artist, remove_favorite_track, search, track,
-    track_file_url, track_playback_info, AuthenticatedRequestError, YtAddFavoriteAlbumError,
+    artist_albums, device_authorization, device_authorization_token, favorite_albums,
+    favorite_artists, favorite_tracks, models::YtSearchResultsFormatted, remove_favorite_album,
+    remove_favorite_artist, remove_favorite_track, search, track, track_file_url,
+    track_playback_info, AuthenticatedRequestError, YtAddFavoriteAlbumError,
     YtAddFavoriteArtistError, YtAddFavoriteTrackError, YtAlbum, YtAlbumError, YtAlbumOrder,
     YtAlbumOrderDirection, YtAlbumTracksError, YtAlbumType, YtArtist, YtArtistAlbumsError,
     YtArtistError, YtArtistOrder, YtArtistOrderDirection, YtAudioQuality,

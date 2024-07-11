@@ -21,7 +21,7 @@ use moosicbox_qobuz::QobuzAlbumError;
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use moosicbox_tidal::TidalAlbumError;
 use moosicbox_yt::{
-    db::models::{YtAlbum, YtAlbumImageSize},
+    models::{YtAlbum, YtAlbumImageSize},
     YtAlbumError,
 };
 use once_cell::sync::Lazy;

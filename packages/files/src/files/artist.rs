@@ -20,7 +20,7 @@ use moosicbox_qobuz::QobuzArtistError;
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use moosicbox_tidal::TidalArtistError;
 use moosicbox_yt::{
-    db::models::{YtArtist, YtArtistImageSize},
+    models::{YtArtist, YtArtistImageSize},
     YtArtistError,
 };
 use once_cell::sync::Lazy;
