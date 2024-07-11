@@ -336,7 +336,26 @@ fn main() -> std::io::Result<()> {
                 .service(moosicbox_qobuz::api::album_endpoint)
                 .service(moosicbox_qobuz::api::artist_endpoint)
                 .service(moosicbox_qobuz::api::track_endpoint)
-                .service(moosicbox_qobuz::api::search_endpoint);
+                .service(moosicbox_qobuz::api::search_endpoint)
+                .service(moosicbox_yt::api::device_authorization_endpoint)
+                .service(moosicbox_yt::api::device_authorization_token_endpoint)
+                .service(moosicbox_yt::api::track_file_url_endpoint)
+                .service(moosicbox_yt::api::track_playback_info_endpoint)
+                .service(moosicbox_yt::api::favorite_artists_endpoint)
+                .service(moosicbox_yt::api::add_favorite_artist_endpoint)
+                .service(moosicbox_yt::api::remove_favorite_artist_endpoint)
+                .service(moosicbox_yt::api::favorite_albums_endpoint)
+                .service(moosicbox_yt::api::add_favorite_album_endpoint)
+                .service(moosicbox_yt::api::remove_favorite_album_endpoint)
+                .service(moosicbox_yt::api::favorite_tracks_endpoint)
+                .service(moosicbox_yt::api::add_favorite_track_endpoint)
+                .service(moosicbox_yt::api::remove_favorite_track_endpoint)
+                .service(moosicbox_yt::api::artist_albums_endpoint)
+                .service(moosicbox_yt::api::album_tracks_endpoint)
+                .service(moosicbox_yt::api::album_endpoint)
+                .service(moosicbox_yt::api::artist_endpoint)
+                .service(moosicbox_yt::api::track_endpoint)
+                .service(moosicbox_yt::api::search_endpoint);
 
             #[cfg(feature = "upnp")]
             {
