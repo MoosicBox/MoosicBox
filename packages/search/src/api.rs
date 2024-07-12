@@ -15,11 +15,18 @@ use moosicbox_json_utils::{
     tantivy::{ToValue, ToValueType},
     ParseError,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::Value;
 use tantivy::schema::NamedFieldDocument;
 
-use crate::{data::reindex_global_search_index_from_db, search_global_search_index};
+use crate::{
+    data::reindex_global_search_index_from_db,
+    models::{
+        ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
+        ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
+    },
+    search_global_search_index,
+};
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -43,29 +50,6 @@ pub struct SearchGlobalSearchQuery {
     query: String,
     offset: Option<usize>,
     limit: Option<usize>,
-}
-
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[serde(tag = "type")]
-pub enum ApiGlobalSearchResult {
-    Artist(ApiGlobalArtistSearchResult),
-    Album(ApiGlobalAlbumSearchResult),
-    Track(ApiGlobalTrackSearchResult),
-}
-
-impl ApiGlobalSearchResult {
-    fn to_key(&self) -> String {
-        match self {
-            ApiGlobalSearchResult::Artist(artist) => format!("artist|{}", artist.title),
-            ApiGlobalSearchResult::Album(album) => {
-                format!("album|{}|{}", album.title, album.artist)
-            }
-            ApiGlobalSearchResult::Track(track) => {
-                format!("track|{}|{}|{}", track.title, track.album, track.artist)
-            }
-        }
-    }
 }
 
 impl ToValueType<ApiGlobalArtistSearchResult> for &NamedFieldDocument {
@@ -172,53 +156,24 @@ impl ToValueType<ApiGlobalSearchResult> for &NamedFieldDocument {
     }
 }
 
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct ApiGlobalArtistSearchResult {
-    pub artist_id: u64,
-    pub title: String,
-    pub contains_cover: bool,
-    pub blur: bool,
-}
-
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct ApiGlobalAlbumSearchResult {
-    pub artist_id: u64,
-    pub artist: String,
-    pub album_id: u64,
-    pub title: String,
-    pub contains_cover: bool,
-    pub blur: bool,
-    pub date_released: Option<String>,
-    pub date_added: Option<String>,
-    pub versions: Vec<ApiAlbumVersionQuality>,
-}
-
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct ApiGlobalTrackSearchResult {
-    pub artist_id: u64,
-    pub artist: String,
-    pub album_id: u64,
-    pub album: String,
-    pub track_id: u64,
-    pub title: String,
-    pub contains_cover: bool,
-    pub blur: bool,
-    pub date_released: Option<String>,
-    pub date_added: Option<String>,
-    pub format: Option<AudioFormat>,
-    pub bit_depth: Option<u8>,
-    pub sample_rate: Option<u32>,
-    pub channels: Option<u8>,
-    pub source: TrackApiSource,
+impl ApiGlobalSearchResult {
+    fn to_key(&self) -> String {
+        match self {
+            ApiGlobalSearchResult::Artist(artist) => format!("artist|{}", artist.title),
+            ApiGlobalSearchResult::Album(album) => {
+                format!("album|{}|{}", album.title, album.artist)
+            }
+            ApiGlobalSearchResult::Track(track) => {
+                format!("track|{}|{}|{}", track.title, track.album, track.artist)
+            }
+        }
+    }
 }
 
 #[get("/search/global-search")]
 pub async fn search_global_search_endpoint(
     query: web::Query<SearchGlobalSearchQuery>,
-) -> Result<Json<Value>> {
+) -> Result<Json<ApiSearchResultsResponse>> {
     let limit = query.limit.unwrap_or(10);
     let offset = query.offset.unwrap_or(0);
 
@@ -255,8 +210,5 @@ pub async fn search_global_search_endpoint(
         }
     }
 
-    Ok(Json(serde_json::json!({
-        "position": position,
-        "results": results,
-    })))
+    Ok(Json(ApiSearchResultsResponse { position, results }))
 }

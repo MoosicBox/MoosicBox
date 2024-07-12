@@ -179,7 +179,7 @@ pub struct QobuzAlbum {
     pub title: String,
     pub version: Option<String>,
     pub qobuz_id: u64,
-    pub released_at: u64,
+    pub released_at: i64,
     pub release_date_original: String,
     pub duration: u32,
     pub parental_warning: bool,

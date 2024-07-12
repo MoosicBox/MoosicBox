@@ -12,14 +12,16 @@ use moosicbox_core::sqlite::{
     menu::{get_album, GetAlbumError},
     models::{
         qobuz::{QobuzAlbum, QobuzImageSize},
-        tidal::{TidalAlbum, TidalAlbumImageSize},
         ApiSource, Id,
     },
 };
 use moosicbox_database::{query::*, Database, DatabaseError};
 use moosicbox_qobuz::QobuzAlbumError;
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
-use moosicbox_tidal::TidalAlbumError;
+use moosicbox_tidal::{
+    models::{TidalAlbum, TidalAlbumImageSize},
+    TidalAlbumError,
+};
 use moosicbox_yt::{
     models::{YtAlbum, YtAlbumImageSize},
     YtAlbumError,

@@ -13,6 +13,7 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
 moosicbox_config = { path = "../config" }
+moosicbox_core = { path = "../core", default-features = false }
 moosicbox_database = { path = "../database", default-features = false, features = [
     "rusqlite",
 ] }
@@ -21,19 +22,16 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
 ] }
 
 # API Dependencies
-actix-web  = { workspace = true, optional = true }
-serde      = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
+actix-web = { workspace = true, optional = true }
 
-# DB Dependencies
-moosicbox_core = { path = "../core", optional = true, default-features = false }
-
-itertools = { workspace = true }
-log       = { workspace = true }
-once_cell = { workspace = true }
-regex     = { workspace = true }
-tantivy   = { workspace = true }
-thiserror = { workspace = true }
+itertools  = { workspace = true }
+log        = { workspace = true }
+once_cell  = { workspace = true }
+regex      = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+tantivy    = { workspace = true }
+thiserror  = { workspace = true }
 
 [dev-dependencies]
 moosicbox_config = { path = "../config", features = ["test"] }
@@ -48,5 +46,5 @@ default = ["api", "db"]
 
 fail-on-warnings = []
 
-api = ["db", "dep:actix-web", "dep:serde", "dep:serde_json"]
-db  = ["dep:moosicbox_core"]
+api = ["db", "dep:actix-web"]
+db  = []

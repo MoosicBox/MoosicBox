@@ -22,6 +22,7 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
     "serde_json",
 ] }
 moosicbox_search = { path = "../search" }
+moosicbox_tidal = { path = "../tidal" }
 
 # API Dependencies
 actix-web      = { workspace = true, optional = true }
@@ -29,9 +30,6 @@ moosicbox_auth = { path = "../auth", default-features = false, optional = true }
 
 # Qobuz Dependencies
 moosicbox_qobuz = { path = "../qobuz", optional = true }
-
-# Tidal Dependencies
-moosicbox_tidal = { path = "../tidal", optional = true }
 
 # Yt Dependencies
 moosicbox_yt = { path = "../yt", optional = true }
@@ -63,7 +61,7 @@ fail-on-warnings = []
 api   = ["dep:actix-web", "dep:moosicbox_auth"]
 local = ["dep:audiotags", "dep:lofty", "dep:mp3-duration"]
 qobuz = ["dep:moosicbox_qobuz"]
-tidal = ["dep:moosicbox_tidal"]
+tidal = []
 yt    = ["dep:moosicbox_yt"]
 
 aac  = ["moosicbox_core/aac"]

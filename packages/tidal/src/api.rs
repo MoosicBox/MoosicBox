@@ -4,8 +4,9 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, Result,
 };
-use moosicbox_core::sqlite::models::{tidal::TidalSearchResults, ToApi};
+use moosicbox_core::sqlite::models::ToApi;
 use moosicbox_paging::Page;
+use moosicbox_search::models::ApiSearchResultsResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
@@ -934,29 +935,29 @@ pub async fn search_endpoint(
     req: HttpRequest,
     query: web::Query<TidalSearchQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<TidalSearchResults>> {
-    Ok(Json(
-        search(
-            #[cfg(feature = "db")]
-            &**data.database,
-            &query.query,
-            query.offset,
-            query.limit,
-            query.include_contributions,
-            query.include_did_you_mean,
-            query.include_user_playlists,
-            query.supports_user_data,
-            query
-                .types
-                .clone()
-                .map(|x| x.into_iter().map(|x| x.into()).collect::<Vec<_>>()),
-            query.country_code.clone(),
-            query.locale.clone(),
-            query.device_type,
-            req.headers()
-                .get(TIDAL_ACCESS_TOKEN_HEADER)
-                .map(|x| x.to_str().unwrap().to_string()),
-        )
-        .await?,
-    ))
+) -> Result<Json<ApiSearchResultsResponse>> {
+    let results = search(
+        #[cfg(feature = "db")]
+        &**data.database,
+        &query.query,
+        query.offset,
+        query.limit,
+        query.include_contributions,
+        query.include_did_you_mean,
+        query.include_user_playlists,
+        query.supports_user_data,
+        query
+            .types
+            .clone()
+            .map(|x| x.into_iter().map(|x| x.into()).collect::<Vec<_>>()),
+        query.country_code.clone(),
+        query.locale.clone(),
+        query.device_type,
+        req.headers()
+            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+    )
+    .await?;
+
+    Ok(Json(results.into()))
 }

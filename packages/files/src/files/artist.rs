@@ -11,14 +11,16 @@ use moosicbox_core::sqlite::{
     db::{get_artist, DbError},
     models::{
         qobuz::{QobuzArtist, QobuzImageSize},
-        tidal::{TidalArtist, TidalArtistImageSize},
         ApiSource, Id,
     },
 };
 use moosicbox_database::{query::*, Database, DatabaseError};
 use moosicbox_qobuz::QobuzArtistError;
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
-use moosicbox_tidal::TidalArtistError;
+use moosicbox_tidal::{
+    models::{TidalArtist, TidalArtistImageSize},
+    TidalArtistError,
+};
 use moosicbox_yt::{
     models::{YtArtist, YtArtistImageSize},
     YtArtistError,

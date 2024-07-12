@@ -140,6 +140,45 @@ impl ToValueType<usize> for &Value {
     }
 }
 
+impl ToValueType<i8> for &Value {
+    fn to_value_type(self) -> Result<i8, ParseError> {
+        Ok(self
+            .as_i64()
+            .ok_or_else(|| ParseError::ConvertType("i8".into()))? as i8)
+    }
+}
+
+impl ToValueType<i16> for &Value {
+    fn to_value_type(self) -> Result<i16, ParseError> {
+        Ok(self
+            .as_i64()
+            .ok_or_else(|| ParseError::ConvertType("i16".into()))? as i16)
+    }
+}
+
+impl ToValueType<i32> for &Value {
+    fn to_value_type(self) -> Result<i32, ParseError> {
+        Ok(self
+            .as_i64()
+            .ok_or_else(|| ParseError::ConvertType("i32".into()))? as i32)
+    }
+}
+
+impl ToValueType<i64> for &Value {
+    fn to_value_type(self) -> Result<i64, ParseError> {
+        self.as_i64()
+            .ok_or_else(|| ParseError::ConvertType("i64".into()))
+    }
+}
+
+impl ToValueType<isize> for &Value {
+    fn to_value_type(self) -> Result<isize, ParseError> {
+        self.as_i64()
+            .map(|x| x as isize)
+            .ok_or_else(|| ParseError::ConvertType("isize".into()))
+    }
+}
+
 pub trait ToValue {
     fn to_value<'a, T>(&'a self, index: &str) -> Result<T, ParseError>
     where

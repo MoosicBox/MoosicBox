@@ -1,8 +1,13 @@
 use std::fmt::Display;
 
+use moosicbox_core::sqlite::models::TrackApiSource;
 use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
     ParseError, ToValueType,
+};
+use moosicbox_search::models::{
+    ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
+    ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -26,6 +31,17 @@ impl From<TidalArtist> for Artist {
             title: value.name,
             cover: value.picture,
         }
+    }
+}
+
+impl From<TidalArtist> for ApiGlobalSearchResult {
+    fn from(value: TidalArtist) -> Self {
+        Self::Artist(ApiGlobalArtistSearchResult {
+            artist_id: value.id,
+            title: value.name,
+            contains_cover: value.contains_cover,
+            blur: false,
+        })
     }
 }
 
@@ -102,6 +118,17 @@ pub struct TidalSearchArtist {
     pub contains_cover: bool,
     pub r#type: String,
     pub name: String,
+}
+
+impl From<TidalSearchArtist> for ApiGlobalSearchResult {
+    fn from(value: TidalSearchArtist) -> Self {
+        Self::Artist(ApiGlobalArtistSearchResult {
+            artist_id: value.id,
+            title: value.name,
+            contains_cover: value.contains_cover,
+            blur: false,
+        })
+    }
 }
 
 impl TidalSearchArtist {
@@ -247,6 +274,23 @@ pub struct TidalSearchAlbum {
     pub media_metadata_tags: Vec<String>,
 }
 
+impl From<TidalSearchAlbum> for ApiGlobalSearchResult {
+    fn from(value: TidalSearchAlbum) -> Self {
+        let artist = value.artists.into_iter().next().expect("Missing artist");
+        Self::Album(ApiGlobalAlbumSearchResult {
+            artist_id: artist.id,
+            artist: artist.name,
+            album_id: value.id,
+            title: value.title,
+            contains_cover: value.contains_cover,
+            blur: false,
+            date_released: value.release_date,
+            date_added: None,
+            versions: vec![],
+        })
+    }
+}
+
 impl TidalSearchAlbum {
     pub fn cover_url(&self, size: TidalAlbumImageSize) -> Option<String> {
         self.cover.as_ref().map(|cover| {
@@ -362,7 +406,7 @@ impl From<TidalTrack> for Track {
             overall_bitrate: None,
             sample_rate: None,
             channels: None,
-            source: super::TrackApiSource::Tidal,
+            source: TrackApiSource::Tidal,
         }
     }
 }
@@ -414,6 +458,29 @@ pub struct TidalSearchTrack {
     pub popularity: u32,
     pub title: String,
     pub media_metadata_tags: Vec<String>,
+}
+
+impl From<TidalSearchTrack> for ApiGlobalSearchResult {
+    fn from(value: TidalSearchTrack) -> Self {
+        let artist = value.artists.into_iter().next().expect("Missing artist");
+        Self::Track(ApiGlobalTrackSearchResult {
+            artist_id: artist.id,
+            artist: artist.name,
+            album_id: value.album_id,
+            album: value.album,
+            title: value.title,
+            contains_cover: value.album_cover.is_some(),
+            blur: false,
+            date_released: None,
+            date_added: None,
+            track_id: value.id,
+            format: None,
+            bit_depth: None,
+            sample_rate: None,
+            channels: None,
+            source: TrackApiSource::Tidal,
+        })
+    }
 }
 
 impl ToValueType<TidalSearchTrack> for &serde_json::Value {
@@ -481,6 +548,43 @@ pub struct TidalSearchResults {
     pub albums: TidalSearchResultList<TidalSearchAlbum>,
     pub artists: TidalSearchResultList<TidalArtist>,
     pub tracks: TidalSearchResultList<TidalSearchTrack>,
+    pub offset: usize,
+    pub limit: usize,
+}
+
+impl From<TidalSearchResults> for ApiSearchResultsResponse {
+    fn from(value: TidalSearchResults) -> Self {
+        let artists = value
+            .artists
+            .items
+            .into_iter()
+            .map(|x| x.into())
+            .collect::<Vec<ApiGlobalSearchResult>>();
+        let albums = value
+            .albums
+            .items
+            .into_iter()
+            .map(|x| x.into())
+            .collect::<Vec<ApiGlobalSearchResult>>();
+        let tracks = value
+            .tracks
+            .items
+            .into_iter()
+            .map(|x| x.into())
+            .collect::<Vec<ApiGlobalSearchResult>>();
+
+        let position = value.offset + value.limit;
+        let position = if position > value.albums.total {
+            value.albums.total
+        } else {
+            position
+        };
+
+        Self {
+            position,
+            results: [artists, albums, tracks].concat(),
+        }
+    }
 }
 
 impl ToValueType<TidalSearchResults> for &Value {
@@ -491,10 +595,15 @@ impl ToValueType<TidalSearchResults> for &Value {
 
 impl AsModelResult<TidalSearchResults, ParseError> for Value {
     fn as_model(&self) -> Result<TidalSearchResults, ParseError> {
+        let albums: TidalSearchResultList<TidalSearchAlbum> = self.to_value("albums")?;
+        let offset = albums.offset;
+        let limit = albums.limit;
         Ok(TidalSearchResults {
-            albums: self.to_value("albums")?,
+            albums,
             artists: self.to_value("artists")?,
             tracks: self.to_value("tracks")?,
+            offset,
+            limit,
         })
     }
 }

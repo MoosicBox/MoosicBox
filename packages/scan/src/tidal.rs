@@ -1,18 +1,15 @@
 use std::sync::Arc;
 
 use moosicbox_core::{
-    sqlite::{
-        db::DbError,
-        models::{
-            tidal::{TidalAlbum, TidalAlbumImageSize, TidalArtistImageSize, TidalTrack},
-            TrackApiSource,
-        },
-    },
+    sqlite::{db::DbError, models::TrackApiSource},
     types::AudioFormat,
 };
 use moosicbox_database::Database;
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
-use moosicbox_tidal::{TidalAlbumTracksError, TidalArtistError, TidalFavoriteAlbumsError};
+use moosicbox_tidal::{
+    models::{TidalAlbum, TidalAlbumImageSize, TidalArtistImageSize, TidalTrack},
+    TidalAlbumTracksError, TidalArtistError, TidalFavoriteAlbumsError,
+};
 use thiserror::Error;
 use tokio::{select, sync::RwLock};
 use tokio_util::sync::CancellationToken;

@@ -18,6 +18,8 @@ pub mod api;
 #[cfg(feature = "db")]
 pub mod data;
 
+pub mod models;
+
 #[cfg(test)]
 static TESTS_DIR_PATH: Lazy<PathBuf> = Lazy::new(moosicbox_config::get_tests_dir_path);
 

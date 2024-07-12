@@ -19,7 +19,6 @@ use super::db::{
 };
 
 pub mod qobuz;
-pub mod tidal;
 
 pub trait AsModel<T> {
     fn as_model(&self) -> T;

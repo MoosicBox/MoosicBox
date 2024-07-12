@@ -5,15 +5,17 @@ pub mod api;
 #[cfg(feature = "db")]
 pub mod db;
 
+pub mod models;
+
 use std::{fmt::Display, sync::Arc};
 
+use models::{TidalAlbum, TidalArtist, TidalSearchResults, TidalTrack};
 #[cfg(feature = "db")]
 use moosicbox_database::{Database, DatabaseError};
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use moosicbox_core::sqlite::models::{
-    tidal::{TidalAlbum, TidalArtist, TidalSearchResults, TidalTrack},
     Album, ApiSource, Artist, AsModelResult, Id, LibraryAlbum, Track,
 };
 use moosicbox_json_utils::{serde_json::ToValue, ParseError};

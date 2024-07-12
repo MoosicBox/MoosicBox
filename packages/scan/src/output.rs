@@ -12,8 +12,7 @@ use moosicbox_core::{
             set_track_sizes, DbError, InsertTrack, SetTrackSize,
         },
         models::{
-            qobuz::QobuzImageSize, tidal::TidalAlbumImageSize, LibraryAlbum, LibraryArtist,
-            LibraryTrack, TrackApiSource,
+            qobuz::QobuzImageSize, LibraryAlbum, LibraryArtist, LibraryTrack, TrackApiSource,
         },
     },
     types::{AudioFormat, PlaybackQuality},
@@ -21,6 +20,7 @@ use moosicbox_core::{
 use moosicbox_database::{Database, DatabaseError, DatabaseValue, TryFromError};
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
 use moosicbox_search::data::ReindexFromDbError;
+use moosicbox_tidal::models::TidalAlbumImageSize;
 use once_cell::sync::Lazy;
 use thiserror::Error;
 use tokio::sync::RwLock;
