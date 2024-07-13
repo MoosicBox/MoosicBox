@@ -5,6 +5,10 @@ use moosicbox_json_utils::{
     serde_json::{ToNestedValue as _, ToValue as _},
     ParseError, ToValueType,
 };
+use moosicbox_search::models::{
+    ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
+    ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -16,6 +20,17 @@ pub struct YtArtist {
     pub contains_cover: bool,
     pub popularity: u32,
     pub name: String,
+}
+
+impl From<YtArtist> for ApiGlobalSearchResult {
+    fn from(value: YtArtist) -> Self {
+        Self::Artist(ApiGlobalArtistSearchResult {
+            artist_id: value.id.into(),
+            title: value.name,
+            contains_cover: value.contains_cover,
+            blur: false,
+        })
+    }
 }
 
 impl From<YtArtist> for Artist {
@@ -156,6 +171,22 @@ impl From<YtAlbum> for Album {
             blur: false,
             versions: vec![],
         }
+    }
+}
+
+impl From<YtAlbum> for ApiGlobalSearchResult {
+    fn from(value: YtAlbum) -> Self {
+        Self::Album(ApiGlobalAlbumSearchResult {
+            artist_id: value.artist_id.into(),
+            artist: value.artist,
+            album_id: value.id.into(),
+            title: value.title,
+            contains_cover: value.contains_cover,
+            blur: false,
+            date_released: value.release_date,
+            date_added: None,
+            versions: vec![],
+        })
     }
 }
 
@@ -333,6 +364,28 @@ impl From<YtTrack> for Track {
             channels: None,
             source: TrackApiSource::Yt,
         }
+    }
+}
+
+impl From<YtTrack> for ApiGlobalSearchResult {
+    fn from(value: YtTrack) -> Self {
+        Self::Track(ApiGlobalTrackSearchResult {
+            artist_id: value.artist_id.into(),
+            artist: value.artist,
+            album_id: value.album_id.into(),
+            album: value.album,
+            title: value.title,
+            contains_cover: value.artist_cover.is_some(),
+            blur: false,
+            date_released: None,
+            date_added: None,
+            track_id: value.id.into(),
+            format: None,
+            bit_depth: None,
+            sample_rate: None,
+            channels: None,
+            source: TrackApiSource::Tidal,
+        })
     }
 }
 
@@ -1558,6 +1611,9 @@ impl AsModelResult<YtSearchResultsContents, ParseError> for Value {
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResults {
     pub contents: Vec<YtSearchResultsContents>,
+    pub offset: usize,
+    pub limit: usize,
+    pub total: usize,
 }
 
 impl ToValueType<YtSearchResults> for &Value {
@@ -1568,8 +1624,16 @@ impl ToValueType<YtSearchResults> for &Value {
 
 impl AsModelResult<YtSearchResults, ParseError> for Value {
     fn as_model(&self) -> Result<YtSearchResults, ParseError> {
+        let contents: Vec<YtSearchResultsContents> = self.to_value("contents")?;
+        let offset = 0;
+        let limit = 3;
+        let total = contents.len();
+
         Ok(YtSearchResults {
-            contents: self.to_value("contents")?,
+            contents,
+            offset,
+            limit,
+            total,
         })
     }
 }
@@ -1978,6 +2042,9 @@ pub struct YtSearchResultsFormatted {
     pub artists: Vec<YtArtist>,
     pub videos: Vec<YtVideo>,
     pub tracks: Vec<YtTrack>,
+    pub offset: usize,
+    pub limit: usize,
+    pub total: usize,
 }
 
 impl From<YtSearchResults> for YtSearchResultsFormatted {
@@ -1987,6 +2054,48 @@ impl From<YtSearchResults> for YtSearchResultsFormatted {
             artists: (&value).into(),
             videos: (&value).into(),
             tracks: (&value).into(),
+            offset: value.offset,
+            limit: value.limit,
+            total: value.total,
+        }
+    }
+}
+
+impl From<YtSearchResults> for ApiSearchResultsResponse {
+    fn from(value: YtSearchResults) -> Self {
+        let formatted: YtSearchResultsFormatted = value.into();
+        formatted.into()
+    }
+}
+
+impl From<YtSearchResultsFormatted> for ApiSearchResultsResponse {
+    fn from(value: YtSearchResultsFormatted) -> Self {
+        let artists = value
+            .artists
+            .into_iter()
+            .map(|x| x.into())
+            .collect::<Vec<ApiGlobalSearchResult>>();
+        let albums = value
+            .albums
+            .into_iter()
+            .map(|x| x.into())
+            .collect::<Vec<ApiGlobalSearchResult>>();
+        let tracks = value
+            .tracks
+            .into_iter()
+            .map(|x| x.into())
+            .collect::<Vec<ApiGlobalSearchResult>>();
+
+        let position = value.offset + value.limit;
+        let position = if position > value.total {
+            value.total
+        } else {
+            position
+        };
+
+        Self {
+            position,
+            results: [artists, albums, tracks].concat(),
         }
     }
 }

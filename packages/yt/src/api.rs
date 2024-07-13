@@ -6,6 +6,7 @@ use actix_web::{
 };
 use moosicbox_core::sqlite::models::ToApi;
 use moosicbox_paging::Page;
+use moosicbox_search::models::ApiSearchResultsResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
@@ -13,17 +14,16 @@ use strum_macros::{AsRefStr, EnumString};
 use crate::{
     add_favorite_album, add_favorite_artist, add_favorite_track, album, album_tracks, artist,
     artist_albums, device_authorization, device_authorization_token, favorite_albums,
-    favorite_artists, favorite_tracks, models::YtSearchResultsFormatted, remove_favorite_album,
-    remove_favorite_artist, remove_favorite_track, search, track, track_file_url,
-    track_playback_info, AuthenticatedRequestError, YtAddFavoriteAlbumError,
-    YtAddFavoriteArtistError, YtAddFavoriteTrackError, YtAlbum, YtAlbumError, YtAlbumOrder,
-    YtAlbumOrderDirection, YtAlbumTracksError, YtAlbumType, YtArtist, YtArtistAlbumsError,
-    YtArtistError, YtArtistOrder, YtArtistOrderDirection, YtAudioQuality,
-    YtDeviceAuthorizationError, YtDeviceAuthorizationTokenError, YtDeviceType,
-    YtFavoriteAlbumsError, YtFavoriteArtistsError, YtFavoriteTracksError,
-    YtRemoveFavoriteAlbumError, YtRemoveFavoriteArtistError, YtRemoveFavoriteTrackError,
-    YtSearchError, YtTrack, YtTrackError, YtTrackFileUrlError, YtTrackOrder, YtTrackOrderDirection,
-    YtTrackPlaybackInfo, YtTrackPlaybackInfoError,
+    favorite_artists, favorite_tracks, remove_favorite_album, remove_favorite_artist,
+    remove_favorite_track, search, track, track_file_url, track_playback_info,
+    AuthenticatedRequestError, YtAddFavoriteAlbumError, YtAddFavoriteArtistError,
+    YtAddFavoriteTrackError, YtAlbum, YtAlbumError, YtAlbumOrder, YtAlbumOrderDirection,
+    YtAlbumTracksError, YtAlbumType, YtArtist, YtArtistAlbumsError, YtArtistError, YtArtistOrder,
+    YtArtistOrderDirection, YtAudioQuality, YtDeviceAuthorizationError,
+    YtDeviceAuthorizationTokenError, YtDeviceType, YtFavoriteAlbumsError, YtFavoriteArtistsError,
+    YtFavoriteTracksError, YtRemoveFavoriteAlbumError, YtRemoveFavoriteArtistError,
+    YtRemoveFavoriteTrackError, YtSearchError, YtTrack, YtTrackError, YtTrackFileUrlError,
+    YtTrackOrder, YtTrackOrderDirection, YtTrackPlaybackInfo, YtTrackPlaybackInfoError,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -924,7 +924,7 @@ pub struct YtSearchQuery {
 #[route("/yt/search", method = "GET")]
 pub async fn search_endpoint(
     query: web::Query<YtSearchQuery>,
-) -> Result<Json<YtSearchResultsFormatted>> {
+) -> Result<Json<ApiSearchResultsResponse>> {
     Ok(Json(
         search(&query.query, query.offset, query.limit)
             .await?
