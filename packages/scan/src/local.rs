@@ -124,145 +124,168 @@ fn scan_track(
     metadata: Metadata,
 ) -> Pin<Box<dyn Future<Output = Result<(), ScanError>> + Send>> {
     Box::pin(async move {
-        let extension = path
-            .extension()
-            .and_then(std::ffi::OsStr::to_str)
-            .unwrap_or("")
-            .to_uppercase();
+        let (
+            path,
+            tag,
+            path_album,
+            format,
+            bytes,
+            title,
+            number,
+            duration,
+            album,
+            album_artist,
+            date_released,
+            audio_bitrate,
+            overall_bitrate,
+            sample_rate,
+            bit_depth,
+            channels,
+        ) = tokio::task::spawn_blocking(move || {
+            let extension = path
+                .extension()
+                .and_then(std::ffi::OsStr::to_str)
+                .unwrap_or("")
+                .to_uppercase();
 
-        let tag = match extension.as_str() {
-            "FLAC" | "MP4" | "M4A" | "MP3" | "WAV" => Some(
-                tokio::task::spawn_blocking({
-                    let path = path.clone();
-                    move || Tag::new().read_from_path(path.to_str().unwrap())
-                })
-                .await?,
-            ),
-            _ => None,
-        };
-        let lofty_tag = tokio::task::spawn_blocking({
-            let path = path.clone();
-            move || {
-                lofty::Probe::open(path)
-                    .expect("ERROR: Bad path provided!")
-                    .options(ParseOptions::new().read_picture(false))
-                    .read()
-                    .expect("ERROR: Failed to read file!")
-            }
-        })
-        .await?;
-
-        let duration = if path.to_str().unwrap().ends_with(".mp3") {
-            tokio::task::spawn_blocking({
-                let path = path.clone();
-                move || {
-                    mp3_duration::from_path(path.as_path())
-                        .unwrap()
-                        .as_secs_f64()
+            let tag = match extension.as_str() {
+                "FLAC" | "MP4" | "M4A" | "MP3" | "WAV" => {
+                    Some(Tag::new().read_from_path(path.to_str().unwrap()))
                 }
-            })
-            .await?
-        } else {
-            match tag {
-                Some(Ok(ref tag)) => tag.duration().unwrap(),
-                Some(Err(err)) => return Err(ScanError::Tag(err)),
-                None => 10.0,
-            }
-        };
+                _ => None,
+            };
+            let lofty_tag = lofty::Probe::open(&path)
+                .expect("ERROR: Bad path provided!")
+                .options(ParseOptions::new().read_picture(false))
+                .read()
+                .expect("ERROR: Failed to read file!");
 
-        let tag = tag.and_then(|x| x.ok());
+            let duration = if path.clone().to_str().unwrap().ends_with(".mp3") {
+                mp3_duration::from_path(path.as_path())
+                    .unwrap()
+                    .as_secs_f64()
+            } else {
+                match tag {
+                    Some(Ok(ref tag)) => tag.duration().unwrap(),
+                    Some(Err(err)) => return Err(ScanError::Tag(err)),
+                    None => 10.0,
+                }
+            };
 
-        let path_artist = path.clone().parent().unwrap().parent().unwrap().to_owned();
-        let artist_dir_name = path_artist
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string();
-        let path_album = path.clone().parent().unwrap().to_owned();
-        let album_dir_name = path_album
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string();
+            let tag = tag.and_then(|x| x.ok());
 
-        let track_filestem = path.file_stem().unwrap().to_str().unwrap().to_string();
+            let path_artist = path.clone().parent().unwrap().parent().unwrap().to_owned();
+            let artist_dir_name = path_artist
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string();
+            let path_album = path.clone().parent().unwrap().to_owned();
+            let album_dir_name = path_album
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string();
 
-        let format = match extension.as_str() {
-            #[cfg(feature = "aac")]
-            "M4A" => AudioFormat::Aac,
-            #[cfg(feature = "flac")]
-            "FLAC" => AudioFormat::Flac,
-            #[cfg(feature = "mp3")]
-            "MP3" => AudioFormat::Mp3,
-            #[cfg(feature = "opus")]
-            "OPUS" => AudioFormat::Opus,
-            _ => AudioFormat::Source,
-        };
-        let bytes = metadata.len();
-        let title = tag
-            .as_ref()
-            .and_then(|tag| tag.title().map(|title| title.to_string()))
-            .or_else(|| extract_track_name(&track_filestem))
-            .unwrap_or("(untitled)".to_string());
-        let number = tag
-            .as_ref()
-            .and_then(|tag| tag.track_number())
-            .or_else(|| extract_track_number(&track_filestem))
-            .unwrap_or(1) as i32;
-        let album = tag
-            .as_ref()
-            .and_then(|tag| tag.album_title())
-            .unwrap_or(&album_dir_name)
-            .to_string();
-        let artist_name = tag
-            .as_ref()
-            .and_then(|tag| tag.artist().or(tag.album_artist()))
-            .unwrap_or(&artist_dir_name)
-            .to_string();
-        let album_artist = tag
-            .as_ref()
-            .and_then(|tag| tag.album_artist())
-            .unwrap_or(artist_name.as_str())
-            .to_string();
-        let date_released = tag
-            .as_ref()
-            .and_then(|tag| tag.date())
-            .map(|date| date.to_string());
+            let track_filestem = path.file_stem().unwrap().to_str().unwrap().to_string();
 
-        let audio_bitrate = &lofty_tag.properties().audio_bitrate();
-        let overall_bitrate = &lofty_tag.properties().overall_bitrate();
-        let sample_rate = &lofty_tag.properties().sample_rate();
-        let bit_depth = &lofty_tag.properties().bit_depth();
-        let channels = &lofty_tag.properties().channels();
+            let format = match extension.as_str() {
+                #[cfg(feature = "aac")]
+                "M4A" => AudioFormat::Aac,
+                #[cfg(feature = "flac")]
+                "FLAC" => AudioFormat::Flac,
+                #[cfg(feature = "mp3")]
+                "MP3" => AudioFormat::Mp3,
+                #[cfg(feature = "opus")]
+                "OPUS" => AudioFormat::Opus,
+                _ => AudioFormat::Source,
+            };
+            let bytes = metadata.len();
+            let title = tag
+                .as_ref()
+                .and_then(|tag| tag.title().map(|title| title.to_string()))
+                .or_else(|| extract_track_name(&track_filestem))
+                .unwrap_or("(untitled)".to_string());
+            let number = tag
+                .as_ref()
+                .and_then(|tag| tag.track_number())
+                .or_else(|| extract_track_number(&track_filestem))
+                .unwrap_or(1) as i32;
+            let album = tag
+                .as_ref()
+                .and_then(|tag| tag.album_title())
+                .unwrap_or(&album_dir_name)
+                .to_string();
+            let artist_name = tag
+                .as_ref()
+                .and_then(|tag| tag.artist().or(tag.album_artist()))
+                .unwrap_or(&artist_dir_name)
+                .to_string();
+            let album_artist = tag
+                .as_ref()
+                .and_then(|tag| tag.album_artist())
+                .unwrap_or(artist_name.as_str())
+                .to_string();
+            let date_released = tag
+                .as_ref()
+                .and_then(|tag| tag.date())
+                .map(|date| date.to_string());
 
-        log::debug!("====== {} ======", path.clone().to_str().unwrap());
-        log::debug!("title: {}", title);
-        log::debug!("format: {:?}", format);
-        log::debug!("number: {}", number);
-        log::debug!("duration: {}", duration);
-        log::debug!("bytes: {}", bytes);
-        log::debug!("audio_bitrate: {:?}", audio_bitrate);
-        log::debug!("overall_bitrate: {:?}", overall_bitrate);
-        log::debug!("sample_rate: {:?}", sample_rate);
-        log::debug!("bit_depth: {:?}", bit_depth);
-        log::debug!("channels: {:?}", channels);
-        log::debug!("album title: {}", album);
-        log::debug!("artist directory name: {}", artist_dir_name);
-        log::debug!("album directory name: {}", album_dir_name);
-        log::debug!("artist: {}", artist_name.clone());
-        log::debug!("album_artist: {}", album_artist.clone());
-        log::debug!("date_released: {:?}", date_released);
-        log::debug!(
-            "contains cover: {:?}",
-            tag.as_ref().is_some_and(|tag| tag.album_cover().is_some())
-        );
+            let audio_bitrate = lofty_tag.properties().audio_bitrate();
+            let overall_bitrate = lofty_tag.properties().overall_bitrate();
+            let sample_rate = lofty_tag.properties().sample_rate();
+            let bit_depth = lofty_tag.properties().bit_depth();
+            let channels = lofty_tag.properties().channels();
 
-        let album_artist = match MULTI_ARTIST_PATTERN.find(album_artist.as_str()) {
-            Some(comma) => album_artist[..comma.start() + 1].to_string(),
-            None => album_artist,
-        };
+            log::debug!("====== {} ======", path.clone().to_str().unwrap());
+            log::debug!("title: {}", title);
+            log::debug!("format: {:?}", format);
+            log::debug!("number: {}", number);
+            log::debug!("duration: {}", duration);
+            log::debug!("bytes: {}", bytes);
+            log::debug!("audio_bitrate: {:?}", audio_bitrate);
+            log::debug!("overall_bitrate: {:?}", overall_bitrate);
+            log::debug!("sample_rate: {:?}", sample_rate);
+            log::debug!("bit_depth: {:?}", bit_depth);
+            log::debug!("channels: {:?}", channels);
+            log::debug!("album title: {}", album);
+            log::debug!("artist directory name: {}", artist_dir_name);
+            log::debug!("album directory name: {}", album_dir_name);
+            log::debug!("artist: {}", artist_name.clone());
+            log::debug!("album_artist: {}", album_artist.clone());
+            log::debug!("date_released: {:?}", date_released);
+            log::debug!(
+                "contains cover: {:?}",
+                tag.as_ref().is_some_and(|tag| tag.album_cover().is_some())
+            );
+
+            let album_artist = match MULTI_ARTIST_PATTERN.find(album_artist.as_str()) {
+                Some(comma) => album_artist[..comma.start() + 1].to_string(),
+                None => album_artist,
+            };
+
+            Ok::<_, ScanError>((
+                path.to_path_buf(),
+                tag,
+                path_album,
+                format,
+                bytes,
+                title,
+                number,
+                duration,
+                album,
+                album_artist,
+                date_released,
+                audio_bitrate,
+                overall_bitrate,
+                sample_rate,
+                bit_depth,
+                channels,
+            ))
+        })
+        .await??;
 
         let mut output = output.write().await;
 
@@ -342,11 +365,11 @@ fn scan_track(
                 duration,
                 &Some(bytes),
                 format,
-                bit_depth,
-                audio_bitrate,
-                overall_bitrate,
-                sample_rate,
-                channels,
+                &bit_depth,
+                &audio_bitrate,
+                &overall_bitrate,
+                &sample_rate,
+                &channels,
                 TrackApiSource::Local,
                 &None,
                 &None,
