@@ -1,13 +1,12 @@
 use std::fmt::Display;
 
+use moosicbox_core::sqlite::models::{Album, Artist, AsModelResult, Track, TrackApiSource};
 use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
     ParseError, ToValueType,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
-use super::{Album, Artist, AsModelResult, Track};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -383,7 +382,7 @@ impl From<QobuzTrack> for Track {
             overall_bitrate: None,
             sample_rate: None,
             channels: None,
-            source: super::TrackApiSource::Qobuz,
+            source: TrackApiSource::Qobuz,
         }
     }
 }

@@ -10,13 +10,13 @@ use futures::{StreamExt, TryStreamExt};
 use moosicbox_core::sqlite::{
     db::DbError,
     menu::{get_album, GetAlbumError},
-    models::{
-        qobuz::{QobuzAlbum, QobuzImageSize},
-        ApiSource, Id,
-    },
+    models::{ApiSource, Id},
 };
 use moosicbox_database::{query::*, Database, DatabaseError};
-use moosicbox_qobuz::QobuzAlbumError;
+use moosicbox_qobuz::{
+    models::{QobuzAlbum, QobuzImageSize},
+    QobuzAlbumError,
+};
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use moosicbox_tidal::{
     models::{TidalAlbum, TidalAlbumImageSize},

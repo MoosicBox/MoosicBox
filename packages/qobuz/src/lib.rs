@@ -5,6 +5,9 @@ pub mod api;
 #[cfg(feature = "db")]
 pub mod db;
 
+pub mod models;
+
+use models::{QobuzAlbum, QobuzArtist, QobuzRelease, QobuzSearchResults, QobuzTrack};
 #[cfg(feature = "db")]
 use moosicbox_core::sqlite::db::DbError;
 #[cfg(feature = "db")]
@@ -16,10 +19,7 @@ use std::{collections::HashMap, str::Utf8Error, sync::Arc};
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
-use moosicbox_core::sqlite::models::{
-    qobuz::{QobuzAlbum, QobuzArtist, QobuzImage, QobuzRelease, QobuzSearchResults, QobuzTrack},
-    Album, ApiSource, Artist, Id, LibraryAlbum, Track,
-};
+use moosicbox_core::sqlite::models::{Album, ApiSource, Artist, Id, LibraryAlbum, Track};
 use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
     ParseError, ToValueType,
@@ -37,6 +37,8 @@ use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
 use tokio::sync::Mutex;
 use url::form_urlencoded;
+
+use crate::models::QobuzImage;
 
 static AUTH_HEADER_NAME: &str = "x-user-auth-token";
 static APP_ID_HEADER_NAME: &str = "x-app-id";

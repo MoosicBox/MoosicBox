@@ -4,7 +4,7 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, Result,
 };
-use moosicbox_core::sqlite::models::{qobuz::QobuzSearchResults, ToApi};
+use moosicbox_core::sqlite::models::ToApi;
 use moosicbox_paging::Page;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -12,11 +12,12 @@ use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
     album, album_tracks, artist, artist_albums, favorite_albums, favorite_artists, favorite_tracks,
-    format_title, search, track, track_file_url, user_login, QobuzAlbum, QobuzAlbumError,
-    QobuzAlbumOrder, QobuzAlbumReleaseType, QobuzAlbumSort, QobuzAlbumTracksError, QobuzArtist,
-    QobuzArtistAlbumsError, QobuzArtistError, QobuzAudioQuality, QobuzFavoriteAlbumsError,
-    QobuzFavoriteArtistsError, QobuzFavoriteTracksError, QobuzRelease, QobuzSearchError,
-    QobuzTrack, QobuzTrackError, QobuzTrackFileUrlError, QobuzUserLoginError,
+    format_title, models::QobuzSearchResults, search, track, track_file_url, user_login,
+    QobuzAlbum, QobuzAlbumError, QobuzAlbumOrder, QobuzAlbumReleaseType, QobuzAlbumSort,
+    QobuzAlbumTracksError, QobuzArtist, QobuzArtistAlbumsError, QobuzArtistError,
+    QobuzAudioQuality, QobuzFavoriteAlbumsError, QobuzFavoriteArtistsError,
+    QobuzFavoriteTracksError, QobuzRelease, QobuzSearchError, QobuzTrack, QobuzTrackError,
+    QobuzTrackFileUrlError, QobuzUserLoginError,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

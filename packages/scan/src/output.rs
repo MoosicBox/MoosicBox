@@ -11,14 +11,13 @@ use moosicbox_core::{
             add_album_maps_and_get_albums, add_artist_maps_and_get_artists, add_tracks,
             set_track_sizes, DbError, InsertTrack, SetTrackSize,
         },
-        models::{
-            qobuz::QobuzImageSize, LibraryAlbum, LibraryArtist, LibraryTrack, TrackApiSource,
-        },
+        models::{LibraryAlbum, LibraryArtist, LibraryTrack, TrackApiSource},
     },
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_database::{Database, DatabaseError, DatabaseValue, TryFromError};
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
+use moosicbox_qobuz::models::QobuzImageSize;
 use moosicbox_search::data::ReindexFromDbError;
 use moosicbox_tidal::models::TidalAlbumImageSize;
 use once_cell::sync::Lazy;

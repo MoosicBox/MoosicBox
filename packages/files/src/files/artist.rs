@@ -9,13 +9,13 @@ use bytes::BytesMut;
 use futures::{StreamExt, TryStreamExt};
 use moosicbox_core::sqlite::{
     db::{get_artist, DbError},
-    models::{
-        qobuz::{QobuzArtist, QobuzImageSize},
-        ApiSource, Id,
-    },
+    models::{ApiSource, Id},
 };
 use moosicbox_database::{query::*, Database, DatabaseError};
-use moosicbox_qobuz::QobuzArtistError;
+use moosicbox_qobuz::{
+    models::{QobuzArtist, QobuzImageSize},
+    QobuzArtistError,
+};
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use moosicbox_tidal::{
     models::{TidalArtist, TidalArtistImageSize},

@@ -1,19 +1,15 @@
 use std::sync::Arc;
 
 use moosicbox_core::{
-    sqlite::{
-        db::DbError,
-        models::{
-            qobuz::{QobuzAlbum, QobuzTrack},
-            TrackApiSource,
-        },
-    },
+    sqlite::{db::DbError, models::TrackApiSource},
     types::AudioFormat,
 };
 use moosicbox_database::Database;
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
 use moosicbox_qobuz::{
-    format_title, QobuzAlbumTracksError, QobuzArtistError, QobuzFavoriteAlbumsError,
+    format_title,
+    models::{QobuzAlbum, QobuzTrack},
+    QobuzAlbumTracksError, QobuzArtistError, QobuzFavoriteAlbumsError,
 };
 use thiserror::Error;
 use tokio::{select, sync::RwLock};

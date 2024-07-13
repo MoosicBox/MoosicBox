@@ -18,8 +18,6 @@ use super::db::{
     get_session_playlist_tracks, get_tracks, DbError,
 };
 
-pub mod qobuz;
-
 pub trait AsModel<T> {
     fn as_model(&self) -> T;
 }
