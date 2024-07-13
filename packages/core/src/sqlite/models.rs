@@ -1918,6 +1918,20 @@ pub enum Id {
     Number(u64),
 }
 
+#[cfg(feature = "tantivy")]
+impl ToValueType<Id> for &tantivy::schema::OwnedValue {
+    fn to_value_type(self) -> Result<Id, ParseError> {
+        use tantivy::schema::Value;
+        if let Some(id) = self.as_u64() {
+            Ok(Id::Number(id))
+        } else if let Some(id) = self.as_str() {
+            Ok(Id::String(id.to_owned()))
+        } else {
+            Err(ParseError::ConvertType("Id".to_string()))
+        }
+    }
+}
+
 impl Default for Id {
     fn default() -> Self {
         Id::Number(0)
