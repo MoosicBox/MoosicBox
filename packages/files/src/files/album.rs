@@ -86,7 +86,7 @@ async fn fetch_local_album_cover(
     let directory = directory.ok_or(FetchLocalAlbumCoverError::NoAlbumCover)?;
     let directory_path = std::path::PathBuf::from(directory);
 
-    if let Some(path) = search_for_cover(directory_path, "cover", None, None)? {
+    if let Some(path) = search_for_cover(directory_path, "cover", None, None).await? {
         let artwork = path.to_str().unwrap().to_string();
 
         log::debug!("Updating Album {album_id} artwork file from '{cover}' to '{artwork}'");
@@ -135,7 +135,7 @@ async fn fetch_local_album_cover_bytes(
     let directory = directory.ok_or(FetchLocalAlbumCoverError::NoAlbumCover)?;
     let directory_path = std::path::PathBuf::from(directory);
 
-    if let Some(path) = search_for_cover(directory_path, "cover", None, None)? {
+    if let Some(path) = search_for_cover(directory_path, "cover", None, None).await? {
         let artwork = path.to_str().unwrap().to_string();
 
         log::debug!("Updating Album {album_id} artwork file from '{cover}' to '{artwork}'");
