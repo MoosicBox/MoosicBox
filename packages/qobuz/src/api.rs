@@ -6,18 +6,18 @@ use actix_web::{
 };
 use moosicbox_core::sqlite::models::ToApi;
 use moosicbox_paging::Page;
+use moosicbox_search::models::ApiSearchResultsResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
     album, album_tracks, artist, artist_albums, favorite_albums, favorite_artists, favorite_tracks,
-    format_title, models::QobuzSearchResults, search, track, track_file_url, user_login,
-    QobuzAlbum, QobuzAlbumError, QobuzAlbumOrder, QobuzAlbumReleaseType, QobuzAlbumSort,
-    QobuzAlbumTracksError, QobuzArtist, QobuzArtistAlbumsError, QobuzArtistError,
-    QobuzAudioQuality, QobuzFavoriteAlbumsError, QobuzFavoriteArtistsError,
-    QobuzFavoriteTracksError, QobuzRelease, QobuzSearchError, QobuzTrack, QobuzTrackError,
-    QobuzTrackFileUrlError, QobuzUserLoginError,
+    format_title, search, track, track_file_url, user_login, QobuzAlbum, QobuzAlbumError,
+    QobuzAlbumOrder, QobuzAlbumReleaseType, QobuzAlbumSort, QobuzAlbumTracksError, QobuzArtist,
+    QobuzArtistAlbumsError, QobuzArtistError, QobuzAudioQuality, QobuzFavoriteAlbumsError,
+    QobuzFavoriteArtistsError, QobuzFavoriteTracksError, QobuzRelease, QobuzSearchError,
+    QobuzTrack, QobuzTrackError, QobuzTrackFileUrlError, QobuzUserLoginError,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -627,21 +627,21 @@ pub async fn search_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzSearchQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<QobuzSearchResults>> {
-    Ok(Json(
-        search(
-            #[cfg(feature = "db")]
-            &**data.database,
-            &query.query,
-            query.offset,
-            query.limit,
-            req.headers()
-                .get(QOBUZ_ACCESS_TOKEN_HEADER)
-                .map(|x| x.to_str().unwrap().to_string()),
-            req.headers()
-                .get(QOBUZ_APP_ID_HEADER)
-                .map(|x| x.to_str().unwrap().to_string()),
-        )
-        .await?,
-    ))
+) -> Result<Json<ApiSearchResultsResponse>> {
+    let results = search(
+        #[cfg(feature = "db")]
+        &**data.database,
+        &query.query,
+        query.offset,
+        query.limit,
+        req.headers()
+            .get(QOBUZ_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+        req.headers()
+            .get(QOBUZ_APP_ID_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+    )
+    .await?;
+
+    Ok(Json(results.into()))
 }

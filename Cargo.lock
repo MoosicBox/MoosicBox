@@ -4244,6 +4244,7 @@ dependencies = [
  "moosicbox_json_utils",
  "moosicbox_music_api",
  "moosicbox_paging",
+ "moosicbox_search",
  "once_cell",
  "open",
  "reqwest 0.12.5",

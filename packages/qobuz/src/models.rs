@@ -5,6 +5,10 @@ use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
     ParseError, ToValueType,
 };
+use moosicbox_search::models::{
+    ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
+    ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -207,6 +211,22 @@ impl From<QobuzAlbum> for Album {
     }
 }
 
+impl From<QobuzAlbum> for ApiGlobalSearchResult {
+    fn from(value: QobuzAlbum) -> Self {
+        Self::Album(ApiGlobalAlbumSearchResult {
+            artist_id: value.artist_id.into(),
+            artist: value.artist,
+            album_id: value.id.into(),
+            title: value.title,
+            contains_cover: value.image.is_some(),
+            blur: false,
+            date_released: Some(value.release_date_original),
+            date_added: None,
+            versions: vec![],
+        })
+    }
+}
+
 impl From<Album> for QobuzAlbum {
     fn from(value: Album) -> Self {
         Self {
@@ -387,6 +407,28 @@ impl From<QobuzTrack> for Track {
     }
 }
 
+impl From<QobuzTrack> for ApiGlobalSearchResult {
+    fn from(value: QobuzTrack) -> Self {
+        Self::Track(ApiGlobalTrackSearchResult {
+            artist_id: value.artist_id.into(),
+            artist: value.artist,
+            album_id: value.album_id.into(),
+            album: value.album,
+            title: value.title,
+            contains_cover: value.image.is_some(),
+            blur: false,
+            date_released: None,
+            date_added: None,
+            track_id: value.id.into(),
+            format: None,
+            bit_depth: None,
+            sample_rate: None,
+            channels: None,
+            source: TrackApiSource::Tidal,
+        })
+    }
+}
+
 impl QobuzTrack {
     pub fn cover_url(&self) -> Option<String> {
         self.image.as_ref().and_then(|image| image.cover_url())
@@ -462,6 +504,17 @@ impl From<QobuzArtist> for Artist {
             title: value.name,
             cover,
         }
+    }
+}
+
+impl From<QobuzArtist> for ApiGlobalSearchResult {
+    fn from(value: QobuzArtist) -> Self {
+        Self::Artist(ApiGlobalArtistSearchResult {
+            artist_id: value.id.into(),
+            title: value.name,
+            contains_cover: value.image.is_some(),
+            blur: false,
+        })
     }
 }
 
@@ -544,6 +597,41 @@ pub struct QobuzSearchResults {
     pub albums: QobuzSearchResultList<QobuzAlbum>,
     pub artists: QobuzSearchResultList<QobuzArtist>,
     pub tracks: QobuzSearchResultList<QobuzTrack>,
+}
+
+impl From<QobuzSearchResults> for ApiSearchResultsResponse {
+    fn from(value: QobuzSearchResults) -> Self {
+        let artists = value
+            .artists
+            .items
+            .into_iter()
+            .map(|x| x.into())
+            .collect::<Vec<ApiGlobalSearchResult>>();
+        let albums = value
+            .albums
+            .items
+            .into_iter()
+            .map(|x| x.into())
+            .collect::<Vec<ApiGlobalSearchResult>>();
+        let tracks = value
+            .tracks
+            .items
+            .into_iter()
+            .map(|x| x.into())
+            .collect::<Vec<ApiGlobalSearchResult>>();
+
+        let position = value.albums.offset + value.albums.limit;
+        let position = if position > value.albums.total {
+            value.albums.total
+        } else {
+            position
+        };
+
+        Self {
+            position,
+            results: [artists, albums, tracks].concat(),
+        }
+    }
 }
 
 impl ToValueType<QobuzSearchResults> for &Value {
