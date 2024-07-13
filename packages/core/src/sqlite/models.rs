@@ -1912,10 +1912,22 @@ impl AsId for TrackSize {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub enum Id {
     String(String),
     Number(u64),
+}
+
+impl Serialize for Id {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Id::String(id) => id.serialize(serializer),
+            Id::Number(id) => id.serialize(serializer),
+        }
+    }
 }
 
 #[cfg(feature = "tantivy")]
