@@ -31,7 +31,6 @@ static CACHE_DIR: Lazy<PathBuf> =
 static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
 
 pub fn cancel() {
-    log::debug!("Cancelling scan");
     CANCELLATION_TOKEN.cancel();
 }
 
