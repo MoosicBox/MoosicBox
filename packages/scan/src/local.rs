@@ -1,3 +1,4 @@
+use async_recursion::async_recursion;
 use audiotags::Tag;
 use futures::Future;
 use lofty::{AudioFile, ParseOptions};
@@ -20,6 +21,7 @@ use thiserror::Error;
 use tokio::{
     fs::{self, DirEntry},
     sync::RwLock,
+    task::{JoinError, JoinHandle},
 };
 use tokio_util::sync::CancellationToken;
 
@@ -34,6 +36,8 @@ pub enum ScanError {
     Db(#[from] DbError),
     #[error(transparent)]
     ParseInt(#[from] ParseIntError),
+    #[error(transparent)]
+    Join(#[from] JoinError),
     #[error(transparent)]
     Tag(#[from] audiotags::error::Error),
     #[error(transparent)]
@@ -50,14 +54,18 @@ pub async fn scan(
     let total_start = std::time::SystemTime::now();
     let start = std::time::SystemTime::now();
     let output = Arc::new(RwLock::new(ScanOutput::new()));
-    scan_dir(
+    let handles = scan_dir(
         Path::new(directory).to_path_buf(),
         output.clone(),
         token,
         Arc::new(Box::new(|a, b, c| Box::pin(scan_track(a, b, c)))),
-        Some(10),
     )
     .await?;
+
+    for resp in futures::future::join_all(handles).await {
+        resp??
+    }
+
     let end = std::time::SystemTime::now();
     log::info!(
         "Finished initial scan in {}ms",
@@ -123,21 +131,37 @@ fn scan_track(
             .to_uppercase();
 
         let tag = match extension.as_str() {
-            "FLAC" | "MP4" | "M4A" | "MP3" | "WAV" => {
-                Some(Tag::new().read_from_path(path.to_str().unwrap()))
-            }
+            "FLAC" | "MP4" | "M4A" | "MP3" | "WAV" => Some(
+                tokio::task::spawn_blocking({
+                    let path = path.clone();
+                    move || Tag::new().read_from_path(path.to_str().unwrap())
+                })
+                .await?,
+            ),
             _ => None,
         };
-        let lofty_tag = lofty::Probe::open(path.clone())
-            .expect("ERROR: Bad path provided!")
-            .options(ParseOptions::new().read_picture(false))
-            .read()
-            .expect("ERROR: Failed to read file!");
+        let lofty_tag = tokio::task::spawn_blocking({
+            let path = path.clone();
+            move || {
+                lofty::Probe::open(path)
+                    .expect("ERROR: Bad path provided!")
+                    .options(ParseOptions::new().read_picture(false))
+                    .read()
+                    .expect("ERROR: Failed to read file!")
+            }
+        })
+        .await?;
 
         let duration = if path.to_str().unwrap().ends_with(".mp3") {
-            mp3_duration::from_path(path.as_path())
-                .unwrap()
-                .as_secs_f64()
+            tokio::task::spawn_blocking({
+                let path = path.clone();
+                move || {
+                    mp3_duration::from_path(path.as_path())
+                        .unwrap()
+                        .as_secs_f64()
+                }
+            })
+            .await?
         } else {
             match tag {
                 Some(Ok(ref tag)) => tag.duration().unwrap(),
@@ -273,7 +297,9 @@ fn scan_track(
                 "cover",
                 Some(save_path.join("album.jpg")),
                 tag,
-            )? {
+            )
+            .await?
+            {
                 let cover = Some(cover.to_str().unwrap().to_string());
 
                 log::debug!(
@@ -293,7 +319,9 @@ fn scan_track(
                 "artist",
                 Some(save_path.join("artist.jpg")),
                 None,
-            )? {
+            )
+            .await?
+            {
                 let cover = Some(cover.to_str().unwrap().to_string());
 
                 log::debug!(
@@ -334,98 +362,60 @@ static MUSIC_FILE_PATTERN: Lazy<Regex> =
 static MULTI_ARTIST_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\S,\S").unwrap());
 
 #[allow(clippy::type_complexity)]
-fn process_dir_entry<F>(
+#[async_recursion]
+async fn process_dir_entry<F>(
     p: DirEntry,
     output: Arc<RwLock<ScanOutput>>,
     token: CancellationToken,
     fun: Arc<Box<dyn Fn(PathBuf, Arc<RwLock<ScanOutput>>, Metadata) -> Pin<Box<F>> + Send + Sync>>,
-) -> Pin<Box<dyn Future<Output = Result<(), ScanError>> + Send>>
+) -> Result<Vec<JoinHandle<Result<(), ScanError>>>, ScanError>
 where
     F: Future<Output = Result<(), ScanError>> + Send + 'static,
 {
-    Box::pin(async move {
-        let metadata = p.metadata().await?;
+    let metadata = p.metadata().await?;
 
-        if metadata.is_dir() {
-            scan_dir(p.path(), output.clone(), token.clone(), fun, None).await?;
-        } else if metadata.is_file()
-            && MUSIC_FILE_PATTERN.is_match(p.path().file_name().unwrap().to_str().unwrap())
-        {
+    if metadata.is_dir() {
+        Ok(scan_dir(p.path(), output.clone(), token.clone(), fun).await?)
+    } else if metadata.is_file()
+        && MUSIC_FILE_PATTERN.is_match(p.path().file_name().unwrap().to_str().unwrap())
+    {
+        Ok(vec![tokio::spawn(async move {
             (fun)(p.path(), output.clone(), metadata).await?;
-        }
-
-        Ok(())
-    })
+            Ok::<_, ScanError>(())
+        })])
+    } else {
+        Ok(vec![])
+    }
 }
 
 #[allow(clippy::type_complexity)]
-fn scan_dir<F>(
+async fn scan_dir<F>(
     path: PathBuf,
     output: Arc<RwLock<ScanOutput>>,
     token: CancellationToken,
     fun: Arc<Box<dyn Fn(PathBuf, Arc<RwLock<ScanOutput>>, Metadata) -> Pin<Box<F>> + Send + Sync>>,
-    max_parallel: Option<u8>,
-) -> Pin<Box<dyn Future<Output = Result<(), ScanError>> + Send>>
+) -> Result<Vec<JoinHandle<Result<(), ScanError>>>, ScanError>
 where
     F: Future<Output = Result<(), ScanError>> + Send + 'static,
 {
-    Box::pin(async move {
-        let mut dir = match fs::read_dir(path).await {
-            Ok(dir) => dir,
-            Err(_err) => return Ok(()),
-        };
+    let mut dir = match fs::read_dir(path).await {
+        Ok(dir) => dir,
+        Err(_err) => return Ok(vec![]),
+    };
 
-        if let Some(max_parallel) = max_parallel {
-            let mut chunks = vec![];
+    let mut handles = vec![];
 
-            let mut c = 0;
-
-            while let Some(entry) = dir.next_entry().await? {
-                if chunks.len() < (max_parallel as usize) {
-                    chunks.push(vec![entry]);
-                } else {
-                    chunks[c % (max_parallel as usize)].push(entry);
-                }
-
-                c += 1;
+    while let Some(entry) = dir.next_entry().await? {
+        tokio::select! {
+            resp = process_dir_entry(entry, output.clone(), token.clone(), fun.clone()) => {
+                handles.extend(resp?)
             }
-
-            let mut handles = chunks
-                .into_iter()
-                .map(move |batch| {
-                    let output = output.clone();
-                    let token = token.clone();
-                    let fun = fun.clone();
-                    std::thread::spawn(|| async move {
-                        for p in batch {
-                            tokio::select! {
-                                resp = process_dir_entry(p, output.clone(), token.clone(), fun.clone()) => resp?,
-                                _ = token.cancelled() => {
-                                    log::debug!("Scan cancelled");
-                                    break;
-                                }
-                            }
-                        }
-                        Ok::<_, ScanError>(())
-                    })
-                })
-                .collect::<Vec<_>>();
-
-            while let Some(cur_thread) = handles.pop() {
-                cur_thread.join().unwrap().await?;
-            }
-        } else {
-            while let Some(entry) = dir.next_entry().await? {
-                tokio::select! {
-                    resp = process_dir_entry(entry, output.clone(), token.clone(), fun.clone()) => resp?,
-                    _ = token.cancelled() => {
-                        log::debug!("Scan cancelled");
-                        break;
-                    }
-                }
+            _ = token.cancelled() => {
+                log::debug!("Scan cancelled");
+                break;
             }
         }
+    }
 
-        Ok(())
-    })
+    Ok(handles)
 }

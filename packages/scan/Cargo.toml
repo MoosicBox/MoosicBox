@@ -33,9 +33,10 @@ moosicbox_auth = { path = "../auth", default-features = false, optional = true }
 moosicbox_yt = { path = "../yt", optional = true }
 
 # Local Dependencies
-audiotags    = { workspace = true, optional = true }
-lofty        = { workspace = true, optional = true }
-mp3-duration = { workspace = true, optional = true }
+async-recursion = { workspace = true, optional = true }
+audiotags       = { workspace = true, optional = true }
+lofty           = { workspace = true, optional = true }
+mp3-duration    = { workspace = true, optional = true }
 
 futures      = { workspace = true }
 log          = { workspace = true }
@@ -56,11 +57,16 @@ default = ["aac", "api", "flac", "local", "mp3", "opus", "qobuz", "tidal", "yt"]
 
 fail-on-warnings = []
 
-api   = ["dep:actix-web", "dep:moosicbox_auth"]
-local = ["dep:audiotags", "dep:lofty", "dep:mp3-duration"]
+api = ["dep:actix-web", "dep:moosicbox_auth"]
+local = [
+    "dep:async-recursion",
+    "dep:audiotags",
+    "dep:lofty",
+    "dep:mp3-duration",
+]
 qobuz = []
 tidal = []
-yt    = ["dep:moosicbox_yt"]
+yt = ["dep:moosicbox_yt"]
 
 aac  = ["moosicbox_core/aac"]
 flac = ["moosicbox_core/flac"]
