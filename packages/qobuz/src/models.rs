@@ -224,7 +224,7 @@ impl From<Album> for QobuzAlbum {
                 mega: Some(x),
             }),
             version: None,
-            qobuz_id: value.id.into(),
+            qobuz_id: 0,
             released_at: 0,
             release_date_original: value.date_released.unwrap_or_default(),
             duration: 0,

@@ -450,7 +450,7 @@ pub async fn album_source_artwork_endpoint(
     let album_id = match source {
         ApiSource::Library => album_id_string.parse::<u64>().map(Id::Number),
         ApiSource::Tidal => album_id_string.parse::<u64>().map(Id::Number),
-        ApiSource::Qobuz => album_id_string.parse::<u64>().map(Id::Number),
+        ApiSource::Qobuz => Ok(Id::String(album_id_string)),
         ApiSource::Yt => Ok(Id::String(album_id_string)),
     }
     .map_err(|_e| ErrorBadRequest("Invalid album_id"))?;
@@ -485,7 +485,7 @@ pub async fn album_artwork_endpoint(
     let album_id = match source {
         ApiSource::Library => album_id_string.parse::<u64>().map(Id::Number),
         ApiSource::Tidal => album_id_string.parse::<u64>().map(Id::Number),
-        ApiSource::Qobuz => album_id_string.parse::<u64>().map(Id::Number),
+        ApiSource::Qobuz => Ok(Id::String(album_id_string)),
         ApiSource::Yt => Ok(Id::String(album_id_string)),
     }
     .map_err(|_e| ErrorBadRequest("Invalid album_id"))?;
