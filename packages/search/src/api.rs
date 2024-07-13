@@ -192,7 +192,7 @@ pub async fn search_global_search_endpoint(
             let value: ApiGlobalSearchResult = match value.to_value_type() {
                 Ok(value) => value,
                 Err(err) => {
-                    log::trace!("Failed to parse search result: {err:?}");
+                    log::error!("Failed to parse search result: {err:?}");
                     continue;
                 }
             };
