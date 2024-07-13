@@ -1,5 +1,5 @@
 use moosicbox_core::{
-    sqlite::models::{ApiAlbumVersionQuality, TrackApiSource},
+    sqlite::models::{ApiAlbumVersionQuality, Id, TrackApiSource},
     types::AudioFormat,
 };
 use serde::Serialize;
@@ -7,7 +7,7 @@ use serde::Serialize;
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiGlobalArtistSearchResult {
-    pub artist_id: u64,
+    pub artist_id: Id,
     pub title: String,
     pub contains_cover: bool,
     pub blur: bool,
@@ -16,9 +16,9 @@ pub struct ApiGlobalArtistSearchResult {
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiGlobalAlbumSearchResult {
-    pub artist_id: u64,
+    pub artist_id: Id,
     pub artist: String,
-    pub album_id: u64,
+    pub album_id: Id,
     pub title: String,
     pub contains_cover: bool,
     pub blur: bool,
@@ -30,11 +30,11 @@ pub struct ApiGlobalAlbumSearchResult {
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiGlobalTrackSearchResult {
-    pub artist_id: u64,
+    pub artist_id: Id,
     pub artist: String,
-    pub album_id: u64,
+    pub album_id: Id,
     pub album: String,
-    pub track_id: u64,
+    pub track_id: Id,
     pub title: String,
     pub contains_cover: bool,
     pub blur: bool,

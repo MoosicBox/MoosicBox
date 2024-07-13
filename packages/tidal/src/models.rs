@@ -37,7 +37,7 @@ impl From<TidalArtist> for Artist {
 impl From<TidalArtist> for ApiGlobalSearchResult {
     fn from(value: TidalArtist) -> Self {
         Self::Artist(ApiGlobalArtistSearchResult {
-            artist_id: value.id,
+            artist_id: value.id.into(),
             title: value.name,
             contains_cover: value.contains_cover,
             blur: false,
@@ -123,7 +123,7 @@ pub struct TidalSearchArtist {
 impl From<TidalSearchArtist> for ApiGlobalSearchResult {
     fn from(value: TidalSearchArtist) -> Self {
         Self::Artist(ApiGlobalArtistSearchResult {
-            artist_id: value.id,
+            artist_id: value.id.into(),
             title: value.name,
             contains_cover: value.contains_cover,
             blur: false,
@@ -278,9 +278,9 @@ impl From<TidalSearchAlbum> for ApiGlobalSearchResult {
     fn from(value: TidalSearchAlbum) -> Self {
         let artist = value.artists.into_iter().next().expect("Missing artist");
         Self::Album(ApiGlobalAlbumSearchResult {
-            artist_id: artist.id,
+            artist_id: artist.id.into(),
             artist: artist.name,
-            album_id: value.id,
+            album_id: value.id.into(),
             title: value.title,
             contains_cover: value.contains_cover,
             blur: false,
@@ -464,16 +464,16 @@ impl From<TidalSearchTrack> for ApiGlobalSearchResult {
     fn from(value: TidalSearchTrack) -> Self {
         let artist = value.artists.into_iter().next().expect("Missing artist");
         Self::Track(ApiGlobalTrackSearchResult {
-            artist_id: artist.id,
+            artist_id: artist.id.into(),
             artist: artist.name,
-            album_id: value.album_id,
+            album_id: value.album_id.into(),
             album: value.album,
             title: value.title,
             contains_cover: value.album_cover.is_some(),
             blur: false,
             date_released: None,
             date_added: None,
-            track_id: value.id,
+            track_id: value.id.into(),
             format: None,
             bit_depth: None,
             sample_rate: None,

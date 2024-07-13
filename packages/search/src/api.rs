@@ -11,10 +11,7 @@ use moosicbox_core::{
     sqlite::models::{ApiAlbumVersionQuality, TrackApiSource},
     types::AudioFormat,
 };
-use moosicbox_json_utils::{
-    tantivy::{ToValue, ToValueType},
-    ParseError,
-};
+use moosicbox_json_utils::{tantivy::ToValue, ParseError, ToValueType};
 use serde::Deserialize;
 use serde_json::Value;
 use tantivy::schema::NamedFieldDocument;
