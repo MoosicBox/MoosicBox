@@ -384,7 +384,7 @@ impl From<YtTrack> for ApiGlobalSearchResult {
             bit_depth: None,
             sample_rate: None,
             channels: None,
-            source: TrackApiSource::Tidal,
+            source: TrackApiSource::Yt,
         })
     }
 }
