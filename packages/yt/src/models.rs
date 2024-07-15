@@ -506,7 +506,7 @@ impl AsModelResult<YtSearchTrack, ParseError> for serde_json::Value {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct YtSearchResultList<T> {
     pub items: Vec<T>,
     pub offset: usize,
@@ -538,7 +538,7 @@ where
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRenderer {
     tracking_params: String,
@@ -568,7 +568,7 @@ impl AsModelResult<YtSearchResultsContentsListItemRenderer, ParseError> for Valu
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererFlexColumns {
     music_responsive_list_item_flex_column_renderer:
@@ -592,7 +592,7 @@ impl AsModelResult<YtSearchResultsContentsListItemRendererFlexColumns, ParseErro
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererFlexColumnsRenderer {
     text: YtSearchResultsContentsSearchRendererRuns,
@@ -620,7 +620,7 @@ impl AsModelResult<YtSearchResultsContentsListItemRendererFlexColumnsRenderer, P
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererMenu {
     menu_renderer: YtSearchResultsContentsListItemRendererMenuRenderer,
@@ -640,7 +640,7 @@ impl AsModelResult<YtSearchResultsContentsListItemRendererMenu, ParseError> for 
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererMenuRenderer {
     items: Vec<YtSearchResultsContentsListItemRendererMenuRendererItem>,
@@ -662,7 +662,7 @@ impl AsModelResult<YtSearchResultsContentsListItemRendererMenuRenderer, ParseErr
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererMenuRendererItem {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -692,7 +692,7 @@ impl AsModelResult<YtSearchResultsContentsListItemRendererMenuRendererItem, Pars
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererMenuRendererItemNavigationItemRenderer {
     text: YtSearchResultsContentsSearchRendererRuns,
@@ -737,7 +737,7 @@ impl
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererMenuRendererItemServiceItemRenderer {
     text: YtSearchResultsContentsSearchRendererRuns,
@@ -782,7 +782,7 @@ impl
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererThumbnail {
     music_thumbnail_renderer: YtSearchResultsContentsListItemRendererThumbnailRenderer,
@@ -802,7 +802,7 @@ impl AsModelResult<YtSearchResultsContentsListItemRendererThumbnail, ParseError>
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererThumbnailRenderer {
     thumbnail: YtSearchResultsContentsListItemRendererThumbnailRendererThumbnail,
@@ -832,7 +832,7 @@ impl AsModelResult<YtSearchResultsContentsListItemRendererThumbnailRenderer, Par
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererThumbnailRendererThumbnail {
     thumbnails: Vec<YtSearchResultsContentsListItemRendererThumbnailRendererThumbnailData>,
@@ -860,7 +860,7 @@ impl AsModelResult<YtSearchResultsContentsListItemRendererThumbnailRendererThumb
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererThumbnailRendererThumbnailData {
     url: String,
@@ -895,7 +895,7 @@ impl
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchSuggestionRenderer {
     suggestion: YtSearchResultsContentsSearchRendererRuns,
@@ -915,7 +915,7 @@ impl AsModelResult<YtSearchResultsContentsSearchSuggestionRenderer, ParseError> 
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRuns {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -936,7 +936,7 @@ impl AsModelResult<YtSearchResultsContentsSearchRendererRuns, ParseError> for Va
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRun {
     text: String,
@@ -962,7 +962,7 @@ impl AsModelResult<YtSearchResultsContentsSearchRendererRun, ParseError> for Val
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererIcon {
     icon_type: String,
@@ -982,7 +982,7 @@ impl AsModelResult<YtSearchResultsContentsSearchRendererIcon, ParseError> for Va
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunNavigationEndpoint {
     click_tracking_params: String,
@@ -1019,7 +1019,7 @@ impl AsModelResult<YtSearchResultsContentsSearchRendererRunNavigationEndpoint, P
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunServiceEndpoint {
     click_tracking_params: String,
@@ -1045,7 +1045,7 @@ impl AsModelResult<YtSearchResultsContentsSearchRendererRunServiceEndpoint, Pars
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunServiceEndpointQueueAddEndpoint {
     queue_target: YtSearchResultsContentsSearchRendererRunServiceEndpointQueueTarget,
@@ -1084,7 +1084,7 @@ impl
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunServiceEndpointQueueTarget {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1117,7 +1117,7 @@ impl AsModelResult<YtSearchResultsContentsSearchRendererRunServiceEndpointQueueT
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunServiceEndpointQueueCommand {
     click_tracking_params: String,
@@ -1150,7 +1150,7 @@ impl AsModelResult<YtSearchResultsContentsSearchRendererRunServiceEndpointQueueC
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunServiceEndpointQueueAddToToastAction {
     item: YtSearchResultsContentsSearchRendererRunServiceEndpointQueueAddToToastActionItem,
@@ -1189,7 +1189,7 @@ impl
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunServiceEndpointQueueAddToToastActionItem {
     notification_text_renderer: YtSearchResultsContentsSearchNotificationTextRenderer,
@@ -1228,7 +1228,7 @@ impl
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchNotificationTextRenderer {
     success_response_text: YtSearchResultsContentsSearchRendererRuns,
@@ -1254,7 +1254,7 @@ impl AsModelResult<YtSearchResultsContentsSearchNotificationTextRenderer, ParseE
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunNavigationEndpointBrowseEndpoint {
     browse_id: String,
@@ -1293,7 +1293,7 @@ impl
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunNavigationEndpointWatchEndpoint {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1340,7 +1340,7 @@ impl
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunNavigationEndpointWatchPlaylistEndpoint {
     playlist_id: String,
@@ -1382,7 +1382,7 @@ impl
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunNavigationEndpointWatchEndpointConfigs {
     watch_endpoint_music_config:
@@ -1422,7 +1422,7 @@ impl
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunNavigationEndpointWatchEndpointConfig {
     music_video_type: String,
@@ -1461,7 +1461,7 @@ impl
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunNavigationEndpointBrowseEndpointConfigs {
     browse_endpoint_context_music_config:
@@ -1502,7 +1502,7 @@ impl
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunNavigationEndpointBrowseEndpointConfig {
     page_type: String,
@@ -1541,7 +1541,7 @@ impl
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSectionRenderer {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1566,7 +1566,7 @@ impl AsModelResult<YtSearchResultsContentsSectionRenderer, ParseError> for Value
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSection {
     pub contents: Vec<YtSearchResultsContentsSectionRenderer>,
@@ -1586,7 +1586,7 @@ impl AsModelResult<YtSearchResultsContentsSection, ParseError> for Value {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContents {
     pub search_suggestions_section_renderer: YtSearchResultsContentsSection,
@@ -1607,7 +1607,7 @@ impl AsModelResult<YtSearchResultsContents, ParseError> for Value {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResults {
     pub contents: Vec<YtSearchResultsContents>,
@@ -2035,7 +2035,7 @@ impl From<&YtSearchResults> for Vec<YtTrack> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsFormatted {
     pub albums: Vec<YtAlbum>,
