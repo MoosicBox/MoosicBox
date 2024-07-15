@@ -375,7 +375,7 @@ impl From<YtTrack> for ApiGlobalSearchResult {
             album_id: value.album_id.into(),
             album: value.album,
             title: value.title,
-            contains_cover: value.artist_cover.is_some(),
+            contains_cover: value.album_cover.is_some(),
             blur: false,
             date_released: None,
             date_added: None,
