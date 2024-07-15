@@ -835,7 +835,8 @@ impl AsModelResult<YtSearchResultsContentsListItemRendererThumbnailRenderer, Par
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererThumbnailRendererThumbnail {
-    thumbnails: Vec<YtSearchResultsContentsListItemRendererThumbnailRendererThumbnailData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thumbnails: Option<Vec<YtSearchResultsContentsListItemRendererThumbnailRendererThumbnailData>>,
 }
 
 impl ToValueType<YtSearchResultsContentsListItemRendererThumbnailRendererThumbnail> for &Value {
@@ -1679,9 +1680,12 @@ fn track_from_search_result(value: &YtSearchResultsContentsListItemRenderer) -> 
                                 .music_thumbnail_renderer
                                 .thumbnail
                                 .thumbnails
-                                .iter()
-                                .max_by(|a, b| a.width.cmp(&b.width))
-                                .map(|x| x.url.clone()),
+                                .as_ref()
+                                .and_then(|x| {
+                                    x.iter()
+                                        .max_by(|a, b| a.width.cmp(&b.width))
+                                        .map(|x| x.url.clone())
+                                }),
                             title: value
                                 .flex_columns
                                 .first()
@@ -1723,9 +1727,12 @@ fn video_from_search_result(value: &YtSearchResultsContentsListItemRenderer) -> 
                                 .music_thumbnail_renderer
                                 .thumbnail
                                 .thumbnails
-                                .iter()
-                                .max_by(|a, b| a.width.cmp(&b.width))
-                                .map(|x| x.url.clone()),
+                                .as_ref()
+                                .and_then(|x| {
+                                    x.iter()
+                                        .max_by(|a, b| a.width.cmp(&b.width))
+                                        .map(|x| x.url.clone())
+                                }),
                             title: value
                                 .flex_columns
                                 .first()
@@ -1766,15 +1773,19 @@ fn artist_from_search_result(value: &YtSearchResultsContentsListItemRenderer) ->
                         .music_thumbnail_renderer
                         .thumbnail
                         .thumbnails
-                        .iter()
-                        .max_by(|a, b| a.width.cmp(&b.width))
-                        .map(|x| x.url.clone()),
-                    contains_cover: !value
+                        .as_ref()
+                        .and_then(|x| {
+                            x.iter()
+                                .max_by(|a, b| a.width.cmp(&b.width))
+                                .map(|x| x.url.clone())
+                        }),
+                    contains_cover: value
                         .thumbnail
                         .music_thumbnail_renderer
                         .thumbnail
                         .thumbnails
-                        .is_empty(),
+                        .as_ref()
+                        .is_some_and(|x| !x.is_empty()),
                     name: value
                         .flex_columns
                         .first()
@@ -1820,15 +1831,19 @@ fn album_artist_from_search_result(
                                         .music_thumbnail_renderer
                                         .thumbnail
                                         .thumbnails
-                                        .iter()
-                                        .max_by(|a, b| a.width.cmp(&b.width))
-                                        .map(|x| x.url.clone()),
-                                    contains_cover: !value
+                                        .as_ref()
+                                        .and_then(|x| {
+                                            x.iter()
+                                                .max_by(|a, b| a.width.cmp(&b.width))
+                                                .map(|x| x.url.clone())
+                                        }),
+                                    contains_cover: value
                                         .thumbnail
                                         .music_thumbnail_renderer
                                         .thumbnail
                                         .thumbnails
-                                        .is_empty(),
+                                        .as_ref()
+                                        .is_some_and(|x| !x.is_empty()),
                                     name: run.text.clone(),
                                     ..Default::default()
                                 })
