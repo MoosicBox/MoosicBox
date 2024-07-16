@@ -4,7 +4,7 @@ use moosicbox_core::{
 };
 use serde::Serialize;
 
-#[derive(Serialize, Clone)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiGlobalArtistSearchResult {
     pub artist_id: Id,
@@ -13,7 +13,7 @@ pub struct ApiGlobalArtistSearchResult {
     pub blur: bool,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiGlobalAlbumSearchResult {
     pub artist_id: Id,
@@ -27,7 +27,7 @@ pub struct ApiGlobalAlbumSearchResult {
     pub versions: Vec<ApiAlbumVersionQuality>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiGlobalTrackSearchResult {
     pub artist_id: Id,
@@ -47,7 +47,7 @@ pub struct ApiGlobalTrackSearchResult {
     pub source: TrackApiSource,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
 pub enum ApiGlobalSearchResult {
@@ -56,7 +56,7 @@ pub enum ApiGlobalSearchResult {
     Track(ApiGlobalTrackSearchResult),
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiSearchResultsResponse {
     pub position: usize,
