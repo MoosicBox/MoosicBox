@@ -93,43 +93,43 @@ impl FromId for u64 {
 #[derive(Debug, Error)]
 pub enum ArtistsError {
     #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send>),
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 #[derive(Debug, Error)]
 pub enum ArtistError {
     #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send>),
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 #[derive(Debug, Error)]
 pub enum AddArtistError {
     #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send>),
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 #[derive(Debug, Error)]
 pub enum RemoveArtistError {
     #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send>),
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 #[derive(Debug, Error)]
 pub enum AlbumsError {
     #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send>),
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 #[derive(Debug, Error)]
 pub enum AlbumError {
     #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send>),
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 #[derive(Debug, Error)]
 pub enum ArtistAlbumsError {
     #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send>),
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 #[derive(Debug, Error)]
@@ -141,43 +141,43 @@ pub enum LibraryAlbumError {
     #[error(transparent)]
     Db(#[from] moosicbox_core::sqlite::db::DbError),
     #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send>),
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 #[derive(Debug, Error)]
 pub enum AddAlbumError {
     #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send>),
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 #[derive(Debug, Error)]
 pub enum RemoveAlbumError {
     #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send>),
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 #[derive(Debug, Error)]
 pub enum TracksError {
     #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send>),
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 #[derive(Debug, Error)]
 pub enum TrackError {
     #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send>),
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 #[derive(Debug, Error)]
 pub enum AddTrackError {
     #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send>),
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 #[derive(Debug, Error)]
 pub enum RemoveTrackError {
     #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send>),
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 #[async_trait]
