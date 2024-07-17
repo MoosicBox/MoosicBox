@@ -375,7 +375,7 @@ impl<T> From<Page<T>> for Vec<T> {
 
 impl<In, Out, E> ToApi<PagingResponse<Out, E>> for PagingResponse<In, E>
 where
-    In: ToApi<Out> + Clone + 'static,
+    In: ToApi<Out> + 'static,
     E: 'static,
 {
     fn to_api(self) -> PagingResponse<Out, E> {
