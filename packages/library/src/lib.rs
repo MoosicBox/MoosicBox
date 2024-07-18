@@ -300,7 +300,7 @@ pub async fn favorite_albums(
     let offset = request.page.as_ref().map(|x| x.offset).unwrap_or(0);
     let limit = request.page.as_ref().map(|x| x.limit).unwrap_or(total);
 
-    let items = if limit - offset < total {
+    let items = if offset != 0 || limit != total {
         items
             .into_iter()
             .skip(offset as usize)
@@ -310,7 +310,6 @@ pub async fn favorite_albums(
     } else {
         items.into_iter().cloned().collect::<Vec<_>>()
     };
-    let total = items.len() as u32;
 
     log::trace!("Received favorite albums response: {items:?}");
 
