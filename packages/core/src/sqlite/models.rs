@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use moosicbox_database::{Database, DatabaseValue};
 use moosicbox_json_utils::{database::ToValue as _, MissingValue, ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
 
@@ -636,7 +637,7 @@ pub enum IdType {
     Track,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Id {
     String(String),
     Number(u64),
@@ -689,6 +690,23 @@ impl Serialize for Id {
         match self {
             Id::String(id) => id.serialize(serializer),
             Id::Number(id) => id.serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Id {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value: Value = Value::deserialize(deserializer)?;
+
+        if value.is_number() {
+            Ok(Id::Number(value.as_u64().unwrap()))
+        } else if value.is_string() {
+            Ok(Id::String(value.as_str().unwrap().to_string()))
+        } else {
+            panic!("invalid type")
         }
     }
 }
