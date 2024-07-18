@@ -45,7 +45,7 @@ serde            = { workspace = true, features = ["derive"] }
 serde_json       = { workspace = true }
 symphonia        = { workspace = true }
 thiserror        = { workspace = true }
-tokio            = { workspace = true, features = ["macros", "rt", "time"] }
+tokio            = { workspace = true, features = ["macros", "rt", "time", "tracing"] }
 tokio-util       = { workspace = true }
 url              = { workspace = true }
 
@@ -78,26 +78,26 @@ pulseaudio-standard = ["moosicbox_symphonia_player/pulseaudio-standard"]
 aac = [
     "moosicbox_converter/aac",
     "moosicbox_core/aac",
-    "moosicbox_symphonia_player/aac",
     "moosicbox_session/aac",
+    "moosicbox_symphonia_player/aac",
 ]
 flac = [
     "moosicbox_converter/flac",
     "moosicbox_core/flac",
-    "moosicbox_symphonia_player/flac",
     "moosicbox_session/flac",
+    "moosicbox_symphonia_player/flac",
 ]
 mp3 = [
     "moosicbox_converter/mp3",
     "moosicbox_core/mp3",
-    "moosicbox_symphonia_player/mp3",
     "moosicbox_session/mp3",
+    "moosicbox_symphonia_player/mp3",
 ]
 opus = [
     "moosicbox_converter/opus",
     "moosicbox_core/opus",
-    "moosicbox_symphonia_player/opus",
     "moosicbox_session/opus",
+    "moosicbox_symphonia_player/opus",
 ]
 
 local = []

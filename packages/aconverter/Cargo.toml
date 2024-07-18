@@ -27,13 +27,17 @@ moosicbox_music_api = { path = "../music_api", default-features = false }
 
 opus = { workspace = true }
 
-audiotags  = { workspace = true }
-clap       = { workspace = true }
+audiotags = { workspace = true }
+clap = { workspace = true }
 env_logger = { workspace = true }
-futures    = { workspace = true }
-log        = { workspace = true }
-thiserror  = { workspace = true }
-tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
+futures = { workspace = true }
+log = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = [
+    "macros",
+    "rt-multi-thread",
+    "tracing",
+] }
 
 [features]
 default = ["aac", "flac", "mp3", "opus"]

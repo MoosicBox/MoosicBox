@@ -13,16 +13,21 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
 
-bytes       = { workspace = true }
-flume       = { workspace = true }
-futures     = { workspace = true }
+bytes = { workspace = true }
+flume = { workspace = true }
+futures = { workspace = true }
 lazy_static = { workspace = true }
-log         = { workspace = true }
+log = { workspace = true }
 pin-project = { workspace = true }
-reqwest     = { workspace = true }
-thiserror   = { workspace = true }
-tokio       = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
-tokio-util  = { workspace = true }
+reqwest = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = [
+    "macros",
+    "rt-multi-thread",
+    "time",
+    "tracing",
+] }
+tokio-util = { workspace = true }
 
 [features]
 default = ["remote-bytestream", "stalled-monitor"]

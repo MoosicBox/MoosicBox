@@ -38,7 +38,7 @@ reqwest                 = { workspace = true }
 rubato                  = { workspace = true }
 symphonia               = { workspace = true }
 thiserror               = { workspace = true }
-tokio                   = { workspace = true, features = ["rt-multi-thread"] }
+tokio                   = { workspace = true, features = ["rt-multi-thread", "tracing"] }
 tokio-stream            = { workspace = true }
 tokio-util              = { workspace = true }
 

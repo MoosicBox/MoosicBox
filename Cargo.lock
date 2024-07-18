@@ -3972,6 +3972,7 @@ dependencies = [
  "awc",
  "aws-config",
  "aws-sdk-ssm",
+ "console-subscriber",
  "enum-as-inner",
  "flume",
  "futures",

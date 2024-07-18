@@ -49,7 +49,11 @@ static LIBRARY_API_STATE: Lazy<std::sync::RwLock<Option<moosicbox_library::Libra
 
 #[allow(clippy::too_many_lines)]
 fn main() -> std::io::Result<()> {
-    moosicbox_logging::init("moosicbox_server.log").expect("Failed to initialize FreeLog");
+    if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {
+        console_subscriber::init();
+    } else {
+        moosicbox_logging::init("moosicbox_server.log").expect("Failed to initialize FreeLog");
+    }
 
     let args: Vec<String> = env::args().collect();
 

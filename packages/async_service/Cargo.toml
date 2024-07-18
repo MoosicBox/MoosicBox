@@ -18,7 +18,7 @@ flume       = { workspace = true }
 futures     = { workspace = true }
 log         = { workspace = true }
 thiserror   = { workspace = true }
-tokio       = { workspace = true, features = ["macros", "rt", "time"] }
+tokio       = { workspace = true, features = ["macros", "rt", "time", "tracing"] }
 tokio-util  = { workspace = true }
 
 [dev-dependencies]
