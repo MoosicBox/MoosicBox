@@ -2215,6 +2215,7 @@ impl MusicApi for QobuzMusicApi {
             url,
             format: track.format.unwrap_or(AudioFormat::Source),
             track_id: Some(track.id.to_owned()),
+            source: track.source,
         }))
     }
 

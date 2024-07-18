@@ -8,7 +8,10 @@ use std::{
 use audiotags::Tag;
 use clap::Parser;
 use futures::StreamExt as _;
-use moosicbox_core::types::{from_extension_to_audio_format, AudioFormat};
+use moosicbox_core::{
+    sqlite::models::TrackApiSource,
+    types::{from_extension_to_audio_format, AudioFormat},
+};
 use moosicbox_files::{files::track::get_audio_bytes, save_bytes_stream_to_file};
 use moosicbox_music_api::TrackSource;
 use thiserror::Error;
@@ -73,6 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             path: source.to_str().unwrap().to_string(),
             format: source_encoding,
             track_id: None,
+            source: TrackApiSource::Local,
         },
         output_encoding,
         None,

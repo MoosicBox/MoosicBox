@@ -4,7 +4,7 @@ use std::{collections::HashMap, str::FromStr as _, sync::Arc};
 
 use async_trait::async_trait;
 use moosicbox_core::{
-    sqlite::models::{Album, AlbumSort, AlbumSource, ApiSource, Artist, Id, Track},
+    sqlite::models::{Album, AlbumSort, AlbumSource, ApiSource, Artist, Id, Track, TrackApiSource},
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_database::DatabaseValue;
@@ -135,11 +135,13 @@ pub enum TrackSource {
         path: String,
         format: AudioFormat,
         track_id: Option<Id>,
+        source: TrackApiSource,
     },
     RemoteUrl {
         url: String,
         format: AudioFormat,
         track_id: Option<Id>,
+        source: TrackApiSource,
     },
 }
 

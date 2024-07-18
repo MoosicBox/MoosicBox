@@ -400,9 +400,10 @@ pub fn track_key(source: &TrackSource, output_format: AudioFormat) -> String {
             format,
             path,
             track_id,
+            source,
         } => {
             format!(
-                "local:{format}:{id}:{output_format}",
+                "local:{source}:{format}:{id}:{output_format}",
                 id = track_id
                     .as_ref()
                     .map(|x| format!("id:{x}"))
@@ -414,8 +415,9 @@ pub fn track_key(source: &TrackSource, output_format: AudioFormat) -> String {
             format,
             url,
             track_id,
+            source,
         } => format!(
-            "remote:{url}:{format}:{id}:{output_format}",
+            "remote:{source}:{format}:{id}:{output_format}",
             id = track_id
                 .as_ref()
                 .map(|x| format!("id:{x}"))

@@ -1150,6 +1150,7 @@ impl MusicApi for LibraryMusicApi {
             path,
             format: track.format.unwrap_or(AudioFormat::Source),
             track_id: Some(track.id.to_owned()),
+            source: track.source,
         }))
     }
 
