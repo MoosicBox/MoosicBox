@@ -179,22 +179,30 @@ impl DownloadQueue {
         let join_handle = self.join_handle.clone();
         let mut this = self.clone();
 
-        tokio::spawn(async move {
-            let mut handle = join_handle.lock().await;
+        tokio::task::Builder::new()
+            .name("downloader: queue - process")
+            .spawn(async move {
+                let mut handle = join_handle.lock().await;
 
-            if let Some(handle) = handle.as_mut() {
-                if !handle.is_finished() {
-                    handle.await??;
+                if let Some(handle) = handle.as_mut() {
+                    if !handle.is_finished() {
+                        handle.await??;
+                    }
                 }
-            }
 
-            handle.replace(tokio::spawn(async move {
-                this.process_inner().await?;
-                Ok(())
-            }));
+                handle.replace(
+                    tokio::task::Builder::new()
+                        .name("downloader: queue - process_inner")
+                        .spawn(async move {
+                            this.process_inner().await?;
+                            Ok(())
+                        })
+                        .unwrap(),
+                );
 
-            Ok::<_, ProcessDownloadQueueError>(())
-        })
+                Ok::<_, ProcessDownloadQueueError>(())
+            })
+            .unwrap()
     }
 
     #[allow(unused)]
@@ -307,17 +315,22 @@ impl DownloadQueue {
                         if let Some(size) = bytes {
                             task_size.replace(size);
                             let database = database.clone();
-                            tokio::task::spawn(async move {
-                                if let Err(err) = database
-                                    .update("download_tasks")
-                                    .where_eq("id", task_id)
-                                    .value("total_bytes", size)
-                                    .execute_first(&**database)
-                                    .await
-                                {
-                                    log::error!("Failed to set DownloadTask total_bytes: {err:?}");
-                                }
-                            });
+                            tokio::task::Builder::new()
+                                .name("downloader: queue - on_progress - size")
+                                .spawn(async move {
+                                    if let Err(err) = database
+                                        .update("download_tasks")
+                                        .where_eq("id", task_id)
+                                        .value("total_bytes", size)
+                                        .execute_first(&**database)
+                                        .await
+                                    {
+                                        log::error!(
+                                            "Failed to set DownloadTask total_bytes: {err:?}"
+                                        );
+                                    }
+                                })
+                                .unwrap();
                         }
                     }
                     GenericProgressEvent::Speed { .. } => {}
@@ -400,16 +413,19 @@ impl Drop for DownloadQueue {
     fn drop(&mut self) {
         let handle = self.join_handle.clone();
 
-        tokio::task::spawn(async move {
-            let mut handle = handle.lock().await;
-            if let Some(handle) = handle.as_mut() {
-                if !handle.is_finished() {
-                    if let Err(err) = handle.await {
-                        log::error!("Failed to drop DownloadQueue: {err:?}");
+        tokio::task::Builder::new()
+            .name("downloader: queue - drop")
+            .spawn(async move {
+                let mut handle = handle.lock().await;
+                if let Some(handle) = handle.as_mut() {
+                    if !handle.is_finished() {
+                        if let Err(err) = handle.await {
+                            log::error!("Failed to drop DownloadQueue: {err:?}");
+                        }
                     }
                 }
-            }
-        });
+            })
+            .unwrap();
     }
 }
 

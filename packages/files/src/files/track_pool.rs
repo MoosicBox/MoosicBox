@@ -224,6 +224,7 @@ impl service::Processor for service::Service {
         ctx: Arc<RwLock<Context>>,
         command: Command,
     ) -> Result<(), Self::Error> {
+        let cmd_str = command.as_ref().to_string();
         match command {
             Command::FetchTrackBytes {
                 tx,
@@ -251,11 +252,14 @@ impl service::Processor for service::Service {
             } => {
                 if let Some(track_bytes_source) = ctx.read().await.pool.get(&key) {
                     let mut track_bytes_source = track_bytes_source.clone();
-                    tokio::spawn(async move {
-                        track_bytes_source
-                            .start_fetch_track_bytes(key, stream, size, start, end)
-                            .await
-                    });
+                    tokio::task::Builder::new()
+                        .name(&format!("files: track_pool process_command {cmd_str}"))
+                        .spawn(async move {
+                            track_bytes_source
+                                .start_fetch_track_bytes(key, stream, size, start, end)
+                                .await
+                        })
+                        .unwrap();
                 }
             }
         }

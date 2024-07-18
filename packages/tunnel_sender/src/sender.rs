@@ -264,187 +264,191 @@ impl TunnelSender {
         let abort_request_tokens = self.abort_request_tokens.clone();
         let cancellation_token = self.cancellation_token.clone();
 
-        tokio::spawn(async move {
-            let mut just_retried = false;
-            log::debug!("Fetching signature token...");
-            let token = loop {
-                match select!(
-                    resp = moosicbox_auth::fetch_signature_token(&host, &client_id, &access_token) => resp,
-                    _ = cancellation_token.cancelled() => {
-                        log::debug!("Cancelling fetch");
-                        return;
-                    }
-                ) {
-                    Ok(Some(token)) => break token,
-                    Ok(None) => {
-                        log::error!("Failed to fetch token, no response");
-                    }
-                    Err(FetchSignatureError::Unauthorized) => {
-                        log::error!("Unauthorized response from fetch_signature_token");
-                    }
-                    Err(err) => {
-                        log::error!("Failed to fetch signature token: {err:?}");
-                    }
-                }
-
-                select!(
-                    _ = sleep(Duration::from_millis(5000)) => {}
-                    _ = cancellation_token.cancelled() => {
-                        log::debug!("Cancelling retry");
-                        return;
-                    }
-                );
-            };
-
-            loop {
-                let close_token = CancellationToken::new();
-
-                let (txf, rxf) = futures_channel::mpsc::unbounded();
-
-                sender_arc.write().unwrap().replace(txf.clone());
-
-                log::debug!("Connecting to websocket...");
-                match select!(
-                    resp = connect_async(format!("{url}?clientId={client_id}&sender=true&signature={token}")) => resp,
-                    _ = cancellation_token.cancelled() => {
-                        log::debug!("Cancelling connect");
-                        break;
-                    }
-                ) {
-                    Ok((ws_stream, _)) => {
-                        log::debug!("WebSocket handshake has been successfully completed");
-
-                        if just_retried {
-                            log::info!("WebSocket successfully reconnected");
-                            just_retried = false;
+        tokio::task::Builder::new()
+            .name("tunnel_sender")
+            .spawn(async move {
+                let mut just_retried = false;
+                log::debug!("Fetching signature token...");
+                let token = loop {
+                    match select!(
+                        resp = moosicbox_auth::fetch_signature_token(&host, &client_id, &access_token) => resp,
+                        _ = cancellation_token.cancelled() => {
+                            log::debug!("Cancelling fetch");
+                            return;
                         }
-
-                        let (write, read) = ws_stream.split();
-
-                        let ws_writer = rxf
-                            .filter(|message| {
-                                match message {
-                                    TunnelResponseMessage::Packet(packet) => {
-                                        if Self::is_request_aborted(packet.request_id, abort_request_tokens.clone()) {
-                                            log::debug!(
-                                                "Not sending packet from aborted request request_id={} packet_id={} size={}",
-                                                packet.request_id,
-                                                packet.packet_id,
-                                                packet.message.len()
-                                            );
-                                            return ready(false);
-                                        }
-                                    },
-                                    TunnelResponseMessage::Ws(_ws) => {}
-                                }
-
-                                ready(true)
-                            })
-                            .map(|message| {
-                                match message {
-                                    TunnelResponseMessage::Packet(packet) => {
-                                        log::debug!(
-                                            "Sending packet from request request_id={} packet_id={} size={}",
-                                            packet.request_id,
-                                            packet.packet_id,
-                                            packet.message.len()
-                                        );
-                                        Ok(packet.message)
-                                    },
-                                    TunnelResponseMessage::Ws(ws) => {
-                                        if let Message::Text(text) = ws.message {
-                                            if log::log_enabled!(log::Level::Trace) {
-                                                log::debug!(
-                                                    "Sending ws message to={:?} exclude={:?} size={} message={}",
-                                                    ws.to_connection_ids,
-                                                    ws.exclude_connection_ids,
-                                                    text.len(),
-                                                    text,
-                                                );
-                                            } else {
-                                                log::debug!(
-                                                    "Sending ws message to={:?} exclude={:?} size={}",
-                                                    ws.to_connection_ids,
-                                                    ws.exclude_connection_ids,
-                                                    text.len(),
-                                                );
-                                            }
-                                            serde_json::from_str(&text).and_then(|value: Value| {
-                                                serde_json::to_string(&TunnelWsResponse {
-                                                    request_id: 0,
-                                                    body: value,
-                                                    exclude_connection_ids: ws.exclude_connection_ids,
-                                                    to_connection_ids: ws.to_connection_ids,
-                                                }).map(Message::Text)
-                                            }).map_err(|e| {
-                                                log::error!("Serde error occurred: {e:?}");
-                                                tokio_tungstenite::tungstenite::Error::AlreadyClosed
-                                            })
-                                        } else {
-                                            Ok(ws.message)
-                                        }
-                                    }
-                                }
-                            })
-                            .forward(write);
-
-                        let ws_reader = read.for_each(|m| async {
-                            let m = match m {
-                                Ok(m) => m,
-                                Err(e) => {
-                                    log::error!("Send Loop error: {:?}", e);
-                                    close_token.cancel();
-                                    return;
-                                }
-                            };
-
-                            let tx = tx.clone();
-                            let close_token = close_token.clone();
-                            tokio::spawn(async move {
-                                if let Err(e) = handler(tx.clone(), m).await {
-                                    log::error!("Handler Send Loop error: {e:?}");
-                                    close_token.cancel();
-                                }
-                            });
-                        });
-
-                        pin_mut!(ws_writer, ws_reader);
-                        select!(
-                            _ = close_token.cancelled() => {}
-                            _ = cancellation_token.cancelled() => {}
-                            _ = future::select(ws_writer, ws_reader) => {}
-                        );
-                        log::info!("WebSocket connection closed");
-                    }
-                    Err(err) => match err {
-                        Error::Http(response) => {
-                            if let Ok(body) =
-                                std::str::from_utf8(response.body().as_ref().unwrap_or(&vec![]))
-                            {
-                                log::error!("body: {}", body);
-                            } else {
-                                log::error!("body: (unable to get body)");
-                            }
+                    ) {
+                        Ok(Some(token)) => break token,
+                        Ok(None) => {
+                            log::error!("Failed to fetch token, no response");
                         }
-                        _ => log::error!("Failed to connect to websocket server: {err:?}"),
-                    },
-                }
+                        Err(FetchSignatureError::Unauthorized) => {
+                            log::error!("Unauthorized response from fetch_signature_token");
+                        }
+                        Err(err) => {
+                            log::error!("Failed to fetch signature token: {err:?}");
+                        }
+                    }
 
-                if just_retried {
                     select!(
                         _ = sleep(Duration::from_millis(5000)) => {}
                         _ = cancellation_token.cancelled() => {
                             log::debug!("Cancelling retry");
-                            break;
+                            return;
                         }
                     );
-                } else {
-                    just_retried = true;
-                }
-            }
+                };
 
-            log::debug!("Tunnel closed");
-        });
+                loop {
+                    let close_token = CancellationToken::new();
+
+                    let (txf, rxf) = futures_channel::mpsc::unbounded();
+
+                    sender_arc.write().unwrap().replace(txf.clone());
+
+                    log::debug!("Connecting to websocket...");
+                    match select!(
+                        resp = connect_async(format!("{url}?clientId={client_id}&sender=true&signature={token}")) => resp,
+                        _ = cancellation_token.cancelled() => {
+                            log::debug!("Cancelling connect");
+                            break;
+                        }
+                    ) {
+                        Ok((ws_stream, _)) => {
+                            log::debug!("WebSocket handshake has been successfully completed");
+
+                            if just_retried {
+                                log::info!("WebSocket successfully reconnected");
+                                just_retried = false;
+                            }
+
+                            let (write, read) = ws_stream.split();
+
+                            let ws_writer = rxf
+                                .filter(|message| {
+                                    match message {
+                                        TunnelResponseMessage::Packet(packet) => {
+                                            if Self::is_request_aborted(packet.request_id, abort_request_tokens.clone()) {
+                                                log::debug!(
+                                                    "Not sending packet from aborted request request_id={} packet_id={} size={}",
+                                                    packet.request_id,
+                                                    packet.packet_id,
+                                                    packet.message.len()
+                                                );
+                                                return ready(false);
+                                            }
+                                        },
+                                        TunnelResponseMessage::Ws(_ws) => {}
+                                    }
+
+                                    ready(true)
+                                })
+                                .map(|message| {
+                                    match message {
+                                        TunnelResponseMessage::Packet(packet) => {
+                                            log::debug!(
+                                                "Sending packet from request request_id={} packet_id={} size={}",
+                                                packet.request_id,
+                                                packet.packet_id,
+                                                packet.message.len()
+                                            );
+                                            Ok(packet.message)
+                                        },
+                                        TunnelResponseMessage::Ws(ws) => {
+                                            if let Message::Text(text) = ws.message {
+                                                if log::log_enabled!(log::Level::Trace) {
+                                                    log::debug!(
+                                                        "Sending ws message to={:?} exclude={:?} size={} message={}",
+                                                        ws.to_connection_ids,
+                                                        ws.exclude_connection_ids,
+                                                        text.len(),
+                                                        text,
+                                                    );
+                                                } else {
+                                                    log::debug!(
+                                                        "Sending ws message to={:?} exclude={:?} size={}",
+                                                        ws.to_connection_ids,
+                                                        ws.exclude_connection_ids,
+                                                        text.len(),
+                                                    );
+                                                }
+                                                serde_json::from_str(&text).and_then(|value: Value| {
+                                                    serde_json::to_string(&TunnelWsResponse {
+                                                        request_id: 0,
+                                                        body: value,
+                                                        exclude_connection_ids: ws.exclude_connection_ids,
+                                                        to_connection_ids: ws.to_connection_ids,
+                                                    }).map(Message::Text)
+                                                }).map_err(|e| {
+                                                    log::error!("Serde error occurred: {e:?}");
+                                                    tokio_tungstenite::tungstenite::Error::AlreadyClosed
+                                                })
+                                            } else {
+                                                Ok(ws.message)
+                                            }
+                                        }
+                                    }
+                                })
+                                .forward(write);
+
+                            let ws_reader = read.for_each(|m| async {
+                                let m = match m {
+                                    Ok(m) => m,
+                                    Err(e) => {
+                                        log::error!("Send Loop error: {:?}", e);
+                                        close_token.cancel();
+                                        return;
+                                    }
+                                };
+
+                                let tx = tx.clone();
+                                let close_token = close_token.clone();
+                                tokio::task::Builder::new()
+                                    .name("tunnel_sender: Process WS message")
+                                    .spawn(async move {
+                                        if let Err(e) = handler(tx.clone(), m).await {
+                                            log::error!("Handler Send Loop error: {e:?}");
+                                            close_token.cancel();
+                                        }
+                                    }).unwrap();
+                            });
+
+                            pin_mut!(ws_writer, ws_reader);
+                            select!(
+                                _ = close_token.cancelled() => {}
+                                _ = cancellation_token.cancelled() => {}
+                                _ = future::select(ws_writer, ws_reader) => {}
+                            );
+                            log::info!("WebSocket connection closed");
+                        }
+                        Err(err) => match err {
+                            Error::Http(response) => {
+                                if let Ok(body) =
+                                    std::str::from_utf8(response.body().as_ref().unwrap_or(&vec![]))
+                                {
+                                    log::error!("body: {}", body);
+                                } else {
+                                    log::error!("body: (unable to get body)");
+                                }
+                            }
+                            _ => log::error!("Failed to connect to websocket server: {err:?}"),
+                        },
+                    }
+
+                    if just_retried {
+                        select!(
+                            _ = sleep(Duration::from_millis(5000)) => {}
+                            _ = cancellation_token.cancelled() => {
+                                log::debug!("Cancelling retry");
+                                break;
+                            }
+                        );
+                    } else {
+                        just_retried = true;
+                    }
+                }
+
+                log::debug!("Tunnel closed");
+            }).unwrap();
 
         rx
     }

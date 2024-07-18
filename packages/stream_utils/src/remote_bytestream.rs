@@ -79,75 +79,80 @@ impl RemoteByteStreamFetcher {
         );
         log::debug!("Starting fetch for byte stream with range {bytes_range}");
 
-        self.abort_handle = Some(tokio::spawn(async move {
-            log::debug!("Fetching byte stream with range {bytes_range}");
+        self.abort_handle = Some(
+            tokio::task::Builder::new()
+                .name("stream_utils: RemoteByteStream Fetcher")
+                .spawn(async move {
+                    log::debug!("Fetching byte stream with range {bytes_range}");
 
-            let response = Client::new()
-                .get(&url)
-                .header("Range", bytes_range)
-                .send()
-                .await;
+                    let response = Client::new()
+                        .get(&url)
+                        .header("Range", bytes_range)
+                        .send()
+                        .await;
 
-            let response = match response {
-                Ok(response) => response,
-                Err(err) => {
-                    log::error!("Failed to get stream response: {err:?}");
-                    if let Err(err) = sender.send_async(Bytes::new()).await {
-                        log::warn!("Failed to send empty bytes: {err:?}");
+                    let response = match response {
+                        Ok(response) => response,
+                        Err(err) => {
+                            log::error!("Failed to get stream response: {err:?}");
+                            if let Err(err) = sender.send_async(Bytes::new()).await {
+                                log::warn!("Failed to send empty bytes: {err:?}");
+                            }
+                            return;
+                        }
+                    };
+
+                    match response.status() {
+                        reqwest::StatusCode::OK | reqwest::StatusCode::PARTIAL_CONTENT => {}
+                        _ => {
+                            log::error!(
+                                "Received error response ({}): {:?}",
+                                response.status(),
+                                response.text().await
+                            );
+                            if let Err(err) = sender.send_async(Bytes::new()).await {
+                                log::warn!("Failed to send empty bytes: {err:?}");
+                            }
+                            return;
+                        }
                     }
-                    return;
-                }
-            };
 
-            match response.status() {
-                reqwest::StatusCode::OK | reqwest::StatusCode::PARTIAL_CONTENT => {}
-                _ => {
-                    log::error!(
-                        "Received error response ({}): {:?}",
-                        response.status(),
-                        response.text().await
-                    );
-                    if let Err(err) = sender.send_async(Bytes::new()).await {
-                        log::warn!("Failed to send empty bytes: {err:?}");
+                    let mut stream = response.bytes_stream();
+
+                    while let Some(item) = tokio::select! {
+                        resp = stream.next() => resp,
+                        _ = abort.cancelled() => {
+                            log::debug!("Aborted");
+                            None
+                        }
+                        _ = stream_abort.cancelled() => {
+                            log::debug!("Stream aborted");
+                            None
+                        }
+                    } {
+                        log::trace!("Received more bytes from stream");
+                        let bytes = match item {
+                            Ok(bytes) => bytes,
+                            Err(err) => {
+                                log::info!("Aborted byte stream read (no bytes received): {err:?}");
+                                return;
+                            }
+                        };
+                        if let Err(err) = sender.send_async(bytes).await {
+                            log::info!("Aborted byte stream read: {err:?}");
+                            return;
+                        }
                     }
-                    return;
-                }
-            }
 
-            let mut stream = response.bytes_stream();
-
-            while let Some(item) = tokio::select! {
-                resp = stream.next() => resp,
-                _ = abort.cancelled() => {
-                    log::debug!("Aborted");
-                    None
-                }
-                _ = stream_abort.cancelled() => {
-                    log::debug!("Stream aborted");
-                    None
-                }
-            } {
-                log::trace!("Received more bytes from stream");
-                let bytes = match item {
-                    Ok(bytes) => bytes,
-                    Err(err) => {
-                        log::info!("Aborted byte stream read (no bytes received): {err:?}");
-                        return;
+                    log::debug!("Finished reading from stream");
+                    if sender.send_async(Bytes::new()).await.is_ok()
+                        && ready_receiver.recv_async().await.is_err()
+                    {
+                        log::info!("Byte stream read has been aborted");
                     }
-                };
-                if let Err(err) = sender.send_async(bytes).await {
-                    log::info!("Aborted byte stream read: {err:?}");
-                    return;
-                }
-            }
-
-            log::debug!("Finished reading from stream");
-            if sender.send_async(Bytes::new()).await.is_ok()
-                && ready_receiver.recv_async().await.is_err()
-            {
-                log::info!("Byte stream read has been aborted");
-            }
-        }));
+                })
+                .unwrap(),
+        );
     }
 
     fn abort(&mut self) {

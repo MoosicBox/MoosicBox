@@ -73,35 +73,40 @@ impl ByteStreamSourceFetcher {
         let end = self.end;
         log::debug!("Starting fetch for byte stream with range start={start} end={end:?}");
 
-        self.abort_handle = Some(tokio::spawn(async move {
-            log::debug!("Fetching byte stream with range start={start} end={end:?}");
+        self.abort_handle = Some(
+            tokio::task::Builder::new()
+                .name("symphonia_player: ByteStreamSource Fetcher")
+                .spawn(async move {
+                    log::debug!("Fetching byte stream with range start={start} end={end:?}");
 
-            while let Some(item) = tokio::select! {
-                resp = stream.next() => resp,
-                _ = abort.cancelled() => {
-                    log::debug!("Aborted");
-                    None
-                }
-                _ = stream_abort.cancelled() => {
-                    log::debug!("Stream aborted");
-                    None
-                }
-            } {
-                log::trace!("Received more bytes from stream");
-                let bytes = item.unwrap();
-                if let Err(err) = sender.send_async(bytes).await {
-                    log::info!("Aborted byte stream read: {err:?}");
-                    return;
-                }
-            }
+                    while let Some(item) = tokio::select! {
+                        resp = stream.next() => resp,
+                        _ = abort.cancelled() => {
+                            log::debug!("Aborted");
+                            None
+                        }
+                        _ = stream_abort.cancelled() => {
+                            log::debug!("Stream aborted");
+                            None
+                        }
+                    } {
+                        log::trace!("Received more bytes from stream");
+                        let bytes = item.unwrap();
+                        if let Err(err) = sender.send_async(bytes).await {
+                            log::info!("Aborted byte stream read: {err:?}");
+                            return;
+                        }
+                    }
 
-            log::debug!("Finished reading from stream");
-            if sender.send_async(Bytes::new()).await.is_ok()
-                && ready_receiver.recv_async().await.is_err()
-            {
-                log::info!("Byte stream read has been aborted");
-            }
-        }));
+                    log::debug!("Finished reading from stream");
+                    if sender.send_async(Bytes::new()).await.is_ok()
+                        && ready_receiver.recv_async().await.is_err()
+                    {
+                        log::info!("Byte stream read has been aborted");
+                    }
+                })
+                .unwrap(),
+        );
     }
 
     fn abort(&mut self) {

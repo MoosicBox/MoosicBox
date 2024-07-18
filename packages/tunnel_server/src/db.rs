@@ -329,7 +329,12 @@ pub async fn init_postgres_raw_native_tls() -> Result<(), InitDatabaseError> {
         .await
         .replace(Box::new(PostgresDatabase::new(client)));
 
-    DB_CONNECTION.lock().await.replace(tokio::spawn(connection));
+    DB_CONNECTION.lock().await.replace(
+        tokio::task::Builder::new()
+            .name("postgres")
+            .spawn(connection)
+            .unwrap(),
+    );
 
     Ok(())
 }
@@ -371,7 +376,12 @@ pub async fn init_postgres_raw_openssl() -> Result<(), InitDatabaseError> {
         .await
         .replace(Box::new(PostgresDatabase::new(client)));
 
-    DB_CONNECTION.lock().await.replace(tokio::spawn(connection));
+    DB_CONNECTION.lock().await.replace(
+        tokio::task::Builder::new()
+            .name("postgres")
+            .spawn(connection)
+            .unwrap(),
+    );
 
     Ok(())
 }
@@ -402,7 +412,12 @@ pub async fn init_postgres_raw_no_tls() -> Result<(), InitDatabaseError> {
         .await
         .replace(Box::new(PostgresDatabase::new(client)));
 
-    DB_CONNECTION.lock().await.replace(tokio::spawn(connection));
+    DB_CONNECTION.lock().await.replace(
+        tokio::task::Builder::new()
+            .name("postgres")
+            .spawn(connection)
+            .unwrap(),
+    );
 
     Ok(())
 }

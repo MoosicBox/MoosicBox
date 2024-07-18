@@ -37,6 +37,7 @@ macro_rules! async_service_body {
         }
 
         pub struct Service {
+            pub name: $crate::Arc<String>,
             pub ctx: $crate::Arc<$crate::tokio::sync::RwLock<$context>>,
             pub token: $crate::CancellationToken,
             sender: $crate::Sender<Command>,
@@ -51,54 +52,65 @@ macro_rules! async_service_body {
                     sender: tx,
                     receiver: rx,
                     token: $crate::CancellationToken::new(),
+                    name: $crate::Arc::new("Unnamed".to_string())
                 }
             }
 
-            pub fn start(mut self) -> $crate::JoinHandle<Result<(), Error>> {
-                $crate::tokio::spawn(async move {
-                    self.on_start().await?;
-                    let ctx = self.ctx;
+            pub fn with_name(mut self, name: &str) -> Self {
+                self.name = $crate::Arc::new(name.to_owned());
+                self
+            }
 
-                    while let Ok(Ok(command)) = $crate::tokio::select!(
-                        () = self.token.cancelled() => {
-                            log::debug!("Service was cancelled");
-                            Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "Cancelled"))
-                        }
-                        command = self.receiver.recv_async() => { Ok(command) }
-                    ) {
-                        if $sequential {
-                            log::trace!("Received Service command");
-                            if let Err(e) = Self::process_command(ctx.clone(), command.cmd).await {
-                                log::error!("Failed to process command: {e:?}");
+            pub fn start(mut self) -> $crate::JoinHandle<Result<(), Error>> {
+                $crate::tokio::task::Builder::new()
+                    .name(&format!("async_service: {}", self.name))
+                    .spawn(async move {
+                        self.on_start().await?;
+                        let ctx = self.ctx;
+
+                        while let Ok(Ok(command)) = $crate::tokio::select!(
+                            () = self.token.cancelled() => {
+                                log::debug!("Service was cancelled");
+                                Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "Cancelled"))
                             }
-                            if let Some(tx) = command.tx {
-                                tx.send_async(()).await?;
-                            }
-                        } else {
-                            let ctx = ctx.clone();
-                            $crate::tokio::spawn(async move {
+                            command = self.receiver.recv_async() => { Ok(command) }
+                        ) {
+                            if $sequential {
                                 log::trace!("Received Service command");
-                                if let Err(e) = Self::process_command(ctx, command.cmd).await {
+                                if let Err(e) = Self::process_command(ctx.clone(), command.cmd).await {
                                     log::error!("Failed to process command: {e:?}");
                                 }
                                 if let Some(tx) = command.tx {
                                     tx.send_async(()).await?;
                                 }
-                                Ok::<_, Error>(())
-                            });
+                            } else {
+                                let ctx = ctx.clone();
+                                $crate::tokio::task::Builder::new()
+                                    .name(&format!("async_service: {} - process_command", self.name))
+                                    .spawn(async move {
+                                        log::trace!("Received Service command");
+                                        if let Err(e) = Self::process_command(ctx, command.cmd).await {
+                                            log::error!("Failed to process command: {e:?}");
+                                        }
+                                        if let Some(tx) = command.tx {
+                                            tx.send_async(()).await?;
+                                        }
+                                        Ok::<_, Error>(())
+                                    }).unwrap();
+                            }
                         }
-                    }
 
-                    Self::on_shutdown(ctx).await?;
+                        Self::on_shutdown(ctx).await?;
 
-                    $crate::log::debug!("Stopped Service");
+                        $crate::log::debug!("Stopped Service");
 
-                    Ok(())
-                })
+                        Ok(())
+                    }).unwrap()
             }
 
             pub fn handle(&self) -> Handle {
                 Handle {
+                    name: self.name.clone(),
                     sender: self.sender.clone(),
                     token: self.token.clone(),
                 }
@@ -126,6 +138,7 @@ macro_rules! async_service_body {
 
         #[derive(Clone)]
         pub struct Handle {
+            name: $crate::Arc<String>,
             sender: $crate::Sender<Command>,
             token: $crate::CancellationToken,
         }
@@ -165,12 +178,14 @@ macro_rules! async_service_body {
             async fn send_command_and_wait_async(&self, command: $command) -> Result<(), Self::Error> {
                 let (tx, rx) = $crate::unbounded();
                 let sender = self.sender.clone();
-                $crate::tokio::spawn(async move {
-                    sender.send_async(Command {
-                        cmd: command,
-                        tx: Some(tx)
-                    }).await
-                });
+                $crate::tokio::task::Builder::new()
+                    .name(&format!("async_service: {} - send_command_and_wait_async", self.name))
+                    .spawn(async move {
+                        sender.send_async(Command {
+                            cmd: command,
+                            tx: Some(tx)
+                        }).await
+                    }).unwrap();
                 Ok(rx.recv_async().await?)
             }
 
@@ -327,7 +342,7 @@ mod test {
         };
         let service = example::Service::new(ctx);
         let handle = service.handle();
-        let join = service.start();
+        let join = service.with_name("test").start();
 
         handle
             .send_command_and_wait_async(ExampleCommand::TestCommand {

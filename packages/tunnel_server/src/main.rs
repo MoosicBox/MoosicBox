@@ -60,7 +60,7 @@ fn main() -> Result<(), std::io::Error> {
         let ws_server = ws::server::WsServer::new();
         let ws_service = ws::server::service::Service::new(ws_server);
         let ws_service_handle = ws_service.handle();
-        let ws_service = ws_service.start();
+        let ws_service = ws_service.with_name("WsServer").start();
 
         WS_SERVER_HANDLE
             .write()

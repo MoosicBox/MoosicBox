@@ -177,7 +177,8 @@ impl Processor for Service {
         ctx: Arc<RwLock<UpnpContext>>,
         command: UpnpCommand,
     ) -> Result<(), Self::Error> {
-        log::debug!("process_command command={command}");
+        let cmd_str = command.as_ref().to_owned();
+        log::debug!("process_command command={cmd_str}");
         match command {
             UpnpCommand::SubscribeMediaInfo {
                 interval,
@@ -190,6 +191,7 @@ impl Processor for Service {
                 let action = Arc::new(action);
                 tx.send_async(
                     subscribe(
+                        &cmd_str,
                         ctx,
                         interval,
                         Box::new(move || {
@@ -239,6 +241,7 @@ impl Processor for Service {
                 let action = Arc::new(action);
                 tx.send_async(
                     subscribe(
+                        &cmd_str,
                         ctx,
                         interval,
                         Box::new(move || {
@@ -288,6 +291,7 @@ impl Processor for Service {
                 let action = Arc::new(action);
                 tx.send_async(
                     subscribe(
+                        &cmd_str,
                         ctx,
                         interval,
                         Box::new(move || {
@@ -335,6 +339,7 @@ impl Processor for Service {
 }
 
 async fn subscribe(
+    command: &str,
     ctx: Arc<RwLock<UpnpContext>>,
     interval: Duration,
     action: SubscriptionAction,
@@ -348,10 +353,12 @@ async fn subscribe(
         .insert(subscription_id, status_token.clone());
     ctx.status_join_handles.insert(
         subscription_id,
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(interval);
+        tokio::task::Builder::new()
+            .name(&format!("upnp: subscribe {command}"))
+            .spawn(async move {
+                let mut interval = tokio::time::interval(interval);
 
-            while tokio::select!(
+                while tokio::select!(
                 () = token.cancelled() => {
                     log::debug!("UpnpListener was cancelled");
                     Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "Cancelled"))
@@ -368,8 +375,9 @@ async fn subscribe(
                 action().await;
             }
 
-            Ok(())
-        }),
+                Ok(())
+            })
+            .unwrap(),
     );
 
     Ok(subscription_id)

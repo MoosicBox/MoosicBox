@@ -74,80 +74,84 @@ pub async fn setup_tunnel(
             let music_apis_send = music_apis.clone();
             Ok((
                 Some(host),
-                Some(tokio::spawn(async move {
-                    let mut rx = tunnel.start();
+                Some(tokio::task::Builder::new()
+                    .name("server: tunnel")
+                    .spawn(async move {
+                        let mut rx = tunnel.start();
 
-                    while let Some(m) = rx.recv().await {
-                        match m {
-                            TunnelMessage::Text(m) => {
-                                log::debug!("Received text TunnelMessage {}", &m);
-                                let tunnel = tunnel.clone();
-                                let database_send = database_send.clone();
-                                let music_apis_send = music_apis_send.clone();
-                                tokio::spawn(async move {
-                                    match serde_json::from_str(&m).unwrap() {
-                                        TunnelRequest::Http(request) => {
-                                            if let Err(err) = tunnel
-                                                .tunnel_request(
-                                                    database_send.clone(),
-                                                    music_apis_send.apis,
-                                                    service_port,
-                                                    request.request_id,
-                                                    request.method,
-                                                    request.path,
-                                                    request.query,
-                                                    request.payload,
-                                                    request.headers,
-                                                    request.encoding,
-                                                )
-                                                .await
-                                            {
-                                                log::error!("Tunnel request failed: {err:?}");
+                        while let Some(m) = rx.recv().await {
+                            match m {
+                                TunnelMessage::Text(m) => {
+                                    log::debug!("Received text TunnelMessage {}", &m);
+                                    let tunnel = tunnel.clone();
+                                    let database_send = database_send.clone();
+                                    let music_apis_send = music_apis_send.clone();
+                                    tokio::task::Builder::new()
+                                        .name("server: tunnel message")
+                                        .spawn(async move {
+                                            match serde_json::from_str(&m).unwrap() {
+                                                TunnelRequest::Http(request) => {
+                                                    if let Err(err) = tunnel
+                                                        .tunnel_request(
+                                                            database_send.clone(),
+                                                            music_apis_send.apis,
+                                                            service_port,
+                                                            request.request_id,
+                                                            request.method,
+                                                            request.path,
+                                                            request.query,
+                                                            request.payload,
+                                                            request.headers,
+                                                            request.encoding,
+                                                        )
+                                                        .await
+                                                    {
+                                                        log::error!("Tunnel request failed: {err:?}");
+                                                    }
+                                                }
+                                                TunnelRequest::Ws(request) => {
+                                                    let sender = WS_SERVER_HANDLE
+                                                        .read()
+                                                        .await
+                                                        .as_ref()
+                                                        .ok_or("Failed to get ws server handle")?
+                                                        .clone();
+                                                    if let Err(err) = tunnel
+                                                        .ws_request(
+                                                            &**database_send,
+                                                            request.conn_id,
+                                                            request.request_id,
+                                                            request.body.clone(),
+                                                            sender,
+                                                        )
+                                                        .await
+                                                    {
+                                                        log::error!(
+                                                                "Failed to propagate ws request {} from conn_id {}: {err:?}",
+                                                                request.request_id,
+                                                                request.conn_id
+                                                            );
+                                                    }
+                                                }
+                                                TunnelRequest::Abort(request) => {
+                                                    log::debug!("Aborting request {}", request.request_id);
+                                                    tunnel.abort_request(request.request_id);
+                                                }
                                             }
-                                        }
-                                        TunnelRequest::Ws(request) => {
-                                            let sender = WS_SERVER_HANDLE
-                                                .read()
-                                                .await
-                                                .as_ref()
-                                                .ok_or("Failed to get ws server handle")?
-                                                .clone();
-                                            if let Err(err) = tunnel
-                                                .ws_request(
-                                                    &**database_send,
-                                                    request.conn_id,
-                                                    request.request_id,
-                                                    request.body.clone(),
-                                                    sender,
-                                                )
-                                                .await
-                                            {
-                                                log::error!(
-                                                        "Failed to propagate ws request {} from conn_id {}: {err:?}",
-                                                        request.request_id,
-                                                        request.conn_id
-                                                    );
-                                            }
-                                        }
-                                        TunnelRequest::Abort(request) => {
-                                            log::debug!("Aborting request {}", request.request_id);
-                                            tunnel.abort_request(request.request_id);
-                                        }
-                                    }
-                                    Ok::<_, String>(())
-                                });
+                                            Ok::<_, String>(())
+                                        }).unwrap();
+                                }
+                                TunnelMessage::Binary(_) => todo!(),
+                                TunnelMessage::Ping(_) => {}
+                                TunnelMessage::Pong(_) => todo!(),
+                                TunnelMessage::Close => {
+                                    log::info!("Tunnel connection was closed");
+                                }
+                                TunnelMessage::Frame(_) => todo!(),
                             }
-                            TunnelMessage::Binary(_) => todo!(),
-                            TunnelMessage::Ping(_) => {}
-                            TunnelMessage::Pong(_) => todo!(),
-                            TunnelMessage::Close => {
-                                log::info!("Tunnel connection was closed");
-                            }
-                            TunnelMessage::Frame(_) => todo!(),
                         }
-                    }
-                    log::debug!("Exiting tunnel message loop");
-                })),
+                        log::debug!("Exiting tunnel message loop");
+                    }).unwrap()),
                 Some(handle),
             ))
         }

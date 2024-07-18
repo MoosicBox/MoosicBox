@@ -407,10 +407,13 @@ where
     } else if metadata.is_file()
         && MUSIC_FILE_PATTERN.is_match(p.path().file_name().unwrap().to_str().unwrap())
     {
-        Ok(vec![tokio::spawn(async move {
-            (fun)(p.path(), output.clone(), metadata).await?;
-            Ok::<_, ScanError>(())
-        })])
+        Ok(vec![tokio::task::Builder::new()
+            .name("scan: Local process_dir_entry")
+            .spawn(async move {
+                (fun)(p.path(), output.clone(), metadata).await?;
+                Ok::<_, ScanError>(())
+            })
+            .unwrap()])
     } else {
         Ok(vec![])
     }

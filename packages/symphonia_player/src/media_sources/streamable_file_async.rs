@@ -158,9 +158,12 @@ impl Read for StreamableFileAsync {
                 .as_millis();
             self.receivers.push((id, rx));
 
-            tokio::spawn(async move {
-                Self::read_chunk(tx, url, chunk_write_pos, file_size).await;
-            });
+            tokio::task::Builder::new()
+                .name("symphonia_player: StreamableFileAsync read_chunk")
+                .spawn(async move {
+                    Self::read_chunk(tx, url, chunk_write_pos, file_size).await;
+                })
+                .unwrap();
         }
 
         // Write any new bytes.

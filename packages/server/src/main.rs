@@ -209,7 +209,9 @@ fn main() -> std::io::Result<()> {
         #[cfg(feature = "player")]
         let playback_event_handle = playback_event_service.handle();
         #[cfg(feature = "player")]
-        let playback_join_handle = playback_event_service.start();
+        let playback_join_handle = playback_event_service
+            .with_name("PlaybackEventService")
+            .start();
         #[cfg(feature = "player")]
         PLAYBACK_EVENT_HANDLE
             .set(playback_event_handle.clone())
@@ -222,7 +224,10 @@ fn main() -> std::io::Result<()> {
         }
 
         #[cfg(feature = "postgres-raw")]
-        let db_connection_handle = tokio::spawn(db_connection);
+        let db_connection_handle = tokio::task::Builder::new()
+            .name("server: postgres")
+            .spawn(db_connection)
+            .unwrap();
 
         let (tunnel_host, tunnel_join_handle, tunnel_handle) =
             crate::tunnel::setup_tunnel(database.clone(), music_api_state.clone(), service_port)
@@ -233,7 +238,10 @@ fn main() -> std::io::Result<()> {
             ws_server.add_sender(Box::new(tunnel_handle.clone()));
         }
 
-        let ws_server_handle = tokio::spawn(ws_server.run());
+        let ws_server_handle = tokio::task::Builder::new()
+            .name("server: WsServer")
+            .spawn(ws_server.run())
+            .unwrap();
 
         #[cfg(feature = "player")]
         if let Err(err) =
@@ -279,7 +287,10 @@ fn main() -> std::io::Result<()> {
             .unwrap_or_else(|_| panic!("Failed to set UPNP_LISTENER_HANDLE"));
 
         #[cfg(feature = "upnp")]
-        tokio::spawn(moosicbox_upnp::scan_devices());
+        tokio::task::Builder::new()
+            .name("server: upnp")
+            .spawn(moosicbox_upnp::scan_devices())
+            .unwrap();
 
         let app = move || {
             let app_data = AppState {
@@ -491,11 +502,14 @@ fn main() -> std::io::Result<()> {
             http_server = http_server.workers(workers);
         }
 
-        tokio::spawn(async move {
-            tokio::signal::ctrl_c().await?;
-            log::debug!("Received ctrl-c");
-            Ok::<_, std::io::Error>(())
-        });
+        tokio::task::Builder::new()
+            .name("server: ctrl-c")
+            .spawn(async move {
+                tokio::signal::ctrl_c().await?;
+                log::debug!("Received ctrl-c");
+                Ok::<_, std::io::Error>(())
+            })
+            .unwrap();
 
         let http_server = http_server
             .bind((default_env("BIND_ADDR", "0.0.0.0"), service_port))?

@@ -205,15 +205,18 @@ pub async fn subscribe_endpoint(query: web::Query<SubscribeQuery>) -> Result<Jso
     };
     let (sid, mut stream) = subscribe_events(&service, device.url()).await?;
 
-    tokio::spawn({
-        let sid = sid.clone();
-        async move {
-            while let Ok(Some(event)) = stream.try_next().await {
-                log::info!("Received subscription event for sid={sid}: {event:?}");
+    tokio::task::Builder::new()
+        .name(&format!("upnp: api subscribe {sid}"))
+        .spawn({
+            let sid = sid.clone();
+            async move {
+                while let Ok(Some(event)) = stream.try_next().await {
+                    log::info!("Received subscription event for sid={sid}: {event:?}");
+                }
+                log::info!("Stream ended for sid={sid}");
             }
-            log::info!("Stream ended for sid={sid}");
-        }
-    });
+        })
+        .unwrap();
 
     Ok(Json(sid))
 }
