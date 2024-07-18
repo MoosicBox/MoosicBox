@@ -3668,6 +3668,7 @@ dependencies = [
  "libvips",
  "log",
  "moosicbox_assert",
+ "moosicbox_task",
  "once_cell",
  "strum",
  "strum_macros",

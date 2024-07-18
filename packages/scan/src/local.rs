@@ -144,7 +144,7 @@ fn scan_track(
             sample_rate,
             bit_depth,
             channels,
-        ) = tokio::task::spawn_blocking(move || {
+        ) = moosicbox_task::spawn_blocking("scan: scan_track", move || {
             let extension = path
                 .extension()
                 .and_then(std::ffi::OsStr::to_str)

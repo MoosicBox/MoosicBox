@@ -17,6 +17,7 @@ required-features = ["build-binary"]
 
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
+moosicbox_task   = { path = "../task", default-features = false }
 
 bytes = { workspace = true }
 clap = { workspace = true }

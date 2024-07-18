@@ -41,7 +41,7 @@ pub(crate) async fn resize_image_path(
         use log::error;
         use moosicbox_image::libvips::{get_error, resize_local_file};
         image_type = "jpeg";
-        let resized = tokio::task::spawn_blocking({
+        let resized = moosicbox_task::spawn_blocking("files: resize_image_path", {
             let path = path.to_owned();
             move || {
                 Ok::<_, ResizeImageError>(resize_local_file(width, height, &path).map_err(|e| {

@@ -48,8 +48,10 @@ pub async fn try_resize_local_file_async(
     quality: u8,
 ) -> Result<Option<Bytes>, ResizeImageError> {
     let path = path.to_owned();
-    Ok(tokio::task::spawn_blocking(move || {
-        try_resize_local_file(width, height, &path, encoding, quality)
-    })
-    .await??)
+    Ok(
+        moosicbox_task::spawn_blocking("image: Resize local file", move || {
+            try_resize_local_file(width, height, &path, encoding, quality)
+        })
+        .await??,
+    )
 }

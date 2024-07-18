@@ -201,7 +201,9 @@ pub fn encode_aac_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     writer: T,
 ) -> tokio::task::JoinHandle<()> {
     let path = path.clone();
-    tokio::task::spawn_blocking(move || encode_aac(path, writer))
+    moosicbox_task::spawn_blocking("symphonia_player: encode_aac", move || {
+        encode_aac(path, writer)
+    })
 }
 
 pub fn encode_aac<T: std::io::Write + Send + Sync + Clone + 'static>(path: String, writer: T) {
