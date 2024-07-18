@@ -12,10 +12,7 @@ mod ws;
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App};
 use futures_util::Future;
-use moosicbox_core::{
-    app::AppState,
-    sqlite::models::{RegisterConnection, RegisterPlayer, UpdateSession},
-};
+use moosicbox_core::{app::AppState, sqlite::models::ApiSource};
 use moosicbox_database::Database;
 use moosicbox_downloader::{
     api::models::ApiProgressEvent,
@@ -23,12 +20,18 @@ use moosicbox_downloader::{
 };
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 use moosicbox_files::files::track_pool::service::Commander as _;
+use moosicbox_library::{LibraryMusicApi, LibraryMusicApiState};
+use moosicbox_music_api::{MusicApi, MusicApiState};
 use moosicbox_player::{
     api::DEFAULT_PLAYBACK_RETRY_OPTIONS,
     player::{Player as _, PlayerSource, Track},
 };
+use moosicbox_qobuz::QobuzMusicApi;
+use moosicbox_session::models::{RegisterConnection, RegisterPlayer, UpdateSession};
+use moosicbox_tidal::TidalMusicApi;
 use moosicbox_tunnel_sender::sender::TunnelSenderHandle;
 use moosicbox_ws::{send_download_event, WebsocketContext, WebsocketSendError};
+use moosicbox_yt::YtMusicApi;
 use once_cell::sync::Lazy;
 use std::{
     collections::HashMap,
@@ -54,6 +57,14 @@ static WS_SERVER_HANDLE: Lazy<tokio::sync::RwLock<Option<ws::server::WsServerHan
 
 #[allow(clippy::type_complexity)]
 static DB: Lazy<std::sync::RwLock<Option<Arc<Box<dyn Database>>>>> =
+    Lazy::new(|| std::sync::RwLock::new(None));
+
+#[allow(clippy::type_complexity)]
+static MUSIC_API_STATE: Lazy<std::sync::RwLock<Option<MusicApiState>>> =
+    Lazy::new(|| std::sync::RwLock::new(None));
+
+#[allow(clippy::type_complexity)]
+static LIBRARY_API_STATE: Lazy<std::sync::RwLock<Option<LibraryMusicApiState>>> =
     Lazy::new(|| std::sync::RwLock::new(None));
 
 #[allow(clippy::too_many_lines)]
@@ -114,6 +125,32 @@ fn main() -> std::io::Result<()> {
 
         let database: Arc<Box<dyn Database>> = Arc::new(db);
         DB.write().unwrap().replace(database.clone());
+
+        let mut apis_map: HashMap<ApiSource, Box<dyn MusicApi>> = HashMap::new();
+        apis_map.insert(
+            ApiSource::Library,
+            Box::new(LibraryMusicApi::new(database.clone())),
+        );
+        apis_map.insert(
+            ApiSource::Tidal,
+            Box::new(TidalMusicApi::new(database.clone())),
+        );
+        apis_map.insert(
+            ApiSource::Qobuz,
+            Box::new(QobuzMusicApi::new(database.clone())),
+        );
+        apis_map.insert(ApiSource::Yt, Box::new(YtMusicApi::new(database.clone())));
+        let music_api_state = MusicApiState::new(apis_map);
+        MUSIC_API_STATE
+            .write()
+            .unwrap()
+            .replace(music_api_state.clone());
+
+        let library_api_state = LibraryMusicApiState::new(LibraryMusicApi::new(database.clone()));
+        LIBRARY_API_STATE
+            .write()
+            .unwrap()
+            .replace(library_api_state.clone());
 
         let bytes_throttle = Arc::new(Mutex::new(Throttle::new(Duration::from_millis(200), 1)));
         let bytes_buf = Arc::new(AtomicUsize::new(0));
@@ -176,7 +213,7 @@ fn main() -> std::io::Result<()> {
         let db_connection_handle = tokio::spawn(db_connection);
 
         let (tunnel_host, tunnel_join_handle, tunnel_handle) =
-            crate::tunnel::setup_tunnel(database.clone(), service_port)
+            crate::tunnel::setup_tunnel(database.clone(), music_api_state.clone(), service_port)
                 .await
                 .expect("Failed to setup tunnel connection");
 
@@ -238,6 +275,9 @@ fn main() -> std::io::Result<()> {
                 database: database.clone(),
             };
 
+            let music_api_state = MUSIC_API_STATE.read().unwrap().as_ref().unwrap().clone();
+            let library_api_state = LIBRARY_API_STATE.read().unwrap().as_ref().unwrap().clone();
+
             let cors = Cors::default()
                 .allow_any_origin()
                 .allowed_methods(vec!["GET", "POST", "OPTIONS", "DELETE", "PUT", "PATCH"])
@@ -261,6 +301,8 @@ fn main() -> std::io::Result<()> {
             #[allow(unused_mut)]
             let mut app = app
                 .app_data(web::Data::new(app_data))
+                .app_data(web::Data::new(music_api_state))
+                .app_data(web::Data::new(library_api_state))
                 .service(api::health_endpoint)
                 .service(api::websocket)
                 .service(moosicbox_scan::api::run_scan_endpoint)
@@ -305,7 +347,6 @@ fn main() -> std::io::Result<()> {
                 .service(moosicbox_player::api::stop_track_endpoint)
                 .service(moosicbox_player::api::seek_track_endpoint)
                 .service(moosicbox_player::api::player_status_endpoint)
-                .service(moosicbox_search::api::reindex_endpoint)
                 .service(moosicbox_search::api::search_global_search_endpoint)
                 .service(moosicbox_tidal::api::device_authorization_endpoint)
                 .service(moosicbox_tidal::api::device_authorization_token_endpoint)
@@ -711,6 +752,7 @@ fn handle_upnp_playback_update(update: &UpdateSession) -> Pin<Box<dyn Future<Out
 
                     let player = moosicbox_upnp::player::UpnpPlayer::new(
                         DB.read().unwrap().clone().unwrap(),
+                        MUSIC_API_STATE.read().unwrap().clone().unwrap(),
                         device,
                         service,
                         PlayerSource::Local,

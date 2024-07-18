@@ -2,9 +2,8 @@ use std::path::Path;
 
 use moosicbox_core::sqlite::{
     db::DbError,
-    models::{LibraryAlbum, LibraryArtist, LibraryTrack},
+    models::{Album, Artist, Track},
 };
-use moosicbox_database::Database;
 use thiserror::Error;
 
 use crate::{DataValue, PopulateIndexError, RecreateIndexError, GLOBAL_SEARCH_INDEX_PATH};
@@ -13,12 +12,12 @@ pub trait AsDataValues {
     fn as_data_values<'a>(&self) -> Vec<(&'a str, DataValue)>;
 }
 
-impl AsDataValues for LibraryArtist {
+impl AsDataValues for Artist {
     fn as_data_values<'a>(&self) -> Vec<(&'a str, DataValue)> {
         vec![
             ("document_type", DataValue::String("artists".into())),
             ("artist_title", DataValue::String(self.title.clone())),
-            ("artist_id", DataValue::Number(self.id as u64)),
+            ("artist_id", DataValue::String(self.id.to_string())),
             ("album_title", DataValue::String("".into())),
             ("track_title", DataValue::String("".into())),
             (
@@ -34,14 +33,14 @@ impl AsDataValues for LibraryArtist {
     }
 }
 
-impl AsDataValues for LibraryAlbum {
+impl AsDataValues for Album {
     fn as_data_values<'a>(&self) -> Vec<(&'a str, DataValue)> {
         let mut data = vec![
             ("document_type", DataValue::String("albums".into())),
             ("artist_title", DataValue::String(self.artist.clone())),
-            ("artist_id", DataValue::Number(self.artist_id as u64)),
+            ("artist_id", DataValue::String(self.artist_id.to_string())),
             ("album_title", DataValue::String(self.title.clone())),
-            ("album_id", DataValue::Number(self.id as u64)),
+            ("album_id", DataValue::String(self.id.to_string())),
             ("track_title", DataValue::String("".into())),
             (
                 "cover",
@@ -92,16 +91,16 @@ impl AsDataValues for LibraryAlbum {
     }
 }
 
-impl AsDataValues for LibraryTrack {
+impl AsDataValues for Track {
     fn as_data_values<'a>(&self) -> Vec<(&'a str, DataValue)> {
         vec![
             ("document_type", DataValue::String("tracks".into())),
             ("artist_title", DataValue::String(self.artist.clone())),
-            ("artist_id", DataValue::Number(self.artist_id as u64)),
+            ("artist_id", DataValue::String(self.artist_id.to_string())),
             ("album_title", DataValue::String(self.album.clone())),
-            ("album_id", DataValue::Number(self.album_id as u64)),
+            ("album_id", DataValue::String(self.album_id.to_string())),
             ("track_title", DataValue::String(self.title.clone())),
-            ("track_id", DataValue::Number(self.id as u64)),
+            ("track_id", DataValue::String(self.id.to_string())),
             (
                 "cover",
                 DataValue::String(self.artwork.clone().unwrap_or("".to_string())),
@@ -147,21 +146,21 @@ pub trait AsDeleteTerm {
     fn as_delete_term<'a>(&self) -> (&'a str, DataValue);
 }
 
-impl AsDeleteTerm for LibraryArtist {
+impl AsDeleteTerm for Artist {
     fn as_delete_term<'a>(&self) -> (&'a str, DataValue) {
-        ("artist_id", DataValue::Number(self.id as u64))
+        ("artist_id", DataValue::String(self.id.to_string()))
     }
 }
 
-impl AsDeleteTerm for LibraryAlbum {
+impl AsDeleteTerm for Album {
     fn as_delete_term<'a>(&self) -> (&'a str, DataValue) {
-        ("album_id", DataValue::Number(self.id as u64))
+        ("album_id", DataValue::String(self.id.to_string()))
     }
 }
 
-impl AsDeleteTerm for LibraryTrack {
+impl AsDeleteTerm for Track {
     fn as_delete_term<'a>(&self) -> (&'a str, DataValue) {
-        ("track_id", DataValue::Number(self.id as u64))
+        ("track_id", DataValue::String(self.id.to_string()))
     }
 }
 
@@ -175,35 +174,8 @@ pub enum ReindexFromDbError {
     PopulateIndex(#[from] PopulateIndexError),
 }
 
-pub async fn reindex_global_search_index_from_db(
-    db: &dyn Database,
-) -> Result<(), ReindexFromDbError> {
+pub async fn recreate_global_search_index() -> Result<(), RecreateIndexError> {
     let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
     crate::recreate_global_search_index(path)?;
-
-    let artists = moosicbox_core::sqlite::db::get_artists(db)
-        .await?
-        .into_iter()
-        .map(|artist| artist.as_data_values())
-        .collect::<Vec<_>>();
-
-    crate::populate_global_search_index(artists, false)?;
-
-    let albums = moosicbox_core::sqlite::db::get_albums(db)
-        .await?
-        .into_iter()
-        .map(|album| album.as_data_values())
-        .collect::<Vec<_>>();
-
-    crate::populate_global_search_index(albums, false)?;
-
-    let tracks = moosicbox_core::sqlite::db::get_tracks(db, None)
-        .await?
-        .into_iter()
-        .map(|track| track.as_data_values())
-        .collect::<Vec<_>>();
-
-    crate::populate_global_search_index(tracks, false)?;
-
     Ok(())
 }

@@ -1,0 +1,62 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["multimedia", "network-programming"]
+description = "MoosicBox Library Music API package"
+edition     = "2021"
+keywords    = ["audio", "library"]
+license     = "MPL-2.0"
+name        = "moosicbox_library"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_assert = { path = "../assert", default-features = false }
+moosicbox_core = { path = "../core", default-features = false }
+moosicbox_database = { path = "../database", default-features = false, features = [
+    "rusqlite",
+] }
+moosicbox_files = { path = "../files", default-features = false }
+moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
+    "database",
+    "serde_json",
+] }
+moosicbox_music_api = { path = "../music_api", default-features = false }
+moosicbox_paging = { path = "../paging", default-features = false }
+moosicbox_search = { path = "../search", default-features = false }
+moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
+moosicbox_symphonia_player = { path = "../symphonia_player", default-features = false }
+
+# API Dependencies
+actix-web = { workspace = true, optional = true }
+
+async-recursion = { workspace = true }
+async-trait     = { workspace = true }
+enum-as-inner   = { workspace = true }
+futures         = { workspace = true }
+log             = { workspace = true }
+once_cell       = { workspace = true }
+open            = { workspace = true }
+regex           = { workspace = true }
+reqwest         = { workspace = true, features = ["json"] }
+rusqlite        = { workspace = true }
+serde           = { workspace = true, features = ["derive"] }
+serde_json      = { workspace = true }
+strum           = { workspace = true }
+strum_macros    = { workspace = true }
+thiserror       = { workspace = true }
+tokio           = { workspace = true, features = ["macros"] }
+tokio-util      = { workspace = true }
+url             = { workspace = true }
+
+[features]
+default = ["aac", "api", "flac", "mp3", "opus"]
+
+fail-on-warnings = []
+
+api = ["dep:actix-web"]
+
+aac  = ["moosicbox_core/aac", "moosicbox_symphonia_player/aac"]
+flac = ["moosicbox_core/flac", "moosicbox_symphonia_player/flac"]
+mp3  = ["moosicbox_core/mp3", "moosicbox_symphonia_player/mp3"]
+opus = ["moosicbox_core/opus", "moosicbox_symphonia_player/opus"]

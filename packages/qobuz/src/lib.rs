@@ -13,32 +13,46 @@ use moosicbox_core::sqlite::db::DbError;
 #[cfg(feature = "db")]
 use moosicbox_database::{Database, DatabaseError};
 
+use moosicbox_files::get_content_length;
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use std::{collections::HashMap, str::Utf8Error, sync::Arc};
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
-use moosicbox_core::sqlite::models::{Album, ApiSource, Artist, Id, LibraryAlbum, Track};
+use moosicbox_core::{
+    sqlite::models::{Album, ApiSource, Artist, Id, Track},
+    types::{AudioFormat, PlaybackQuality},
+};
 use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
     ParseError, ToValueType,
 };
 use moosicbox_music_api::{
     AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumOrder, AlbumOrderDirection,
-    AlbumType, AlbumsError, ArtistAlbumsError, ArtistError, ArtistOrder, ArtistOrderDirection,
-    ArtistsError, LibraryAlbumError, MusicApi, RemoveAlbumError, RemoveArtistError,
-    RemoveTrackError, TrackError, TrackOrder, TrackOrderDirection, TracksError,
+    AlbumType, AlbumsError, AlbumsRequest, ArtistAlbumsError, ArtistError, ArtistOrder,
+    ArtistOrderDirection, ArtistsError, ImageCoverSize, ImageCoverSource, MusicApi,
+    RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackAudioQuality, TrackError,
+    TrackOrder, TrackOrderDirection, TrackSource, TracksError,
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use url::form_urlencoded;
 
 use crate::models::QobuzImage;
+
+static ARTIST_CACHE: Lazy<RwLock<HashMap<Id, Option<QobuzArtist>>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
+
+static ALBUM_CACHE: Lazy<RwLock<HashMap<Id, Option<QobuzAlbum>>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
+
+static TRACK_CACHE: Lazy<RwLock<HashMap<Id, Option<QobuzTrack>>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
 
 static AUTH_HEADER_NAME: &str = "x-user-auth-token";
 static APP_ID_HEADER_NAME: &str = "x-app-id";
@@ -644,6 +658,12 @@ pub async fn artist(
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> Result<QobuzArtist, QobuzArtistError> {
+    {
+        if let Some(Some(artist)) = ARTIST_CACHE.read().await.get(artist_id).as_ref() {
+            return Ok(artist.clone());
+        }
+    }
+
     let url = qobuz_api_endpoint!(
         Artist,
         &[],
@@ -661,7 +681,13 @@ pub async fn artist(
 
     log::trace!("Received artist response: {value:?}");
 
-    let artist = value.to_value_type()?;
+    let artist: QobuzArtist = value.to_value_type()?;
+
+    {
+        let mut cache = ARTIST_CACHE.write().await;
+
+        cache.insert(artist.id.into(), Some(artist.clone()));
+    }
 
     Ok(artist)
 }
@@ -707,8 +733,16 @@ pub async fn favorite_artists(
 
     log::trace!("Received favorite artists response: {value:?}");
 
-    let items = value.to_nested_value(&["artists", "items"])?;
+    let items: Vec<QobuzArtist> = value.to_nested_value(&["artists", "items"])?;
     let total = value.to_nested_value(&["artists", "total"])?;
+
+    {
+        let mut cache = ARTIST_CACHE.write().await;
+
+        for item in &items {
+            cache.insert(item.id.into(), Some(item.clone()));
+        }
+    }
 
     #[cfg(feature = "db")]
     let db = db.clone();
@@ -910,6 +944,12 @@ pub async fn album(
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> Result<QobuzAlbum, QobuzAlbumError> {
+    {
+        if let Some(Some(album)) = ALBUM_CACHE.read().await.get(album_id).as_ref() {
+            return Ok(album.clone());
+        }
+    }
+
     let url = qobuz_api_endpoint!(
         Album,
         &[],
@@ -925,7 +965,13 @@ pub async fn album(
     )
     .await?;
 
-    let album = value.to_value_type()?;
+    let album: QobuzAlbum = value.to_value_type()?;
+
+    {
+        let mut cache = ALBUM_CACHE.write().await;
+
+        cache.insert(album.id.as_str().into(), Some(album.clone()));
+    }
 
     Ok(album)
 }
@@ -981,13 +1027,21 @@ pub async fn favorite_albums(
         }
     };
 
-    let items = value
+    let items: Vec<QobuzAlbum> = value
         .to_nested_value::<Vec<_>>(&["albums", "items"])?
         .into_iter()
         .take(original_limit as usize)
         .collect();
 
     let total = value.to_nested_value(&["albums", "total"])?;
+
+    {
+        let mut cache = ALBUM_CACHE.write().await;
+
+        for item in &items {
+            cache.insert(item.id.as_str().into(), Some(item.clone()));
+        }
+    }
 
     #[cfg(feature = "db")]
     let db = db.clone();
@@ -1159,7 +1213,7 @@ pub async fn album_tracks(
     let artist_id = value.to_nested_value(&["artist", "id"])?;
     let album = value.to_value("title")?;
     let image: Option<QobuzImage> = value.to_value("image")?;
-    let items = value
+    let items: Vec<QobuzTrack> = value
         .to_nested_value::<Vec<&Value>>(&["tracks", "items"])?
         .iter()
         .map(move |value| {
@@ -1174,6 +1228,14 @@ pub async fn album_tracks(
         })
         .collect::<Result<Vec<_>, _>>()?;
     let total = value.to_nested_value(&["tracks", "total"])?;
+
+    {
+        let mut cache = TRACK_CACHE.write().await;
+
+        for item in &items {
+            cache.insert(item.id.into(), Some(item.clone()));
+        }
+    }
 
     #[cfg(feature = "db")]
     let db = db.clone();
@@ -1224,6 +1286,12 @@ pub async fn track(
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> Result<QobuzTrack, QobuzTrackError> {
+    {
+        if let Some(Some(track)) = TRACK_CACHE.read().await.get(track_id).as_ref() {
+            return Ok(track.clone());
+        }
+    }
+
     let url = qobuz_api_endpoint!(
         Track,
         &[],
@@ -1239,7 +1307,13 @@ pub async fn track(
     )
     .await?;
 
-    let track = value.to_value_type()?;
+    let track: QobuzTrack = value.to_value_type()?;
+
+    {
+        let mut cache = TRACK_CACHE.write().await;
+
+        cache.insert(track.id.into(), Some(track.clone()));
+    }
 
     Ok(track)
 }
@@ -1283,8 +1357,16 @@ pub async fn favorite_tracks(
     )
     .await?;
 
-    let items = value.to_nested_value(&["tracks", "items"])?;
+    let items: Vec<QobuzTrack> = value.to_nested_value(&["tracks", "items"])?;
     let total = value.to_nested_value(&["tracks", "total"])?;
+
+    {
+        let mut cache = TRACK_CACHE.write().await;
+
+        for track in &items {
+            cache.insert(track.id.into(), Some(track.clone()));
+        }
+    }
 
     #[cfg(feature = "db")]
     let db = db.clone();
@@ -1394,6 +1476,17 @@ impl QobuzAudioQuality {
             QobuzAudioQuality::FlacLossless => 6,
             QobuzAudioQuality::FlacHiRes => 7,
             QobuzAudioQuality::FlacHighestRes => 27,
+        }
+    }
+}
+
+impl From<TrackAudioQuality> for QobuzAudioQuality {
+    fn from(value: TrackAudioQuality) -> Self {
+        match value {
+            TrackAudioQuality::Low => QobuzAudioQuality::Low,
+            TrackAudioQuality::FlacLossless => QobuzAudioQuality::FlacLossless,
+            TrackAudioQuality::FlacHiRes => QobuzAudioQuality::FlacHiRes,
+            TrackAudioQuality::FlacHighestRes => QobuzAudioQuality::FlacHighestRes,
         }
     }
 }
@@ -1793,8 +1886,20 @@ impl From<QobuzFavoriteTracksError> for TracksError {
     }
 }
 
+impl From<QobuzAlbumTracksError> for TracksError {
+    fn from(err: QobuzAlbumTracksError) -> Self {
+        TracksError::Other(Box::new(err))
+    }
+}
+
 impl From<QobuzTrackError> for TrackError {
     fn from(err: QobuzTrackError) -> Self {
+        TrackError::Other(Box::new(err))
+    }
+}
+
+impl From<QobuzTrackFileUrlError> for TrackError {
+    fn from(err: QobuzTrackFileUrlError) -> Self {
         TrackError::Other(Box::new(err))
     }
 }
@@ -1889,18 +1994,33 @@ impl MusicApi for QobuzMusicApi {
         .await?)
     }
 
-    async fn albums(
+    async fn artist_cover_source(
         &self,
-        offset: Option<u32>,
-        limit: Option<u32>,
-        _order: Option<AlbumOrder>,
-        _order_direction: Option<AlbumOrderDirection>,
-    ) -> PagingResult<Album, AlbumsError> {
+        artist: &Artist,
+        size: ImageCoverSize,
+    ) -> Result<Option<ImageCoverSource>, ArtistError> {
+        let artist = crate::artist(
+            #[cfg(feature = "db")]
+            &**self.db,
+            &artist.id,
+            None,
+            None,
+        )
+        .await?;
+
+        Ok(artist
+            .image
+            .as_ref()
+            .and_then(|x| x.cover_url_for_size(size.into()))
+            .map(ImageCoverSource::RemoteUrl))
+    }
+
+    async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
         Ok(favorite_albums(
             #[cfg(feature = "db")]
             self.db.clone(),
-            offset,
-            limit,
+            request.page.as_ref().map(|x| x.offset),
+            request.page.as_ref().map(|x| x.limit),
             None,
             None,
         )
@@ -1951,26 +2071,6 @@ impl MusicApi for QobuzMusicApi {
         }))
     }
 
-    #[cfg(not(feature = "db"))]
-    async fn library_album(
-        &self,
-        _album_id: &Id,
-    ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
-        Err(LibraryAlbumError::NoDb)
-    }
-
-    #[cfg(feature = "db")]
-    async fn library_album(
-        &self,
-        album_id: &Id,
-    ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
-        Ok(
-            moosicbox_core::sqlite::menu::get_album(&**self.db, album_id, ApiSource::Qobuz)
-                .await
-                .map_err(|err| LibraryAlbumError::Other(Box::new(err)))?,
-        )
-    }
-
     async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
         Ok(add_favorite_album(
             #[cfg(feature = "db")]
@@ -1993,16 +2093,64 @@ impl MusicApi for QobuzMusicApi {
         .await?)
     }
 
+    async fn album_cover_source(
+        &self,
+        album: &Album,
+        size: ImageCoverSize,
+    ) -> Result<Option<ImageCoverSource>, AlbumError> {
+        let album = crate::album(
+            #[cfg(feature = "db")]
+            &**self.db,
+            &album.id,
+            None,
+            None,
+        )
+        .await?;
+
+        Ok(album
+            .image
+            .as_ref()
+            .and_then(|x| x.cover_url_for_size(size.into()))
+            .map(ImageCoverSource::RemoteUrl))
+    }
+
     async fn tracks(
         &self,
+        track_ids: Option<&[Id]>,
         offset: Option<u32>,
         limit: Option<u32>,
         _order: Option<TrackOrder>,
         _order_direction: Option<TrackOrderDirection>,
     ) -> PagingResult<Track, TracksError> {
+        moosicbox_assert::assert_or_unimplemented!(
+            track_ids.is_none(),
+            "Fetching specific tracks by id is not implemented yet"
+        );
+
         Ok(favorite_tracks(
             #[cfg(feature = "db")]
             self.db.clone(),
+            offset,
+            limit,
+            None,
+            None,
+        )
+        .await?
+        .map(|x| x.into()))
+    }
+
+    async fn album_tracks(
+        &self,
+        album_id: &Id,
+        offset: Option<u32>,
+        limit: Option<u32>,
+        _order: Option<TrackOrder>,
+        _order_direction: Option<TrackOrderDirection>,
+    ) -> PagingResult<Track, TracksError> {
+        Ok(album_tracks(
+            #[cfg(feature = "db")]
+            self.db.clone(),
+            album_id,
             offset,
             limit,
             None,
@@ -2046,6 +2194,50 @@ impl MusicApi for QobuzMusicApi {
             None,
         )
         .await?)
+    }
+
+    async fn track_source(
+        &self,
+        track: &Track,
+        quality: TrackAudioQuality,
+    ) -> Result<Option<TrackSource>, TrackError> {
+        let url = track_file_url(
+            #[cfg(feature = "db")]
+            &**self.db,
+            &track.id,
+            quality.into(),
+            None,
+            None,
+            None,
+        )
+        .await?;
+        Ok(Some(TrackSource::RemoteUrl {
+            url,
+            format: track.format.unwrap_or(AudioFormat::Source),
+            track_id: Some(track.id.to_owned()),
+        }))
+    }
+
+    async fn track_size(
+        &self,
+        track_id: &Id,
+        _source: &TrackSource,
+        _quality: PlaybackQuality,
+    ) -> Result<Option<u64>, TrackError> {
+        let url = track_file_url(
+            #[cfg(feature = "db")]
+            &**self.db,
+            track_id,
+            QobuzAudioQuality::Low,
+            None,
+            None,
+            None,
+        )
+        .await?;
+
+        Ok(get_content_length(&url, None, None)
+            .await
+            .map_err(|e| TrackError::Other(Box::new(e)))?)
     }
 }
 

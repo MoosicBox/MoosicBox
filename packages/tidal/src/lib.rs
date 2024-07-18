@@ -15,15 +15,18 @@ use moosicbox_database::{Database, DatabaseError};
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
-use moosicbox_core::sqlite::models::{
-    Album, ApiSource, Artist, AsModelResult, Id, LibraryAlbum, Track,
+use moosicbox_core::{
+    sqlite::models::{Album, AlbumSort, ApiSource, Artist, AsModelResult, Id, Track},
+    types::{AudioFormat, PlaybackQuality},
 };
+use moosicbox_files::get_content_length;
 use moosicbox_json_utils::{serde_json::ToValue, ParseError};
 use moosicbox_music_api::{
     AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumOrder, AlbumOrderDirection,
-    AlbumType, AlbumsError, ArtistAlbumsError, ArtistError, ArtistOrder, ArtistOrderDirection,
-    ArtistsError, LibraryAlbumError, MusicApi, RemoveAlbumError, RemoveArtistError,
-    RemoveTrackError, TrackError, TrackOrder, TrackOrderDirection, TracksError,
+    AlbumType, AlbumsError, AlbumsRequest, ArtistAlbumsError, ArtistError, ArtistOrder,
+    ArtistOrderDirection, ArtistsError, ImageCoverSize, ImageCoverSource, MusicApi,
+    RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackAudioQuality, TrackError,
+    TrackOrder, TrackOrderDirection, TrackSource, TracksError,
 };
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use once_cell::sync::Lazy;
@@ -849,6 +852,21 @@ pub enum TidalAlbumOrder {
 pub enum TidalAlbumOrderDirection {
     Asc,
     Desc,
+}
+
+impl From<AlbumSort> for TidalAlbumOrderDirection {
+    fn from(value: AlbumSort) -> Self {
+        match value {
+            AlbumSort::ArtistAsc => TidalAlbumOrderDirection::Asc,
+            AlbumSort::ArtistDesc => TidalAlbumOrderDirection::Desc,
+            AlbumSort::NameAsc => TidalAlbumOrderDirection::Asc,
+            AlbumSort::NameDesc => TidalAlbumOrderDirection::Desc,
+            AlbumSort::ReleaseDateAsc => TidalAlbumOrderDirection::Asc,
+            AlbumSort::ReleaseDateDesc => TidalAlbumOrderDirection::Desc,
+            AlbumSort::DateAddedAsc => TidalAlbumOrderDirection::Asc,
+            AlbumSort::DateAddedDesc => TidalAlbumOrderDirection::Desc,
+        }
+    }
 }
 
 #[derive(Debug, Error)]
@@ -1873,6 +1891,17 @@ pub enum TidalAudioQuality {
     HiResLossless,
 }
 
+impl From<TrackAudioQuality> for TidalAudioQuality {
+    fn from(value: TrackAudioQuality) -> Self {
+        match value {
+            TrackAudioQuality::Low => TidalAudioQuality::High,
+            TrackAudioQuality::FlacLossless => TidalAudioQuality::Lossless,
+            TrackAudioQuality::FlacHiRes => TidalAudioQuality::HiResLossless,
+            TrackAudioQuality::FlacHighestRes => TidalAudioQuality::HiResLossless,
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum TidalTrackFileUrlError {
     #[error(transparent)]
@@ -1981,6 +2010,12 @@ impl From<ArtistOrderDirection> for TidalArtistOrderDirection {
             ArtistOrderDirection::Ascending => TidalArtistOrderDirection::Asc,
             ArtistOrderDirection::Descending => TidalArtistOrderDirection::Desc,
         }
+    }
+}
+
+impl From<AlbumSort> for TidalAlbumOrder {
+    fn from(_value: AlbumSort) -> Self {
+        TidalAlbumOrder::Date
     }
 }
 
@@ -2104,8 +2139,20 @@ impl From<TidalFavoriteTracksError> for TracksError {
     }
 }
 
+impl From<TidalAlbumTracksError> for TracksError {
+    fn from(err: TidalAlbumTracksError) -> Self {
+        TracksError::Other(Box::new(err))
+    }
+}
+
 impl From<TidalTrackError> for TrackError {
     fn from(err: TidalTrackError) -> Self {
+        TrackError::Other(Box::new(err))
+    }
+}
+
+impl From<TidalTrackFileUrlError> for TrackError {
+    fn from(err: TidalTrackFileUrlError) -> Self {
         TrackError::Other(Box::new(err))
     }
 }
@@ -2213,20 +2260,35 @@ impl MusicApi for TidalMusicApi {
         .await?)
     }
 
-    async fn albums(
+    async fn artist_cover_source(
         &self,
-        offset: Option<u32>,
-        limit: Option<u32>,
-        order: Option<AlbumOrder>,
-        order_direction: Option<AlbumOrderDirection>,
-    ) -> PagingResult<Album, AlbumsError> {
+        artist: &Artist,
+        size: ImageCoverSize,
+    ) -> Result<Option<ImageCoverSource>, ArtistError> {
+        let artist = crate::artist(
+            #[cfg(feature = "db")]
+            &**self.db,
+            &artist.id,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?;
+
+        Ok(artist
+            .picture_url(size.into())
+            .map(ImageCoverSource::RemoteUrl))
+    }
+
+    async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
         Ok(favorite_albums(
             #[cfg(feature = "db")]
             self.db.clone(),
-            offset,
-            limit,
-            order.map(|x| x.into()),
-            order_direction.map(|x| x.into()),
+            request.page.as_ref().map(|x| x.offset),
+            request.page.as_ref().map(|x| x.limit),
+            request.sort.as_ref().map(|x| (*x).into()),
+            request.sort.as_ref().map(|x| (*x).into()),
             None,
             None,
             None,
@@ -2350,26 +2412,6 @@ impl MusicApi for TidalMusicApi {
         .map(|x| x.into()))
     }
 
-    #[cfg(not(feature = "db"))]
-    async fn library_album(
-        &self,
-        _album_id: &Id,
-    ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
-        Err(LibraryAlbumError::NoDb)
-    }
-
-    #[cfg(feature = "db")]
-    async fn library_album(
-        &self,
-        album_id: &Id,
-    ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
-        Ok(
-            moosicbox_core::sqlite::menu::get_album(&**self.db, album_id, ApiSource::Tidal)
-                .await
-                .map_err(|err| LibraryAlbumError::Other(Box::new(err)))?,
-        )
-    }
-
     async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
         Ok(add_favorite_album(
             #[cfg(feature = "db")]
@@ -2398,13 +2440,40 @@ impl MusicApi for TidalMusicApi {
         .await?)
     }
 
+    async fn album_cover_source(
+        &self,
+        album: &Album,
+        size: ImageCoverSize,
+    ) -> Result<Option<ImageCoverSource>, AlbumError> {
+        let album = crate::album(
+            #[cfg(feature = "db")]
+            &**self.db,
+            &album.id,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?;
+
+        Ok(album
+            .cover_url(size.into())
+            .map(ImageCoverSource::RemoteUrl))
+    }
+
     async fn tracks(
         &self,
+        track_ids: Option<&[Id]>,
         offset: Option<u32>,
         limit: Option<u32>,
         order: Option<TrackOrder>,
         order_direction: Option<TrackOrderDirection>,
     ) -> PagingResult<Track, TracksError> {
+        moosicbox_assert::assert_or_unimplemented!(
+            track_ids.is_none(),
+            "Fetching specific tracks by id is not implemented yet"
+        );
+
         Ok(favorite_tracks(
             #[cfg(feature = "db")]
             self.db.clone(),
@@ -2413,6 +2482,29 @@ impl MusicApi for TidalMusicApi {
             order.map(|x| x.into()),
             order_direction.map(|x| x.into()),
             None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?
+        .map(|x| x.into()))
+    }
+
+    async fn album_tracks(
+        &self,
+        album_id: &Id,
+        offset: Option<u32>,
+        limit: Option<u32>,
+        _order: Option<TrackOrder>,
+        _order_direction: Option<TrackOrderDirection>,
+    ) -> PagingResult<Track, TracksError> {
+        Ok(album_tracks(
+            #[cfg(feature = "db")]
+            self.db.clone(),
+            album_id,
+            offset,
+            limit,
             None,
             None,
             None,
@@ -2464,5 +2556,54 @@ impl MusicApi for TidalMusicApi {
             None,
         )
         .await?)
+    }
+
+    async fn track_source(
+        &self,
+        track: &Track,
+        quality: TrackAudioQuality,
+    ) -> Result<Option<TrackSource>, TrackError> {
+        Ok(track_file_url(
+            #[cfg(feature = "db")]
+            &**self.db,
+            quality.into(),
+            &track.id,
+            None,
+        )
+        .await?
+        .first()
+        .map(|x| x.to_string())
+        .map(|url| TrackSource::RemoteUrl {
+            url,
+            format: track.format.unwrap_or(AudioFormat::Source),
+            track_id: Some(track.id.to_owned()),
+        }))
+    }
+
+    async fn track_size(
+        &self,
+        track_id: &Id,
+        _source: &TrackSource,
+        _quality: PlaybackQuality,
+    ) -> Result<Option<u64>, TrackError> {
+        let url = if let Some(url) = track_file_url(
+            #[cfg(feature = "db")]
+            &**self.db,
+            TidalAudioQuality::High,
+            track_id,
+            None,
+        )
+        .await?
+        .into_iter()
+        .next()
+        {
+            url
+        } else {
+            return Ok(None);
+        };
+
+        Ok(get_content_length(&url, None, None)
+            .await
+            .map_err(|e| TrackError::Other(Box::new(e)))?)
     }
 }

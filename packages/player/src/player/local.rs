@@ -2,7 +2,8 @@ use std::sync::{atomic::AtomicBool, Arc, RwLock, RwLockWriteGuard};
 
 use async_trait::async_trait;
 use flume::Receiver;
-use moosicbox_core::sqlite::models::{ToApi, TrackApiSource, UpdateSession};
+use moosicbox_core::sqlite::models::{ToApi, TrackApiSource};
+use moosicbox_session::models::UpdateSession;
 use moosicbox_symphonia_player::{output::AudioOutputHandler, volume_mixer::mix_volume};
 use rand::{thread_rng, Rng as _};
 use symphonia::core::io::MediaSourceStream;
@@ -67,6 +68,7 @@ impl Player for LocalPlayer {
         let sent_playback_start_event = AtomicBool::new(false);
 
         let get_handler = move || {
+            #[allow(unused_mut)]
             let mut audio_output_handler = AudioOutputHandler::new()
                 .with_filter(Box::new({
                     let active_playback = active_playback.clone();

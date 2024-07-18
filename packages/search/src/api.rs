@@ -2,44 +2,25 @@ use std::str::FromStr;
 
 use actix_web::{
     error::ErrorInternalServerError,
-    get, post,
+    get,
     web::{self, Json},
     Result,
 };
 use moosicbox_core::{
-    app::AppState,
     sqlite::models::{ApiAlbumVersionQuality, TrackApiSource},
     types::AudioFormat,
 };
 use moosicbox_json_utils::{tantivy::ToValue, ParseError, ToValueType};
 use serde::Deserialize;
-use serde_json::Value;
 use tantivy::schema::NamedFieldDocument;
 
 use crate::{
-    data::reindex_global_search_index_from_db,
     models::{
         ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
         ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
     },
     search_global_search_index,
 };
-
-#[derive(Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct ReindexQuery {}
-
-#[post("/search/reindex")]
-pub async fn reindex_endpoint(
-    _query: web::Query<ReindexQuery>,
-    data: web::Data<AppState>,
-) -> Result<Json<Value>> {
-    reindex_global_search_index_from_db(&**data.database)
-        .await
-        .map_err(|e| ErrorInternalServerError(format!("Failed to reindex from database: {e:?}")))?;
-
-    Ok(Json(serde_json::json!({"success": true})))
-}
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]

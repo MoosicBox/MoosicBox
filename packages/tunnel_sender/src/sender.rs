@@ -17,11 +17,12 @@ use moosicbox_core::types::AudioFormat;
 use moosicbox_database::Database;
 use moosicbox_env_utils::default_env_usize;
 use moosicbox_files::api::AlbumCoverQuery;
-use moosicbox_files::files::album::{get_album_cover, AlbumCoverError, AlbumCoverSource};
+use moosicbox_files::files::album::{get_album_cover, AlbumCoverError};
 use moosicbox_files::files::track::{
-    audio_format_to_content_type, get_track_id_source, get_track_info, TrackSource,
+    audio_format_to_content_type, get_track_id_source, get_track_info,
 };
 use moosicbox_files::range::{parse_ranges, Range};
+use moosicbox_music_api::{MusicApis, TrackSource};
 use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;
 use moosicbox_stream_utils::ByteWriter;
 use moosicbox_symphonia_player::media_sources::remote_bytestream::RemoteByteStreamMediaSource;
@@ -1076,6 +1077,7 @@ impl TunnelSender {
     pub async fn tunnel_request(
         &self,
         database: Arc<Box<dyn Database>>,
+        music_apis: MusicApis,
         service_port: u16,
         request_id: usize,
         method: Method,
@@ -1130,10 +1132,10 @@ impl TunnelSender {
                         response_headers.insert("accept-ranges".to_string(), "bytes".to_string());
 
                         match get_track_id_source(
-                            &Id::Number(query.track_id as u64),
-                            &**database,
-                            query.quality,
+                            music_apis.clone(),
+                            &query.track_id.into(),
                             query.source.unwrap_or(ApiSource::Library),
+                            query.quality,
                         )
                         .await
                         {
@@ -1184,13 +1186,12 @@ impl TunnelSender {
                                     }
                                 }
                             }
-                            Ok(TrackSource::Tidal { url, .. })
-                            | Ok(TrackSource::Qobuz { url, .. })
-                            | Ok(TrackSource::Yt { url, .. }) => {
+                            Ok(TrackSource::RemoteUrl { url, .. }) => {
                                 let writer = ByteWriter::default();
                                 let stream = writer.stream();
 
                                 let get_handler = move || {
+                                    #[allow(unused_mut)]
                                     let mut audio_output_handler = AudioOutputHandler::new();
 
                                     let format = match query.format {
@@ -1334,8 +1335,9 @@ impl TunnelSender {
                     let mut headers = HashMap::new();
                     headers.insert("content-type".to_string(), "application/json".to_string());
 
-                    if let Ok(track_info) = get_track_info(query.track_id as u64, &**database).await
-                    {
+                    let api = music_apis.get(query.source.unwrap_or(ApiSource::Library))?;
+
+                    if let Ok(track_info) = get_track_info(&**api, &query.track_id.into()).await {
                         let mut bytes: Vec<u8> = Vec::new();
                         serde_json::to_writer(&mut bytes, &track_info)?;
                         self.send(request_id, 200, headers, Cursor::new(bytes), encoding)?;
@@ -1384,84 +1386,89 @@ impl TunnelSender {
                                 .parse::<u32>()
                                 .map_err(|_| TunnelRequestError::BadRequest("Bad height".into()))?;
 
-                            match get_album_cover(
-                                album_id,
-                                source,
+                            let api = music_apis.get(query.source.unwrap_or(ApiSource::Library))?;
+
+                            let album = api
+                                .album(&album_id)
+                                .await
+                                .map_err(|e| {
+                                    TunnelRequestError::NotFound(format!(
+                                        "Failed to get album: {e:?}"
+                                    ))
+                                })?
+                                .ok_or_else(|| {
+                                    TunnelRequestError::NotFound(format!(
+                                        "Album not found: {}",
+                                        album_id.to_owned()
+                                    ))
+                                })?;
+
+                            let path = get_album_cover(
+                                &**api,
                                 &**database,
-                                Some(std::cmp::max(width, height)),
+                                &album,
+                                (std::cmp::max(width, height) as u16).into(),
                             )
                             .await
-                            .map_err(|e| TunnelRequestError::Request(e.to_string()))?
-                            {
-                                AlbumCoverSource::LocalFilePath(path) => {
-                                    let mut headers = HashMap::new();
-                                    let resized = {
-                                        use moosicbox_image::{
-                                            image::try_resize_local_file_async, Encoding,
-                                        };
-                                        if let Some(resized) = try_resize_local_file_async(
-                                            width,
-                                            height,
-                                            &path,
-                                            Encoding::Webp,
-                                            80,
-                                        )
-                                        .await
-                                        .map_err(|e| {
-                                            TunnelRequestError::InternalServerError(Box::new(
-                                                AlbumCoverError::File(path.clone(), e.to_string()),
-                                            ))
-                                        })? {
-                                            headers.insert(
-                                                "content-type".to_string(),
-                                                "image/webp".to_string(),
-                                            );
-                                            resized
-                                        } else {
-                                            headers.insert(
-                                                "content-type".to_string(),
-                                                "image/jpeg".to_string(),
-                                            );
-                                            try_resize_local_file_async(
-                                                width,
-                                                height,
-                                                &path,
-                                                Encoding::Jpeg,
-                                                80,
-                                            )
-                                            .await
-                                            .map_err(|e| {
-                                                TunnelRequestError::InternalServerError(Box::new(
-                                                    AlbumCoverError::File(
-                                                        path.clone(),
-                                                        e.to_string(),
-                                                    ),
-                                                ))
-                                            })?
-                                            .ok_or_else(|| {
-                                                TunnelRequestError::InternalServerError(Box::new(
-                                                    AlbumCoverError::File(
-                                                        path,
-                                                        "No cover from Option".to_string(),
-                                                    ),
-                                                ))
-                                            })?
-                                        }
-                                    };
+                            .map_err(|e| TunnelRequestError::Request(e.to_string()))?;
 
+                            let mut headers = HashMap::new();
+                            let resized = {
+                                use moosicbox_image::{
+                                    image::try_resize_local_file_async, Encoding,
+                                };
+                                if let Some(resized) = try_resize_local_file_async(
+                                    width,
+                                    height,
+                                    &path,
+                                    Encoding::Webp,
+                                    80,
+                                )
+                                .await
+                                .map_err(|e| {
+                                    TunnelRequestError::InternalServerError(Box::new(
+                                        AlbumCoverError::File(path.clone(), e.to_string()),
+                                    ))
+                                })? {
                                     headers.insert(
-                                        "cache-control".to_string(),
-                                        format!("max-age={}", 86400u32 * 14),
+                                        "content-type".to_string(),
+                                        "image/webp".to_string(),
                                     );
-                                    self.send(
-                                        request_id,
-                                        200,
-                                        headers,
-                                        Cursor::new(resized),
-                                        encoding,
-                                    )?;
+                                    resized
+                                } else {
+                                    headers.insert(
+                                        "content-type".to_string(),
+                                        "image/jpeg".to_string(),
+                                    );
+                                    try_resize_local_file_async(
+                                        width,
+                                        height,
+                                        &path,
+                                        Encoding::Jpeg,
+                                        80,
+                                    )
+                                    .await
+                                    .map_err(|e| {
+                                        TunnelRequestError::InternalServerError(Box::new(
+                                            AlbumCoverError::File(path.clone(), e.to_string()),
+                                        ))
+                                    })?
+                                    .ok_or_else(|| {
+                                        TunnelRequestError::InternalServerError(Box::new(
+                                            AlbumCoverError::File(
+                                                path,
+                                                "No cover from Option".to_string(),
+                                            ),
+                                        ))
+                                    })?
                                 }
-                            }
+                            };
+
+                            headers.insert(
+                                "cache-control".to_string(),
+                                format!("max-age={}", 86400u32 * 14),
+                            );
+                            self.send(request_id, 200, headers, Cursor::new(resized), encoding)?;
 
                             Ok(())
                         }

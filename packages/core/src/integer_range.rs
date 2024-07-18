@@ -1,6 +1,8 @@
 use actix_web::error::ErrorBadRequest;
 use thiserror::Error;
 
+use crate::sqlite::models::Id;
+
 #[derive(Debug, Error)]
 pub enum ParseIntegersError {
     #[error("Could not parse integers: {0}")]
@@ -80,4 +82,13 @@ pub fn parse_integer_ranges(
 
         Ok(ids)
     }
+}
+
+pub fn parse_integer_ranges_to_ids(
+    integer_ranges: &str,
+) -> std::result::Result<Vec<Id>, ParseIntegersError> {
+    Ok(parse_integer_ranges(integer_ranges)?
+        .into_iter()
+        .map(|x| x.into())
+        .collect::<Vec<Id>>())
 }

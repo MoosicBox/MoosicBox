@@ -1,4 +1,3 @@
-use crate::sqlite::models::{LibraryAlbum, LibraryArtist, LibraryTrack};
 use enum_as_inner::EnumAsInner;
 use futures::Future;
 use once_cell::sync::Lazy;
@@ -7,6 +6,8 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use crate::models::{LibraryAlbum, LibraryArtist, LibraryTrack};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct CacheItem {
@@ -36,6 +37,7 @@ pub struct CacheRequest<'a> {
     pub key: &'a str,
     pub expiration: Duration,
 }
+
 static CACHE_MAP: Lazy<RwLock<HashMap<String, CacheItem>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
 

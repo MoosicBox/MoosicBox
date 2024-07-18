@@ -1,10 +1,11 @@
 use moosicbox_core::{
     app::AppState,
     sqlite::{
-        db::{get_artists, DbError},
-        models::{AlbumSource, ArtistSort, LibraryArtist},
+        db::DbError,
+        models::{AlbumSource, ArtistSort},
     },
 };
+use moosicbox_library::{db::get_artists, models::LibraryArtist};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

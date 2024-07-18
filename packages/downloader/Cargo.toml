@@ -24,6 +24,8 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
     "rusqlite",
     "serde_json",
 ] }
+moosicbox_library = { path = "../library", default-features = false }
+moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_paging = { path = "../paging", default-features = false }
 
 # API Dependencies
@@ -65,7 +67,7 @@ fail-on-warnings = []
 
 api = ["dep:actix-web"]
 
-aac  = ["moosicbox_core/aac", "moosicbox_files/aac"]
-flac = ["moosicbox_core/flac", "moosicbox_files/flac"]
-mp3  = ["moosicbox_core/mp3", "moosicbox_files/mp3"]
-opus = ["moosicbox_core/opus", "moosicbox_files/opus"]
+aac  = ["moosicbox_core/aac", "moosicbox_files/aac", "moosicbox_library/aac"]
+flac = ["moosicbox_core/flac", "moosicbox_files/flac", "moosicbox_library/flac"]
+mp3  = ["moosicbox_core/mp3", "moosicbox_files/mp3", "moosicbox_library/mp3"]
+opus = ["moosicbox_core/opus", "moosicbox_files/opus", "moosicbox_library/opus"]

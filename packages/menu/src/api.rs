@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc};
+use std::{ops::Deref, str::FromStr};
 
 use actix_web::{
     delete,
@@ -7,37 +7,32 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
-use moosicbox_core::sqlite::{
-    menu::get_artist_albums,
-    models::{ApiSource, Id},
-};
 use moosicbox_core::{
     app::AppState,
-    integer_range::{parse_integer_ranges, ParseIntegersError},
-    sqlite::{
-        db::get_tracks,
-        menu::{get_album, get_artist},
-        models::{
-            AlbumSort, AlbumSource, ApiAlbum, ApiArtist, ApiTrack, ArtistSort, LibraryAlbum, ToApi,
-        },
-    },
+    integer_range::ParseIntegersError,
+    sqlite::models::{AlbumSort, AlbumSource, ArtistSort, ToApi},
 };
-use moosicbox_database::Database;
-use moosicbox_music_api::MusicApi;
+use moosicbox_core::{
+    integer_range::parse_integer_ranges_to_ids,
+    sqlite::models::{ApiSource, Id},
+};
+use moosicbox_library::{
+    db::{get_album_tracks, get_tracks},
+    models::{ApiAlbum, ApiArtist, ApiTrack},
+    LibraryMusicApiState,
+};
+use moosicbox_music_api::{AlbumFilters, AlbumsRequest, MusicApiState};
 use moosicbox_paging::{Page, PagingRequest};
-use moosicbox_qobuz::QobuzMusicApi;
-use moosicbox_tidal::TidalMusicApi;
-use moosicbox_yt::YtMusicApi;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde::Deserialize;
 use thiserror::Error;
 
 use crate::library::{
     albums::{
-        add_album, get_album_tracks, get_album_versions, get_all_albums, refavorite_album,
-        remove_album, AlbumFilters, AlbumsRequest, ApiAlbumVersion,
+        add_album, get_album_versions, get_all_albums, refavorite_album, remove_album,
+        ApiAlbumVersion,
     },
     artists::{get_all_artists, ArtistFilters, ArtistsRequest},
+    get_album, get_artist, get_artist_albums, GetArtistError,
 };
 
 fn album_id_for_source(id: &str, source: ApiSource) -> Result<Id, actix_web::Error> {
@@ -56,15 +51,6 @@ fn album_id_for_source(id: &str, source: ApiSource) -> Result<Id, actix_web::Err
     })
 }
 
-fn music_api_from_source(db: Arc<Box<dyn Database>>, source: ApiSource) -> Box<dyn MusicApi> {
-    match source {
-        ApiSource::Tidal => Box::new(TidalMusicApi::new(db.clone())),
-        ApiSource::Qobuz => Box::new(QobuzMusicApi::new(db.clone())),
-        ApiSource::Yt => Box::new(YtMusicApi::new(db.clone())),
-        ApiSource::Library => unimplemented!(),
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum MenuError {
     #[error(transparent)]
@@ -75,12 +61,12 @@ pub enum MenuError {
     NotFound { error: String },
 }
 
-#[derive(Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum MenuResponse {
-    Albums(Vec<LibraryAlbum>),
-    Error(Value),
-}
+// #[derive(Serialize, Deserialize)]
+// #[serde(untagged)]
+// pub enum MenuResponse {
+//     Albums(Vec<LibraryAlbum>),
+//     Error(Value),
+// }
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -153,12 +139,16 @@ pub struct GetAlbumsQuery {
 #[get("/albums")]
 pub async fn get_albums_endpoint(
     query: web::Query<GetAlbumsQuery>,
-    data: web::Data<AppState>,
+    library_api: web::Data<LibraryMusicApiState>,
 ) -> Result<Json<Page<ApiAlbum>>> {
     let request = AlbumsRequest {
-        page: PagingRequest {
-            offset: query.offset.unwrap_or(0),
-            limit: query.limit.unwrap_or(100),
+        page: if query.offset.is_some() || query.limit.is_some() {
+            Some(PagingRequest {
+                offset: query.offset.unwrap_or(0),
+                limit: query.limit.unwrap_or(100),
+            })
+        } else {
+            None
         },
         sources: query
             .sources
@@ -182,18 +172,18 @@ pub async fn get_albums_endpoint(
                     .map_err(|_e| ErrorBadRequest(format!("Invalid sort value: {sort}")))
             })
             .transpose()?,
-        filters: AlbumFilters {
+        filters: Some(AlbumFilters {
             name: query.name.clone().map(|s| s.to_lowercase()),
             artist: query.artist.clone().map(|s| s.to_lowercase()),
             search: query.search.clone().map(|s| s.to_lowercase()),
-            artist_id: query.artist_id,
-            tidal_artist_id: query.tidal_artist_id,
-            qobuz_artist_id: query.qobuz_artist_id,
-        },
+            artist_id: query.artist_id.map(|x| x.into()),
+            tidal_artist_id: query.tidal_artist_id.map(|x| x.into()),
+            qobuz_artist_id: query.qobuz_artist_id.map(|x| x.into()),
+        }),
     };
 
     Ok(Json(
-        get_all_albums(data.database.clone(), &request)
+        get_all_albums(library_api.as_ref().deref().to_owned(), &request)
             .await
             .map_err(|e| ErrorInternalServerError(format!("Failed to fetch albums: {e}")))?
             .to_api()
@@ -212,7 +202,7 @@ pub async fn get_tracks_endpoint(
     query: web::Query<GetTracksQuery>,
     data: web::Data<AppState>,
 ) -> Result<Json<Vec<ApiTrack>>> {
-    let ids = parse_integer_ranges(&query.track_ids).map_err(|e| match e {
+    let ids = parse_integer_ranges_to_ids(&query.track_ids).map_err(|e| match e {
         ParseIntegersError::ParseId(id) => {
             ErrorBadRequest(format!("Could not parse trackId '{id}'"))
         }
@@ -246,7 +236,7 @@ pub async fn get_album_tracks_endpoint(
     data: web::Data<AppState>,
 ) -> Result<Json<Vec<ApiTrack>>> {
     Ok(Json(
-        get_album_tracks(query.album_id, &data)
+        get_album_tracks(&**data.database, &query.album_id.into())
             .await
             .map_err(|_e| ErrorInternalServerError("Failed to fetch tracks"))?
             .into_iter()
@@ -264,10 +254,10 @@ pub struct GetAlbumVersionsQuery {
 #[get("/album/versions")]
 pub async fn get_album_versions_endpoint(
     query: web::Query<GetAlbumVersionsQuery>,
-    data: web::Data<AppState>,
+    library_api: web::Data<LibraryMusicApiState>,
 ) -> Result<Json<Vec<ApiAlbumVersion>>> {
     Ok(Json(
-        get_album_versions(query.album_id, &data)
+        get_album_versions(&library_api, &query.album_id.into())
             .await
             .map_err(|_e| ErrorInternalServerError("Failed to fetch album versions"))?
             .into_iter()
@@ -288,13 +278,35 @@ pub async fn get_artist_albums_endpoint(
     data: web::Data<AppState>,
 ) -> Result<Json<Vec<ApiAlbum>>> {
     Ok(Json(
-        get_artist_albums(query.artist_id, &data)
+        get_artist_albums(&query.artist_id.into(), &data)
             .await
             .map_err(|_e| ErrorInternalServerError("Failed to fetch albums"))?
             .iter()
             .map(|t| t.to_api())
             .collect(),
     ))
+}
+
+impl From<GetArtistError> for actix_web::Error {
+    fn from(e: GetArtistError) -> Self {
+        match e {
+            GetArtistError::ArtistNotFound(_) => {
+                ErrorNotFound(format!("Failed to fetch artist: {e:?}"))
+            }
+            GetArtistError::AlbumArtistNotFound(_) => {
+                ErrorNotFound(format!("Failed to fetch artist: {e:?}"))
+            }
+            GetArtistError::UnknownSource { .. }
+            | GetArtistError::PoisonError
+            | GetArtistError::SqliteError(_)
+            | GetArtistError::DbError(_) => {
+                ErrorInternalServerError(format!("Failed to fetch artist: {e:?}"))
+            }
+            GetArtistError::InvalidRequest => {
+                ErrorBadRequest(format!("Failed to fetch artist: {e:?}"))
+            }
+        }
+    }
 }
 
 #[derive(Deserialize, Clone)]
@@ -323,8 +335,7 @@ pub async fn get_artist_endpoint(
             query.qobuz_album_id,
             &data,
         )
-        .await
-        .map_err(|e| ErrorInternalServerError(format!("Failed to fetch artist: {e:?}")))?
+        .await?
         .to_api(),
     ))
 }
@@ -371,13 +382,18 @@ pub struct AddAlbumQuery {
 pub async fn add_album_endpoint(
     query: web::Query<AddAlbumQuery>,
     data: web::Data<AppState>,
+    library_api: web::Data<LibraryMusicApiState>,
+    api_state: web::Data<MusicApiState>,
 ) -> Result<Json<ApiAlbum>> {
     Ok(Json(
         add_album(
+            &**api_state
+                .apis
+                .get(query.source)
+                .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
+            &library_api,
             data.database.clone(),
             &album_id_for_source(&query.album_id, query.source)?,
-            query.source,
-            &*music_api_from_source(data.database.clone(), query.source),
         )
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to add album: {e:?}")))?
@@ -396,12 +412,18 @@ pub struct RemoveAlbumQuery {
 pub async fn remove_album_endpoint(
     query: web::Query<RemoveAlbumQuery>,
     data: web::Data<AppState>,
+    library_api: web::Data<LibraryMusicApiState>,
+    api_state: web::Data<MusicApiState>,
 ) -> Result<Json<ApiAlbum>> {
     Ok(Json(
         remove_album(
+            &**api_state
+                .apis
+                .get(query.source)
+                .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
+            &library_api,
             &**data.database,
             &album_id_for_source(&query.album_id, query.source)?,
-            &*music_api_from_source(data.database.clone(), query.source),
         )
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to remove album: {e:?}")))?
@@ -420,13 +442,18 @@ pub struct ReFavoriteAlbumQuery {
 pub async fn refavorite_album_endpoint(
     query: web::Query<ReFavoriteAlbumQuery>,
     data: web::Data<AppState>,
+    library_api: web::Data<LibraryMusicApiState>,
+    api_state: web::Data<MusicApiState>,
 ) -> Result<Json<ApiAlbum>> {
     Ok(Json(
         refavorite_album(
+            &**api_state
+                .apis
+                .get(query.source)
+                .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
+            &library_api,
             data.database.clone(),
             &album_id_for_source(&query.album_id, query.source)?,
-            query.source,
-            &*music_api_from_source(data.database.clone(), query.source),
         )
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to re-favorite album: {e:?}")))?

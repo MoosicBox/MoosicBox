@@ -2,7 +2,7 @@
 
 use bytes::Bytes;
 use moosicbox_core::{sqlite::models::ApiSource, types::AudioFormat};
-use moosicbox_files::files::track::TrackAudioQuality;
+use moosicbox_music_api::{MusicApisError, TrackAudioQuality};
 use moosicbox_ws::WebsocketMessageError;
 use serde::Deserialize;
 use serde_aux::prelude::*;
@@ -28,6 +28,8 @@ pub enum SendMessageError {
 pub enum TunnelRequestError {
     #[error("Bad request: {0}")]
     BadRequest(String),
+    #[error("Not found: {0}")]
+    NotFound(String),
     #[error("Invalid Query: {0}")]
     InvalidQuery(String),
     #[error("Request error: {0}")]
@@ -52,6 +54,8 @@ pub enum TunnelRequestError {
     Regex(#[from] regex::Error),
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
+    #[error(transparent)]
+    MusicApis(#[from] MusicApisError),
 }
 
 #[derive(Debug, Deserialize)]
@@ -69,6 +73,7 @@ struct GetTrackQuery {
 struct GetTrackInfoQuery {
     #[serde(deserialize_with = "deserialize_number_from_string")]
     track_id: i32,
+    source: Option<ApiSource>,
 }
 
 pub enum TunnelMessage {

@@ -12,6 +12,7 @@
 !/packages/files
 !/packages/image
 !/packages/json_utils
+!/packages/library
 !/packages/logging
 !/packages/menu
 !/packages/middleware
@@ -22,6 +23,7 @@
 !/packages/scan
 !/packages/search
 !/packages/server
+!/packages/session
 !/packages/stream_utils
 !/packages/symphonia_player
 !/packages/tidal

@@ -5,8 +5,12 @@ use std::sync::Arc;
 
 use db::get_enabled_scan_origins;
 use moosicbox_config::get_cache_dir_path;
-use moosicbox_core::sqlite::db::DbError;
+use moosicbox_core::sqlite::{
+    db::DbError,
+    models::{ApiSource, TrackApiSource},
+};
 use moosicbox_database::Database;
+use moosicbox_music_api::{MusicApi, MusicApiState, MusicApisError};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
@@ -17,12 +21,9 @@ use tokio_util::sync::CancellationToken;
 pub mod api;
 #[cfg(feature = "local")]
 pub mod local;
-#[cfg(feature = "qobuz")]
-pub mod qobuz;
-#[cfg(feature = "tidal")]
-pub mod tidal;
 
 pub mod db;
+pub mod music_api;
 pub mod output;
 
 static CACHE_DIR: Lazy<PathBuf> =
@@ -40,10 +41,68 @@ pub fn cancel() {
 pub enum ScanOrigin {
     #[cfg(feature = "local")]
     Local,
-    #[cfg(feature = "tidal")]
     Tidal,
-    #[cfg(feature = "qobuz")]
     Qobuz,
+    Yt,
+}
+
+impl From<ScanOrigin> for ApiSource {
+    fn from(value: ScanOrigin) -> Self {
+        match value {
+            #[cfg(feature = "local")]
+            ScanOrigin::Local => {
+                moosicbox_assert::die_or_panic!("Local ScanOrigin cant map to ApiSource")
+            }
+            ScanOrigin::Tidal => ApiSource::Tidal,
+            ScanOrigin::Qobuz => ApiSource::Qobuz,
+            ScanOrigin::Yt => ApiSource::Yt,
+        }
+    }
+}
+
+impl From<ApiSource> for ScanOrigin {
+    fn from(value: ApiSource) -> Self {
+        match value {
+            ApiSource::Library => {
+                moosicbox_assert::die_or_panic!("Library ApiSource cant map to ScanOrigin")
+            }
+            ApiSource::Tidal => ScanOrigin::Tidal,
+            ApiSource::Qobuz => ScanOrigin::Qobuz,
+            ApiSource::Yt => ScanOrigin::Yt,
+        }
+    }
+}
+
+impl From<TrackApiSource> for ScanOrigin {
+    fn from(value: TrackApiSource) -> Self {
+        match value {
+            TrackApiSource::Local => {
+                #[cfg(feature = "local")]
+                {
+                    ScanOrigin::Local
+                }
+                #[cfg(not(feature = "local"))]
+                {
+                    moosicbox_assert::die_or_panic!("Local TrackApiSource cant map to ScanOrigin")
+                }
+            }
+            TrackApiSource::Tidal => ScanOrigin::Tidal,
+            TrackApiSource::Qobuz => ScanOrigin::Qobuz,
+            TrackApiSource::Yt => ScanOrigin::Yt,
+        }
+    }
+}
+
+impl From<ScanOrigin> for TrackApiSource {
+    fn from(value: ScanOrigin) -> Self {
+        match value {
+            #[cfg(feature = "local")]
+            ScanOrigin::Local => TrackApiSource::Local,
+            ScanOrigin::Tidal => TrackApiSource::Tidal,
+            ScanOrigin::Qobuz => TrackApiSource::Qobuz,
+            ScanOrigin::Yt => TrackApiSource::Yt,
+        }
+    }
 }
 
 #[derive(Debug, Error)]
@@ -53,15 +112,14 @@ pub enum ScanError {
     #[cfg(feature = "local")]
     #[error(transparent)]
     Local(#[from] local::ScanError),
-    #[cfg(feature = "tidal")]
     #[error(transparent)]
-    Tidal(#[from] tidal::ScanError),
-    #[cfg(feature = "qobuz")]
+    MusicApis(#[from] MusicApisError),
     #[error(transparent)]
-    Qobuz(#[from] qobuz::ScanError),
+    MusicApi(#[from] music_api::ScanError),
 }
 
 pub async fn scan(
+    api_state: MusicApiState,
     db: Arc<Box<dyn Database>>,
     origins: Option<Vec<ScanOrigin>>,
 ) -> Result<(), ScanError> {
@@ -81,10 +139,7 @@ pub async fn scan(
         match origin {
             #[cfg(feature = "local")]
             ScanOrigin::Local => scan_local(db.clone()).await?,
-            #[cfg(feature = "tidal")]
-            ScanOrigin::Tidal => scan_tidal(db.clone()).await?,
-            #[cfg(feature = "qobuz")]
-            ScanOrigin::Qobuz => scan_qobuz(db.clone()).await?,
+            _ => scan_music_api(&**api_state.apis.get(origin.into())?, &**db).await?,
         }
     }
 
@@ -113,9 +168,11 @@ pub async fn scan_local(db: Arc<Box<dyn Database>>) -> Result<(), local::ScanErr
     Ok(())
 }
 
-#[cfg(feature = "tidal")]
-pub async fn scan_tidal(db: Arc<Box<dyn Database>>) -> Result<(), tidal::ScanError> {
-    let enabled_origins = get_enabled_scan_origins(&**db).await?;
+pub async fn scan_music_api(
+    api: &dyn MusicApi,
+    db: &dyn Database,
+) -> Result<(), music_api::ScanError> {
+    let enabled_origins = get_enabled_scan_origins(db).await?;
     let enabled = enabled_origins
         .into_iter()
         .any(|origin| origin == ScanOrigin::Tidal);
@@ -124,23 +181,7 @@ pub async fn scan_tidal(db: Arc<Box<dyn Database>>) -> Result<(), tidal::ScanErr
         return Ok(());
     }
 
-    tidal::scan(db, CANCELLATION_TOKEN.clone()).await?;
-
-    Ok(())
-}
-
-#[cfg(feature = "qobuz")]
-pub async fn scan_qobuz(db: Arc<Box<dyn Database>>) -> Result<(), qobuz::ScanError> {
-    let enabled_origins = get_enabled_scan_origins(&**db).await?;
-    let enabled = enabled_origins
-        .into_iter()
-        .any(|origin| origin == ScanOrigin::Qobuz);
-
-    if !enabled {
-        return Ok(());
-    }
-
-    qobuz::scan(db, CANCELLATION_TOKEN.clone()).await?;
+    music_api::scan(api, db, CANCELLATION_TOKEN.clone()).await?;
 
     Ok(())
 }

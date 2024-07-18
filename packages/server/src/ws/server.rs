@@ -409,7 +409,6 @@ impl WsServer {
         ) {
             log::trace!("Received WsServer command");
             tokio::spawn(Self::process_command(ctx.clone(), cmd));
-            // Self::process_command(ctx, cmd).await?;
         }
 
         log::debug!("Stopped WsServer");

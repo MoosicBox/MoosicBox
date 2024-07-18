@@ -1,11 +1,11 @@
 use std::str::FromStr;
 
-use moosicbox_core::sqlite::models::{ApiSource, AsId, TrackApiSource};
+use moosicbox_core::sqlite::models::{ApiSource, AsId, Id, TrackApiSource};
 use moosicbox_database::DatabaseValue;
-use moosicbox_files::files::track::TrackAudioQuality;
 use moosicbox_json_utils::{
     database::ToValue as _, serde_json::ToValue, MissingValue, ParseError, ToValueType,
 };
+use moosicbox_music_api::TrackAudioQuality;
 use rusqlite::types::Value;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
@@ -98,6 +98,18 @@ impl ToValueType<DownloadTaskState> for Value {
 pub enum DownloadApiSource {
     Tidal,
     Qobuz,
+    Yt,
+}
+
+impl From<ApiSource> for DownloadApiSource {
+    fn from(value: ApiSource) -> Self {
+        match value {
+            ApiSource::Tidal => DownloadApiSource::Tidal,
+            ApiSource::Qobuz => DownloadApiSource::Qobuz,
+            ApiSource::Yt => DownloadApiSource::Yt,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl From<DownloadApiSource> for ApiSource {
@@ -105,6 +117,7 @@ impl From<DownloadApiSource> for ApiSource {
         match value {
             DownloadApiSource::Tidal => ApiSource::Tidal,
             DownloadApiSource::Qobuz => ApiSource::Qobuz,
+            DownloadApiSource::Yt => ApiSource::Yt,
         }
     }
 }
@@ -114,6 +127,7 @@ impl From<DownloadApiSource> for TrackApiSource {
         match value {
             DownloadApiSource::Tidal => TrackApiSource::Tidal,
             DownloadApiSource::Qobuz => TrackApiSource::Qobuz,
+            DownloadApiSource::Yt => TrackApiSource::Yt,
         }
     }
 }
@@ -123,6 +137,7 @@ impl From<TrackApiSource> for DownloadApiSource {
         match value {
             TrackApiSource::Tidal => DownloadApiSource::Tidal,
             TrackApiSource::Qobuz => DownloadApiSource::Qobuz,
+            TrackApiSource::Yt => DownloadApiSource::Yt,
             _ => panic!("Invalid TrackApiSource"),
         }
     }
@@ -166,26 +181,40 @@ impl ToValueType<DownloadApiSource> for Value {
 #[serde(tag = "type")]
 pub enum DownloadItem {
     Track {
-        track_id: u64,
+        track_id: Id,
         source: DownloadApiSource,
         quality: TrackAudioQuality,
     },
-    AlbumCover(u64),
-    ArtistCover(u64),
+    AlbumCover {
+        album_id: Id,
+        source: DownloadApiSource,
+    },
+    ArtistCover {
+        album_id: Id,
+        source: DownloadApiSource,
+    },
 }
 
 impl ToValueType<DownloadItem> for &serde_json::Value {
     fn to_value_type(self) -> Result<DownloadItem, ParseError> {
         let item_type: String = self.to_value("type")?;
 
+        let source: Option<DownloadApiSource> = self.to_value("source")?;
+
         Ok(match item_type.as_str() {
             "TRACK" => DownloadItem::Track {
                 track_id: self.to_value("track_id")?,
-                source: self.to_value("source")?,
+                source: source.unwrap_or(DownloadApiSource::Qobuz),
                 quality: self.to_value("quality")?,
             },
-            "ALBUM_COVER" => DownloadItem::AlbumCover(self.to_value("album_id")?),
-            "ARTIST_COVER" => DownloadItem::ArtistCover(self.to_value("album_id")?),
+            "ALBUM_COVER" => DownloadItem::AlbumCover {
+                album_id: self.to_value("album_id")?,
+                source: source.unwrap_or(DownloadApiSource::Qobuz),
+            },
+            "ARTIST_COVER" => DownloadItem::ArtistCover {
+                album_id: self.to_value("album_id")?,
+                source: source.unwrap_or(DownloadApiSource::Qobuz),
+            },
             _ => {
                 return Err(ParseError::ConvertType(format!(
                     "Invalid DownloadItem type '{item_type}'"
@@ -200,14 +229,22 @@ impl ToValueType<DownloadItem> for &moosicbox_database::Row {
     fn to_value_type(self) -> Result<DownloadItem, ParseError> {
         let item_type: String = self.to_value("type")?;
 
+        let source: Option<DownloadApiSource> = self.to_value("source")?;
+
         Ok(match item_type.as_str() {
             "TRACK" => DownloadItem::Track {
                 track_id: self.to_value("track_id")?,
-                source: self.to_value("source")?,
+                source: source.unwrap_or(DownloadApiSource::Qobuz),
                 quality: self.to_value("quality")?,
             },
-            "ALBUM_COVER" => DownloadItem::AlbumCover(self.to_value("album_id")?),
-            "ARTIST_COVER" => DownloadItem::ArtistCover(self.to_value("album_id")?),
+            "ALBUM_COVER" => DownloadItem::AlbumCover {
+                album_id: self.to_value("album_id")?,
+                source: source.unwrap_or(DownloadApiSource::Qobuz),
+            },
+            "ARTIST_COVER" => DownloadItem::ArtistCover {
+                album_id: self.to_value("album_id")?,
+                source: source.unwrap_or(DownloadApiSource::Qobuz),
+            },
             _ => {
                 return Err(ParseError::ConvertType(format!(
                     "Invalid DownloadItem type '{item_type}'"

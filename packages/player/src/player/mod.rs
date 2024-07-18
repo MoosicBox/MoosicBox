@@ -12,16 +12,18 @@ use futures::{Future, StreamExt as _, TryStreamExt as _};
 use local_ip_address::local_ip;
 use moosicbox_core::{
     sqlite::{
-        db::{get_album_tracks, get_session_playlist, DbError},
-        models::{
-            ApiSource, ApiTrack, Id, LibraryTrack, ToApi, TrackApiSource, UpdateSession,
-            UpdateSessionPlaylistTrack,
-        },
+        db::DbError,
+        models::{ApiSource, Id, ToApi, TrackApiSource},
     },
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_database::Database;
 use moosicbox_json_utils::{serde_json::ToValue as _, ParseError};
+use moosicbox_music_api::MusicApi;
+use moosicbox_session::{
+    db::{get_session, get_session_playlist},
+    models::{UpdateSession, UpdateSessionPlaylist, UpdateSessionPlaylistTrack},
+};
 use moosicbox_stream_utils::{
     remote_bytestream::RemoteByteStream, stalled_monitor::StalledReadMonitor,
 };
@@ -76,11 +78,11 @@ pub enum PlayerError {
     #[error("Track fetch failed: {0}")]
     TrackFetchFailed(String),
     #[error("Album fetch failed: {0}")]
-    AlbumFetchFailed(i32),
+    AlbumFetchFailed(Id),
     #[error("Track not found: {0}")]
-    TrackNotFound(i32),
+    TrackNotFound(Id),
     #[error("Track not locally stored: {0}")]
-    TrackNotLocal(i32),
+    TrackNotLocal(Id),
     #[error("Failed to seek: {0}")]
     Seek(String),
     #[error("No players playing")]
@@ -97,6 +99,8 @@ pub enum PlayerError {
     InvalidPlaybackType,
     #[error("Invalid state")]
     InvalidState,
+    #[error("Invalid source")]
+    InvalidSource,
     #[error("Playback retry requested")]
     RetryRequested,
     #[error("Playback cancelled")]
@@ -206,15 +210,6 @@ impl Track {
             ApiSource::Qobuz => TrackApiSource::Qobuz,
             ApiSource::Yt => TrackApiSource::Yt,
         }
-    }
-}
-
-pub fn track_id(track: &ApiTrack) -> Id {
-    match track {
-        ApiTrack::Library { track_id, .. } => Id::Number(*track_id),
-        ApiTrack::Tidal { track_id, .. } => Id::Number(*track_id),
-        ApiTrack::Qobuz { track_id, .. } => Id::Number(*track_id),
-        ApiTrack::Yt { track_id, .. } => Id::String(track_id.clone()),
     }
 }
 
@@ -406,7 +401,7 @@ pub trait Player: Clone + Send + 'static {
     ) -> Result<(), PlayerError> {
         let session_id = init.session_id;
         log::trace!("Searching for existing session id {}", session_id);
-        if let Ok(session) = moosicbox_core::sqlite::db::get_session(db, session_id).await {
+        if let Ok(session) = get_session(db, session_id).await {
             if let Some(session) = session {
                 log::debug!("Got session {session:?}");
                 if let Err(err) = self
@@ -426,7 +421,7 @@ pub trait Player: Clone + Send + 'static {
                                 .tracks
                                 .iter()
                                 .map(|x| Track {
-                                    id: track_id(x),
+                                    id: x.track_id(),
                                     source: x.api_source(),
                                     data: Some(x.data()),
                                 })
@@ -460,9 +455,10 @@ pub trait Player: Clone + Send + 'static {
     #[allow(clippy::too_many_arguments)]
     async fn play_album(
         &self,
+        api: &dyn MusicApi,
         db: &dyn Database,
         session_id: Option<usize>,
-        album_id: i32,
+        album_id: &Id,
         position: Option<u16>,
         seek: Option<f64>,
         volume: Option<f64>,
@@ -470,15 +466,21 @@ pub trait Player: Clone + Send + 'static {
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
         let tracks = {
-            get_album_tracks(db, album_id as u64)
+            api.album_tracks(album_id, None, None, None, None)
                 .await
                 .map_err(|e| {
                     log::error!("Failed to fetch album tracks: {e:?}");
-                    PlayerError::AlbumFetchFailed(album_id)
+                    PlayerError::AlbumFetchFailed(album_id.to_owned())
+                })?
+                .with_rest_of_items_in_batches()
+                .await
+                .map_err(|e| {
+                    log::error!("Failed to fetch album tracks: {e:?}");
+                    PlayerError::AlbumFetchFailed(album_id.to_owned())
                 })?
                 .into_iter()
                 .map(|x| Track {
-                    id: Id::Number(x.id as u64),
+                    id: x.id.to_owned(),
                     source: ApiSource::Library,
                     data: Some(serde_json::to_value(x).unwrap()),
                 })
@@ -1019,7 +1021,7 @@ pub trait Player: Clone + Send + 'static {
 
     async fn track_to_playable_file(
         &self,
-        track: &LibraryTrack,
+        track: &moosicbox_core::sqlite::models::Track,
         quality: PlaybackQuality,
     ) -> Result<PlayableTrack, PlayerError> {
         log::trace!("track_to_playable_file track={track:?} quality={quality:?}");
@@ -1129,7 +1131,7 @@ pub trait Player: Clone + Send + 'static {
         };
 
         Ok(PlayableTrack {
-            track_id: Id::Number(track.id as u64),
+            track_id: track.id.to_owned(),
             source,
             hint,
         })
@@ -1222,9 +1224,9 @@ pub trait Player: Clone + Send + 'static {
                             track
                                 .data
                                 .clone()
-                                .ok_or(PlayerError::TrackNotFound((&track.id).into()))?,
+                                .ok_or(PlayerError::TrackNotFound(track.id.to_owned()))?,
                         )
-                        .map_err(|_| PlayerError::TrackNotFound((&track.id).into()))?,
+                        .map_err(|_| PlayerError::TrackNotFound(track.id.to_owned()))?,
                         quality,
                     )
                     .await?
@@ -1241,9 +1243,9 @@ pub trait Player: Clone + Send + 'static {
                             track
                                 .data
                                 .clone()
-                                .ok_or(PlayerError::TrackNotFound((&track.id).into()))?,
+                                .ok_or(PlayerError::TrackNotFound(track.id.to_owned()))?,
                         )
-                        .map_err(|_| PlayerError::TrackNotFound((&track.id).into()))?,
+                        .map_err(|_| PlayerError::TrackNotFound(track.id.to_owned()))?,
                         quality,
                     )
                     .await?
@@ -1346,7 +1348,7 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
         .collect::<Vec<_>>();
     let playlist = if tracks != prev_tracks {
         has_change = true;
-        Some(moosicbox_core::sqlite::models::UpdateSessionPlaylist {
+        Some(UpdateSessionPlaylist {
             session_playlist_id: current
                 .session_playlist_id
                 .map(|id| id as i32)

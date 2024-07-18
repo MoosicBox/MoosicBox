@@ -1,5 +1,5 @@
 use actix_web::{
-    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound, ErrorUnauthorized},
+    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     route,
     web::{self, Json},
     HttpRequest, HttpResponse, Result,
@@ -7,21 +7,21 @@ use actix_web::{
 use futures::StreamExt;
 use moosicbox_core::{
     app::AppState,
-    integer_range::{parse_integer_ranges, ParseIntegersError},
+    integer_range::{parse_integer_ranges_to_ids, ParseIntegersError},
     sqlite::models::{ApiSource, Id},
     types::AudioFormat,
 };
+use moosicbox_music_api::{ImageCoverSize, MusicApiState, TrackAudioQuality, TrackSource};
 use serde::Deserialize;
 
 use crate::files::{
-    album::{get_album_cover, AlbumCoverError, AlbumCoverSource},
-    artist::{get_artist_cover, ArtistCoverError, ArtistCoverSource},
+    album::{get_album_cover, AlbumCoverError},
+    artist::{get_artist_cover, ArtistCoverError},
     resize_image_path,
     track::{
         audio_format_to_content_type, get_or_init_track_visualization, get_track_bytes,
         get_track_id_source, get_track_info, get_tracks_info, track_source_to_content_type,
-        GetTrackBytesError, TrackAudioQuality, TrackInfo, TrackInfoError, TrackSource,
-        TrackSourceError,
+        GetTrackBytesError, TrackInfo, TrackInfoError, TrackSourceError,
     },
 };
 
@@ -30,40 +30,9 @@ impl From<TrackSourceError> for actix_web::Error {
         match e {
             TrackSourceError::NotFound(e) => ErrorNotFound(e.to_string()),
             TrackSourceError::InvalidSource => ErrorBadRequest(e.to_string()),
-            TrackSourceError::Db(_) => ErrorInternalServerError(e.to_string()),
-            TrackSourceError::TidalTrackUrl(e) => match e {
-                moosicbox_tidal::TidalTrackFileUrlError::AuthenticatedRequest(e) => {
-                    ErrorUnauthorized(e.to_string())
-                }
-                moosicbox_tidal::TidalTrackFileUrlError::Parse(_) => {
-                    ErrorInternalServerError(e.to_string())
-                }
-            },
-            TrackSourceError::QobuzTrackUrl(e) => match e {
-                moosicbox_qobuz::QobuzTrackFileUrlError::AuthenticatedRequest(_) => {
-                    ErrorUnauthorized(e.to_string())
-                }
-                moosicbox_qobuz::QobuzTrackFileUrlError::Database(_) => {
-                    ErrorInternalServerError(e.to_string())
-                }
-                moosicbox_qobuz::QobuzTrackFileUrlError::Db(_) => {
-                    ErrorInternalServerError(e.to_string())
-                }
-                moosicbox_qobuz::QobuzTrackFileUrlError::NoAppSecretAvailable => {
-                    ErrorInternalServerError(e.to_string())
-                }
-                moosicbox_qobuz::QobuzTrackFileUrlError::Parse(_) => {
-                    ErrorInternalServerError(e.to_string())
-                }
-            },
-            TrackSourceError::YtTrackUrl(e) => match e {
-                moosicbox_yt::YtTrackFileUrlError::AuthenticatedRequest(e) => {
-                    ErrorUnauthorized(e.to_string())
-                }
-                moosicbox_yt::YtTrackFileUrlError::Parse(_) => {
-                    ErrorInternalServerError(e.to_string())
-                }
-            },
+            TrackSourceError::Track(_)
+            | TrackSourceError::Db(_)
+            | TrackSourceError::MusicApis(_) => ErrorInternalServerError(e.to_string()),
         }
     }
 }
@@ -85,13 +54,13 @@ pub struct GetTrackVisualizationQuery {
 #[route("/track/visualization", method = "GET")]
 pub async fn track_visualization_endpoint(
     query: web::Query<GetTrackVisualizationQuery>,
-    data: web::Data<AppState>,
+    api_state: web::Data<MusicApiState>,
 ) -> Result<Json<Vec<u8>>> {
     let source = get_track_id_source(
-        &Id::Number(query.track_id),
-        &**data.database,
-        None,
+        api_state.apis.clone(),
+        &query.track_id.into(),
         query.source.unwrap_or(ApiSource::Library),
+        Some(TrackAudioQuality::Low),
     )
     .await?;
 
@@ -112,6 +81,7 @@ impl From<GetTrackBytesError> for actix_web::Error {
             | GetTrackBytesError::ParseInt(_)
             | GetTrackBytesError::Recv(_)
             | GetTrackBytesError::Commander(_)
+            | GetTrackBytesError::Track(_)
             | GetTrackBytesError::TrackInfo(_) => ErrorInternalServerError(err),
             GetTrackBytesError::NotFound => ErrorNotFound(err),
             GetTrackBytesError::UnsupportedFormat => ErrorBadRequest(err),
@@ -132,15 +102,15 @@ pub struct GetTrackQuery {
 pub async fn track_endpoint(
     req: HttpRequest,
     query: web::Query<GetTrackQuery>,
-    data: web::Data<AppState>,
+    api_state: web::Data<MusicApiState>,
 ) -> Result<HttpResponse> {
     let method = req.method();
 
     let source = get_track_id_source(
-        &Id::Number(query.track_id),
-        &**data.database,
-        query.quality,
+        api_state.apis.clone(),
+        &query.track_id.into(),
         query.source.unwrap_or(ApiSource::Library),
+        query.quality,
     )
     .await?;
 
@@ -190,7 +160,7 @@ pub async fn track_endpoint(
         response.insert_header((actix_web::http::header::CONTENT_TYPE, content_type));
     } else {
         match &source {
-            TrackSource::Tidal { .. } | TrackSource::Qobuz { .. } | TrackSource::Yt { .. } => {
+            TrackSource::RemoteUrl { .. } => {
                 #[cfg(feature = "flac")]
                 {
                     response.insert_header((
@@ -214,7 +184,10 @@ pub async fn track_endpoint(
     log::debug!("{method} /track Fetching track bytes with range range={range:?}");
 
     let bytes = get_track_bytes(
-        &**data.database,
+        &**api_state
+            .apis
+            .get(query.source.unwrap_or(ApiSource::Library))
+            .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
         &Id::Number(query.track_id),
         source,
         format,
@@ -294,16 +267,24 @@ pub async fn track_endpoint(
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTrackInfoQuery {
-    pub track_id: usize,
+    pub track_id: Id,
+    pub source: Option<ApiSource>,
 }
 
 #[route("/track/info", method = "GET")]
 pub async fn track_info_endpoint(
     query: web::Query<GetTrackInfoQuery>,
-    data: web::Data<AppState>,
+    api_state: web::Data<MusicApiState>,
 ) -> Result<Json<TrackInfo>> {
     Ok(Json(
-        get_track_info(query.track_id as u64, &**data.database).await?,
+        get_track_info(
+            &**api_state
+                .apis
+                .get(query.source.unwrap_or(ApiSource::Library))
+                .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
+            &query.track_id,
+        )
+        .await?,
     ))
 }
 
@@ -311,14 +292,15 @@ pub async fn track_info_endpoint(
 #[serde(rename_all = "camelCase")]
 pub struct GetTracksInfoQuery {
     pub track_ids: String,
+    pub source: Option<ApiSource>,
 }
 
 #[route("/tracks/info", method = "GET")]
 pub async fn tracks_info_endpoint(
     query: web::Query<GetTracksInfoQuery>,
-    data: web::Data<AppState>,
+    api_state: web::Data<MusicApiState>,
 ) -> Result<Json<Vec<TrackInfo>>> {
-    let ids = parse_integer_ranges(&query.track_ids).map_err(|e| match e {
+    let ids = parse_integer_ranges_to_ids(&query.track_ids).map_err(|e| match e {
         ParseIntegersError::ParseId(id) => {
             ErrorBadRequest(format!("Could not parse trackId '{id}'"))
         }
@@ -330,7 +312,16 @@ pub async fn tracks_info_endpoint(
         }
     })?;
 
-    Ok(Json(get_tracks_info(ids, &**data.database).await?))
+    Ok(Json(
+        get_tracks_info(
+            &**api_state
+                .apis
+                .get(query.source.unwrap_or(ApiSource::Library))
+                .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
+            &ids,
+        )
+        .await?,
+    ))
 }
 
 impl From<ArtistCoverError> for actix_web::Error {
@@ -351,6 +342,7 @@ pub async fn artist_source_artwork_endpoint(
     path: web::Path<String>,
     query: web::Query<ArtistCoverQuery>,
     data: web::Data<AppState>,
+    api_state: web::Data<MusicApiState>,
 ) -> Result<HttpResponse> {
     let paths = path.into_inner();
 
@@ -359,26 +351,32 @@ pub async fn artist_source_artwork_endpoint(
     let artist_id = match source {
         ApiSource::Library => artist_id_string.parse::<u64>().map(Id::Number),
         ApiSource::Tidal => artist_id_string.parse::<u64>().map(Id::Number),
-        ApiSource::Qobuz => artist_id_string.parse::<u64>().map(Id::Number),
+        ApiSource::Qobuz => Ok(Id::String(artist_id_string)),
         ApiSource::Yt => Ok(Id::String(artist_id_string)),
     }
     .map_err(|_e| ErrorBadRequest("Invalid artist_id"))?;
 
-    match get_artist_cover(artist_id, source, &**data.database, None).await? {
-        ArtistCoverSource::LocalFilePath(path) => {
-            let path_buf = std::path::PathBuf::from(path);
-            let file_path = path_buf.as_path();
+    let size = ImageCoverSize::Max;
+    let api = api_state
+        .apis
+        .get(source)
+        .map_err(|e| ErrorInternalServerError(format!("Failed to get music_api: {e:?}")))?;
+    let artist = api
+        .artist(&artist_id)
+        .await
+        .map_err(|e| ErrorNotFound(format!("Failed to get artist: {e:?}")))?
+        .ok_or_else(|| ErrorNotFound(format!("Artist not found: {}", artist_id.to_owned())))?;
 
-            let file = actix_files::NamedFile::open_async(file_path)
-                .await
-                .map_err(|e| {
-                    ArtistCoverError::File(file_path.to_str().unwrap().into(), format!("{e:?}"))
-                })
-                .map_err(|e| ErrorInternalServerError(e.to_string()))?;
+    let path = get_artist_cover(&**api, &**data.database, &artist, size).await?;
+    let path_buf = std::path::PathBuf::from(path);
+    let file_path = path_buf.as_path();
 
-            Ok(file.into_response(&req))
-        }
-    }
+    let file = actix_files::NamedFile::open_async(file_path)
+        .await
+        .map_err(|e| ArtistCoverError::File(file_path.to_str().unwrap().into(), format!("{e:?}")))
+        .map_err(|e| ErrorInternalServerError(e.to_string()))?;
+
+    Ok(file.into_response(&req))
 }
 
 #[route("/artists/{artist_id}/{size}", method = "GET", method = "HEAD")]
@@ -386,6 +384,7 @@ pub async fn artist_cover_endpoint(
     path: web::Path<(String, String)>,
     query: web::Query<ArtistCoverQuery>,
     data: web::Data<AppState>,
+    api_state: web::Data<MusicApiState>,
 ) -> Result<HttpResponse> {
     let paths = path.into_inner();
 
@@ -394,7 +393,7 @@ pub async fn artist_cover_endpoint(
     let artist_id = match source {
         ApiSource::Library => artist_id_string.parse::<u64>().map(Id::Number),
         ApiSource::Tidal => artist_id_string.parse::<u64>().map(Id::Number),
-        ApiSource::Qobuz => artist_id_string.parse::<u64>().map(Id::Number),
+        ApiSource::Qobuz => Ok(Id::String(artist_id_string)),
         ApiSource::Yt => Ok(Id::String(artist_id_string)),
     }
     .map_err(|_e| ErrorBadRequest("Invalid artist_id"))?;
@@ -411,13 +410,18 @@ pub async fn artist_cover_endpoint(
         .collect::<Result<Vec<_>>>()?;
     let (width, height) = (dimensions[0], dimensions[1]);
 
-    let ArtistCoverSource::LocalFilePath(path) = get_artist_cover(
-        artist_id,
-        source,
-        &**data.database,
-        Some(std::cmp::max(width, height)),
-    )
-    .await?;
+    let size = (std::cmp::max(width, height) as u16).into();
+    let api = api_state
+        .apis
+        .get(source)
+        .map_err(|e| ErrorInternalServerError(format!("Failed to get music_api: {e:?}")))?;
+    let artist = api
+        .artist(&artist_id)
+        .await
+        .map_err(|e| ErrorNotFound(format!("Failed to get artist: {e:?}")))?
+        .ok_or_else(|| ErrorNotFound(format!("Artist not found: {}", artist_id.to_owned())))?;
+
+    let path = get_artist_cover(&**api, &**data.database, &artist, size).await?;
 
     resize_image_path(&path, width, height)
         .await
@@ -442,6 +446,7 @@ pub async fn album_source_artwork_endpoint(
     path: web::Path<String>,
     query: web::Query<AlbumCoverQuery>,
     data: web::Data<AppState>,
+    api_state: web::Data<MusicApiState>,
 ) -> Result<HttpResponse> {
     let paths = path.into_inner();
 
@@ -455,21 +460,27 @@ pub async fn album_source_artwork_endpoint(
     }
     .map_err(|_e| ErrorBadRequest("Invalid album_id"))?;
 
-    match get_album_cover(album_id, source, &**data.database, None).await? {
-        AlbumCoverSource::LocalFilePath(path) => {
-            let path_buf = std::path::PathBuf::from(path);
-            let file_path = path_buf.as_path();
+    let size = ImageCoverSize::Max;
+    let api = api_state
+        .apis
+        .get(source)
+        .map_err(|e| ErrorInternalServerError(format!("Failed to get music_api: {e:?}")))?;
+    let album = api
+        .album(&album_id)
+        .await
+        .map_err(|e| ErrorNotFound(format!("Failed to get album: {e:?}")))?
+        .ok_or_else(|| ErrorNotFound(format!("Album not found: {}", album_id.to_owned())))?;
 
-            let file = actix_files::NamedFile::open_async(file_path)
-                .await
-                .map_err(|e| {
-                    AlbumCoverError::File(file_path.to_str().unwrap().into(), format!("{e:?}"))
-                })
-                .map_err(|e| ErrorInternalServerError(e.to_string()))?;
+    let path = get_album_cover(&**api, &**data.database, &album, size).await?;
+    let path_buf = std::path::PathBuf::from(path);
+    let file_path = path_buf.as_path();
 
-            Ok(file.into_response(&req))
-        }
-    }
+    let file = actix_files::NamedFile::open_async(file_path)
+        .await
+        .map_err(|e| AlbumCoverError::File(file_path.to_str().unwrap().into(), format!("{e:?}")))
+        .map_err(|e| ErrorInternalServerError(e.to_string()))?;
+
+    Ok(file.into_response(&req))
 }
 
 #[route("/albums/{album_id}/{size}", method = "GET", method = "HEAD")]
@@ -477,6 +488,7 @@ pub async fn album_artwork_endpoint(
     path: web::Path<(String, String)>,
     query: web::Query<AlbumCoverQuery>,
     data: web::Data<AppState>,
+    api_state: web::Data<MusicApiState>,
 ) -> Result<HttpResponse> {
     let paths = path.into_inner();
 
@@ -502,13 +514,18 @@ pub async fn album_artwork_endpoint(
         .collect::<Result<Vec<_>>>()?;
     let (width, height) = (dimensions[0], dimensions[1]);
 
-    let AlbumCoverSource::LocalFilePath(path) = get_album_cover(
-        album_id,
-        source,
-        &**data.database,
-        Some(std::cmp::max(width, height)),
-    )
-    .await?;
+    let size = (std::cmp::max(width, height) as u16).into();
+    let api = api_state
+        .apis
+        .get(source)
+        .map_err(|e| ErrorInternalServerError(format!("Failed to get music_api: {e:?}")))?;
+    let album = api
+        .album(&album_id)
+        .await
+        .map_err(|e| ErrorNotFound(format!("Failed to get album: {e:?}")))?
+        .ok_or_else(|| ErrorNotFound(format!("Album not found: {}", album_id.to_owned())))?;
+
+    let path = get_album_cover(&**api, &**data.database, &album, size).await?;
 
     resize_image_path(&path, width, height)
         .await

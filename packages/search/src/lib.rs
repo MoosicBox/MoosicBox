@@ -258,7 +258,7 @@ pub enum DataValue {
 }
 
 pub fn populate_global_search_index(
-    data: Vec<Vec<(&str, DataValue)>>,
+    data: &[Vec<(&str, DataValue)>],
     delete: bool,
 ) -> Result<(), PopulateIndexError> {
     log::debug!("Populating global search index...");
@@ -343,10 +343,10 @@ pub fn populate_global_search_index(
                     }
                 }
                 DataValue::Bool(value) => {
-                    doc.add_bool(field, value);
+                    doc.add_bool(field, *value);
                 }
                 DataValue::Number(value) => {
-                    doc.add_u64(field, value);
+                    doc.add_u64(field, *value);
                 }
             }
         }
@@ -397,7 +397,7 @@ pub enum DeleteFromIndexError {
 }
 
 pub fn delete_from_global_search_index(
-    data: Vec<(&str, DataValue)>,
+    data: &[(&str, DataValue)],
 ) -> Result<(), DeleteFromIndexError> {
     log::debug!("Deleting from global search index...");
 
@@ -477,7 +477,7 @@ pub enum ReindexError {
     PopulateIndex(#[from] PopulateIndexError),
 }
 
-pub fn reindex_global_search_index(data: Vec<Vec<(&str, DataValue)>>) -> Result<(), ReindexError> {
+pub fn reindex_global_search_index(data: &[Vec<(&str, DataValue)>]) -> Result<(), ReindexError> {
     let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
     recreate_global_search_index(path)?;
     populate_global_search_index(data, false)?;
@@ -1052,7 +1052,7 @@ mod tests {
     fn test_global_search() {
         before_each();
 
-        crate::populate_global_search_index(TEST_DATA.clone(), true).unwrap();
+        crate::populate_global_search_index(&TEST_DATA, true).unwrap();
         let results = crate::search_global_search_index("in procession", 0, 10).unwrap();
 
         assert_eq!(results.len(), 4);
@@ -1072,7 +1072,7 @@ mod tests {
     fn test_global_search_with_offset() {
         before_each();
 
-        crate::populate_global_search_index(TEST_DATA.clone(), true).unwrap();
+        crate::populate_global_search_index(&TEST_DATA, true).unwrap();
         let results = crate::search_global_search_index("in procession", 1, 10).unwrap();
 
         assert_eq!(results.len(), 3);
@@ -1091,7 +1091,7 @@ mod tests {
     fn test_global_search_with_limit() {
         before_each();
 
-        crate::populate_global_search_index(TEST_DATA.clone(), true).unwrap();
+        crate::populate_global_search_index(&TEST_DATA, true).unwrap();
         let results = crate::search_global_search_index("in procession", 0, 2).unwrap();
 
         assert_eq!(results.len(), 2);
@@ -1106,7 +1106,7 @@ mod tests {
     fn test_global_search_with_limit_and_offset() {
         before_each();
 
-        crate::populate_global_search_index(TEST_DATA.clone(), true).unwrap();
+        crate::populate_global_search_index(&TEST_DATA, true).unwrap();
         let results = crate::search_global_search_index("in procession", 1, 1).unwrap();
 
         assert_eq!(results.len(), 1);
@@ -1121,7 +1121,7 @@ mod tests {
     fn test_global_search_reindex() {
         before_each();
 
-        crate::populate_global_search_index(TEST_DATA.clone(), true).unwrap();
+        crate::populate_global_search_index(&TEST_DATA, true).unwrap();
         assert_eq!(
             crate::search_global_search_index("in procession", 0, 10)
                 .unwrap()
@@ -1138,7 +1138,7 @@ mod tests {
             0
         );
 
-        crate::populate_global_search_index(TEST_DATA.clone(), true).unwrap();
+        crate::populate_global_search_index(&TEST_DATA, true).unwrap();
         assert_eq!(
             crate::search_global_search_index("in procession", 0, 10)
                 .unwrap()
@@ -1146,7 +1146,7 @@ mod tests {
             4
         );
 
-        crate::reindex_global_search_index(TEST_DATA.clone())
+        crate::reindex_global_search_index(&TEST_DATA)
             .expect("Failed to reindex_global_search_index");
         assert_eq!(
             crate::search_global_search_index("in procession", 0, 10)

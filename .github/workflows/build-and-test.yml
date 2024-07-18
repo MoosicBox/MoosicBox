@@ -126,6 +126,16 @@ jobs:
                       path: packages/json_utils
                       os: ubuntu-latest
 
+                    - name: library
+                      path: packages/library
+                      os: ubuntu-latest
+
+                    - name: library-api
+                      path: packages/library
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: api
+
                     - name: load_balancer
                       path: packages/load_balancer
                       os: ubuntu-latest
@@ -346,6 +356,10 @@ jobs:
                       cargo: --no-default-features
                       features: opus
 
+                    - name: session
+                      path: packages/session
+                      os: ubuntu-latest
+
                     - name: scan
                       path: packages/scan
                       os: ubuntu-latest
@@ -355,24 +369,6 @@ jobs:
                       os: ubuntu-latest
                       cargo: --no-default-features
                       features: local
-
-                    - name: scan-qobuz
-                      path: packages/scan
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: qobuz
-
-                    - name: scan-tidal
-                      path: packages/scan
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: tidal
-
-                    - name: scan-yt
-                      path: packages/scan
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: yt
 
                     - name: scan-api
                       path: packages/scan
@@ -399,11 +395,6 @@ jobs:
                     - name: stream_utils
                       path: packages/stream_utils
                       os: ubuntu-latest
-
-                    - name: stream_utils-no-default-features
-                      path: packages/stream_utils
-                      os: ubuntu-latest
-                      cargo: --no-default-features
 
                     - name: stream_utils-remote-bytestream
                       path: packages/stream_utils

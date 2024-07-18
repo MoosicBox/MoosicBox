@@ -1,0 +1,34 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools"]
+description = "MoosicBox Session Handling package"
+edition     = "2021"
+keywords    = ["session", "state"]
+license     = "MPL-2.0"
+name        = "moosicbox_session"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_core       = { path = "../core", default-features = false }
+moosicbox_database   = { path = "../database", default-features = false }
+moosicbox_json_utils = { path = "../json_utils", default-features = false }
+moosicbox_library    = { path = "../library", default-features = false }
+
+async-trait  = { workspace = true }
+log          = { workspace = true }
+serde        = { workspace = true, features = ["derive"] }
+serde_json   = { workspace = true }
+strum        = { workspace = true }
+strum_macros = { workspace = true }
+
+[features]
+default = ["aac", "flac", "mp3", "opus"]
+
+fail-on-warnings = []
+
+aac  = ["moosicbox_library/aac"]
+flac = ["moosicbox_library/flac"]
+mp3  = ["moosicbox_library/mp3"]
+opus = ["moosicbox_library/opus"]

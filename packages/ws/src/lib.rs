@@ -12,14 +12,9 @@ use std::{
 
 use async_trait::async_trait;
 use log::{debug, info, trace};
-use moosicbox_core::sqlite::{
-    db::{get_session_playlist, DbError},
-    models::{
-        ApiUpdateSession, ApiUpdateSessionPlaylist, Connection, CreateSession, DeleteSession,
-        RegisterConnection, RegisterPlayer, SetSeek, SetSessionActivePlayers, ToApi, UpdateSession,
-    },
-};
+use moosicbox_core::sqlite::{db::DbError, models::{SetSeek, ToApi as _}};
 use moosicbox_database::Database;
+use moosicbox_session::{db::get_session_playlist, models::{ApiUpdateSession, ApiUpdateSessionPlaylist, Connection, CreateSession, DeleteSession, RegisterConnection, RegisterPlayer, SetSessionActivePlayers, UpdateSession}};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -376,7 +371,7 @@ pub async fn get_sessions(
     send_all: bool,
 ) -> Result<(), WebsocketSendError> {
     let sessions = {
-        moosicbox_core::sqlite::db::get_sessions(db)
+        moosicbox_session::db::get_sessions(db)
             .await?
             .iter()
             .map(|session| session.to_api())
@@ -402,7 +397,7 @@ async fn create_session(
     context: &WebsocketContext,
     payload: &CreateSession,
 ) -> Result<(), WebsocketSendError> {
-    moosicbox_core::sqlite::db::create_session(db, payload).await?;
+    moosicbox_session::db::create_session(db, payload).await?;
     get_sessions(db, sender, context, true).await?;
     Ok(())
 }
@@ -410,7 +405,7 @@ async fn create_session(
 async fn get_connections(db: &dyn Database) -> Result<String, WebsocketSendError> {
     let connection_data = CONNECTION_DATA.as_ref().read().unwrap().clone();
     let connections = {
-        moosicbox_core::sqlite::db::get_connections(db)
+        moosicbox_session::db::get_connections(db)
             .await?
             .iter()
             .map(|connection| {
@@ -438,7 +433,7 @@ pub async fn register_connection(
     context: &WebsocketContext,
     payload: &RegisterConnection,
 ) -> Result<Connection, WebsocketSendError> {
-    let connection = moosicbox_core::sqlite::db::register_connection(db, payload).await?;
+    let connection = moosicbox_session::db::register_connection(db, payload).await?;
 
     let mut connection_data = CONNECTION_DATA.write().unwrap();
 
@@ -452,11 +447,11 @@ pub async fn register_players(
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &Vec<RegisterPlayer>,
-) -> Result<Vec<moosicbox_core::sqlite::models::Player>, WebsocketSendError> {
+) -> Result<Vec<moosicbox_session::models::Player>, WebsocketSendError> {
     let mut players = vec![];
     for player in payload {
         players.push(
-            moosicbox_core::sqlite::db::create_player(db, &context.connection_id, player).await?,
+            moosicbox_session::db::create_player(db, &context.connection_id, player).await?,
         );
     }
 
@@ -471,7 +466,7 @@ async fn set_session_active_players(
     context: &WebsocketContext,
     payload: &SetSessionActivePlayers,
 ) -> Result<(), WebsocketMessageError> {
-    moosicbox_core::sqlite::db::set_session_active_players(db, payload).await?;
+    moosicbox_session::db::set_session_active_players(db, payload).await?;
     get_sessions(db, sender, context, true).await?;
     Ok(())
 }
@@ -515,7 +510,7 @@ pub async fn update_session(
     if let Some(actions) = context.map(|x| &x.player_actions) {
         if payload.playback_updated() {
             if let Some(session) =
-                moosicbox_core::sqlite::db::get_session(db, payload.session_id).await?
+                moosicbox_session::db::get_session(db, payload.session_id).await?
             {
                 let funcs = session
                     .active_players
@@ -553,7 +548,7 @@ pub async fn update_session(
     } else {
         log::debug!("Updating session id={}", payload.session_id);
     }
-    moosicbox_core::sqlite::db::update_session(db, payload).await?;
+    moosicbox_session::db::update_session(db, payload).await?;
 
     let playlist = if payload.playlist.is_some() {
         get_session_playlist(db, payload.session_id)
@@ -601,7 +596,7 @@ async fn delete_session(
     context: &WebsocketContext,
     payload: &DeleteSession,
 ) -> Result<(), WebsocketSendError> {
-    moosicbox_core::sqlite::db::delete_session(db, payload.session_id).await?;
+    moosicbox_session::db::delete_session(db, payload.session_id).await?;
 
     get_sessions(db, sender, context, true).await?;
 

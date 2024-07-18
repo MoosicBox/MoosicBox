@@ -12,6 +12,7 @@ use futures::StreamExt;
 use futures_core::Future;
 use lazy_static::lazy_static;
 use moosicbox_core::types::AudioFormat;
+use moosicbox_music_api::TrackSource;
 use moosicbox_stream_utils::{stalled_monitor::StalledReadMonitor, ByteWriter};
 use strum_macros::AsRefStr;
 use thiserror::Error;
@@ -23,7 +24,7 @@ use crate::{
     BytesStream,
 };
 
-use super::track::{BytesStreamItem, GetTrackBytesError, TrackBytes, TrackSource};
+use super::track::{BytesStreamItem, GetTrackBytesError, TrackBytes};
 
 pub static HANDLE: OnceLock<service::Handle> = OnceLock::new();
 
@@ -135,9 +136,7 @@ impl Context {
 
         let filename = match source {
             TrackSource::LocalFilePath { path, .. } => filename_from_path_str(&path),
-            TrackSource::Tidal { .. } => None,
-            TrackSource::Qobuz { .. } => None,
-            TrackSource::Yt { .. } => None,
+            TrackSource::RemoteUrl { .. } => None,
         };
 
         let writers = Arc::new(Mutex::new(vec![]));
@@ -405,39 +404,18 @@ pub fn track_key(source: &TrackSource, output_format: AudioFormat) -> String {
             format!(
                 "local:{format}:{id}:{output_format}",
                 id = track_id
+                    .as_ref()
                     .map(|x| format!("id:{x}"))
                     .as_deref()
                     .unwrap_or(path)
             )
         }
-        TrackSource::Tidal {
+        TrackSource::RemoteUrl {
             format,
             url,
             track_id,
         } => format!(
-            "tidal:{format}:{id}:{output_format}",
-            id = track_id
-                .map(|x| format!("id:{x}"))
-                .as_deref()
-                .unwrap_or(url)
-        ),
-        TrackSource::Qobuz {
-            format,
-            url,
-            track_id,
-        } => format!(
-            "qobuz:{format}:{id}:{output_format}",
-            id = track_id
-                .map(|x| format!("id:{x}"))
-                .as_deref()
-                .unwrap_or(url)
-        ),
-        TrackSource::Yt {
-            format,
-            url,
-            track_id,
-        } => format!(
-            "yt:{format}:{id}:{output_format}",
+            "remote:{url}:{format}:{id}:{output_format}",
             id = track_id
                 .as_ref()
                 .map(|x| format!("id:{x}"))

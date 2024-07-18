@@ -350,7 +350,7 @@ impl DownloadQueue {
             .clone()
             .ok_or(ProcessDownloadQueueError::NoDownloader)?;
 
-        match task.item {
+        match &task.item {
             DownloadItem::Track {
                 track_id,
                 quality,
@@ -360,21 +360,21 @@ impl DownloadQueue {
                     .download_track_id(
                         &task.file_path,
                         track_id,
-                        quality,
-                        source,
+                        *quality,
+                        *source,
                         on_progress,
                         *TIMEOUT_DURATION,
                     )
                     .await?
             }
-            DownloadItem::AlbumCover(album_id) => {
+            DownloadItem::AlbumCover { album_id, source } => {
                 downloader
-                    .download_album_cover(&task.file_path, album_id, on_progress)
+                    .download_album_cover(&task.file_path, album_id, *source, on_progress)
                     .await?;
             }
-            DownloadItem::ArtistCover(album_id) => {
+            DownloadItem::ArtistCover { album_id, source } => {
                 downloader
-                    .download_artist_cover(&task.file_path, album_id, on_progress)
+                    .download_artist_cover(&task.file_path, album_id, *source, on_progress)
                     .await?;
             }
         }
@@ -416,8 +416,9 @@ impl Drop for DownloadQueue {
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
+    use moosicbox_core::sqlite::models::Id;
     use moosicbox_database::{query::*, Row};
-    use moosicbox_files::files::track::TrackAudioQuality;
+    use moosicbox_music_api::TrackAudioQuality;
     use pretty_assertions::assert_eq;
 
     use crate::db::models::{DownloadApiSource, DownloadItem, DownloadTaskState};
@@ -431,9 +432,9 @@ mod tests {
         async fn download_track_id(
             &self,
             _path: &str,
-            _track_id: u64,
-            _quality: moosicbox_files::files::track::TrackAudioQuality,
-            _source: crate::db::models::DownloadApiSource,
+            _track_id: &Id,
+            _quality: TrackAudioQuality,
+            _source: DownloadApiSource,
             _on_size: ProgressListener,
             _timeout_duration: Option<Duration>,
         ) -> Result<(), DownloadTrackError> {
@@ -443,7 +444,8 @@ mod tests {
         async fn download_album_cover(
             &self,
             _path: &str,
-            _album_id: u64,
+            _album_id: &Id,
+            _source: DownloadApiSource,
             _on_size: ProgressListener,
         ) -> Result<(), DownloadAlbumError> {
             Ok(())
@@ -452,7 +454,8 @@ mod tests {
         async fn download_artist_cover(
             &self,
             _path: &str,
-            _album_id: u64,
+            _album_id: &Id,
+            _source: DownloadApiSource,
             _on_size: ProgressListener,
         ) -> Result<(), DownloadAlbumError> {
             Ok(())
@@ -540,7 +543,7 @@ mod tests {
                 id: 1,
                 state: DownloadTaskState::Pending,
                 item: DownloadItem::Track {
-                    track_id: 1,
+                    track_id: 1.into(),
                     source: DownloadApiSource::Tidal,
                     quality: TrackAudioQuality::FlacHighestRes,
                 },
@@ -579,7 +582,7 @@ mod tests {
                     id: 1,
                     state: DownloadTaskState::Pending,
                     item: DownloadItem::Track {
-                        track_id: 1,
+                        track_id: 1.into(),
                         source: DownloadApiSource::Tidal,
                         quality: TrackAudioQuality::FlacHighestRes,
                     },
@@ -592,7 +595,7 @@ mod tests {
                     id: 2,
                     state: DownloadTaskState::Pending,
                     item: DownloadItem::Track {
-                        track_id: 2,
+                        track_id: 2.into(),
                         source: DownloadApiSource::Tidal,
                         quality: TrackAudioQuality::FlacHighestRes,
                     },
@@ -635,7 +638,7 @@ mod tests {
                     id: 1,
                     state: DownloadTaskState::Pending,
                     item: DownloadItem::Track {
-                        track_id: 1,
+                        track_id: 1.into(),
                         source: DownloadApiSource::Tidal,
                         quality: TrackAudioQuality::FlacHighestRes,
                     },
@@ -648,7 +651,7 @@ mod tests {
                     id: 1,
                     state: DownloadTaskState::Pending,
                     item: DownloadItem::Track {
-                        track_id: 1,
+                        track_id: 1.into(),
                         source: DownloadApiSource::Tidal,
                         quality: TrackAudioQuality::FlacHighestRes,
                     },
@@ -687,7 +690,7 @@ mod tests {
                 id: 1,
                 state: DownloadTaskState::Pending,
                 item: DownloadItem::Track {
-                    track_id: 1,
+                    track_id: 1.into(),
                     source: DownloadApiSource::Tidal,
                     quality: TrackAudioQuality::FlacHighestRes,
                 },
@@ -705,7 +708,7 @@ mod tests {
                 id: 2,
                 state: DownloadTaskState::Pending,
                 item: DownloadItem::Track {
-                    track_id: 2,
+                    track_id: 2.into(),
                     source: DownloadApiSource::Tidal,
                     quality: TrackAudioQuality::FlacHighestRes,
                 },

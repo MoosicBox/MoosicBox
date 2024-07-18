@@ -48,12 +48,14 @@ pub enum GetContentLengthError {
     ToStr(#[from] reqwest::header::ToStrError),
 }
 
+static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| reqwest::Client::builder().build().unwrap());
+
 pub async fn get_content_length(
     url: &str,
     start: Option<u64>,
     end: Option<u64>,
 ) -> Result<Option<u64>, GetContentLengthError> {
-    let mut client = reqwest::Client::new().head(url);
+    let mut client = CLIENT.head(url);
 
     if start.is_some() || end.is_some() {
         let start = start.map(|x| x.to_string()).unwrap_or("".into());

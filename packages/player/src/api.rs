@@ -11,9 +11,10 @@ use actix_web::{
 };
 use moosicbox_core::{
     app::AppState,
-    sqlite::models::ApiSource,
+    sqlite::models::{ApiSource, Id, IdType},
     types::{AudioFormat, PlaybackQuality},
 };
+use moosicbox_music_api::MusicApiState;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 
@@ -70,6 +71,7 @@ impl From<PlayerError> for actix_web::Error {
             PlayerError::Cancelled => ErrorInternalServerError(err),
             PlayerError::RetryRequested => ErrorInternalServerError(err),
             PlayerError::InvalidState => ErrorInternalServerError(err),
+            PlayerError::InvalidSource => ErrorInternalServerError(err),
         }
     }
 }
@@ -109,24 +111,34 @@ pub const DEFAULT_PLAYBACK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOp
 #[serde(rename_all = "camelCase")]
 pub struct PlayAlbumQuery {
     pub session_id: Option<usize>,
-    pub album_id: i32,
+    pub album_id: String,
     pub position: Option<u16>,
     pub seek: Option<f64>,
     pub volume: Option<f64>,
     pub host: Option<String>,
     pub format: Option<AudioFormat>,
+    pub source: Option<ApiSource>,
 }
 
 #[post("/player/play/album")]
 pub async fn play_album_endpoint(
     query: web::Query<PlayAlbumQuery>,
     data: web::Data<AppState>,
+    api_state: web::Data<MusicApiState>,
 ) -> Result<Json<PlaybackStatus>> {
+    let source = query.source.unwrap_or(ApiSource::Library);
+    let album_id = Id::try_from_str(query.album_id.as_str(), source, IdType::Album)
+        .map_err(|e| ErrorBadRequest(format!("Invalid album id: {e:?}")))?;
+
     get_player(query.host.as_deref())
         .play_album(
+            &**api_state
+                .apis
+                .get(source)
+                .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
             &**data.database,
             query.session_id,
-            query.album_id,
+            &album_id,
             query.position,
             query.seek,
             query.volume,
@@ -156,11 +168,14 @@ pub struct PlayTrackQuery {
 pub async fn play_track_endpoint(
     query: web::Query<PlayTrackQuery>,
     data: web::Data<AppState>,
+    api_state: web::Data<MusicApiState>,
 ) -> Result<Json<PlaybackStatus>> {
     let track_id = get_track_or_ids_from_track_id_ranges(
-        &**data.database,
+        &**api_state
+            .apis
+            .get(query.source.unwrap_or(ApiSource::Library))
+            .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
         query.track_id.to_string().as_str(),
-        query.source,
         query.host.as_deref(),
     )
     .await?
@@ -205,11 +220,14 @@ pub struct PlayTracksQuery {
 pub async fn play_tracks_endpoint(
     query: web::Query<PlayTracksQuery>,
     data: web::Data<AppState>,
+    api_state: web::Data<MusicApiState>,
 ) -> Result<Json<PlaybackStatus>> {
     let track_ids = get_track_or_ids_from_track_id_ranges(
-        &**data.database,
+        &**api_state
+            .apis
+            .get(query.source.unwrap_or(ApiSource::Library))
+            .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
         &query.track_ids,
-        query.source,
         query.host.as_deref(),
     )
     .await?;
@@ -289,13 +307,16 @@ pub struct UpdatePlaybackQuery {
 pub async fn update_playback_endpoint(
     query: web::Query<UpdatePlaybackQuery>,
     data: web::Data<AppState>,
+    api_state: web::Data<MusicApiState>,
 ) -> Result<Json<PlaybackStatus>> {
     let track_ids = if let Some(track_ids) = &query.track_ids {
         Some(
             get_track_or_ids_from_track_id_ranges(
-                &**data.database,
+                &**api_state
+                    .apis
+                    .get(query.source.unwrap_or(ApiSource::Library))
+                    .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
                 track_ids,
-                query.source,
                 query.host.as_deref(),
             )
             .await?,

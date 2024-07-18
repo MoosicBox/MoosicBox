@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use crate::api::models::to_api_download_task;
@@ -16,6 +17,7 @@ use crate::DownloadApiSource;
 use crate::GetCreateDownloadTasksError;
 use crate::GetDownloadPathError;
 use crate::MoosicboxDownloader;
+use actix_web::error::ErrorBadRequest;
 use actix_web::error::ErrorInternalServerError;
 use actix_web::error::ErrorNotFound;
 use actix_web::{
@@ -23,10 +25,12 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
-use moosicbox_core::sqlite::db::{get_artists, get_tracks};
-use moosicbox_core::sqlite::menu::get_albums;
 use moosicbox_database::Database;
-use moosicbox_files::files::track::TrackAudioQuality;
+use moosicbox_library::LibraryMusicApiState;
+use moosicbox_music_api::AlbumsRequest;
+use moosicbox_music_api::MusicApi as _;
+use moosicbox_music_api::MusicApiState;
+use moosicbox_music_api::TrackAudioQuality;
 use moosicbox_paging::Page;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
@@ -42,7 +46,10 @@ pub async fn add_progress_listener_to_download_queue(listener: ProgressListenerR
     DOWNLOAD_QUEUE.write().await.add_progress_listener(listener);
 }
 
-async fn get_default_download_queue(db: Arc<Box<dyn Database>>) -> Arc<RwLock<DownloadQueue>> {
+async fn get_default_download_queue(
+    db: Arc<Box<dyn Database>>,
+    api_state: MusicApiState,
+) -> Arc<RwLock<DownloadQueue>> {
     let queue = { DOWNLOAD_QUEUE.read().await.clone() };
 
     if !queue.has_database() {
@@ -52,7 +59,7 @@ async fn get_default_download_queue(db: Arc<Box<dyn Database>>) -> Arc<RwLock<Do
     }
     if !queue.has_downloader() {
         let mut queue = DOWNLOAD_QUEUE.write().await;
-        let output = queue.with_downloader(Box::new(MoosicboxDownloader::new(db)));
+        let output = queue.with_downloader(Box::new(MoosicboxDownloader::new(db, api_state)));
         *queue = output.clone();
     }
 
@@ -98,33 +105,37 @@ pub struct DownloadQuery {
     download_album_cover: Option<bool>,
     download_artist_cover: Option<bool>,
     quality: Option<TrackAudioQuality>,
-    source: Option<DownloadApiSource>,
+    source: DownloadApiSource,
 }
 
 #[route("/download", method = "POST")]
 pub async fn download_endpoint(
     query: web::Query<DownloadQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
+    api_state: web::Data<MusicApiState>,
 ) -> Result<Json<Value>> {
     let download_path = get_download_path(&**data.database, query.location_id).await?;
 
     let tasks = get_create_download_tasks(
-        &**data.database,
+        &**api_state
+            .apis
+            .get(query.source.into())
+            .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
         &download_path,
-        query.track_id,
+        query.track_id.map(|x| x.into()),
         query.track_ids.clone(),
-        query.album_id,
+        query.album_id.map(|x| x.into()),
         query.album_ids.clone(),
         query.download_album_cover.unwrap_or(true),
         query.download_artist_cover.unwrap_or(true),
         query.quality,
-        query.source,
+        Some(query.source),
     )
     .await?;
 
     let tasks = create_download_tasks(&**data.database, tasks).await?;
 
-    let queue = get_default_download_queue(data.database.clone()).await;
+    let queue = get_default_download_queue(data.database.clone(), api_state.as_ref().clone()).await;
     let mut download_queue = queue.write().await;
 
     download_queue.add_tasks_to_queue(tasks).await;
@@ -143,6 +154,7 @@ pub struct RetryDownloadQuery {
 pub async fn retry_download_endpoint(
     query: web::Query<RetryDownloadQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
+    api_state: web::Data<MusicApiState>,
 ) -> Result<Json<Value>> {
     let tasks = get_download_tasks(&**data.database).await?;
     let task = tasks
@@ -152,7 +164,10 @@ pub async fn retry_download_endpoint(
 
     let mut download_queue = DownloadQueue::new();
     download_queue.with_database(data.database.clone());
-    download_queue.with_downloader(Box::new(MoosicboxDownloader::new(data.database.clone())));
+    download_queue.with_downloader(Box::new(MoosicboxDownloader::new(
+        data.database.clone(),
+        api_state.as_ref().clone(),
+    )));
     download_queue.add_tasks_to_queue(vec![task]).await;
     download_queue.process();
 
@@ -170,6 +185,7 @@ pub struct GetDownloadTasks {
 pub async fn download_tasks_endpoint(
     query: web::Query<GetDownloadTasks>,
     data: web::Data<moosicbox_core::app::AppState>,
+    library_api: web::Data<LibraryMusicApiState>,
 ) -> Result<Json<Page<ApiDownloadTask>>> {
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(30);
@@ -198,29 +214,42 @@ pub async fn download_tasks_endpoint(
     let track_ids = tasks
         .iter()
         .filter_map(|task| {
-            if let DownloadItem::Track { track_id, .. } = task.item {
-                Some(track_id)
+            if let DownloadItem::Track { track_id, .. } = &task.item {
+                Some(track_id.to_owned())
             } else {
                 None
             }
         })
         .collect::<Vec<_>>();
 
-    let tracks = get_tracks(&**data.database, Some(&track_ids)).await?;
+    let tracks = library_api
+        .deref()
+        .tracks(Some(&track_ids), None, None, None, None)
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to get tracks: {e:?}")))?
+        .with_rest_of_items_in_batches()
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to get tracks: {e:?}")))?;
 
     let album_ids = tasks
         .iter()
         .filter_map(|task| {
-            if let DownloadItem::AlbumCover(album_id) = task.item {
-                Some(album_id as i32)
+            if let DownloadItem::AlbumCover { album_id, .. } = &task.item {
+                Some(album_id.to_owned())
             } else {
                 None
             }
         })
         .collect::<Vec<_>>();
 
-    let albums = get_albums(&**data.database)
-        .await?
+    let albums = library_api
+        .deref()
+        .albums(&AlbumsRequest::default())
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to get albums: {e:?}")))?
+        .with_rest_of_items_in_batches()
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to get albums: {e:?}")))?
         .iter()
         .filter(|album| album_ids.contains(&album.id))
         .cloned()
@@ -228,11 +257,17 @@ pub async fn download_tasks_endpoint(
 
     let artist_ids = albums
         .iter()
-        .map(|album| album.artist_id)
+        .map(|album| album.artist_id.to_owned())
         .collect::<HashSet<_>>();
 
-    let artists = get_artists(&**data.database)
-        .await?
+    let artists = library_api
+        .deref()
+        .artists(None, None, None, None)
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to get artists: {e:?}")))?
+        .with_rest_of_items_in_batches()
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to get artists: {e:?}")))?
         .iter()
         .filter(|artist| artist_ids.contains(&artist.id))
         .cloned()

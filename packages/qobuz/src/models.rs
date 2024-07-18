@@ -1,16 +1,21 @@
 use std::fmt::Display;
 
-use moosicbox_core::sqlite::models::{Album, Artist, AsModelResult, Track, TrackApiSource};
+use moosicbox_core::sqlite::models::{
+    Album, AlbumSource, ApiSource, ApiSources, Artist, AsModelResult, Track, TrackApiSource,
+};
 use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
     ParseError, ToValueType,
 };
+use moosicbox_music_api::ImageCoverSize;
 use moosicbox_search::models::{
     ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
     ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use crate::format_title;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -31,6 +36,18 @@ pub enum QobuzImageSize {
     Medium,     // 600
     Small,      // 300
     Thumbnail,  // 100
+}
+
+impl From<ImageCoverSize> for QobuzImageSize {
+    fn from(value: ImageCoverSize) -> Self {
+        match value {
+            ImageCoverSize::Max => QobuzImageSize::Mega,
+            ImageCoverSize::Large => QobuzImageSize::Large,
+            ImageCoverSize::Medium => QobuzImageSize::Medium,
+            ImageCoverSize::Small => QobuzImageSize::Small,
+            ImageCoverSize::Thumbnail => QobuzImageSize::Thumbnail,
+        }
+    }
 }
 
 impl From<QobuzImageSize> for u16 {
@@ -197,8 +214,8 @@ impl From<QobuzAlbum> for Album {
     fn from(value: QobuzAlbum) -> Self {
         let artwork = value.cover_url();
         Self {
-            id: value.id.into(),
-            title: value.title,
+            id: value.id.as_str().into(),
+            title: format_title(value.title.as_str(), value.version.as_deref()),
             artist: value.artist,
             artist_id: value.artist_id.into(),
             date_released: Some(value.release_date_original),
@@ -207,6 +224,10 @@ impl From<QobuzAlbum> for Album {
             directory: None,
             blur: false,
             versions: vec![],
+            source: AlbumSource::Qobuz,
+            artist_sources: ApiSources::default()
+                .with_source(ApiSource::Qobuz, value.artist_id.into()),
+            album_sources: ApiSources::default().with_source(ApiSource::Qobuz, value.id.into()),
         }
     }
 }
@@ -384,7 +405,7 @@ impl From<QobuzTrack> for Track {
         Self {
             id: value.id.into(),
             number: value.track_number as i32,
-            title: value.title,
+            title: format_title(value.title.as_str(), value.version.as_deref()),
             duration: value.duration as f64,
             album: value.album,
             album_id: value.album_id.into(),
@@ -403,6 +424,8 @@ impl From<QobuzTrack> for Track {
             sample_rate: None,
             channels: None,
             source: TrackApiSource::Qobuz,
+            api_source: ApiSource::Qobuz,
+            sources: ApiSources::default().with_source(ApiSource::Qobuz, value.id.into()),
         }
     }
 }
@@ -424,7 +447,7 @@ impl From<QobuzTrack> for ApiGlobalSearchResult {
             bit_depth: None,
             sample_rate: None,
             channels: None,
-            source: TrackApiSource::Tidal,
+            source: TrackApiSource::Qobuz,
         })
     }
 }
@@ -503,6 +526,7 @@ impl From<QobuzArtist> for Artist {
             id: value.id.into(),
             title: value.name,
             cover,
+            source: ApiSource::Qobuz,
         }
     }
 }

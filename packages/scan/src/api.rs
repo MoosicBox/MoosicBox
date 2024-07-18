@@ -9,6 +9,7 @@ use actix_web::{
 };
 use moosicbox_auth::NonTunnelRequestAuthorized;
 use moosicbox_core::app::AppState;
+use moosicbox_music_api::MusicApiState;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -24,6 +25,7 @@ pub struct ScanQuery {
 pub async fn run_scan_endpoint(
     query: web::Query<ScanQuery>,
     data: web::Data<AppState>,
+    api_state: web::Data<MusicApiState>,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
     let origins = query
@@ -41,7 +43,7 @@ pub async fn run_scan_endpoint(
         })
         .transpose()?;
 
-    scan(data.database.clone(), origins)
+    scan(api_state.as_ref().clone(), data.database.clone(), origins)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
 

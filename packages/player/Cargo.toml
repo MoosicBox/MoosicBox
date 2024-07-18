@@ -21,6 +21,7 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
     "serde_json",
 ] }
 moosicbox_music_api = { path = "../music_api", default-features = false }
+moosicbox_session = { path = "../session", default-features = false }
 moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
 moosicbox_symphonia_player = { path = "../symphonia_player", default-features = false }
 
@@ -78,21 +79,25 @@ aac = [
     "moosicbox_converter/aac",
     "moosicbox_core/aac",
     "moosicbox_symphonia_player/aac",
+    "moosicbox_session/aac",
 ]
 flac = [
     "moosicbox_converter/flac",
     "moosicbox_core/flac",
     "moosicbox_symphonia_player/flac",
+    "moosicbox_session/flac",
 ]
 mp3 = [
     "moosicbox_converter/mp3",
     "moosicbox_core/mp3",
     "moosicbox_symphonia_player/mp3",
+    "moosicbox_session/mp3",
 ]
 opus = [
     "moosicbox_converter/opus",
     "moosicbox_core/opus",
     "moosicbox_symphonia_player/opus",
+    "moosicbox_session/opus",
 ]
 
 local = []

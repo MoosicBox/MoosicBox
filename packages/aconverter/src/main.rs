@@ -9,10 +9,8 @@ use audiotags::Tag;
 use clap::Parser;
 use futures::StreamExt as _;
 use moosicbox_core::types::{from_extension_to_audio_format, AudioFormat};
-use moosicbox_files::{
-    files::track::{get_audio_bytes, TrackSource},
-    save_bytes_stream_to_file,
-};
+use moosicbox_files::{files::track::get_audio_bytes, save_bytes_stream_to_file};
+use moosicbox_music_api::TrackSource;
 use thiserror::Error;
 
 #[derive(Parser, Debug)]

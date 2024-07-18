@@ -3,7 +3,10 @@ use audiotags::Tag;
 use futures::Future;
 use lofty::{AudioFile, ParseOptions};
 use moosicbox_core::{
-    sqlite::{db::DbError, models::TrackApiSource},
+    sqlite::{
+        db::DbError,
+        models::{ApiSource, TrackApiSource},
+    },
     types::AudioFormat,
 };
 use moosicbox_database::Database;
@@ -74,7 +77,7 @@ pub async fn scan(
 
     {
         let output = output.read().await;
-        output.update_database(db.clone()).await?;
+        output.update_database(&**db).await?;
         output.reindex_global_search_index(&**db).await?;
     }
 
@@ -296,7 +299,9 @@ fn scan_track(
 
         log::info!("Scanning track {count}");
 
-        let artist = output.add_artist(&album_artist, &None, &None).await;
+        let artist = output
+            .add_artist(&album_artist, &None, ApiSource::Library)
+            .await;
         let mut artist = artist.write().await;
         let album = artist
             .add_album(
@@ -304,7 +309,7 @@ fn scan_track(
                 &date_released,
                 Some(path_album.to_str().unwrap()),
                 &None,
-                &None,
+                ApiSource::Library,
             )
             .await;
         let mut album = album.write().await;
@@ -372,7 +377,7 @@ fn scan_track(
                 &channels,
                 TrackApiSource::Local,
                 &None,
-                &None,
+                ApiSource::Library,
             )
             .await;
 

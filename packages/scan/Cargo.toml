@@ -21,16 +21,14 @@ moosicbox_files = { path = "../files", default-features = false }
 moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
     "serde_json",
 ] }
-moosicbox_qobuz = { path = "../qobuz" }
+moosicbox_library = { path = "../library", default-features = false }
+moosicbox_music_api = { path = "../music_api", default-features = false }
+moosicbox_paging = { path = "../paging" }
 moosicbox_search = { path = "../search" }
-moosicbox_tidal = { path = "../tidal" }
 
 # API Dependencies
 actix-web      = { workspace = true, optional = true }
 moosicbox_auth = { path = "../auth", default-features = false, optional = true }
-
-# Yt Dependencies
-moosicbox_yt = { path = "../yt", optional = true }
 
 # Local Dependencies
 async-recursion = { workspace = true, optional = true }
@@ -53,7 +51,7 @@ tokio        = { workspace = true, features = ["macros"] }
 tokio-util   = { workspace = true }
 
 [features]
-default = ["aac", "api", "flac", "local", "mp3", "opus", "qobuz", "tidal", "yt"]
+default = ["aac", "api", "flac", "local", "mp3", "opus"]
 
 fail-on-warnings = []
 
@@ -64,11 +62,8 @@ local = [
     "dep:lofty",
     "dep:mp3-duration",
 ]
-qobuz = []
-tidal = []
-yt = ["dep:moosicbox_yt"]
 
-aac  = ["moosicbox_core/aac"]
-flac = ["moosicbox_core/flac"]
-mp3  = ["moosicbox_core/mp3"]
-opus = ["moosicbox_core/opus"]
+aac  = ["moosicbox_core/aac", "moosicbox_library/aac"]
+flac = ["moosicbox_core/flac", "moosicbox_library/flac"]
+mp3  = ["moosicbox_core/mp3", "moosicbox_library/mp3"]
+opus = ["moosicbox_core/opus", "moosicbox_library/opus"]

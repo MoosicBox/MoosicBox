@@ -20,6 +20,7 @@ RUN cat Cargo.toml | \
     \"packages\/files\",\r\
     \"packages\/image\",\r\
     \"packages\/json_utils\",\r\
+    \"packages\/library\",\r\
     \"packages\/logging\",\r\
     \"packages\/menu\",\r\
     \"packages\/middleware\",\r\
@@ -30,6 +31,7 @@ RUN cat Cargo.toml | \
     \"packages\/scan\",\r\
     \"packages\/search\",\r\
     \"packages\/server\",\r\
+    \"packages\/session\",\r\
     \"packages\/stream_utils\",\r\
     \"packages\/symphonia_player\",\r\
     \"packages\/tidal\",\r\
@@ -54,6 +56,7 @@ COPY packages/env_utils/Cargo.toml packages/env_utils/Cargo.toml
 COPY packages/files/Cargo.toml packages/files/Cargo.toml
 COPY packages/image/Cargo.toml packages/image/Cargo.toml
 COPY packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
+COPY packages/library/Cargo.toml packages/library/Cargo.toml
 COPY packages/logging/Cargo.toml packages/logging/Cargo.toml
 COPY packages/menu/Cargo.toml packages/menu/Cargo.toml
 COPY packages/middleware/Cargo.toml packages/middleware/Cargo.toml
@@ -64,6 +67,7 @@ COPY packages/qobuz/Cargo.toml packages/qobuz/Cargo.toml
 COPY packages/scan/Cargo.toml packages/scan/Cargo.toml
 COPY packages/search/Cargo.toml packages/search/Cargo.toml
 COPY packages/server/Cargo.toml packages/server/Cargo.toml
+COPY packages/session/Cargo.toml packages/session/Cargo.toml
 COPY packages/stream_utils/Cargo.toml packages/stream_utils/Cargo.toml
 COPY packages/symphonia_player/Cargo.toml packages/symphonia_player/Cargo.toml
 COPY packages/tidal/Cargo.toml packages/tidal/Cargo.toml
@@ -91,6 +95,7 @@ packages/env_utils|\
 packages/files|\
 packages/image|\
 packages/json_utils|\
+packages/library|\
 packages/logging|\
 packages/menu|\
 packages/middleware|\
@@ -101,6 +106,7 @@ packages/qobuz|\
 packages/scan|\
 packages/search|\
 packages/server|\
+packages/session|\
 packages/stream_utils|\
 packages/symphonia_player|\
 packages/tidal|\

@@ -15,15 +15,18 @@ use moosicbox_database::{Database, DatabaseError};
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
-use moosicbox_core::sqlite::models::{
-    Album, ApiSource, Artist, AsModelResult, Id, LibraryAlbum, Track,
+use moosicbox_core::{
+    sqlite::models::{Album, AlbumSort, ApiSource, Artist, AsModelResult, Id, Track},
+    types::{AudioFormat, PlaybackQuality},
 };
+use moosicbox_files::get_content_length;
 use moosicbox_json_utils::{serde_json::ToValue, ParseError};
 use moosicbox_music_api::{
     AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumOrder, AlbumOrderDirection,
-    AlbumType, AlbumsError, ArtistAlbumsError, ArtistError, ArtistOrder, ArtistOrderDirection,
-    ArtistsError, LibraryAlbumError, MusicApi, RemoveAlbumError, RemoveArtistError,
-    RemoveTrackError, TrackError, TrackOrder, TrackOrderDirection, TracksError,
+    AlbumType, AlbumsError, AlbumsRequest, ArtistAlbumsError, ArtistError, ArtistOrder,
+    ArtistOrderDirection, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError,
+    RemoveTrackError, TrackAudioQuality, TrackError, TrackOrder, TrackOrderDirection, TrackSource,
+    TracksError,
 };
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use once_cell::sync::Lazy;
@@ -945,12 +948,33 @@ pub enum YtAlbumOrder {
     Date,
 }
 
+impl From<AlbumSort> for YtAlbumOrder {
+    fn from(_value: AlbumSort) -> Self {
+        YtAlbumOrder::Date
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum YtAlbumOrderDirection {
     Asc,
     Desc,
+}
+
+impl From<AlbumSort> for YtAlbumOrderDirection {
+    fn from(value: AlbumSort) -> Self {
+        match value {
+            AlbumSort::ArtistAsc => YtAlbumOrderDirection::Asc,
+            AlbumSort::ArtistDesc => YtAlbumOrderDirection::Desc,
+            AlbumSort::NameAsc => YtAlbumOrderDirection::Asc,
+            AlbumSort::NameDesc => YtAlbumOrderDirection::Desc,
+            AlbumSort::ReleaseDateAsc => YtAlbumOrderDirection::Asc,
+            AlbumSort::ReleaseDateDesc => YtAlbumOrderDirection::Desc,
+            AlbumSort::DateAddedAsc => YtAlbumOrderDirection::Asc,
+            AlbumSort::DateAddedDesc => YtAlbumOrderDirection::Desc,
+        }
+    }
 }
 
 #[derive(Debug, Error)]
@@ -1897,6 +1921,17 @@ pub enum YtAudioQuality {
     HiResLossless,
 }
 
+impl From<TrackAudioQuality> for YtAudioQuality {
+    fn from(value: TrackAudioQuality) -> Self {
+        match value {
+            TrackAudioQuality::Low => YtAudioQuality::High,
+            TrackAudioQuality::FlacLossless => YtAudioQuality::Lossless,
+            TrackAudioQuality::FlacHiRes => YtAudioQuality::HiResLossless,
+            TrackAudioQuality::FlacHighestRes => YtAudioQuality::HiResLossless,
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum YtTrackFileUrlError {
     #[error(transparent)]
@@ -2128,8 +2163,20 @@ impl From<YtFavoriteTracksError> for TracksError {
     }
 }
 
+impl From<YtAlbumTracksError> for TracksError {
+    fn from(err: YtAlbumTracksError) -> Self {
+        TracksError::Other(Box::new(err))
+    }
+}
+
 impl From<YtTrackError> for TrackError {
     fn from(err: YtTrackError) -> Self {
+        TrackError::Other(Box::new(err))
+    }
+}
+
+impl From<YtTrackFileUrlError> for TrackError {
+    fn from(err: YtTrackFileUrlError) -> Self {
         TrackError::Other(Box::new(err))
     }
 }
@@ -2237,20 +2284,14 @@ impl MusicApi for YtMusicApi {
         .await?)
     }
 
-    async fn albums(
-        &self,
-        offset: Option<u32>,
-        limit: Option<u32>,
-        order: Option<AlbumOrder>,
-        order_direction: Option<AlbumOrderDirection>,
-    ) -> PagingResult<Album, AlbumsError> {
+    async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
         Ok(favorite_albums(
             #[cfg(feature = "db")]
             self.db.clone(),
-            offset,
-            limit,
-            order.map(|x| x.into()),
-            order_direction.map(|x| x.into()),
+            request.page.as_ref().map(|x| x.offset),
+            request.page.as_ref().map(|x| x.limit),
+            request.sort.as_ref().map(|x| (*x).into()),
+            request.sort.as_ref().map(|x| (*x).into()),
             None,
             None,
             None,
@@ -2374,26 +2415,6 @@ impl MusicApi for YtMusicApi {
         .map(|x| x.into()))
     }
 
-    #[cfg(not(feature = "db"))]
-    async fn library_album(
-        &self,
-        _album_id: &Id,
-    ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
-        Err(LibraryAlbumError::NoDb)
-    }
-
-    #[cfg(feature = "db")]
-    async fn library_album(
-        &self,
-        album_id: &Id,
-    ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
-        Ok(
-            moosicbox_core::sqlite::menu::get_album(&**self.db, album_id, ApiSource::Yt)
-                .await
-                .map_err(|err| LibraryAlbumError::Other(Box::new(err)))?,
-        )
-    }
-
     async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
         Ok(add_favorite_album(
             #[cfg(feature = "db")]
@@ -2424,11 +2445,17 @@ impl MusicApi for YtMusicApi {
 
     async fn tracks(
         &self,
+        track_ids: Option<&[Id]>,
         offset: Option<u32>,
         limit: Option<u32>,
         order: Option<TrackOrder>,
         order_direction: Option<TrackOrderDirection>,
     ) -> PagingResult<Track, TracksError> {
+        moosicbox_assert::assert_or_unimplemented!(
+            track_ids.is_none(),
+            "Fetching specific tracks by id is not implemented yet"
+        );
+
         Ok(favorite_tracks(
             #[cfg(feature = "db")]
             self.db.clone(),
@@ -2437,6 +2464,29 @@ impl MusicApi for YtMusicApi {
             order.map(|x| x.into()),
             order_direction.map(|x| x.into()),
             None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?
+        .map(|x| x.into()))
+    }
+
+    async fn album_tracks(
+        &self,
+        album_id: &Id,
+        offset: Option<u32>,
+        limit: Option<u32>,
+        _order: Option<TrackOrder>,
+        _order_direction: Option<TrackOrderDirection>,
+    ) -> PagingResult<Track, TracksError> {
+        Ok(album_tracks(
+            #[cfg(feature = "db")]
+            self.db.clone(),
+            album_id,
+            offset,
+            limit,
             None,
             None,
             None,
@@ -2488,5 +2538,54 @@ impl MusicApi for YtMusicApi {
             None,
         )
         .await?)
+    }
+
+    async fn track_source(
+        &self,
+        track: &Track,
+        quality: TrackAudioQuality,
+    ) -> Result<Option<TrackSource>, TrackError> {
+        Ok(track_file_url(
+            #[cfg(feature = "db")]
+            &**self.db,
+            quality.into(),
+            &track.id,
+            None,
+        )
+        .await?
+        .first()
+        .map(|x| x.to_string())
+        .map(|url| TrackSource::RemoteUrl {
+            url,
+            format: track.format.unwrap_or(AudioFormat::Source),
+            track_id: Some(track.id.to_owned()),
+        }))
+    }
+
+    async fn track_size(
+        &self,
+        track_id: &Id,
+        _source: &TrackSource,
+        _quality: PlaybackQuality,
+    ) -> Result<Option<u64>, TrackError> {
+        let url = if let Some(url) = track_file_url(
+            #[cfg(feature = "db")]
+            &**self.db,
+            YtAudioQuality::High,
+            track_id,
+            None,
+        )
+        .await?
+        .into_iter()
+        .next()
+        {
+            url
+        } else {
+            return Ok(None);
+        };
+
+        Ok(get_content_length(&url, None, None)
+            .await
+            .map_err(|e| TrackError::Other(Box::new(e)))?)
     }
 }

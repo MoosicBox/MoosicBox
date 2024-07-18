@@ -62,3 +62,12 @@ pub struct ApiSearchResultsResponse {
     pub position: usize,
     pub results: Vec<ApiGlobalSearchResult>,
 }
+
+impl From<Vec<ApiGlobalSearchResult>> for ApiSearchResultsResponse {
+    fn from(value: Vec<ApiGlobalSearchResult>) -> Self {
+        ApiSearchResultsResponse {
+            position: 0,
+            results: value,
+        }
+    }
+}

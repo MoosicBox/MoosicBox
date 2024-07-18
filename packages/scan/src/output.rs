@@ -7,19 +7,24 @@ use std::{
 use futures::future::join_all;
 use moosicbox_core::{
     sqlite::{
-        db::{
-            add_album_maps_and_get_albums, add_artist_maps_and_get_artists, add_tracks,
-            set_track_sizes, DbError, InsertTrack, SetTrackSize,
-        },
-        models::{LibraryAlbum, LibraryArtist, LibraryTrack, TrackApiSource},
+        db::DbError,
+        models::{Album, ApiSource, Artist, Id, Track, TrackApiSource},
     },
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_database::{Database, DatabaseError, DatabaseValue, TryFromError};
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
-use moosicbox_qobuz::models::QobuzImageSize;
-use moosicbox_search::data::ReindexFromDbError;
-use moosicbox_tidal::models::TidalAlbumImageSize;
+use moosicbox_library::{
+    db::{
+        self, add_album_maps_and_get_albums, add_artist_maps_and_get_artists, add_tracks,
+        set_track_sizes, InsertTrack, SetTrackSize,
+    },
+    models::{LibraryAlbum, LibraryArtist, LibraryTrack},
+};
+use moosicbox_music_api::ImageCoverSize;
+use moosicbox_search::{
+    data::AsDataValues as _, populate_global_search_index, PopulateIndexError, RecreateIndexError,
+};
 use once_cell::sync::Lazy;
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -70,8 +75,8 @@ pub struct ScanTrack {
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
     pub source: TrackApiSource,
-    pub qobuz_id: Option<u64>,
-    pub tidal_id: Option<u64>,
+    pub id: Option<Id>,
+    pub api_source: ApiSource,
 }
 
 impl ScanTrack {
@@ -90,8 +95,8 @@ impl ScanTrack {
         sample_rate: &Option<u32>,
         channels: &Option<u8>,
         source: TrackApiSource,
-        qobuz_id: &Option<u64>,
-        tidal_id: &Option<u64>,
+        id: &Option<&Id>,
+        api_source: ApiSource,
     ) -> Self {
         Self {
             path: path.map(|p| p.to_string()),
@@ -106,8 +111,8 @@ impl ScanTrack {
             sample_rate: *sample_rate,
             channels: *channels,
             source,
-            qobuz_id: *qobuz_id,
-            tidal_id: *tidal_id,
+            id: id.cloned(),
+            api_source,
         }
     }
 }
@@ -121,8 +126,8 @@ pub struct ScanAlbum {
     pub date_released: Option<String>,
     pub directory: Option<String>,
     pub tracks: Arc<RwLock<Vec<Arc<RwLock<ScanTrack>>>>>,
-    pub qobuz_id: Option<String>,
-    pub tidal_id: Option<u64>,
+    pub id: Option<Id>,
+    pub api_source: ApiSource,
 }
 
 impl ScanAlbum {
@@ -132,8 +137,8 @@ impl ScanAlbum {
         name: &str,
         date_released: &Option<String>,
         directory: Option<&str>,
-        qobuz_id: &Option<String>,
-        tidal_id: &Option<u64>,
+        id: &Option<&Id>,
+        api_source: ApiSource,
     ) -> Self {
         Self {
             artist,
@@ -143,8 +148,8 @@ impl ScanAlbum {
             date_released: date_released.clone(),
             directory: directory.map(|d| d.to_string()),
             tracks: Arc::new(RwLock::new(Vec::new())),
-            qobuz_id: qobuz_id.clone(),
-            tidal_id: *tidal_id,
+            id: id.cloned(),
+            api_source,
         }
     }
 
@@ -164,8 +169,8 @@ impl ScanAlbum {
         sample_rate: &Option<u32>,
         channels: &Option<u8>,
         source: TrackApiSource,
-        qobuz_id: &Option<u64>,
-        tidal_id: &Option<u64>,
+        id: &Option<&Id>,
+        api_source: ApiSource,
     ) -> Arc<RwLock<ScanTrack>> {
         if let Some(track) = {
             let tracks = self.tracks.read().await;
@@ -201,8 +206,8 @@ impl ScanAlbum {
                 sample_rate,
                 channels,
                 source,
-                qobuz_id,
-                tidal_id,
+                id,
+                api_source,
             )));
             self.tracks.write().await.push(track.clone());
 
@@ -214,20 +219,19 @@ impl ScanAlbum {
     pub async fn search_cover(
         &mut self,
         url: String,
-        source: &str,
+        api_source: ApiSource,
     ) -> Result<Option<String>, FetchAndSaveBytesFromRemoteUrlError> {
         if self.cover.is_none() && !self.searched_cover {
             let path = CACHE_DIR
-                .join(source)
+                .join(api_source.to_string())
                 .join(moosicbox_files::sanitize_filename(&self.artist.name))
                 .join(moosicbox_files::sanitize_filename(&self.name));
 
-            let filename = if source == "local" {
+            let filename = if api_source == ApiSource::Library {
                 "album.jpg".to_string()
-            } else if let Some(id) = self.tidal_id {
-                format!("album_{}.jpg", id)
-            } else if let Some(id) = &self.qobuz_id {
-                format!("album_{}.jpg", id)
+            } else if let Some(id) = &self.id {
+                let size = ImageCoverSize::Max;
+                format!("album_{id}_{size}.jpg")
             } else {
                 "album.jpg".to_string()
             };
@@ -255,11 +259,19 @@ impl ScanAlbum {
             ("artwork", DatabaseValue::StringOpt(self.cover)),
             ("directory", DatabaseValue::StringOpt(self.directory)),
         ]);
-        if let Some(qobuz_id) = self.qobuz_id {
-            values.insert("qobuz_id", DatabaseValue::String(qobuz_id));
-        }
-        if let Some(tidal_id) = self.tidal_id {
-            values.insert("tidal_id", DatabaseValue::Number(tidal_id as i64));
+        if let Some(id) = &self.id {
+            match self.api_source {
+                ApiSource::Library => {}
+                ApiSource::Tidal => {
+                    values.insert("tidal_id", id.into());
+                }
+                ApiSource::Qobuz => {
+                    values.insert("qobuz_id", id.into());
+                }
+                ApiSource::Yt => {
+                    values.insert("yt_id", id.into());
+                }
+            }
         }
         values
     }
@@ -275,11 +287,19 @@ impl ScanAlbum {
             ("artwork", DatabaseValue::StringOpt(self.cover)),
             ("directory", DatabaseValue::StringOpt(self.directory)),
         ]);
-        if let Some(qobuz_id) = self.qobuz_id {
-            values.insert("qobuz_id", DatabaseValue::String(qobuz_id));
-        }
-        if let Some(tidal_id) = self.tidal_id {
-            values.insert("tidal_id", DatabaseValue::Number(tidal_id as i64));
+        if let Some(id) = &self.id {
+            match self.api_source {
+                ApiSource::Library => {}
+                ApiSource::Tidal => {
+                    values.insert("tidal_id", id.into());
+                }
+                ApiSource::Qobuz => {
+                    values.insert("qobuz_id", id.into());
+                }
+                ApiSource::Yt => {
+                    values.insert("yt_id", id.into());
+                }
+            }
         }
         values
     }
@@ -291,20 +311,20 @@ pub struct ScanArtist {
     pub cover: Option<String>,
     pub searched_cover: bool,
     pub albums: Arc<RwLock<Vec<Arc<RwLock<ScanAlbum>>>>>,
-    pub qobuz_id: Option<u64>,
-    pub tidal_id: Option<u64>,
+    pub id: Option<Id>,
+    pub api_source: ApiSource,
 }
 
 impl ScanArtist {
     #[allow(unused)]
-    pub fn new(name: &str, qobuz_id: &Option<u64>, tidal_id: &Option<u64>) -> Self {
+    pub fn new(name: &str, id: &Option<&Id>, api_source: ApiSource) -> Self {
         Self {
             name: name.to_string(),
             cover: None,
             searched_cover: false,
             albums: Arc::new(RwLock::new(Vec::new())),
-            qobuz_id: *qobuz_id,
-            tidal_id: *tidal_id,
+            id: id.cloned(),
+            api_source,
         }
     }
 
@@ -314,8 +334,8 @@ impl ScanArtist {
         name: &str,
         date_released: &Option<String>,
         directory: Option<&str>,
-        qobuz_id: &Option<String>,
-        tidal_id: &Option<u64>,
+        id: &Option<&Id>,
+        api_source: ApiSource,
     ) -> Arc<RwLock<ScanAlbum>> {
         if let Some(album) = {
             let albums = self.albums.read().await;
@@ -336,8 +356,8 @@ impl ScanArtist {
                 name,
                 date_released,
                 directory,
-                qobuz_id,
-                tidal_id,
+                id,
+                api_source,
             )));
             self.albums.write().await.push(album.clone());
 
@@ -349,22 +369,19 @@ impl ScanArtist {
     pub async fn search_cover(
         &mut self,
         url: String,
-        source: &str,
+        api_source: ApiSource,
     ) -> Result<Option<String>, FetchAndSaveBytesFromRemoteUrlError> {
         if self.cover.is_none() && !self.searched_cover {
             self.searched_cover = true;
 
             let path = CACHE_DIR
-                .join(source)
+                .join(api_source.to_string())
                 .join(moosicbox_files::sanitize_filename(&self.name));
 
-            let filename = if source == "local" {
+            let filename = if api_source == ApiSource::Library {
                 "artist.jpg".to_string()
-            } else if let Some(id) = self.tidal_id {
-                let size = TidalAlbumImageSize::Max;
-                format!("artist_{id}_{size}.jpg")
-            } else if let Some(id) = &self.qobuz_id {
-                let size = QobuzImageSize::Mega;
+            } else if let Some(id) = &self.id {
+                let size = ImageCoverSize::Max;
                 format!("artist_{id}_{size}.jpg")
             } else {
                 "artist.jpg".to_string()
@@ -385,11 +402,19 @@ impl ScanArtist {
             ("title", DatabaseValue::String(self.name.clone())),
             ("cover", DatabaseValue::StringOpt(self.cover.clone())),
         ]);
-        if let Some(qobuz_id) = self.qobuz_id {
-            values.insert("qobuz_id", DatabaseValue::Number(qobuz_id as i64));
-        }
-        if let Some(tidal_id) = self.tidal_id {
-            values.insert("tidal_id", DatabaseValue::Number(tidal_id as i64));
+        if let Some(id) = &self.id {
+            match self.api_source {
+                ApiSource::Library => {}
+                ApiSource::Tidal => {
+                    values.insert("tidal_id", id.into());
+                }
+                ApiSource::Qobuz => {
+                    values.insert("qobuz_id", id.into());
+                }
+                ApiSource::Yt => {
+                    values.insert("yt_id", id.into());
+                }
+            }
         }
         values
     }
@@ -399,11 +424,19 @@ impl ScanArtist {
             ("title", DatabaseValue::String(self.name.clone())),
             ("cover", DatabaseValue::StringOpt(self.cover.clone())),
         ]);
-        if let Some(qobuz_id) = self.qobuz_id {
-            values.insert("qobuz_id", DatabaseValue::Number(qobuz_id as i64));
-        }
-        if let Some(tidal_id) = self.tidal_id {
-            values.insert("tidal_id", DatabaseValue::Number(tidal_id as i64));
+        if let Some(id) = &self.id {
+            match self.api_source {
+                ApiSource::Library => {}
+                ApiSource::Tidal => {
+                    values.insert("tidal_id", id.into());
+                }
+                ApiSource::Qobuz => {
+                    values.insert("qobuz_id", id.into());
+                }
+                ApiSource::Yt => {
+                    values.insert("yt_id", id.into());
+                }
+            }
         }
         values
     }
@@ -426,7 +459,9 @@ pub enum UpdateDatabaseError {
     #[error("Invalid data: {0}")]
     InvalidData(String),
     #[error(transparent)]
-    ReindexFromDb(#[from] ReindexFromDbError),
+    PopulateIndex(#[from] PopulateIndexError),
+    #[error(transparent)]
+    RecreateIndex(#[from] RecreateIndexError),
 }
 
 #[derive(Clone)]
@@ -448,8 +483,8 @@ impl ScanOutput {
     pub async fn add_artist(
         &mut self,
         name: &str,
-        qobuz_id: &Option<u64>,
-        tidal_id: &Option<u64>,
+        id: &Option<&Id>,
+        api_source: ApiSource,
     ) -> Arc<RwLock<ScanArtist>> {
         if let Some(artist) = {
             let artists = self.artists.read().await;
@@ -465,7 +500,7 @@ impl ScanOutput {
         } {
             artist
         } else {
-            let artist = Arc::new(RwLock::new(ScanArtist::new(name, qobuz_id, tidal_id)));
+            let artist = Arc::new(RwLock::new(ScanArtist::new(name, id, api_source)));
             self.artists.write().await.push(artist.clone());
 
             artist
@@ -475,7 +510,7 @@ impl ScanOutput {
     #[allow(unused)]
     pub async fn update_database(
         &self,
-        db: Arc<Box<dyn Database>>,
+        db: &dyn Database,
     ) -> Result<UpdateDatabaseResults, UpdateDatabaseError> {
         let artists = join_all(
             self.artists
@@ -529,14 +564,14 @@ impl ScanOutput {
         let existing_artist_ids = db
             .select("artists")
             .columns(&["id"])
-            .execute(&**db)
+            .execute(db)
             .await?
             .iter()
             .map(|id| id.id().unwrap().try_into())
             .collect::<Result<HashSet<i32>, _>>()?;
 
         let db_artists = add_artist_maps_and_get_artists(
-            &**db,
+            db,
             artists
                 .iter()
                 .map(|artist| artist.clone().to_database_values())
@@ -566,7 +601,7 @@ impl ScanOutput {
         let existing_album_ids = db
             .select("albums")
             .columns(&["id"])
-            .execute(&**db)
+            .execute(db)
             .await?
             .iter()
             .map(|id| id.id().unwrap().try_into())
@@ -586,7 +621,7 @@ impl ScanOutput {
         .flatten()
         .collect::<Vec<_>>();
 
-        let db_albums = add_album_maps_and_get_albums(&**db, album_maps).await?;
+        let db_albums = add_album_maps_and_get_albums(db, album_maps).await?;
 
         let db_albums_end = std::time::SystemTime::now();
         log::info!(
@@ -610,7 +645,7 @@ impl ScanOutput {
         let existing_track_ids = db
             .select("tracks")
             .columns(&["id"])
-            .execute(&**db)
+            .execute(db)
             .await?
             .iter()
             .map(|id| id.id().unwrap().try_into())
@@ -623,8 +658,18 @@ impl ScanOutput {
                     InsertTrack {
                         album_id: db.id,
                         file: track.path.clone(),
-                        qobuz_id: track.qobuz_id,
-                        tidal_id: track.tidal_id,
+                        qobuz_id: match track.api_source {
+                            ApiSource::Library => None,
+                            ApiSource::Tidal => None,
+                            ApiSource::Qobuz => track.id.as_ref().map(|x| x.into()),
+                            ApiSource::Yt => None,
+                        },
+                        tidal_id: match track.api_source {
+                            ApiSource::Library => None,
+                            ApiSource::Tidal => track.id.as_ref().map(|x| x.into()),
+                            ApiSource::Qobuz => None,
+                            ApiSource::Yt => None,
+                        },
                         track: LibraryTrack {
                             number: track.number as i32,
                             title: track.name.clone(),
@@ -643,7 +688,7 @@ impl ScanOutput {
         .flatten()
         .collect::<Vec<_>>();
 
-        let db_tracks = add_tracks(&**db, insert_tracks).await?;
+        let db_tracks = add_tracks(db, insert_tracks).await?;
 
         let db_tracks_end = std::time::SystemTime::now();
         log::info!(
@@ -680,7 +725,7 @@ impl ScanOutput {
             })
             .collect::<Vec<_>>();
 
-        set_track_sizes(&**db, &track_sizes).await?;
+        set_track_sizes(db, &track_sizes).await?;
 
         let db_track_sizes_end = std::time::SystemTime::now();
         log::info!(
@@ -719,7 +764,34 @@ impl ScanOutput {
     ) -> Result<(), UpdateDatabaseError> {
         let reindex_start = std::time::SystemTime::now();
 
-        moosicbox_search::data::reindex_global_search_index_from_db(db).await?;
+        moosicbox_search::data::recreate_global_search_index().await?;
+
+        let artists = db::get_artists(db)
+            .await?
+            .into_iter()
+            .map(|x| x.into())
+            .map(|artist: Artist| artist.as_data_values())
+            .collect::<Vec<_>>();
+
+        populate_global_search_index(&artists, false)?;
+
+        let albums = db::get_albums(db)
+            .await?
+            .into_iter()
+            .map(|x| x.into())
+            .map(|album: Album| album.as_data_values())
+            .collect::<Vec<_>>();
+
+        populate_global_search_index(&albums, false)?;
+
+        let tracks = db::get_tracks(db, None)
+            .await?
+            .into_iter()
+            .map(|x| x.into())
+            .map(|track: Track| track.as_data_values())
+            .collect::<Vec<_>>();
+
+        populate_global_search_index(&tracks, false)?;
 
         let reindex_end = std::time::SystemTime::now();
         log::info!(

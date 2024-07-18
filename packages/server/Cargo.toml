@@ -11,9 +11,11 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { path = "../assert" }
+moosicbox_assert = { path = "../assert", default-features = false }
 moosicbox_async_service = { path = "../async_service", default-features = false }
-moosicbox_auth = { path = "../auth" }
+moosicbox_auth = { path = "../auth", default-features = false, features = [
+    "api",
+] }
 moosicbox_config = { path = "../config", default-features = false }
 moosicbox_core = { path = "../core", default-features = false }
 moosicbox_database = { path = "../database", default-features = false, features = [
@@ -22,7 +24,7 @@ moosicbox_database = { path = "../database", default-features = false, features 
 moosicbox_downloader = { path = "../downloader", default-features = false, features = [
     "api",
 ] }
-moosicbox_env_utils = { path = "../env_utils" }
+moosicbox_env_utils = { path = "../env_utils", default-features = false }
 moosicbox_files = { path = "../files", default-features = false, features = [
     "api",
     "files",
@@ -30,23 +32,35 @@ moosicbox_files = { path = "../files", default-features = false, features = [
     "range",
     "track-range",
 ] }
-moosicbox_logging = { path = "../logging" }
-moosicbox_menu = { path = "../menu" }
-moosicbox_middleware = { path = "../middleware" }
+moosicbox_library = { path = "../library", default-features = false, features = [
+    "api",
+] }
+moosicbox_logging = { path = "../logging", default-features = false }
+moosicbox_menu = { path = "../menu", default-features = false, features = [
+    "api",
+] }
+moosicbox_middleware = { path = "../middleware", default-features = false }
+moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_player = { path = "../player", default-features = false, features = [
     "api",
     "local",
 ] }
-moosicbox_qobuz = { path = "../qobuz" }
+moosicbox_qobuz = { path = "../qobuz", default-features = false, features = [
+    "api",
+    "db",
+] }
 moosicbox_scan = { path = "../scan", default-features = false, features = [
     "api",
     "local",
-    "qobuz",
-    "tidal",
-    "yt",
 ] }
-moosicbox_search = { path = "../search" }
-moosicbox_tidal = { path = "../tidal" }
+moosicbox_search = { path = "../search", default-features = false, features = [
+    "api",
+] }
+moosicbox_session = { path = "../session", default-features = false }
+moosicbox_tidal = { path = "../tidal", default-features = false, features = [
+    "api",
+    "db",
+] }
 moosicbox_tunnel = { path = "../tunnel", default-features = false }
 moosicbox_tunnel_sender = { path = "../tunnel_sender", default-features = false }
 moosicbox_upnp = { path = "../upnp", optional = true, default-features = false, features = [
@@ -54,8 +68,11 @@ moosicbox_upnp = { path = "../upnp", optional = true, default-features = false, 
     "listener",
     "player",
 ] }
-moosicbox_ws = { path = "../ws" }
-moosicbox_yt = { path = "../yt" }
+moosicbox_ws = { path = "../ws", default-features = false }
+moosicbox_yt = { path = "../yt", default-features = false, features = [
+    "api",
+    "db",
+] }
 
 # Postgres
 aws-config = { workspace = true, optional = true }
@@ -136,32 +153,48 @@ aac = [
     "moosicbox_core/aac",
     "moosicbox_downloader/aac",
     "moosicbox_files/aac",
+    "moosicbox_library/aac",
+    "moosicbox_library/aac",
     "moosicbox_player/aac",
     "moosicbox_scan/aac",
+    "moosicbox_session/aac",
+    "moosicbox_session/aac",
     "moosicbox_tunnel_sender/aac",
 ]
 flac = [
     "moosicbox_core/flac",
     "moosicbox_downloader/flac",
     "moosicbox_files/flac",
+    "moosicbox_library/flac",
+    "moosicbox_library/flac",
     "moosicbox_player/flac",
     "moosicbox_scan/flac",
+    "moosicbox_session/flac",
+    "moosicbox_session/flac",
     "moosicbox_tunnel_sender/flac",
 ]
 mp3 = [
     "moosicbox_core/mp3",
     "moosicbox_downloader/mp3",
     "moosicbox_files/mp3",
+    "moosicbox_library/mp3",
+    "moosicbox_library/mp3",
     "moosicbox_player/mp3",
     "moosicbox_scan/mp3",
+    "moosicbox_session/mp3",
+    "moosicbox_session/mp3",
     "moosicbox_tunnel_sender/mp3",
 ]
 opus = [
     "moosicbox_core/opus",
     "moosicbox_downloader/opus",
     "moosicbox_files/opus",
+    "moosicbox_library/opus",
+    "moosicbox_library/opus",
     "moosicbox_player/opus",
     "moosicbox_scan/opus",
+    "moosicbox_session/opus",
+    "moosicbox_session/opus",
     "moosicbox_tunnel_sender/opus",
 ]
 

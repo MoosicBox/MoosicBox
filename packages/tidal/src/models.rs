@@ -1,10 +1,11 @@
 use std::fmt::Display;
 
-use moosicbox_core::sqlite::models::TrackApiSource;
+use moosicbox_core::sqlite::models::{AlbumSource, ApiSource, ApiSources, TrackApiSource};
 use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
     ParseError, ToValueType,
 };
+use moosicbox_music_api::ImageCoverSize;
 use moosicbox_search::models::{
     ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
     ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
@@ -30,6 +31,7 @@ impl From<TidalArtist> for Artist {
             id: value.id.into(),
             title: value.name,
             cover: value.picture,
+            source: ApiSource::Tidal,
         }
     }
 }
@@ -51,6 +53,18 @@ pub enum TidalArtistImageSize {
     Large,  // 480
     Medium, // 320
     Small,  // 160
+}
+
+impl From<ImageCoverSize> for TidalArtistImageSize {
+    fn from(value: ImageCoverSize) -> Self {
+        match value {
+            ImageCoverSize::Max => TidalArtistImageSize::Max,
+            ImageCoverSize::Large => TidalArtistImageSize::Large,
+            ImageCoverSize::Medium => TidalArtistImageSize::Medium,
+            ImageCoverSize::Small => TidalArtistImageSize::Small,
+            ImageCoverSize::Thumbnail => TidalArtistImageSize::Small,
+        }
+    }
 }
 
 impl From<TidalArtistImageSize> for u16 {
@@ -192,6 +206,10 @@ impl From<TidalAlbum> for Album {
             directory: None,
             blur: false,
             versions: vec![],
+            source: AlbumSource::Tidal,
+            artist_sources: ApiSources::default()
+                .with_source(ApiSource::Tidal, value.artist_id.into()),
+            album_sources: ApiSources::default().with_source(ApiSource::Tidal, value.id.into()),
         }
     }
 }
@@ -224,6 +242,18 @@ pub enum TidalAlbumImageSize {
     Medium,    // 320
     Small,     // 160
     Thumbnail, // 80
+}
+
+impl From<ImageCoverSize> for TidalAlbumImageSize {
+    fn from(value: ImageCoverSize) -> Self {
+        match value {
+            ImageCoverSize::Max => TidalAlbumImageSize::Max,
+            ImageCoverSize::Large => TidalAlbumImageSize::Large,
+            ImageCoverSize::Medium => TidalAlbumImageSize::Medium,
+            ImageCoverSize::Small => TidalAlbumImageSize::Small,
+            ImageCoverSize::Thumbnail => TidalAlbumImageSize::Thumbnail,
+        }
+    }
 }
 
 impl From<TidalAlbumImageSize> for u16 {
@@ -407,6 +437,8 @@ impl From<TidalTrack> for Track {
             sample_rate: None,
             channels: None,
             source: TrackApiSource::Tidal,
+            api_source: ApiSource::Tidal,
+            sources: ApiSources::default().with_source(ApiSource::Tidal, value.id.into()),
         }
     }
 }

@@ -1,6 +1,8 @@
 use std::fmt::Display;
 
-use moosicbox_core::sqlite::models::{Album, Artist, AsModelResult, Track, TrackApiSource};
+use moosicbox_core::sqlite::models::{
+    Album, AlbumSource, ApiSource, ApiSources, Artist, AsModelResult, Track, TrackApiSource,
+};
 use moosicbox_json_utils::{
     serde_json::{ToNestedValue as _, ToValue as _},
     ParseError, ToValueType,
@@ -39,6 +41,7 @@ impl From<YtArtist> for Artist {
             id: value.id.into(),
             title: value.name,
             cover: value.picture,
+            source: ApiSource::Yt,
         }
     }
 }
@@ -160,16 +163,20 @@ pub struct YtAlbum {
 impl From<YtAlbum> for Album {
     fn from(value: YtAlbum) -> Self {
         Self {
-            id: value.id.into(),
+            id: value.id.as_str().into(),
             title: value.title,
             artist: value.artist,
-            artist_id: value.artist_id.into(),
+            artist_id: value.artist_id.as_str().into(),
             date_released: value.release_date,
             date_added: None,
             artwork: value.cover,
             directory: None,
             blur: false,
             versions: vec![],
+            source: AlbumSource::Yt,
+            artist_sources: ApiSources::default()
+                .with_source(ApiSource::Yt, value.artist_id.into()),
+            album_sources: ApiSources::default().with_source(ApiSource::Yt, value.id.into()),
         }
     }
 }
@@ -342,7 +349,7 @@ pub struct YtTrack {
 impl From<YtTrack> for Track {
     fn from(value: YtTrack) -> Self {
         Self {
-            id: value.id.into(),
+            id: value.id.as_str().into(),
             number: value.track_number as i32,
             title: value.title,
             duration: value.duration as f64,
@@ -363,6 +370,8 @@ impl From<YtTrack> for Track {
             sample_rate: None,
             channels: None,
             source: TrackApiSource::Yt,
+            api_source: ApiSource::Yt,
+            sources: ApiSources::default().with_source(ApiSource::Yt, value.id.into()),
         }
     }
 }

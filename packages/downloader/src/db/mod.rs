@@ -41,7 +41,7 @@ pub async fn create_download_task(
     db: &dyn Database,
     task: &CreateDownloadTask,
 ) -> Result<DownloadTask, DbError> {
-    let track_id = if let DownloadItem::Track { track_id, .. } = task.item {
+    let track_id = if let DownloadItem::Track { track_id, .. } = &task.item {
         Some(track_id)
     } else {
         None
@@ -56,9 +56,9 @@ pub async fn create_download_task(
     } else {
         None
     };
-    let album_id = if let DownloadItem::AlbumCover(album_id) = task.item {
+    let album_id = if let DownloadItem::AlbumCover { album_id, .. } = &task.item {
         Some(album_id)
-    } else if let DownloadItem::ArtistCover(album_id) = task.item {
+    } else if let DownloadItem::ArtistCover { album_id, .. } = &task.item {
         Some(album_id)
     } else {
         None
