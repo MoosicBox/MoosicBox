@@ -22,7 +22,7 @@ use crate::{
     get_track_or_ids_from_track_id_ranges,
     player::{
         get_session_playlist_id_from_session_id, local::LocalPlayer, ApiPlaybackStatus,
-        PlaybackRetryOptions, PlaybackStatus, Player as _, PlayerError, PlayerSource,
+        PlaybackStatus, Player as _, PlayerError, PlayerSource, DEFAULT_PLAYBACK_RETRY_OPTIONS,
     },
 };
 
@@ -101,11 +101,6 @@ fn get_player(host: Option<&str>) -> LocalPlayer {
         })
         .clone()
 }
-
-pub const DEFAULT_PLAYBACK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
-    max_attempts: 10,
-    retry_delay: std::time::Duration::from_millis(500),
-};
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]

@@ -53,6 +53,11 @@ pub const DEFAULT_SEEK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOption
     retry_delay: std::time::Duration::from_millis(100),
 };
 
+pub const DEFAULT_PLAYBACK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
+    max_attempts: 10,
+    retry_delay: std::time::Duration::from_millis(500),
+};
+
 pub static CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
 
 #[derive(Debug, Error)]

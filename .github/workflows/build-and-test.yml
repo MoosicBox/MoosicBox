@@ -356,6 +356,138 @@ jobs:
                       cargo: --no-default-features
                       features: opus
 
+                    - name: server-downloader
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: downloader
+
+                    - name: server-library
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: library
+
+                    - name: server-menu
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: menu
+
+                    - name: server-player
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: player
+
+                    - name: server-qobuz
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: qobuz
+
+                    - name: server-scan
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: scan
+
+                    - name: server-search
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: search
+
+                    - name: server-tidal
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: tidal
+
+                    - name: server-upnp
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: upnp
+
+                    - name: server-yt
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: yt
+
+                    - name: server-auth-api
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: auth-api
+
+                    - name: server-downloader-api
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: downloader-api
+
+                    - name: server-files-api
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: files-api
+
+                    - name: server-library-api
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: library-api
+
+                    - name: server-menu-api
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: menu-api
+
+                    - name: server-player-api
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: player-api
+
+                    - name: server-qobuz-api
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: qobuz-api
+
+                    - name: server-scan-api
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: scan-api
+
+                    - name: server-search-api
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: search-api
+
+                    - name: server-tidal-api
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: tidal-api
+
+                    - name: server-upnp-api
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: upnp-api
+
+                    - name: server-yt-api
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: yt-api
+
                     - name: session
                       path: packages/session
                       os: ubuntu-latest

@@ -5,46 +5,25 @@ mod api;
 #[cfg(feature = "static-token-auth")]
 mod auth;
 mod db;
+#[cfg(feature = "player")]
 mod playback_session;
 mod tunnel;
 mod ws;
 
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App};
-use futures_util::Future;
 use moosicbox_core::{app::AppState, sqlite::models::ApiSource};
 use moosicbox_database::Database;
-use moosicbox_downloader::{
-    api::models::ApiProgressEvent,
-    queue::{ProgressEvent, ProgressListenerRefFut},
-};
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 use moosicbox_files::files::track_pool::service::Commander as _;
-use moosicbox_library::{LibraryMusicApi, LibraryMusicApiState};
 use moosicbox_music_api::{MusicApi, MusicApiState};
-use moosicbox_player::{
-    api::DEFAULT_PLAYBACK_RETRY_OPTIONS,
-    player::{Player as _, PlayerSource, Track},
-};
-use moosicbox_qobuz::QobuzMusicApi;
-use moosicbox_session::models::{RegisterConnection, RegisterPlayer, UpdateSession};
-use moosicbox_tidal::TidalMusicApi;
-use moosicbox_tunnel_sender::sender::TunnelSenderHandle;
-use moosicbox_ws::{send_download_event, WebsocketContext, WebsocketSendError};
-use moosicbox_yt::YtMusicApi;
 use once_cell::sync::Lazy;
-use std::{
-    collections::HashMap,
-    env,
-    pin::Pin,
-    sync::{atomic::AtomicUsize, Arc, Mutex},
-    time::Duration,
-};
-use throttle::Throttle;
+use std::{collections::HashMap, env, sync::Arc};
 use tokio::try_join;
 use tokio_util::sync::CancellationToken;
-use ws::server::{WsServer, WsServerHandle};
+use ws::server::WsServer;
 
+#[cfg(feature = "player")]
 use crate::playback_session::{service::Commander, PLAYBACK_EVENT_HANDLE};
 
 static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
@@ -63,8 +42,9 @@ static DB: Lazy<std::sync::RwLock<Option<Arc<Box<dyn Database>>>>> =
 static MUSIC_API_STATE: Lazy<std::sync::RwLock<Option<MusicApiState>>> =
     Lazy::new(|| std::sync::RwLock::new(None));
 
+#[cfg(feature = "library")]
 #[allow(clippy::type_complexity)]
-static LIBRARY_API_STATE: Lazy<std::sync::RwLock<Option<LibraryMusicApiState>>> =
+static LIBRARY_API_STATE: Lazy<std::sync::RwLock<Option<moosicbox_library::LibraryMusicApiState>>> =
     Lazy::new(|| std::sync::RwLock::new(None));
 
 #[allow(clippy::too_many_lines)]
@@ -126,42 +106,65 @@ fn main() -> std::io::Result<()> {
         let database: Arc<Box<dyn Database>> = Arc::new(db);
         DB.write().unwrap().replace(database.clone());
 
+        #[allow(unused_mut)]
         let mut apis_map: HashMap<ApiSource, Box<dyn MusicApi>> = HashMap::new();
+        #[cfg(feature = "library")]
         apis_map.insert(
             ApiSource::Library,
-            Box::new(LibraryMusicApi::new(database.clone())),
+            Box::new(moosicbox_library::LibraryMusicApi::new(database.clone())),
         );
+        #[cfg(feature = "tidal")]
         apis_map.insert(
             ApiSource::Tidal,
-            Box::new(TidalMusicApi::new(database.clone())),
+            Box::new(moosicbox_tidal::TidalMusicApi::new(database.clone())),
         );
+        #[cfg(feature = "qobuz")]
         apis_map.insert(
             ApiSource::Qobuz,
-            Box::new(QobuzMusicApi::new(database.clone())),
+            Box::new(moosicbox_qobuz::QobuzMusicApi::new(database.clone())),
         );
-        apis_map.insert(ApiSource::Yt, Box::new(YtMusicApi::new(database.clone())));
+        #[cfg(feature = "yt")]
+        apis_map.insert(
+            ApiSource::Yt,
+            Box::new(moosicbox_yt::YtMusicApi::new(database.clone())),
+        );
         let music_api_state = MusicApiState::new(apis_map);
         MUSIC_API_STATE
             .write()
             .unwrap()
             .replace(music_api_state.clone());
 
-        let library_api_state = LibraryMusicApiState::new(LibraryMusicApi::new(database.clone()));
+        #[cfg(feature = "library")]
+        let library_api_state = moosicbox_library::LibraryMusicApiState::new(
+            moosicbox_library::LibraryMusicApi::new(database.clone()),
+        );
+        #[cfg(feature = "library")]
         LIBRARY_API_STATE
             .write()
             .unwrap()
             .replace(library_api_state.clone());
 
-        let bytes_throttle = Arc::new(Mutex::new(Throttle::new(Duration::from_millis(200), 1)));
-        let bytes_buf = Arc::new(AtomicUsize::new(0));
+        #[cfg(feature = "downloader")]
+        let bytes_throttle = Arc::new(std::sync::Mutex::new(throttle::Throttle::new(
+            std::time::Duration::from_millis(200),
+            1,
+        )));
+        #[cfg(feature = "downloader")]
+        let bytes_buf = Arc::new(std::sync::atomic::AtomicUsize::new(0));
 
+        #[cfg(feature = "downloader")]
         moosicbox_downloader::api::add_progress_listener_to_download_queue(Box::new(
             move |event| {
                 let bytes_throttle = bytes_throttle.clone();
                 let bytes_buf = bytes_buf.clone();
                 let event = event.clone();
                 Box::pin(async move {
-                    let event = if let ProgressEvent::BytesRead { task, read, total } = event {
+                    let event = if let moosicbox_downloader::queue::ProgressEvent::BytesRead {
+                        task,
+                        read,
+                        total,
+                    } = event
+                    {
                         if bytes_throttle.lock().unwrap().accept().is_err() {
                             bytes_buf.fetch_add(read, std::sync::atomic::Ordering::SeqCst);
                             return;
@@ -169,7 +172,7 @@ fn main() -> std::io::Result<()> {
 
                         let bytes = bytes_buf.load(std::sync::atomic::Ordering::SeqCst);
                         bytes_buf.store(0, std::sync::atomic::Ordering::SeqCst);
-                        ProgressEvent::BytesRead {
+                        moosicbox_downloader::queue::ProgressEvent::BytesRead {
                             task,
                             read: read + bytes,
                             total,
@@ -178,9 +181,10 @@ fn main() -> std::io::Result<()> {
                         event.clone()
                     };
 
-                    let api_event: ApiProgressEvent = event.into();
+                    let api_event: moosicbox_downloader::api::models::ApiProgressEvent =
+                        event.into();
 
-                    if let Err(err) = send_download_event(
+                    if let Err(err) = moosicbox_ws::send_download_event(
                         WS_SERVER_HANDLE.read().await.as_ref().unwrap(),
                         None,
                         api_event,
@@ -189,25 +193,33 @@ fn main() -> std::io::Result<()> {
                     {
                         log::error!("Failed to broadcast download event: {err:?}");
                     }
-                }) as ProgressListenerRefFut
+                }) as moosicbox_downloader::queue::ProgressListenerRefFut
             },
         ))
         .await;
 
         let (mut ws_server, server_tx) = WsServer::new(database.clone());
+        #[cfg(feature = "player")]
         let handle = server_tx.clone();
         WS_SERVER_HANDLE.write().await.replace(server_tx);
 
+        #[cfg(feature = "player")]
         let playback_event_service =
             playback_session::service::Service::new(playback_session::Context::new(handle.clone()));
+        #[cfg(feature = "player")]
         let playback_event_handle = playback_event_service.handle();
+        #[cfg(feature = "player")]
         let playback_join_handle = playback_event_service.start();
+        #[cfg(feature = "player")]
         PLAYBACK_EVENT_HANDLE
             .set(playback_event_handle.clone())
             .unwrap_or_else(|_| panic!("Failed to set PLAYBACK_EVENT_HANDLE"));
 
-        moosicbox_player::player::set_service_port(service_port);
-        moosicbox_player::player::on_playback_event(crate::playback_session::on_playback_event);
+        #[cfg(feature = "player")]
+        {
+            moosicbox_player::player::set_service_port(service_port);
+            moosicbox_player::player::on_playback_event(crate::playback_session::on_playback_event);
+        }
 
         #[cfg(feature = "postgres-raw")]
         let db_connection_handle = tokio::spawn(db_connection);
@@ -223,6 +235,7 @@ fn main() -> std::io::Result<()> {
 
         let ws_server_handle = tokio::spawn(ws_server.run());
 
+        #[cfg(feature = "player")]
         if let Err(err) =
             register_server_player(&**database.clone(), handle.clone(), &tunnel_handle).await
         {
@@ -276,6 +289,8 @@ fn main() -> std::io::Result<()> {
             };
 
             let music_api_state = MUSIC_API_STATE.read().unwrap().as_ref().unwrap().clone();
+
+            #[cfg(feature = "library")]
             let library_api_state = LIBRARY_API_STATE.read().unwrap().as_ref().unwrap().clone();
 
             let cors = Cors::default()
@@ -302,103 +317,156 @@ fn main() -> std::io::Result<()> {
             let mut app = app
                 .app_data(web::Data::new(app_data))
                 .app_data(web::Data::new(music_api_state))
-                .app_data(web::Data::new(library_api_state))
                 .service(api::health_endpoint)
-                .service(api::websocket)
-                .service(moosicbox_scan::api::run_scan_endpoint)
-                .service(moosicbox_scan::api::run_scan_path_endpoint)
-                .service(moosicbox_scan::api::get_scan_origins_endpoint)
-                .service(moosicbox_scan::api::enable_scan_origin_endpoint)
-                .service(moosicbox_scan::api::disable_scan_origin_endpoint)
-                .service(moosicbox_scan::api::get_scan_paths_endpoint)
-                .service(moosicbox_scan::api::add_scan_path_endpoint)
-                .service(moosicbox_scan::api::remove_scan_path_endpoint)
-                .service(moosicbox_auth::api::get_magic_token_endpoint)
-                .service(moosicbox_auth::api::create_magic_token_endpoint)
-                .service(moosicbox_downloader::api::download_endpoint)
-                .service(moosicbox_downloader::api::retry_download_endpoint)
-                .service(moosicbox_downloader::api::download_tasks_endpoint)
-                .service(moosicbox_menu::api::get_artists_endpoint)
-                .service(moosicbox_menu::api::get_artist_endpoint)
-                .service(moosicbox_menu::api::get_album_endpoint)
-                .service(moosicbox_menu::api::add_album_endpoint)
-                .service(moosicbox_menu::api::remove_album_endpoint)
-                .service(moosicbox_menu::api::refavorite_album_endpoint)
-                .service(moosicbox_menu::api::get_albums_endpoint)
-                .service(moosicbox_menu::api::get_tracks_endpoint)
-                .service(moosicbox_menu::api::get_album_tracks_endpoint)
-                .service(moosicbox_menu::api::get_album_versions_endpoint)
-                .service(moosicbox_menu::api::get_artist_albums_endpoint)
-                .service(moosicbox_files::api::track_endpoint)
-                .service(moosicbox_files::api::track_visualization_endpoint)
-                .service(moosicbox_files::api::track_info_endpoint)
-                .service(moosicbox_files::api::tracks_info_endpoint)
-                .service(moosicbox_files::api::artist_cover_endpoint)
-                .service(moosicbox_files::api::album_source_artwork_endpoint)
-                .service(moosicbox_files::api::album_artwork_endpoint)
-                .service(moosicbox_player::api::play_track_endpoint)
-                .service(moosicbox_player::api::play_tracks_endpoint)
-                .service(moosicbox_player::api::play_album_endpoint)
-                .service(moosicbox_player::api::pause_playback_endpoint)
-                .service(moosicbox_player::api::resume_playback_endpoint)
-                .service(moosicbox_player::api::update_playback_endpoint)
-                .service(moosicbox_player::api::next_track_endpoint)
-                .service(moosicbox_player::api::previous_track_endpoint)
-                .service(moosicbox_player::api::stop_track_endpoint)
-                .service(moosicbox_player::api::seek_track_endpoint)
-                .service(moosicbox_player::api::player_status_endpoint)
-                .service(moosicbox_search::api::search_global_search_endpoint)
-                .service(moosicbox_tidal::api::device_authorization_endpoint)
-                .service(moosicbox_tidal::api::device_authorization_token_endpoint)
-                .service(moosicbox_tidal::api::track_file_url_endpoint)
-                .service(moosicbox_tidal::api::track_playback_info_endpoint)
-                .service(moosicbox_tidal::api::favorite_artists_endpoint)
-                .service(moosicbox_tidal::api::add_favorite_artist_endpoint)
-                .service(moosicbox_tidal::api::remove_favorite_artist_endpoint)
-                .service(moosicbox_tidal::api::favorite_albums_endpoint)
-                .service(moosicbox_tidal::api::add_favorite_album_endpoint)
-                .service(moosicbox_tidal::api::remove_favorite_album_endpoint)
-                .service(moosicbox_tidal::api::favorite_tracks_endpoint)
-                .service(moosicbox_tidal::api::add_favorite_track_endpoint)
-                .service(moosicbox_tidal::api::remove_favorite_track_endpoint)
-                .service(moosicbox_tidal::api::artist_albums_endpoint)
-                .service(moosicbox_tidal::api::album_tracks_endpoint)
-                .service(moosicbox_tidal::api::album_endpoint)
-                .service(moosicbox_tidal::api::artist_endpoint)
-                .service(moosicbox_tidal::api::track_endpoint)
-                .service(moosicbox_tidal::api::search_endpoint)
-                .service(moosicbox_qobuz::api::user_login_endpoint)
-                .service(moosicbox_qobuz::api::track_file_url_endpoint)
-                .service(moosicbox_qobuz::api::favorite_artists_endpoint)
-                .service(moosicbox_qobuz::api::favorite_albums_endpoint)
-                .service(moosicbox_qobuz::api::favorite_tracks_endpoint)
-                .service(moosicbox_qobuz::api::artist_albums_endpoint)
-                .service(moosicbox_qobuz::api::album_tracks_endpoint)
-                .service(moosicbox_qobuz::api::album_endpoint)
-                .service(moosicbox_qobuz::api::artist_endpoint)
-                .service(moosicbox_qobuz::api::track_endpoint)
-                .service(moosicbox_qobuz::api::search_endpoint)
-                .service(moosicbox_yt::api::device_authorization_endpoint)
-                .service(moosicbox_yt::api::device_authorization_token_endpoint)
-                .service(moosicbox_yt::api::track_file_url_endpoint)
-                .service(moosicbox_yt::api::track_playback_info_endpoint)
-                .service(moosicbox_yt::api::favorite_artists_endpoint)
-                .service(moosicbox_yt::api::add_favorite_artist_endpoint)
-                .service(moosicbox_yt::api::remove_favorite_artist_endpoint)
-                .service(moosicbox_yt::api::favorite_albums_endpoint)
-                .service(moosicbox_yt::api::add_favorite_album_endpoint)
-                .service(moosicbox_yt::api::remove_favorite_album_endpoint)
-                .service(moosicbox_yt::api::favorite_tracks_endpoint)
-                .service(moosicbox_yt::api::add_favorite_track_endpoint)
-                .service(moosicbox_yt::api::remove_favorite_track_endpoint)
-                .service(moosicbox_yt::api::artist_albums_endpoint)
-                .service(moosicbox_yt::api::album_tracks_endpoint)
-                .service(moosicbox_yt::api::album_endpoint)
-                .service(moosicbox_yt::api::artist_endpoint)
-                .service(moosicbox_yt::api::track_endpoint)
-                .service(moosicbox_yt::api::search_endpoint);
+                .service(api::websocket);
 
-            #[cfg(feature = "upnp")]
+            #[cfg(feature = "library")]
+            {
+                app = app.app_data(web::Data::new(library_api_state));
+            }
+
+            #[cfg(feature = "scan-api")]
+            {
+                app = app
+                    .service(moosicbox_scan::api::run_scan_endpoint)
+                    .service(moosicbox_scan::api::run_scan_path_endpoint)
+                    .service(moosicbox_scan::api::get_scan_origins_endpoint)
+                    .service(moosicbox_scan::api::enable_scan_origin_endpoint)
+                    .service(moosicbox_scan::api::disable_scan_origin_endpoint)
+                    .service(moosicbox_scan::api::get_scan_paths_endpoint)
+                    .service(moosicbox_scan::api::add_scan_path_endpoint)
+                    .service(moosicbox_scan::api::remove_scan_path_endpoint);
+            }
+
+            #[cfg(feature = "auth-api")]
+            {
+                app = app
+                    .service(moosicbox_auth::api::get_magic_token_endpoint)
+                    .service(moosicbox_auth::api::create_magic_token_endpoint);
+            }
+
+            #[cfg(feature = "downloader-api")]
+            {
+                app = app
+                    .service(moosicbox_downloader::api::download_endpoint)
+                    .service(moosicbox_downloader::api::retry_download_endpoint)
+                    .service(moosicbox_downloader::api::download_tasks_endpoint);
+            }
+
+            #[cfg(feature = "menu-api")]
+            {
+                app = app
+                    .service(moosicbox_menu::api::get_artists_endpoint)
+                    .service(moosicbox_menu::api::get_artist_endpoint)
+                    .service(moosicbox_menu::api::get_album_endpoint)
+                    .service(moosicbox_menu::api::add_album_endpoint)
+                    .service(moosicbox_menu::api::remove_album_endpoint)
+                    .service(moosicbox_menu::api::refavorite_album_endpoint)
+                    .service(moosicbox_menu::api::get_albums_endpoint)
+                    .service(moosicbox_menu::api::get_tracks_endpoint)
+                    .service(moosicbox_menu::api::get_album_tracks_endpoint)
+                    .service(moosicbox_menu::api::get_album_versions_endpoint)
+                    .service(moosicbox_menu::api::get_artist_albums_endpoint);
+            }
+
+            #[cfg(feature = "files-api")]
+            {
+                app = app
+                    .service(moosicbox_files::api::track_endpoint)
+                    .service(moosicbox_files::api::track_visualization_endpoint)
+                    .service(moosicbox_files::api::track_info_endpoint)
+                    .service(moosicbox_files::api::tracks_info_endpoint)
+                    .service(moosicbox_files::api::artist_cover_endpoint)
+                    .service(moosicbox_files::api::album_source_artwork_endpoint)
+                    .service(moosicbox_files::api::album_artwork_endpoint);
+            }
+
+            #[cfg(feature = "player-api")]
+            {
+                app = app
+                    .service(moosicbox_player::api::play_track_endpoint)
+                    .service(moosicbox_player::api::play_tracks_endpoint)
+                    .service(moosicbox_player::api::play_album_endpoint)
+                    .service(moosicbox_player::api::pause_playback_endpoint)
+                    .service(moosicbox_player::api::resume_playback_endpoint)
+                    .service(moosicbox_player::api::update_playback_endpoint)
+                    .service(moosicbox_player::api::next_track_endpoint)
+                    .service(moosicbox_player::api::previous_track_endpoint)
+                    .service(moosicbox_player::api::stop_track_endpoint)
+                    .service(moosicbox_player::api::seek_track_endpoint)
+                    .service(moosicbox_player::api::player_status_endpoint);
+            }
+
+            #[cfg(feature = "search-api")]
+            {
+                app = app.service(moosicbox_search::api::search_global_search_endpoint);
+            }
+
+            #[cfg(feature = "tidal-api")]
+            {
+                app = app
+                    .service(moosicbox_tidal::api::device_authorization_endpoint)
+                    .service(moosicbox_tidal::api::device_authorization_token_endpoint)
+                    .service(moosicbox_tidal::api::track_file_url_endpoint)
+                    .service(moosicbox_tidal::api::track_playback_info_endpoint)
+                    .service(moosicbox_tidal::api::favorite_artists_endpoint)
+                    .service(moosicbox_tidal::api::add_favorite_artist_endpoint)
+                    .service(moosicbox_tidal::api::remove_favorite_artist_endpoint)
+                    .service(moosicbox_tidal::api::favorite_albums_endpoint)
+                    .service(moosicbox_tidal::api::add_favorite_album_endpoint)
+                    .service(moosicbox_tidal::api::remove_favorite_album_endpoint)
+                    .service(moosicbox_tidal::api::favorite_tracks_endpoint)
+                    .service(moosicbox_tidal::api::add_favorite_track_endpoint)
+                    .service(moosicbox_tidal::api::remove_favorite_track_endpoint)
+                    .service(moosicbox_tidal::api::artist_albums_endpoint)
+                    .service(moosicbox_tidal::api::album_tracks_endpoint)
+                    .service(moosicbox_tidal::api::album_endpoint)
+                    .service(moosicbox_tidal::api::artist_endpoint)
+                    .service(moosicbox_tidal::api::track_endpoint)
+                    .service(moosicbox_tidal::api::search_endpoint);
+            }
+
+            #[cfg(feature = "qobuz-api")]
+            {
+                app = app
+                    .service(moosicbox_qobuz::api::user_login_endpoint)
+                    .service(moosicbox_qobuz::api::track_file_url_endpoint)
+                    .service(moosicbox_qobuz::api::favorite_artists_endpoint)
+                    .service(moosicbox_qobuz::api::favorite_albums_endpoint)
+                    .service(moosicbox_qobuz::api::favorite_tracks_endpoint)
+                    .service(moosicbox_qobuz::api::artist_albums_endpoint)
+                    .service(moosicbox_qobuz::api::album_tracks_endpoint)
+                    .service(moosicbox_qobuz::api::album_endpoint)
+                    .service(moosicbox_qobuz::api::artist_endpoint)
+                    .service(moosicbox_qobuz::api::track_endpoint)
+                    .service(moosicbox_qobuz::api::search_endpoint);
+            }
+
+            #[cfg(feature = "yt-api")]
+            {
+                app = app
+                    .service(moosicbox_yt::api::device_authorization_endpoint)
+                    .service(moosicbox_yt::api::device_authorization_token_endpoint)
+                    .service(moosicbox_yt::api::track_file_url_endpoint)
+                    .service(moosicbox_yt::api::track_playback_info_endpoint)
+                    .service(moosicbox_yt::api::favorite_artists_endpoint)
+                    .service(moosicbox_yt::api::add_favorite_artist_endpoint)
+                    .service(moosicbox_yt::api::remove_favorite_artist_endpoint)
+                    .service(moosicbox_yt::api::favorite_albums_endpoint)
+                    .service(moosicbox_yt::api::add_favorite_album_endpoint)
+                    .service(moosicbox_yt::api::remove_favorite_album_endpoint)
+                    .service(moosicbox_yt::api::favorite_tracks_endpoint)
+                    .service(moosicbox_yt::api::add_favorite_track_endpoint)
+                    .service(moosicbox_yt::api::remove_favorite_track_endpoint)
+                    .service(moosicbox_yt::api::artist_albums_endpoint)
+                    .service(moosicbox_yt::api::album_tracks_endpoint)
+                    .service(moosicbox_yt::api::album_endpoint)
+                    .service(moosicbox_yt::api::artist_endpoint)
+                    .service(moosicbox_yt::api::track_endpoint)
+                    .service(moosicbox_yt::api::search_endpoint);
+            }
+
+            #[cfg(feature = "upnp-api")]
             {
                 app = app
                     .service(moosicbox_upnp::api::scan_devices_endpoint)
@@ -437,35 +505,42 @@ fn main() -> std::io::Result<()> {
             async move {
                 let resp = http_server.await;
 
-                log::debug!("Shutting down server players...");
-                let players = SERVER_PLAYERS.write().await.drain().collect::<Vec<_>>();
-                for (id, player) in players {
-                    log::debug!("Shutting down player id={}", id);
-                    if let Err(err) = player
-                        .update_playback(
-                            true,
-                            None,
-                            Some(true),
-                            None,
-                            None,
-                            None,
-                            None,
-                            None,
-                            None,
-                            None,
-                            None,
-                            None,
-                        )
-                        .await
-                    {
-                        log::error!("Failed to stop player id={}: {err:?}", id);
-                    } else {
-                        log::debug!("Successfully shut down player id={}", id);
+                #[cfg(feature = "player")]
+                {
+                    use moosicbox_player::player::Player as _;
+
+                    log::debug!("Shutting down server players...");
+                    let players = SERVER_PLAYERS.write().await.drain().collect::<Vec<_>>();
+                    for (id, player) in players {
+                        log::debug!("Shutting down player id={}", id);
+                        if let Err(err) = player
+                            .update_playback(
+                                true,
+                                None,
+                                Some(true),
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                            )
+                            .await
+                        {
+                            log::error!("Failed to stop player id={}: {err:?}", id);
+                        } else {
+                            log::debug!("Successfully shut down player id={}", id);
+                        }
                     }
                 }
 
                 #[cfg(feature = "upnp")]
                 {
+                    use moosicbox_player::player::Player as _;
+
                     log::debug!("Shutting down UPnP players...");
                     let players = UPNP_PLAYERS.write().await.drain().collect::<Vec<_>>();
                     for (id, player) in players {
@@ -503,6 +578,7 @@ fn main() -> std::io::Result<()> {
                 DB.write().unwrap().take();
 
                 log::debug!("Cancelling scan...");
+                #[cfg(feature = "scan")]
                 moosicbox_scan::cancel();
                 CANCELLATION_TOKEN.cancel();
 
@@ -523,9 +599,12 @@ fn main() -> std::io::Result<()> {
                     db_connection_handle.abort();
                 }
 
-                log::debug!("Shutting down PlaybackEventHandler...");
-                if let Err(e) = playback_event_handle.shutdown() {
-                    log::error!("Failed to shut down PlaybackEventHandler: {e:?}");
+                #[cfg(feature = "player")]
+                {
+                    log::debug!("Shutting down PlaybackEventHandler...");
+                    if let Err(e) = playback_event_handle.shutdown() {
+                        log::error!("Failed to shut down PlaybackEventHandler: {e:?}");
+                    }
                 }
 
                 log::debug!("Shutting down TrackPool...");
@@ -554,12 +633,17 @@ fn main() -> std::io::Result<()> {
                 resp
             },
             async move {
-                let resp = playback_join_handle
-                    .await
-                    .expect("Failed to shut down playback event handler")
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
-                log::debug!("PlaybackEventHandler connection closed");
-                resp
+                #[cfg(feature = "player")]
+                {
+                    let resp = playback_join_handle
+                        .await
+                        .expect("Failed to shut down playback event handler")
+                        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
+                    log::debug!("PlaybackEventHandler connection closed");
+                    resp
+                }
+                #[cfg(not(feature = "player"))]
+                Ok(())
             },
             async move {
                 let resp = track_pool_join_handle
@@ -593,13 +677,17 @@ fn main() -> std::io::Result<()> {
     })
 }
 
+#[cfg(feature = "player")]
 static SERVER_PLAYERS: Lazy<
     tokio::sync::RwLock<HashMap<i32, moosicbox_player::player::local::LocalPlayer>>,
 > = Lazy::new(|| tokio::sync::RwLock::new(HashMap::new()));
 
+#[cfg(feature = "player")]
 fn handle_server_playback_update(
-    update: &UpdateSession,
-) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    update: &moosicbox_session::models::UpdateSession,
+) -> std::pin::Pin<Box<dyn futures_util::Future<Output = ()> + Send>> {
+    use moosicbox_player::player::Player as _;
+
     let update = update.clone();
 
     Box::pin(async move {
@@ -620,7 +708,7 @@ fn handle_server_playback_update(
                     };
 
                     let player = moosicbox_player::player::local::LocalPlayer::new(
-                        PlayerSource::Local,
+                        moosicbox_player::player::PlayerSource::Local,
                         None,
                     );
 
@@ -650,7 +738,7 @@ fn handle_server_playback_update(
                 update.playlist.as_ref().map(|x| {
                     x.tracks
                         .iter()
-                        .map(|t| Track {
+                        .map(|t| moosicbox_player::player::Track {
                             id: t.id.clone().into(),
                             source: t.r#type,
                             data: Some(serde_json::to_value(t).unwrap()),
@@ -660,7 +748,7 @@ fn handle_server_playback_update(
                 None,
                 Some(update.session_id.try_into().unwrap()),
                 None,
-                Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
+                Some(moosicbox_player::player::DEFAULT_PLAYBACK_RETRY_OPTIONS),
             )
             .await
         };
@@ -676,38 +764,42 @@ fn handle_server_playback_update(
     })
 }
 
+#[cfg(feature = "player")]
 async fn register_server_player(
     db: &dyn Database,
-    ws: WsServerHandle,
-    tunnel_handle: &Option<TunnelSenderHandle>,
-) -> Result<(), WebsocketSendError> {
+    ws: ws::server::WsServerHandle,
+    tunnel_handle: &Option<moosicbox_tunnel_sender::sender::TunnelSenderHandle>,
+) -> Result<(), moosicbox_ws::WebsocketSendError> {
     let connection_id = "self";
 
-    let context = WebsocketContext {
+    let context = moosicbox_ws::WebsocketContext {
         connection_id: connection_id.to_string(),
         ..Default::default()
     };
-    let payload = RegisterConnection {
+    let payload = moosicbox_session::models::RegisterConnection {
         connection_id: connection_id.to_string(),
         name: "MoosicBox Server".to_string(),
-        players: vec![RegisterPlayer {
+        players: vec![moosicbox_session::models::RegisterPlayer {
             name: "MoosicBox Server".into(),
             r#type: "SYMPHONIA".into(),
         }],
     };
 
-    let handle = WS_SERVER_HANDLE
-        .read()
-        .await
-        .clone()
-        .ok_or(WebsocketSendError::Unknown("No ws server handle".into()))?;
+    let handle =
+        WS_SERVER_HANDLE
+            .read()
+            .await
+            .clone()
+            .ok_or(moosicbox_ws::WebsocketSendError::Unknown(
+                "No ws server handle".into(),
+            ))?;
 
     let connection = moosicbox_ws::register_connection(db, &handle, &context, &payload).await?;
 
     let player = connection
         .players
         .first()
-        .ok_or(WebsocketSendError::Unknown(
+        .ok_or(moosicbox_ws::WebsocketSendError::Unknown(
             "No player on connection".into(),
         ))?;
 
@@ -726,8 +818,12 @@ static UPNP_PLAYERS: Lazy<tokio::sync::RwLock<HashMap<i32, moosicbox_upnp::playe
     Lazy::new(|| tokio::sync::RwLock::new(HashMap::new()));
 
 #[cfg(feature = "upnp")]
-fn handle_upnp_playback_update(update: &UpdateSession) -> Pin<Box<dyn Future<Output = ()> + Send>> {
-    use moosicbox_player::player::Track;
+fn handle_upnp_playback_update(
+    update: &moosicbox_session::models::UpdateSession,
+) -> std::pin::Pin<Box<dyn futures_util::Future<Output = ()> + Send>> {
+    use moosicbox_player::player::{
+        Player as _, PlayerSource, Track, DEFAULT_PLAYBACK_RETRY_OPTIONS,
+    };
 
     let update = update.clone();
 
@@ -814,25 +910,28 @@ fn handle_upnp_playback_update(update: &UpdateSession) -> Pin<Box<dyn Future<Out
 #[cfg(feature = "upnp")]
 async fn register_upnp_players(
     db: &dyn Database,
-    ws: WsServerHandle,
-    tunnel_handle: &Option<TunnelSenderHandle>,
-) -> Result<(), WebsocketSendError> {
+    ws: ws::server::WsServerHandle,
+    tunnel_handle: &Option<moosicbox_tunnel_sender::sender::TunnelSenderHandle>,
+) -> Result<(), moosicbox_ws::WebsocketSendError> {
     let connection_id = "self";
 
-    let context = WebsocketContext {
+    let context = moosicbox_ws::WebsocketContext {
         connection_id: connection_id.to_string(),
         ..Default::default()
     };
-    let payload = vec![RegisterPlayer {
+    let payload = vec![moosicbox_session::models::RegisterPlayer {
         name: "MoosicBox UPnP".into(),
         r#type: "SYMPHONIA".into(),
     }];
 
-    let handle = WS_SERVER_HANDLE
-        .read()
-        .await
-        .clone()
-        .ok_or(WebsocketSendError::Unknown("No ws server handle".into()))?;
+    let handle =
+        WS_SERVER_HANDLE
+            .read()
+            .await
+            .clone()
+            .ok_or(moosicbox_ws::WebsocketSendError::Unknown(
+                "No ws server handle".into(),
+            ))?;
 
     let players = moosicbox_ws::register_players(db, &handle, &context, &payload).await?;
 

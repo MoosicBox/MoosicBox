@@ -61,6 +61,7 @@ impl WebsocketSender for WsServer {
 /// A command received by the [`WsServer`].
 #[derive(Debug)]
 pub enum Command {
+    #[cfg(feature = "player")]
     AddPlayerAction {
         id: i32,
         action: PlayerAction,
@@ -168,6 +169,7 @@ impl WsServer {
         )
     }
 
+    #[cfg(feature = "player")]
     pub fn add_player_action(&mut self, id: i32, action: PlayerAction) {
         self.player_actions.push((id, action));
     }
@@ -306,6 +308,7 @@ impl WsServer {
 
     async fn process_command(ctx: Arc<RwLock<Self>>, cmd: Command) -> io::Result<()> {
         match cmd {
+            #[cfg(feature = "player")]
             Command::AddPlayerAction { id, action } => {
                 ctx.write().await.add_player_action(id, action);
                 log::debug!("Added a player action with id={id}");
@@ -461,6 +464,7 @@ impl WebsocketSender for WsServerHandle {
 }
 
 impl WsServerHandle {
+    #[cfg(feature = "player")]
     pub async fn add_player_action(&self, id: i32, action: PlayerAction) {
         log::trace!("Sending AddPlayerAction command");
 
