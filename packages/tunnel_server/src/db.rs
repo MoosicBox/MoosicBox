@@ -329,12 +329,10 @@ pub async fn init_postgres_raw_native_tls() -> Result<(), InitDatabaseError> {
         .await
         .replace(Box::new(PostgresDatabase::new(client)));
 
-    DB_CONNECTION.lock().await.replace(
-        tokio::task::Builder::new()
-            .name("postgres")
-            .spawn(connection)
-            .unwrap(),
-    );
+    DB_CONNECTION
+        .lock()
+        .await
+        .replace(moosicbox_task::spawn("postgres", connection));
 
     Ok(())
 }
@@ -376,12 +374,10 @@ pub async fn init_postgres_raw_openssl() -> Result<(), InitDatabaseError> {
         .await
         .replace(Box::new(PostgresDatabase::new(client)));
 
-    DB_CONNECTION.lock().await.replace(
-        tokio::task::Builder::new()
-            .name("postgres")
-            .spawn(connection)
-            .unwrap(),
-    );
+    DB_CONNECTION
+        .lock()
+        .await
+        .replace(moosicbox_task::spawn("postgres", connection));
 
     Ok(())
 }
@@ -412,12 +408,10 @@ pub async fn init_postgres_raw_no_tls() -> Result<(), InitDatabaseError> {
         .await
         .replace(Box::new(PostgresDatabase::new(client)));
 
-    DB_CONNECTION.lock().await.replace(
-        tokio::task::Builder::new()
-            .name("postgres")
-            .spawn(connection)
-            .unwrap(),
-    );
+    DB_CONNECTION
+        .lock()
+        .await
+        .replace(moosicbox_task::spawn("postgres", connection));
 
     Ok(())
 }

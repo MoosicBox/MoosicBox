@@ -23,6 +23,7 @@ moosicbox_env_utils     = { path = "../env_utils" }
 moosicbox_json_utils    = { path = "../json_utils" }
 moosicbox_logging       = { path = "../logging" }
 moosicbox_middleware    = { path = "../middleware", default-features = false }
+moosicbox_task          = { path = "../task", default-features = false }
 moosicbox_tunnel        = { path = "../tunnel", default-features = false }
 
 sqlx = { workspace = true, optional = true, features = [

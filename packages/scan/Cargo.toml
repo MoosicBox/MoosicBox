@@ -25,6 +25,7 @@ moosicbox_library = { path = "../library", default-features = false }
 moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_paging = { path = "../paging" }
 moosicbox_search = { path = "../search" }
+moosicbox_task = { path = "../task", default-features = false }
 
 # API Dependencies
 actix-web      = { workspace = true, optional = true }

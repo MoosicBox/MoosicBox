@@ -228,10 +228,7 @@ fn main() -> std::io::Result<()> {
         }
 
         #[cfg(feature = "postgres-raw")]
-        let db_connection_handle = tokio::task::Builder::new()
-            .name("server: postgres")
-            .spawn(db_connection)
-            .unwrap();
+        let db_connection_handle = moosicbox_task::spawn("server: postgres", db_connection);
 
         let (tunnel_host, tunnel_join_handle, tunnel_handle) =
             crate::tunnel::setup_tunnel(database.clone(), music_api_state.clone(), service_port)
@@ -242,10 +239,7 @@ fn main() -> std::io::Result<()> {
             ws_server.add_sender(Box::new(tunnel_handle.clone()));
         }
 
-        let ws_server_handle = tokio::task::Builder::new()
-            .name("server: WsServer")
-            .spawn(ws_server.run())
-            .unwrap();
+        let ws_server_handle = moosicbox_task::spawn("server: WsServer", ws_server.run());
 
         #[cfg(feature = "player")]
         if let Err(err) =
@@ -291,10 +285,7 @@ fn main() -> std::io::Result<()> {
             .unwrap_or_else(|_| panic!("Failed to set UPNP_LISTENER_HANDLE"));
 
         #[cfg(feature = "upnp")]
-        tokio::task::Builder::new()
-            .name("server: upnp")
-            .spawn(moosicbox_upnp::scan_devices())
-            .unwrap();
+        moosicbox_task::spawn("server: upnp", moosicbox_upnp::scan_devices());
 
         let app = move || {
             let app_data = AppState {
@@ -506,14 +497,11 @@ fn main() -> std::io::Result<()> {
             http_server = http_server.workers(workers);
         }
 
-        tokio::task::Builder::new()
-            .name("server: ctrl-c")
-            .spawn(async move {
-                tokio::signal::ctrl_c().await?;
-                log::debug!("Received ctrl-c");
-                Ok::<_, std::io::Error>(())
-            })
-            .unwrap();
+        moosicbox_task::spawn("server: ctrl-c", async move {
+            tokio::signal::ctrl_c().await?;
+            log::debug!("Received ctrl-c");
+            Ok::<_, std::io::Error>(())
+        });
 
         let http_server = http_server
             .bind((default_env("BIND_ADDR", "0.0.0.0"), service_port))?

@@ -40,49 +40,46 @@ impl TrackBytesMediaSource {
         let sender = self.sender.clone();
         let id = self.id;
 
-        tokio::task::Builder::new()
-            .name("files: TrackBytesMediaSource")
-            .spawn(async move {
-                log::trace!("Starting stream listen for track bytes for writer id={id}");
-                loop {
-                    log::debug!("Acquiring lock for inner bytes for writer id={id}");
-                    let mut bytes = bytes.lock().await;
-                    log::debug!("Acquired lock for inner bytes for writer id={id}");
+        moosicbox_task::spawn("files: TrackBytesMediaSource", async move {
+            log::trace!("Starting stream listen for track bytes for writer id={id}");
+            loop {
+                log::debug!("Acquiring lock for inner bytes for writer id={id}");
+                let mut bytes = bytes.lock().await;
+                log::debug!("Acquired lock for inner bytes for writer id={id}");
 
-                    tokio::select!(
-                        _ = tokio::time::sleep(Duration::from_millis(5000)) => {
-                            moosicbox_assert::die_or_error!(
-                                "Timed out waiting for bytes from stream for writer id={id}"
-                            );
-                            break;
-                        }
-                        response = bytes.stream.next() => {
-                            match response {
-                                Some(Ok(Ok(bytes))) => {
-                                    log::trace!("Sending {} bytes to writer id={id}", bytes.len());
-                                    if sender.send_async(bytes).await.is_err() {
-                                        log::debug!("Receiver has dropped for writer id={id}");
-                                        break;
-                                    }
-                                }
-                                None => {
-                                    log::trace!("Sending empty bytes to writer id={id}");
-                                    if sender.send_async(Bytes::new()).await.is_err() {
-                                        log::debug!("Receiver has dropped for writer id={id}");
-                                    }
+                tokio::select!(
+                    _ = tokio::time::sleep(Duration::from_millis(5000)) => {
+                        moosicbox_assert::die_or_error!(
+                            "Timed out waiting for bytes from stream for writer id={id}"
+                        );
+                        break;
+                    }
+                    response = bytes.stream.next() => {
+                        match response {
+                            Some(Ok(Ok(bytes))) => {
+                                log::trace!("Sending {} bytes to writer id={id}", bytes.len());
+                                if sender.send_async(bytes).await.is_err() {
+                                    log::debug!("Receiver has dropped for writer id={id}");
                                     break;
                                 }
-                                Some(Err(err)) | Some(Ok(Err(err))) => {
-                                    moosicbox_assert::die_or_error!(
-                                        "Byte stream returned error: writer id={id} {err:?}"
-                                    );
+                            }
+                            None => {
+                                log::trace!("Sending empty bytes to writer id={id}");
+                                if sender.send_async(Bytes::new()).await.is_err() {
+                                    log::debug!("Receiver has dropped for writer id={id}");
                                 }
+                                break;
+                            }
+                            Some(Err(err)) | Some(Ok(Err(err))) => {
+                                moosicbox_assert::die_or_error!(
+                                    "Byte stream returned error: writer id={id} {err:?}"
+                                );
                             }
                         }
-                    );
-                }
-            })
-            .unwrap();
+                    }
+                );
+            }
+        });
     }
 }
 

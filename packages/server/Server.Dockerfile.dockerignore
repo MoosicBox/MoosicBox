@@ -26,6 +26,7 @@
 !/packages/session
 !/packages/stream_utils
 !/packages/symphonia_player
+!/packages/task
 !/packages/tidal
 !/packages/tunnel
 !/packages/tunnel_sender

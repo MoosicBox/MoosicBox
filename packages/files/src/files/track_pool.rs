@@ -252,14 +252,14 @@ impl service::Processor for service::Service {
             } => {
                 if let Some(track_bytes_source) = ctx.read().await.pool.get(&key) {
                     let mut track_bytes_source = track_bytes_source.clone();
-                    tokio::task::Builder::new()
-                        .name(&format!("files: track_pool process_command {cmd_str}"))
-                        .spawn(async move {
+                    moosicbox_task::spawn(
+                        &format!("files: track_pool process_command {cmd_str}"),
+                        async move {
                             track_bytes_source
                                 .start_fetch_track_bytes(key, stream, size, start, end)
                                 .await
-                        })
-                        .unwrap();
+                        },
+                    );
                 }
             }
         }

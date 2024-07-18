@@ -1,0 +1,18 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools"]
+description = "MoosicBox task utilities package"
+edition     = "2021"
+keywords    = ["async", "blocking", "spawn", "task", "tokio"]
+license     = "MPL-2.0"
+name        = "moosicbox_task"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
+
+[dependencies]
+futures = { workspace = true }
+tokio   = { workspace = true, features = ["rt", "tracing"] }
+
+[features]
+fail-on-warnings = []

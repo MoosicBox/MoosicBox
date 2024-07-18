@@ -353,12 +353,10 @@ async fn subscribe(
         .insert(subscription_id, status_token.clone());
     ctx.status_join_handles.insert(
         subscription_id,
-        tokio::task::Builder::new()
-            .name(&format!("upnp: subscribe {command}"))
-            .spawn(async move {
-                let mut interval = tokio::time::interval(interval);
+        moosicbox_task::spawn(&format!("upnp: subscribe {command}"), async move {
+            let mut interval = tokio::time::interval(interval);
 
-                while tokio::select!(
+            while tokio::select!(
                 () = token.cancelled() => {
                     log::debug!("UpnpListener was cancelled");
                     Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "Cancelled"))
@@ -375,9 +373,8 @@ async fn subscribe(
                 action().await;
             }
 
-                Ok(())
-            })
-            .unwrap(),
+            Ok(())
+        }),
     );
 
     Ok(subscription_id)

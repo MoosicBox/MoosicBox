@@ -24,6 +24,7 @@ moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_session = { path = "../session", default-features = false }
 moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
 moosicbox_symphonia_player = { path = "../symphonia_player", default-features = false }
+moosicbox_task = { path = "../task", default-features = false }
 
 actix-cors       = { workspace = true }
 actix-files      = { workspace = true }

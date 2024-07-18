@@ -30,6 +30,7 @@ moosicbox_logging = { path = "../logging", default-features = false }
 moosicbox_middleware = { path = "../middleware", default-features = false }
 moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_session = { path = "../session", default-features = false }
+moosicbox_task = { path = "../task", default-features = false }
 moosicbox_tunnel = { path = "../tunnel", default-features = false }
 moosicbox_tunnel_sender = { path = "../tunnel_sender", default-features = false }
 moosicbox_ws = { path = "../ws", default-features = false }
@@ -112,7 +113,7 @@ strum              = { workspace = true }
 strum_macros       = { workspace = true }
 thiserror          = { workspace = true }
 throttle           = { workspace = true }
-tokio              = { workspace = true, features = ["macros", "rt", "time"] }
+tokio              = { workspace = true, features = ["macros", "rt", "time", "tracing"] }
 tokio-util         = { workspace = true }
 url                = { workspace = true }
 

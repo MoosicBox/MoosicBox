@@ -8,5 +8,6 @@
 !/packages/json_utils
 !/packages/logging
 !/packages/middleware
+!/packages/task
 !/packages/tunnel
 !/packages/tunnel_server

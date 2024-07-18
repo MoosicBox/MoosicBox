@@ -411,10 +411,10 @@ impl WsServer {
             cmd = cmd_rx.recv_async() => { Ok(cmd) }
         ) {
             log::trace!("Received WsServer command");
-            tokio::task::Builder::new()
-                .name("server: WsServer process_command")
-                .spawn(Self::process_command(ctx.clone(), cmd))
-                .unwrap();
+            moosicbox_task::spawn(
+                "server: WsServer process_command",
+                Self::process_command(ctx.clone(), cmd),
+            );
         }
 
         log::debug!("Stopped WsServer");

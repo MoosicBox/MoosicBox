@@ -601,6 +601,10 @@ jobs:
                       os: macos-latest
                       dependencies: brew install pulseaudio
 
+                    - name: task
+                      path: packages/task
+                      os: ubuntu-latest
+
                     - name: yt
                       path: packages/yt
                       os: ubuntu-latest

@@ -12,6 +12,7 @@ version     = "0.1.0"
 
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
+moosicbox_task   = { path = "../task", default-features = false }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -53,7 +54,7 @@ serde_json      = { workspace = true }
 strum           = { workspace = true }
 strum_macros    = { workspace = true }
 thiserror       = { workspace = true }
-tokio           = { workspace = true, optional = true, features = ["macros"] }
+tokio           = { workspace = true, optional = true, features = ["macros", "tracing"] }
 xml             = { workspace = true }
 
 [features]

@@ -30,6 +30,7 @@ moosicbox_image = { path = "../image", default-features = false, features = [
 moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
 moosicbox_symphonia_player = { path = "../symphonia_player", default-features = false }
+moosicbox_task = { path = "../task", default-features = false }
 moosicbox_tunnel = { path = "../tunnel", default-features = false }
 moosicbox_ws = { path = "../ws", default-features = false }
 
@@ -53,7 +54,7 @@ strum             = { workspace = true }
 strum_macros      = { workspace = true }
 symphonia         = { workspace = true }
 thiserror         = { workspace = true }
-tokio             = { workspace = true }
+tokio             = { workspace = true, features = ["tracing"] }
 tokio-tungstenite = { workspace = true }
 tokio-util        = { workspace = true }
 

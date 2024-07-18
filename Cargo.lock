@@ -3415,6 +3415,7 @@ dependencies = [
  "moosicbox_session",
  "moosicbox_stream_utils",
  "moosicbox_symphonia_player",
+ "moosicbox_task",
  "moosicbox_tidal",
  "moosicbox_tunnel",
  "moosicbox_tunnel_sender",
@@ -3460,6 +3461,7 @@ dependencies = [
  "futures",
  "log",
  "moosicbox_assert",
+ "moosicbox_task",
  "pretty_assertions",
  "test-log",
  "thiserror",
@@ -3588,6 +3590,7 @@ dependencies = [
  "moosicbox_library",
  "moosicbox_music_api",
  "moosicbox_paging",
+ "moosicbox_task",
  "mp3-duration",
  "once_cell",
  "pretty_assertions",
@@ -3639,6 +3642,7 @@ dependencies = [
  "moosicbox_music_api",
  "moosicbox_stream_utils",
  "moosicbox_symphonia_player",
+ "moosicbox_task",
  "once_cell",
  "regex",
  "reqwest 0.12.5",
@@ -3855,6 +3859,7 @@ dependencies = [
  "moosicbox_session",
  "moosicbox_stream_utils",
  "moosicbox_symphonia_player",
+ "moosicbox_task",
  "ogg",
  "once_cell",
  "rand",
@@ -3923,6 +3928,7 @@ dependencies = [
  "moosicbox_music_api",
  "moosicbox_paging",
  "moosicbox_search",
+ "moosicbox_task",
  "mp3-duration",
  "once_cell",
  "regex",
@@ -3999,6 +4005,7 @@ dependencies = [
  "moosicbox_scan",
  "moosicbox_search",
  "moosicbox_session",
+ "moosicbox_task",
  "moosicbox_tidal",
  "moosicbox_tunnel",
  "moosicbox_tunnel_sender",
@@ -4053,6 +4060,7 @@ dependencies = [
  "lazy_static",
  "log",
  "moosicbox_assert",
+ "moosicbox_task",
  "pin-project",
  "reqwest 0.12.5",
  "thiserror",
@@ -4080,6 +4088,7 @@ dependencies = [
  "moosicbox_converter",
  "moosicbox_env_utils",
  "moosicbox_stream_utils",
+ "moosicbox_task",
  "mp3lame-encoder",
  "ogg",
  "opus",
@@ -4093,6 +4102,14 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util",
+]
+
+[[package]]
+name = "moosicbox_task"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "tokio",
 ]
 
 [[package]]
@@ -4168,6 +4185,7 @@ dependencies = [
  "moosicbox_music_api",
  "moosicbox_stream_utils",
  "moosicbox_symphonia_player",
+ "moosicbox_task",
  "moosicbox_tunnel",
  "moosicbox_ws",
  "once_cell",
@@ -4211,6 +4229,7 @@ dependencies = [
  "moosicbox_json_utils",
  "moosicbox_logging",
  "moosicbox_middleware",
+ "moosicbox_task",
  "moosicbox_tunnel",
  "native-tls",
  "once_cell",
@@ -4254,6 +4273,7 @@ dependencies = [
  "moosicbox_session",
  "moosicbox_stream_utils",
  "moosicbox_symphonia_player",
+ "moosicbox_task",
  "once_cell",
  "pin-utils",
  "rand",

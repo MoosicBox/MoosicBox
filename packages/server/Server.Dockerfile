@@ -34,6 +34,7 @@ RUN cat Cargo.toml | \
     \"packages\/session\",\r\
     \"packages\/stream_utils\",\r\
     \"packages\/symphonia_player\",\r\
+    \"packages\/task\",\r\
     \"packages\/tidal\",\r\
     \"packages\/tunnel\",\r\
     \"packages\/tunnel_sender\",\r\
@@ -70,6 +71,7 @@ COPY packages/server/Cargo.toml packages/server/Cargo.toml
 COPY packages/session/Cargo.toml packages/session/Cargo.toml
 COPY packages/stream_utils/Cargo.toml packages/stream_utils/Cargo.toml
 COPY packages/symphonia_player/Cargo.toml packages/symphonia_player/Cargo.toml
+COPY packages/task/Cargo.toml packages/task/Cargo.toml
 COPY packages/tidal/Cargo.toml packages/tidal/Cargo.toml
 COPY packages/tunnel/Cargo.toml packages/tunnel/Cargo.toml
 COPY packages/tunnel_sender/Cargo.toml packages/tunnel_sender/Cargo.toml
@@ -109,6 +111,7 @@ packages/server|\
 packages/session|\
 packages/stream_utils|\
 packages/symphonia_player|\
+packages/task|\
 packages/tidal|\
 packages/tunnel|\
 packages/tunnel_sender|\

@@ -333,52 +333,49 @@ fn request(
     let path = path.to_string();
     let abort_token = abort_token.clone();
 
-    tokio::task::Builder::new()
-        .name("tunnel_server_request")
-        .spawn(async move {
-            debug!("Sending server request {request_id}");
-            let ws_server = WS_SERVER_HANDLE.read().await.as_ref().unwrap().clone();
-            ws_server
-                .send_command_async(crate::ws::server::Command::RequestStart {
+    moosicbox_task::spawn("tunnel_server_request", async move {
+        debug!("Sending server request {request_id}");
+        let ws_server = WS_SERVER_HANDLE.read().await.as_ref().unwrap().clone();
+        ws_server
+            .send_command_async(crate::ws::server::Command::RequestStart {
+                request_id,
+                sender: tx,
+                headers_sender: headers_tx,
+                abort_request_token: abort_token,
+            })
+            .await?;
+
+        let conn_id = match get_connection_id(&client_id).await {
+            Ok(conn_id) => conn_id,
+            Err(err) => {
+                log::error!("Failed to get connection id for request_id={request_id} client_id={client_id}: {err:?}");
+                ws_server
+                    .send_command_async(crate::ws::server::Command::RequestEnd { request_id })
+                    .await?;
+                return Err(err.into());
+            }
+        };
+
+        debug!("Sending server request {request_id} to {conn_id}");
+        ws_server
+            .send_command_async(crate::ws::server::Command::Message {
+                msg: serde_json::to_value(TunnelRequest::Http(TunnelHttpRequest {
                     request_id,
-                    sender: tx,
-                    headers_sender: headers_tx,
-                    abort_request_token: abort_token,
-                })
-                .await?;
-
-            let conn_id = match get_connection_id(&client_id).await {
-                Ok(conn_id) => conn_id,
-                Err(err) => {
-                    log::error!("Failed to get connection id for request_id={request_id} client_id={client_id}: {err:?}");
-                    ws_server
-                        .send_command_async(crate::ws::server::Command::RequestEnd { request_id })
-                        .await?;
-                    return Err(err.into());
-                }
-            };
-
-            debug!("Sending server request {request_id} to {conn_id}");
-            ws_server
-                .send_command_async(crate::ws::server::Command::Message {
-                    msg: serde_json::to_value(TunnelRequest::Http(TunnelHttpRequest {
-                        request_id,
-                        method: method.clone(),
-                        path: path.to_string(),
-                        query,
-                        payload,
-                        headers,
-                        encoding: TunnelEncoding::Binary,
-                    }))
-                    .unwrap()
-                    .to_string(),
-                    conn: conn_id,
-                })
-                .await?;
-            debug!("Sent server request {request_id} to {conn_id}");
-            Ok::<_, RequestError>(())
-        })
-        .unwrap();
+                    method: method.clone(),
+                    path: path.to_string(),
+                    query,
+                    payload,
+                    headers,
+                    encoding: TunnelEncoding::Binary,
+                }))
+                .unwrap()
+                .to_string(),
+                conn: conn_id,
+            })
+            .await?;
+        debug!("Sent server request {request_id} to {conn_id}");
+        Ok::<_, RequestError>(())
+    });
 
     Ok((headers_rx, rx))
 }

@@ -6,6 +6,7 @@ pub use async_trait::async_trait;
 pub use flume::{unbounded, Receiver, RecvError, SendError, Sender};
 pub use futures::Future;
 pub use log;
+pub use moosicbox_task;
 pub use thiserror::Error;
 pub use tokio;
 pub use tokio::task::{JoinError, JoinHandle};
@@ -62,9 +63,9 @@ macro_rules! async_service_body {
             }
 
             pub fn start(mut self) -> $crate::JoinHandle<Result<(), Error>> {
-                $crate::tokio::task::Builder::new()
-                    .name(&format!("async_service: {}", self.name))
-                    .spawn(async move {
+                $crate::moosicbox_task::spawn(
+                    &format!("async_service: {}", self.name),
+                    async move {
                         self.on_start().await?;
                         let ctx = self.ctx;
 
@@ -85,9 +86,9 @@ macro_rules! async_service_body {
                                 }
                             } else {
                                 let ctx = ctx.clone();
-                                $crate::tokio::task::Builder::new()
-                                    .name(&format!("async_service: {} - process_command", self.name))
-                                    .spawn(async move {
+                                $crate::moosicbox_task::spawn(
+                                    &format!("async_service: {} - process_command", self.name),
+                                    async move {
                                         log::trace!("Received Service command");
                                         if let Err(e) = Self::process_command(ctx, command.cmd).await {
                                             log::error!("Failed to process command: {e:?}");
@@ -96,7 +97,8 @@ macro_rules! async_service_body {
                                             tx.send_async(()).await?;
                                         }
                                         Ok::<_, Error>(())
-                                    }).unwrap();
+                                    },
+                                );
                             }
                         }
 
@@ -105,7 +107,8 @@ macro_rules! async_service_body {
                         $crate::log::debug!("Stopped Service");
 
                         Ok(())
-                    }).unwrap()
+                    },
+                )
             }
 
             pub fn handle(&self) -> Handle {
@@ -178,14 +181,15 @@ macro_rules! async_service_body {
             async fn send_command_and_wait_async(&self, command: $command) -> Result<(), Self::Error> {
                 let (tx, rx) = $crate::unbounded();
                 let sender = self.sender.clone();
-                $crate::tokio::task::Builder::new()
-                    .name(&format!("async_service: {} - send_command_and_wait_async", self.name))
-                    .spawn(async move {
+                $crate::moosicbox_task::spawn(
+                    &format!("async_service: {} - send_command_and_wait_async", self.name),
+                    async move {
                         sender.send_async(Command {
                             cmd: command,
                             tx: Some(tx)
                         }).await
-                    }).unwrap();
+                    },
+                );
                 Ok(rx.recv_async().await?)
             }
 

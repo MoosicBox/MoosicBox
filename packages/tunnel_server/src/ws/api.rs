@@ -27,16 +27,16 @@ pub async fn websocket(
     let (res, session, msg_stream) = actix_ws::handle(&req, stream)?;
 
     // spawn websocket handler (and don't await it) so that the response is returned immediately
-    tokio::task::Builder::new()
-        .name("tunnel_server_websocket")
-        .spawn_local(handler::handle_ws(
+    moosicbox_task::spawn_local(
+        "tunnel_server_websocket",
+        handler::handle_ws(
             ws_server,
             session,
             msg_stream,
             query.client_id.clone(),
             query.sender.unwrap_or(false),
-        ))
-        .unwrap();
+        ),
+    );
 
     Ok(res)
 }

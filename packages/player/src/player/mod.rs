@@ -649,81 +649,78 @@ pub trait Player: Clone + Send + 'static {
             playback.tracks.iter().map(|t| &t.id).collect::<Vec<_>>()
         );
 
-        tokio::task::Builder::new()
-            .name("player: Play playback")
-            .spawn(async move {
-                let mut seek = seek;
-                let mut playback = playback.clone();
-                let abort = playback.abort.clone();
+        moosicbox_task::spawn("player: Play playback", async move {
+            let mut seek = seek;
+            let mut playback = playback.clone();
+            let abort = playback.abort.clone();
 
-                while playback.playing && (playback.position as usize) < playback.tracks.len() {
-                    let track_or_id = &playback.tracks[playback.position as usize];
-                    log::debug!("play_playback: track={track_or_id:?} seek={seek:?}");
+            while playback.playing && (playback.position as usize) < playback.tracks.len() {
+                let track_or_id = &playback.tracks[playback.position as usize];
+                log::debug!("play_playback: track={track_or_id:?} seek={seek:?}");
 
-                    let seek = if seek.is_some() { seek.take() } else { None };
+                let seek = if seek.is_some() { seek.take() } else { None };
 
-                    tokio::select! {
-                        _ = abort.cancelled() => {
-                            log::debug!("Playback cancelled");
-                            return Err(PlayerError::Cancelled);
-                        }
-                        resp = player.play(seek, retry_options) => {
-                            if let Err(err) = resp {
-                                log::error!("Playback error occurred: {err:?}");
+                tokio::select! {
+                    _ = abort.cancelled() => {
+                        log::debug!("Playback cancelled");
+                        return Err(PlayerError::Cancelled);
+                    }
+                    resp = player.play(seek, retry_options) => {
+                        if let Err(err) = resp {
+                            log::error!("Playback error occurred: {err:?}");
 
-                                {
-                                    let mut binding = player.active_playback_write();
-                                    let active = binding.as_mut().unwrap();
-                                    let old = active.clone();
-                                    active.playing = false;
-                                    trigger_playback_event(active, &old);
-                                }
-
-                                tx.send_async(()).await?;
-                                return Err(err);
+                            {
+                                let mut binding = player.active_playback_write();
+                                let active = binding.as_mut().unwrap();
+                                let old = active.clone();
+                                active.playing = false;
+                                trigger_playback_event(active, &old);
                             }
+
+                            tx.send_async(()).await?;
+                            return Err(err);
                         }
                     }
-
-                    log::debug!("play_playback: playback finished track={track_or_id:?}");
-
-                    let mut binding = player.active_playback_write();
-                    let active = binding.as_mut().unwrap();
-
-                    if ((active.position + 1) as usize) >= active.tracks.len() {
-                        log::debug!("Playback position at end of tracks. Breaking");
-                        break;
-                    }
-
-                    let old = active.clone();
-                    active.position += 1;
-                    active.progress = 0.0;
-                    trigger_playback_event(active, &old);
-
-                    playback = active.clone();
                 }
 
-                log::debug!(
-                    "Finished playback on all tracks. playing={} position={} len={}",
-                    playback.playing,
-                    playback.position,
-                    playback.tracks.len()
-                );
+                log::debug!("play_playback: playback finished track={track_or_id:?}");
 
-                {
-                    let mut binding = player.active_playback_write();
-                    let active = binding.as_mut().unwrap();
-                    let old = active.clone();
-                    active.playing = false;
+                let mut binding = player.active_playback_write();
+                let active = binding.as_mut().unwrap();
 
-                    trigger_playback_event(active, &old);
+                if ((active.position + 1) as usize) >= active.tracks.len() {
+                    log::debug!("Playback position at end of tracks. Breaking");
+                    break;
                 }
 
-                tx.send_async(()).await?;
+                let old = active.clone();
+                active.position += 1;
+                active.progress = 0.0;
+                trigger_playback_event(active, &old);
 
-                Ok::<_, PlayerError>(0)
-            })
-            .unwrap();
+                playback = active.clone();
+            }
+
+            log::debug!(
+                "Finished playback on all tracks. playing={} position={} len={}",
+                playback.playing,
+                playback.position,
+                playback.tracks.len()
+            );
+
+            {
+                let mut binding = player.active_playback_write();
+                let active = binding.as_mut().unwrap();
+                let old = active.clone();
+                active.playing = false;
+
+                trigger_playback_event(active, &old);
+            }
+
+            tx.send_async(()).await?;
+
+            Ok::<_, PlayerError>(0)
+        });
 
         Ok(())
     }
