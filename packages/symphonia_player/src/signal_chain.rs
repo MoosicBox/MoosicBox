@@ -103,6 +103,7 @@ impl SignalChain {
         mut self,
         media_source: Box<dyn MediaSource>,
     ) -> Result<Box<dyn MediaSource>, SignalChainError> {
+        log::trace!("process: starting SignalChain processor");
         if self.steps.is_empty() {
             return Err(SignalChainError::Empty);
         }

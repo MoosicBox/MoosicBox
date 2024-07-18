@@ -1061,6 +1061,7 @@ pub trait Player: Clone + Send + 'static {
             match quality.format {
                 #[cfg(feature = "aac")]
                 AudioFormat::Aac => {
+                    log::debug!("Encoding playback with AacEncoder");
                     use moosicbox_symphonia_player::output::encoder::aac::encoder::AacEncoder;
                     let mut hint = Hint::new();
                     hint.with_extension("m4a");
@@ -1070,6 +1071,7 @@ pub trait Player: Clone + Send + 'static {
                 }
                 #[cfg(feature = "flac")]
                 AudioFormat::Flac => {
+                    log::debug!("Encoding playback with FlacEncoder");
                     use moosicbox_symphonia_player::output::encoder::flac::encoder::FlacEncoder;
                     let mut hint = Hint::new();
                     hint.with_extension("flac");
@@ -1079,6 +1081,7 @@ pub trait Player: Clone + Send + 'static {
                 }
                 #[cfg(feature = "mp3")]
                 AudioFormat::Mp3 => {
+                    log::debug!("Encoding playback with Mp3Encoder");
                     use moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder;
                     let mut hint = Hint::new();
                     hint.with_extension("mp3");
@@ -1088,6 +1091,7 @@ pub trait Player: Clone + Send + 'static {
                 }
                 #[cfg(feature = "opus")]
                 AudioFormat::Opus => {
+                    log::debug!("Encoding playback with OpusEncoder");
                     use moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder;
                     let mut hint = Hint::new();
                     hint.with_extension("opus");
@@ -1096,11 +1100,15 @@ pub trait Player: Clone + Send + 'static {
                         .with_hint(hint);
                 }
                 #[allow(unreachable_patterns)]
-                _ => {}
+                _ => {
+                    moosicbox_assert::die!("Invalid format {}", quality.format);
+                }
             }
 
+            log::trace!("track_to_playable_file: getting file at path={path:?}");
             let file = tokio::fs::File::open(path.to_path_buf()).await?;
 
+            log::trace!("track_to_playable_file: Creating ByteStreamSource");
             let ms = Box::new(ByteStreamSource::new(
                 Box::new(
                     StalledReadMonitor::new(
@@ -1231,7 +1239,10 @@ pub trait Player: Clone + Send + 'static {
                                 .clone()
                                 .ok_or(PlayerError::TrackNotFound(track.id.to_owned()))?,
                         )
-                        .map_err(|_| PlayerError::TrackNotFound(track.id.to_owned()))?,
+                        .map_err(|e| {
+                            log::error!("Failed to parse track: {e:?}");
+                            PlayerError::TrackNotFound(track.id.to_owned())
+                        })?,
                         quality,
                     )
                     .await?
@@ -1250,7 +1261,10 @@ pub trait Player: Clone + Send + 'static {
                                 .clone()
                                 .ok_or(PlayerError::TrackNotFound(track.id.to_owned()))?,
                         )
-                        .map_err(|_| PlayerError::TrackNotFound(track.id.to_owned()))?,
+                        .map_err(|e| {
+                            log::error!("Failed to parse track: {e:?}");
+                            PlayerError::TrackNotFound(track.id.to_owned())
+                        })?,
                         quality,
                     )
                     .await?
