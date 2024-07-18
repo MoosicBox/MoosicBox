@@ -86,32 +86,39 @@ pub async fn get_track_id_source(
     source: ApiSource,
     quality: Option<TrackAudioQuality>,
 ) -> Result<TrackSource, TrackSourceError> {
-    let library_api = &**apis.get(source)?;
+    let track_api = apis.get(source)?;
 
     log::debug!(
         "get_track_id_source: track_id={track_id} quality={quality:?} source={:?}",
-        library_api.source()
+        track_api.source()
     );
 
-    let track = library_api
+    let track = track_api
         .track(track_id)
         .await?
         .ok_or_else(|| TrackSourceError::NotFound(track_id.to_owned()))?;
 
-    let source = track.source.into();
-    let api = &**apis.get(source)?;
+    let track_source = track.source.into();
 
-    let track = api
-        .track(
-            track
-                .sources
-                .get(source)
-                .ok_or_else(|| TrackSourceError::NotFound(track_id.to_owned()))?,
+    let (api, track) = if track_source != source {
+        let api = apis.get(track_source)?;
+
+        (
+            api.clone(),
+            api.track(
+                track
+                    .sources
+                    .get(track_source)
+                    .ok_or_else(|| TrackSourceError::NotFound(track_id.to_owned()))?,
+            )
+            .await?
+            .ok_or_else(|| TrackSourceError::NotFound(track_id.to_owned()))?,
         )
-        .await?
-        .ok_or_else(|| TrackSourceError::NotFound(track_id.to_owned()))?;
+    } else {
+        (track_api, track)
+    };
 
-    get_track_source(api, &track, quality).await
+    get_track_source(&**api, &track, quality).await
 }
 
 pub async fn get_track_source(
