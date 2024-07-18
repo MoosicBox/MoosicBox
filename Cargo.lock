@@ -3389,7 +3389,6 @@ dependencies = [
 name = "moosicbox"
 version = "0.1.0"
 dependencies = [
- "moosicbox_aconverter",
  "moosicbox_assert",
  "moosicbox_async_service",
  "moosicbox_auth",
