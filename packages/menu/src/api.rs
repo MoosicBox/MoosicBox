@@ -1,4 +1,4 @@
-use std::{ops::Deref, str::FromStr};
+use std::str::FromStr;
 
 use actix_web::{
     delete,
@@ -27,10 +27,7 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use crate::library::{
-    albums::{
-        add_album, get_album_versions, get_all_albums, refavorite_album, remove_album,
-        ApiAlbumVersion,
-    },
+    albums::{add_album, get_album_versions, refavorite_album, remove_album, ApiAlbumVersion},
     artists::{get_all_artists, ArtistFilters, ArtistsRequest},
     get_album, get_artist, get_artist_albums, GetArtistError,
 };
@@ -60,13 +57,6 @@ pub enum MenuError {
     #[error("Not Found Error: {error:?}")]
     NotFound { error: String },
 }
-
-// #[derive(Serialize, Deserialize)]
-// #[serde(untagged)]
-// pub enum MenuResponse {
-//     Albums(Vec<LibraryAlbum>),
-//     Error(Value),
-// }
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -183,7 +173,8 @@ pub async fn get_albums_endpoint(
     };
 
     Ok(Json(
-        get_all_albums(library_api.as_ref().deref().to_owned(), &request)
+        library_api
+            .library_albums(&request)
             .await
             .map_err(|e| ErrorInternalServerError(format!("Failed to fetch albums: {e}")))?
             .to_api()

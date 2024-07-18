@@ -1,6 +1,5 @@
 use std::sync::{Arc, PoisonError};
 
-use async_recursion::async_recursion;
 use moosicbox_core::{
     sqlite::{
         db::DbError,
@@ -15,7 +14,6 @@ use moosicbox_library::{
     LibraryAlbumTracksError, LibraryFavoriteAlbumsError, LibraryMusicApi,
 };
 use moosicbox_music_api::{AlbumType, AlbumsRequest, LibraryAlbumError, MusicApi, TracksError};
-use moosicbox_paging::{PagingRequest, PagingResponse, PagingResult};
 use moosicbox_scan::{music_api::ScanError, output::ScanOutput};
 use moosicbox_search::{
     data::{AsDataValues, AsDeleteTerm},
@@ -24,7 +22,7 @@ use moosicbox_search::{
 use moosicbox_session::db::delete_session_playlist_tracks_by_track_id;
 use serde::Serialize;
 use thiserror::Error;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 
 use super::GetAlbumError;
 
@@ -34,40 +32,6 @@ pub enum GetAlbumsError {
     Db(#[from] DbError),
     #[error(transparent)]
     LibraryFavoriteAlbums(#[from] LibraryFavoriteAlbumsError),
-}
-
-#[async_recursion]
-pub async fn get_all_albums(
-    library_api: Arc<LibraryMusicApi>,
-    request: &AlbumsRequest,
-) -> PagingResult<LibraryAlbum, GetAlbumsError> {
-    let items = library_api
-        .library_albums(request)
-        .await?
-        .with_rest_of_items_in_batches()
-        .await?;
-
-    let total = items.len() as u32;
-
-    Ok(PagingResponse {
-        page: moosicbox_paging::Page::WithTotal {
-            items,
-            offset: 0,
-            limit: total,
-            total,
-        },
-        fetch: Arc::new(Mutex::new(Box::new({
-            let request = request.clone();
-
-            move |offset, limit| {
-                let mut request = request.clone();
-                request.page = Some(PagingRequest { offset, limit });
-                let library_api = library_api.clone();
-
-                Box::pin(async move { get_all_albums(library_api, &request).await })
-            }
-        }))),
-    })
 }
 
 #[derive(Debug, Error)]
