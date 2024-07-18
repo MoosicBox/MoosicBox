@@ -168,6 +168,12 @@ pub enum TrackApiSource {
     Yt,
 }
 
+impl Display for TrackApiSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_ref())
+    }
+}
+
 impl From<TrackApiSource> for ApiSource {
     fn from(value: TrackApiSource) -> Self {
         match value {
