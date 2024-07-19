@@ -509,7 +509,6 @@ impl From<LibraryAlbumError> for actix_web::Error {
     fn from(err: LibraryAlbumError) -> Self {
         log::error!("{err:?}");
         match err {
-            LibraryAlbumError::NotFound => ErrorNotFound("Library album not found"),
             LibraryAlbumError::Db(_) => ErrorInternalServerError(err.to_string()),
         }
     }
@@ -526,7 +525,9 @@ pub async fn album_endpoint(
     query: web::Query<LibraryAlbumQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<ApiAlbum>> {
-    let album = album(&**data.database, &query.album_id.into()).await?;
+    let album = album(&**data.database, &query.album_id.into())
+        .await?
+        .ok_or_else(|| ErrorNotFound("Album not found"))?;
 
     Ok(Json(album.to_api()))
 }

@@ -584,16 +584,15 @@ pub async fn album_tracks(
 
 #[derive(Debug, Error)]
 pub enum LibraryAlbumError {
-    #[error("Not found")]
-    NotFound,
     #[error(transparent)]
     Db(#[from] DbError),
 }
 
-pub async fn album(db: &dyn Database, album_id: &Id) -> Result<LibraryAlbum, LibraryAlbumError> {
-    db::get_album(db, "id", album_id)
-        .await?
-        .ok_or(LibraryAlbumError::NotFound)
+pub async fn album(
+    db: &dyn Database,
+    album_id: &Id,
+) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
+    Ok(db::get_album(db, "id", album_id).await?)
 }
 
 #[derive(Debug, Error)]
@@ -900,7 +899,7 @@ impl LibraryMusicApi {
     }
 
     pub async fn library_album(&self, album_id: &Id) -> Result<Option<LibraryAlbum>, AlbumError> {
-        Ok(Some(album(&**self.db, album_id).await?))
+        Ok(album(&**self.db, album_id).await?)
     }
 
     pub async fn library_albums(
