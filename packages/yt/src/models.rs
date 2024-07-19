@@ -1634,7 +1634,8 @@ impl ToValueType<YtSearchResults> for &Value {
 
 impl AsModelResult<YtSearchResults, ParseError> for Value {
     fn as_model(&self) -> Result<YtSearchResults, ParseError> {
-        let contents: Vec<YtSearchResultsContents> = self.to_value("contents")?;
+        let contents: Option<Vec<YtSearchResultsContents>> = self.to_value("contents")?;
+        let contents = contents.unwrap_or_default();
         let offset = 0;
         let limit = 3;
         let total = contents.len();
