@@ -6,6 +6,7 @@ where
     Fut: futures::Future + Send + 'static,
     Fut::Output: Send + 'static,
 {
+    log::trace!("spawn: {name}");
     tokio::task::Builder::new()
         .name(name)
         .spawn(future)
@@ -13,11 +14,12 @@ where
 }
 
 #[cfg(not(tokio_unstable))]
-pub fn spawn<Fut>(_name: &str, future: Fut) -> tokio::task::JoinHandle<Fut::Output>
+pub fn spawn<Fut>(name: &str, future: Fut) -> tokio::task::JoinHandle<Fut::Output>
 where
     Fut: futures::Future + Send + 'static,
     Fut::Output: Send + 'static,
 {
+    log::trace!("spawn: {name}");
     tokio::task::spawn(future)
 }
 
@@ -30,6 +32,7 @@ where
     Function: FnOnce() -> Output + Send + 'static,
     Output: Send + 'static,
 {
+    log::trace!("spawn_blocking: {name}");
     tokio::task::Builder::new()
         .name(name)
         .spawn_blocking(function)
@@ -38,13 +41,14 @@ where
 
 #[cfg(not(tokio_unstable))]
 pub fn spawn_blocking<Function, Output>(
-    _name: &str,
+    name: &str,
     function: Function,
 ) -> tokio::task::JoinHandle<Output>
 where
     Function: FnOnce() -> Output + Send + 'static,
     Output: Send + 'static,
 {
+    log::trace!("spawn_blocking: {name}");
     tokio::task::spawn_blocking(function)
 }
 
@@ -54,6 +58,7 @@ where
     Fut: futures::Future + 'static,
     Fut::Output: 'static,
 {
+    log::trace!("spawn_local: {name}");
     tokio::task::Builder::new()
         .name(name)
         .spawn_local(future)
@@ -61,10 +66,11 @@ where
 }
 
 #[cfg(not(tokio_unstable))]
-pub fn spawn_local<Fut>(_name: &str, future: Fut) -> tokio::task::JoinHandle<Fut::Output>
+pub fn spawn_local<Fut>(name: &str, future: Fut) -> tokio::task::JoinHandle<Fut::Output>
 where
     Fut: futures::Future + 'static,
     Fut::Output: 'static,
 {
+    log::trace!("spawn_local: {name}");
     tokio::task::spawn_local(future)
 }

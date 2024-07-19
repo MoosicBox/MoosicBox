@@ -12,6 +12,7 @@ version     = "0.1.0"
 
 [dependencies]
 futures = { workspace = true }
+log     = { workspace = true }
 tokio   = { workspace = true, features = ["rt", "tracing"] }
 
 [features]
