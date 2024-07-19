@@ -1211,6 +1211,10 @@ impl MusicApi for LibraryMusicApi {
                     writer.bytes_written()
                 }
                 AudioFormat::Source => File::open(path).unwrap().metadata().unwrap().len(),
+                #[allow(unreachable_patterns)]
+                _ => {
+                    moosicbox_assert::die_or_panic!("Invalid library state");
+                }
             },
             TrackSource::RemoteUrl { url, .. } => {
                 if let Some(bytes) = get_content_length(url, None, None)
