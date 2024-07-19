@@ -30,30 +30,43 @@ In progress:
 - Opus decoder
 - YouTube Music integration
 
-To-do (in no particular order):
+To-do (in priority order):
 
-- Spotify integration
-- Playlists
-- Shareable playlists via an authenticated link
-- Audio encoding cache
-- Image optimization cache
-- End-to-end encryption option
-- Schedule playback
+### Beta
+
+- Better session & audio zone handling
+- Introductory screen to walk through initial setup
+- Pre-load next playback track
 - Save tracks hosted on server locally on clients
   - Source quality and/or encoded lossy
+- iOS app
+
+### v1.0
+
+- Stream audio file visualization as it processes
+- Control streaming audio quality
+- Auto scan file changes (optionally)
+- Image optimization cache
+- Audio encoding cache
+- Run as a service in the background, optionally at startup
+- Spotify integration
 - Enable switching between different bitrates within encodings
 - Enable on the fly switching audio quality during playback
-- Pre-load next playback track
-- Shuffle playback
 - Current playback screen
-- Listen-only connections
-- Support MPEG-DASH encoding
-- Support HLS protocol
 - Support gapless playback
+- Playlists
+- Shuffle playback
+
+### Beyond v1.0
+
 - Peer-to-peer secure tunneling
 - Turso database support
-- ios app
-- Run as a service in the background, optionally at startup
+- End-to-end encryption option
+- Listen-only connections
+- Schedule playback
+- Shareable playlists via an authenticated link
+- Support HLS protocol
+- Support MPEG-DASH encoding
 
 ## Local Server
 
