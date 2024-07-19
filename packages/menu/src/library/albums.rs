@@ -191,18 +191,26 @@ pub async fn add_album(
     album_id: &Id,
 ) -> Result<LibraryAlbum, AddAlbumError> {
     log::debug!(
-        "Adding album to library album_id={album_id:?} source={}",
+        "add_album: Adding album to library album_id={album_id:?} source={}",
         api.source()
     );
 
-    if let Some(album) = library_api.album(album_id).await? {
+    if let Some(album) = library_api
+        .album_from_source(album_id, api.source())
+        .await?
+    {
         log::debug!("Album album_id={album_id:?} already added: album={album:?}");
-        return Ok(album.into());
+        return Ok(album);
     }
 
     let output = Arc::new(RwLock::new(ScanOutput::new()));
 
+    log::debug!(
+        "add_album: Fetching album_id={album_id} from {} api",
+        api.source()
+    );
     let album = api.album(album_id).await?.ok_or(AddAlbumError::NoAlbum)?;
+    log::debug!("add_album: Got album={album:?}");
 
     api.add_album(album_id).await?;
 
@@ -244,7 +252,7 @@ pub async fn add_album(
         false,
     )?;
 
-    let tracks = api
+    let tracks = library_api
         .tracks(
             Some(
                 &results
@@ -261,6 +269,7 @@ pub async fn add_album(
         .await?
         .with_rest_of_items_in_batches()
         .await?;
+
     moosicbox_search::populate_global_search_index(
         &tracks
             .iter()
@@ -313,7 +322,7 @@ pub async fn remove_album(
     );
 
     let mut album = library_api
-        .library_album(album_id)
+        .album_from_source(album_id, api.source())
         .await?
         .ok_or(RemoveAlbumError::NoAlbum)?;
 
@@ -324,7 +333,7 @@ pub async fn remove_album(
     }
 
     let tracks = library_api
-        .album_tracks(album_id, None, None, None, None)
+        .album_tracks(&album.id.into(), None, None, None, None)
         .await?
         .with_rest_of_items_in_batches()
         .await?;
