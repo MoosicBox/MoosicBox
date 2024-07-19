@@ -565,10 +565,12 @@ pub async fn delete_connection(tunnel_ws_id: &str) -> Result<(), DatabaseError> 
         let tunnel_ws_id = tunnel_ws_id.clone();
 
         Box::pin(async move {
-            moosicbox_database::query::delete("connections")
+            let deleted = moosicbox_database::query::delete("connections")
                 .where_eq("tunnel_ws_id", tunnel_ws_id)
                 .execute(&**DB.lock().await.as_mut().expect("DB not initialized"))
                 .await?;
+
+            log::debug!("delete_connection: deleted={deleted:?}");
 
             Ok(())
         })
