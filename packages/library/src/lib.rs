@@ -588,6 +588,19 @@ pub enum LibraryAlbumError {
     Db(#[from] DbError),
 }
 
+pub async fn album_from_source(
+    db: &dyn Database,
+    album_id: &Id,
+    source: ApiSource,
+) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
+    Ok(db::get_album(
+        db,
+        &format!("{}_id", source.to_string().to_lowercase()),
+        album_id,
+    )
+    .await?)
+}
+
 pub async fn album(
     db: &dyn Database,
     album_id: &Id,
@@ -896,6 +909,14 @@ impl LibraryMusicApi {
         artist_id: &Id,
     ) -> Result<Option<LibraryArtist>, ArtistError> {
         Ok(Some(artist(&**self.db, artist_id).await?))
+    }
+
+    pub async fn album_from_source(
+        &self,
+        album_id: &Id,
+        source: ApiSource,
+    ) -> Result<Option<LibraryAlbum>, AlbumError> {
+        Ok(album_from_source(&**self.db, album_id, source).await?)
     }
 
     pub async fn library_album(&self, album_id: &Id) -> Result<Option<LibraryAlbum>, AlbumError> {
