@@ -911,6 +911,15 @@ impl LibraryMusicApi {
         Ok(Some(artist(&**self.db, artist_id).await?))
     }
 
+    pub async fn library_album_artist(
+        &self,
+        album_id: &Id,
+    ) -> Result<Option<LibraryArtist>, ArtistError> {
+        get_artist_by_album_id(&**self.db, album_id.into())
+            .await
+            .map_err(|e| ArtistError::Other(e.into()))
+    }
+
     pub async fn album_from_source(
         &self,
         album_id: &Id,
@@ -983,10 +992,7 @@ impl MusicApi for LibraryMusicApi {
     }
 
     async fn album_artist(&self, album_id: &Id) -> Result<Option<Artist>, ArtistError> {
-        Ok(get_artist_by_album_id(&**self.db, album_id.into())
-            .await
-            .map_err(|e| ArtistError::Other(e.into()))?
-            .map(|x| x.into()))
+        Ok(self.library_album_artist(album_id).await?.map(|x| x.into()))
     }
 
     async fn artist_cover_source(
