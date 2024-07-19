@@ -936,6 +936,8 @@ pub enum QobuzAlbumError {
     AuthenticatedRequest(#[from] AuthenticatedRequestError),
     #[error(transparent)]
     Parse(#[from] ParseError),
+    #[error("Not found")]
+    NotFound,
 }
 
 pub async fn album(
@@ -945,8 +947,12 @@ pub async fn album(
     app_id: Option<String>,
 ) -> Result<QobuzAlbum, QobuzAlbumError> {
     {
-        if let Some(Some(album)) = ALBUM_CACHE.read().await.get(album_id).as_ref() {
-            return Ok(album.clone());
+        if let Some(album) = ALBUM_CACHE.read().await.get(album_id).as_ref() {
+            if let Some(album) = album {
+                return Ok(album.clone());
+            } else {
+                return Err(QobuzAlbumError::NotFound);
+            }
         }
     }
 
@@ -963,7 +969,11 @@ pub async fn album(
         app_id,
         access_token,
     )
-    .await?;
+    .await
+    .map_err(|e| match e {
+        AuthenticatedRequestError::RequestFailed(404, _) => QobuzAlbumError::NotFound,
+        _ => e.into(),
+    })?;
 
     let album: QobuzAlbum = value.to_value_type()?;
 
