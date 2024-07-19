@@ -209,7 +209,7 @@ pub async fn get_track_bytes(
     start: Option<u64>,
     end: Option<u64>,
 ) -> Result<TrackBytes, GetTrackBytesError> {
-    log::debug!("Getting track bytes track_id={track_id} format={format:?} try_to_get_size={try_to_get_size} start={start:?} end={end:?}");
+    log::debug!("get_track_bytes: Getting track bytes track_id={track_id} format={format:?} try_to_get_size={try_to_get_size} start={start:?} end={end:?}");
 
     let size = if try_to_get_size {
         match get_or_init_track_size(api, track_id, &source, PlaybackQuality { format }).await {
@@ -237,6 +237,8 @@ pub async fn get_track_bytes(
         .await?
         .ok_or(GetTrackBytesError::NotFound)?;
 
+    log::debug!("get_track_bytes: Got track from api: track={track:?}");
+
     let format = match format {
         #[cfg(feature = "flac")]
         AudioFormat::Flac => {
@@ -245,7 +247,7 @@ pub async fn get_track_bytes(
             }
             format
         }
-        AudioFormat::Source => track.format.ok_or(GetTrackBytesError::UnsupportedFormat)?,
+        AudioFormat::Source => format,
         #[allow(unreachable_patterns)]
         _ => format,
     };
