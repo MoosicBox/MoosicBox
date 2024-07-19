@@ -13,15 +13,16 @@ use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
     add_favorite_album, add_favorite_artist, add_favorite_track, album, album_tracks, artist,
-    artist_albums, favorite_artists, favorite_tracks, remove_favorite_album,
-    remove_favorite_artist, remove_favorite_track, search, track, track_file_url,
-    LibraryAddFavoriteAlbumError, LibraryAddFavoriteArtistError, LibraryAddFavoriteTrackError,
-    LibraryAlbum, LibraryAlbumError, LibraryAlbumTracksError, LibraryAlbumType, LibraryArtist,
-    LibraryArtistAlbumsError, LibraryArtistError, LibraryArtistOrder, LibraryArtistOrderDirection,
-    LibraryAudioQuality, LibraryFavoriteArtistsError, LibraryFavoriteTracksError,
-    LibraryRemoveFavoriteAlbumError, LibraryRemoveFavoriteArtistError,
-    LibraryRemoveFavoriteTrackError, LibrarySearchError, LibraryTrack, LibraryTrackError,
-    LibraryTrackFileUrlError, LibraryTrackOrder, LibraryTrackOrderDirection, SearchType,
+    artist_albums, favorite_artists, favorite_tracks, reindex_global_search_index,
+    remove_favorite_album, remove_favorite_artist, remove_favorite_track, search, track,
+    track_file_url, LibraryAddFavoriteAlbumError, LibraryAddFavoriteArtistError,
+    LibraryAddFavoriteTrackError, LibraryAlbum, LibraryAlbumError, LibraryAlbumTracksError,
+    LibraryAlbumType, LibraryArtist, LibraryArtistAlbumsError, LibraryArtistError,
+    LibraryArtistOrder, LibraryArtistOrderDirection, LibraryAudioQuality,
+    LibraryFavoriteArtistsError, LibraryFavoriteTracksError, LibraryRemoveFavoriteAlbumError,
+    LibraryRemoveFavoriteArtistError, LibraryRemoveFavoriteTrackError, LibrarySearchError,
+    LibraryTrack, LibraryTrackError, LibraryTrackFileUrlError, LibraryTrackOrder,
+    LibraryTrackOrderDirection, ReindexError, SearchType,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -609,4 +610,29 @@ pub async fn search_endpoint(
     .await?;
 
     Ok(Json(results.into()))
+}
+
+impl From<ReindexError> for actix_web::Error {
+    fn from(err: ReindexError) -> Self {
+        log::error!("{err:?}");
+        match err {
+            ReindexError::Db(_)
+            | ReindexError::RecreateIndex(_)
+            | ReindexError::PopulateIndex(_) => ErrorInternalServerError(err.to_string()),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReindexQuery {}
+
+#[route("/library/reindex", method = "POST")]
+pub async fn reindex_endpoint(
+    _query: web::Query<ReindexQuery>,
+    data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<Value>> {
+    reindex_global_search_index(&**data.database).await?;
+
+    Ok(Json(serde_json::json!({"success": true})))
 }

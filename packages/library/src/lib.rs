@@ -31,7 +31,10 @@ use moosicbox_music_api::{
     TrackOrder, TrackOrderDirection, TrackSource, TracksError,
 };
 use moosicbox_paging::{Page, PagingRequest, PagingResponse, PagingResult};
-use moosicbox_search::models::ApiGlobalSearchResult;
+use moosicbox_search::{
+    data::AsDataValues as _, models::ApiGlobalSearchResult, populate_global_search_index,
+    PopulateIndexError, RecreateIndexError,
+};
 use once_cell::sync::Lazy;
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
@@ -1246,6 +1249,60 @@ impl MusicApi for LibraryMusicApi {
 
         Ok(Some(bytes))
     }
+}
+
+#[derive(Debug, Error)]
+pub enum ReindexError {
+    #[error(transparent)]
+    Db(#[from] DbError),
+    #[error(transparent)]
+    RecreateIndex(#[from] RecreateIndexError),
+    #[error(transparent)]
+    PopulateIndex(#[from] PopulateIndexError),
+}
+
+pub async fn reindex_global_search_index(db: &dyn Database) -> Result<(), ReindexError> {
+    let reindex_start = std::time::SystemTime::now();
+
+    moosicbox_search::data::recreate_global_search_index().await?;
+
+    let artists = db::get_artists(db)
+        .await?
+        .into_iter()
+        .map(|x| x.into())
+        .map(|artist: Artist| artist.as_data_values())
+        .collect::<Vec<_>>();
+
+    populate_global_search_index(&artists, false)?;
+
+    let albums = db::get_albums(db)
+        .await?
+        .into_iter()
+        .map(|x| x.into())
+        .map(|album: Album| album.as_data_values())
+        .collect::<Vec<_>>();
+
+    populate_global_search_index(&albums, false)?;
+
+    let tracks = db::get_tracks(db, None)
+        .await?
+        .into_iter()
+        .map(|x| x.into())
+        .map(|track: Track| track.as_data_values())
+        .collect::<Vec<_>>();
+
+    populate_global_search_index(&tracks, false)?;
+
+    let reindex_end = std::time::SystemTime::now();
+    log::info!(
+        "Finished search reindex update for scan in {}ms",
+        reindex_end
+            .duration_since(reindex_start)
+            .unwrap()
+            .as_millis()
+    );
+
+    Ok(())
 }
 
 #[cfg(test)]

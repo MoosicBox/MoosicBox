@@ -23,7 +23,9 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
 ] }
 moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_paging = { path = "../paging", default-features = false }
-moosicbox_search = { path = "../search", default-features = false }
+moosicbox_search = { path = "../search", default-features = false, features = [
+    "db",
+] }
 moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
 moosicbox_symphonia_player = { path = "../symphonia_player", default-features = false }
 
