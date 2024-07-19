@@ -38,10 +38,11 @@ impl From<YtArtist> for ApiGlobalSearchResult {
 impl From<YtArtist> for Artist {
     fn from(value: YtArtist) -> Self {
         Self {
-            id: value.id.into(),
+            id: value.id.as_str().into(),
             title: value.name,
             cover: value.picture,
             source: ApiSource::Yt,
+            sources: ApiSources::default().with_source(ApiSource::Yt, value.id.into()),
         }
     }
 }

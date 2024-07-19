@@ -33,6 +33,10 @@ impl From<LibraryArtist> for Artist {
             title: value.title,
             cover: value.cover,
             source: ApiSource::Library,
+            sources: ApiSources::default()
+                .with_source_opt(ApiSource::Tidal, value.tidal_id.map(|x| x.into()))
+                .with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(|x| x.into()))
+                .with_source_opt(ApiSource::Yt, value.yt_id.map(|x| x.into())),
         }
     }
 }

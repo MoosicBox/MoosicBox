@@ -261,6 +261,7 @@ pub struct Artist {
     pub title: String,
     pub cover: Option<String>,
     pub source: ApiSource,
+    pub sources: ApiSources,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]

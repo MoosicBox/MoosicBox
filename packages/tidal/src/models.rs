@@ -32,6 +32,7 @@ impl From<TidalArtist> for Artist {
             title: value.name,
             cover: value.picture,
             source: ApiSource::Tidal,
+            sources: ApiSources::default().with_source(ApiSource::Tidal, value.id.into()),
         }
     }
 }

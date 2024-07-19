@@ -527,6 +527,7 @@ impl From<QobuzArtist> for Artist {
             title: value.name,
             cover,
             source: ApiSource::Qobuz,
+            sources: ApiSources::default().with_source(ApiSource::Qobuz, value.id.into()),
         }
     }
 }
