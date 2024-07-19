@@ -24,7 +24,7 @@ use moosicbox_core::{
     integer_range::{parse_integer_ranges_to_ids, ParseIntegersError},
     sqlite::{
         db::DbError,
-        models::{Id, Track, TrackApiSource},
+        models::{Album, Artist, Id, Track, TrackApiSource},
     },
     types::AudioFormat,
 };
@@ -38,6 +38,7 @@ use moosicbox_files::{
     get_content_length, sanitize_filename, save_bytes_stream_to_file_with_speed_listener,
     GetContentLengthError, SaveBytesStreamToFileError,
 };
+use moosicbox_library::LibraryMusicApi;
 use moosicbox_music_api::{
     AlbumError, ArtistError, ImageCoverSize, MusicApi, MusicApiState, MusicApisError,
     TrackAudioQuality, TrackError, TrackSource, TracksError,
@@ -102,6 +103,7 @@ pub enum GetCreateDownloadTasksError {
 #[allow(clippy::too_many_arguments)]
 pub async fn get_create_download_tasks(
     api: &dyn MusicApi,
+    library_api: &LibraryMusicApi,
     download_path: &Path,
     track_id: Option<Id>,
     track_ids: Option<String>,
@@ -117,7 +119,7 @@ pub async fn get_create_download_tasks(
     if let Some(track_id) = track_id {
         tasks.extend(
             get_create_download_tasks_for_track_ids(
-                api,
+                library_api,
                 &[track_id],
                 download_path,
                 source,
@@ -132,7 +134,7 @@ pub async fn get_create_download_tasks(
 
         tasks.extend(
             get_create_download_tasks_for_track_ids(
-                api,
+                library_api,
                 &track_ids,
                 download_path,
                 source,
@@ -146,6 +148,7 @@ pub async fn get_create_download_tasks(
         tasks.extend(
             get_create_download_tasks_for_album_ids(
                 api,
+                library_api,
                 &[album_id],
                 download_path,
                 source,
@@ -163,6 +166,7 @@ pub async fn get_create_download_tasks(
         tasks.extend(
             get_create_download_tasks_for_album_ids(
                 api,
+                library_api,
                 &album_ids,
                 download_path,
                 source,
@@ -178,13 +182,15 @@ pub async fn get_create_download_tasks(
 }
 
 pub async fn get_create_download_tasks_for_track_ids(
-    api: &dyn MusicApi,
+    library_api: &LibraryMusicApi,
     track_ids: &[Id],
     download_path: &Path,
     source: Option<DownloadApiSource>,
     quality: Option<TrackAudioQuality>,
 ) -> Result<Vec<CreateDownloadTask>, GetCreateDownloadTasksError> {
-    let tracks = api.tracks(Some(track_ids), None, None, None, None).await?;
+    let tracks = library_api
+        .tracks(Some(track_ids), None, None, None, None)
+        .await?;
 
     get_create_download_tasks_for_tracks(&tracks, download_path, source, quality)
 }
@@ -234,6 +240,7 @@ pub fn get_create_download_tasks_for_tracks(
 #[allow(clippy::too_many_arguments)]
 pub async fn get_create_download_tasks_for_album_ids(
     api: &dyn MusicApi,
+    library_api: &LibraryMusicApi,
     album_ids: &[Id],
     download_path: &Path,
     source: Option<DownloadApiSource>,
@@ -244,7 +251,7 @@ pub async fn get_create_download_tasks_for_album_ids(
     let mut tasks = vec![];
 
     for album_id in album_ids {
-        let tracks = api
+        let tracks = library_api
             .album_tracks(album_id, None, None, None, None)
             .await?
             .with_rest_of_items_in_batches()
@@ -277,7 +284,7 @@ pub async fn get_create_download_tasks_for_album_ids(
                     .join(&sanitize_filename(&track.artist))
                     .join(&sanitize_filename(&track.album))
             } else {
-                let album = api
+                let album = library_api
                     .album(album_id)
                     .await?
                     .ok_or(GetCreateDownloadTasksError::NotFound)?;
@@ -382,6 +389,7 @@ pub enum DownloadTrackError {
 #[allow(clippy::too_many_arguments)]
 pub async fn download_track_id(
     api: &dyn MusicApi,
+    library_api: &LibraryMusicApi,
     path: &str,
     track_id: &Id,
     quality: TrackAudioQuality,
@@ -392,10 +400,18 @@ pub async fn download_track_id(
 ) -> Result<(), DownloadTrackError> {
     log::debug!("Starting download for track_id={track_id} quality={quality:?} source={source:?} path={path}");
 
-    let track = api
-        .track(track_id)
+    let track: Track = library_api
+        .library_track(track_id)
         .await?
+        .ok_or(DownloadTrackError::NotFound)?
+        .into();
+
+    let id = track
+        .sources
+        .get(api.source())
         .ok_or(DownloadTrackError::NotFound)?;
+
+    let track = api.track(id).await?.ok_or(DownloadTrackError::NotFound)?;
 
     download_track(
         api,
@@ -723,6 +739,7 @@ pub enum DownloadAlbumError {
 #[allow(clippy::too_many_arguments)]
 pub async fn download_album_id(
     api: &dyn MusicApi,
+    library_api: &LibraryMusicApi,
     db: &dyn Database,
     path: &str,
     album_id: &Id,
@@ -764,11 +781,20 @@ pub async fn download_album_id(
     log::debug!("Completed album download for {} tracks", tracks.len());
 
     if try_download_album_cover {
-        download_album_cover(api, db, path, album_id, on_progress.clone(), speed.clone()).await?;
+        download_album_cover(
+            api,
+            library_api,
+            db,
+            path,
+            album_id,
+            on_progress.clone(),
+            speed.clone(),
+        )
+        .await?;
     }
 
     if try_download_artist_cover {
-        download_artist_cover(api, db, path, album_id, on_progress, speed).await?;
+        download_artist_cover(api, library_api, db, path, album_id, on_progress, speed).await?;
     }
 
     Ok(())
@@ -776,6 +802,7 @@ pub async fn download_album_id(
 
 pub async fn download_album_cover(
     api: &dyn MusicApi,
+    library_api: &LibraryMusicApi,
     db: &dyn Database,
     path: &str,
     album_id: &Id,
@@ -793,10 +820,18 @@ pub async fn download_album_cover(
         return Ok(());
     }
 
-    let album = api
-        .album(album_id)
+    let album: Album = library_api
+        .library_album(album_id)
         .await?
+        .ok_or(DownloadAlbumError::NotFound)?
+        .into();
+
+    let id = album
+        .album_sources
+        .get(api.source())
         .ok_or(DownloadAlbumError::NotFound)?;
+
+    let album = api.album(id).await?.ok_or(DownloadAlbumError::NotFound)?;
 
     let bytes = match get_album_cover_bytes(api, db, &album, ImageCoverSize::Max, true).await {
         Ok(bytes) => bytes,
@@ -846,6 +881,7 @@ pub async fn download_album_cover(
 
 pub async fn download_artist_cover(
     api: &dyn MusicApi,
+    library_api: &LibraryMusicApi,
     db: &dyn Database,
     path: &str,
     album_id: &Id,
@@ -861,10 +897,18 @@ pub async fn download_artist_cover(
         return Ok(());
     }
 
-    let artist = api
-        .album_artist(album_id)
+    let artist: Artist = library_api
+        .library_album_artist(album_id)
         .await?
+        .ok_or(DownloadAlbumError::NotFound)?
+        .into();
+
+    let id = artist
+        .sources
+        .get(api.source())
         .ok_or(DownloadAlbumError::NotFound)?;
+
+    let artist = api.artist(id).await?.ok_or(DownloadAlbumError::NotFound)?;
 
     let bytes = match get_artist_cover_bytes(api, db, &artist, ImageCoverSize::Max, true).await {
         Ok(bytes) => bytes,
@@ -949,14 +993,20 @@ pub struct MoosicboxDownloader {
     speed: Arc<AtomicF64>,
     db: Arc<Box<dyn Database>>,
     api_state: MusicApiState,
+    library_api: LibraryMusicApi,
 }
 
 impl MoosicboxDownloader {
-    pub fn new(db: Arc<Box<dyn Database>>, api_state: MusicApiState) -> Self {
+    pub fn new(
+        db: Arc<Box<dyn Database>>,
+        api_state: MusicApiState,
+        library_api: LibraryMusicApi,
+    ) -> Self {
         Self {
             speed: Arc::new(AtomicF64::new(0.0)),
             db,
             api_state,
+            library_api,
         }
     }
 }
@@ -978,6 +1028,7 @@ impl Downloader for MoosicboxDownloader {
     ) -> Result<(), DownloadTrackError> {
         download_track_id(
             &**self.api_state.apis.get(source.into())?,
+            &self.library_api,
             path,
             track_id,
             quality,
@@ -998,6 +1049,7 @@ impl Downloader for MoosicboxDownloader {
     ) -> Result<(), DownloadAlbumError> {
         download_album_cover(
             &**self.api_state.apis.get(source.into())?,
+            &self.library_api,
             &**self.db,
             path,
             album_id,
@@ -1016,6 +1068,7 @@ impl Downloader for MoosicboxDownloader {
     ) -> Result<(), DownloadAlbumError> {
         download_artist_cover(
             &**self.api_state.apis.get(source.into())?,
+            &self.library_api,
             &**self.db,
             path,
             album_id,
