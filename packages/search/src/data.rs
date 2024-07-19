@@ -148,19 +148,19 @@ pub trait AsDeleteTerm {
 
 impl AsDeleteTerm for Artist {
     fn as_delete_term<'a>(&self) -> (&'a str, DataValue) {
-        ("artist_id", DataValue::String(self.id.to_string()))
+        ("artist_id_string", DataValue::String(self.id.to_string()))
     }
 }
 
 impl AsDeleteTerm for Album {
     fn as_delete_term<'a>(&self) -> (&'a str, DataValue) {
-        ("album_id", DataValue::String(self.id.to_string()))
+        ("album_id_string", DataValue::String(self.id.to_string()))
     }
 }
 
 impl AsDeleteTerm for Track {
     fn as_delete_term<'a>(&self) -> (&'a str, DataValue) {
-        ("track_id", DataValue::String(self.id.to_string()))
+        ("track_id_string", DataValue::String(self.id.to_string()))
     }
 }
 

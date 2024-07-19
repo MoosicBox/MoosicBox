@@ -140,19 +140,25 @@ fn create_global_search_index(
     schema_builder.add_text_field("artist_title_search", TEXT);
     schema_builder.add_text_field("artist_title_string", STRING);
 
-    schema_builder.add_u64_field("artist_id", INDEXED | STORED);
+    schema_builder.add_text_field("artist_id", STORED);
+    schema_builder.add_text_field("artist_id_search", TEXT);
+    schema_builder.add_text_field("artist_id_string", STRING);
 
     schema_builder.add_text_field("album_title", STORED);
     schema_builder.add_text_field("album_title_search", TEXT);
     schema_builder.add_text_field("album_title_string", STRING);
 
-    schema_builder.add_u64_field("album_id", INDEXED | STORED);
+    schema_builder.add_text_field("album_id", STORED);
+    schema_builder.add_text_field("album_id_search", TEXT);
+    schema_builder.add_text_field("album_id_string", STRING);
 
     schema_builder.add_text_field("track_title", STORED);
     schema_builder.add_text_field("track_title_search", TEXT);
     schema_builder.add_text_field("track_title_string", STRING);
 
-    schema_builder.add_u64_field("track_id", INDEXED | STORED);
+    schema_builder.add_text_field("track_id", STORED);
+    schema_builder.add_text_field("track_id_search", TEXT);
+    schema_builder.add_text_field("track_id_string", STRING);
 
     schema_builder.add_text_field("cover", STORED);
     schema_builder.add_text_field("cover_string", STRING);
