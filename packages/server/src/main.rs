@@ -408,6 +408,27 @@ fn main() -> std::io::Result<()> {
                 app = app.service(moosicbox_search::api::search_global_search_endpoint);
             }
 
+            #[cfg(feature = "library-api")]
+            {
+                app = app
+                    .service(moosicbox_library::api::track_file_url_endpoint)
+                    .service(moosicbox_library::api::favorite_artists_endpoint)
+                    .service(moosicbox_library::api::add_favorite_artist_endpoint)
+                    .service(moosicbox_library::api::remove_favorite_artist_endpoint)
+                    .service(moosicbox_library::api::add_favorite_album_endpoint)
+                    .service(moosicbox_library::api::remove_favorite_album_endpoint)
+                    .service(moosicbox_library::api::favorite_tracks_endpoint)
+                    .service(moosicbox_library::api::add_favorite_track_endpoint)
+                    .service(moosicbox_library::api::remove_favorite_track_endpoint)
+                    .service(moosicbox_library::api::artist_albums_endpoint)
+                    .service(moosicbox_library::api::album_tracks_endpoint)
+                    .service(moosicbox_library::api::album_endpoint)
+                    .service(moosicbox_library::api::artist_endpoint)
+                    .service(moosicbox_library::api::track_endpoint)
+                    .service(moosicbox_library::api::search_endpoint)
+                    .service(moosicbox_library::api::reindex_endpoint);
+            }
+
             #[cfg(feature = "tidal-api")]
             {
                 app = app
