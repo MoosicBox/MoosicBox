@@ -43,16 +43,16 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 
 #[derive(Clone)]
-pub struct LibraryMusicApiState(Arc<LibraryMusicApi>);
+pub struct LibraryMusicApiState(LibraryMusicApi);
 
 impl LibraryMusicApiState {
     pub fn new(api: LibraryMusicApi) -> Self {
-        Self(Arc::new(api))
+        Self(api)
     }
 }
 
 impl Deref for LibraryMusicApiState {
-    type Target = Arc<LibraryMusicApi>;
+    type Target = LibraryMusicApi;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -882,6 +882,7 @@ pub enum TrackSizeError {
     UnsupportedSource(TrackSource),
 }
 
+#[derive(Clone)]
 pub struct LibraryMusicApi {
     db: Arc<Box<dyn Database>>,
 }
