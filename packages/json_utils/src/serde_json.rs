@@ -249,19 +249,10 @@ where
     }
 
     if inner_value.is_null() {
-        return match inner_value.to_value_type() {
-            Ok(inner) => Ok(inner),
-            Err(err) => match err {
-                ParseError::ConvertType(r#type) => {
-                    inner_value.missing_value(ParseError::ConvertType(format!(
-                        "{} expected '{}', found null",
-                        path.join(" -> "),
-                        r#type
-                    )))
-                }
-                _ => Err(err),
-            },
-        };
+        return inner_value.missing_value(ParseError::ConvertType(format!(
+            "{} found null",
+            path.join(" -> "),
+        )));
     }
 
     match inner_value.to_value_type() {
