@@ -89,6 +89,14 @@ impl From<&str> for Literal {
     }
 }
 
+impl From<&String> for Literal {
+    fn from(val: &String) -> Self {
+        Self {
+            value: val.to_string(),
+        }
+    }
+}
+
 impl From<String> for Literal {
     fn from(val: String) -> Self {
         Self { value: val }
