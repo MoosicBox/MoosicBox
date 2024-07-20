@@ -367,6 +367,8 @@ pub async fn artist_source_artwork_endpoint(
         .map_err(|e| ErrorNotFound(format!("Failed to get artist: {e:?}")))?
         .ok_or_else(|| ErrorNotFound(format!("Artist not found: {}", artist_id.to_owned())))?;
 
+    log::debug!("artist_source_cover_endpoint: artist={artist:?}");
+
     let path = get_artist_cover(&**api, &**data.database, &artist, size).await?;
     let path_buf = std::path::PathBuf::from(path);
     let file_path = path_buf.as_path();
@@ -421,6 +423,8 @@ pub async fn artist_cover_endpoint(
         .map_err(|e| ErrorNotFound(format!("Failed to get artist: {e:?}")))?
         .ok_or_else(|| ErrorNotFound(format!("Artist not found: {}", artist_id.to_owned())))?;
 
+    log::debug!("artist_cover_endpoint: artist={artist:?}");
+
     let path = get_artist_cover(&**api, &**data.database, &artist, size).await?;
 
     resize_image_path(&path, width, height)
@@ -470,6 +474,8 @@ pub async fn album_source_artwork_endpoint(
         .await
         .map_err(|e| ErrorNotFound(format!("Failed to get album: {e:?}")))?
         .ok_or_else(|| ErrorNotFound(format!("Album not found: {}", album_id.to_owned())))?;
+
+    log::debug!("album_source_cover_endpoint: album={album:?}");
 
     let path = get_album_cover(&**api, &**data.database, &album, size).await?;
     let path_buf = std::path::PathBuf::from(path);
@@ -524,6 +530,8 @@ pub async fn album_artwork_endpoint(
         .await
         .map_err(|e| ErrorNotFound(format!("Failed to get album: {e:?}")))?
         .ok_or_else(|| ErrorNotFound(format!("Album not found: {}", album_id.to_owned())))?;
+
+    log::debug!("album_cover_endpoint: album={album:?}");
 
     let path = get_album_cover(&**api, &**data.database, &album, size).await?;
 
