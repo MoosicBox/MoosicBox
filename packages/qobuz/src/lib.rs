@@ -40,19 +40,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::Mutex;
 use url::form_urlencoded;
 
 use crate::models::QobuzImage;
-
-static ARTIST_CACHE: Lazy<RwLock<HashMap<Id, Option<QobuzArtist>>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
-
-static ALBUM_CACHE: Lazy<RwLock<HashMap<Id, Option<QobuzAlbum>>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
-
-static TRACK_CACHE: Lazy<RwLock<HashMap<Id, Option<QobuzTrack>>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
 
 static AUTH_HEADER_NAME: &str = "x-user-auth-token";
 static APP_ID_HEADER_NAME: &str = "x-app-id";
@@ -658,12 +649,6 @@ pub async fn artist(
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> Result<QobuzArtist, QobuzArtistError> {
-    {
-        if let Some(Some(artist)) = ARTIST_CACHE.read().await.get(artist_id).as_ref() {
-            return Ok(artist.clone());
-        }
-    }
-
     let url = qobuz_api_endpoint!(
         Artist,
         &[],
@@ -681,15 +666,7 @@ pub async fn artist(
 
     log::trace!("Received artist response: {value:?}");
 
-    let artist: QobuzArtist = value.to_value_type()?;
-
-    {
-        let mut cache = ARTIST_CACHE.write().await;
-
-        cache.insert(artist.id.into(), Some(artist.clone()));
-    }
-
-    Ok(artist)
+    Ok(value.to_value_type()?)
 }
 
 #[derive(Debug, Error)]
@@ -735,14 +712,6 @@ pub async fn favorite_artists(
 
     let items: Vec<QobuzArtist> = value.to_nested_value(&["artists", "items"])?;
     let total = value.to_nested_value(&["artists", "total"])?;
-
-    {
-        let mut cache = ARTIST_CACHE.write().await;
-
-        for item in &items {
-            cache.insert(item.id.into(), Some(item.clone()));
-        }
-    }
 
     #[cfg(feature = "db")]
     let db = db.clone();
@@ -946,16 +915,6 @@ pub async fn album(
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> Result<QobuzAlbum, QobuzAlbumError> {
-    {
-        if let Some(album) = ALBUM_CACHE.read().await.get(album_id).as_ref() {
-            if let Some(album) = album {
-                return Ok(album.clone());
-            } else {
-                return Err(QobuzAlbumError::NotFound);
-            }
-        }
-    }
-
     let url = qobuz_api_endpoint!(
         Album,
         &[],
@@ -975,15 +934,7 @@ pub async fn album(
         _ => e.into(),
     })?;
 
-    let album: QobuzAlbum = value.to_value_type()?;
-
-    {
-        let mut cache = ALBUM_CACHE.write().await;
-
-        cache.insert(album.id.as_str().into(), Some(album.clone()));
-    }
-
-    Ok(album)
+    Ok(value.to_value_type()?)
 }
 
 #[derive(Debug, Error)]
@@ -1044,14 +995,6 @@ pub async fn favorite_albums(
         .collect();
 
     let total = value.to_nested_value(&["albums", "total"])?;
-
-    {
-        let mut cache = ALBUM_CACHE.write().await;
-
-        for item in &items {
-            cache.insert(item.id.as_str().into(), Some(item.clone()));
-        }
-    }
 
     #[cfg(feature = "db")]
     let db = db.clone();
@@ -1239,14 +1182,6 @@ pub async fn album_tracks(
         .collect::<Result<Vec<_>, _>>()?;
     let total = value.to_nested_value(&["tracks", "total"])?;
 
-    {
-        let mut cache = TRACK_CACHE.write().await;
-
-        for item in &items {
-            cache.insert(item.id.into(), Some(item.clone()));
-        }
-    }
-
     #[cfg(feature = "db")]
     let db = db.clone();
     let album_id = album_id.clone();
@@ -1296,12 +1231,6 @@ pub async fn track(
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> Result<QobuzTrack, QobuzTrackError> {
-    {
-        if let Some(Some(track)) = TRACK_CACHE.read().await.get(track_id).as_ref() {
-            return Ok(track.clone());
-        }
-    }
-
     let url = qobuz_api_endpoint!(
         Track,
         &[],
@@ -1317,15 +1246,7 @@ pub async fn track(
     )
     .await?;
 
-    let track: QobuzTrack = value.to_value_type()?;
-
-    {
-        let mut cache = TRACK_CACHE.write().await;
-
-        cache.insert(track.id.into(), Some(track.clone()));
-    }
-
-    Ok(track)
+    Ok(value.to_value_type()?)
 }
 
 #[derive(Debug, Error)]
@@ -1369,14 +1290,6 @@ pub async fn favorite_tracks(
 
     let items: Vec<QobuzTrack> = value.to_nested_value(&["tracks", "items"])?;
     let total = value.to_nested_value(&["tracks", "total"])?;
-
-    {
-        let mut cache = TRACK_CACHE.write().await;
-
-        for track in &items {
-            cache.insert(track.id.into(), Some(track.clone()));
-        }
-    }
 
     #[cfg(feature = "db")]
     let db = db.clone();
