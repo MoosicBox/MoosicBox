@@ -218,7 +218,7 @@ impl ToValueType<TrackApiSource> for rusqlite::types::Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Track {
     pub id: Id,
@@ -255,7 +255,7 @@ impl Track {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Artist {
     pub id: Id,
     pub title: String,
