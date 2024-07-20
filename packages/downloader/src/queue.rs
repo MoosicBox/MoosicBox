@@ -363,6 +363,7 @@ impl DownloadQueue {
                 track_id,
                 quality,
                 source,
+                ..
             } => {
                 downloader
                     .download_track_id(
@@ -375,12 +376,16 @@ impl DownloadQueue {
                     )
                     .await?
             }
-            DownloadItem::AlbumCover { album_id, source } => {
+            DownloadItem::AlbumCover {
+                album_id, source, ..
+            } => {
                 downloader
                     .download_album_cover(&task.file_path, album_id, *source, on_progress)
                     .await?;
             }
-            DownloadItem::ArtistCover { album_id, source } => {
+            DownloadItem::ArtistCover {
+                album_id, source, ..
+            } => {
                 downloader
                     .download_artist_cover(&task.file_path, album_id, *source, on_progress)
                     .await?;
@@ -554,6 +559,12 @@ mod tests {
                     track_id: 1.into(),
                     source: DownloadApiSource::Tidal,
                     quality: TrackAudioQuality::FlacHighestRes,
+                    artist_id: 1.into(),
+                    artist: "artist".into(),
+                    album_id: 1.into(),
+                    album: "album".into(),
+                    title: "title".into(),
+                    contains_cover: false,
                 },
                 file_path: "".into(),
                 created: "".into(),
@@ -593,6 +604,12 @@ mod tests {
                         track_id: 1.into(),
                         source: DownloadApiSource::Tidal,
                         quality: TrackAudioQuality::FlacHighestRes,
+                        artist_id: 1.into(),
+                        artist: "artist".into(),
+                        album_id: 1.into(),
+                        album: "album".into(),
+                        title: "title".into(),
+                        contains_cover: false,
                     },
                     file_path: "".into(),
                     created: "".into(),
@@ -606,6 +623,12 @@ mod tests {
                         track_id: 2.into(),
                         source: DownloadApiSource::Tidal,
                         quality: TrackAudioQuality::FlacHighestRes,
+                        artist_id: 1.into(),
+                        artist: "artist".into(),
+                        album_id: 1.into(),
+                        album: "album".into(),
+                        title: "title".into(),
+                        contains_cover: false,
                     },
                     file_path: "".into(),
                     created: "".into(),
@@ -649,6 +672,12 @@ mod tests {
                         track_id: 1.into(),
                         source: DownloadApiSource::Tidal,
                         quality: TrackAudioQuality::FlacHighestRes,
+                        artist_id: 1.into(),
+                        artist: "artist".into(),
+                        album_id: 1.into(),
+                        album: "album".into(),
+                        title: "title".into(),
+                        contains_cover: false,
                     },
                     file_path: "".into(),
                     created: "".into(),
@@ -662,6 +691,12 @@ mod tests {
                         track_id: 1.into(),
                         source: DownloadApiSource::Tidal,
                         quality: TrackAudioQuality::FlacHighestRes,
+                        artist_id: 1.into(),
+                        artist: "artist".into(),
+                        album_id: 1.into(),
+                        album: "album".into(),
+                        title: "title".into(),
+                        contains_cover: false,
                     },
                     file_path: "".into(),
                     created: "".into(),
@@ -701,6 +736,12 @@ mod tests {
                     track_id: 1.into(),
                     source: DownloadApiSource::Tidal,
                     quality: TrackAudioQuality::FlacHighestRes,
+                    artist_id: 1.into(),
+                    artist: "artist".into(),
+                    album_id: 1.into(),
+                    album: "album".into(),
+                    title: "title".into(),
+                    contains_cover: false,
                 },
                 file_path: "".into(),
                 created: "".into(),
@@ -719,6 +760,12 @@ mod tests {
                     track_id: 2.into(),
                     source: DownloadApiSource::Tidal,
                     quality: TrackAudioQuality::FlacHighestRes,
+                    artist_id: 1.into(),
+                    artist: "artist".into(),
+                    album_id: 1.into(),
+                    album: "album".into(),
+                    title: "title".into(),
+                    contains_cover: false,
                 },
                 file_path: "".into(),
                 created: "".into(),

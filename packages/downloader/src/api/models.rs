@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use moosicbox_core::sqlite::models::{Album, Artist, Id, Track};
+use moosicbox_core::sqlite::models::Id;
 use moosicbox_json_utils::{serde_json::ToValue, ParseError, ToValueType};
 use moosicbox_music_api::TrackAudioQuality;
 use serde::{Deserialize, Serialize};
@@ -170,8 +170,8 @@ pub enum StrippedApiDownloadItem {
 pub enum ApiDownloadItem {
     #[serde(rename_all = "camelCase")]
     Track {
-        track_id: Id,
         source: DownloadApiSource,
+        track_id: Id,
         quality: TrackAudioQuality,
         artist_id: Id,
         artist: String,
@@ -182,6 +182,7 @@ pub enum ApiDownloadItem {
     },
     #[serde(rename_all = "camelCase")]
     AlbumCover {
+        source: DownloadApiSource,
         artist_id: Id,
         artist: String,
         album_id: Id,
@@ -190,11 +191,70 @@ pub enum ApiDownloadItem {
     },
     #[serde(rename_all = "camelCase")]
     ArtistCover {
+        source: DownloadApiSource,
         artist_id: Id,
         album_id: Id,
         title: String,
         contains_cover: bool,
     },
+}
+
+impl From<DownloadItem> for ApiDownloadItem {
+    fn from(value: DownloadItem) -> Self {
+        match value {
+            DownloadItem::Track {
+                source,
+                track_id,
+                quality,
+                artist_id,
+                artist,
+                album_id,
+                album,
+                title,
+                contains_cover,
+            } => ApiDownloadItem::Track {
+                source,
+                track_id,
+                quality,
+                artist_id,
+                artist,
+                album_id,
+                album,
+                title,
+                contains_cover,
+            },
+            DownloadItem::AlbumCover {
+                source,
+                artist_id,
+                artist,
+                album_id,
+                title,
+                contains_cover,
+                ..
+            } => ApiDownloadItem::AlbumCover {
+                source,
+                artist_id,
+                artist,
+                album_id,
+                title,
+                contains_cover,
+            },
+            DownloadItem::ArtistCover {
+                source,
+                artist_id,
+                album_id,
+                title,
+                contains_cover,
+                ..
+            } => ApiDownloadItem::ArtistCover {
+                source,
+                artist_id,
+                album_id,
+                title,
+                contains_cover,
+            },
+        }
+    }
 }
 
 impl From<DownloadItem> for StrippedApiDownloadItem {
@@ -204,6 +264,7 @@ impl From<DownloadItem> for StrippedApiDownloadItem {
                 track_id,
                 source,
                 quality,
+                ..
             } => StrippedApiDownloadItem::Track {
                 track_id,
                 source,
@@ -244,74 +305,14 @@ impl ToValueType<StrippedApiDownloadItem> for &serde_json::Value {
     }
 }
 
-pub(crate) fn to_api_download_item(
-    item: DownloadItem,
-    tracks: &[Track],
-    albums: &[Album],
-    artists: &[Artist],
-) -> Result<Option<ApiDownloadItem>, ParseError> {
-    Ok(Some(match item {
-        DownloadItem::Track {
-            track_id,
-            source,
-            quality,
-        } => {
-            if let Some(track) = tracks.iter().find(|track| track.id == track_id) {
-                ApiDownloadItem::Track {
-                    track_id,
-                    source,
-                    quality,
-                    artist_id: track.artist_id.to_owned(),
-                    artist: track.artist.clone(),
-                    album_id: track.album_id.to_owned(),
-                    album: track.album.clone(),
-                    title: track.title.clone(),
-                    contains_cover: track.artwork.is_some(),
-                }
-            } else {
-                return Ok(None);
-            }
-        }
-        DownloadItem::AlbumCover { album_id, .. } => {
-            if let Some(album) = albums.iter().find(|album| album.id == album_id) {
-                ApiDownloadItem::AlbumCover {
-                    artist_id: album.artist_id.to_owned(),
-                    artist: album.artist.clone(),
-                    album_id,
-                    title: album.title.clone(),
-                    contains_cover: album.artwork.is_some(),
-                }
-            } else {
-                return Ok(None);
-            }
-        }
-        DownloadItem::ArtistCover { album_id, .. } => {
-            if let Some(album) = albums.iter().find(|album| album.id == album_id) {
-                if let Some(artist) = artists.iter().find(|artist| artist.id == album.artist_id) {
-                    ApiDownloadItem::ArtistCover {
-                        artist_id: album.artist_id.to_owned(),
-                        album_id,
-                        title: album.artist.clone(),
-                        contains_cover: artist.cover.is_some(),
-                    }
-                } else {
-                    return Ok(None);
-                }
-            } else {
-                return Ok(None);
-            }
-        }
-    }))
-}
-
 impl ToValueType<ApiDownloadItem> for &serde_json::Value {
     fn to_value_type(self) -> Result<ApiDownloadItem, ParseError> {
         let item_type: String = self.to_value("type")?;
 
         Ok(match item_type.as_str() {
             "TRACK" => ApiDownloadItem::Track {
-                track_id: self.to_value("track_id")?,
                 source: self.to_value("source")?,
+                track_id: self.to_value("track_id")?,
                 quality: self.to_value("quality")?,
                 artist_id: self.to_value("artist_id")?,
                 artist: self.to_value("artist")?,
@@ -321,6 +322,7 @@ impl ToValueType<ApiDownloadItem> for &serde_json::Value {
                 contains_cover: self.to_value("contains_cover")?,
             },
             "ALBUM_COVER" => ApiDownloadItem::AlbumCover {
+                source: self.to_value("source")?,
                 artist_id: self.to_value("artist_id")?,
                 artist: self.to_value("artist")?,
                 album_id: self.to_value("album_id")?,
@@ -328,6 +330,7 @@ impl ToValueType<ApiDownloadItem> for &serde_json::Value {
                 contains_cover: self.to_value("contains_cover")?,
             },
             "ARTIST_COVER" => ApiDownloadItem::ArtistCover {
+                source: self.to_value("source")?,
                 artist_id: self.to_value("artist_id")?,
                 album_id: self.to_value("album_id")?,
                 title: self.to_value("title")?,
@@ -363,6 +366,21 @@ pub struct ApiDownloadTask {
     pub bytes: u64,
     pub total_bytes: Option<u64>,
     pub speed: Option<u64>,
+}
+
+impl From<DownloadTask> for ApiDownloadTask {
+    fn from(value: DownloadTask) -> Self {
+        Self {
+            id: value.id,
+            state: value.state.into(),
+            item: value.item.into(),
+            file_path: value.file_path,
+            progress: 0.0,
+            bytes: 0,
+            total_bytes: value.total_bytes,
+            speed: None,
+        }
+    }
 }
 
 impl From<DownloadTask> for StrippedApiDownloadTask {
@@ -405,26 +423,4 @@ fn calc_progress_for_task(mut task: ApiDownloadTask) -> ApiDownloadTask {
     }
 
     task
-}
-
-pub(crate) fn to_api_download_task(
-    task: DownloadTask,
-    tracks: &[Track],
-    albums: &[Album],
-    artists: &[Artist],
-) -> Result<Option<ApiDownloadTask>, ParseError> {
-    if let Some(item) = to_api_download_item(task.item, tracks, albums, artists)? {
-        Ok(Some(calc_progress_for_task(ApiDownloadTask {
-            id: task.id,
-            state: task.state.into(),
-            item,
-            file_path: task.file_path,
-            progress: 0.0,
-            bytes: 0,
-            total_bytes: task.total_bytes,
-            speed: None,
-        })))
-    } else {
-        Ok(None)
-    }
 }

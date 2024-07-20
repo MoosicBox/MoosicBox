@@ -181,39 +181,137 @@ impl ToValueType<DownloadApiSource> for Value {
 #[serde(tag = "type")]
 pub enum DownloadItem {
     Track {
-        track_id: Id,
         source: DownloadApiSource,
+        track_id: Id,
         quality: TrackAudioQuality,
+        artist_id: Id,
+        artist: String,
+        album_id: Id,
+        album: String,
+        title: String,
+        contains_cover: bool,
     },
     AlbumCover {
-        album_id: Id,
         source: DownloadApiSource,
+        artist_id: Id,
+        artist: String,
+        album_id: Id,
+        title: String,
+        contains_cover: bool,
     },
     ArtistCover {
-        album_id: Id,
         source: DownloadApiSource,
+        artist_id: Id,
+        album_id: Id,
+        title: String,
+        contains_cover: bool,
     },
+}
+
+impl DownloadItem {
+    pub fn source(&self) -> &DownloadApiSource {
+        match self {
+            DownloadItem::Track { source, .. } => source,
+            DownloadItem::AlbumCover { source, .. } => source,
+            DownloadItem::ArtistCover { source, .. } => source,
+        }
+    }
+
+    pub fn quality(&self) -> Option<&TrackAudioQuality> {
+        match self {
+            DownloadItem::Track { quality, .. } => Some(quality),
+            DownloadItem::AlbumCover { .. } => None,
+            DownloadItem::ArtistCover { .. } => None,
+        }
+    }
+
+    pub fn track(&self) -> Option<&String> {
+        match self {
+            DownloadItem::Track { title, .. } => Some(title),
+            DownloadItem::AlbumCover { .. } => None,
+            DownloadItem::ArtistCover { .. } => None,
+        }
+    }
+
+    pub fn track_id(&self) -> Option<&Id> {
+        match self {
+            DownloadItem::Track { track_id, .. } => Some(track_id),
+            DownloadItem::AlbumCover { .. } => None,
+            DownloadItem::ArtistCover { .. } => None,
+        }
+    }
+
+    pub fn album(&self) -> Option<&String> {
+        match self {
+            DownloadItem::Track { album, .. } => Some(album),
+            DownloadItem::AlbumCover { title, .. } => Some(title),
+            DownloadItem::ArtistCover { .. } => None,
+        }
+    }
+
+    pub fn album_id(&self) -> Option<&Id> {
+        match self {
+            DownloadItem::Track { album_id, .. } => Some(album_id),
+            DownloadItem::AlbumCover { album_id, .. } => Some(album_id),
+            DownloadItem::ArtistCover { album_id, .. } => Some(album_id),
+        }
+    }
+
+    pub fn artist(&self) -> Option<&String> {
+        match self {
+            DownloadItem::Track { artist, .. } => Some(artist),
+            DownloadItem::AlbumCover { artist, .. } => Some(artist),
+            DownloadItem::ArtistCover { title, .. } => Some(title),
+        }
+    }
+
+    pub fn artist_id(&self) -> Option<&Id> {
+        match self {
+            DownloadItem::Track { artist_id, .. } => Some(artist_id),
+            DownloadItem::AlbumCover { artist_id, .. } => Some(artist_id),
+            DownloadItem::ArtistCover { artist_id, .. } => Some(artist_id),
+        }
+    }
+
+    pub fn contains_cover(&self) -> bool {
+        match self {
+            DownloadItem::Track { contains_cover, .. } => *contains_cover,
+            DownloadItem::AlbumCover { contains_cover, .. } => *contains_cover,
+            DownloadItem::ArtistCover { contains_cover, .. } => *contains_cover,
+        }
+    }
 }
 
 impl ToValueType<DownloadItem> for &serde_json::Value {
     fn to_value_type(self) -> Result<DownloadItem, ParseError> {
         let item_type: String = self.to_value("type")?;
 
-        let source: Option<DownloadApiSource> = self.to_value("source")?;
-
         Ok(match item_type.as_str() {
             "TRACK" => DownloadItem::Track {
-                track_id: self.to_value("track_id")?,
-                source: source.unwrap_or(DownloadApiSource::Qobuz),
+                source: self.to_value("source")?,
+                track_id: self.to_value("trackId")?,
                 quality: self.to_value("quality")?,
+                artist_id: self.to_value("artistId")?,
+                artist: self.to_value("artist")?,
+                album_id: self.to_value("albumId")?,
+                album: self.to_value("album")?,
+                title: self.to_value("track")?,
+                contains_cover: self.to_value("containsCover")?,
             },
             "ALBUM_COVER" => DownloadItem::AlbumCover {
-                album_id: self.to_value("album_id")?,
-                source: source.unwrap_or(DownloadApiSource::Qobuz),
+                source: self.to_value("source")?,
+                artist_id: self.to_value("artistId")?,
+                artist: self.to_value("artist")?,
+                album_id: self.to_value("albumId")?,
+                title: self.to_value("album")?,
+                contains_cover: self.to_value("containsCover")?,
             },
             "ARTIST_COVER" => DownloadItem::ArtistCover {
-                album_id: self.to_value("album_id")?,
-                source: source.unwrap_or(DownloadApiSource::Qobuz),
+                source: self.to_value("source")?,
+                artist_id: self.to_value("artistId")?,
+                album_id: self.to_value("albumId")?,
+                title: self.to_value("artist")?,
+                contains_cover: self.to_value("containsCover")?,
             },
             _ => {
                 return Err(ParseError::ConvertType(format!(
@@ -229,21 +327,32 @@ impl ToValueType<DownloadItem> for &moosicbox_database::Row {
     fn to_value_type(self) -> Result<DownloadItem, ParseError> {
         let item_type: String = self.to_value("type")?;
 
-        let source: Option<DownloadApiSource> = self.to_value("source")?;
-
         Ok(match item_type.as_str() {
             "TRACK" => DownloadItem::Track {
+                source: self.to_value("source")?,
                 track_id: self.to_value("track_id")?,
-                source: source.unwrap_or(DownloadApiSource::Qobuz),
                 quality: self.to_value("quality")?,
+                artist_id: self.to_value("artist_id")?,
+                artist: self.to_value("artist")?,
+                album_id: self.to_value("album_id")?,
+                album: self.to_value("album")?,
+                title: self.to_value("track")?,
+                contains_cover: self.to_value("contains_cover")?,
             },
             "ALBUM_COVER" => DownloadItem::AlbumCover {
+                source: self.to_value("source")?,
+                artist_id: self.to_value("artist_id")?,
+                artist: self.to_value("artist")?,
                 album_id: self.to_value("album_id")?,
-                source: source.unwrap_or(DownloadApiSource::Qobuz),
+                title: self.to_value("album")?,
+                contains_cover: self.to_value("contains_cover")?,
             },
             "ARTIST_COVER" => DownloadItem::ArtistCover {
+                source: self.to_value("source")?,
+                artist_id: self.to_value("artist_id")?,
                 album_id: self.to_value("album_id")?,
-                source: source.unwrap_or(DownloadApiSource::Qobuz),
+                title: self.to_value("artist")?,
+                contains_cover: self.to_value("contains_cover")?,
             },
             _ => {
                 return Err(ParseError::ConvertType(format!(

@@ -4,7 +4,7 @@ use moosicbox_json_utils::ToValueType as _;
 
 pub mod models;
 
-use self::models::{CreateDownloadTask, DownloadItem, DownloadLocation, DownloadTask};
+use self::models::{CreateDownloadTask, DownloadLocation, DownloadTask};
 
 pub async fn create_download_location(db: &dyn Database, path: &str) -> Result<(), DbError> {
     db.upsert("download_locations")
@@ -41,43 +41,36 @@ pub async fn create_download_task(
     db: &dyn Database,
     task: &CreateDownloadTask,
 ) -> Result<DownloadTask, DbError> {
-    let track_id = if let DownloadItem::Track { track_id, .. } = &task.item {
-        Some(track_id)
-    } else {
-        None
-    };
-    let source = if let DownloadItem::Track { source, .. } = task.item {
-        Some(source.as_ref().to_string())
-    } else {
-        None
-    };
-    let quality = if let DownloadItem::Track { quality, .. } = task.item {
-        Some(quality.as_ref().to_string())
-    } else {
-        None
-    };
-    let album_id = if let DownloadItem::AlbumCover { album_id, .. } = &task.item {
-        Some(album_id)
-    } else if let DownloadItem::ArtistCover { album_id, .. } = &task.item {
-        Some(album_id)
-    } else {
-        None
-    };
+    let source = task.item.source().as_ref();
+    let quality = task.item.quality().map(|x| x.as_ref());
+    let track_id = task.item.track_id();
+    let track = task.item.track();
+    let album_id = task.item.album_id();
+    let album = task.item.album();
+    let artist_id = task.item.artist_id();
+    let artist = task.item.artist();
+    let contains_cover = task.item.contains_cover();
 
     Ok(db
         .upsert("download_tasks")
         .where_eq("file_path", task.file_path.clone())
         .where_eq("type", task.item.as_ref())
+        .where_eq("source", source)
         .filter_if_some(track_id.map(|x| where_eq("track_id", x)))
-        .filter_if_some(source.clone().map(|x| where_eq("source", x)))
-        .filter_if_some(quality.clone().map(|x| where_eq("quality", x)))
+        .filter_if_some(quality.map(|x| where_eq("quality", x)))
         .filter_if_some(album_id.map(|x| where_eq("album_id", x)))
+        .filter_if_some(artist_id.map(|x| where_eq("artist_id", x)))
         .value("file_path", task.file_path.clone())
         .value("type", task.item.as_ref())
-        .value("track_id", track_id)
+        .value("track", track)
         .value("source", source)
         .value("quality", quality)
+        .value("track_id", track_id)
+        .value("album", album)
         .value("album_id", album_id)
+        .value("artist", artist)
+        .value("artist_id", artist_id)
+        .value("contains_cover", contains_cover)
         .execute_first(db)
         .await?
         .to_value_type()?)
