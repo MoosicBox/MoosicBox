@@ -110,27 +110,39 @@ fn main() -> std::io::Result<()> {
         let database: Arc<Box<dyn Database>> = Arc::new(db);
         DB.write().unwrap().replace(database.clone());
 
+        #[cfg(feature = "library")]
+        let library_music_api = moosicbox_library::LibraryMusicApi::new(database.clone());
+        #[cfg(feature = "library")]
+        let library_api_state =
+            moosicbox_library::LibraryMusicApiState::new(library_music_api.clone());
+
         #[allow(unused_mut)]
         let mut apis_map: HashMap<ApiSource, Box<dyn MusicApi>> = HashMap::new();
         #[cfg(feature = "library")]
         apis_map.insert(
             ApiSource::Library,
-            Box::new(moosicbox_library::LibraryMusicApi::new(database.clone())),
+            Box::new(moosicbox_music_api::CachedMusicApi::new(library_music_api)),
         );
         #[cfg(feature = "tidal")]
         apis_map.insert(
             ApiSource::Tidal,
-            Box::new(moosicbox_tidal::TidalMusicApi::new(database.clone())),
+            Box::new(moosicbox_music_api::CachedMusicApi::new(
+                moosicbox_tidal::TidalMusicApi::new(database.clone()),
+            )),
         );
         #[cfg(feature = "qobuz")]
         apis_map.insert(
             ApiSource::Qobuz,
-            Box::new(moosicbox_qobuz::QobuzMusicApi::new(database.clone())),
+            Box::new(moosicbox_music_api::CachedMusicApi::new(
+                moosicbox_qobuz::QobuzMusicApi::new(database.clone()),
+            )),
         );
         #[cfg(feature = "yt")]
         apis_map.insert(
             ApiSource::Yt,
-            Box::new(moosicbox_yt::YtMusicApi::new(database.clone())),
+            Box::new(moosicbox_music_api::CachedMusicApi::new(
+                moosicbox_yt::YtMusicApi::new(database.clone()),
+            )),
         );
         let music_api_state = MusicApiState::new(apis_map);
         MUSIC_API_STATE
@@ -138,10 +150,6 @@ fn main() -> std::io::Result<()> {
             .unwrap()
             .replace(music_api_state.clone());
 
-        #[cfg(feature = "library")]
-        let library_api_state = moosicbox_library::LibraryMusicApiState::new(
-            moosicbox_library::LibraryMusicApi::new(database.clone()),
-        );
         #[cfg(feature = "library")]
         LIBRARY_API_STATE
             .write()
