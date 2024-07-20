@@ -3,6 +3,7 @@ use moosicbox_core::{
     types::AudioFormat,
 };
 use serde::Serialize;
+use tantivy::schema::NamedFieldDocument;
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -70,4 +71,11 @@ impl From<Vec<ApiGlobalSearchResult>> for ApiSearchResultsResponse {
             results: value,
         }
     }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiRawSearchResultsResponse {
+    pub position: usize,
+    pub results: Vec<NamedFieldDocument>,
 }

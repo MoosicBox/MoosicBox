@@ -17,7 +17,7 @@ use tantivy::schema::NamedFieldDocument;
 use crate::{
     models::{
         ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
-        ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
+        ApiGlobalTrackSearchResult, ApiRawSearchResultsResponse, ApiSearchResultsResponse,
     },
     search_global_search_index,
 };
@@ -189,4 +189,45 @@ pub async fn search_global_search_endpoint(
     }
 
     Ok(Json(ApiSearchResultsResponse { position, results }))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchRawGlobalSearchQuery {
+    query: String,
+    offset: Option<usize>,
+    limit: Option<usize>,
+}
+
+#[get("/search/raw-global-search")]
+pub async fn search_raw_global_search_endpoint(
+    query: web::Query<SearchRawGlobalSearchQuery>,
+) -> Result<Json<ApiRawSearchResultsResponse>> {
+    let limit = query.limit.unwrap_or(10);
+    let offset = query.offset.unwrap_or(0);
+
+    let mut position = offset;
+    let mut results: Vec<NamedFieldDocument> = vec![];
+
+    while results.len() < limit {
+        let values = search_global_search_index(&query.query, position, limit).map_err(|e| {
+            ErrorInternalServerError(format!("Failed to search global search index: {e:?}"))
+        })?;
+
+        if values.is_empty() {
+            break;
+        }
+
+        for value in values {
+            position += 1;
+
+            results.push(value);
+
+            if results.len() >= limit {
+                break;
+            }
+        }
+    }
+
+    Ok(Json(ApiRawSearchResultsResponse { position, results }))
 }

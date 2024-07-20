@@ -413,7 +413,9 @@ fn main() -> std::io::Result<()> {
 
             #[cfg(feature = "search-api")]
             {
-                app = app.service(moosicbox_search::api::search_global_search_endpoint);
+                app = app
+                    .service(moosicbox_search::api::search_global_search_endpoint)
+                    .service(moosicbox_search::api::search_raw_global_search_endpoint);
             }
 
             #[cfg(feature = "library-api")]
