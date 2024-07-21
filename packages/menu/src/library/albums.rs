@@ -446,6 +446,10 @@ pub enum ReFavoriteAlbumError {
     Albums(#[from] moosicbox_music_api::AlbumsError),
     #[error(transparent)]
     ArtistAlbums(#[from] moosicbox_music_api::ArtistAlbumsError),
+    #[error("Missing album")]
+    MissingAlbum,
+    #[error("Missing artist")]
+    MissingArtist,
     #[error("No artist")]
     NoArtist,
     #[error("No album")]
@@ -465,21 +469,41 @@ pub async fn refavorite_album(
         api.source()
     );
 
-    let favorite_albums = api
-        .albums(&AlbumsRequest::default())
+    let existing: Option<Album> = library_api
+        .library_album_from_source(album_id, api.source())
         .await?
-        .with_rest_of_items_in_batches()
-        .await?;
+        .map(|x| x.into());
 
-    let album = favorite_albums
-        .iter()
-        .find(|album| &album.id == album_id)
-        .ok_or(ReFavoriteAlbumError::NoAlbum)?;
+    let (artist, album) = if let Some(album) = existing {
+        if let Some(artist_id) = album.artist_sources.get(api.source()) {
+            (
+                api.artist(artist_id)
+                    .await?
+                    .ok_or(ReFavoriteAlbumError::MissingArtist)?,
+                album,
+            )
+        } else {
+            return Err(ReFavoriteAlbumError::MissingArtist);
+        }
+    } else {
+        let favorite_albums = api
+            .albums(&AlbumsRequest::default())
+            .await?
+            .with_rest_of_items_in_batches()
+            .await?;
 
-    let artist = api
-        .artist(&album.artist_id)
-        .await?
-        .ok_or(ReFavoriteAlbumError::NoArtist)?;
+        let album = favorite_albums
+            .into_iter()
+            .find(|album| &album.id == album_id)
+            .ok_or(ReFavoriteAlbumError::MissingAlbum)?;
+
+        (
+            api.artist(&album.artist_id)
+                .await?
+                .ok_or(ReFavoriteAlbumError::NoArtist)?,
+            album,
+        )
+    };
 
     let new_album_id = api
         .artist_albums(&artist.id, AlbumType::All, None, None, None, None)
@@ -488,7 +512,7 @@ pub async fn refavorite_album(
         .await?
         .iter()
         .find(|x| {
-            x.artist_id == album.artist_id
+            x.artist_id == artist.id
                 && x.title.to_lowercase().trim() == album.title.to_lowercase().trim()
         })
         .map(|x| x.id.clone());
