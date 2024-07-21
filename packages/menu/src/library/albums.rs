@@ -196,7 +196,7 @@ pub async fn add_album(
     );
 
     if let Some(album) = library_api
-        .album_from_source(album_id, api.source())
+        .library_album_from_source(album_id, api.source())
         .await?
     {
         log::debug!("Album album_id={album_id:?} already added: album={album:?}");
@@ -283,7 +283,7 @@ pub async fn add_album(
     }
 
     library_api
-        .library_album(album_id)
+        .library_album_from_source(album_id, api.source())
         .await?
         .ok_or(AddAlbumError::NoAlbum)
 }
@@ -322,7 +322,7 @@ pub async fn remove_album(
     );
 
     let mut album = library_api
-        .album_from_source(album_id, api.source())
+        .library_album_from_source(album_id, api.source())
         .await?
         .ok_or(RemoveAlbumError::NoAlbum)?;
 

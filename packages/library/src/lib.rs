@@ -920,7 +920,7 @@ impl LibraryMusicApi {
             .map_err(|e| ArtistError::Other(e.into()))
     }
 
-    pub async fn album_from_source(
+    pub async fn library_album_from_source(
         &self,
         album_id: &Id,
         source: ApiSource,
