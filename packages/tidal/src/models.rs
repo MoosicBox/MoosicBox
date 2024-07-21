@@ -98,11 +98,15 @@ impl Display for TidalArtistImageSize {
 
 impl TidalArtist {
     pub fn picture_url(&self, size: TidalArtistImageSize) -> Option<String> {
-        self.picture.as_ref().map(|picture| {
-            let picture_path = picture.replace('-', "/");
-            format!("https://resources.tidal.com/images/{picture_path}/{size}x{size}.jpg")
-        })
+        artist_picture_url(self.picture.as_deref(), size)
     }
+}
+
+fn artist_picture_url(picture: Option<&str>, size: TidalArtistImageSize) -> Option<String> {
+    picture.map(|picture| {
+        let picture_path = picture.replace('-', "/");
+        format!("https://resources.tidal.com/images/{picture_path}/{size}x{size}.jpg")
+    })
 }
 
 impl ToValueType<TidalArtist> for &serde_json::Value {
@@ -114,6 +118,7 @@ impl ToValueType<TidalArtist> for &serde_json::Value {
 impl AsModelResult<TidalArtist, ParseError> for serde_json::Value {
     fn as_model(&self) -> Result<TidalArtist, ParseError> {
         let picture: Option<String> = self.to_value("picture")?;
+        let picture = artist_picture_url(picture.as_deref(), TidalArtistImageSize::Max);
 
         Ok(TidalArtist {
             id: self.to_value("id")?,
@@ -196,6 +201,8 @@ pub struct TidalAlbum {
 
 impl From<TidalAlbum> for Album {
     fn from(value: TidalAlbum) -> Self {
+        let artwork = value.cover_url(TidalAlbumImageSize::Max);
+
         Self {
             id: value.id.into(),
             title: value.title,
@@ -203,7 +210,7 @@ impl From<TidalAlbum> for Album {
             artist_id: value.artist_id.into(),
             date_released: value.release_date,
             date_added: None,
-            artwork: value.cover,
+            artwork,
             directory: None,
             blur: false,
             versions: vec![],
