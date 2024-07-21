@@ -56,6 +56,14 @@ impl WebsocketSender for WsServer {
         }
         Ok(())
     }
+
+    async fn ping(&self) -> Result<(), WebsocketSendError> {
+        self.ping_system();
+        for sender in &self.senders {
+            sender.ping().await?;
+        }
+        Ok(())
+    }
 }
 
 /// A command received by the [`WsServer`].
@@ -176,6 +184,11 @@ impl WsServer {
 
     pub fn add_sender(&mut self, sender: Box<dyn WebsocketSender>) {
         self.senders.push(sender);
+    }
+
+    #[allow(clippy::unused_self)]
+    fn ping_system(&self) {
+        log::trace!("ping_system: pong");
     }
 
     /// Send message to users in a room.
@@ -462,6 +475,13 @@ impl WebsocketSender for WsServerHandle {
         }
         self.broadcast_except(connection_id.parse::<usize>().unwrap(), data.to_string())
             .await;
+        Ok(())
+    }
+
+    async fn ping(&self) -> Result<(), WebsocketSendError> {
+        self.ping()
+            .await
+            .map_err(|e| WebsocketSendError::Unknown(e.to_string()))?;
         Ok(())
     }
 }

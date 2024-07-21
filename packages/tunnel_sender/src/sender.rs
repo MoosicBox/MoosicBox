@@ -131,11 +131,21 @@ impl WebsocketSender for TunnelSenderHandle {
         }
         Ok(())
     }
+
+    async fn ping(&self) -> Result<(), moosicbox_ws::WebsocketSendError> {
+        if let Some(sender) = self.sender.read().unwrap().as_ref() {
+            sender
+                .unbounded_send(TunnelResponseMessage::Ping)
+                .map_err(|e| WebsocketSendError::Unknown(e.to_string()))?;
+        }
+        Ok(())
+    }
 }
 
 pub enum TunnelResponseMessage {
     Packet(TunnelResponsePacket),
     Ws(TunnelResponseWs),
+    Ping,
 }
 
 pub struct TunnelResponsePacket {
@@ -336,6 +346,7 @@ impl TunnelSender {
                                             }
                                         },
                                         TunnelResponseMessage::Ws(_ws) => {}
+                                        TunnelResponseMessage::Ping => {}
                                     }
 
                                     ready(true)
@@ -383,6 +394,10 @@ impl TunnelSender {
                                             } else {
                                                 Ok(ws.message)
                                             }
+                                        },
+                                        TunnelResponseMessage::Ping => {
+                                            log::trace!("Sending ping");
+                                            Ok(Message::Ping(vec![]))
                                         }
                                     }
                                 })
@@ -398,17 +413,40 @@ impl TunnelSender {
                                 }
                             };
 
-                            let tx = tx.clone();
-                            let close_token = close_token.clone();
-                            moosicbox_task::spawn(
-                                "tunnel_sender: Process WS message",
+                            moosicbox_task::spawn("tunnel_sender: Process WS message", {
+                                let tx = tx.clone();
+                                let close_token = close_token.clone();
+
                                 async move {
                                     if let Err(e) = handler(tx.clone(), m).await {
                                         log::error!("Handler Send Loop error: {e:?}");
                                         close_token.cancel();
                                     }
-                                },
-                            );
+                                }
+                            });
+                        });
+
+                        let pinger = moosicbox_task::spawn("tunnel_sender: pinger", {
+                            let txf = txf.clone();
+                            let close_token = close_token.clone();
+                            let cancellation_token = cancellation_token.clone();
+
+                            async move {
+                                loop {
+                                    select!(
+                                        _ = close_token.cancelled() => { break; }
+                                        _ = cancellation_token.cancelled() => { break; }
+                                        _ = tokio::time::sleep(std::time::Duration::from_millis(5000)) => {
+                                            log::trace!("Sending ping to tunnel");
+                                            if let Err(e) = txf.unbounded_send(TunnelResponseMessage::Ping) {
+                                                log::error!("Pinger Send Loop error: {e:?}");
+                                                close_token.cancel();
+                                                break;
+                                            }
+                                        }
+                                    );
+                                }
+                            }
                         });
 
                         pin_mut!(ws_writer, ws_reader);
@@ -417,6 +455,13 @@ impl TunnelSender {
                             _ = cancellation_token.cancelled() => {}
                             _ = future::select(ws_writer, ws_reader) => {}
                         );
+                        if !close_token.is_cancelled() {
+                            close_token.cancel();
+                        }
+                        log::debug!("start_tunnel: Waiting for pinger to finish...");
+                        if let Err(e) = pinger.await {
+                            log::warn!("start_tunnel: Pinger failed to finish: {e:?}");
+                        }
                         log::info!("WebSocket connection closed");
                     }
                     Err(err) => match err {

@@ -99,4 +99,8 @@ where
 
         Ok(())
     }
+
+    async fn ping(&self) -> Result<(), WebsocketSendError> {
+        self.root_sender.ping().await
+    }
 }

@@ -54,6 +54,7 @@ pub async fn handle_ws(
             // commands & messages received from client
             Either::Left((Either::Left((Some(Ok(msg)), _)), _)) => match msg {
                 Message::Ping(bytes) => {
+                    log::trace!("Received ping");
                     last_heartbeat = Instant::now();
                     session.pong(&bytes).await.unwrap();
                 }

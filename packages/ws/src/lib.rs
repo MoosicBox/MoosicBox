@@ -102,6 +102,7 @@ pub trait WebsocketSender: Send + Sync {
     async fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError>;
     async fn send_all(&self, data: &str) -> Result<(), WebsocketSendError>;
     async fn send_all_except(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError>;
+    async fn ping(&self) -> Result<(), WebsocketSendError>;
 }
 
 impl core::fmt::Debug for dyn WebsocketSender {

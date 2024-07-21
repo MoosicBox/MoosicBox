@@ -138,8 +138,7 @@ pub async fn setup_tunnel(
                                 });
                             }
                             TunnelMessage::Binary(_) => todo!(),
-                            TunnelMessage::Ping(_) => {}
-                            TunnelMessage::Pong(_) => todo!(),
+                            TunnelMessage::Ping(_) | TunnelMessage::Pong(_) => {}
                             TunnelMessage::Close => {
                                 log::info!("Tunnel connection was closed");
                             }
