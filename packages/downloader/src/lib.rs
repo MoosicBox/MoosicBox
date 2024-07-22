@@ -889,7 +889,7 @@ pub async fn download_artist_cover(
     let bytes = match get_artist_cover_bytes(api, db, &artist, ImageCoverSize::Max, true).await {
         Ok(bytes) => bytes,
         Err(err) => match err {
-            ArtistCoverError::NotFound(_) => {
+            ArtistCoverError::NotFound(..) => {
                 log::debug!("No artist cover found");
                 return Ok(());
             }

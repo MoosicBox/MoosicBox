@@ -41,8 +41,8 @@ fn get_artist_directory(artist: &Artist) -> Option<String> {
 
 #[derive(Debug, Error)]
 pub enum ArtistCoverError {
-    #[error("Artist cover not found for artist: {0}")]
-    NotFound(Id),
+    #[error("Artist cover not found for artist: {0} ({1})")]
+    NotFound(Id, String),
     #[error(transparent)]
     Artist(#[from] ArtistError),
     #[error(transparent)]
@@ -70,7 +70,12 @@ pub async fn get_local_artist_cover(
     let source = api
         .artist_cover_source(artist, size)
         .await?
-        .ok_or_else(|| ArtistCoverError::NotFound(artist.id.to_owned()))?;
+        .ok_or_else(|| {
+            ArtistCoverError::NotFound(
+                artist.id.to_owned(),
+                "Artist cover source not found".to_owned(),
+            )
+        })?;
 
     let directory = get_artist_directory(artist);
     if let Ok(cover) =
@@ -84,7 +89,10 @@ pub async fn get_local_artist_cover(
         return copy_streaming_cover_to_local(db, artist, cover).await;
     }
 
-    Err(ArtistCoverError::NotFound(artist.id.to_owned()))
+    Err(ArtistCoverError::NotFound(
+        artist.id.to_owned(),
+        "Artist cover remote image not found".to_owned(),
+    ))
 }
 
 pub async fn get_local_artist_cover_bytes(
@@ -97,7 +105,12 @@ pub async fn get_local_artist_cover_bytes(
     let source = api
         .artist_cover_source(artist, size)
         .await?
-        .ok_or_else(|| ArtistCoverError::NotFound(artist.id.to_owned()))?;
+        .ok_or_else(|| {
+            ArtistCoverError::NotFound(
+                artist.id.to_owned(),
+                "Artist cover source not found".to_owned(),
+            )
+        })?;
 
     let directory = get_artist_directory(artist);
     if let Ok(cover) = fetch_local_artist_cover_bytes(db, artist, directory.as_ref()).await {
@@ -110,7 +123,10 @@ pub async fn get_local_artist_cover_bytes(
         return Ok(cover);
     }
 
-    Err(ArtistCoverError::NotFound(artist.id.to_owned()))
+    Err(ArtistCoverError::NotFound(
+        artist.id.to_owned(),
+        "Artist cover remote image not found".to_owned(),
+    ))
 }
 
 #[derive(Debug, Error)]

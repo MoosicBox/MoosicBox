@@ -326,7 +326,17 @@ pub async fn tracks_info_endpoint(
 
 impl From<ArtistCoverError> for actix_web::Error {
     fn from(err: ArtistCoverError) -> Self {
-        ErrorInternalServerError(err.to_string())
+        match err {
+            ArtistCoverError::NotFound(..) => ErrorNotFound(err.to_string()),
+            ArtistCoverError::Artist(_)
+            | ArtistCoverError::FetchCover(_)
+            | ArtistCoverError::FetchLocalArtistCover(_)
+            | ArtistCoverError::IO(_)
+            | ArtistCoverError::Db(_)
+            | ArtistCoverError::Database(_)
+            | ArtistCoverError::File(_, _)
+            | ArtistCoverError::InvalidSource => ErrorInternalServerError(err.to_string()),
+        }
     }
 }
 
@@ -434,7 +444,17 @@ pub async fn artist_cover_endpoint(
 
 impl From<AlbumCoverError> for actix_web::Error {
     fn from(err: AlbumCoverError) -> Self {
-        ErrorInternalServerError(err.to_string())
+        match err {
+            AlbumCoverError::NotFound(..) => ErrorNotFound(err.to_string()),
+            AlbumCoverError::Album(_)
+            | AlbumCoverError::FetchCover(_)
+            | AlbumCoverError::FetchLocalAlbumCover(_)
+            | AlbumCoverError::IO(_)
+            | AlbumCoverError::Db(_)
+            | AlbumCoverError::Database(_)
+            | AlbumCoverError::File(_, _)
+            | AlbumCoverError::InvalidSource => ErrorInternalServerError(err.to_string()),
+        }
     }
 }
 
