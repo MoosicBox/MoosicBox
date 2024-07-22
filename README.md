@@ -24,50 +24,9 @@ Implemented:
 - Android app
 - Audio file visualization on seek bar
 
-In progress:
+To-do:
 
-- UPnP/DLNA support
-- YouTube Music integration
-
-To-do (in priority order):
-
-### Beta
-
-- Media control bindings (mobile & web)
-- Better session & audio zone handling
-- Introductory screen to walk through initial setup
-- Pre-load next playback track
-- Save tracks hosted on server locally on clients
-  - Source quality and/or encoded lossy
-- iOS app
-
-### v1.0
-
-- Stream audio file visualization as it processes
-- Control streaming audio quality
-- Auto scan file changes (optionally)
-- Image optimization cache
-- Audio encoding cache
-- Run as a service in the background, optionally at startup
-- Opus decoder
-- Spotify integration
-- Enable switching between different bitrates within encodings
-- Enable on the fly switching audio quality during playback
-- Current playback screen
-- Support gapless playback
-- Playlists
-- Shuffle playback
-
-### Beyond v1.0
-
-- Peer-to-peer secure tunneling
-- Turso database support
-- End-to-end encryption option
-- Listen-only connections
-- Schedule playback
-- Shareable playlists via an authenticated link
-- Support HLS protocol
-- Support MPEG-DASH encoding
+See the [prioritized backlog](https://github.com/orgs/MoosicBox/projects/1/views/1)
 
 ## Local Server
 
