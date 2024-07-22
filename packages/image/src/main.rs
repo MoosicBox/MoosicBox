@@ -80,7 +80,7 @@ async fn try_resize_local_file(
         (width, height)
     } else {
         let file_path = Path::new(path);
-        let reader = ::image::io::Reader::open(file_path)?;
+        let reader = ::image::ImageReader::open(file_path)?;
         let dimensions = reader.into_dimensions()?;
 
         if let Some(width) = width {
