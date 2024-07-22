@@ -118,7 +118,6 @@ impl ToValueType<TidalArtist> for &serde_json::Value {
 impl AsModelResult<TidalArtist, ParseError> for serde_json::Value {
     fn as_model(&self) -> Result<TidalArtist, ParseError> {
         let picture: Option<String> = self.to_value("picture")?;
-        let picture = artist_picture_url(picture.as_deref(), TidalArtistImageSize::Max);
 
         Ok(TidalArtist {
             id: self.to_value("id")?,
