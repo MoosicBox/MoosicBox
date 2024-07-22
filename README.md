@@ -27,13 +27,13 @@ Implemented:
 In progress:
 
 - UPnP/DLNA support
-- Opus decoder
 - YouTube Music integration
 
 To-do (in priority order):
 
 ### Beta
 
+- Media control bindings (mobile & web)
 - Better session & audio zone handling
 - Introductory screen to walk through initial setup
 - Pre-load next playback track
@@ -49,6 +49,7 @@ To-do (in priority order):
 - Image optimization cache
 - Audio encoding cache
 - Run as a service in the background, optionally at startup
+- Opus decoder
 - Spotify integration
 - Enable switching between different bitrates within encodings
 - Enable on the fly switching audio quality during playback
