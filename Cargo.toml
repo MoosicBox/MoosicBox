@@ -165,14 +165,14 @@ serde-aux = "4.5.0"
 serde_json = "1.0.120"
 serial_test = "3.1.1"
 sha2 = "0.10.8"
-sqlx = { version = "0.7", default-features = false, features = [
+sqlx = { version = "=0.7", default-features = false, features = [
     "runtime-tokio",
     "tls-rustls",
 ] }
-sqlx-mysql = { version = "0.7", default-features = false, features = [
+sqlx-mysql = { version = "=0.7", default-features = false, features = [
     "chrono",
 ] }
-sqlx-postgres = { version = "0.7", default-features = false, features = [
+sqlx-postgres = { version = "=0.7", default-features = false, features = [
     "chrono",
 ] }
 static_init = "1.0.3"
