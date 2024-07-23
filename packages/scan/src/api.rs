@@ -3,7 +3,7 @@ use std::str::FromStr;
 use actix_web::{
     delete,
     error::{ErrorBadRequest, ErrorInternalServerError},
-    get, post,
+    post,
     web::{self, Json},
     Result,
 };
@@ -13,7 +13,27 @@ use moosicbox_music_api::MusicApiState;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::{disable_scan_origin, enable_scan_origin, get_scan_origins, scan, ScanOrigin};
+use crate::{disable_scan_origin, enable_scan_origin, scan, ScanOrigin};
+
+#[cfg(feature = "openapi")]
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    tags((name = "Scan")),
+    paths(
+        run_scan_endpoint,
+        run_scan_path_endpoint,
+        get_scan_origins_endpoint,
+        enable_scan_origin_endpoint,
+        disable_scan_origin_endpoint,
+        get_scan_paths_endpoint,
+        add_scan_path_endpoint,
+        remove_scan_path_endpoint,
+    ),
+    components(schemas(
+        ScanOrigin,
+    ))
+)]
+pub struct Api;
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -21,6 +41,24 @@ pub struct ScanQuery {
     origins: Option<String>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Scan"],
+        post,
+        path = "/run-scan",
+        description = "Run a scan for the specified origin(s)",
+        params(
+            ("origins" = Option<String>, Query, description = "Comma-separated list of ScanOrigins"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The scan has successfully ran",
+                body = Value,
+            )
+        )
+    )
+)]
 #[post("/run-scan")]
 pub async fn run_scan_endpoint(
     query: web::Query<ScanQuery>,
@@ -58,6 +96,24 @@ pub struct ScanPathQuery {
 }
 
 #[cfg(feature = "local")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Scan"],
+        post,
+        path = "/run-scan-path",
+        description = "Run a local scan on the specific path",
+        params(
+            ("path" = String, Query, description = "Local file path to scan"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The scan has successfully ran",
+                body = Value,
+            )
+        )
+    )
+)]
 #[post("/run-scan-path")]
 pub async fn run_scan_path_endpoint(
     query: web::Query<ScanPathQuery>,
@@ -79,13 +135,30 @@ pub async fn run_scan_path_endpoint(
 #[serde(rename_all = "camelCase")]
 pub struct GetScanOriginsQuery {}
 
-#[get("/scan-origins")]
+#[cfg(feature = "local")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Scan"],
+        get,
+        path = "/scan-origins",
+        description = "Get the enabled scan origins",
+        params(),
+        responses(
+            (
+                status = 200,
+                description = "The enabled scan origins",
+                body = Value,
+            )
+        )
+    )
+)]
+#[actix_web::get("/scan-origins")]
 pub async fn get_scan_origins_endpoint(
     _query: web::Query<GetScanOriginsQuery>,
     data: web::Data<AppState>,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    let origins = get_scan_origins(&**data.database)
+    let origins = crate::get_scan_origins(&**data.database)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to get scan origins: {e:?}")))?;
 
@@ -98,6 +171,24 @@ pub struct EnableScanOriginQuery {
     origin: ScanOrigin,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Scan"],
+        post,
+        path = "/scan-origins",
+        description = "Enable a scan origin",
+        params(
+            ("origin" = ScanOrigin, Query, description = "ScanOrigin to enable"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The ScanOrigin was successfully enabled",
+                body = Value,
+            )
+        )
+    )
+)]
 #[post("/scan-origins")]
 pub async fn enable_scan_origin_endpoint(
     query: web::Query<EnableScanOriginQuery>,
@@ -117,6 +208,24 @@ pub struct DisableScanOriginQuery {
     origin: ScanOrigin,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Scan"],
+        delete,
+        path = "/scan-origins",
+        description = "Disable a scan origin",
+        params(
+            ("origin" = ScanOrigin, Query, description = "ScanOrigin to disable"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The ScanOrigin was successfully disabled",
+                body = Value,
+            )
+        )
+    )
+)]
 #[delete("/scan-origins")]
 pub async fn disable_scan_origin_endpoint(
     query: web::Query<DisableScanOriginQuery>,
@@ -136,7 +245,23 @@ pub async fn disable_scan_origin_endpoint(
 pub struct GetScanPathsQuery {}
 
 #[cfg(feature = "local")]
-#[get("/scan-paths")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Scan"],
+        get,
+        path = "/scan-paths",
+        description = "Get the enabled local scan paths",
+        params(),
+        responses(
+            (
+                status = 200,
+                description = "The enabled local scan paths",
+                body = Value,
+            )
+        )
+    )
+)]
+#[actix_web::get("/scan-paths")]
 pub async fn get_scan_paths_endpoint(
     _query: web::Query<GetScanPathsQuery>,
     data: web::Data<AppState>,
@@ -157,6 +282,24 @@ pub struct AddScanPathQuery {
 }
 
 #[cfg(feature = "local")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Scan"],
+        post,
+        path = "/scan-paths",
+        description = "Enable a local scan path",
+        params(
+            ("origin" = String, Query, description = "Local scan path to enable"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The local scan path was successfully enabled",
+                body = Value,
+            )
+        )
+    )
+)]
 #[post("/scan-paths")]
 pub async fn add_scan_path_endpoint(
     query: web::Query<AddScanPathQuery>,
@@ -178,6 +321,24 @@ pub struct RemoveScanPathQuery {
 }
 
 #[cfg(feature = "local")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Scan"],
+        delete,
+        path = "/scan-paths",
+        description = "Disable a local scan path",
+        params(
+            ("origin" = String, Query, description = "Local scan path to disable"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The local scan path was successfully disabled",
+                body = Value,
+            )
+        )
+    )
+)]
 #[delete("/scan-paths")]
 pub async fn remove_scan_path_endpoint(
     query: web::Query<RemoveScanPathQuery>,

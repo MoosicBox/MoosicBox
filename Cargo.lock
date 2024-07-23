@@ -3981,6 +3981,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
+ "utoipa",
 ]
 
 [[package]]
