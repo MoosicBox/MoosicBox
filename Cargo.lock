@@ -3686,6 +3686,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util",
+ "utoipa",
 ]
 
 [[package]]

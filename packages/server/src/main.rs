@@ -353,6 +353,8 @@ fn main() -> std::io::Result<()> {
                 "/downloader",
                 moosicbox_downloader::api::Api::openapi(),
             );
+            #[cfg(feature = "files-api")]
+            let api = nest_api(api, "/files", moosicbox_files::api::Api::openapi());
             api
         };
 

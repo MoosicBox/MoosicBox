@@ -265,5 +265,6 @@ openapi = [
     "moosicbox_auth/openapi",
     "moosicbox_core/openapi",
     "moosicbox_downloader/openapi",
+    "moosicbox_files/openapi",
     "moosicbox_music_api/openapi",
 ]

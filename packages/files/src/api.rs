@@ -25,6 +25,34 @@ use crate::files::{
     },
 };
 
+#[cfg(feature = "openapi")]
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    tags((name = "Files")),
+    paths(
+        track_visualization_endpoint,
+        track_endpoint,
+        track_info_endpoint,
+        tracks_info_endpoint,
+        artist_cover_endpoint,
+        artist_source_artwork_endpoint,
+        album_artwork_endpoint,
+        album_source_artwork_endpoint,
+    ),
+    components(schemas(
+        GetTrackVisualizationQuery,
+        GetTrackQuery,
+        GetTrackInfoQuery,
+        GetTracksInfoQuery,
+        ArtistCoverQuery,
+        AlbumCoverQuery,
+        TrackInfo,
+        AudioFormat,
+        ApiSource,
+    ))
+)]
+pub struct Api;
+
 impl From<TrackSourceError> for actix_web::Error {
     fn from(e: TrackSourceError) -> Self {
         match e {
@@ -45,12 +73,36 @@ impl From<TrackInfoError> for actix_web::Error {
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct GetTrackVisualizationQuery {
     pub track_id: u64,
     pub max: Option<u16>,
     pub source: Option<ApiSource>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Files"],
+        get,
+        path = "/track/visualization",
+        description = "Get the track visualization data points",
+        params(
+            ("trackId" = u64, Query,
+                description = "The track ID"),
+            ("max" = Option<u16>, Query,
+                description = "The maximum number of visualization data points to return"),
+            ("source" = Option<ApiSource>, Query,
+                description = "The track API source"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Track audio bytes",
+                body = Vec<u8>,
+            )
+        )
+    )
+)]
 #[route("/track/visualization", method = "GET")]
 pub async fn track_visualization_endpoint(
     query: web::Query<GetTrackVisualizationQuery>,
@@ -91,6 +143,7 @@ impl From<GetTrackBytesError> for actix_web::Error {
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct GetTrackQuery {
     pub track_id: u64,
     pub format: Option<AudioFormat>,
@@ -98,6 +151,26 @@ pub struct GetTrackQuery {
     pub source: Option<ApiSource>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Files", "head"],
+        get,
+        path = "/track",
+        description = "Get the track file stream audio bytes with a chunked encoding",
+        params(
+            ("trackId" = u64, Query, description = "The track ID"),
+            ("format" = Option<AudioFormat>, Query, description = "The track format to return"),
+            ("quality" = Option<TrackAudioQuality>, Query, description = "The quality to return"),
+            ("source" = Option<ApiSource>, Query, description = "The track API source"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Track audio bytes",
+            )
+        )
+    )
+)]
 #[route("/track", method = "GET", method = "HEAD")]
 pub async fn track_endpoint(
     req: HttpRequest,
@@ -266,11 +339,31 @@ pub async fn track_endpoint(
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct GetTrackInfoQuery {
     pub track_id: Id,
     pub source: Option<ApiSource>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Files"],
+        get,
+        path = "/track/info",
+        description = "Get the track's metadata",
+        params(
+            ("trackId" = Id, Query, description = "The track ID"),
+            ("source" = Option<ApiSource>, Query, description = "The track API source"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Track info",
+                body = TrackInfo,
+            )
+        )
+    )
+)]
 #[route("/track/info", method = "GET")]
 pub async fn track_info_endpoint(
     query: web::Query<GetTrackInfoQuery>,
@@ -290,11 +383,31 @@ pub async fn track_info_endpoint(
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct GetTracksInfoQuery {
     pub track_ids: String,
     pub source: Option<ApiSource>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Files"],
+        get,
+        path = "/tracks/info",
+        description = "Get the track's info",
+        params(
+            ("trackIds" = String, Query, description = "The comma-separated list of track IDs"),
+            ("source" = Option<ApiSource>, Query, description = "The tracks' API source"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Tracks info",
+                body = Vec<TrackInfo>,
+            )
+        )
+    )
+)]
 #[route("/tracks/info", method = "GET")]
 pub async fn tracks_info_endpoint(
     query: web::Query<GetTracksInfoQuery>,
@@ -342,10 +455,28 @@ impl From<ArtistCoverError> for actix_web::Error {
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ArtistCoverQuery {
     pub source: Option<ApiSource>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Files", "head"],
+        get,
+        path = "/artists/{artistId}/source",
+        description = "Get source quality artist cover",
+        params(
+            ("artistId" = u64, Path, description = "The Artist ID"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The source quality artist cover",
+            )
+        )
+    )
+)]
 #[route("/artists/{artist_id}/source", method = "GET", method = "HEAD")]
 pub async fn artist_source_artwork_endpoint(
     req: HttpRequest,
@@ -391,6 +522,54 @@ pub async fn artist_source_artwork_endpoint(
     Ok(file.into_response(&req))
 }
 
+#[cfg(feature = "openapi")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Files", "head"],
+        get,
+        path = "/artists/{artistId}/{size}",
+        description = "Get artist cover at the specified dimensions",
+        params(
+            ("artistId" = u64, Path, description = "The Artist ID"),
+            ("size" = String, Path, description = "The {width}x{height} of the image"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The artist cover at the specified dimensions",
+            )
+        )
+    )
+)]
+#[route("/artists/{artist_id}/{size}", method = "GET", method = "HEAD")]
+#[allow(unused)]
+pub async fn artist_cover_head_endpoint(
+    _path: web::Path<(String, String)>,
+    _query: web::Query<ArtistCoverQuery>,
+    _data: web::Data<AppState>,
+    _api_state: web::Data<MusicApiState>,
+) -> Result<HttpResponse> {
+    unimplemented!()
+}
+
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Files", "head"],
+        get,
+        path = "/artists/{artistId}/{size}",
+        description = "Get artist cover at the specified dimensions",
+        params(
+            ("artistId" = u64, Path, description = "The Artist ID"),
+            ("size" = String, Path, description = "The {width}x{height} of the image"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The artist cover at the specified dimensions",
+            )
+        )
+    )
+)]
 #[route("/artists/{artist_id}/{size}", method = "GET", method = "HEAD")]
 pub async fn artist_cover_endpoint(
     path: web::Path<(String, String)>,
@@ -460,10 +639,28 @@ impl From<AlbumCoverError> for actix_web::Error {
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct AlbumCoverQuery {
     pub source: Option<ApiSource>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Files", "head"],
+        get,
+        path = "/albums/{artistId}/source",
+        description = "Get source quality album cover",
+        params(
+            ("artistId" = u64, Path, description = "The Artist ID"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The source quality album cover",
+            )
+        )
+    )
+)]
 #[route("/albums/{album_id}/source", method = "GET", method = "HEAD")]
 pub async fn album_source_artwork_endpoint(
     req: HttpRequest,
@@ -509,6 +706,24 @@ pub async fn album_source_artwork_endpoint(
     Ok(file.into_response(&req))
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Files", "head"],
+        get,
+        path = "/albums/{artistId}/{size}",
+        description = "Get album cover at the specified dimensions",
+        params(
+            ("artistId" = u64, Path, description = "The Artist ID"),
+            ("size" = String, Path, description = "The {width}x{height} of the image"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The album cover at the specified dimensions",
+            )
+        )
+    )
+)]
 #[route("/albums/{album_id}/{size}", method = "GET", method = "HEAD")]
 pub async fn album_artwork_endpoint(
     path: web::Path<(String, String)>,
