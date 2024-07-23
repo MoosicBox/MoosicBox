@@ -115,7 +115,7 @@ pub struct PlayAlbumQuery {
     pub source: Option<ApiSource>,
 }
 
-#[post("/player/play/album")]
+#[post("/play/album")]
 pub async fn play_album_endpoint(
     query: web::Query<PlayAlbumQuery>,
     data: web::Data<AppState>,
@@ -159,7 +159,7 @@ pub struct PlayTrackQuery {
     pub source: Option<ApiSource>,
 }
 
-#[post("/player/play/track")]
+#[post("/play/track")]
 pub async fn play_track_endpoint(
     query: web::Query<PlayTrackQuery>,
     data: web::Data<AppState>,
@@ -211,7 +211,7 @@ pub struct PlayTracksQuery {
     pub source: Option<ApiSource>,
 }
 
-#[post("/player/play/tracks")]
+#[post("/play/tracks")]
 pub async fn play_tracks_endpoint(
     query: web::Query<PlayTracksQuery>,
     data: web::Data<AppState>,
@@ -251,7 +251,7 @@ pub struct StopTrackQuery {
     pub host: Option<String>,
 }
 
-#[post("/player/stop")]
+#[post("/stop")]
 pub async fn stop_track_endpoint(
     query: web::Query<StopTrackQuery>,
     _data: web::Data<AppState>,
@@ -270,7 +270,7 @@ pub struct SeekTrackQuery {
     pub host: Option<String>,
 }
 
-#[post("/player/seek")]
+#[post("/seek")]
 pub async fn seek_track_endpoint(
     query: web::Query<SeekTrackQuery>,
     _data: web::Data<AppState>,
@@ -298,7 +298,7 @@ pub struct UpdatePlaybackQuery {
     pub source: Option<ApiSource>,
 }
 
-#[post("/player/update-playback")]
+#[post("/update-playback")]
 pub async fn update_playback_endpoint(
     query: web::Query<UpdatePlaybackQuery>,
     data: web::Data<AppState>,
@@ -347,7 +347,7 @@ pub struct NextTrackQuery {
     pub host: Option<String>,
 }
 
-#[post("/player/next-track")]
+#[post("/next-track")]
 pub async fn next_track_endpoint(
     query: web::Query<NextTrackQuery>,
     _data: web::Data<AppState>,
@@ -365,7 +365,7 @@ pub struct PauseQuery {
     pub host: Option<String>,
 }
 
-#[post("/player/pause")]
+#[post("/pause")]
 pub async fn pause_playback_endpoint(
     query: web::Query<PauseQuery>,
     _data: web::Data<AppState>,
@@ -383,7 +383,7 @@ pub struct ResumeQuery {
     pub host: Option<String>,
 }
 
-#[post("/player/resume")]
+#[post("/resume")]
 pub async fn resume_playback_endpoint(
     query: web::Query<ResumeQuery>,
     _data: web::Data<AppState>,
@@ -402,7 +402,7 @@ pub struct PreviousTrackQuery {
     pub host: Option<String>,
 }
 
-#[post("/player/previous-track")]
+#[post("/previous-track")]
 pub async fn previous_track_endpoint(
     query: web::Query<PreviousTrackQuery>,
     _data: web::Data<AppState>,
@@ -420,7 +420,7 @@ pub struct PlayerStatusQuery {
     pub host: Option<String>,
 }
 
-#[get("/player/status")]
+#[get("/status")]
 pub async fn player_status_endpoint(
     query: web::Query<PlayerStatusQuery>,
 ) -> Result<Json<ApiPlaybackStatus>> {

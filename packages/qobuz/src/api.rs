@@ -58,7 +58,7 @@ pub struct QobuzUserLoginQuery {
     persist: Option<bool>,
 }
 
-#[route("/qobuz/auth/login", method = "POST")]
+#[route("/auth/login", method = "POST")]
 pub async fn user_login_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzUserLoginQuery>,
@@ -213,7 +213,7 @@ pub struct QobuzArtistQuery {
     artist_id: u64,
 }
 
-#[route("/qobuz/artists", method = "GET")]
+#[route("/artists", method = "GET")]
 pub async fn artist_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzArtistQuery>,
@@ -248,7 +248,7 @@ pub struct QobuzFavoriteArtistsQuery {
     limit: Option<u32>,
 }
 
-#[route("/qobuz/favorites/artists", method = "GET")]
+#[route("/favorites/artists", method = "GET")]
 pub async fn favorite_artists_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzFavoriteArtistsQuery>,
@@ -285,7 +285,7 @@ pub struct QobuzAlbumQuery {
     album_id: String,
 }
 
-#[route("/qobuz/albums", method = "GET")]
+#[route("/albums", method = "GET")]
 pub async fn album_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzAlbumQuery>,
@@ -389,7 +389,7 @@ pub struct QobuzArtistAlbumsQuery {
     track_size: Option<u8>,
 }
 
-#[route("/qobuz/artists/albums", method = "GET")]
+#[route("/artists/albums", method = "GET")]
 pub async fn artist_albums_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzArtistAlbumsQuery>,
@@ -432,7 +432,7 @@ pub struct QobuzFavoriteAlbumsQuery {
     limit: Option<u32>,
 }
 
-#[route("/qobuz/favorites/albums", method = "GET")]
+#[route("/favorites/albums", method = "GET")]
 pub async fn favorite_albums_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzFavoriteAlbumsQuery>,
@@ -471,7 +471,7 @@ pub struct QobuzAlbumTracksQuery {
     limit: Option<u32>,
 }
 
-#[route("/qobuz/albums/tracks", method = "GET")]
+#[route("/albums/tracks", method = "GET")]
 pub async fn album_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzAlbumTracksQuery>,
@@ -509,7 +509,7 @@ pub struct QobuzTrackQuery {
     track_id: u64,
 }
 
-#[route("/qobuz/tracks", method = "GET")]
+#[route("/tracks", method = "GET")]
 pub async fn track_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzTrackQuery>,
@@ -544,7 +544,7 @@ pub struct QobuzFavoriteTracksQuery {
     limit: Option<u32>,
 }
 
-#[route("/qobuz/favorites/tracks", method = "GET")]
+#[route("/favorites/tracks", method = "GET")]
 pub async fn favorite_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzFavoriteTracksQuery>,
@@ -582,7 +582,7 @@ pub struct QobuzTrackFileUrlQuery {
     track_id: u64,
 }
 
-#[route("/qobuz/track/url", method = "GET")]
+#[route("/track/url", method = "GET")]
 pub async fn track_file_url_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzTrackFileUrlQuery>,
@@ -622,7 +622,7 @@ pub struct QobuzSearchQuery {
     limit: Option<usize>,
 }
 
-#[route("/qobuz/search", method = "GET")]
+#[route("/search", method = "GET")]
 pub async fn search_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzSearchQuery>,

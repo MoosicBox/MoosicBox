@@ -45,7 +45,7 @@ impl From<ScanError> for actix_web::Error {
     }
 }
 
-#[route("/upnp/scan-devices", method = "GET")]
+#[route("/scan-devices", method = "GET")]
 pub async fn scan_devices_endpoint() -> Result<Json<Vec<UpnpDevice>>> {
     Ok(Json(scan_devices().await?))
 }
@@ -58,7 +58,7 @@ pub struct GetTransportInfoQuery {
     instance_id: u32,
 }
 
-#[route("/upnp/transport-info", method = "GET")]
+#[route("/transport-info", method = "GET")]
 pub async fn get_transport_info_endpoint(
     query: web::Query<GetTransportInfoQuery>,
 ) -> Result<Json<TransportInfo>> {
@@ -82,7 +82,7 @@ pub struct GetMediaInfoQuery {
     instance_id: u32,
 }
 
-#[route("/upnp/media-info", method = "GET")]
+#[route("/media-info", method = "GET")]
 pub async fn get_media_info_endpoint(
     query: web::Query<GetMediaInfoQuery>,
 ) -> Result<Json<MediaInfo>> {
@@ -106,7 +106,7 @@ pub struct GetPositionInfoQuery {
     instance_id: u32,
 }
 
-#[route("/upnp/position-info", method = "GET")]
+#[route("/position-info", method = "GET")]
 pub async fn get_position_info_endpoint(
     query: web::Query<GetPositionInfoQuery>,
 ) -> Result<Json<PositionInfo>> {
@@ -131,7 +131,7 @@ pub struct GetVolumeQuery {
     instance_id: u32,
 }
 
-#[route("/upnp/volume", method = "GET")]
+#[route("/volume", method = "GET")]
 pub async fn get_volume_endpoint(
     query: web::Query<GetVolumeQuery>,
 ) -> Result<Json<HashMap<String, String>>> {
@@ -163,7 +163,7 @@ pub struct SetVolumeQuery {
     value: u8,
 }
 
-#[route("/upnp/volume", method = "POST")]
+#[route("/volume", method = "POST")]
 pub async fn set_volume_endpoint(
     query: web::Query<SetVolumeQuery>,
 ) -> Result<Json<HashMap<String, String>>> {
@@ -194,7 +194,7 @@ pub struct SubscribeQuery {
     service_id: String,
 }
 
-#[route("/upnp/subscribe", method = "POST")]
+#[route("/subscribe", method = "POST")]
 pub async fn subscribe_endpoint(query: web::Query<SubscribeQuery>) -> Result<Json<String>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
         get_device_and_service(udn, &query.service_id)?
@@ -226,7 +226,7 @@ pub struct PauseQuery {
     instance_id: u32,
 }
 
-#[route("/upnp/pause", method = "POST")]
+#[route("/pause", method = "POST")]
 pub async fn pause_endpoint(
     query: web::Query<PauseQuery>,
 ) -> Result<Json<HashMap<String, String>>> {
@@ -251,7 +251,7 @@ pub struct PlayQuery {
     instance_id: u32,
 }
 
-#[route("/upnp/play", method = "POST")]
+#[route("/play", method = "POST")]
 pub async fn play_endpoint(query: web::Query<PlayQuery>) -> Result<Json<HashMap<String, String>>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
         get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")?
@@ -281,7 +281,7 @@ pub struct SeekQuery {
     unit: Option<String>,
 }
 
-#[route("/upnp/seek", method = "POST")]
+#[route("/seek", method = "POST")]
 pub async fn seek_endpoint(query: web::Query<SeekQuery>) -> Result<Json<HashMap<String, String>>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
         get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")?

@@ -163,7 +163,7 @@ pub struct YtDeviceAuthorizationQuery {
     open: Option<bool>,
 }
 
-#[route("/yt/auth/device-authorization", method = "POST")]
+#[route("/auth/device-authorization", method = "POST")]
 pub async fn device_authorization_endpoint(
     query: web::Query<YtDeviceAuthorizationQuery>,
 ) -> Result<Json<Value>> {
@@ -189,7 +189,7 @@ pub struct YtDeviceAuthorizationTokenQuery {
     persist: Option<bool>,
 }
 
-#[route("/yt/auth/device-authorization/token", method = "POST")]
+#[route("/auth/device-authorization/token", method = "POST")]
 pub async fn device_authorization_token_endpoint(
     query: web::Query<YtDeviceAuthorizationTokenQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
@@ -224,7 +224,7 @@ pub struct YtTrackFileUrlQuery {
     track_id: u64,
 }
 
-#[route("/yt/track/url", method = "GET")]
+#[route("/track/url", method = "GET")]
 pub async fn track_file_url_endpoint(
     req: HttpRequest,
     query: web::Query<YtTrackFileUrlQuery>,
@@ -258,7 +258,7 @@ pub struct YtTrackPlaybackInfoQuery {
     track_id: u64,
 }
 
-#[route("/yt/track/playback-info", method = "GET")]
+#[route("/track/playback-info", method = "GET")]
 pub async fn track_playback_info_endpoint(
     req: HttpRequest,
     query: web::Query<YtTrackPlaybackInfoQuery>,
@@ -298,7 +298,7 @@ pub struct YtFavoriteArtistsQuery {
     user_id: Option<u64>,
 }
 
-#[route("/yt/favorites/artists", method = "GET")]
+#[route("/favorites/artists", method = "GET")]
 pub async fn favorite_artists_endpoint(
     req: HttpRequest,
     query: web::Query<YtFavoriteArtistsQuery>,
@@ -343,7 +343,7 @@ pub struct YtAddFavoriteArtistsQuery {
     user_id: Option<u64>,
 }
 
-#[route("/yt/favorites/artists", method = "POST")]
+#[route("/favorites/artists", method = "POST")]
 pub async fn add_favorite_artist_endpoint(
     req: HttpRequest,
     query: web::Query<YtAddFavoriteArtistsQuery>,
@@ -385,7 +385,7 @@ pub struct YtRemoveFavoriteArtistsQuery {
     user_id: Option<u64>,
 }
 
-#[route("/yt/favorites/artists", method = "DELETE")]
+#[route("/favorites/artists", method = "DELETE")]
 pub async fn remove_favorite_artist_endpoint(
     req: HttpRequest,
     query: web::Query<YtRemoveFavoriteArtistsQuery>,
@@ -430,7 +430,7 @@ pub struct YtFavoriteAlbumsQuery {
     user_id: Option<u64>,
 }
 
-#[route("/yt/favorites/albums", method = "GET")]
+#[route("/favorites/albums", method = "GET")]
 pub async fn favorite_albums_endpoint(
     req: HttpRequest,
     query: web::Query<YtFavoriteAlbumsQuery>,
@@ -475,7 +475,7 @@ pub struct YtAddFavoriteAlbumsQuery {
     user_id: Option<u64>,
 }
 
-#[route("/yt/favorites/albums", method = "POST")]
+#[route("/favorites/albums", method = "POST")]
 pub async fn add_favorite_album_endpoint(
     req: HttpRequest,
     query: web::Query<YtAddFavoriteAlbumsQuery>,
@@ -517,7 +517,7 @@ pub struct YtRemoveFavoriteAlbumsQuery {
     user_id: Option<u64>,
 }
 
-#[route("/yt/favorites/albums", method = "DELETE")]
+#[route("/favorites/albums", method = "DELETE")]
 pub async fn remove_favorite_album_endpoint(
     req: HttpRequest,
     query: web::Query<YtRemoveFavoriteAlbumsQuery>,
@@ -559,7 +559,7 @@ pub struct YtAddFavoriteTracksQuery {
     user_id: Option<u64>,
 }
 
-#[route("/yt/favorites/tracks", method = "POST")]
+#[route("/favorites/tracks", method = "POST")]
 pub async fn add_favorite_track_endpoint(
     req: HttpRequest,
     query: web::Query<YtAddFavoriteTracksQuery>,
@@ -601,7 +601,7 @@ pub struct YtRemoveFavoriteTracksQuery {
     user_id: Option<u64>,
 }
 
-#[route("/yt/favorites/tracks", method = "DELETE")]
+#[route("/favorites/tracks", method = "DELETE")]
 pub async fn remove_favorite_track_endpoint(
     req: HttpRequest,
     query: web::Query<YtRemoveFavoriteTracksQuery>,
@@ -646,7 +646,7 @@ pub struct YtFavoriteTracksQuery {
     user_id: Option<u64>,
 }
 
-#[route("/yt/favorites/tracks", method = "GET")]
+#[route("/favorites/tracks", method = "GET")]
 pub async fn favorite_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<YtFavoriteTracksQuery>,
@@ -712,7 +712,7 @@ impl From<AlbumType> for YtAlbumType {
     }
 }
 
-#[route("/yt/artists/albums", method = "GET")]
+#[route("/artists/albums", method = "GET")]
 pub async fn artist_albums_endpoint(
     req: HttpRequest,
     query: web::Query<YtArtistAlbumsQuery>,
@@ -757,7 +757,7 @@ pub struct YtAlbumTracksQuery {
     device_type: Option<YtDeviceType>,
 }
 
-#[route("/yt/albums/tracks", method = "GET")]
+#[route("/albums/tracks", method = "GET")]
 pub async fn album_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<YtAlbumTracksQuery>,
@@ -809,7 +809,7 @@ pub struct YtAlbumQuery {
     device_type: Option<YtDeviceType>,
 }
 
-#[route("/yt/albums", method = "GET")]
+#[route("/albums", method = "GET")]
 pub async fn album_endpoint(
     req: HttpRequest,
     query: web::Query<YtAlbumQuery>,
@@ -847,7 +847,7 @@ pub struct YtArtistQuery {
     device_type: Option<YtDeviceType>,
 }
 
-#[route("/yt/artists", method = "GET")]
+#[route("/artists", method = "GET")]
 pub async fn artist_endpoint(
     req: HttpRequest,
     query: web::Query<YtArtistQuery>,
@@ -885,7 +885,7 @@ pub struct YtTrackQuery {
     device_type: Option<YtDeviceType>,
 }
 
-#[route("/yt/tracks", method = "GET")]
+#[route("/tracks", method = "GET")]
 pub async fn track_endpoint(
     req: HttpRequest,
     query: web::Query<YtTrackQuery>,
@@ -921,7 +921,7 @@ pub struct YtSearchQuery {
     limit: Option<usize>,
 }
 
-#[route("/yt/search", method = "GET")]
+#[route("/search", method = "GET")]
 pub async fn search_endpoint(
     query: web::Query<YtSearchQuery>,
 ) -> Result<Json<ApiSearchResultsResponse>> {

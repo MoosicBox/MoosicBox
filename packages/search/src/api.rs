@@ -148,7 +148,7 @@ impl ApiGlobalSearchResult {
     }
 }
 
-#[get("/search/global-search")]
+#[get("/global-search")]
 pub async fn search_global_search_endpoint(
     query: web::Query<SearchGlobalSearchQuery>,
 ) -> Result<Json<ApiSearchResultsResponse>> {
@@ -199,7 +199,7 @@ pub struct SearchRawGlobalSearchQuery {
     limit: Option<usize>,
 }
 
-#[get("/search/raw-global-search")]
+#[get("/raw-global-search")]
 pub async fn search_raw_global_search_endpoint(
     query: web::Query<SearchRawGlobalSearchQuery>,
 ) -> Result<Json<ApiRawSearchResultsResponse>> {

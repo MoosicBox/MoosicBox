@@ -164,7 +164,7 @@ pub struct TidalDeviceAuthorizationQuery {
     open: Option<bool>,
 }
 
-#[route("/tidal/auth/device-authorization", method = "POST")]
+#[route("/auth/device-authorization", method = "POST")]
 pub async fn device_authorization_endpoint(
     query: web::Query<TidalDeviceAuthorizationQuery>,
 ) -> Result<Json<Value>> {
@@ -190,7 +190,7 @@ pub struct TidalDeviceAuthorizationTokenQuery {
     persist: Option<bool>,
 }
 
-#[route("/tidal/auth/device-authorization/token", method = "POST")]
+#[route("/auth/device-authorization/token", method = "POST")]
 pub async fn device_authorization_token_endpoint(
     query: web::Query<TidalDeviceAuthorizationTokenQuery>,
     #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
@@ -225,7 +225,7 @@ pub struct TidalTrackFileUrlQuery {
     track_id: u64,
 }
 
-#[route("/tidal/track/url", method = "GET")]
+#[route("/track/url", method = "GET")]
 pub async fn track_file_url_endpoint(
     req: HttpRequest,
     query: web::Query<TidalTrackFileUrlQuery>,
@@ -259,7 +259,7 @@ pub struct TidalTrackPlaybackInfoQuery {
     track_id: u64,
 }
 
-#[route("/tidal/track/playback-info", method = "GET")]
+#[route("/track/playback-info", method = "GET")]
 pub async fn track_playback_info_endpoint(
     req: HttpRequest,
     query: web::Query<TidalTrackPlaybackInfoQuery>,
@@ -299,7 +299,7 @@ pub struct TidalFavoriteArtistsQuery {
     user_id: Option<u64>,
 }
 
-#[route("/tidal/favorites/artists", method = "GET")]
+#[route("/favorites/artists", method = "GET")]
 pub async fn favorite_artists_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteArtistsQuery>,
@@ -344,7 +344,7 @@ pub struct TidalAddFavoriteArtistsQuery {
     user_id: Option<u64>,
 }
 
-#[route("/tidal/favorites/artists", method = "POST")]
+#[route("/favorites/artists", method = "POST")]
 pub async fn add_favorite_artist_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAddFavoriteArtistsQuery>,
@@ -386,7 +386,7 @@ pub struct TidalRemoveFavoriteArtistsQuery {
     user_id: Option<u64>,
 }
 
-#[route("/tidal/favorites/artists", method = "DELETE")]
+#[route("/favorites/artists", method = "DELETE")]
 pub async fn remove_favorite_artist_endpoint(
     req: HttpRequest,
     query: web::Query<TidalRemoveFavoriteArtistsQuery>,
@@ -431,7 +431,7 @@ pub struct TidalFavoriteAlbumsQuery {
     user_id: Option<u64>,
 }
 
-#[route("/tidal/favorites/albums", method = "GET")]
+#[route("/favorites/albums", method = "GET")]
 pub async fn favorite_albums_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteAlbumsQuery>,
@@ -476,7 +476,7 @@ pub struct TidalAddFavoriteAlbumsQuery {
     user_id: Option<u64>,
 }
 
-#[route("/tidal/favorites/albums", method = "POST")]
+#[route("/favorites/albums", method = "POST")]
 pub async fn add_favorite_album_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAddFavoriteAlbumsQuery>,
@@ -518,7 +518,7 @@ pub struct TidalRemoveFavoriteAlbumsQuery {
     user_id: Option<u64>,
 }
 
-#[route("/tidal/favorites/albums", method = "DELETE")]
+#[route("/favorites/albums", method = "DELETE")]
 pub async fn remove_favorite_album_endpoint(
     req: HttpRequest,
     query: web::Query<TidalRemoveFavoriteAlbumsQuery>,
@@ -560,7 +560,7 @@ pub struct TidalAddFavoriteTracksQuery {
     user_id: Option<u64>,
 }
 
-#[route("/tidal/favorites/tracks", method = "POST")]
+#[route("/favorites/tracks", method = "POST")]
 pub async fn add_favorite_track_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAddFavoriteTracksQuery>,
@@ -602,7 +602,7 @@ pub struct TidalRemoveFavoriteTracksQuery {
     user_id: Option<u64>,
 }
 
-#[route("/tidal/favorites/tracks", method = "DELETE")]
+#[route("/favorites/tracks", method = "DELETE")]
 pub async fn remove_favorite_track_endpoint(
     req: HttpRequest,
     query: web::Query<TidalRemoveFavoriteTracksQuery>,
@@ -647,7 +647,7 @@ pub struct TidalFavoriteTracksQuery {
     user_id: Option<u64>,
 }
 
-#[route("/tidal/favorites/tracks", method = "GET")]
+#[route("/favorites/tracks", method = "GET")]
 pub async fn favorite_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteTracksQuery>,
@@ -713,7 +713,7 @@ impl From<AlbumType> for TidalAlbumType {
     }
 }
 
-#[route("/tidal/artists/albums", method = "GET")]
+#[route("/artists/albums", method = "GET")]
 pub async fn artist_albums_endpoint(
     req: HttpRequest,
     query: web::Query<TidalArtistAlbumsQuery>,
@@ -758,7 +758,7 @@ pub struct TidalAlbumTracksQuery {
     device_type: Option<TidalDeviceType>,
 }
 
-#[route("/tidal/albums/tracks", method = "GET")]
+#[route("/albums/tracks", method = "GET")]
 pub async fn album_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAlbumTracksQuery>,
@@ -810,7 +810,7 @@ pub struct TidalAlbumQuery {
     device_type: Option<TidalDeviceType>,
 }
 
-#[route("/tidal/albums", method = "GET")]
+#[route("/albums", method = "GET")]
 pub async fn album_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAlbumQuery>,
@@ -848,7 +848,7 @@ pub struct TidalArtistQuery {
     device_type: Option<TidalDeviceType>,
 }
 
-#[route("/tidal/artists", method = "GET")]
+#[route("/artists", method = "GET")]
 pub async fn artist_endpoint(
     req: HttpRequest,
     query: web::Query<TidalArtistQuery>,
@@ -886,7 +886,7 @@ pub struct TidalTrackQuery {
     device_type: Option<TidalDeviceType>,
 }
 
-#[route("/tidal/tracks", method = "GET")]
+#[route("/tracks", method = "GET")]
 pub async fn track_endpoint(
     req: HttpRequest,
     query: web::Query<TidalTrackQuery>,
@@ -930,7 +930,7 @@ pub struct TidalSearchQuery {
     device_type: Option<TidalDeviceType>,
 }
 
-#[route("/tidal/search", method = "GET")]
+#[route("/search", method = "GET")]
 pub async fn search_endpoint(
     req: HttpRequest,
     query: web::Query<TidalSearchQuery>,
