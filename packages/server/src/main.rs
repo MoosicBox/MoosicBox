@@ -47,6 +47,11 @@ static MUSIC_API_STATE: Lazy<std::sync::RwLock<Option<MusicApiState>>> =
 static LIBRARY_API_STATE: Lazy<std::sync::RwLock<Option<moosicbox_library::LibraryMusicApiState>>> =
     Lazy::new(|| std::sync::RwLock::new(None));
 
+#[cfg(feature = "openapi")]
+#[derive(utoipa::OpenApi)]
+#[openapi()]
+struct ApiDoc;
+
 #[allow(clippy::too_many_lines)]
 fn main() -> std::io::Result<()> {
     if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {
@@ -295,6 +300,54 @@ fn main() -> std::io::Result<()> {
         #[cfg(feature = "upnp")]
         moosicbox_task::spawn("server: upnp", moosicbox_upnp::scan_devices());
 
+        #[cfg(feature = "openapi")]
+        let openapi = {
+            use utoipa::{openapi::OpenApi, OpenApi as _};
+
+            #[allow(unused)]
+            fn nest_api(api: OpenApi, path: &str, mut nested: OpenApi) -> OpenApi {
+                nested.paths.paths.iter_mut().for_each(|(path, item)| {
+                    item.operations.iter_mut().for_each(|(_, operation)| {
+                        operation.operation_id = Some(path.to_owned());
+                    });
+                });
+                nested.paths.paths.iter_mut().for_each(|(_, item)| {
+                    if let Some(key) = item
+                        .operations
+                        .clone()
+                        .iter()
+                        .find(|(_key, operation)| {
+                            operation
+                                .tags
+                                .as_ref()
+                                .is_some_and(|x| x.iter().any(|x| x == "head"))
+                        })
+                        .map(|x| x.0)
+                    {
+                        let mut operation = {
+                            let operation = item.operations.get_mut(key).unwrap();
+                            let tags = operation.tags.as_mut().unwrap();
+                            tags.remove(tags.iter().position(|x| x == "head").unwrap());
+                            operation.clone()
+                        };
+                        operation.operation_id = operation
+                            .operation_id
+                            .as_ref()
+                            .map(|x| format!("{x} (HEAD)"));
+                        item.operations
+                            .insert(utoipa::openapi::PathItemType::Head, operation);
+                    }
+                });
+
+                api.nest(path, nested)
+            }
+
+            #[allow(clippy::let_and_return)]
+            let api = ApiDoc::openapi();
+
+            api
+        };
+
         let app = move || {
             let app_data = AppState {
                 tunnel_host: tunnel_host.clone(),
@@ -337,6 +390,28 @@ fn main() -> std::io::Result<()> {
             #[cfg(feature = "library")]
             {
                 app = app.app_data(web::Data::new(library_api_state));
+            }
+
+            #[cfg(feature = "openapi")]
+            {
+                use utoipa_redoc::Servable as _;
+                use utoipa_scalar::Servable as _;
+
+                app = app
+                    .service(utoipa_redoc::Redoc::with_url("/redoc", openapi.clone()))
+                    .service(
+                        utoipa_swagger_ui::SwaggerUi::new("/swagger-ui/{_:.*}")
+                            .url("/api-docs/openapi.json", openapi.clone()),
+                    )
+                    // There is no need to create RapiDoc::with_openapi because the OpenApi is served
+                    // via SwaggerUi. Instead we only make rapidoc to point to the existing doc.
+                    //
+                    // If we wanted to serve the schema, the following would work:
+                    // .service(RapiDoc::with_openapi("/api-docs/openapi2.json", openapi.clone()).path("/rapidoc"))
+                    .service(
+                        utoipa_rapidoc::RapiDoc::new("/api-docs/openapi.json").path("/rapidoc"),
+                    )
+                    .service(utoipa_scalar::Scalar::with_url("/scalar", openapi.clone()));
             }
 
             #[cfg(feature = "scan-api")]

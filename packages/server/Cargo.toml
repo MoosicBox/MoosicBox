@@ -73,6 +73,12 @@ moosicbox_yt = { path = "../yt", default-features = false, features = [
     "db",
 ], optional = true }
 
+utoipa            = { workspace = true, optional = true }
+utoipa-rapidoc    = { workspace = true, optional = true }
+utoipa-redoc      = { workspace = true, optional = true }
+utoipa-scalar     = { workspace = true, optional = true }
+utoipa-swagger-ui = { workspace = true, optional = true }
+
 # Postgres
 aws-config = { workspace = true, optional = true }
 aws-sdk-ssm = { workspace = true, optional = true }
@@ -125,6 +131,7 @@ default = [
     "cpal",
     "flac",
     "mp3",
+    "openapi",
     "opus",
     "postgres-native-tls",
     "postgres-openssl",
@@ -248,3 +255,11 @@ search-api     = ["dep:moosicbox_search", "search"]
 tidal-api      = ["dep:moosicbox_tidal", "tidal"]
 upnp-api       = ["dep:moosicbox_upnp", "upnp"]
 yt-api         = ["dep:moosicbox_yt", "yt"]
+
+openapi = [
+    "dep:utoipa",
+    "dep:utoipa-rapidoc",
+    "dep:utoipa-redoc",
+    "dep:utoipa-scalar",
+    "dep:utoipa-swagger-ui",
+]
