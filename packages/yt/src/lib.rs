@@ -40,6 +40,7 @@ use url::form_urlencoded;
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum YtDeviceType {
     Browser,
 }
@@ -684,6 +685,7 @@ async fn refetch_access_token(
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum YtArtistOrder {
     Date,
 }
@@ -691,6 +693,7 @@ pub enum YtArtistOrder {
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum YtArtistOrderDirection {
     Asc,
     Desc,
@@ -944,6 +947,7 @@ pub async fn remove_favorite_artist(
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum YtAlbumOrder {
     Date,
 }
@@ -957,6 +961,7 @@ impl From<AlbumSort> for YtAlbumOrder {
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum YtAlbumOrderDirection {
     Asc,
     Desc,
@@ -1269,6 +1274,7 @@ pub async fn remove_favorite_album(
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum YtTrackOrder {
     Date,
 }
@@ -1276,6 +1282,7 @@ pub enum YtTrackOrder {
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum YtTrackOrderDirection {
     Asc,
     Desc,
@@ -1915,6 +1922,7 @@ pub async fn search(
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum YtAudioQuality {
     High,
     Lossless,
@@ -1971,6 +1979,7 @@ pub async fn track_file_url(
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct YtTrackPlaybackInfo {
     pub album_peak_amplitude: f64,
     pub album_replay_gain: f64,

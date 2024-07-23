@@ -26,6 +26,45 @@ use crate::{
     YtTrackOrder, YtTrackOrderDirection, YtTrackPlaybackInfo, YtTrackPlaybackInfoError,
 };
 
+#[cfg(feature = "openapi")]
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    tags((name = "YouTube Music")),
+    paths(
+        device_authorization_endpoint,
+        device_authorization_token_endpoint,
+        track_file_url_endpoint,
+        track_playback_info_endpoint,
+        favorite_artists_endpoint,
+        add_favorite_artist_endpoint,
+        remove_favorite_artist_endpoint,
+        favorite_albums_endpoint,
+        add_favorite_album_endpoint,
+        remove_favorite_album_endpoint,
+        add_favorite_track_endpoint,
+        remove_favorite_track_endpoint,
+        favorite_tracks_endpoint,
+        artist_albums_endpoint,
+        album_tracks_endpoint,
+        album_endpoint,
+        artist_endpoint,
+        track_endpoint,
+        search_endpoint,
+    ),
+    components(schemas(
+        YtTrackPlaybackInfo,
+        YtDeviceType,
+        YtAudioQuality,
+        YtArtistOrder,
+        YtArtistOrderDirection,
+        YtAlbumOrder,
+        YtAlbumOrderDirection,
+        YtTrackOrder,
+        YtTrackOrderDirection,
+    ))
+)]
+pub struct Api;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
@@ -163,6 +202,25 @@ pub struct YtDeviceAuthorizationQuery {
     open: Option<bool>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["YouTube Music"],
+        post,
+        path = "/auth/device-authorization",
+        description = "Begin the authorization process for YouTube Music",
+        params(
+            ("client_id" = String, Query, description = "YouTube Music client ID to use"),
+            ("open" = Option<bool>, Query, description = "Open the authorization page in a browser"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "URL and Device code used in the YouTube Music authorization flow",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/auth/device-authorization", method = "POST")]
 pub async fn device_authorization_endpoint(
     query: web::Query<YtDeviceAuthorizationQuery>,
@@ -189,6 +247,26 @@ pub struct YtDeviceAuthorizationTokenQuery {
     persist: Option<bool>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["YouTube Music"],
+        post,
+        path = "/auth/device-authorization/token",
+        description = "Finish the authorization process for YouTube Music",
+        params(
+            ("client_id" = String, Query, description = "YouTube Music client ID to use"),
+            ("client_secret" = String, Query, description = "YouTube Music client secret to use"),
+            ("device_code" = String, Query, description = "YouTube Music device code to use"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Access token and refresh token used in the YouTube Music authentication",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/auth/device-authorization/token", method = "POST")]
 pub async fn device_authorization_token_endpoint(
     query: web::Query<YtDeviceAuthorizationTokenQuery>,
@@ -224,6 +302,25 @@ pub struct YtTrackFileUrlQuery {
     track_id: u64,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["YouTube Music"],
+        get,
+        path = "/track/url",
+        description = "Get YouTube Music track file stream URL",
+        params(
+            ("audioQuality" = TidalAudioQuality, Query, description = "Audio quality to fetch the file stream for"),
+            ("trackId" = u64, Query, description = "YouTube Music track ID to fetch track stream URL for"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "YouTube Music track URL for the specified ID",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/track/url", method = "GET")]
 pub async fn track_file_url_endpoint(
     req: HttpRequest,
@@ -258,6 +355,25 @@ pub struct YtTrackPlaybackInfoQuery {
     track_id: u64,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["YouTube Music"],
+        get,
+        path = "/track/playback-info",
+        description = "Get YouTube Music track metadata info",
+        params(
+            ("audioQuality" = TidalAudioQuality, Query, description = "Audio quality to fetch the track metadata for"),
+            ("trackId" = u64, Query, description = "YouTube Music track ID to fetch track metadata for"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "YouTube Music track metadata info",
+                body = TidalTrackPlaybackInfo,
+            )
+        )
+    )
+)]
 #[route("/track/playback-info", method = "GET")]
 pub async fn track_playback_info_endpoint(
     req: HttpRequest,
@@ -298,6 +414,31 @@ pub struct YtFavoriteArtistsQuery {
     user_id: Option<u64>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["YouTube Music"],
+        get,
+        path = "/favorites/artists",
+        description = "Get YouTube Music favorited artists",
+        params(
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+            ("order" = Option<TidalArtistOrder>, Query, description = "Sort property to sort the artists by"),
+            ("orderDirection" = Option<TidalAlbumOrderDirection>, Query, description = "Sort order direction to order the artists by"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("userId" = Option<u64>, Query, description = "User ID making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Page of YouTube Music favorited artists",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/artists", method = "GET")]
 pub async fn favorite_artists_endpoint(
     req: HttpRequest,
@@ -343,6 +484,28 @@ pub struct YtAddFavoriteArtistsQuery {
     user_id: Option<u64>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["YouTube Music"],
+        post,
+        path = "/favorites/artists",
+        description = "Favorite a YouTube Music artist",
+        params(
+            ("artistId" = u64, Query, description = "YouTube Music artist ID to favorite"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("userId" = Option<u64>, Query, description = "User ID making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/artists", method = "POST")]
 pub async fn add_favorite_artist_endpoint(
     req: HttpRequest,
@@ -385,6 +548,28 @@ pub struct YtRemoveFavoriteArtistsQuery {
     user_id: Option<u64>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["YouTube Music"],
+        delete,
+        path = "/favorites/artists",
+        description = "Remove YouTube Music artist from favorites",
+        params(
+            ("artistId" = u64, Query, description = "YouTube Music artist ID to remove from favorites"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("userId" = Option<u64>, Query, description = "User ID making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/artists", method = "DELETE")]
 pub async fn remove_favorite_artist_endpoint(
     req: HttpRequest,
@@ -430,6 +615,31 @@ pub struct YtFavoriteAlbumsQuery {
     user_id: Option<u64>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["YouTube Music"],
+        get,
+        path = "/favorites/albums",
+        description = "Get YouTube Music favorited albums",
+        params(
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+            ("order" = Option<TidalAlbumOrder>, Query, description = "Sort property to sort the albums by"),
+            ("orderDirection" = Option<TidalAlbumOrderDirection>, Query, description = "Sort order direction to order the albums by"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("userId" = Option<u64>, Query, description = "User ID making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Page of YouTube Music favorited albums",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/albums", method = "GET")]
 pub async fn favorite_albums_endpoint(
     req: HttpRequest,
@@ -475,6 +685,28 @@ pub struct YtAddFavoriteAlbumsQuery {
     user_id: Option<u64>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["YouTube Music"],
+        post,
+        path = "/favorites/albums",
+        description = "Favorite a YouTube Music album",
+        params(
+            ("albumId" = u64, Query, description = "YouTube Music album ID to favorite"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("userId" = Option<u64>, Query, description = "User ID making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/albums", method = "POST")]
 pub async fn add_favorite_album_endpoint(
     req: HttpRequest,
@@ -517,6 +749,28 @@ pub struct YtRemoveFavoriteAlbumsQuery {
     user_id: Option<u64>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["YouTube Music"],
+        delete,
+        path = "/favorites/albums",
+        description = "Remove YouTube Music album from favorites",
+        params(
+            ("albumId" = u64, Query, description = "YouTube Music album ID to remove from favorites"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("userId" = Option<u64>, Query, description = "User ID making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/albums", method = "DELETE")]
 pub async fn remove_favorite_album_endpoint(
     req: HttpRequest,
@@ -559,6 +813,28 @@ pub struct YtAddFavoriteTracksQuery {
     user_id: Option<u64>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["YouTube Music"],
+        post,
+        path = "/favorites/tracks",
+        description = "Favorite a YouTube Music track",
+        params(
+            ("trackId" = u64, Query, description = "YouTube Music track ID to favorite"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("userId" = Option<u64>, Query, description = "User ID making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/tracks", method = "POST")]
 pub async fn add_favorite_track_endpoint(
     req: HttpRequest,
@@ -601,6 +877,28 @@ pub struct YtRemoveFavoriteTracksQuery {
     user_id: Option<u64>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["YouTube Music"],
+        delete,
+        path = "/favorites/tracks",
+        description = "Remove YouTube Music track from favorites",
+        params(
+            ("trackId" = u64, Query, description = "YouTube Music track ID to remove from favorites"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("userId" = Option<u64>, Query, description = "User ID making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/tracks", method = "DELETE")]
 pub async fn remove_favorite_track_endpoint(
     req: HttpRequest,
@@ -646,6 +944,31 @@ pub struct YtFavoriteTracksQuery {
     user_id: Option<u64>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["YouTube Music"],
+        get,
+        path = "/favorites/tracks",
+        description = "Get YouTube Music favorited tracks",
+        params(
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+            ("order" = Option<TidalTrackOrder>, Query, description = "Sort property to sort the tracks by"),
+            ("orderDirection" = Option<TidalTrackOrderDirection>, Query, description = "Sort order direction to order the tracks by"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("userId" = Option<u64>, Query, description = "User ID making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Page of YouTube Music favorited tracks",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/tracks", method = "GET")]
 pub async fn favorite_tracks_endpoint(
     req: HttpRequest,
@@ -712,6 +1035,30 @@ impl From<AlbumType> for YtAlbumType {
     }
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["YouTube Music"],
+        get,
+        path = "/artists/albums",
+        description = "Get YouTube Music albums for the specified artist",
+        params(
+            ("artistId" = u64, Query, description = "YouTube Music artist ID to search for albums for"),
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+            ("albumType" = Option<AlbumType>, Query, description = "Album type to filter to"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Page of YouTube Music albums for an artist",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/artists/albums", method = "GET")]
 pub async fn artist_albums_endpoint(
     req: HttpRequest,
@@ -757,6 +1104,29 @@ pub struct YtAlbumTracksQuery {
     device_type: Option<YtDeviceType>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["YouTube Music"],
+        get,
+        path = "/albums/tracks",
+        description = "Get YouTube Music tracks for the specified album",
+        params(
+            ("albumId" = u64, Query, description = "YouTube Music album ID to search for tracks for"),
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Page of YouTube Music tracks for an album",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/albums/tracks", method = "GET")]
 pub async fn album_tracks_endpoint(
     req: HttpRequest,
@@ -809,6 +1179,27 @@ pub struct YtAlbumQuery {
     device_type: Option<YtDeviceType>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["YouTube Music"],
+        get,
+        path = "/albums",
+        description = "Get YouTube Music album for the specified ID",
+        params(
+            ("albumId" = u64, Query, description = "YouTube Music album ID to fetch"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "YouTube Music album for the specified ID",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/albums", method = "GET")]
 pub async fn album_endpoint(
     req: HttpRequest,
@@ -847,6 +1238,27 @@ pub struct YtArtistQuery {
     device_type: Option<YtDeviceType>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["YouTube Music"],
+        get,
+        path = "/artists",
+        description = "Get YouTube Music artist for the specified ID",
+        params(
+            ("artistId" = u64, Query, description = "YouTube Music artist ID to fetch"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "YouTube Music artist for the specified ID",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/artists", method = "GET")]
 pub async fn artist_endpoint(
     req: HttpRequest,
@@ -885,6 +1297,27 @@ pub struct YtTrackQuery {
     device_type: Option<YtDeviceType>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["YouTube Music"],
+        get,
+        path = "/tracks",
+        description = "Get YouTube Music track for the specified ID",
+        params(
+            ("trackId" = u64, Query, description = "YouTube Music track ID to fetch"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "YouTube Music track for the specified ID",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/tracks", method = "GET")]
 pub async fn track_endpoint(
     req: HttpRequest,
@@ -921,6 +1354,26 @@ pub struct YtSearchQuery {
     limit: Option<usize>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["YouTube Music"],
+        get,
+        path = "/search",
+        description = "Search the YouTube Music library for artists/albums/tracks that fuzzy match the query",
+        params(
+            ("query" = String, Query, description = "The search query"),
+            ("offset" = Option<usize>, Query, description = "Page offset"),
+            ("limit" = Option<usize>, Query, description = "Page limit"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "A page of matches for the given search query",
+                body = ApiSearchResultsResponse,
+            )
+        )
+    )
+)]
 #[route("/search", method = "GET")]
 pub async fn search_endpoint(
     query: web::Query<YtSearchQuery>,
