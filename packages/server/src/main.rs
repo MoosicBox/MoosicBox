@@ -341,181 +341,206 @@ fn main() -> std::io::Result<()> {
 
             #[cfg(feature = "scan-api")]
             {
-                app = app
-                    .service(moosicbox_scan::api::run_scan_endpoint)
-                    .service(moosicbox_scan::api::run_scan_path_endpoint)
-                    .service(moosicbox_scan::api::get_scan_origins_endpoint)
-                    .service(moosicbox_scan::api::enable_scan_origin_endpoint)
-                    .service(moosicbox_scan::api::disable_scan_origin_endpoint)
-                    .service(moosicbox_scan::api::get_scan_paths_endpoint)
-                    .service(moosicbox_scan::api::add_scan_path_endpoint)
-                    .service(moosicbox_scan::api::remove_scan_path_endpoint);
+                app = app.service(
+                    web::scope("/scan")
+                        .service(moosicbox_scan::api::run_scan_endpoint)
+                        .service(moosicbox_scan::api::run_scan_path_endpoint)
+                        .service(moosicbox_scan::api::get_scan_origins_endpoint)
+                        .service(moosicbox_scan::api::enable_scan_origin_endpoint)
+                        .service(moosicbox_scan::api::disable_scan_origin_endpoint)
+                        .service(moosicbox_scan::api::get_scan_paths_endpoint)
+                        .service(moosicbox_scan::api::add_scan_path_endpoint)
+                        .service(moosicbox_scan::api::remove_scan_path_endpoint),
+                );
             }
 
             #[cfg(feature = "auth-api")]
             {
-                app = app
-                    .service(moosicbox_auth::api::get_magic_token_endpoint)
-                    .service(moosicbox_auth::api::create_magic_token_endpoint);
+                app = app.service(
+                    web::scope("/auth")
+                        .service(moosicbox_auth::api::get_magic_token_endpoint)
+                        .service(moosicbox_auth::api::create_magic_token_endpoint),
+                );
             }
 
             #[cfg(feature = "downloader-api")]
             {
-                app = app
-                    .service(moosicbox_downloader::api::download_endpoint)
-                    .service(moosicbox_downloader::api::retry_download_endpoint)
-                    .service(moosicbox_downloader::api::download_tasks_endpoint);
+                app = app.service(
+                    web::scope("/downloader")
+                        .service(moosicbox_downloader::api::download_endpoint)
+                        .service(moosicbox_downloader::api::retry_download_endpoint)
+                        .service(moosicbox_downloader::api::download_tasks_endpoint),
+                );
             }
 
             #[cfg(feature = "menu-api")]
             {
-                app = app
-                    .service(moosicbox_menu::api::get_artists_endpoint)
-                    .service(moosicbox_menu::api::get_artist_endpoint)
-                    .service(moosicbox_menu::api::get_album_endpoint)
-                    .service(moosicbox_menu::api::add_album_endpoint)
-                    .service(moosicbox_menu::api::remove_album_endpoint)
-                    .service(moosicbox_menu::api::refavorite_album_endpoint)
-                    .service(moosicbox_menu::api::get_albums_endpoint)
-                    .service(moosicbox_menu::api::get_tracks_endpoint)
-                    .service(moosicbox_menu::api::get_album_tracks_endpoint)
-                    .service(moosicbox_menu::api::get_album_versions_endpoint)
-                    .service(moosicbox_menu::api::get_artist_albums_endpoint);
+                app = app.service(
+                    web::scope("/menu")
+                        .service(moosicbox_menu::api::get_artists_endpoint)
+                        .service(moosicbox_menu::api::get_artist_endpoint)
+                        .service(moosicbox_menu::api::get_album_endpoint)
+                        .service(moosicbox_menu::api::add_album_endpoint)
+                        .service(moosicbox_menu::api::remove_album_endpoint)
+                        .service(moosicbox_menu::api::refavorite_album_endpoint)
+                        .service(moosicbox_menu::api::get_albums_endpoint)
+                        .service(moosicbox_menu::api::get_tracks_endpoint)
+                        .service(moosicbox_menu::api::get_album_tracks_endpoint)
+                        .service(moosicbox_menu::api::get_album_versions_endpoint)
+                        .service(moosicbox_menu::api::get_artist_albums_endpoint),
+                );
             }
 
             #[cfg(feature = "files-api")]
             {
-                app = app
-                    .service(moosicbox_files::api::track_endpoint)
-                    .service(moosicbox_files::api::track_visualization_endpoint)
-                    .service(moosicbox_files::api::track_info_endpoint)
-                    .service(moosicbox_files::api::tracks_info_endpoint)
-                    .service(moosicbox_files::api::artist_cover_endpoint)
-                    .service(moosicbox_files::api::album_source_artwork_endpoint)
-                    .service(moosicbox_files::api::album_artwork_endpoint);
+                app = app.service(
+                    web::scope("/files")
+                        .service(moosicbox_files::api::track_endpoint)
+                        .service(moosicbox_files::api::track_visualization_endpoint)
+                        .service(moosicbox_files::api::track_info_endpoint)
+                        .service(moosicbox_files::api::tracks_info_endpoint)
+                        .service(moosicbox_files::api::artist_source_artwork_endpoint)
+                        .service(moosicbox_files::api::artist_cover_endpoint)
+                        .service(moosicbox_files::api::album_source_artwork_endpoint)
+                        .service(moosicbox_files::api::album_artwork_endpoint),
+                );
             }
 
             #[cfg(feature = "player-api")]
             {
-                app = app
-                    .service(moosicbox_player::api::play_track_endpoint)
-                    .service(moosicbox_player::api::play_tracks_endpoint)
-                    .service(moosicbox_player::api::play_album_endpoint)
-                    .service(moosicbox_player::api::pause_playback_endpoint)
-                    .service(moosicbox_player::api::resume_playback_endpoint)
-                    .service(moosicbox_player::api::update_playback_endpoint)
-                    .service(moosicbox_player::api::next_track_endpoint)
-                    .service(moosicbox_player::api::previous_track_endpoint)
-                    .service(moosicbox_player::api::stop_track_endpoint)
-                    .service(moosicbox_player::api::seek_track_endpoint)
-                    .service(moosicbox_player::api::player_status_endpoint);
+                app = app.service(
+                    web::scope("/player")
+                        .service(moosicbox_player::api::play_track_endpoint)
+                        .service(moosicbox_player::api::play_tracks_endpoint)
+                        .service(moosicbox_player::api::play_album_endpoint)
+                        .service(moosicbox_player::api::pause_playback_endpoint)
+                        .service(moosicbox_player::api::resume_playback_endpoint)
+                        .service(moosicbox_player::api::update_playback_endpoint)
+                        .service(moosicbox_player::api::next_track_endpoint)
+                        .service(moosicbox_player::api::previous_track_endpoint)
+                        .service(moosicbox_player::api::stop_track_endpoint)
+                        .service(moosicbox_player::api::seek_track_endpoint)
+                        .service(moosicbox_player::api::player_status_endpoint),
+                );
             }
 
             #[cfg(feature = "search-api")]
             {
-                app = app
-                    .service(moosicbox_search::api::search_global_search_endpoint)
-                    .service(moosicbox_search::api::search_raw_global_search_endpoint);
+                app = app.service(
+                    web::scope("/search")
+                        .service(moosicbox_search::api::search_global_search_endpoint)
+                        .service(moosicbox_search::api::search_raw_global_search_endpoint),
+                );
             }
 
             #[cfg(feature = "library-api")]
             {
-                app = app
-                    .service(moosicbox_library::api::track_file_url_endpoint)
-                    .service(moosicbox_library::api::favorite_artists_endpoint)
-                    .service(moosicbox_library::api::add_favorite_artist_endpoint)
-                    .service(moosicbox_library::api::remove_favorite_artist_endpoint)
-                    .service(moosicbox_library::api::add_favorite_album_endpoint)
-                    .service(moosicbox_library::api::remove_favorite_album_endpoint)
-                    .service(moosicbox_library::api::favorite_tracks_endpoint)
-                    .service(moosicbox_library::api::add_favorite_track_endpoint)
-                    .service(moosicbox_library::api::remove_favorite_track_endpoint)
-                    .service(moosicbox_library::api::artist_albums_endpoint)
-                    .service(moosicbox_library::api::album_tracks_endpoint)
-                    .service(moosicbox_library::api::album_endpoint)
-                    .service(moosicbox_library::api::artist_endpoint)
-                    .service(moosicbox_library::api::track_endpoint)
-                    .service(moosicbox_library::api::search_endpoint)
-                    .service(moosicbox_library::api::reindex_endpoint);
+                app = app.service(
+                    web::scope("/library")
+                        .service(moosicbox_library::api::track_file_url_endpoint)
+                        .service(moosicbox_library::api::favorite_artists_endpoint)
+                        .service(moosicbox_library::api::add_favorite_artist_endpoint)
+                        .service(moosicbox_library::api::remove_favorite_artist_endpoint)
+                        .service(moosicbox_library::api::add_favorite_album_endpoint)
+                        .service(moosicbox_library::api::remove_favorite_album_endpoint)
+                        .service(moosicbox_library::api::favorite_tracks_endpoint)
+                        .service(moosicbox_library::api::add_favorite_track_endpoint)
+                        .service(moosicbox_library::api::remove_favorite_track_endpoint)
+                        .service(moosicbox_library::api::artist_albums_endpoint)
+                        .service(moosicbox_library::api::album_tracks_endpoint)
+                        .service(moosicbox_library::api::album_endpoint)
+                        .service(moosicbox_library::api::artist_endpoint)
+                        .service(moosicbox_library::api::track_endpoint)
+                        .service(moosicbox_library::api::search_endpoint)
+                        .service(moosicbox_library::api::reindex_endpoint),
+                );
             }
 
             #[cfg(feature = "tidal-api")]
             {
-                app = app
-                    .service(moosicbox_tidal::api::device_authorization_endpoint)
-                    .service(moosicbox_tidal::api::device_authorization_token_endpoint)
-                    .service(moosicbox_tidal::api::track_file_url_endpoint)
-                    .service(moosicbox_tidal::api::track_playback_info_endpoint)
-                    .service(moosicbox_tidal::api::favorite_artists_endpoint)
-                    .service(moosicbox_tidal::api::add_favorite_artist_endpoint)
-                    .service(moosicbox_tidal::api::remove_favorite_artist_endpoint)
-                    .service(moosicbox_tidal::api::favorite_albums_endpoint)
-                    .service(moosicbox_tidal::api::add_favorite_album_endpoint)
-                    .service(moosicbox_tidal::api::remove_favorite_album_endpoint)
-                    .service(moosicbox_tidal::api::favorite_tracks_endpoint)
-                    .service(moosicbox_tidal::api::add_favorite_track_endpoint)
-                    .service(moosicbox_tidal::api::remove_favorite_track_endpoint)
-                    .service(moosicbox_tidal::api::artist_albums_endpoint)
-                    .service(moosicbox_tidal::api::album_tracks_endpoint)
-                    .service(moosicbox_tidal::api::album_endpoint)
-                    .service(moosicbox_tidal::api::artist_endpoint)
-                    .service(moosicbox_tidal::api::track_endpoint)
-                    .service(moosicbox_tidal::api::search_endpoint);
+                app = app.service(
+                    web::scope("/tidal")
+                        .service(moosicbox_tidal::api::device_authorization_endpoint)
+                        .service(moosicbox_tidal::api::device_authorization_token_endpoint)
+                        .service(moosicbox_tidal::api::track_file_url_endpoint)
+                        .service(moosicbox_tidal::api::track_playback_info_endpoint)
+                        .service(moosicbox_tidal::api::favorite_artists_endpoint)
+                        .service(moosicbox_tidal::api::add_favorite_artist_endpoint)
+                        .service(moosicbox_tidal::api::remove_favorite_artist_endpoint)
+                        .service(moosicbox_tidal::api::favorite_albums_endpoint)
+                        .service(moosicbox_tidal::api::add_favorite_album_endpoint)
+                        .service(moosicbox_tidal::api::remove_favorite_album_endpoint)
+                        .service(moosicbox_tidal::api::favorite_tracks_endpoint)
+                        .service(moosicbox_tidal::api::add_favorite_track_endpoint)
+                        .service(moosicbox_tidal::api::remove_favorite_track_endpoint)
+                        .service(moosicbox_tidal::api::artist_albums_endpoint)
+                        .service(moosicbox_tidal::api::album_tracks_endpoint)
+                        .service(moosicbox_tidal::api::album_endpoint)
+                        .service(moosicbox_tidal::api::artist_endpoint)
+                        .service(moosicbox_tidal::api::track_endpoint)
+                        .service(moosicbox_tidal::api::search_endpoint),
+                );
             }
 
             #[cfg(feature = "qobuz-api")]
             {
-                app = app
-                    .service(moosicbox_qobuz::api::user_login_endpoint)
-                    .service(moosicbox_qobuz::api::track_file_url_endpoint)
-                    .service(moosicbox_qobuz::api::favorite_artists_endpoint)
-                    .service(moosicbox_qobuz::api::favorite_albums_endpoint)
-                    .service(moosicbox_qobuz::api::favorite_tracks_endpoint)
-                    .service(moosicbox_qobuz::api::artist_albums_endpoint)
-                    .service(moosicbox_qobuz::api::album_tracks_endpoint)
-                    .service(moosicbox_qobuz::api::album_endpoint)
-                    .service(moosicbox_qobuz::api::artist_endpoint)
-                    .service(moosicbox_qobuz::api::track_endpoint)
-                    .service(moosicbox_qobuz::api::search_endpoint);
+                app = app.service(
+                    web::scope("/qobuz")
+                        .service(moosicbox_qobuz::api::user_login_endpoint)
+                        .service(moosicbox_qobuz::api::track_file_url_endpoint)
+                        .service(moosicbox_qobuz::api::favorite_artists_endpoint)
+                        .service(moosicbox_qobuz::api::favorite_albums_endpoint)
+                        .service(moosicbox_qobuz::api::favorite_tracks_endpoint)
+                        .service(moosicbox_qobuz::api::artist_albums_endpoint)
+                        .service(moosicbox_qobuz::api::album_tracks_endpoint)
+                        .service(moosicbox_qobuz::api::album_endpoint)
+                        .service(moosicbox_qobuz::api::artist_endpoint)
+                        .service(moosicbox_qobuz::api::track_endpoint)
+                        .service(moosicbox_qobuz::api::search_endpoint),
+                );
             }
 
             #[cfg(feature = "yt-api")]
             {
-                app = app
-                    .service(moosicbox_yt::api::device_authorization_endpoint)
-                    .service(moosicbox_yt::api::device_authorization_token_endpoint)
-                    .service(moosicbox_yt::api::track_file_url_endpoint)
-                    .service(moosicbox_yt::api::track_playback_info_endpoint)
-                    .service(moosicbox_yt::api::favorite_artists_endpoint)
-                    .service(moosicbox_yt::api::add_favorite_artist_endpoint)
-                    .service(moosicbox_yt::api::remove_favorite_artist_endpoint)
-                    .service(moosicbox_yt::api::favorite_albums_endpoint)
-                    .service(moosicbox_yt::api::add_favorite_album_endpoint)
-                    .service(moosicbox_yt::api::remove_favorite_album_endpoint)
-                    .service(moosicbox_yt::api::favorite_tracks_endpoint)
-                    .service(moosicbox_yt::api::add_favorite_track_endpoint)
-                    .service(moosicbox_yt::api::remove_favorite_track_endpoint)
-                    .service(moosicbox_yt::api::artist_albums_endpoint)
-                    .service(moosicbox_yt::api::album_tracks_endpoint)
-                    .service(moosicbox_yt::api::album_endpoint)
-                    .service(moosicbox_yt::api::artist_endpoint)
-                    .service(moosicbox_yt::api::track_endpoint)
-                    .service(moosicbox_yt::api::search_endpoint);
+                app = app.service(
+                    web::scope("/yt")
+                        .service(moosicbox_yt::api::device_authorization_endpoint)
+                        .service(moosicbox_yt::api::device_authorization_token_endpoint)
+                        .service(moosicbox_yt::api::track_file_url_endpoint)
+                        .service(moosicbox_yt::api::track_playback_info_endpoint)
+                        .service(moosicbox_yt::api::favorite_artists_endpoint)
+                        .service(moosicbox_yt::api::add_favorite_artist_endpoint)
+                        .service(moosicbox_yt::api::remove_favorite_artist_endpoint)
+                        .service(moosicbox_yt::api::favorite_albums_endpoint)
+                        .service(moosicbox_yt::api::add_favorite_album_endpoint)
+                        .service(moosicbox_yt::api::remove_favorite_album_endpoint)
+                        .service(moosicbox_yt::api::favorite_tracks_endpoint)
+                        .service(moosicbox_yt::api::add_favorite_track_endpoint)
+                        .service(moosicbox_yt::api::remove_favorite_track_endpoint)
+                        .service(moosicbox_yt::api::artist_albums_endpoint)
+                        .service(moosicbox_yt::api::album_tracks_endpoint)
+                        .service(moosicbox_yt::api::album_endpoint)
+                        .service(moosicbox_yt::api::artist_endpoint)
+                        .service(moosicbox_yt::api::track_endpoint)
+                        .service(moosicbox_yt::api::search_endpoint),
+                );
             }
 
             #[cfg(feature = "upnp-api")]
             {
-                app = app
-                    .service(moosicbox_upnp::api::scan_devices_endpoint)
-                    .service(moosicbox_upnp::api::get_transport_info_endpoint)
-                    .service(moosicbox_upnp::api::get_media_info_endpoint)
-                    .service(moosicbox_upnp::api::get_position_info_endpoint)
-                    .service(moosicbox_upnp::api::get_volume_endpoint)
-                    .service(moosicbox_upnp::api::set_volume_endpoint)
-                    .service(moosicbox_upnp::api::subscribe_endpoint)
-                    .service(moosicbox_upnp::api::pause_endpoint)
-                    .service(moosicbox_upnp::api::play_endpoint)
-                    .service(moosicbox_upnp::api::seek_endpoint);
+                app = app.service(
+                    web::scope("/upnp")
+                        .service(moosicbox_upnp::api::scan_devices_endpoint)
+                        .service(moosicbox_upnp::api::get_transport_info_endpoint)
+                        .service(moosicbox_upnp::api::get_media_info_endpoint)
+                        .service(moosicbox_upnp::api::get_position_info_endpoint)
+                        .service(moosicbox_upnp::api::get_volume_endpoint)
+                        .service(moosicbox_upnp::api::set_volume_endpoint)
+                        .service(moosicbox_upnp::api::subscribe_endpoint)
+                        .service(moosicbox_upnp::api::pause_endpoint)
+                        .service(moosicbox_upnp::api::play_endpoint)
+                        .service(moosicbox_upnp::api::seek_endpoint),
+                );
             }
 
             app
