@@ -93,6 +93,7 @@ pub struct ApiLibraryArtist {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ApiArtist {
     Library(ApiLibraryArtist),
 }
@@ -408,6 +409,7 @@ impl AsId for LibraryAlbum {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ApiAlbum {
     Library(ApiLibraryAlbum),
 }
@@ -628,6 +630,7 @@ enum ApiTrackInner {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ApiTrack {
     Library {
         track_id: u64,

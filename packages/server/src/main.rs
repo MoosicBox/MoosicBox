@@ -355,6 +355,8 @@ fn main() -> std::io::Result<()> {
             );
             #[cfg(feature = "files-api")]
             let api = nest_api(api, "/files", moosicbox_files::api::Api::openapi());
+            #[cfg(feature = "library-api")]
+            let api = nest_api(api, "/library", moosicbox_library::api::Api::openapi());
             api
         };
 

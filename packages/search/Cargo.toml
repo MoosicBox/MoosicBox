@@ -25,6 +25,7 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
+utoipa    = { workspace = true, optional = true }
 
 itertools  = { workspace = true }
 log        = { workspace = true }
@@ -44,9 +45,10 @@ static_init       = { workspace = true }
 test-log          = { workspace = true }
 
 [features]
-default = ["api", "db"]
+default = ["api", "db", "openapi"]
 
 fail-on-warnings = []
 
-api = ["db", "dep:actix-web"]
-db  = []
+api     = ["db", "dep:actix-web"]
+db      = []
+openapi = ["dep:utoipa"]

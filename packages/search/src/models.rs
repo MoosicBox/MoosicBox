@@ -7,6 +7,7 @@ use tantivy::schema::NamedFieldDocument;
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiGlobalArtistSearchResult {
     pub artist_id: Id,
     pub title: String,
@@ -16,6 +17,7 @@ pub struct ApiGlobalArtistSearchResult {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiGlobalAlbumSearchResult {
     pub artist_id: Id,
     pub artist: String,
@@ -30,6 +32,7 @@ pub struct ApiGlobalAlbumSearchResult {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiGlobalTrackSearchResult {
     pub artist_id: Id,
     pub artist: String,
@@ -51,6 +54,7 @@ pub struct ApiGlobalTrackSearchResult {
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ApiGlobalSearchResult {
     Artist(ApiGlobalArtistSearchResult),
     Album(ApiGlobalAlbumSearchResult),
@@ -59,6 +63,7 @@ pub enum ApiGlobalSearchResult {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiSearchResultsResponse {
     pub position: usize,
     pub results: Vec<ApiGlobalSearchResult>,

@@ -31,6 +31,7 @@ moosicbox_symphonia_player = { path = "../symphonia_player", default-features = 
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
+utoipa    = { workspace = true, optional = true }
 
 async-recursion = { workspace = true }
 async-trait     = { workspace = true }
@@ -52,11 +53,12 @@ tokio-util      = { workspace = true }
 url             = { workspace = true }
 
 [features]
-default = ["aac", "api", "flac", "mp3", "opus"]
+default = ["aac", "api", "flac", "mp3", "openapi", "opus"]
 
 fail-on-warnings = []
 
-api = ["dep:actix-web"]
+api     = ["dep:actix-web"]
+openapi = ["dep:utoipa", "moosicbox_search/openapi"]
 
 aac  = ["moosicbox_core/aac", "moosicbox_symphonia_player/aac"]
 flac = ["moosicbox_core/flac", "moosicbox_symphonia_player/flac"]

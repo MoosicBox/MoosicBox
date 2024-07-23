@@ -4,8 +4,12 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
-use moosicbox_core::{integer_range::parse_integer_ranges_to_ids, sqlite::models::ToApi};
-use moosicbox_paging::Page;
+use moosicbox_core::{
+    integer_range::parse_integer_ranges_to_ids,
+    sqlite::models::{AlbumSort, ToApi},
+};
+use moosicbox_music_api::AlbumsRequest;
+use moosicbox_paging::{Page, PagingRequest};
 use moosicbox_search::models::ApiSearchResultsResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -13,21 +17,72 @@ use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
     add_favorite_album, add_favorite_artist, add_favorite_track, album, album_tracks, artist,
-    artist_albums, favorite_artists, favorite_tracks, reindex_global_search_index,
+    artist_albums, favorite_albums, favorite_artists, favorite_tracks, reindex_global_search_index,
     remove_favorite_album, remove_favorite_artist, remove_favorite_track, search, track,
     track_file_url, LibraryAddFavoriteAlbumError, LibraryAddFavoriteArtistError,
-    LibraryAddFavoriteTrackError, LibraryAlbum, LibraryAlbumError, LibraryAlbumTracksError,
-    LibraryAlbumType, LibraryArtist, LibraryArtistAlbumsError, LibraryArtistError,
-    LibraryArtistOrder, LibraryArtistOrderDirection, LibraryAudioQuality,
-    LibraryFavoriteArtistsError, LibraryFavoriteTracksError, LibraryRemoveFavoriteAlbumError,
-    LibraryRemoveFavoriteArtistError, LibraryRemoveFavoriteTrackError, LibrarySearchError,
-    LibraryTrack, LibraryTrackError, LibraryTrackFileUrlError, LibraryTrackOrder,
-    LibraryTrackOrderDirection, ReindexError, SearchType,
+    LibraryAddFavoriteTrackError, LibraryAlbum, LibraryAlbumError, LibraryAlbumOrder,
+    LibraryAlbumOrderDirection, LibraryAlbumTracksError, LibraryAlbumType, LibraryArtist,
+    LibraryArtistAlbumsError, LibraryArtistError, LibraryArtistOrder, LibraryArtistOrderDirection,
+    LibraryAudioQuality, LibraryFavoriteAlbumsError, LibraryFavoriteArtistsError,
+    LibraryFavoriteTracksError, LibraryRemoveFavoriteAlbumError, LibraryRemoveFavoriteArtistError,
+    LibraryRemoveFavoriteTrackError, LibrarySearchError, LibraryTrack, LibraryTrackError,
+    LibraryTrackFileUrlError, LibraryTrackOrder, LibraryTrackOrderDirection, ReindexError,
+    SearchType,
 };
+
+#[cfg(feature = "openapi")]
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    tags((name = "Library")),
+    paths(
+        track_file_url_endpoint,
+        favorite_artists_endpoint,
+        add_favorite_artist_endpoint,
+        remove_favorite_artist_endpoint,
+        favorite_albums_endpoint,
+        add_favorite_album_endpoint,
+        remove_favorite_album_endpoint,
+        add_favorite_track_endpoint,
+        remove_favorite_track_endpoint,
+        favorite_tracks_endpoint,
+        artist_albums_endpoint,
+        album_tracks_endpoint,
+        album_endpoint,
+        artist_endpoint,
+        track_endpoint,
+        search_endpoint,
+        reindex_endpoint,
+    ),
+    components(schemas(
+        LibraryTrackQuery,
+        AlbumType,
+        ApiArtist,
+        ApiAlbum,
+        ApiTrack,
+        ApiLibraryArtist,
+        ApiLibraryAlbum,
+        ApiLibraryTrack,
+        ApiSearchResultsResponse,
+        moosicbox_search::models::ApiGlobalSearchResult,
+        moosicbox_search::models::ApiGlobalArtistSearchResult,
+        moosicbox_search::models::ApiGlobalAlbumSearchResult,
+        moosicbox_search::models::ApiGlobalTrackSearchResult,
+        LibraryArtistOrder,
+        LibraryArtistOrderDirection,
+        LibraryAlbumOrder,
+        LibraryAlbumOrderDirection,
+        LibraryTrackOrder,
+        LibraryTrackOrderDirection,
+        SearchType,
+        LibraryAudioQuality,
+    ))
+)]
+pub struct Api;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ApiAlbum {
     Library(ApiLibraryAlbum),
 }
@@ -48,6 +103,7 @@ impl ToApi<ApiAlbum> for LibraryAlbum {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiLibraryAlbum {
     pub id: u64,
     pub artist: String,
@@ -61,6 +117,7 @@ pub struct ApiLibraryAlbum {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ApiTrack {
     Library(ApiLibraryTrack),
 }
@@ -84,6 +141,7 @@ impl ToApi<ApiTrack> for LibraryTrack {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiLibraryTrack {
     pub id: u64,
     pub number: u32,
@@ -100,6 +158,7 @@ pub struct ApiLibraryTrack {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ApiArtist {
     Library(ApiLibraryArtist),
 }
@@ -116,6 +175,7 @@ impl ToApi<ApiArtist> for LibraryArtist {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiLibraryArtist {
     pub id: u64,
     pub contains_cover: bool,
@@ -134,11 +194,30 @@ impl From<LibraryTrackFileUrlError> for actix_web::Error {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryTrackFileUrlQuery {
-    audio_quality: LibraryAudioQuality,
     track_id: u64,
+    audio_quality: LibraryAudioQuality,
 }
 
-#[route("/library/track/url", method = "GET")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Library"],
+        get,
+        path = "/track/url",
+        description = "Get track stream URL for the audio",
+        params(
+            ("trackId" = u64, Query, description = "The track ID"),
+            ("audioQuality" = LibraryAudioQuality, Query, description = "Page offset"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The track URL",
+                body = Value,
+            )
+        )
+    )
+)]
+#[route("/track/url", method = "GET")]
 pub async fn track_file_url_endpoint(
     query: web::Query<LibraryTrackFileUrlQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
@@ -152,6 +231,88 @@ pub async fn track_file_url_endpoint(
         )
         .await?,
     })))
+}
+
+impl From<LibraryFavoriteAlbumsError> for actix_web::Error {
+    fn from(err: LibraryFavoriteAlbumsError) -> Self {
+        log::error!("{err:?}");
+        ErrorInternalServerError(err.to_string())
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryFavoriteAlbumsQuery {
+    offset: Option<u32>,
+    limit: Option<u32>,
+    order: Option<LibraryAlbumOrder>,
+    order_direction: Option<LibraryAlbumOrderDirection>,
+}
+
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Library"],
+        get,
+        path = "/favorites/albums",
+        description = "List favorite albums",
+        params(
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+            ("order" = Option<LibraryAlbumOrder>, Query, description = "Sort order"),
+            ("orderDirection" = Option<LibraryAlbumOrderDirection>, Query, description = "Sort order direction"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Page of album metadata",
+                body = Value,
+            )
+        )
+    )
+)]
+#[route("/favorites/albums", method = "GET")]
+pub async fn favorite_albums_endpoint(
+    query: web::Query<LibraryFavoriteAlbumsQuery>,
+    data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<Page<ApiAlbum>>> {
+    Ok(Json(
+        favorite_albums(
+            data.database.clone(),
+            &AlbumsRequest {
+                sources: None,
+                sort: match (query.order, query.order_direction) {
+                    (None, None) => None,
+                    (None, Some(direction)) => Some(match direction {
+                        LibraryAlbumOrderDirection::Asc => AlbumSort::ReleaseDateAsc,
+                        LibraryAlbumOrderDirection::Desc => AlbumSort::ReleaseDateDesc,
+                    }),
+                    (Some(order), None) => Some(match order {
+                        LibraryAlbumOrder::Date => AlbumSort::ReleaseDateDesc,
+                    }),
+                    (Some(order), Some(direction)) => Some(match (order, direction) {
+                        (LibraryAlbumOrder::Date, LibraryAlbumOrderDirection::Asc) => {
+                            AlbumSort::ReleaseDateAsc
+                        }
+                        (LibraryAlbumOrder::Date, LibraryAlbumOrderDirection::Desc) => {
+                            AlbumSort::ReleaseDateDesc
+                        }
+                    }),
+                },
+                filters: None,
+                page: if query.offset.is_some() || query.limit.is_some() {
+                    Some(PagingRequest {
+                        offset: query.offset.unwrap_or(0),
+                        limit: query.limit.unwrap_or(10),
+                    })
+                } else {
+                    None
+                },
+            },
+        )
+        .await?
+        .to_api()
+        .into(),
+    ))
 }
 
 impl From<LibraryFavoriteArtistsError> for actix_web::Error {
@@ -170,7 +331,28 @@ pub struct LibraryFavoriteArtistsQuery {
     order_direction: Option<LibraryArtistOrderDirection>,
 }
 
-#[route("/library/favorites/artists", method = "GET")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Library"],
+        get,
+        path = "/favorites/artists",
+        description = "List favorite artists",
+        params(
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+            ("order" = Option<LibraryArtistOrder>, Query, description = "Sort order"),
+            ("orderDirection" = Option<LibraryArtistOrderDirection>, Query, description = "Sort order direction"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Page of artist metadata",
+                body = Value,
+            )
+        )
+    )
+)]
+#[route("/favorites/artists", method = "GET")]
 pub async fn favorite_artists_endpoint(
     query: web::Query<LibraryFavoriteArtistsQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
@@ -202,7 +384,25 @@ pub struct LibraryAddFavoriteArtistsQuery {
     artist_id: u64,
 }
 
-#[route("/library/favorites/artists", method = "POST")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Library"],
+        post,
+        path = "/favorites/artists",
+        description = "Add favorite artist",
+        params(
+            ("artistId" = u64, Query, description = "The artist ID"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
+#[route("/favorites/artists", method = "POST")]
 pub async fn add_favorite_artist_endpoint(
     query: web::Query<LibraryAddFavoriteArtistsQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
@@ -227,7 +427,25 @@ pub struct LibraryRemoveFavoriteArtistsQuery {
     artist_id: u64,
 }
 
-#[route("/library/favorites/artists", method = "DELETE")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Library"],
+        delete,
+        path = "/favorites/artists",
+        description = "Delete favorite artist",
+        params(
+            ("artistId" = u64, Query, description = "The artist ID"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
+#[route("/favorites/artists", method = "DELETE")]
 pub async fn remove_favorite_artist_endpoint(
     query: web::Query<LibraryRemoveFavoriteArtistsQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
@@ -238,41 +456,6 @@ pub async fn remove_favorite_artist_endpoint(
         "success": true
     })))
 }
-
-// impl From<LibraryFavoriteAlbumsError> for actix_web::Error {
-//     fn from(err: LibraryFavoriteAlbumsError) -> Self {
-//         log::error!("{err:?}");
-//         ErrorInternalServerError(err.to_string())
-//     }
-// }
-
-// #[derive(Deserialize)]
-// #[serde(rename_all = "camelCase")]
-// pub struct LibraryFavoriteAlbumsQuery {
-//     offset: Option<u32>,
-//     limit: Option<u32>,
-//     order: Option<LibraryAlbumOrder>,
-//     order_direction: Option<LibraryAlbumOrderDirection>,
-// }
-
-// #[route("/library/favorites/albums", method = "GET")]
-// pub async fn favorite_albums_endpoint(
-//     query: web::Query<LibraryFavoriteAlbumsQuery>,
-//     data: web::Data<moosicbox_core::app::AppState>,
-// ) -> Result<Json<Page<ApiAlbum>>> {
-//     Ok(Json(
-//         favorite_albums(
-//             data.database.clone(),
-//             query.offset,
-//             query.limit,
-//             query.order,
-//             query.order_direction,
-//         )
-//         .await?
-//         .to_api()
-//         .into(),
-//     ))
-// }
 
 impl From<LibraryAddFavoriteAlbumError> for actix_web::Error {
     fn from(err: LibraryAddFavoriteAlbumError) -> Self {
@@ -287,7 +470,25 @@ pub struct LibraryAddFavoriteAlbumsQuery {
     album_id: u64,
 }
 
-#[route("/library/favorites/albums", method = "POST")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Library"],
+        post,
+        path = "/favorites/albums",
+        description = "Add favorite album",
+        params(
+            ("albumId" = u64, Query, description = "The album ID"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
+#[route("/favorites/albums", method = "POST")]
 pub async fn add_favorite_album_endpoint(
     query: web::Query<LibraryAddFavoriteAlbumsQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
@@ -312,7 +513,25 @@ pub struct LibraryRemoveFavoriteAlbumsQuery {
     album_id: u64,
 }
 
-#[route("/library/favorites/albums", method = "DELETE")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Library"],
+        delete,
+        path = "/favorites/albums",
+        description = "Delete favorite album",
+        params(
+            ("albumId" = u64, Query, description = "The album ID"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
+#[route("/favorites/albums", method = "DELETE")]
 pub async fn remove_favorite_album_endpoint(
     query: web::Query<LibraryRemoveFavoriteAlbumsQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
@@ -337,7 +556,25 @@ pub struct LibraryAddFavoriteTracksQuery {
     track_id: u64,
 }
 
-#[route("/library/favorites/tracks", method = "POST")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Library"],
+        post,
+        path = "/favorites/tracks",
+        description = "Add favorite track",
+        params(
+            ("trackId" = u64, Query, description = "The track ID"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
+#[route("/favorites/tracks", method = "POST")]
 pub async fn add_favorite_track_endpoint(
     query: web::Query<LibraryAddFavoriteTracksQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
@@ -362,7 +599,25 @@ pub struct LibraryRemoveFavoriteTracksQuery {
     track_id: u64,
 }
 
-#[route("/library/favorites/tracks", method = "DELETE")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Library"],
+        delete,
+        path = "/favorites/tracks",
+        description = "Delete favorite track",
+        params(
+            ("trackId" = u64, Query, description = "The track ID"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
+#[route("/favorites/tracks", method = "DELETE")]
 pub async fn remove_favorite_track_endpoint(
     query: web::Query<LibraryRemoveFavoriteTracksQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
@@ -391,7 +646,29 @@ pub struct LibraryFavoriteTracksQuery {
     order_direction: Option<LibraryTrackOrderDirection>,
 }
 
-#[route("/library/favorites/tracks", method = "GET")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Library"],
+        get,
+        path = "/favorites/tracks",
+        description = "List favorite tracks",
+        params(
+            ("trackIds" = Option<String>, Query, description = "A comma-separated list of track IDs"),
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+            ("order" = Option<LibraryTrackOrder>, Query, description = "Sort order"),
+            ("orderDirection" = Option<LibraryTrackOrderDirection>, Query, description = "Sort order direction"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "List of artist album metadata",
+                body = Value,
+            )
+        )
+    )
+)]
+#[route("/favorites/tracks", method = "GET")]
 pub async fn favorite_tracks_endpoint(
     query: web::Query<LibraryFavoriteTracksQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
@@ -437,6 +714,7 @@ pub struct LibraryArtistAlbumsQuery {
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Copy, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum AlbumType {
     Lp,
     EpsAndSingles,
@@ -453,7 +731,28 @@ impl From<AlbumType> for LibraryAlbumType {
     }
 }
 
-#[route("/library/artists/albums", method = "GET")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Library"],
+        get,
+        path = "/artists/albums",
+        description = "Get the list of artist album metadata for an artistId",
+        params(
+            ("artistId" = u64, Query, description = "The artist ID"),
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+            ("albumType" = Option<AlbumType>, Query, description = "Filter to this album type"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "List of artist album metadata",
+                body = Vec<ApiAlbum>,
+            )
+        )
+    )
+)]
+#[route("/artists/albums", method = "GET")]
 pub async fn artist_albums_endpoint(
     query: web::Query<LibraryArtistAlbumsQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
@@ -487,7 +786,27 @@ pub struct LibraryAlbumTracksQuery {
     limit: Option<u32>,
 }
 
-#[route("/library/albums/tracks", method = "GET")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Library"],
+        get,
+        path = "/albums/tracks",
+        description = "Get the list of album track metadata for an albumId",
+        params(
+            ("albumId" = u64, Query, description = "The album ID"),
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "List of album track metadata",
+                body = Vec<ApiTrack>,
+            )
+        )
+    )
+)]
+#[route("/albums/tracks", method = "GET")]
 pub async fn album_tracks_endpoint(
     query: web::Query<LibraryAlbumTracksQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
@@ -520,7 +839,25 @@ pub struct LibraryAlbumQuery {
     album_id: u64,
 }
 
-#[route("/library/albums", method = "GET")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Library"],
+        get,
+        path = "/albums",
+        description = "Get the album metadata for an albumId",
+        params(
+            ("albumId" = u64, Query, description = "The album ID"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Album metadata information",
+                body = ApiAlbum,
+            )
+        )
+    )
+)]
+#[route("/albums", method = "GET")]
 pub async fn album_endpoint(
     query: web::Query<LibraryAlbumQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
@@ -545,7 +882,25 @@ pub struct LibraryArtistQuery {
     artist_id: u64,
 }
 
-#[route("/library/artists", method = "GET")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Library"],
+        get,
+        path = "/artists",
+        description = "Get the artist metadata for an artistId",
+        params(
+            ("artistId" = u64, Query, description = "The artist ID"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Artist metadata information",
+                body = ApiArtist,
+            )
+        )
+    )
+)]
+#[route("/artists", method = "GET")]
 pub async fn artist_endpoint(
     query: web::Query<LibraryArtistQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
@@ -564,11 +919,30 @@ impl From<LibraryTrackError> for actix_web::Error {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct LibraryTrackQuery {
     track_id: u64,
 }
 
-#[route("/library/tracks", method = "GET")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Library"],
+        get,
+        path = "/tracks",
+        description = "Get the track metadata for a trackId",
+        params(
+            ("trackId" = u64, Query, description = "The track ID"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Track metadata information",
+                body = ApiTrack,
+            )
+        )
+    )
+)]
+#[route("/tracks", method = "GET")]
 pub async fn track_endpoint(
     query: web::Query<LibraryTrackQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
@@ -593,7 +967,28 @@ pub struct LibrarySearchQuery {
     types: Option<Vec<SearchType>>,
 }
 
-#[route("/library/search", method = "GET")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Library"],
+        get,
+        path = "/search",
+        description = "Search the library for artists/albums/tracks that fuzzy match the query",
+        params(
+            ("query" = String, Query, description = "The search query"),
+            ("offset" = Option<usize>, Query, description = "Page offset"),
+            ("limit" = Option<usize>, Query, description = "Page limit"),
+            ("types" = Option<Vec<SearchType>>, Query, description = "List of types to filter the search by"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "A page of matches for the given search query",
+                body = ApiSearchResultsResponse,
+            )
+        )
+    )
+)]
+#[route("/search", method = "GET")]
 pub async fn search_endpoint(
     query: web::Query<LibrarySearchQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
@@ -628,7 +1023,23 @@ impl From<ReindexError> for actix_web::Error {
 #[serde(rename_all = "camelCase")]
 pub struct ReindexQuery {}
 
-#[route("/library/reindex", method = "POST")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Library"],
+        get,
+        path = "/reindex",
+        description = "Reindex the search database with the complete library",
+        params(),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
+#[route("/reindex", method = "POST")]
 pub async fn reindex_endpoint(
     _query: web::Query<ReindexQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
