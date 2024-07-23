@@ -8,6 +8,7 @@ use strum_macros::{AsRefStr, EnumString};
 )]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum AudioFormat {
     #[cfg(feature = "aac")]
     Aac,

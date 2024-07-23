@@ -3565,6 +3565,7 @@ dependencies = [
  "strum_macros",
  "tantivy",
  "thiserror",
+ "utoipa",
 ]
 
 [[package]]
@@ -3634,6 +3635,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
+ "utoipa",
 ]
 
 [[package]]
@@ -3849,6 +3851,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "url",
+ "utoipa",
 ]
 
 [[package]]
@@ -3863,6 +3866,7 @@ dependencies = [
  "serde",
  "thiserror",
  "tokio",
+ "utoipa",
 ]
 
 [[package]]

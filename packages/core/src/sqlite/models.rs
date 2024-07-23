@@ -161,6 +161,7 @@ impl AsId for StringId {
 )]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum TrackApiSource {
     #[default]
     Local,
@@ -396,6 +397,7 @@ impl Deref for ApiSources {
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Album {
     pub id: Id,
     pub title: String,
@@ -413,6 +415,7 @@ pub struct Album {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct ApiAlbumVersionQuality {
     pub format: Option<AudioFormat>,
@@ -423,6 +426,7 @@ pub struct ApiAlbumVersionQuality {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, Eq, PartialEq, Default, AsRefStr)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum AlbumSource {
     #[default]
     Local,
@@ -491,6 +495,7 @@ impl FromStr for AlbumSort {
 )]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ApiSource {
     #[default]
     Library,
@@ -639,9 +644,22 @@ pub enum IdType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+// #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum Id {
     String(String),
     Number(u64),
+}
+
+#[cfg(feature = "openapi")]
+impl<'__s> utoipa::ToSchema<'__s> for Id {
+    fn schema() -> (
+        &'__s str,
+        utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
+    ) {
+        use utoipa::PartialSchema as _;
+
+        ("Id", String::schema())
+    }
 }
 
 #[derive(Debug, Error)]

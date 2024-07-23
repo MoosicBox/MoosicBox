@@ -165,6 +165,7 @@ impl TrackSource {
 #[derive(Debug, Default, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum TrackAudioQuality {
     Low,          // MP3 320
     FlacLossless, // FLAC 16 bit 44.1kHz

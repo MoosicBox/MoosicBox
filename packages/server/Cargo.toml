@@ -263,4 +263,7 @@ openapi = [
     "dep:utoipa-scalar",
     "dep:utoipa-swagger-ui",
     "moosicbox_auth/openapi",
+    "moosicbox_core/openapi",
+    "moosicbox_downloader/openapi",
+    "moosicbox_music_api/openapi",
 ]

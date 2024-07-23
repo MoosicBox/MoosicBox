@@ -33,6 +33,15 @@ use tokio::sync::RwLock;
 
 pub mod models;
 
+#[cfg(feature = "openapi")]
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    tags((name = "Downloader")),
+    paths(download_endpoint, retry_download_endpoint, download_tasks_endpoint),
+    components(schemas(DownloadApiSource, Id, TrackAudioQuality))
+)]
+pub struct Api;
+
 static DOWNLOAD_QUEUE: Lazy<Arc<RwLock<DownloadQueue>>> =
     Lazy::new(|| Arc::new(RwLock::new(DownloadQueue::new())));
 
@@ -102,6 +111,32 @@ pub struct DownloadQuery {
     source: DownloadApiSource,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Downloader"],
+        post,
+        path = "/download",
+        description = "Queue the specified tracks or albums to be downloaded",
+        params(
+            ("locationId" = Option<u64>, Query, description = "The download location to save the files to"),
+            ("trackId" = Option<Id>, Query, description = "A trackId to download"),
+            ("trackIds" = Option<String>, Query, description = "A comma-separated list of trackIds to download"),
+            ("albumId" = Option<Id>, Query, description = "A albumId to download"),
+            ("albumIds" = Option<String>, Query, description = "A comma-separated list of albumIds to download"),
+            ("downloadAlbumCover" = Option<bool>, Query, description = "Whether or not to download the album cover, if available"),
+            ("downloadArtistCover" = Option<bool>, Query, description = "Whether or not to download the artist cover, if available"),
+            ("quality" = Option<TrackAudioQuality>, Query, description = "The track audio quality to download the tracks at"),
+            ("source" = DownloadApiSource, Query, description = "The API source to download the track from"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The download has successfully started",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/download", method = "POST")]
 pub async fn download_endpoint(
     query: web::Query<DownloadQuery>,
@@ -144,6 +179,24 @@ pub struct RetryDownloadQuery {
     task_id: u64,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Downloader"],
+        post,
+        path = "/retry-download",
+        description = "Retry a specific download task",
+        params(
+            ("taskId" = u64, Query, description = "The task ID to retry"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Retry a specific download task",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/retry-download", method = "POST")]
 pub async fn retry_download_endpoint(
     query: web::Query<RetryDownloadQuery>,
@@ -175,6 +228,25 @@ pub struct GetDownloadTasks {
     limit: Option<u32>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Downloader"],
+        get,
+        path = "/download-tasks",
+        description = "Get a list of the current and historical download tasks",
+        params(
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "A paginated response of download items",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/download-tasks", method = "GET")]
 pub async fn download_tasks_endpoint(
     query: web::Query<GetDownloadTasks>,

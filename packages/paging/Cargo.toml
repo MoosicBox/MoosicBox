@@ -17,6 +17,9 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
     "serde_json",
 ] }
 
+# API Dependencies
+utoipa = { workspace = true, optional = true }
+
 futures   = { workspace = true }
 log       = { workspace = true }
 serde     = { workspace = true, features = ["derive"] }
@@ -24,6 +27,8 @@ thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["macros"] }
 
 [features]
-default = []
+default = ["openapi"]
+
+openapi = ["dep:utoipa"]
 
 fail-on-warnings = []

@@ -36,9 +36,10 @@ strum         = { workspace = true }
 strum_macros  = { workspace = true }
 tantivy       = { workspace = true, optional = true }
 thiserror     = { workspace = true }
+utoipa        = { workspace = true, optional = true }
 
 [features]
-default = ["aac", "flac", "mp3", "opus", "tantivy"]
+default = ["aac", "flac", "mp3", "openapi", "opus", "tantivy"]
 
 fail-on-warnings = []
 
@@ -46,5 +47,7 @@ aac  = []
 flac = []
 mp3  = []
 opus = []
+
+openapi = ["dep:utoipa"]
 
 tantivy = ["dep:tantivy"]

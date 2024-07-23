@@ -31,6 +31,7 @@ moosicbox_task = { path = "../task", default-features = false }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
+utoipa    = { workspace = true, optional = true }
 
 async-recursion = { workspace = true }
 async-trait     = { workspace = true }
@@ -62,11 +63,17 @@ test-log          = { workspace = true }
 tokio             = { workspace = true, features = ["macros", "rt", "tracing"] }
 
 [features]
-default = ["aac", "api", "flac", "mp3", "opus"]
+default = ["aac", "api", "flac", "mp3", "openapi", "opus"]
 
 fail-on-warnings = []
 
 api = ["dep:actix-web"]
+openapi = [
+    "dep:utoipa",
+    "moosicbox_core/openapi",
+    "moosicbox_music_api/openapi",
+    "moosicbox_paging/openapi",
+]
 
 aac  = ["moosicbox_core/aac", "moosicbox_files/aac", "moosicbox_library/aac"]
 flac = ["moosicbox_core/flac", "moosicbox_files/flac", "moosicbox_library/flac"]

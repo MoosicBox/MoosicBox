@@ -19,6 +19,9 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
 ] }
 moosicbox_paging = { path = "../paging", default-features = false }
 
+# API Dependencies
+utoipa = { workspace = true, optional = true }
+
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }
 
@@ -43,8 +46,10 @@ pretty_assertions = { workspace = true }
 test-log          = { workspace = true }
 
 [features]
-default = ["db"]
+default = ["db", "openapi"]
 
 fail-on-warnings = []
+
+openapi = ["dep:utoipa"]
 
 db = ["dep:rusqlite"]

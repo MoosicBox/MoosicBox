@@ -347,6 +347,12 @@ fn main() -> std::io::Result<()> {
 
             #[cfg(feature = "auth-api")]
             let api = nest_api(api, "/auth", moosicbox_auth::api::Api::openapi());
+            #[cfg(feature = "downloader-api")]
+            let api = nest_api(
+                api,
+                "/downloader",
+                moosicbox_downloader::api::Api::openapi(),
+            );
             api
         };
 

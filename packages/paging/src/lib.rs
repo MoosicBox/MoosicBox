@@ -26,6 +26,21 @@ pub enum Page<T> {
     },
 }
 
+#[cfg(feature = "openapi")]
+impl<'__s, T> utoipa::ToSchema<'__s> for Page<T> {
+    fn schema() -> (
+        &'__s str,
+        utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
+    ) {
+        use utoipa::openapi::{ObjectBuilder, RefOr, Schema};
+
+        (
+            "Page",
+            RefOr::T(Schema::Object(ObjectBuilder::new().build())),
+        )
+    }
+}
+
 impl<T: Serialize> ::serde::Serialize for Page<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -127,6 +142,7 @@ impl<T> Page<T> {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PagingRequest {
     pub offset: u32,
     pub limit: u32,
