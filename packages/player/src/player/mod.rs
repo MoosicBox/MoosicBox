@@ -292,7 +292,7 @@ pub async fn get_track_url(
     let query_string = format!("?{}", query_params);
 
     let url = match api_source {
-        ApiSource::Library => Ok(format!("{host}/track{query_string}")),
+        ApiSource::Library => Ok(format!("{host}/files/track{query_string}")),
         ApiSource::Tidal => {
             let url = format!("{host}/tidal/track/url{query_string}");
             log::debug!("Fetching track file url from {url}");
