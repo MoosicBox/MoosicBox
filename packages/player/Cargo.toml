@@ -26,6 +26,9 @@ moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
 moosicbox_symphonia_player = { path = "../symphonia_player", default-features = false }
 moosicbox_task = { path = "../task", default-features = false }
 
+#API Dependencies
+utoipa = { workspace = true, optional = true }
+
 actix-cors       = { workspace = true }
 actix-files      = { workspace = true }
 actix-web        = { workspace = true }
@@ -59,13 +62,15 @@ default = [
     "local",
     "mp3",
     "oboe-shared-stdcxx",
+    "openapi",
     "opus",
     "pulseaudio",
 ]
 
 fail-on-warnings = []
 
-api = []
+api     = []
+openapi = ["dep:utoipa"]
 
 # Player audio outputs
 asio                = ["moosicbox_symphonia_player/asio"]

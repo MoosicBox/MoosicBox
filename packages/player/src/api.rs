@@ -26,6 +26,31 @@ use crate::{
     },
 };
 
+#[cfg(feature = "openapi")]
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    tags((name = "Library")),
+    paths(
+        play_album_endpoint,
+        play_track_endpoint,
+        play_tracks_endpoint,
+        stop_track_endpoint,
+        seek_track_endpoint,
+        update_playback_endpoint,
+        next_track_endpoint,
+        pause_playback_endpoint,
+        resume_playback_endpoint,
+        previous_track_endpoint,
+        player_status_endpoint,
+    ),
+    components(schemas(
+        crate::player::ApiPlayback,
+        ApiPlaybackStatus,
+        PlaybackStatus,
+    ))
+)]
+pub struct Api;
+
 impl From<PlayerError> for actix_web::Error {
     fn from(err: PlayerError) -> Self {
         match err {
@@ -115,6 +140,31 @@ pub struct PlayAlbumQuery {
     pub source: Option<ApiSource>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Player"],
+        post,
+        path = "/play/album",
+        description = "Play the given album for the specified host or local player",
+        params(
+            ("sessionId" = Option<usize>, Query, description = "Session ID to play the album on"),
+            ("albumId" = String, Query, description = "Album ID to play"),
+            ("position" = Option<u16>, Query, description = "Position in the playlist to play from"),
+            ("seek" = Option<f64>, Query, description = "Seek position to begin playback from"),
+            ("volume" = Option<f64>, Query, description = "Volume level to play at"),
+            ("host" = Option<String>, Query, description = "Remote host to fetch track audio from"),
+            ("format" = Option<AudioFormat>, Query, description = "Audio format to play the tracks in"),
+            ("source" = Option<ApiSource>, Query, description = "API source to fetch the tracks from"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[post("/play/album")]
 pub async fn play_album_endpoint(
     query: web::Query<PlayAlbumQuery>,
@@ -159,6 +209,30 @@ pub struct PlayTrackQuery {
     pub source: Option<ApiSource>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Player"],
+        post,
+        path = "/play/track",
+        description = "Play the given track for the specified host or local player",
+        params(
+            ("sessionId" = Option<usize>, Query, description = "Session ID to play the album on"),
+            ("trackId" = i32, Query, description = "Track ID to play"),
+            ("seek" = Option<f64>, Query, description = "Seek position to begin playback from"),
+            ("volume" = Option<f64>, Query, description = "Volume level to play at"),
+            ("host" = Option<String>, Query, description = "Remote host to fetch track audio from"),
+            ("format" = Option<AudioFormat>, Query, description = "Audio format to play the tracks in"),
+            ("source" = Option<ApiSource>, Query, description = "API source to fetch the tracks from"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[post("/play/track")]
 pub async fn play_track_endpoint(
     query: web::Query<PlayTrackQuery>,
@@ -211,6 +285,31 @@ pub struct PlayTracksQuery {
     pub source: Option<ApiSource>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Player"],
+        post,
+        path = "/play/tracks",
+        description = "Play the given tracks for the specified host or local player",
+        params(
+            ("sessionId" = Option<usize>, Query, description = "Session ID to play the album on"),
+            ("trackIds" = String, Query, description = "Comma-separated list of track IDs to play"),
+            ("position" = Option<u16>, Query, description = "Position in the list of tracks to play from"),
+            ("seek" = Option<f64>, Query, description = "Seek position to begin playback from"),
+            ("volume" = Option<f64>, Query, description = "Volume level to play at"),
+            ("host" = Option<String>, Query, description = "Remote host to fetch track audio from"),
+            ("format" = Option<AudioFormat>, Query, description = "Audio format to play the tracks in"),
+            ("source" = Option<ApiSource>, Query, description = "API source to fetch the tracks from"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[post("/play/tracks")]
 pub async fn play_tracks_endpoint(
     query: web::Query<PlayTracksQuery>,
@@ -251,6 +350,24 @@ pub struct StopTrackQuery {
     pub host: Option<String>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Player"],
+        post,
+        path = "/stop",
+        description = "Stop the current playback for the specified host",
+        params(
+            ("host" = Option<String>, Query, description = "Remote host to stop playback from"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[post("/stop")]
 pub async fn stop_track_endpoint(
     query: web::Query<StopTrackQuery>,
@@ -270,6 +387,24 @@ pub struct SeekTrackQuery {
     pub host: Option<String>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Player"],
+        post,
+        path = "/seek",
+        description = "Seek the current playback for the specified host",
+        params(
+            ("seek" = Option<f64>, Query, description = "Position to seek the playback to"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[post("/seek")]
 pub async fn seek_track_endpoint(
     query: web::Query<SeekTrackQuery>,
@@ -298,6 +433,34 @@ pub struct UpdatePlaybackQuery {
     pub source: Option<ApiSource>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Player"],
+        post,
+        path = "/update-playback",
+        description = "Update a playback for the player",
+        params(
+            ("play" = Option<bool>, Query, description = "Trigger playback to begin on this update"),
+            ("stop" = Option<bool>, Query, description = "Trigger playback to stop on this update"),
+            ("playing" = Option<bool>, Query, description = "Update the 'playing' status on the playback"),
+            ("position" = Option<u16>, Query, description = "Update the 'position' status on the playback"),
+            ("seek" = Option<f64>, Query, description = "Update the 'seek' status on the playback"),
+            ("volume" = Option<f64>, Query, description = "Update the 'volume' status on the playback"),
+            ("host" = Option<String>, Query, description = "Remote host to fetch track audio from"),
+            ("trackIds" = String, Query, description = "Comma-separated list of track IDs to update the playback with"),
+            ("format" = Option<AudioFormat>, Query, description = "Update the 'format' status on the playback"),
+            ("sessionId" = Option<usize>, Query, description = "Session ID to update the playback for"),
+            ("source" = Option<ApiSource>, Query, description = "Update the 'source' status on the playback"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = PlaybackStatus,
+            )
+        )
+    )
+)]
 #[post("/update-playback")]
 pub async fn update_playback_endpoint(
     query: web::Query<UpdatePlaybackQuery>,
@@ -347,6 +510,25 @@ pub struct NextTrackQuery {
     pub host: Option<String>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Player"],
+        post,
+        path = "/next-track",
+        description = "Skip to the next track for the playback for the specified host",
+        params(
+            ("seek" = Option<f64>, Query, description = "Position to seek the next track on the playback to"),
+            ("host" = Option<String>, Query, description = "Remote host to skip to the next track on the playback for"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[post("/next-track")]
 pub async fn next_track_endpoint(
     query: web::Query<NextTrackQuery>,
@@ -365,6 +547,24 @@ pub struct PauseQuery {
     pub host: Option<String>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Player"],
+        post,
+        path = "/pause",
+        description = "Pause the playback for the specified host",
+        params(
+            ("host" = Option<String>, Query, description = "Remote host to pause the playback for"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[post("/pause")]
 pub async fn pause_playback_endpoint(
     query: web::Query<PauseQuery>,
@@ -383,6 +583,24 @@ pub struct ResumeQuery {
     pub host: Option<String>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Player"],
+        post,
+        path = "/resume",
+        description = "Resume the playback for the specified host",
+        params(
+            ("host" = Option<String>, Query, description = "Remote host to resume the playback for"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[post("/resume")]
 pub async fn resume_playback_endpoint(
     query: web::Query<ResumeQuery>,
@@ -402,6 +620,25 @@ pub struct PreviousTrackQuery {
     pub host: Option<String>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Player"],
+        post,
+        path = "/previous-track",
+        description = "Skip to the previous track for the playback for the specified host",
+        params(
+            ("seek" = Option<f64>, Query, description = "Position to seek the previous track on the playback to"),
+            ("host" = Option<String>, Query, description = "Remote host to skip to the previous track on the playback for"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[post("/previous-track")]
 pub async fn previous_track_endpoint(
     query: web::Query<PreviousTrackQuery>,
@@ -420,6 +657,24 @@ pub struct PlayerStatusQuery {
     pub host: Option<String>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Player"],
+        get,
+        path = "/status",
+        description = "Get the playback status for the specified host",
+        params(
+            ("host" = Option<String>, Query, description = "Remote host to get playback status for"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Status for the playback",
+                body = ApiPlaybackStatus,
+            )
+        )
+    )
+)]
 #[get("/status")]
 pub async fn player_status_endpoint(
     query: web::Query<PlayerStatusQuery>,

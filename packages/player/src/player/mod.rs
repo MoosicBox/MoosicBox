@@ -163,6 +163,7 @@ impl Playback {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiPlayback {
     pub track_ids: Vec<String>,
     pub playing: bool,
@@ -183,12 +184,14 @@ impl ToApi<ApiPlayback> for Playback {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiPlaybackStatus {
     pub active_playbacks: Option<ApiPlayback>,
 }
 
 #[derive(Serialize, Debug, Clone, Copy)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PlaybackStatus {
     pub success: bool,
 }
