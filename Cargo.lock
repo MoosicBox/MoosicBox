@@ -4339,6 +4339,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "url",
+ "utoipa",
  "xml",
 ]
 

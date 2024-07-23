@@ -16,6 +16,35 @@ use crate::{
     ScanError, TransportInfo,
 };
 
+#[cfg(feature = "openapi")]
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    tags((name = "UPnP")),
+    paths(
+        scan_devices_endpoint,
+        get_transport_info_endpoint,
+        get_media_info_endpoint,
+        get_position_info_endpoint,
+        get_volume_endpoint,
+        set_volume_endpoint,
+        subscribe_endpoint,
+        pause_endpoint,
+        play_endpoint,
+        seek_endpoint,
+    ),
+    components(schemas(
+        MediaInfo,
+        PositionInfo,
+        TransportInfo,
+        crate::TrackMetadata,
+        crate::TrackMetadataItem,
+        crate::TrackMetadataItemResource,
+        UpnpDevice,
+        crate::models::UpnpService,
+    ))
+)]
+pub struct Api;
+
 impl From<ActionError> for actix_web::Error {
     fn from(e: ActionError) -> Self {
         match &e {
@@ -45,6 +74,22 @@ impl From<ScanError> for actix_web::Error {
     }
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["UPnP"],
+        post,
+        path = "/scan-devices",
+        description = "Scan the network for UPnP devices",
+        params(),
+        responses(
+            (
+                status = 200,
+                description = "List of UPnP devices",
+                body = Vec<UpnpDevice>,
+            )
+        )
+    )
+)]
 #[route("/scan-devices", method = "GET")]
 pub async fn scan_devices_endpoint() -> Result<Json<Vec<UpnpDevice>>> {
     Ok(Json(scan_devices().await?))
@@ -58,6 +103,26 @@ pub struct GetTransportInfoQuery {
     instance_id: u32,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["UPnP"],
+        get,
+        path = "/transport-info",
+        description = "Get the current UPnP transport info",
+        params(
+            ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to get transport info from"),
+            ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to get transport info from"),
+            ("instanceId" = u32, Query, description = "UPnP instance ID to get transport info from"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The current UPnP transport info",
+                body = TransportInfo,
+            )
+        )
+    )
+)]
 #[route("/transport-info", method = "GET")]
 pub async fn get_transport_info_endpoint(
     query: web::Query<GetTransportInfoQuery>,
@@ -82,6 +147,26 @@ pub struct GetMediaInfoQuery {
     instance_id: u32,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["UPnP"],
+        get,
+        path = "/media-info",
+        description = "Get the current UPnP media info",
+        params(
+            ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to get media info from"),
+            ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to get media info from"),
+            ("instanceId" = u32, Query, description = "UPnP instance ID to get media info from"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The current UPnP media info",
+                body = MediaInfo,
+            )
+        )
+    )
+)]
 #[route("/media-info", method = "GET")]
 pub async fn get_media_info_endpoint(
     query: web::Query<GetMediaInfoQuery>,
@@ -106,6 +191,26 @@ pub struct GetPositionInfoQuery {
     instance_id: u32,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["UPnP"],
+        get,
+        path = "/position-info",
+        description = "Get the current UPnP position info",
+        params(
+            ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to get position info from"),
+            ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to get position info from"),
+            ("instanceId" = u32, Query, description = "UPnP instance ID to get position info from"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The current UPnP position info",
+                body = PositionInfo,
+            )
+        )
+    )
+)]
 #[route("/position-info", method = "GET")]
 pub async fn get_position_info_endpoint(
     query: web::Query<GetPositionInfoQuery>,
@@ -131,6 +236,27 @@ pub struct GetVolumeQuery {
     instance_id: u32,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["UPnP"],
+        get,
+        path = "/volume",
+        description = "Get the current UPnP volume info for a device",
+        params(
+            ("channel" = Option<String>, Query, description = "UPnP device channel to get volume info from"),
+            ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to get volume info from"),
+            ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to get volume info from"),
+            ("instanceId" = u32, Query, description = "UPnP instance ID to get volume info from"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The current UPnP volume info",
+                body = HashMap<String, String>,
+            )
+        )
+    )
+)]
 #[route("/volume", method = "GET")]
 pub async fn get_volume_endpoint(
     query: web::Query<GetVolumeQuery>,
@@ -163,6 +289,28 @@ pub struct SetVolumeQuery {
     value: u8,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["UPnP"],
+        post,
+        path = "/volume",
+        description = "Set the current UPnP volume for a device",
+        params(
+            ("channel" = Option<String>, Query, description = "UPnP device channel to get volume info from"),
+            ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to get volume info from"),
+            ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to get volume info from"),
+            ("instanceId" = u32, Query, description = "UPnP instance ID to get volume info from"),
+            ("value" = u8, Query, description = "Integer to set the device volume to"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The set volume action response",
+                body = HashMap<String, String>,
+            )
+        )
+    )
+)]
 #[route("/volume", method = "POST")]
 pub async fn set_volume_endpoint(
     query: web::Query<SetVolumeQuery>,
@@ -194,6 +342,26 @@ pub struct SubscribeQuery {
     service_id: String,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["UPnP"],
+        post,
+        path = "/subscribe",
+        description = "Subscribe to the specified device's service",
+        params(
+            ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to subscribe to"),
+            ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to subscribe to"),
+            ("serviceId" = String, Query, description = "UPnP device service ID to subscribe to"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The subscribe SID",
+                body = String,
+            )
+        )
+    )
+)]
 #[route("/subscribe", method = "POST")]
 pub async fn subscribe_endpoint(query: web::Query<SubscribeQuery>) -> Result<Json<String>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
@@ -226,6 +394,26 @@ pub struct PauseQuery {
     instance_id: u32,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["UPnP"],
+        post,
+        path = "/pause",
+        description = "Pause the specified device's AVTransport",
+        params(
+            ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to pause"),
+            ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to pause"),
+            ("instanceId" = u32, Query, description = "UPnP instance ID to pause"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The pause action response",
+                body = String,
+            )
+        )
+    )
+)]
 #[route("/pause", method = "POST")]
 pub async fn pause_endpoint(
     query: web::Query<PauseQuery>,
@@ -251,6 +439,27 @@ pub struct PlayQuery {
     instance_id: u32,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["UPnP"],
+        post,
+        path = "/play",
+        description = "Play the specified device's AVTransport",
+        params(
+            ("speed" = Option<f64>, Query, description = "Speed to play the playback at"),
+            ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to play"),
+            ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to play"),
+            ("instanceId" = u32, Query, description = "UPnP instance ID to play"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The play action response",
+                body = String,
+            )
+        )
+    )
+)]
 #[route("/play", method = "POST")]
 pub async fn play_endpoint(query: web::Query<PlayQuery>) -> Result<Json<HashMap<String, String>>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
@@ -281,6 +490,28 @@ pub struct SeekQuery {
     unit: Option<String>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["UPnP"],
+        post,
+        path = "/seek",
+        description = "Seek the specified device's AVTransport",
+        params(
+            ("position" = f64, Query, description = "Seek position to seek the playback to"),
+            ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to seek"),
+            ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to seek"),
+            ("instanceId" = u32, Query, description = "UPnP instance ID to seek"),
+            ("unit" = Option<String>, Query, description = "Seek unit"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The seek action response",
+                body = String,
+            )
+        )
+    )
+)]
 #[route("/seek", method = "POST")]
 pub async fn seek_endpoint(query: web::Query<SeekQuery>) -> Result<Json<HashMap<String, String>>> {
     let (device, service) = if let Some(udn) = &query.device_udn {

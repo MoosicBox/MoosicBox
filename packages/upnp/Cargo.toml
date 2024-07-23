@@ -16,6 +16,7 @@ moosicbox_task   = { path = "../task", default-features = false }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
+utoipa    = { workspace = true, optional = true }
 
 # Listener Dependencies
 flume                   = { workspace = true, optional = true }
@@ -58,13 +59,14 @@ tokio           = { workspace = true, optional = true, features = ["macros", "tr
 xml             = { workspace = true }
 
 [features]
-default = ["api", "listener", "player"]
+default = ["api", "listener", "openapi", "player"]
 
 fail-on-warnings = []
 
 
 api = ["dep:actix-web", "dep:tokio"]
 listener = ["dep:flume", "dep:tokio", "dep:tokio-util"]
+openapi = ["dep:utoipa"]
 player = [
     "dep:async-trait",
     "dep:atomic_float",

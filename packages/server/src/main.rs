@@ -367,6 +367,8 @@ fn main() -> std::io::Result<()> {
             let api = nest_api(api, "/scan", moosicbox_scan::api::Api::openapi());
             #[cfg(feature = "tidal-api")]
             let api = nest_api(api, "/tidal", moosicbox_tidal::api::Api::openapi());
+            #[cfg(feature = "upnp-api")]
+            let api = nest_api(api, "/upnp", moosicbox_upnp::api::Api::openapi());
             #[cfg(feature = "yt-api")]
             let api = nest_api(api, "/yt", moosicbox_yt::api::Api::openapi());
 

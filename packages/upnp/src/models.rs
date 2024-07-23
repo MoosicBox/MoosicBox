@@ -2,6 +2,7 @@ use rupnp::{Device, DeviceSpec, Service};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct UpnpDevice {
     pub name: String,
     pub udn: String,
@@ -40,6 +41,7 @@ impl UpnpDevice {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct UpnpService {
     pub id: String,
     pub r#type: String,

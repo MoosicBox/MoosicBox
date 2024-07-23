@@ -345,12 +345,14 @@ pub async fn set_av_transport_uri(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TrackMetadata {
     items: Vec<TrackMetadataItem>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TrackMetadataItem {
     upnp_class: Option<String>,
     upnp_artist: Option<String>,
@@ -363,6 +365,7 @@ pub struct TrackMetadataItem {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TrackMetadataItemResource {
     duration: Option<u32>,
     protocol_info: Option<String>,
@@ -444,6 +447,7 @@ fn parse_track_metadata(track_metadata: &str) -> Result<TrackMetadata, ActionErr
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TransportInfo {
     current_transport_status: String,
     current_transport_state: String,
@@ -483,6 +487,7 @@ pub async fn get_transport_info(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PositionInfo {
     track: u32,
     rel_time: u32,
@@ -604,6 +609,7 @@ pub async fn set_volume(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct MediaInfo {
     media_duration: u32,
     record_medium: String,
