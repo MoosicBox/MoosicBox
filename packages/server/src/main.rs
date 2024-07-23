@@ -533,6 +533,7 @@ fn main() -> std::io::Result<()> {
                         .service(moosicbox_library::api::favorite_artists_endpoint)
                         .service(moosicbox_library::api::add_favorite_artist_endpoint)
                         .service(moosicbox_library::api::remove_favorite_artist_endpoint)
+                        .service(moosicbox_library::api::favorite_albums_endpoint)
                         .service(moosicbox_library::api::add_favorite_album_endpoint)
                         .service(moosicbox_library::api::remove_favorite_album_endpoint)
                         .service(moosicbox_library::api::favorite_tracks_endpoint)
