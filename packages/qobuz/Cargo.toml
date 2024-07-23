@@ -28,6 +28,7 @@ moosicbox_search = { path = "../search", default-features = false }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
+utoipa    = { workspace = true, optional = true }
 
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }
@@ -54,9 +55,10 @@ url             = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 
 [features]
-default = ["api", "db"]
+default = ["api", "db", "openapi"]
 
 fail-on-warnings = []
 
-api = ["dep:actix-web"]
-db  = ["dep:rusqlite", "moosicbox_music_api/db"]
+api     = ["dep:actix-web"]
+db      = ["dep:rusqlite", "moosicbox_music_api/db"]
+openapi = ["dep:utoipa"]

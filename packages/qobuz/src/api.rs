@@ -20,6 +20,32 @@ use crate::{
     QobuzTrack, QobuzTrackError, QobuzTrackFileUrlError, QobuzUserLoginError,
 };
 
+#[cfg(feature = "openapi")]
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    tags((name = "Qobuz")),
+    paths(
+        user_login_endpoint,
+        artist_endpoint,
+        favorite_artists_endpoint,
+        album_endpoint,
+        artist_albums_endpoint,
+        favorite_albums_endpoint,
+        album_tracks_endpoint,
+        track_endpoint,
+        favorite_tracks_endpoint,
+        track_file_url_endpoint,
+        search_endpoint,
+    ),
+    components(schemas(
+        AlbumReleaseType,
+        AlbumSort,
+        AlbumOrder,
+        QobuzAudioQuality,
+    ))
+)]
+pub struct Api;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
@@ -58,6 +84,25 @@ pub struct QobuzUserLoginQuery {
     persist: Option<bool>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Qobuz"],
+        post,
+        path = "/auth/login",
+        description = "Login to Qobuz",
+        params(
+            ("username" = String, Query, description = "Qobuz login username"),
+            ("password" = String, Query, description = "Qobuz login password"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Access token credentials",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/auth/login", method = "POST")]
 pub async fn user_login_endpoint(
     req: HttpRequest,
@@ -213,6 +258,24 @@ pub struct QobuzArtistQuery {
     artist_id: u64,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Qobuz"],
+        get,
+        path = "/artists",
+        description = "Get Qobuz artist by ID",
+        params(
+            ("artistId" = u64, Query, description = "Qobuz artist ID to fetch"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Qobuz artist for the specified ID",
+                body = ApiArtist,
+            )
+        )
+    )
+)]
 #[route("/artists", method = "GET")]
 pub async fn artist_endpoint(
     req: HttpRequest,
@@ -248,6 +311,25 @@ pub struct QobuzFavoriteArtistsQuery {
     limit: Option<u32>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Qobuz"],
+        get,
+        path = "/favorites/artists",
+        description = "Get Qobuz favorited artists",
+        params(
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Page of Qobuz favorited artists",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/artists", method = "GET")]
 pub async fn favorite_artists_endpoint(
     req: HttpRequest,
@@ -285,6 +367,24 @@ pub struct QobuzAlbumQuery {
     album_id: String,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Qobuz"],
+        get,
+        path = "/albums",
+        description = "Get Qobuz album by ID",
+        params(
+            ("albumId" = u64, Query, description = "Qobuz album ID to fetch"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Qobuz album for the specified ID",
+                body = ApiAlbum,
+            )
+        )
+    )
+)]
 #[route("/albums", method = "GET")]
 pub async fn album_endpoint(
     req: HttpRequest,
@@ -316,6 +416,7 @@ impl From<QobuzArtistAlbumsError> for actix_web::Error {
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum AlbumReleaseType {
     All,
     Lp,
@@ -343,6 +444,7 @@ impl From<AlbumReleaseType> for QobuzAlbumReleaseType {
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum AlbumSort {
     ReleaseDate,
     Relevant,
@@ -362,6 +464,7 @@ impl From<AlbumSort> for QobuzAlbumSort {
 #[derive(Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum AlbumOrder {
     Asc,
     #[default]
@@ -389,6 +492,30 @@ pub struct QobuzArtistAlbumsQuery {
     track_size: Option<u8>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Qobuz"],
+        get,
+        path = "/artists/albums",
+        description = "Get Qobuz albums for the specified artist ID",
+        params(
+            ("artistId" = u64, Query, description = "Qobuz artist ID to fetch albums for"),
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+            ("releaseType" = Option<AlbumReleaseType>, Query, description = "Release type of album to filter by"),
+            ("sort" = Option<AlbumSort>, Query, description = "Sort property to sort the albums by"),
+            ("order" = Option<AlbumOrder>, Query, description = "Sort order to order the albums by"),
+            ("trackSize" = Option<u8>, Query, description = "The amount of tracks to return for the albums"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Qobuz albums for the specified artist",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/artists/albums", method = "GET")]
 pub async fn artist_albums_endpoint(
     req: HttpRequest,
@@ -432,6 +559,25 @@ pub struct QobuzFavoriteAlbumsQuery {
     limit: Option<u32>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Qobuz"],
+        get,
+        path = "/favorites/albums",
+        description = "Get Qobuz favorited albums",
+        params(
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Page of Qobuz favorited albums",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/albums", method = "GET")]
 pub async fn favorite_albums_endpoint(
     req: HttpRequest,
@@ -471,6 +617,26 @@ pub struct QobuzAlbumTracksQuery {
     limit: Option<u32>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Qobuz"],
+        get,
+        path = "/albums/tracks",
+        description = "Get Qobuz tracks for the specified album ID",
+        params(
+            ("albumId" = u64, Query, description = "Qobuz album ID to fetch tracks for"),
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Qobuz tracks for the specified album",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/albums/tracks", method = "GET")]
 pub async fn album_tracks_endpoint(
     req: HttpRequest,
@@ -509,6 +675,24 @@ pub struct QobuzTrackQuery {
     track_id: u64,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Qobuz"],
+        get,
+        path = "/tracks",
+        description = "Get Qobuz track by ID",
+        params(
+            ("trackId" = u64, Query, description = "Qobuz track ID to fetch"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Qobuz track for the specified ID",
+                body = ApiAlbum,
+            )
+        )
+    )
+)]
 #[route("/tracks", method = "GET")]
 pub async fn track_endpoint(
     req: HttpRequest,
@@ -544,6 +728,25 @@ pub struct QobuzFavoriteTracksQuery {
     limit: Option<u32>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Qobuz"],
+        get,
+        path = "/favorites/tracks",
+        description = "Get Qobuz favorited tracks",
+        params(
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Page of Qobuz favorited tracks",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/tracks", method = "GET")]
 pub async fn favorite_tracks_endpoint(
     req: HttpRequest,
@@ -582,6 +785,25 @@ pub struct QobuzTrackFileUrlQuery {
     track_id: u64,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Qobuz"],
+        get,
+        path = "/track/url",
+        description = "Get Qobuz track file stream URL",
+        params(
+            ("audioQuality" = QobuzAudioQuality, Query, description = "Audio quality to fetch the file stream for"),
+            ("trackId" = u64, Query, description = "Qobuz track ID to fetch track stream URL for"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Qobuz track URL for the specified ID",
+                body = ApiAlbum,
+            )
+        )
+    )
+)]
 #[route("/track/url", method = "GET")]
 pub async fn track_file_url_endpoint(
     req: HttpRequest,
@@ -622,6 +844,26 @@ pub struct QobuzSearchQuery {
     limit: Option<usize>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Qobuz"],
+        get,
+        path = "/search",
+        description = "Search the Qobuz library for artists/albums/tracks that fuzzy match the query",
+        params(
+            ("query" = String, Query, description = "The search query"),
+            ("offset" = Option<usize>, Query, description = "Page offset"),
+            ("limit" = Option<usize>, Query, description = "Page limit"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "A page of matches for the given search query",
+                body = ApiSearchResultsResponse,
+            )
+        )
+    )
+)]
 #[route("/search", method = "GET")]
 pub async fn search_endpoint(
     req: HttpRequest,

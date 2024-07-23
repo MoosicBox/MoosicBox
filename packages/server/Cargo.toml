@@ -270,5 +270,6 @@ openapi = [
     "moosicbox_menu/openapi",
     "moosicbox_music_api/openapi",
     "moosicbox_player/openapi",
+    "moosicbox_qobuz/openapi",
     "moosicbox_search/openapi",
 ]

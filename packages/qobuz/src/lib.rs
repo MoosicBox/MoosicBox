@@ -1385,6 +1385,7 @@ pub async fn remove_favorite_track(
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum QobuzAudioQuality {
     Low,            // MP3 320
     FlacLossless,   // FLAC 16 bit 44.1kHz

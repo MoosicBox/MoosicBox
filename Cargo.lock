@@ -3944,6 +3944,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "url",
+ "utoipa",
 ]
 
 [[package]]
