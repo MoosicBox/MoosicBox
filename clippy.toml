@@ -15,6 +15,7 @@ allowed-duplicate-crates = [
     "hyper-rustls",
     "indexmap",
     "itertools",
+    "mio",
     "num-derive",
     "regex-automata",
     "regex-syntax",
