@@ -3814,6 +3814,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+ "utoipa",
 ]
 
 [[package]]

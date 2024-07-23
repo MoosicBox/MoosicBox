@@ -32,6 +32,33 @@ use crate::library::{
     get_album, get_artist, get_artist_albums, GetArtistError,
 };
 
+#[cfg(feature = "openapi")]
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    tags((name = "Menu")),
+    paths(
+        get_artists_endpoint,
+        get_albums_endpoint,
+        get_tracks_endpoint,
+        get_album_tracks_endpoint,
+        get_album_versions_endpoint,
+        get_artist_albums_endpoint,
+        get_artist_endpoint,
+        get_album_endpoint,
+        add_album_endpoint,
+        remove_album_endpoint,
+        refavorite_album_endpoint,
+    ),
+    components(schemas(
+        ApiAlbum,
+        ApiArtist,
+        ApiTrack,
+        ApiAlbumVersion,
+        moosicbox_core::sqlite::models::TrackApiSource,
+    ))
+)]
+pub struct Api;
+
 fn album_id_for_source(id: &str, source: ApiSource) -> Result<Id, actix_web::Error> {
     Ok(match source {
         ApiSource::Tidal => id
@@ -67,6 +94,27 @@ pub struct GetArtistsQuery {
     search: Option<String>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Menu"],
+        get,
+        path = "/artists",
+        description = "Get the artists for the specified criteria",
+        params(
+            ("sources" = Option<String>, Query, description = "List of API sources to filter by"),
+            ("sort" = Option<String>, Query, description = "Order to sort by"),
+            ("name" = Option<String>, Query, description = "Name to filter by"),
+            ("search" = Option<String>, Query, description = "Query to generically search by"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The list of artists",
+                body = Vec<ApiArtist>,
+            )
+        )
+    )
+)]
 #[get("/artists")]
 pub async fn get_artists_endpoint(
     query: web::Query<GetArtistsQuery>,
@@ -126,6 +174,33 @@ pub struct GetAlbumsQuery {
     limit: Option<u32>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Menu"],
+        get,
+        path = "/albums",
+        description = "Get the albums for the specified criteria",
+        params(
+            ("sources" = Option<String>, Query, description = "List of API sources to filter by"),
+            ("sort" = Option<String>, Query, description = "Order to sort by"),
+            ("name" = Option<String>, Query, description = "Name to filter by"),
+            ("artist" = Option<String>, Query, description = "Artist name to filter by"),
+            ("search" = Option<String>, Query, description = "Query to generically search by"),
+            ("artistId" = Option<i32>, Query, description = "Artist ID to filter by"),
+            ("tidalArtistId" = Option<i32>, Query, description = "Tidal artist ID to filter by"),
+            ("qobuzArtistId" = Option<i32>, Query, description = "Qobuz artist ID to filter by"),
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The list of albums",
+                body = Value,
+            )
+        )
+    )
+)]
 #[get("/albums")]
 pub async fn get_albums_endpoint(
     query: web::Query<GetAlbumsQuery>,
@@ -188,6 +263,24 @@ pub struct GetTracksQuery {
     track_ids: String,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Menu"],
+        get,
+        path = "/tracks",
+        description = "Get the tracks for the specified criteria",
+        params(
+            ("trackIds" = String, Query, description = "Comma-separated list of track IDs to fetch"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The list of tracks",
+                body = Vec<ApiTrack>,
+            )
+        )
+    )
+)]
 #[get("/tracks")]
 pub async fn get_tracks_endpoint(
     query: web::Query<GetTracksQuery>,
@@ -221,6 +314,24 @@ pub struct GetAlbumTracksQuery {
     album_id: i32,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Menu"],
+        get,
+        path = "/album/tracks",
+        description = "Get the tracks for the specified album",
+        params(
+            ("albumId" = String, Query, description = "Album ID to fetch the tracks for"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The list of tracks",
+                body = Vec<ApiTrack>,
+            )
+        )
+    )
+)]
 #[get("/album/tracks")]
 pub async fn get_album_tracks_endpoint(
     query: web::Query<GetAlbumTracksQuery>,
@@ -242,6 +353,24 @@ pub struct GetAlbumVersionsQuery {
     album_id: i32,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Menu"],
+        get,
+        path = "/album/versions",
+        description = "Get the album versions for the specified album",
+        params(
+            ("albumId" = String, Query, description = "Album ID to fetch the versions for"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The list of album versions",
+                body = Vec<ApiAlbumVersion>,
+            )
+        )
+    )
+)]
 #[get("/album/versions")]
 pub async fn get_album_versions_endpoint(
     query: web::Query<GetAlbumVersionsQuery>,
@@ -263,6 +392,24 @@ pub struct GetArtistAlbumsQuery {
     artist_id: i32,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Menu"],
+        get,
+        path = "/artist/albums",
+        description = "Get the albums for the specified artist",
+        params(
+            ("artistId" = String, Query, description = "Artist ID to fetch the albums for"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The list of albums",
+                body = Vec<ApiAlbum>,
+            )
+        )
+    )
+)]
 #[get("/artist/albums")]
 pub async fn get_artist_albums_endpoint(
     query: web::Query<GetArtistAlbumsQuery>,
@@ -311,6 +458,29 @@ pub struct GetArtistQuery {
     qobuz_album_id: Option<u64>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Menu"],
+        get,
+        path = "/artist",
+        description = "Get the artist for the specified criteria",
+        params(
+            ("artistId" = Option<i32>, Query, description = "Artist ID to filter by"),
+            ("tidalArtistId" = Option<i32>, Query, description = "Tidal artist ID to filter by"),
+            ("qobuzArtistId" = Option<i32>, Query, description = "Qobuz artist ID to filter by"),
+            ("albumId" = Option<i32>, Query, description = "Album ID to filter by"),
+            ("tidalAlbumId" = Option<i32>, Query, description = "Tidal album ID to filter by"),
+            ("qobuzAlbumId" = Option<i32>, Query, description = "Qobuz album ID to filter by"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The matching artist",
+                body = ApiArtist,
+            )
+        )
+    )
+)]
 #[get("/artist")]
 pub async fn get_artist_endpoint(
     query: web::Query<GetArtistQuery>,
@@ -339,6 +509,26 @@ pub struct GetAlbumQuery {
     qobuz_album_id: Option<String>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Menu"],
+        get,
+        path = "/album",
+        description = "Get the album for the specified criteria",
+        params(
+            ("albumId" = Option<i32>, Query, description = "Album ID to filter by"),
+            ("tidalAlbumId" = Option<i32>, Query, description = "Tidal album ID to filter by"),
+            ("qobuzAlbumId" = Option<i32>, Query, description = "Qobuz album ID to filter by"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The matching album",
+                body = ApiAlbum,
+            )
+        )
+    )
+)]
 #[get("/album")]
 pub async fn get_album_endpoint(
     query: web::Query<GetAlbumQuery>,
@@ -369,6 +559,25 @@ pub struct AddAlbumQuery {
     source: ApiSource,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Menu"],
+        post,
+        path = "/album",
+        description = "Add the album to the library",
+        params(
+            ("albumId" = String, Query, description = "Album ID to add"),
+            ("source" = ApiSource, Query, description = "The API source to add the album from"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The added album",
+                body = ApiAlbum,
+            )
+        )
+    )
+)]
 #[post("/album")]
 pub async fn add_album_endpoint(
     query: web::Query<AddAlbumQuery>,
@@ -399,6 +608,25 @@ pub struct RemoveAlbumQuery {
     source: ApiSource,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Menu"],
+        delete,
+        path = "/album",
+        description = "Add the album to the library",
+        params(
+            ("albumId" = String, Query, description = "Album ID to remove"),
+            ("source" = ApiSource, Query, description = "The API source the album existed in"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The removed album",
+                body = ApiAlbum,
+            )
+        )
+    )
+)]
 #[delete("/album")]
 pub async fn remove_album_endpoint(
     query: web::Query<RemoveAlbumQuery>,
@@ -429,6 +657,25 @@ pub struct ReFavoriteAlbumQuery {
     source: ApiSource,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Menu"],
+        delete,
+        path = "/album/re-favorite",
+        description = "Re-favorite the album on the given API source",
+        params(
+            ("albumId" = String, Query, description = "Album ID to re-favorite"),
+            ("source" = ApiSource, Query, description = "The API source the album exists in"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The re-favorited album",
+                body = ApiAlbum,
+            )
+        )
+    )
+)]
 #[post("/album/re-favorite")]
 pub async fn refavorite_album_endpoint(
     query: web::Query<ReFavoriteAlbumQuery>,

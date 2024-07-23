@@ -89,6 +89,7 @@ pub fn sort_album_versions(versions: &mut [AlbumVersion]) {
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiAlbumVersion {
     pub tracks: Vec<ApiTrack>,
     pub format: Option<AudioFormat>,

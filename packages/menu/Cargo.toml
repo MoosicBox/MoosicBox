@@ -23,6 +23,9 @@ moosicbox_scan = { path = "../scan", default-features = false }
 moosicbox_search = { path = "../search", default-features = false }
 moosicbox_session = { path = "../session", default-features = false }
 
+# API Dependencies
+utoipa = { workspace = true, optional = true }
+
 actix-cors      = { workspace = true }
 actix-files     = { workspace = true }
 actix-web       = { workspace = true }
@@ -37,10 +40,11 @@ thiserror       = { workspace = true }
 tokio           = { workspace = true }
 
 [features]
-default = ["api", "local"]
+default = ["api", "local", "openapi"]
 
 fail-on-warnings = []
 
 local = ["moosicbox_scan/local"]
 
-api = []
+api     = []
+openapi = ["dep:utoipa", "moosicbox_core/openapi", "moosicbox_library/openapi"]
