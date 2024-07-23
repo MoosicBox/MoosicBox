@@ -262,4 +262,5 @@ openapi = [
     "dep:utoipa-redoc",
     "dep:utoipa-scalar",
     "dep:utoipa-swagger-ui",
+    "moosicbox_auth/openapi",
 ]

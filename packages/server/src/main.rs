@@ -345,6 +345,8 @@ fn main() -> std::io::Result<()> {
             #[allow(clippy::let_and_return)]
             let api = ApiDoc::openapi();
 
+            #[cfg(feature = "auth-api")]
+            let api = nest_api(api, "/auth", moosicbox_auth::api::Api::openapi());
             api
         };
 

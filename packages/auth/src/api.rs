@@ -11,13 +11,38 @@ use url::form_urlencoded;
 
 use crate::{create_magic_token, get_credentials_from_magic_token, NonTunnelRequestAuthorized};
 
+#[cfg(feature = "openapi")]
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    tags((name = "Auth")),
+    paths(get_magic_token_endpoint, create_magic_token_endpoint,),
+    components(schemas(MagicTokenQuery, CreateMagicTokenQuery))
+)]
+pub struct Api;
+
 #[derive(Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct MagicTokenQuery {
     magic_token: String,
 }
 
-#[route("/auth/magic-token", method = "GET")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Auth"],
+        get,
+        path = "/magic-token",
+        description = "Get the credentials associated with a magic token",
+        params(
+            ("magicToken" = String, Query,
+                description = "The magic token to fetch the credentials for"),
+        ),
+        responses(
+            (status = 200, description = "The credentials for the magic token", body = Value)
+        )
+    )
+)]
+#[route("/magic-token", method = "GET")]
 pub async fn get_magic_token_endpoint(
     query: web::Query<MagicTokenQuery>,
     data: web::Data<AppState>,
@@ -37,11 +62,27 @@ pub async fn get_magic_token_endpoint(
 }
 
 #[derive(Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct CreateMagicTokenQuery {
     host: Option<String>,
 }
 
-#[route("/auth/magic-token", method = "POST")]
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Auth"],
+        post,
+        path = "/magic-token",
+        description = "Create a new magic token",
+        params(
+            ("host" = Option<String>, Query,
+                description = "The host to generate a link with the magic token for"),
+        ),
+        responses(
+            (status = 200, description = "The magic token", body = Value)
+        )
+    )
+)]
+#[route("/magic-token", method = "POST")]
 pub async fn create_magic_token_endpoint(
     query: web::Query<CreateMagicTokenQuery>,
     data: web::Data<AppState>,
@@ -64,7 +105,7 @@ pub async fn create_magic_token_endpoint(
     if let Some(host) = &query.host {
         Ok(Json(json!({
             "token": token,
-            "url": format!("{host}/auth?{query_string}")
+            "url": format!("{host}?{query_string}")
         })))
     } else {
         Ok(Json(json!({

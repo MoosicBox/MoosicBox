@@ -20,6 +20,9 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
     "serde_json",
 ] }
 
+# API Dependencies
+utoipa = { workspace = true, optional = true }
+
 actix      = { workspace = true }
 actix-web  = { workspace = true }
 log        = { workspace = true }
@@ -32,8 +35,9 @@ url        = { workspace = true }
 uuid       = { workspace = true }
 
 [features]
-default = ["api"]
+default = ["api", "openapi"]
 
 fail-on-warnings = []
 
 api = []
+openapi = ["dep:utoipa"]

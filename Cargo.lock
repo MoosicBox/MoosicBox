@@ -3513,6 +3513,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "url",
+ "utoipa",
  "uuid",
 ]
 
