@@ -27,6 +27,45 @@ use crate::{
     TidalTrackOrderDirection, TidalTrackPlaybackInfo, TidalTrackPlaybackInfoError,
 };
 
+#[cfg(feature = "openapi")]
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    tags((name = "Tidal")),
+    paths(
+        device_authorization_endpoint,
+        device_authorization_token_endpoint,
+        track_file_url_endpoint,
+        track_playback_info_endpoint,
+        favorite_artists_endpoint,
+        add_favorite_artist_endpoint,
+        remove_favorite_artist_endpoint,
+        favorite_albums_endpoint,
+        add_favorite_album_endpoint,
+        remove_favorite_album_endpoint,
+        add_favorite_track_endpoint,
+        remove_favorite_track_endpoint,
+        favorite_tracks_endpoint,
+        artist_albums_endpoint,
+        album_tracks_endpoint,
+        album_endpoint,
+        artist_endpoint,
+        track_endpoint,
+        search_endpoint,
+    ),
+    components(schemas(
+        TidalTrackPlaybackInfo,
+        TidalDeviceType,
+        TidalAudioQuality,
+        TidalArtistOrder,
+        TidalArtistOrderDirection,
+        TidalAlbumOrder,
+        TidalAlbumOrderDirection,
+        TidalTrackOrder,
+        TidalTrackOrderDirection,
+    ))
+)]
+pub struct Api;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
@@ -164,6 +203,25 @@ pub struct TidalDeviceAuthorizationQuery {
     open: Option<bool>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Tidal"],
+        post,
+        path = "/auth/device-authorization",
+        description = "Begin the authorization process for Tidal",
+        params(
+            ("client_id" = String, Query, description = "Tidal client ID to use"),
+            ("open" = Option<bool>, Query, description = "Open the authorization page in a browser"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "URL and Device code used in the Tidal authorization flow",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/auth/device-authorization", method = "POST")]
 pub async fn device_authorization_endpoint(
     query: web::Query<TidalDeviceAuthorizationQuery>,
@@ -190,6 +248,26 @@ pub struct TidalDeviceAuthorizationTokenQuery {
     persist: Option<bool>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Tidal"],
+        post,
+        path = "/auth/device-authorization/token",
+        description = "Finish the authorization process for Tidal",
+        params(
+            ("client_id" = String, Query, description = "Tidal client ID to use"),
+            ("client_secret" = String, Query, description = "Tidal client secret to use"),
+            ("device_code" = String, Query, description = "Tidal device code to use"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Access token and refresh token used in the Tidal authentication",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/auth/device-authorization/token", method = "POST")]
 pub async fn device_authorization_token_endpoint(
     query: web::Query<TidalDeviceAuthorizationTokenQuery>,
@@ -225,6 +303,25 @@ pub struct TidalTrackFileUrlQuery {
     track_id: u64,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Tidal"],
+        get,
+        path = "/track/url",
+        description = "Get Tidal track file stream URL",
+        params(
+            ("audioQuality" = TidalAudioQuality, Query, description = "Audio quality to fetch the file stream for"),
+            ("trackId" = u64, Query, description = "Tidal track ID to fetch track stream URL for"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Tidal track URL for the specified ID",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/track/url", method = "GET")]
 pub async fn track_file_url_endpoint(
     req: HttpRequest,
@@ -259,6 +356,25 @@ pub struct TidalTrackPlaybackInfoQuery {
     track_id: u64,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Tidal"],
+        get,
+        path = "/track/playback-info",
+        description = "Get Tidal track metadata info",
+        params(
+            ("audioQuality" = TidalAudioQuality, Query, description = "Audio quality to fetch the track metadata for"),
+            ("trackId" = u64, Query, description = "Tidal track ID to fetch track metadata for"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Tidal track metadata info",
+                body = TidalTrackPlaybackInfo,
+            )
+        )
+    )
+)]
 #[route("/track/playback-info", method = "GET")]
 pub async fn track_playback_info_endpoint(
     req: HttpRequest,
@@ -299,6 +415,31 @@ pub struct TidalFavoriteArtistsQuery {
     user_id: Option<u64>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Tidal"],
+        get,
+        path = "/favorites/artists",
+        description = "Get Tidal favorited artists",
+        params(
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+            ("order" = Option<TidalArtistOrder>, Query, description = "Sort property to sort the artists by"),
+            ("orderDirection" = Option<TidalAlbumOrderDirection>, Query, description = "Sort order direction to order the artists by"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("userId" = Option<u64>, Query, description = "User ID making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Page of Tidal favorited artists",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/artists", method = "GET")]
 pub async fn favorite_artists_endpoint(
     req: HttpRequest,
@@ -344,6 +485,28 @@ pub struct TidalAddFavoriteArtistsQuery {
     user_id: Option<u64>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Tidal"],
+        post,
+        path = "/favorites/artists",
+        description = "Favorite a Tidal artist",
+        params(
+            ("artistId" = u64, Query, description = "Tidal artist ID to favorite"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("userId" = Option<u64>, Query, description = "User ID making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/artists", method = "POST")]
 pub async fn add_favorite_artist_endpoint(
     req: HttpRequest,
@@ -386,6 +549,28 @@ pub struct TidalRemoveFavoriteArtistsQuery {
     user_id: Option<u64>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Tidal"],
+        delete,
+        path = "/favorites/artists",
+        description = "Remove Tidal artist from favorites",
+        params(
+            ("artistId" = u64, Query, description = "Tidal artist ID to remove from favorites"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("userId" = Option<u64>, Query, description = "User ID making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/artists", method = "DELETE")]
 pub async fn remove_favorite_artist_endpoint(
     req: HttpRequest,
@@ -431,6 +616,31 @@ pub struct TidalFavoriteAlbumsQuery {
     user_id: Option<u64>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Tidal"],
+        get,
+        path = "/favorites/albums",
+        description = "Get Tidal favorited albums",
+        params(
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+            ("order" = Option<TidalAlbumOrder>, Query, description = "Sort property to sort the albums by"),
+            ("orderDirection" = Option<TidalAlbumOrderDirection>, Query, description = "Sort order direction to order the albums by"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("userId" = Option<u64>, Query, description = "User ID making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Page of Tidal favorited albums",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/albums", method = "GET")]
 pub async fn favorite_albums_endpoint(
     req: HttpRequest,
@@ -476,6 +686,28 @@ pub struct TidalAddFavoriteAlbumsQuery {
     user_id: Option<u64>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Tidal"],
+        post,
+        path = "/favorites/albums",
+        description = "Favorite a Tidal album",
+        params(
+            ("albumId" = u64, Query, description = "Tidal album ID to favorite"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("userId" = Option<u64>, Query, description = "User ID making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/albums", method = "POST")]
 pub async fn add_favorite_album_endpoint(
     req: HttpRequest,
@@ -518,6 +750,28 @@ pub struct TidalRemoveFavoriteAlbumsQuery {
     user_id: Option<u64>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Tidal"],
+        delete,
+        path = "/favorites/albums",
+        description = "Remove Tidal album from favorites",
+        params(
+            ("albumId" = u64, Query, description = "Tidal album ID to remove from favorites"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("userId" = Option<u64>, Query, description = "User ID making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/albums", method = "DELETE")]
 pub async fn remove_favorite_album_endpoint(
     req: HttpRequest,
@@ -560,6 +814,28 @@ pub struct TidalAddFavoriteTracksQuery {
     user_id: Option<u64>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Tidal"],
+        post,
+        path = "/favorites/tracks",
+        description = "Favorite a Tidal track",
+        params(
+            ("trackId" = u64, Query, description = "Tidal track ID to favorite"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("userId" = Option<u64>, Query, description = "User ID making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/tracks", method = "POST")]
 pub async fn add_favorite_track_endpoint(
     req: HttpRequest,
@@ -602,6 +878,28 @@ pub struct TidalRemoveFavoriteTracksQuery {
     user_id: Option<u64>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Tidal"],
+        delete,
+        path = "/favorites/tracks",
+        description = "Remove Tidal track from favorites",
+        params(
+            ("trackId" = u64, Query, description = "Tidal track ID to remove from favorites"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("userId" = Option<u64>, Query, description = "User ID making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Success message",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/tracks", method = "DELETE")]
 pub async fn remove_favorite_track_endpoint(
     req: HttpRequest,
@@ -647,6 +945,31 @@ pub struct TidalFavoriteTracksQuery {
     user_id: Option<u64>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Tidal"],
+        get,
+        path = "/favorites/tracks",
+        description = "Get Tidal favorited tracks",
+        params(
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+            ("order" = Option<TidalTrackOrder>, Query, description = "Sort property to sort the tracks by"),
+            ("orderDirection" = Option<TidalTrackOrderDirection>, Query, description = "Sort order direction to order the tracks by"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("userId" = Option<u64>, Query, description = "User ID making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Page of Tidal favorited tracks",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/favorites/tracks", method = "GET")]
 pub async fn favorite_tracks_endpoint(
     req: HttpRequest,
@@ -713,6 +1036,30 @@ impl From<AlbumType> for TidalAlbumType {
     }
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Tidal"],
+        get,
+        path = "/artists/albums",
+        description = "Get Tidal albums for the specified artist",
+        params(
+            ("artistId" = u64, Query, description = "Tidal artist ID to search for albums for"),
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+            ("albumType" = Option<AlbumType>, Query, description = "Album type to filter to"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Page of Tidal albums for an artist",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/artists/albums", method = "GET")]
 pub async fn artist_albums_endpoint(
     req: HttpRequest,
@@ -758,6 +1105,29 @@ pub struct TidalAlbumTracksQuery {
     device_type: Option<TidalDeviceType>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Tidal"],
+        get,
+        path = "/albums/tracks",
+        description = "Get Tidal tracks for the specified album",
+        params(
+            ("albumId" = u64, Query, description = "Tidal album ID to search for tracks for"),
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Page of Tidal tracks for an album",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/albums/tracks", method = "GET")]
 pub async fn album_tracks_endpoint(
     req: HttpRequest,
@@ -810,6 +1180,27 @@ pub struct TidalAlbumQuery {
     device_type: Option<TidalDeviceType>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Tidal"],
+        get,
+        path = "/albums",
+        description = "Get Tidal album for the specified ID",
+        params(
+            ("albumId" = u64, Query, description = "Tidal album ID to fetch"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Tidal album for the specified ID",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/albums", method = "GET")]
 pub async fn album_endpoint(
     req: HttpRequest,
@@ -848,6 +1239,27 @@ pub struct TidalArtistQuery {
     device_type: Option<TidalDeviceType>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Tidal"],
+        get,
+        path = "/artists",
+        description = "Get Tidal artist for the specified ID",
+        params(
+            ("artistId" = u64, Query, description = "Tidal artist ID to fetch"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Tidal artist for the specified ID",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/artists", method = "GET")]
 pub async fn artist_endpoint(
     req: HttpRequest,
@@ -886,6 +1298,27 @@ pub struct TidalTrackQuery {
     device_type: Option<TidalDeviceType>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Tidal"],
+        get,
+        path = "/tracks",
+        description = "Get Tidal track for the specified ID",
+        params(
+            ("trackId" = u64, Query, description = "Tidal track ID to fetch"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Tidal track for the specified ID",
+                body = Value,
+            )
+        )
+    )
+)]
 #[route("/tracks", method = "GET")]
 pub async fn track_endpoint(
     req: HttpRequest,
@@ -930,6 +1363,34 @@ pub struct TidalSearchQuery {
     device_type: Option<TidalDeviceType>,
 }
 
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Tidal"],
+        get,
+        path = "/search",
+        description = "Search the Tidal library for artists/albums/tracks that fuzzy match the query",
+        params(
+            ("query" = String, Query, description = "The search query"),
+            ("offset" = Option<usize>, Query, description = "Page offset"),
+            ("limit" = Option<usize>, Query, description = "Page limit"),
+            ("include_contributions" = Option<bool>, Query, description = "Include contribution results"),
+            ("include_did_you_mean" = Option<bool>, Query, description = "Include 'did you mean?' results"),
+            ("include_user_playlists" = Option<bool>, Query, description = "Include user playlists"),
+            ("supports_user_data" = Option<bool>, Query, description = "Include user data"),
+            ("types" = Option<Vec<SearchType>>, Query, description = "Search types to search across"),
+            ("countryCode" = Option<String>, Query, description = "Country code to request from"),
+            ("locale" = Option<String>, Query, description = "Locale to request with"),
+            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "A page of matches for the given search query",
+                body = ApiSearchResultsResponse,
+            )
+        )
+    )
+)]
 #[route("/search", method = "GET")]
 pub async fn search_endpoint(
     req: HttpRequest,

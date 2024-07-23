@@ -273,4 +273,5 @@ openapi = [
     "moosicbox_qobuz/openapi",
     "moosicbox_scan/openapi",
     "moosicbox_search/openapi",
+    "moosicbox_tidal/openapi",
 ]
