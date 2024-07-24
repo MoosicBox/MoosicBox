@@ -1,73 +1,11 @@
-use std::io;
-
 use flume::Receiver;
-use moosicbox_audio_output::AudioOutputError;
 use symphonia::core::audio::AudioBuffer;
 use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error;
-use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, Track};
-use symphonia::core::io::MediaSourceStream;
-use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
+use symphonia::core::formats::{FormatReader, SeekMode, SeekTo, Track};
 use symphonia::core::units::Time;
-use thiserror::Error;
 
-impl From<io::Error> for PlaybackError {
-    fn from(err: io::Error) -> Self {
-        PlaybackError::Symphonia(Error::IoError(err))
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum PlaybackError {
-    #[error(transparent)]
-    AudioOutput(#[from] AudioOutputError),
-    #[error(transparent)]
-    Symphonia(#[from] Error),
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn play_media_source(
-    media_source_stream: MediaSourceStream,
-    hint: &Hint,
-    enable_gapless: bool,
-    verify: bool,
-    track_num: Option<usize>,
-    seek: Option<f64>,
-) -> Result<Receiver<AudioBuffer<f32>>, PlaybackError> {
-    // Use the default options for format readers other than for gapless playback.
-    let format_opts = FormatOptions {
-        enable_gapless,
-        ..Default::default()
-    };
-
-    // Use the default options for metadata readers.
-    let metadata_opts: MetadataOptions = Default::default();
-
-    // Probe the media source stream for metadata and get the format reader.
-    match symphonia::default::get_probe().format(
-        hint,
-        media_source_stream,
-        &format_opts,
-        &metadata_opts,
-    ) {
-        Ok(probed) => {
-            // If present, parse the seek argument.
-            let seek_time = seek;
-
-            // Set the decoder options.
-            let decode_opts = DecoderOptions { verify };
-
-            // Play it!
-            play(probed.format, track_num, seek_time, &decode_opts)
-        }
-        Err(err) => {
-            // The input was not supported by any format reader.
-            log::info!("the input is not supported: {err:?}");
-            Err(PlaybackError::Symphonia(err))
-        }
-    }
-}
+use crate::{AudioDecodeError, DecodeError};
 
 #[derive(Copy, Clone)]
 struct PlayTrackOptions {
@@ -75,12 +13,12 @@ struct PlayTrackOptions {
     seek_ts: u64,
 }
 
-fn play(
+pub fn decode(
     mut reader: Box<dyn FormatReader>,
     track_num: Option<usize>,
     seek_time: Option<f64>,
     decode_opts: &DecoderOptions,
-) -> Result<Receiver<AudioBuffer<f32>>, PlaybackError> {
+) -> Result<Receiver<AudioBuffer<f32>>, DecodeError> {
     // If the user provided a track number, select that track if it exists, otherwise, select the
     // first track with a known codec.
     let track = track_num
@@ -89,7 +27,7 @@ fn play(
 
     let mut track_id = match track {
         Some(track) => track.id,
-        _ => return Err(PlaybackError::AudioOutput(AudioOutputError::OpenStream)),
+        _ => return Err(DecodeError::AudioDecode(AudioDecodeError::OpenStream)),
     };
 
     log::debug!("Playing track_id={track_id}");
@@ -127,14 +65,14 @@ fn play(
 
     let track_info = PlayTrackOptions { track_id, seek_ts };
 
-    play_track(reader, track_info, decode_opts)
+    decode_track(reader, track_info, decode_opts)
 }
 
-fn play_track(
+fn decode_track(
     mut reader: Box<dyn FormatReader>,
     play_opts: PlayTrackOptions,
     decode_opts: &DecoderOptions,
-) -> Result<Receiver<AudioBuffer<f32>>, PlaybackError> {
+) -> Result<Receiver<AudioBuffer<f32>>, DecodeError> {
     let (sender, receiver) = flume::unbounded::<AudioBuffer<f32>>();
 
     // Get the selected track using the track ID.
@@ -142,7 +80,7 @@ fn play_track(
         .tracks()
         .iter()
         .find(|track| track.id == play_opts.track_id)
-        .ok_or(PlaybackError::AudioOutput(AudioOutputError::StreamEnd))?
+        .ok_or(DecodeError::AudioDecode(AudioDecodeError::StreamEnd))?
         .clone();
 
     // Create a decoder for the track.
@@ -156,7 +94,7 @@ fn play_track(
             // Get the next packet from the format reader.
             let packet = match reader.next_packet() {
                 Ok(packet) => packet,
-                Err(err) => break Err(PlaybackError::Symphonia(err)),
+                Err(err) => break Err(DecodeError::Symphonia(err)),
             };
 
             // If the packet does not belong to the selected track, skip it.
@@ -193,7 +131,7 @@ fn play_track(
                     // packet as usual.
                     log::warn!("decode error: {}", err);
                 }
-                Err(err) => break Err(PlaybackError::Symphonia(err)),
+                Err(err) => break Err(DecodeError::Symphonia(err)),
             }
             log::trace!("Finished processing packet");
         };
@@ -218,9 +156,9 @@ fn first_supported_track(tracks: &[Track]) -> Option<&Track> {
         .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
 }
 
-fn ignore_end_of_stream_error(result: Result<(), PlaybackError>) -> Result<(), PlaybackError> {
+fn ignore_end_of_stream_error(result: Result<(), DecodeError>) -> Result<(), DecodeError> {
     match result {
-        Err(PlaybackError::Symphonia(Error::IoError(err)))
+        Err(DecodeError::Symphonia(Error::IoError(err)))
             if err.kind() == std::io::ErrorKind::UnexpectedEof
                 && err.to_string() == "end of stream" =>
         {

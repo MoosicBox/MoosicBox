@@ -5,17 +5,14 @@ use std::{
     sync::{Arc, RwLock, RwLockWriteGuard},
 };
 
+use ::symphonia::core::{io::MediaSource, probe::Hint};
 use async_trait::async_trait;
 use atomic_float::AtomicF64;
 use flume::{bounded, Receiver, SendError};
 use futures::{Future, StreamExt as _, TryStreamExt as _};
 use local_ip_address::local_ip;
-use moosicbox_audio_decoder::{
-    media_sources::{
-        bytestream_source::ByteStreamSource, remote_bytestream::RemoteByteStreamMediaSource,
-    },
-    signal_chain::{SignalChain, SignalChainError},
-    PlaybackError,
+use moosicbox_audio_decoder::media_sources::{
+    bytestream_source::ByteStreamSource, remote_bytestream::RemoteByteStreamMediaSource,
 };
 use moosicbox_core::{
     sqlite::{
@@ -38,15 +35,23 @@ use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng as _};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use symphonia::core::{io::MediaSource, probe::Hint};
 use thiserror::Error;
 use tokio_util::{
     codec::{BytesCodec, FramedRead},
     sync::CancellationToken,
 };
 
+use crate::player::{
+    signal_chain::{SignalChain, SignalChainError},
+    symphonia::PlaybackError,
+};
+
 #[cfg(feature = "local")]
 pub mod local;
+
+pub mod signal_chain;
+pub mod symphonia;
+pub mod symphonia_unsync;
 
 pub const DEFAULT_SEEK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
     max_attempts: 10,
@@ -79,7 +84,7 @@ pub enum PlayerError {
     #[error("Format not supported: {0:?}")]
     UnsupportedFormat(AudioFormat),
     #[error(transparent)]
-    PlaybackError(#[from] moosicbox_audio_decoder::PlaybackError),
+    PlaybackError(#[from] PlaybackError),
     #[error("Track fetch failed: {0}")]
     TrackFetchFailed(String),
     #[error("Album fetch failed: {0}")]
@@ -1065,7 +1070,7 @@ pub trait Player: Clone + Send + 'static {
                 #[cfg(feature = "aac")]
                 AudioFormat::Aac => {
                     log::debug!("Encoding playback with AacEncoder");
-                    use moosicbox_audio_decoder::output::encoders::aac::AacEncoder;
+                    use moosicbox_audio_output::encoders::aac::AacEncoder;
                     let mut hint = Hint::new();
                     hint.with_extension("m4a");
                     signal_chain = signal_chain
@@ -1075,7 +1080,7 @@ pub trait Player: Clone + Send + 'static {
                 #[cfg(feature = "flac")]
                 AudioFormat::Flac => {
                     log::debug!("Encoding playback with FlacEncoder");
-                    use moosicbox_audio_decoder::output::encoders::flac::FlacEncoder;
+                    use moosicbox_audio_output::encoders::flac::FlacEncoder;
                     let mut hint = Hint::new();
                     hint.with_extension("flac");
                     signal_chain = signal_chain
@@ -1085,7 +1090,7 @@ pub trait Player: Clone + Send + 'static {
                 #[cfg(feature = "mp3")]
                 AudioFormat::Mp3 => {
                     log::debug!("Encoding playback with Mp3Encoder");
-                    use moosicbox_audio_decoder::output::encoders::mp3::Mp3Encoder;
+                    use moosicbox_audio_output::encoders::mp3::Mp3Encoder;
                     let mut hint = Hint::new();
                     hint.with_extension("mp3");
                     signal_chain = signal_chain
@@ -1095,7 +1100,7 @@ pub trait Player: Clone + Send + 'static {
                 #[cfg(feature = "opus")]
                 AudioFormat::Opus => {
                     log::debug!("Encoding playback with OpusEncoder");
-                    use moosicbox_audio_decoder::output::encoders::opus::OpusEncoder;
+                    use moosicbox_audio_output::encoders::opus::OpusEncoder;
                     let mut hint = Hint::new();
                     hint.with_extension("opus");
                     signal_chain = signal_chain
@@ -1132,14 +1137,12 @@ pub trait Player: Clone + Send + 'static {
 
             match signal_chain.process(ms) {
                 Ok(stream) => stream,
-                Err(SignalChainError::Playback(err)) => {
-                    return Err(PlayerError::PlaybackError(match err {
-                        moosicbox_audio_decoder::unsync::PlaybackError::AudioOutput(err) => {
-                            PlaybackError::AudioOutput(err)
+                Err(SignalChainError::Playback(e)) => {
+                    return Err(PlayerError::PlaybackError(match e {
+                        symphonia_unsync::PlaybackError::Symphonia(e) => {
+                            PlaybackError::Symphonia(e)
                         }
-                        moosicbox_audio_decoder::unsync::PlaybackError::Symphonia(err) => {
-                            PlaybackError::Symphonia(err)
-                        }
+                        symphonia_unsync::PlaybackError::Decode(e) => PlaybackError::Decode(e),
                     }));
                 }
                 Err(SignalChainError::Empty) => unreachable!("Empty signal chain"),

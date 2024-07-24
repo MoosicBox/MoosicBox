@@ -11,11 +11,12 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert       = { path = "../assert", default-features = false }
-moosicbox_env_utils    = { path = "../env_utils", default-features = false }
-moosicbox_resampler    = { path = "../resampler", default-features = false }
-moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
-moosicbox_task         = { path = "../task", default-features = false }
+moosicbox_assert        = { path = "../assert", default-features = false }
+moosicbox_audio_decoder = { path = "../audio_decoder", default-features = false }
+moosicbox_env_utils     = { path = "../env_utils", default-features = false }
+moosicbox_resampler     = { path = "../resampler", default-features = false }
+moosicbox_stream_utils  = { path = "../stream_utils", default-features = false }
+moosicbox_task          = { path = "../task", default-features = false }
 
 # CPAL
 cpal = { workspace = true, optional = true }
@@ -36,6 +37,7 @@ bytes      = { workspace = true }
 log        = { workspace = true }
 symphonia  = { workspace = true }
 thiserror  = { workspace = true }
+tokio      = { workspace = true, features = ["rt-multi-thread", "tracing"] }
 tokio-util = { workspace = true }
 
 [features]
@@ -59,7 +61,22 @@ pulseaudio          = ["pulseaudio-simple", "pulseaudio-standard"]
 pulseaudio-simple   = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
 pulseaudio-standard = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
 
-aac  = ["dep:fdk-aac", "moosicbox_audio_encoder/aac"]
-flac = ["moosicbox_audio_encoder/flac"]
-mp3  = ["dep:mp3lame-encoder", "moosicbox_audio_encoder/mp3"]
-opus = ["dep:ogg", "dep:opus", "moosicbox_audio_encoder/opus"]
+aac = [
+    "dep:fdk-aac",
+    "dep:moosicbox_audio_encoder",
+    "moosicbox_audio_encoder/aac",
+]
+flac = ["dep:moosicbox_audio_encoder", "moosicbox_audio_encoder/flac"]
+mp3 = [
+
+    "dep:moosicbox_audio_encoder",
+    "dep:mp3lame-encoder",
+    "moosicbox_audio_encoder/mp3",
+]
+opus = [
+
+    "dep:moosicbox_audio_encoder",
+    "dep:ogg",
+    "dep:opus",
+    "moosicbox_audio_encoder/opus",
+]

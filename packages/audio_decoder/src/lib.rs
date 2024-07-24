@@ -3,37 +3,159 @@
 #![forbid(unsafe_code)]
 
 use std::fs::File;
-use std::io;
 use std::path::Path;
 
-use moosicbox_audio_output::{AudioOutputError, AudioOutputHandler};
+use symphonia::core::audio::{AudioBuffer, SignalSpec};
 use symphonia::core::codecs::{DecoderOptions, FinalizeResult, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error;
-use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, Track};
+use symphonia::core::formats::{FormatOptions, FormatReader, Packet, SeekMode, SeekTo, Track};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
-use symphonia::core::units::Time;
+use symphonia::core::units::{Duration, Time};
 use thiserror::Error;
 use tokio::task::JoinError;
+use tokio_util::sync::CancellationToken;
 
-pub mod encoders;
 pub mod media_sources;
-pub mod output;
-pub mod signal_chain;
 pub mod unsync;
 pub mod volume_mixer;
 
-impl From<io::Error> for PlaybackError {
-    fn from(err: io::Error) -> Self {
-        PlaybackError::Symphonia(Error::IoError(err))
+#[allow(dead_code)]
+#[allow(clippy::enum_variant_names)]
+#[derive(Debug, Error)]
+pub enum AudioDecodeError {
+    #[error("OpenStreamError")]
+    OpenStream,
+    #[error("PlayStreamError")]
+    PlayStream,
+    #[error("StreamClosedError")]
+    StreamClosed,
+    #[error("StreamEndError")]
+    StreamEnd,
+    #[error("InterruptError")]
+    Interrupt,
+    #[error(transparent)]
+    IO(#[from] std::io::Error),
+}
+
+pub trait AudioDecode {
+    fn decoded(
+        &mut self,
+        decoded: AudioBuffer<f32>,
+        packet: &Packet,
+        track: &Track,
+    ) -> Result<(), AudioDecodeError>;
+}
+
+type InnerType = Box<dyn AudioDecode>;
+type OpenFunc = Box<dyn FnMut(SignalSpec, Duration) -> Result<InnerType, AudioDecodeError> + Send>;
+type AudioFilter =
+    Box<dyn FnMut(&mut AudioBuffer<f32>, &Packet, &Track) -> Result<(), AudioDecodeError> + Send>;
+
+pub struct AudioDecodeHandler {
+    pub cancellation_token: Option<CancellationToken>,
+    filters: Vec<AudioFilter>,
+    open_outputs: Vec<OpenFunc>,
+    outputs: Vec<InnerType>,
+}
+
+impl AudioDecodeHandler {
+    pub fn new() -> Self {
+        Self {
+            cancellation_token: None,
+            filters: vec![],
+            open_outputs: vec![],
+            outputs: vec![],
+        }
+    }
+
+    pub fn with_filter(mut self, filter: AudioFilter) -> Self {
+        self.filters.push(filter);
+        self
+    }
+
+    pub fn with_output(mut self, open_output: OpenFunc) -> Self {
+        self.open_outputs.push(open_output);
+        self
+    }
+
+    pub fn with_cancellation_token(mut self, cancellation_token: CancellationToken) -> Self {
+        self.cancellation_token.replace(cancellation_token);
+        self
+    }
+
+    fn run_filters(
+        &mut self,
+        decoded: &mut AudioBuffer<f32>,
+        packet: &Packet,
+        track: &Track,
+    ) -> Result<(), AudioDecodeError> {
+        for filter in &mut self.filters {
+            log::trace!("Running audio filter");
+            filter(decoded, packet, track)?;
+        }
+        Ok(())
+    }
+
+    pub fn write(
+        &mut self,
+        mut decoded: AudioBuffer<f32>,
+        packet: &Packet,
+        track: &Track,
+    ) -> Result<(), AudioDecodeError> {
+        self.run_filters(&mut decoded, packet, track)?;
+
+        let len = self.outputs.len();
+
+        for (i, output) in self.outputs.iter_mut().enumerate() {
+            if i == len - 1 {
+                output.decoded(decoded, packet, track)?;
+                break;
+            } else {
+                output.decoded(decoded.clone(), packet, track)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn flush(&mut self) -> Result<(), AudioDecodeError> {
+        Ok(())
+    }
+
+    pub fn contains_outputs_to_open(&self) -> bool {
+        !self.open_outputs.is_empty()
+    }
+
+    pub fn try_open(
+        &mut self,
+        spec: SignalSpec,
+        duration: Duration,
+    ) -> Result<(), AudioDecodeError> {
+        for mut open_func in self.open_outputs.drain(..) {
+            self.outputs.push((*open_func)(spec, duration)?);
+        }
+        Ok(())
+    }
+}
+
+impl Default for AudioDecodeHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl From<std::io::Error> for DecodeError {
+    fn from(err: std::io::Error) -> Self {
+        DecodeError::Symphonia(Error::IoError(err))
     }
 }
 
 #[derive(Debug, Error)]
-pub enum PlaybackError {
+pub enum DecodeError {
     #[error(transparent)]
-    AudioOutput(#[from] AudioOutputError),
+    AudioDecode(#[from] AudioDecodeError),
     #[error(transparent)]
     Symphonia(#[from] Error),
     #[error(transparent)]
@@ -44,18 +166,24 @@ pub enum PlaybackError {
     InvalidSource,
 }
 
-pub async fn play_file_path_str_async(
+#[derive(Copy, Clone)]
+struct PlayTrackOptions {
+    track_id: u32,
+    seek_ts: u64,
+}
+
+pub async fn decode_file_path_str_async(
     path_str: &str,
-    get_audio_output_handler: impl FnOnce() -> GetAudioOutputHandlerRet + Send + 'static,
+    get_audio_output_handler: impl FnOnce() -> GetAudioDecodeHandlerRet + Send + 'static,
     enable_gapless: bool,
     verify: bool,
     track_num: Option<usize>,
     seek: Option<f64>,
-) -> Result<i32, PlaybackError> {
+) -> Result<i32, DecodeError> {
     let path_str = path_str.to_owned();
     moosicbox_task::spawn_blocking("audio_decoder: Play file path", move || {
         let mut handler = get_audio_output_handler()?;
-        play_file_path_str(
+        decode_file_path_str(
             &path_str,
             &mut handler,
             enable_gapless,
@@ -68,14 +196,14 @@ pub async fn play_file_path_str_async(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn play_file_path_str(
+pub fn decode_file_path_str(
     path_str: &str,
-    audio_output_handler: &mut AudioOutputHandler,
+    audio_output_handler: &mut AudioDecodeHandler,
     enable_gapless: bool,
     verify: bool,
     track_num: Option<usize>,
     seek: Option<f64>,
-) -> Result<i32, PlaybackError> {
+) -> Result<i32, DecodeError> {
     // Create a hint to help the format registry guess what format reader is appropriate.
     let mut hint = Hint::new();
 
@@ -93,7 +221,7 @@ fn play_file_path_str(
     // Create the media source stream using the boxed media source from above.
     let mss = MediaSourceStream::new(source, Default::default());
 
-    play_media_source(
+    decode_media_source(
         mss,
         &hint,
         audio_output_handler,
@@ -104,21 +232,21 @@ fn play_file_path_str(
     )
 }
 
-pub type GetAudioOutputHandlerRet = Result<AudioOutputHandler, PlaybackError>;
+pub type GetAudioDecodeHandlerRet = Result<AudioDecodeHandler, DecodeError>;
 
-pub async fn play_media_source_async(
+pub async fn decode_media_source_async(
     media_source_stream: MediaSourceStream,
     hint: &Hint,
-    get_audio_output_handler: impl FnOnce() -> GetAudioOutputHandlerRet + Send + 'static,
+    get_audio_output_handler: impl FnOnce() -> GetAudioDecodeHandlerRet + Send + 'static,
     enable_gapless: bool,
     verify: bool,
     track_num: Option<usize>,
     seek: Option<f64>,
-) -> Result<i32, PlaybackError> {
+) -> Result<i32, DecodeError> {
     let hint = hint.clone();
     moosicbox_task::spawn_blocking("audio_decoder: Play media source", move || {
         let mut handler = get_audio_output_handler()?;
-        play_media_source(
+        decode_media_source(
             media_source_stream,
             &hint,
             &mut handler,
@@ -132,15 +260,15 @@ pub async fn play_media_source_async(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn play_media_source(
+fn decode_media_source(
     media_source_stream: MediaSourceStream,
     hint: &Hint,
-    audio_output_handler: &mut AudioOutputHandler,
+    audio_output_handler: &mut AudioDecodeHandler,
     enable_gapless: bool,
     verify: bool,
     track_num: Option<usize>,
     seek: Option<f64>,
-) -> Result<i32, PlaybackError> {
+) -> Result<i32, DecodeError> {
     // Use the default options for format readers other than for gapless playback.
     let format_opts = FormatOptions {
         enable_gapless,
@@ -165,7 +293,7 @@ fn play_media_source(
             let decode_opts = DecoderOptions { verify };
 
             // Play it!
-            play(
+            decode(
                 probed.format,
                 audio_output_handler,
                 track_num,
@@ -176,24 +304,18 @@ fn play_media_source(
         Err(err) => {
             // The input was not supported by any format reader.
             log::info!("the input is not supported: {err:?}");
-            Err(PlaybackError::Symphonia(err))
+            Err(DecodeError::Symphonia(err))
         }
     }
 }
 
-#[derive(Copy, Clone)]
-struct PlayTrackOptions {
-    track_id: u32,
-    seek_ts: u64,
-}
-
-fn play(
+pub fn decode(
     mut reader: Box<dyn FormatReader>,
-    audio_output_handler: &mut AudioOutputHandler,
+    audio_output_handler: &mut AudioDecodeHandler,
     track_num: Option<usize>,
     seek_time: Option<f64>,
     decode_opts: &DecoderOptions,
-) -> Result<i32, PlaybackError> {
+) -> Result<i32, DecodeError> {
     // If the user provided a track number, select that track if it exists, otherwise, select the
     // first track with a known codec.
     let track = track_num
@@ -242,7 +364,7 @@ fn play(
 
     let result = loop {
         match play_track(&mut reader, audio_output_handler, track_info, decode_opts) {
-            Err(PlaybackError::Symphonia(Error::ResetRequired)) => {
+            Err(DecodeError::Symphonia(Error::ResetRequired)) => {
                 // Select the first supported track since the user's selected track number might no
                 // longer be valid or make sense.
                 let track_id = first_supported_track(reader.tracks()).unwrap().id;
@@ -255,7 +377,7 @@ fn play(
         }
     };
 
-    let result = if let Err(PlaybackError::AudioOutput(AudioOutputError::StreamEnd)) = result {
+    let result = if let Err(DecodeError::AudioDecode(AudioDecodeError::StreamEnd)) = result {
         Ok(0)
     } else {
         result
@@ -269,7 +391,7 @@ fn play(
                 audio_output_handler.flush()?;
             }
         },
-        Err(PlaybackError::AudioOutput(AudioOutputError::Interrupt)) => {
+        Err(DecodeError::AudioDecode(AudioDecodeError::Interrupt)) => {
             log::info!("Audio interrupt detected. Not flushing");
         }
         Err(ref err) => {
@@ -282,10 +404,10 @@ fn play(
 
 fn play_track(
     reader: &mut Box<dyn FormatReader>,
-    audio_output_handler: &mut AudioOutputHandler,
+    audio_output_handler: &mut AudioDecodeHandler,
     play_opts: PlayTrackOptions,
     decode_opts: &DecoderOptions,
-) -> Result<i32, PlaybackError> {
+) -> Result<i32, DecodeError> {
     // Get the selected track using the track ID.
     let track = match reader
         .tracks()
@@ -312,7 +434,7 @@ fn play_track(
         // Get the next packet from the format reader.
         let packet = match reader.next_packet() {
             Ok(packet) => packet,
-            Err(err) => break Err(PlaybackError::Symphonia(err)),
+            Err(err) => break Err(DecodeError::Symphonia(err)),
         };
 
         // If the packet does not belong to the selected track, skip it.
@@ -359,7 +481,7 @@ fn play_track(
                 // packet as usual.
                 log::warn!("decode error: {}", err);
             }
-            Err(err) => break Err(PlaybackError::Symphonia(err)),
+            Err(err) => break Err(DecodeError::Symphonia(err)),
         }
         log::trace!("Finished processing packet");
     };
@@ -377,9 +499,9 @@ fn first_supported_track(tracks: &[Track]) -> Option<&Track> {
         .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
 }
 
-fn ignore_end_of_stream_error(result: Result<(), PlaybackError>) -> Result<(), PlaybackError> {
+fn ignore_end_of_stream_error(result: Result<(), DecodeError>) -> Result<(), DecodeError> {
     match result {
-        Err(PlaybackError::Symphonia(Error::IoError(err)))
+        Err(DecodeError::Symphonia(Error::IoError(err)))
             if err.kind() == std::io::ErrorKind::UnexpectedEof
                 && err.to_string() == "end of stream" =>
         {
@@ -391,7 +513,7 @@ fn ignore_end_of_stream_error(result: Result<(), PlaybackError>) -> Result<(), P
     }
 }
 
-fn do_verification(finalization: FinalizeResult) -> Result<i32, PlaybackError> {
+fn do_verification(finalization: FinalizeResult) -> Result<i32, DecodeError> {
     match finalization.verify_ok {
         Some(is_ok) => {
             // Got a verification result.

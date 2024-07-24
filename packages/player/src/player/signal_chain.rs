@@ -1,5 +1,6 @@
 use flume::Receiver;
-use moosicbox_audio_output::{encoders::AudioEncoder, AudioOutputError, AudioOutputHandler};
+use moosicbox_audio_decoder::{AudioDecodeError, AudioDecodeHandler};
+use moosicbox_audio_output::encoders::AudioEncoder;
 use moosicbox_resampler::Resampler;
 use symphonia::core::{
     audio::{AudioBuffer, Signal},
@@ -8,7 +9,7 @@ use symphonia::core::{
 };
 use thiserror::Error;
 
-use crate::unsync::{play_media_source, PlaybackError};
+use super::symphonia_unsync::{play_media_source, PlaybackError};
 
 #[derive(Debug, Error)]
 pub enum SignalChainError {
@@ -18,7 +19,7 @@ pub enum SignalChainError {
     Empty,
 }
 
-type CreateAudioOutputStream = Box<dyn (FnOnce() -> AudioOutputHandler) + Send + 'static>;
+type CreateAudioDecodeStream = Box<dyn (FnOnce() -> AudioDecodeHandler) + Send + 'static>;
 type CreateAudioEncoder = Box<dyn (FnOnce() -> Box<dyn AudioEncoder>) + Send + 'static>;
 
 pub struct SignalChain {
@@ -37,12 +38,12 @@ impl SignalChain {
         self
     }
 
-    pub fn with_audio_output_handler<F: (FnOnce() -> AudioOutputHandler) + Send + 'static>(
+    pub fn with_audio_decode_handler<F: (FnOnce() -> AudioDecodeHandler) + Send + 'static>(
         mut self,
         handler: F,
     ) -> Self {
         if let Some(step) = self.steps.pop() {
-            self.steps.push(step.with_audio_output_handler(handler));
+            self.steps.push(step.with_audio_decode_handler(handler));
         }
 
         self
@@ -125,7 +126,7 @@ impl Default for SignalChain {
 
 pub struct SignalChainStep {
     hint: Option<Hint>,
-    audio_output_handler: Option<CreateAudioOutputStream>,
+    audio_output_handler: Option<CreateAudioDecodeStream>,
     encoder: Option<CreateAudioEncoder>,
     resampler: Option<Resampler<f32>>,
     enable_gapless: bool,
@@ -151,7 +152,7 @@ impl SignalChainStep {
         self
     }
 
-    pub fn with_audio_output_handler<F: (FnOnce() -> AudioOutputHandler) + Send + 'static>(
+    pub fn with_audio_decode_handler<F: (FnOnce() -> AudioDecodeHandler) + Send + 'static>(
         mut self,
         handler: F,
     ) -> Self {
@@ -314,5 +315,5 @@ pub enum SignalChainProcessorError {
     #[error(transparent)]
     Playback(#[from] PlaybackError),
     #[error(transparent)]
-    AudioOutput(#[from] AudioOutputError),
+    AudioDecode(#[from] AudioDecodeError),
 }

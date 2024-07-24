@@ -1036,7 +1036,7 @@ mod test {
     #[async_trait]
     impl MusicApi for TestMusicApi {
         fn source(&self) -> ApiSource {
-            todo!()
+            ApiSource::Library
         }
 
         async fn artists(

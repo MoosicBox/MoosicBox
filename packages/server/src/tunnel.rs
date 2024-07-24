@@ -137,12 +137,12 @@ pub async fn setup_tunnel(
                                     Ok::<_, String>(())
                                 });
                             }
-                            TunnelMessage::Binary(_) => todo!(),
+                            TunnelMessage::Binary(_) => unimplemented!(),
                             TunnelMessage::Ping(_) | TunnelMessage::Pong(_) => {}
                             TunnelMessage::Close => {
                                 log::info!("Tunnel connection was closed");
                             }
-                            TunnelMessage::Frame(_) => todo!(),
+                            TunnelMessage::Frame(_) => unimplemented!(),
                         }
                     }
                     log::debug!("Exiting tunnel message loop");

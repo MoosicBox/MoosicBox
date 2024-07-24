@@ -1,12 +1,17 @@
 use std::sync::{Mutex, RwLock};
 
 use bytes::Bytes;
+use moosicbox_audio_decoder::{
+    decode_file_path_str, AudioDecode, AudioDecodeError, AudioDecodeHandler,
+};
 use moosicbox_audio_encoder::opus::{
     encoder_opus, OPUS_STREAM_COMMENTS_HEADER, OPUS_STREAM_IDENTIFICATION_HEADER,
 };
+use moosicbox_stream_utils::{ByteStream, ByteWriter};
 use ogg::{PacketWriteEndInfo, PacketWriter};
-use symphonia::core::audio::*;
+use symphonia::core::formats::Track;
 use symphonia::core::units::Duration;
+use symphonia::core::{audio::*, formats::Packet};
 
 use crate::{to_samples, AudioOutput, AudioOutputError};
 use moosicbox_resampler::Resampler;
@@ -282,6 +287,44 @@ impl AudioEncoder for OpusEncoder<'_> {
     }
 }
 
+impl AudioDecode for OpusEncoder<'_> {
+    fn decoded(
+        &mut self,
+        decoded: AudioBuffer<f32>,
+        _packet: &Packet,
+        _track: &Track,
+    ) -> Result<(), AudioDecodeError> {
+        if self.writer.is_none() {
+            return Ok(());
+        }
+
+        let bytes = self.encode(decoded).map_err(|e| {
+            AudioDecodeError::IO(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to encode: {e:?}"),
+            ))
+        })?;
+
+        if let Some(writer) = self.writer.as_mut() {
+            let mut count = 0;
+            loop {
+                count += match writer.write(&bytes[count..]) {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        log::error!("Failed to write: {e:?}");
+                        return Err(AudioDecodeError::StreamClosed);
+                    }
+                };
+                if count >= bytes.len() {
+                    break;
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
 impl AudioOutput for OpusEncoder<'_> {
     fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
         if self.writer.is_none() {
@@ -311,5 +354,38 @@ impl AudioOutput for OpusEncoder<'_> {
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
         Ok(())
+    }
+}
+
+pub fn encode_opus_stream(path: String) -> ByteStream {
+    let writer = ByteWriter::default();
+    let stream = writer.stream();
+
+    encode_opus_spawn(path, writer);
+
+    stream
+}
+
+pub fn encode_opus_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
+    path: String,
+    writer: T,
+) -> tokio::task::JoinHandle<()> {
+    let path = path.clone();
+    moosicbox_task::spawn_blocking("audio_decoder: encode_opus", move || {
+        encode_opus(path, writer)
+    })
+}
+
+pub fn encode_opus<T: std::io::Write + Send + Sync + Clone + 'static>(path: String, writer: T) {
+    let mut audio_decode_handler =
+        AudioDecodeHandler::new().with_output(Box::new(move |spec, duration| {
+            Ok(Box::new(
+                OpusEncoder::with_writer(writer.clone()).open(spec, duration),
+            ))
+        }));
+
+    if let Err(err) = decode_file_path_str(&path, &mut audio_decode_handler, true, true, None, None)
+    {
+        log::error!("Failed to encode to opus: {err:?}");
     }
 }

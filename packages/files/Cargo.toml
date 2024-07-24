@@ -13,6 +13,8 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
 moosicbox_async_service = { path = "../async_service", default-features = false }
+moosicbox_audio_decoder = { path = "../audio_decoder", default-features = false }
+moosicbox_audio_output = { path = "../audio_output", default-features = false }
 moosicbox_config = { path = "../config", default-features = false }
 moosicbox_core = { path = "../core", default-features = false }
 moosicbox_database = { path = "../database", default-features = false, features = [
@@ -25,7 +27,6 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
 ] }
 moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
-moosicbox_audio_decoder = { path = "../audio_decoder", default-features = false }
 moosicbox_task = { path = "../task", default-features = false }
 
 # API Dependencies
@@ -82,7 +83,7 @@ openapi     = ["dep:utoipa", "moosicbox_core/openapi"]
 range       = []
 track-range = []
 
-aac  = ["moosicbox_core/aac", "moosicbox_audio_decoder/aac"]
-flac = ["moosicbox_core/flac", "moosicbox_audio_decoder/flac"]
-mp3  = ["moosicbox_core/mp3", "moosicbox_audio_decoder/mp3"]
-opus = ["moosicbox_core/opus", "moosicbox_audio_decoder/opus"]
+aac  = ["moosicbox_audio_output/aac", "moosicbox_core/aac"]
+flac = ["moosicbox_audio_output/flac", "moosicbox_core/flac"]
+mp3  = ["moosicbox_audio_output/mp3", "moosicbox_core/mp3"]
+opus = ["moosicbox_audio_output/opus", "moosicbox_core/opus"]

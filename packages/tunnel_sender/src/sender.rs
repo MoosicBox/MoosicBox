@@ -12,8 +12,7 @@ use futures_channel::mpsc::UnboundedSender;
 use futures_util::future::ready;
 use futures_util::{future, pin_mut, Future, Stream, StreamExt};
 use moosicbox_audio_decoder::media_sources::remote_bytestream::RemoteByteStreamMediaSource;
-use moosicbox_audio_decoder::output::AudioOutputHandler;
-use moosicbox_audio_decoder::play_media_source_async;
+use moosicbox_audio_decoder::AudioDecodeHandler;
 use moosicbox_auth::FetchSignatureError;
 use moosicbox_core::sqlite::models::{ApiSource, Id};
 use moosicbox_core::types::AudioFormat;
@@ -26,6 +25,7 @@ use moosicbox_files::files::track::{
 };
 use moosicbox_files::range::{parse_ranges, Range};
 use moosicbox_music_api::{MusicApis, TrackSource};
+use moosicbox_player::player::symphonia::play_media_source_async;
 use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;
 use moosicbox_stream_utils::ByteWriter;
 use moosicbox_tunnel::{Method, TunnelEncoding, TunnelWsResponse};
@@ -1199,7 +1199,7 @@ impl TunnelSender {
                                     #[cfg(feature = "aac")]
                                     Some(AudioFormat::Aac) => {
                                         self.send_stream(request_id, 200, response_headers, ranges,
-                                        moosicbox_audio_decoder::encoders::aac::encode_aac_stream(
+                                        moosicbox_audio_output::encoders::aac::encode_aac_stream(
                                             path,
                                         ),
                                         encoding,
@@ -1208,7 +1208,7 @@ impl TunnelSender {
                                     #[cfg(feature = "mp3")]
                                     Some(AudioFormat::Mp3) => {
                                         self.send_stream(request_id, 200, response_headers, ranges,
-                                        moosicbox_audio_decoder::encoders::mp3::encode_mp3_stream(
+                                        moosicbox_audio_output::encoders::mp3::encode_mp3_stream(
                                             path,
                                         ),
                                         encoding,
@@ -1217,7 +1217,7 @@ impl TunnelSender {
                                     #[cfg(feature = "opus")]
                                     Some(AudioFormat::Opus) => {
                                         self.send_stream(request_id, 200, response_headers, ranges,
-                                        moosicbox_audio_decoder::encoders::opus::encode_opus_stream(
+                                        moosicbox_audio_output::encoders::opus::encode_opus_stream(
                                             path,
                                         ),
                                         encoding,
@@ -1240,7 +1240,7 @@ impl TunnelSender {
 
                                 let get_handler = move || {
                                     #[allow(unused_mut)]
-                                    let mut audio_output_handler = AudioOutputHandler::new();
+                                    let mut audio_output_handler = AudioDecodeHandler::new();
 
                                     let format = match query.format {
                                         #[cfg(feature = "aac")]
@@ -1274,7 +1274,7 @@ impl TunnelSender {
                                     match format {
                                         #[cfg(feature = "aac")]
                                         AudioFormat::Aac => {
-                                            use moosicbox_audio_decoder::output::encoders::aac::AacEncoder;
+                                            use moosicbox_audio_output::encoders::aac::AacEncoder;
                                             log::debug!("Using AAC encoder for output");
                                             audio_output_handler = audio_output_handler
                                                 .with_output(Box::new(move |spec, duration| {
@@ -1286,7 +1286,7 @@ impl TunnelSender {
                                         }
                                         #[cfg(feature = "mp3")]
                                         AudioFormat::Mp3 => {
-                                            use moosicbox_audio_decoder::output::encoders::mp3::Mp3Encoder;
+                                            use moosicbox_audio_output::encoders::mp3::Mp3Encoder;
                                             log::debug!("Using MP3 encoder for output");
                                             audio_output_handler = audio_output_handler
                                                 .with_output(Box::new(move |spec, duration| {
@@ -1298,7 +1298,7 @@ impl TunnelSender {
                                         }
                                         #[cfg(feature = "opus")]
                                         AudioFormat::Opus => {
-                                            use moosicbox_audio_decoder::output::encoders::opus::OpusEncoder;
+                                            use moosicbox_audio_output::encoders::opus::OpusEncoder;
                                             log::debug!("Using OPUS encoder for output");
                                             audio_output_handler = audio_output_handler
                                                 .with_output(Box::new(move |spec, duration| {

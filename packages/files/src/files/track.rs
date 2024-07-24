@@ -8,8 +8,8 @@ use flume::RecvError;
 use futures::prelude::*;
 use futures_core::Stream;
 use moosicbox_audio_decoder::{
-    media_sources::remote_bytestream::RemoteByteStreamMediaSource, play_file_path_str_async,
-    play_media_source_async, PlaybackError,
+    decode_file_path_str_async, decode_media_source_async,
+    media_sources::remote_bytestream::RemoteByteStreamMediaSource, DecodeError,
 };
 use moosicbox_core::{
     sqlite::{
@@ -294,61 +294,71 @@ pub async fn get_audio_bytes(
                         Ok(match format {
                             #[cfg(feature = "aac")]
                             AudioFormat::Aac => {
-                                use moosicbox_audio_decoder::output::encoders::aac::AacEncoder;
-                                moosicbox_audio_decoder::output::AudioOutputHandler::new()
-                                    .with_output(Box::new(move |spec, duration| {
+                                use moosicbox_audio_output::encoders::aac::AacEncoder;
+                                moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(
+                                    Box::new(move |spec, duration| {
                                         Ok(Box::new(
                                             AacEncoder::with_writer(writer.clone())
                                                 .open(spec, duration),
                                         ))
-                                    }))
+                                    }),
+                                )
                             }
                             #[cfg(feature = "flac")]
                             AudioFormat::Flac => {
-                                use moosicbox_audio_decoder::output::encoders::flac::FlacEncoder;
-                                moosicbox_audio_decoder::output::AudioOutputHandler::new()
-                                    .with_output(Box::new(move |spec, duration| {
+                                use moosicbox_audio_output::encoders::flac::FlacEncoder;
+                                moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(
+                                    Box::new(move |spec, duration| {
                                         Ok(Box::new(
                                             FlacEncoder::with_writer(writer.clone())
                                                 .open(spec, duration),
                                         ))
-                                    }))
+                                    }),
+                                )
                             }
                             #[cfg(feature = "mp3")]
                             AudioFormat::Mp3 => {
-                                use moosicbox_audio_decoder::output::encoders::mp3::Mp3Encoder;
+                                use moosicbox_audio_output::encoders::mp3::Mp3Encoder;
                                 let encoder_writer = writer.clone();
-                                moosicbox_audio_decoder::output::AudioOutputHandler::new()
-                                    .with_output(Box::new(move |spec, duration| {
+                                moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(
+                                    Box::new(move |spec, duration| {
                                         Ok(Box::new(
                                             Mp3Encoder::with_writer(encoder_writer.clone())
                                                 .open(spec, duration),
                                         ))
-                                    }))
+                                    }),
+                                )
                             }
                             #[cfg(feature = "opus")]
                             AudioFormat::Opus => {
-                                use moosicbox_audio_decoder::output::encoders::opus::OpusEncoder;
+                                use moosicbox_audio_output::encoders::opus::OpusEncoder;
                                 let encoder_writer = writer.clone();
-                                moosicbox_audio_decoder::output::AudioOutputHandler::new()
-                                    .with_output(Box::new(move |spec, duration| {
+                                moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(
+                                    Box::new(move |spec, duration| {
                                         Ok(Box::new(
                                             OpusEncoder::with_writer(encoder_writer.clone())
                                                 .open(spec, duration),
                                         ))
-                                    }))
+                                    }),
+                                )
                             }
                             AudioFormat::Source => {
-                                return Err(moosicbox_audio_decoder::PlaybackError::InvalidSource)
+                                return Err(moosicbox_audio_decoder::DecodeError::InvalidSource)
                             }
                         })
                     };
 
                     match source {
                         TrackSource::LocalFilePath { ref path, .. } => {
-                            if let Err(err) =
-                                play_file_path_str_async(path, get_handler, true, true, None, None)
-                                    .await
+                            if let Err(err) = decode_file_path_str_async(
+                                path,
+                                get_handler,
+                                true,
+                                true,
+                                None,
+                                None,
+                            )
+                            .await
                             {
                                 log::error!("Failed to encode to aac: {err:?}");
                             }
@@ -367,7 +377,7 @@ pub async fn get_audio_bytes(
                                 CancellationToken::new(),
                             )
                             .into();
-                            if let Err(err) = play_media_source_async(
+                            if let Err(err) = decode_media_source_async(
                                 MediaSourceStream::new(Box::new(source), Default::default()),
                                 &Hint::new(),
                                 get_handler,
@@ -542,7 +552,7 @@ pub enum TrackInfoError {
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
     #[error(transparent)]
-    Playback(#[from] PlaybackError),
+    Decode(#[from] DecodeError),
     #[error(transparent)]
     GetTrackBytes(#[from] Box<GetTrackBytesError>),
     #[error(transparent)]
@@ -662,7 +672,7 @@ pub async fn get_or_init_track_visualization(
 
     let get_handler = move || {
         Ok(
-            moosicbox_audio_decoder::output::AudioOutputHandler::new().with_filter(Box::new(
+            moosicbox_audio_decoder::AudioDecodeHandler::new().with_filter(Box::new(
                 move |decoded, _packet, _track| {
                     inner_viz
                         .write()
@@ -678,7 +688,7 @@ pub async fn get_or_init_track_visualization(
     let media_source = TrackBytesMediaSource::new(bytes);
     let mss = MediaSourceStream::new(Box::new(media_source), Default::default());
 
-    play_media_source_async(mss, &hint, get_handler, true, true, None, None).await?;
+    decode_media_source_async(mss, &hint, get_handler, true, true, None, None).await?;
 
     let viz = viz.read().unwrap();
     let count = std::cmp::min(max as usize, viz.len());

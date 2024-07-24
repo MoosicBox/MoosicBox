@@ -1,17 +1,48 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
-use symphonia::core::audio::{AudioBuffer, Signal as _, SignalSpec};
+use moosicbox_audio_decoder::AudioDecode;
+use symphonia::core::audio::{AudioBuffer, Signal as _};
 use symphonia::core::conv::{FromSample, IntoSample as _};
 use symphonia::core::formats::{Packet, Track};
-use symphonia::core::units::Duration;
 use thiserror::Error;
-use tokio_util::sync::CancellationToken;
 
 pub mod encoders;
 
 pub trait AudioOutput {
     fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError>;
     fn flush(&mut self) -> Result<(), AudioOutputError>;
+}
+
+impl AudioDecode for Box<dyn AudioOutput> {
+    fn decoded(
+        &mut self,
+        decoded: symphonia::core::audio::AudioBuffer<f32>,
+        _packet: &Packet,
+        _track: &Track,
+    ) -> Result<(), moosicbox_audio_decoder::AudioDecodeError> {
+        self.write(decoded)
+            .map_err(|_e| moosicbox_audio_decoder::AudioDecodeError::PlayStream)?;
+        Ok(())
+    }
+}
+
+impl AudioDecode for &mut dyn AudioOutput {
+    fn decoded(
+        &mut self,
+        decoded: symphonia::core::audio::AudioBuffer<f32>,
+        _packet: &Packet,
+        _track: &Track,
+    ) -> Result<(), moosicbox_audio_decoder::AudioDecodeError> {
+        self.write(decoded)
+            .map_err(|_e| moosicbox_audio_decoder::AudioDecodeError::PlayStream)?;
+        Ok(())
+    }
+}
+
+impl From<Box<dyn AudioOutput>> for Box<dyn AudioDecode> {
+    fn from(value: Box<dyn AudioOutput>) -> Self {
+        Box::new(value)
+    }
 }
 
 #[allow(dead_code)]
@@ -40,107 +71,6 @@ pub mod pulseaudio;
 
 #[cfg(feature = "cpal")]
 pub mod cpal;
-
-type InnerType = Box<dyn AudioOutput>;
-type OpenFunc = Box<dyn FnMut(SignalSpec, Duration) -> Result<InnerType, AudioOutputError> + Send>;
-type AudioFilter =
-    Box<dyn FnMut(&mut AudioBuffer<f32>, &Packet, &Track) -> Result<(), AudioOutputError> + Send>;
-
-pub struct AudioOutputHandler {
-    pub cancellation_token: Option<CancellationToken>,
-    filters: Vec<AudioFilter>,
-    open_outputs: Vec<OpenFunc>,
-    outputs: Vec<InnerType>,
-}
-
-impl AudioOutputHandler {
-    pub fn new() -> Self {
-        Self {
-            cancellation_token: None,
-            filters: vec![],
-            open_outputs: vec![],
-            outputs: vec![],
-        }
-    }
-
-    pub fn with_filter(mut self, filter: AudioFilter) -> Self {
-        self.filters.push(filter);
-        self
-    }
-
-    pub fn with_output(mut self, open_output: OpenFunc) -> Self {
-        self.open_outputs.push(open_output);
-        self
-    }
-
-    pub fn with_cancellation_token(mut self, cancellation_token: CancellationToken) -> Self {
-        self.cancellation_token.replace(cancellation_token);
-        self
-    }
-
-    fn run_filters(
-        &mut self,
-        decoded: &mut AudioBuffer<f32>,
-        packet: &Packet,
-        track: &Track,
-    ) -> Result<(), AudioOutputError> {
-        for filter in &mut self.filters {
-            log::trace!("Running audio filter");
-            filter(decoded, packet, track)?;
-        }
-        Ok(())
-    }
-
-    pub fn write(
-        &mut self,
-        mut decoded: AudioBuffer<f32>,
-        packet: &Packet,
-        track: &Track,
-    ) -> Result<(), AudioOutputError> {
-        self.run_filters(&mut decoded, packet, track)?;
-
-        let len = self.outputs.len();
-
-        for (i, output) in self.outputs.iter_mut().enumerate() {
-            if i == len - 1 {
-                output.write(decoded)?;
-                break;
-            } else {
-                output.write(decoded.clone())?;
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn flush(&mut self) -> Result<(), AudioOutputError> {
-        for output in self.outputs.iter_mut() {
-            output.flush()?;
-        }
-        Ok(())
-    }
-
-    pub fn contains_outputs_to_open(&self) -> bool {
-        !self.open_outputs.is_empty()
-    }
-
-    pub fn try_open(
-        &mut self,
-        spec: SignalSpec,
-        duration: Duration,
-    ) -> Result<(), AudioOutputError> {
-        for mut open_func in self.open_outputs.drain(..) {
-            self.outputs.push((*open_func)(spec, duration)?);
-        }
-        Ok(())
-    }
-}
-
-impl Default for AudioOutputHandler {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 #[allow(unused)]
 fn to_samples<S: FromSample<f32> + Default + Clone>(decoded: AudioBuffer<f32>) -> Vec<S> {

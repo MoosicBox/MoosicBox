@@ -2,7 +2,7 @@ use std::sync::{atomic::AtomicBool, Arc, RwLock, RwLockWriteGuard};
 
 use async_trait::async_trait;
 use flume::Receiver;
-use moosicbox_audio_decoder::{output::AudioOutputHandler, volume_mixer::mix_volume};
+use moosicbox_audio_decoder::{volume_mixer::mix_volume, AudioDecodeError, AudioDecodeHandler};
 use moosicbox_core::sqlite::models::{ToApi, TrackApiSource};
 use moosicbox_session::models::UpdateSession;
 use rand::{thread_rng, Rng as _};
@@ -10,8 +10,8 @@ use symphonia::core::io::MediaSourceStream;
 use tokio_util::sync::CancellationToken;
 
 use crate::player::{
-    send_playback_event, trigger_playback_event, ApiPlaybackStatus, Playback, PlaybackType, Player,
-    PlayerError, PlayerSource,
+    send_playback_event, symphonia::play_media_source_async, trigger_playback_event,
+    ApiPlaybackStatus, Playback, PlaybackType, Player, PlayerError, PlayerSource,
 };
 
 #[derive(Clone)]
@@ -69,7 +69,7 @@ impl Player for LocalPlayer {
 
         let get_handler = move || {
             #[allow(unused_mut)]
-            let mut audio_output_handler = AudioOutputHandler::new()
+            let mut audio_output_handler = AudioDecodeHandler::new()
                 .with_filter(Box::new({
                     let active_playback = active_playback.clone();
                     move |_decoded, packet, track| {
@@ -122,33 +122,48 @@ impl Player for LocalPlayer {
 
             #[cfg(feature = "cpal")]
             {
-                audio_output_handler = audio_output_handler.with_output(Box::new(
-                    moosicbox_audio_decoder::output::cpal::player::try_open,
-                ));
+                audio_output_handler =
+                    audio_output_handler.with_output(Box::new(|spec, duration| {
+                        Ok(
+                            moosicbox_audio_output::cpal::player::try_open(spec, duration)
+                                .map_err(|_e| AudioDecodeError::PlayStream)?
+                                .into(),
+                        )
+                    }));
             }
             #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
             {
-                audio_output_handler = audio_output_handler.with_output(Box::new(
-                    moosicbox_audio_decoder::output::pulseaudio::simple::try_open,
-                ));
+                audio_output_handler =
+                    audio_output_handler.with_output(Box::new(|spec, duration| {
+                        Ok(
+                            moosicbox_audio_output::pulseaudio::simple::try_open(spec, duration)
+                                .map_err(|_e| AudioDecodeError::PlayStream)?
+                                .into(),
+                        )
+                    }));
             }
             #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
             {
-                audio_output_handler = audio_output_handler.with_output(Box::new(
-                    moosicbox_audio_decoder::output::pulseaudio::standard::try_open,
-                ));
+                audio_output_handler =
+                    audio_output_handler.with_output(Box::new(|spec, duration| {
+                        Ok(
+                            moosicbox_audio_output::pulseaudio::standard::try_open(spec, duration)
+                                .map_err(|_e| AudioDecodeError::PlayStream)?
+                                .into(),
+                        )
+                    }));
             }
 
             moosicbox_assert::assert_or_err!(
                 audio_output_handler.contains_outputs_to_open(),
-                moosicbox_audio_decoder::PlaybackError::NoAudioOutputs,
+                crate::player::symphonia::PlaybackError::NoAudioOutputs,
                 "No outputs set for the audio_output_handler"
             );
 
             Ok(audio_output_handler)
         };
 
-        let response = moosicbox_audio_decoder::play_media_source_async(
+        let response = play_media_source_async(
             mss,
             &playable_track.hint,
             get_handler,
