@@ -699,6 +699,29 @@ impl Id {
             },
         })
     }
+
+    pub fn default_value(source: ApiSource, id_type: IdType) -> Id {
+        match id_type {
+            IdType::Artist => match source {
+                ApiSource::Library => Self::Number(0),
+                ApiSource::Tidal => Self::Number(0),
+                ApiSource::Qobuz => Self::Number(0),
+                ApiSource::Yt => Self::String("".into()),
+            },
+            IdType::Album => match source {
+                ApiSource::Library => Self::Number(0),
+                ApiSource::Tidal => Self::Number(0),
+                ApiSource::Qobuz => Self::String("".into()),
+                ApiSource::Yt => Self::String("".into()),
+            },
+            IdType::Track => match source {
+                ApiSource::Library => Self::Number(0),
+                ApiSource::Tidal => Self::Number(0),
+                ApiSource::Qobuz => Self::Number(0),
+                ApiSource::Yt => Self::String("".into()),
+            },
+        }
+    }
 }
 
 impl Serialize for Id {
