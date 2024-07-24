@@ -7,8 +7,10 @@ use actix_web::{
 use futures::StreamExt;
 use moosicbox_core::{
     app::AppState,
-    integer_range::{parse_integer_ranges_to_ids, ParseIntegersError},
-    sqlite::models::{ApiSource, Id},
+    integer_range::{
+        parse_id_ranges, parse_integer_ranges_to_ids, ParseIdsError, ParseIntegersError,
+    },
+    sqlite::models::{ApiSource, Id, IdType},
     types::AudioFormat,
 };
 use moosicbox_music_api::{ImageCoverSize, MusicApiState, TrackAudioQuality, TrackSource};
@@ -435,6 +437,88 @@ pub async fn tracks_info_endpoint(
         )
         .await?,
     ))
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct GetTrackUrlQuery {
+    pub track_id: Option<String>,
+    pub track_ids: Option<String>,
+    pub source: Option<ApiSource>,
+    pub quality: TrackAudioQuality,
+}
+
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Files"],
+        get,
+        path = "/tracks/url",
+        description = "Get the tracks' stream URLs",
+        params(
+            ("trackId" = Option<String>, Query, description = "Track ID"),
+            ("trackIds" = Option<String>, Query, description = "Comma-separated list of track IDs"),
+            ("source" = Option<ApiSource>, Query, description = "Track' API source"),
+            ("quality" = TrackAudioQuality, Query, description = "Audio quality to get the URL for"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Tracks' stream URLs",
+                body = Vec<String>,
+            )
+        )
+    )
+)]
+#[route("/tracks/url", method = "GET")]
+pub async fn track_urls_endpoint(
+    query: web::Query<GetTrackUrlQuery>,
+    api_state: web::Data<MusicApiState>,
+) -> Result<Json<Vec<String>>> {
+    let source = query.source.unwrap_or(ApiSource::Library);
+    let mut ids = vec![];
+    if let Some(track_ids) = &query.track_ids {
+        ids.extend(
+            parse_id_ranges(track_ids, source, IdType::Track).map_err(|e| match e {
+                ParseIdsError::ParseId(id) => {
+                    ErrorBadRequest(format!("Could not parse trackId '{id}'"))
+                }
+                ParseIdsError::UnmatchedRange(range) => {
+                    ErrorBadRequest(format!("Unmatched range '{range}'"))
+                }
+                ParseIdsError::RangeTooLarge(range) => {
+                    ErrorBadRequest(format!("Range too large '{range}'"))
+                }
+            })?,
+        );
+    }
+    if let Some(track_id) = &query.track_id {
+        ids.push(Id::try_from_str(track_id, source, IdType::Track).map_err(ErrorBadRequest)?);
+    }
+
+    let ids = ids;
+
+    let api = api_state
+        .apis
+        .get(source)
+        .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?;
+
+    let mut urls = vec![];
+
+    for id in ids {
+        let source = api
+            .track_source(id.clone().into(), query.quality)
+            .await
+            .map_err(ErrorInternalServerError)?
+            .ok_or_else(|| ErrorNotFound(format!("Track not found: {id}")))?;
+
+        match source {
+            TrackSource::LocalFilePath { .. } => return Err(ErrorBadRequest("Invalid API source")),
+            TrackSource::RemoteUrl { url, .. } => urls.push(url),
+        }
+    }
+
+    Ok(Json(urls))
 }
 
 impl From<ArtistCoverError> for actix_web::Error {

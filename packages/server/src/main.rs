@@ -501,6 +501,7 @@ fn main() -> std::io::Result<()> {
                         .service(moosicbox_files::api::track_visualization_endpoint)
                         .service(moosicbox_files::api::track_info_endpoint)
                         .service(moosicbox_files::api::tracks_info_endpoint)
+                        .service(moosicbox_files::api::track_urls_endpoint)
                         .service(moosicbox_files::api::artist_source_artwork_endpoint)
                         .service(moosicbox_files::api::artist_cover_endpoint)
                         .service(moosicbox_files::api::album_source_artwork_endpoint)
