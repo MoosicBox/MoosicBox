@@ -722,6 +722,20 @@ impl Id {
             },
         }
     }
+
+    pub fn is_number(&self) -> bool {
+        match self {
+            Id::String(_) => false,
+            Id::Number(_) => true,
+        }
+    }
+
+    pub fn is_string(&self) -> bool {
+        match self {
+            Id::String(_) => true,
+            Id::Number(_) => false,
+        }
+    }
 }
 
 impl Serialize for Id {
