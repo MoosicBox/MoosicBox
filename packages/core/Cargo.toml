@@ -38,6 +38,10 @@ tantivy       = { workspace = true, optional = true }
 thiserror     = { workspace = true }
 utoipa        = { workspace = true, optional = true }
 
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+test-log          = { workspace = true }
+
 [features]
 default = ["aac", "flac", "mp3", "openapi", "opus", "tantivy"]
 
