@@ -1,4 +1,6 @@
 use flume::Receiver;
+use moosicbox_audio_outputs::{encoders::AudioEncoder, AudioOutputError, AudioOutputHandler};
+use moosicbox_resampler::Resampler;
 use symphonia::core::{
     audio::{AudioBuffer, Signal},
     io::{MediaSource, MediaSourceStream},
@@ -6,11 +8,7 @@ use symphonia::core::{
 };
 use thiserror::Error;
 
-use crate::{
-    output::{AudioEncoder, AudioOutputError, AudioOutputHandler},
-    resampler::Resampler,
-    unsync::{play_media_source, PlaybackError},
-};
+use crate::unsync::{play_media_source, PlaybackError};
 
 #[derive(Debug, Error)]
 pub enum SignalChainError {

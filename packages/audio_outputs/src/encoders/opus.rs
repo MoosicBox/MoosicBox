@@ -1,17 +1,17 @@
 use std::sync::{Mutex, RwLock};
 
-use crate::output::{to_samples, AudioEncoder, AudioOutput, AudioOutputError, AudioOutputHandler};
-use crate::play_file_path_str;
-use crate::resampler::Resampler;
-
 use bytes::Bytes;
 use moosicbox_converter::opus::{
     encoder_opus, OPUS_STREAM_COMMENTS_HEADER, OPUS_STREAM_IDENTIFICATION_HEADER,
 };
-use moosicbox_stream_utils::{ByteStream, ByteWriter};
 use ogg::{PacketWriteEndInfo, PacketWriter};
 use symphonia::core::audio::*;
 use symphonia::core::units::Duration;
+
+use crate::{to_samples, AudioOutput, AudioOutputError};
+use moosicbox_resampler::Resampler;
+
+use super::AudioEncoder;
 
 const STEREO_20MS: usize = 48000 * 2 * 20 / 1000;
 
@@ -311,37 +311,5 @@ impl AudioOutput for OpusEncoder<'_> {
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
         Ok(())
-    }
-}
-
-pub fn encode_opus_stream(path: String) -> ByteStream {
-    let writer = ByteWriter::default();
-    let stream = writer.stream();
-
-    encode_opus_spawn(path, writer);
-
-    stream
-}
-
-pub fn encode_opus_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
-    path: String,
-    writer: T,
-) -> tokio::task::JoinHandle<()> {
-    let path = path.clone();
-    moosicbox_task::spawn_blocking("symphonia_player: encode_aac", move || {
-        encode_opus(path, writer)
-    })
-}
-
-pub fn encode_opus<T: std::io::Write + Send + Sync + Clone + 'static>(path: String, writer: T) {
-    let mut audio_output_handler =
-        AudioOutputHandler::new().with_output(Box::new(move |spec, duration| {
-            Ok(Box::new(
-                OpusEncoder::with_writer(writer.clone()).open(spec, duration),
-            ))
-        }));
-
-    if let Err(err) = play_file_path_str(&path, &mut audio_output_handler, true, true, None, None) {
-        log::error!("Failed to encode to opus: {err:?}");
     }
 }

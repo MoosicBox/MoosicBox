@@ -3430,6 +3430,7 @@ version = "0.1.0"
 dependencies = [
  "moosicbox_assert",
  "moosicbox_async_service",
+ "moosicbox_audio_outputs",
  "moosicbox_auth",
  "moosicbox_config",
  "moosicbox_converter",
@@ -3449,6 +3450,7 @@ dependencies = [
  "moosicbox_paging",
  "moosicbox_player",
  "moosicbox_qobuz",
+ "moosicbox_resampler",
  "moosicbox_scan",
  "moosicbox_search",
  "moosicbox_session",
@@ -3505,6 +3507,31 @@ dependencies = [
  "test-log",
  "thiserror",
  "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "moosicbox_audio_outputs"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "cpal",
+ "fdk-aac",
+ "libpulse-binding",
+ "libpulse-simple-binding",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_converter",
+ "moosicbox_env_utils",
+ "moosicbox_resampler",
+ "moosicbox_stream_utils",
+ "moosicbox_task",
+ "mp3lame-encoder",
+ "ogg",
+ "opus",
+ "rb",
+ "symphonia",
+ "thiserror",
  "tokio-util",
 ]
 
@@ -3903,6 +3930,7 @@ dependencies = [
  "local-ip-address",
  "log",
  "moosicbox_assert",
+ "moosicbox_audio_outputs",
  "moosicbox_converter",
  "moosicbox_core",
  "moosicbox_database",
@@ -3959,6 +3987,18 @@ dependencies = [
  "tokio-util",
  "url",
  "utoipa",
+]
+
+[[package]]
+name = "moosicbox_resampler"
+version = "0.1.0"
+dependencies = [
+ "arrayvec",
+ "log",
+ "moosicbox_env_utils",
+ "rubato",
+ "symphonia",
+ "thiserror",
 ]
 
 [[package]]
@@ -4137,27 +4177,20 @@ dependencies = [
  "atomic_float",
  "bytes",
  "clap 4.5.10",
- "cpal",
- "fdk-aac",
  "flume",
  "futures",
  "lazy_static",
- "libpulse-binding",
- "libpulse-simple-binding",
  "log",
  "moosicbox_assert",
+ "moosicbox_audio_outputs",
  "moosicbox_converter",
  "moosicbox_env_utils",
+ "moosicbox_resampler",
  "moosicbox_stream_utils",
  "moosicbox_task",
- "mp3lame-encoder",
- "ogg",
- "opus",
  "pretty_env_logger",
  "rangemap",
- "rb",
  "reqwest 0.12.5",
- "rubato",
  "symphonia",
  "thiserror",
  "tokio",

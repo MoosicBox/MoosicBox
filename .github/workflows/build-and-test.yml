@@ -26,20 +26,114 @@ jobs:
                       path: packages/assert
                       os: ubuntu-latest
 
-                    - name: assert-disabled
-                      path: packages/assert
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-
                     - name: async_service
                       path: packages/async_service
                       os: ubuntu-latest
+
+                    - name: audio_outputs
+                      path: packages/audio_outputs
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev
+
+                    - name: audio_outputs
+                      path: packages/audio_outputs
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev
+
+                    - name: audio_outputs-aac
+                      path: packages/audio_outputs
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: aac
+
+                    - name: audio_outputs-flac
+                      path: packages/audio_outputs
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: flac
+
+                    - name: audio_outputs-mp3
+                      path: packages/audio_outputs
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: mp3
+
+                    - name: audio_outputs-opus
+                      path: packages/audio_outputs
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: opus
+
+                    - name: audio_outputs-cpal-windows
+                      path: packages/audio_outputs
+                      os: windows-latest
+                      cargo: --no-default-features
+                      features: cpal
+
+                    - name: audio_outputs-all-windows
+                      path: packages/audio_outputs
+                      os: windows-latest
+
+                    - name: audio_outputs-cpal-ubuntu
+                      path: packages/audio_outputs
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
+                      cargo: --no-default-features
+                      features: cpal
+
+                    - name: audio_outputs-pulseaudio-standard-ubuntu
+                      path: packages/audio_outputs
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio
+                      cargo: --no-default-features
+                      features: pulseaudio-standard
+
+                    - name: audio_outputs-pulseaudio-simple-ubuntu
+                      path: packages/audio_outputs
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio
+                      cargo: --no-default-features
+                      features: pulseaudio-simple
+
+                    - name: audio_outputs-all-ubuntu
+                      path: packages/audio_outputs
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev
+
+                    - name: audio_outputs-cpal-macos
+                      path: packages/audio_outputs
+                      os: macos-latest
+                      cargo: --no-default-features
+                      features: cpal
+
+                    - name: audio_outputs-pulseaudio-standard-macos
+                      path: packages/audio_outputs
+                      os: macos-latest
+                      dependencies: brew install pulseaudio
+                      cargo: --no-default-features
+                      features: pulseaudio-standard
+
+                    - name: audio_outputs-pulseaudio-simple-macos
+                      path: packages/audio_outputs
+                      os: macos-latest
+                      dependencies: brew install pulseaudio
+                      cargo: --no-default-features
+                      features: pulseaudio-simple
+
+                    - name: audio_outputs-all-macos
+                      path: packages/audio_outputs
+                      os: macos-latest
+                      dependencies: brew install pulseaudio
 
                     - name: auth-api
                       path: packages/auth
                       os: ubuntu-latest
                       cargo: --no-default-features
                       features: api
+
+                    - name: config
+                      path: packages/config
+                      os: ubuntu-latest
 
                     - name: converter-default
                       path: packages/converter
@@ -68,10 +162,6 @@ jobs:
                       os: ubuntu-latest
                       cargo: --no-default-features
                       features: opus
-
-                    - name: config
-                      path: packages/config
-                      os: ubuntu-latest
 
                     - name: core
                       path: packages/core
@@ -148,6 +238,10 @@ jobs:
                       path: packages/menu
                       os: ubuntu-latest
 
+                    - name: middleware
+                      path: packages/middleware
+                      os: ubuntu-latest
+
                     - name: moosicbox
                       path: packages/moosicbox
                       os: ubuntu-latest
@@ -183,6 +277,26 @@ jobs:
                       cargo: --no-default-features
                       features: db
 
+                    - name: resampler
+                      path: packages/resampler
+                      os: ubuntu-latest
+
+                    - name: scan
+                      path: packages/scan
+                      os: ubuntu-latest
+
+                    - name: scan-local
+                      path: packages/scan
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: local
+
+                    - name: scan-api
+                      path: packages/scan
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: api
+
                     - name: search
                       path: packages/search
                       os: ubuntu-latest
@@ -198,84 +312,6 @@ jobs:
                       os: ubuntu-latest
                       cargo: --no-default-features
                       features: db
-
-                    - name: upnp
-                      path: packages/upnp
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev
-
-                    - name: upnp-api
-                      path: packages/upnp
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: api
-
-                    - name: ws
-                      path: packages/ws
-                      os: ubuntu-latest
-
-                    - name: tunnel
-                      path: packages/tunnel
-                      os: ubuntu-latest
-
-                    - name: tunnel-base64
-                      path: packages/tunnel
-                      os: ubuntu-latest
-                      features: base64
-
-                    - name: tunnel_sender
-                      path: packages/tunnel_sender
-                      os: ubuntu-latest
-
-                    - name: tunnel_sender-base64
-                      path: packages/tunnel_sender
-                      os: ubuntu-latest
-                      features: base64
-
-                    - name: tunnel_server
-                      path: packages/tunnel_server
-                      os: ubuntu-latest
-                      env: TUNNEL_ACCESS_TOKEN=123
-
-                    - name: tunnel_server-base64
-                      path: packages/tunnel_server
-                      os: ubuntu-latest
-                      env: TUNNEL_ACCESS_TOKEN=123
-                      features: base64
-
-                    - name: tunnel_server-base
-                      path: packages/tunnel_server
-                      os: ubuntu-latest
-                      env: TUNNEL_ACCESS_TOKEN=123
-                      cargo: --no-default-features
-
-                    - name: tunnel_server-postgres-raw
-                      path: packages/tunnel_server
-                      os: ubuntu-latest
-                      env: TUNNEL_ACCESS_TOKEN=123
-                      features: postgres-raw
-                      cargo: --no-default-features
-
-                    - name: tunnel_server-postgres-raw-openssl
-                      path: packages/tunnel_server
-                      os: ubuntu-latest
-                      env: TUNNEL_ACCESS_TOKEN=123
-                      features: postgres-raw,postgres-openssl
-                      cargo: --no-default-features
-
-                    - name: tunnel_server-postgres-raw-native-tls
-                      path: packages/tunnel_server
-                      os: ubuntu-latest
-                      env: TUNNEL_ACCESS_TOKEN=123
-                      features: postgres-raw,postgres-native-tls
-                      cargo: --no-default-features
-
-                    - name: tunnel_server-postgres-sqlx
-                      path: packages/tunnel_server
-                      os: ubuntu-latest
-                      env: TUNNEL_ACCESS_TOKEN=123
-                      features: postgres-sqlx
-                      cargo: --no-default-features
 
                     - name: server-static-token-auth
                       path: packages/server
@@ -392,6 +428,12 @@ jobs:
                       cargo: --no-default-features
                       features: scan
 
+                    - name: server-scan-api
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: scan-api
+
                     - name: server-search
                       path: packages/server
                       os: ubuntu-latest
@@ -458,12 +500,6 @@ jobs:
                       cargo: --no-default-features
                       features: qobuz-api
 
-                    - name: server-scan-api
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: scan-api
-
                     - name: server-search-api
                       path: packages/server
                       os: ubuntu-latest
@@ -492,21 +528,53 @@ jobs:
                       path: packages/session
                       os: ubuntu-latest
 
-                    - name: scan
-                      path: packages/scan
+                    - name: stream_utils
+                      path: packages/stream_utils
                       os: ubuntu-latest
 
-                    - name: scan-local
-                      path: packages/scan
+                    - name: stream_utils-remote-bytestream
+                      path: packages/stream_utils
                       os: ubuntu-latest
                       cargo: --no-default-features
-                      features: local
+                      features: remote-bytestream
 
-                    - name: scan-api
-                      path: packages/scan
+                    - name: stream_utils-stalled-monitor
+                      path: packages/stream_utils
                       os: ubuntu-latest
                       cargo: --no-default-features
-                      features: api
+                      features: stalled-monitor
+
+                    - name: symphonia_player-default
+                      path: packages/symphonia_player
+                      os: ubuntu-latest
+
+                    - name: symphonia_player-aac
+                      path: packages/symphonia_player
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: aac
+
+                    - name: symphonia_player-flac
+                      path: packages/symphonia_player
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: flac
+
+                    - name: symphonia_player-mp3
+                      path: packages/symphonia_player
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: mp3
+
+                    - name: symphonia_player-opus
+                      path: packages/symphonia_player
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: opus
+
+                    - name: task
+                      path: packages/task
+                      os: ubuntu-latest
 
                     - name: tidal
                       path: packages/tidal
@@ -524,85 +592,88 @@ jobs:
                       cargo: --no-default-features
                       features: db
 
-                    - name: stream_utils
-                      path: packages/stream_utils
+                    - name: tunnel
+                      path: packages/tunnel
                       os: ubuntu-latest
 
-                    - name: stream_utils-remote-bytestream
-                      path: packages/stream_utils
+                    - name: tunnel-base64
+                      path: packages/tunnel
                       os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: remote-bytestream
+                      features: base64
 
-                    - name: stream_utils-stalled-monitor
-                      path: packages/stream_utils
+                    - name: tunnel_sender
+                      path: packages/tunnel_sender
                       os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: stalled-monitor
 
-                    - name: symphonia_player-cpal-windows
-                      path: packages/symphonia_player
-                      os: windows-latest
-                      cargo: --no-default-features
-                      features: cpal
-
-                    - name: symphonia_player-all-windows
-                      path: packages/symphonia_player
-                      os: windows-latest
-
-                    - name: symphonia_player-cpal-ubuntu
-                      path: packages/symphonia_player
+                    - name: tunnel_sender-base64
+                      path: packages/tunnel_sender
                       os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
-                      cargo: --no-default-features
-                      features: cpal
+                      features: base64
 
-                    - name: symphonia_player-pulseaudio-standard-ubuntu
-                      path: packages/symphonia_player
+                    - name: tunnel_server-no-default-features
+                      path: packages/tunnel_server
                       os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio
+                      env: TUNNEL_ACCESS_TOKEN=123
                       cargo: --no-default-features
-                      features: pulseaudio-standard
 
-                    - name: symphonia_player-pulseaudio-simple-ubuntu
-                      path: packages/symphonia_player
+                    - name: tunnel_server
+                      path: packages/tunnel_server
                       os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio
-                      cargo: --no-default-features
-                      features: pulseaudio-simple
+                      env: TUNNEL_ACCESS_TOKEN=123
 
-                    - name: symphonia_player-all-ubuntu
-                      path: packages/symphonia_player
+                    - name: tunnel_server-base64
+                      path: packages/tunnel_server
+                      os: ubuntu-latest
+                      env: TUNNEL_ACCESS_TOKEN=123
+                      features: base64
+
+                    - name: tunnel_server-base
+                      path: packages/tunnel_server
+                      os: ubuntu-latest
+                      env: TUNNEL_ACCESS_TOKEN=123
+                      cargo: --no-default-features
+
+                    - name: tunnel_server-postgres-raw
+                      path: packages/tunnel_server
+                      os: ubuntu-latest
+                      env: TUNNEL_ACCESS_TOKEN=123
+                      features: postgres-raw
+                      cargo: --no-default-features
+
+                    - name: tunnel_server-postgres-raw-openssl
+                      path: packages/tunnel_server
+                      os: ubuntu-latest
+                      env: TUNNEL_ACCESS_TOKEN=123
+                      features: postgres-raw,postgres-openssl
+                      cargo: --no-default-features
+
+                    - name: tunnel_server-postgres-raw-native-tls
+                      path: packages/tunnel_server
+                      os: ubuntu-latest
+                      env: TUNNEL_ACCESS_TOKEN=123
+                      features: postgres-raw,postgres-native-tls
+                      cargo: --no-default-features
+
+                    - name: tunnel_server-postgres-sqlx
+                      path: packages/tunnel_server
+                      os: ubuntu-latest
+                      env: TUNNEL_ACCESS_TOKEN=123
+                      features: postgres-sqlx
+                      cargo: --no-default-features
+
+                    - name: upnp
+                      path: packages/upnp
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev
 
-                    - name: symphonia_player-cpal-macos
-                      path: packages/symphonia_player
-                      os: macos-latest
+                    - name: upnp-api
+                      path: packages/upnp
+                      os: ubuntu-latest
                       cargo: --no-default-features
-                      features: cpal
+                      features: api
 
-                    - name: symphonia_player-pulseaudio-standard-macos
-                      path: packages/symphonia_player
-                      os: macos-latest
-                      dependencies: brew install pulseaudio
-                      cargo: --no-default-features
-                      features: pulseaudio-standard
-
-                    - name: symphonia_player-pulseaudio-simple-macos
-                      path: packages/symphonia_player
-                      os: macos-latest
-                      dependencies: brew install pulseaudio
-                      cargo: --no-default-features
-                      features: pulseaudio-simple
-
-                    - name: symphonia_player-all-macos
-                      path: packages/symphonia_player
-                      os: macos-latest
-                      dependencies: brew install pulseaudio
-
-                    - name: task
-                      path: packages/task
+                    - name: ws
+                      path: packages/ws
                       os: ubuntu-latest
 
                     - name: yt

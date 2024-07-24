@@ -1,6 +1,7 @@
 use std::io;
 
 use flume::Receiver;
+use moosicbox_audio_outputs::AudioOutputError;
 use symphonia::core::audio::AudioBuffer;
 use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error;
@@ -10,8 +11,6 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::core::units::Time;
 use thiserror::Error;
-
-use crate::output::AudioOutputError;
 
 impl From<io::Error> for PlaybackError {
     fn from(err: io::Error) -> Self {

@@ -1065,7 +1065,7 @@ pub trait Player: Clone + Send + 'static {
                 #[cfg(feature = "aac")]
                 AudioFormat::Aac => {
                     log::debug!("Encoding playback with AacEncoder");
-                    use moosicbox_symphonia_player::output::encoder::aac::encoder::AacEncoder;
+                    use moosicbox_symphonia_player::output::encoders::aac::AacEncoder;
                     let mut hint = Hint::new();
                     hint.with_extension("m4a");
                     signal_chain = signal_chain
@@ -1075,7 +1075,7 @@ pub trait Player: Clone + Send + 'static {
                 #[cfg(feature = "flac")]
                 AudioFormat::Flac => {
                     log::debug!("Encoding playback with FlacEncoder");
-                    use moosicbox_symphonia_player::output::encoder::flac::encoder::FlacEncoder;
+                    use moosicbox_symphonia_player::output::encoders::flac::FlacEncoder;
                     let mut hint = Hint::new();
                     hint.with_extension("flac");
                     signal_chain = signal_chain
@@ -1085,7 +1085,7 @@ pub trait Player: Clone + Send + 'static {
                 #[cfg(feature = "mp3")]
                 AudioFormat::Mp3 => {
                     log::debug!("Encoding playback with Mp3Encoder");
-                    use moosicbox_symphonia_player::output::encoder::mp3::encoder::Mp3Encoder;
+                    use moosicbox_symphonia_player::output::encoders::mp3::Mp3Encoder;
                     let mut hint = Hint::new();
                     hint.with_extension("mp3");
                     signal_chain = signal_chain
@@ -1095,7 +1095,7 @@ pub trait Player: Clone + Send + 'static {
                 #[cfg(feature = "opus")]
                 AudioFormat::Opus => {
                     log::debug!("Encoding playback with OpusEncoder");
-                    use moosicbox_symphonia_player::output::encoder::opus::encoder::OpusEncoder;
+                    use moosicbox_symphonia_player::output::encoders::opus::OpusEncoder;
                     let mut hint = Hint::new();
                     hint.with_extension("opus");
                     signal_chain = signal_chain

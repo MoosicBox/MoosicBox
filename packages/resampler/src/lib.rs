@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+
 use symphonia::core::audio::{AudioBuffer, Signal, SignalSpec};
 use symphonia::core::conv::{IntoSample, ReversibleSample};
 use symphonia::core::sample::Sample;

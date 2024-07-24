@@ -1,14 +1,14 @@
 use std::sync::RwLock;
 
-use crate::output::{to_samples, AudioEncoder, AudioOutput, AudioOutputError, AudioOutputHandler};
-use crate::play_file_path_str;
-use crate::resampler::Resampler;
-
 use bytes::Bytes;
 use moosicbox_converter::mp3::encoder_mp3;
-use moosicbox_stream_utils::{ByteStream, ByteWriter};
 use symphonia::core::audio::*;
 use symphonia::core::units::Duration;
+
+use crate::{to_samples, AudioOutput, AudioOutputError};
+use moosicbox_resampler::Resampler;
+
+use super::AudioEncoder;
 
 pub struct Mp3Encoder {
     resampler: Option<RwLock<Resampler<i16>>>,
@@ -188,37 +188,5 @@ impl AudioOutput for Mp3Encoder {
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
         Ok(())
-    }
-}
-
-pub fn encode_mp3_stream(path: String) -> ByteStream {
-    let writer = ByteWriter::default();
-    let stream = writer.stream();
-
-    encode_mp3_spawn(path, writer);
-
-    stream
-}
-
-pub fn encode_mp3_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
-    path: String,
-    writer: T,
-) -> tokio::task::JoinHandle<()> {
-    let path = path.clone();
-    moosicbox_task::spawn_blocking("symphonia_player: encode_mp3", move || {
-        encode_mp3(path, writer)
-    })
-}
-
-pub fn encode_mp3<T: std::io::Write + Send + Sync + Clone + 'static>(path: String, writer: T) {
-    let mut audio_output_handler =
-        AudioOutputHandler::new().with_output(Box::new(move |spec, duration| {
-            Ok(Box::new(
-                Mp3Encoder::with_writer(writer.clone()).open(spec, duration),
-            ))
-        }));
-
-    if let Err(err) = play_file_path_str(&path, &mut audio_output_handler, true, true, None, None) {
-        log::error!("Failed to encode to mp3: {err:?}");
     }
 }

@@ -13,6 +13,7 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_assert           = { version = "0.1.0", path = "../assert", default-features = false }
 moosicbox_async_service    = { version = "0.1.0", path = "../async_service", default-features = false }
+moosicbox_audio_outputs    = { version = "0.1.0", path = "../audio_outputs", default-features = false }
 moosicbox_auth             = { version = "0.1.0", path = "../auth", default-features = false }
 moosicbox_config           = { version = "0.1.0", path = "../config", default-features = false }
 moosicbox_converter        = { version = "0.1.0", path = "../converter", default-features = false }
@@ -32,6 +33,7 @@ moosicbox_music_api        = { version = "0.1.0", path = "../music_api", default
 moosicbox_paging           = { version = "0.1.0", path = "../paging", default-features = false }
 moosicbox_player           = { version = "0.1.0", path = "../player", default-features = false }
 moosicbox_qobuz            = { version = "0.1.0", path = "../qobuz", default-features = false }
+moosicbox_resampler        = { version = "0.1.0", path = "../resampler", default-features = false }
 moosicbox_scan             = { version = "0.1.0", path = "../scan", default-features = false }
 moosicbox_search           = { version = "0.1.0", path = "../search", default-features = false }
 moosicbox_session          = { version = "0.1.0", path = "../session", default-features = false }

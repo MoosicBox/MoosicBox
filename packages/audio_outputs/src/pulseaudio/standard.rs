@@ -1,26 +1,24 @@
-use moosicbox_env_utils::option_env_u32;
-use pulse::def::BufferAttr;
-use pulse::error::PAErr;
-use pulse::time::MicroSeconds;
-use symphonia::core::audio::SignalSpec;
-use symphonia::core::units::Duration;
-use thiserror::Error;
-
 use std::ops::Deref;
 use std::sync::atomic::AtomicUsize;
 use std::{cell::RefCell, rc::Rc, time::SystemTime};
 
-use crate::output::pulseaudio::common::map_channels_to_pa_channelmap;
-use crate::output::{AudioOutput, AudioOutputError};
-use crate::resampler::Resampler;
-
+use libpulse_binding as pulse;
+use moosicbox_env_utils::option_env_u32;
+use moosicbox_resampler::Resampler;
 use pulse::context::{Context, FlagSet as ContextFlagSet};
+use pulse::def::BufferAttr;
+use pulse::error::PAErr;
 use pulse::mainloop::standard::{IterateResult, Mainloop};
 use pulse::proplist::Proplist;
 use pulse::stream::{FlagSet as StreamFlagSet, Latency, Stream};
+use pulse::time::MicroSeconds;
+use symphonia::core::audio::SignalSpec;
 use symphonia::core::audio::*;
+use symphonia::core::units::Duration;
+use thiserror::Error;
 
-use libpulse_binding as pulse;
+use crate::pulseaudio::common::map_channels_to_pa_channelmap;
+use crate::{AudioOutput, AudioOutputError};
 
 pub struct PulseAudioOutput {
     mainloop: Rc<RefCell<Mainloop>>,

@@ -1,0 +1,25 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools"]
+description = "MoosicBox resampler package"
+edition     = "2021"
+keywords    = ["audio", "pcm", "resample", "resampler", "samples"]
+license     = "MPL-2.0"
+name        = "moosicbox_resampler"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_env_utils = { path = "../env_utils", default-features = false }
+
+arrayvec  = { workspace = true }
+log       = { workspace = true }
+rubato    = { workspace = true }
+symphonia = { workspace = true }
+thiserror = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = []

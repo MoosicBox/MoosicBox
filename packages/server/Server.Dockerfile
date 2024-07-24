@@ -10,6 +10,7 @@ RUN cat Cargo.toml | \
     sed -E "s/members = \[[^]]+\]/members = [\r\
     \"packages\/assert\",\r\
     \"packages\/async_service\",\r\
+    \"packages\/audio_outputs\",\r\
     \"packages\/auth\",\r\
     \"packages\/config\",\r\
     \"packages\/converter\",\r\
@@ -28,6 +29,7 @@ RUN cat Cargo.toml | \
     \"packages\/paging\",\r\
     \"packages\/player\",\r\
     \"packages\/qobuz\",\r\
+    \"packages\/resampler\",\r\
     \"packages\/scan\",\r\
     \"packages\/search\",\r\
     \"packages\/server\",\r\
@@ -47,6 +49,7 @@ RUN cat Cargo.toml | \
 
 COPY packages/assert/Cargo.toml packages/assert/Cargo.toml
 COPY packages/async_service/Cargo.toml packages/async_service/Cargo.toml
+COPY packages/audio_outputs/Cargo.toml packages/audio_outputs/Cargo.toml
 COPY packages/auth/Cargo.toml packages/auth/Cargo.toml
 COPY packages/config/Cargo.toml packages/config/Cargo.toml
 COPY packages/converter/Cargo.toml packages/converter/Cargo.toml
@@ -65,6 +68,7 @@ COPY packages/music_api/Cargo.toml packages/music_api/Cargo.toml
 COPY packages/paging/Cargo.toml packages/paging/Cargo.toml
 COPY packages/player/Cargo.toml packages/player/Cargo.toml
 COPY packages/qobuz/Cargo.toml packages/qobuz/Cargo.toml
+COPY packages/resampler/Cargo.toml packages/resampler/Cargo.toml
 COPY packages/scan/Cargo.toml packages/scan/Cargo.toml
 COPY packages/search/Cargo.toml packages/search/Cargo.toml
 COPY packages/server/Cargo.toml packages/server/Cargo.toml
@@ -87,6 +91,7 @@ RUN for file in $(\
     done | grep -E "^(\
 packages/assert|\
 packages/async_service|\
+packages/audio_outputs|\
 packages/auth|\
 packages/config|\
 packages/converter|\
@@ -105,6 +110,7 @@ packages/music_api|\
 packages/paging|\
 packages/player|\
 packages/qobuz|\
+packages/resampler|\
 packages/scan|\
 packages/search|\
 packages/server|\

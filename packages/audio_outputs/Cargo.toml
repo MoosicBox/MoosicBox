@@ -1,0 +1,65 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools"]
+description = "MoosicBox audio outputs package"
+edition     = "2021"
+keywords    = ["audio", "cpal", "outputs", "pulse", "pulseaudio"]
+license     = "MPL-2.0"
+name        = "moosicbox_audio_outputs"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_assert       = { path = "../assert", default-features = false }
+moosicbox_env_utils    = { path = "../env_utils", default-features = false }
+moosicbox_resampler    = { path = "../resampler", default-features = false }
+moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
+moosicbox_task         = { path = "../task", default-features = false }
+
+# CPAL
+cpal = { workspace = true, optional = true }
+rb   = { workspace = true, optional = true }
+
+# PulseAudio
+libpulse-binding        = { workspace = true, optional = true }
+libpulse-simple-binding = { workspace = true, optional = true }
+
+# Encoders
+fdk-aac             = { workspace = true, optional = true }
+moosicbox_converter = { path = "../converter", default-features = false, optional = true }
+mp3lame-encoder     = { workspace = true, optional = true }
+ogg                 = { workspace = true, optional = true }
+opus                = { workspace = true, optional = true }
+
+bytes      = { workspace = true }
+log        = { workspace = true }
+symphonia  = { workspace = true }
+thiserror  = { workspace = true }
+tokio-util = { workspace = true }
+
+[features]
+default = [
+    "aac",
+    "cpal",
+    "flac",
+    "mp3",
+    "oboe-shared-stdcxx",
+    "opus",
+    "pulseaudio",
+]
+
+fail-on-warnings = []
+
+asio                = ["cpal/asio"]
+cpal                = ["dep:cpal", "dep:rb"]
+jack                = ["cpal/jack"]
+oboe-shared-stdcxx  = ["cpal/oboe-shared-stdcxx"]
+pulseaudio          = ["pulseaudio-simple", "pulseaudio-standard"]
+pulseaudio-simple   = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
+pulseaudio-standard = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
+
+aac  = ["dep:fdk-aac", "moosicbox_converter/aac"]
+flac = ["moosicbox_converter/flac"]
+mp3  = ["dep:mp3lame-encoder", "moosicbox_converter/mp3"]
+opus = ["dep:ogg", "dep:opus", "moosicbox_converter/opus"]

@@ -1220,7 +1220,7 @@ impl MusicApi for LibraryMusicApi {
                 #[cfg(feature = "aac")]
                 AudioFormat::Aac => {
                     let writer = moosicbox_stream_utils::ByteWriter::default();
-                    moosicbox_symphonia_player::output::encoder::aac::encoder::encode_aac_spawn(
+                    moosicbox_symphonia_player::encoders::aac::encode_aac_spawn(
                         path.to_string(),
                         writer.clone(),
                     )
@@ -1237,7 +1237,7 @@ impl MusicApi for LibraryMusicApi {
                 #[cfg(feature = "mp3")]
                 AudioFormat::Mp3 => {
                     let writer = moosicbox_stream_utils::ByteWriter::default();
-                    moosicbox_symphonia_player::output::encoder::mp3::encoder::encode_mp3_spawn(
+                    moosicbox_symphonia_player::encoders::mp3::encode_mp3_spawn(
                         path.to_string(),
                         writer.clone(),
                     )
@@ -1248,7 +1248,7 @@ impl MusicApi for LibraryMusicApi {
                 #[cfg(feature = "opus")]
                 AudioFormat::Opus => {
                     let writer = moosicbox_stream_utils::ByteWriter::default();
-                    moosicbox_symphonia_player::output::encoder::opus::encoder::encode_opus_spawn(
+                    moosicbox_symphonia_player::encoders::opus::encode_opus_spawn(
                         path.to_string(),
                         writer.clone(),
                     )

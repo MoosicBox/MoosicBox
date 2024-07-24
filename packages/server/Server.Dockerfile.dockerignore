@@ -2,6 +2,7 @@
 
 !/packages/assert
 !/packages/async_service
+!/packages/audio_outputs
 !/packages/auth
 !/packages/config
 !/packages/converter
@@ -20,6 +21,7 @@
 !/packages/paging
 !/packages/player
 !/packages/qobuz
+!/packages/resampler
 !/packages/scan
 !/packages/search
 !/packages/server

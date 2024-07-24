@@ -1,26 +1,26 @@
 use std::sync::RwLock;
 
-use crate::output::{to_samples, AudioEncoder, AudioOutput, AudioOutputError, AudioOutputHandler};
-use crate::play_file_path_str;
-use crate::resampler::Resampler;
-
 use bytes::Bytes;
-use moosicbox_converter::aac::encoder_aac;
-use moosicbox_stream_utils::{ByteStream, ByteWriter};
+use moosicbox_converter::flac::{encoder_flac, Encoder};
 use symphonia::core::audio::*;
 use symphonia::core::units::Duration;
 
-pub struct AacEncoder {
+use crate::{to_samples, AudioOutput, AudioOutputError};
+use moosicbox_resampler::Resampler;
+
+use super::AudioEncoder;
+
+pub struct FlacEncoder {
     resampler: Option<RwLock<Resampler<i16>>>,
     input_rate: Option<u32>,
     resample_rate: Option<u32>,
     output_rate: usize,
     duration: Option<Duration>,
     writer: Option<Box<dyn std::io::Write + Send + Sync>>,
-    encoder: fdk_aac::enc::Encoder,
+    encoder: Encoder,
 }
 
-impl AacEncoder {
+impl FlacEncoder {
     pub fn new() -> Self {
         Self {
             resampler: None,
@@ -29,7 +29,7 @@ impl AacEncoder {
             output_rate: 44100,
             duration: None,
             writer: None,
-            encoder: encoder_aac().unwrap(),
+            encoder: encoder_flac().expect("Failed to create Flac encoder"),
         }
     }
 
@@ -41,7 +41,7 @@ impl AacEncoder {
             output_rate: 44100,
             duration: None,
             writer: Some(Box::new(writer)),
-            encoder: encoder_aac().unwrap(),
+            encoder: encoder_flac().expect("Failed to create Flac encoder"),
         }
     }
 
@@ -72,14 +72,17 @@ impl AacEncoder {
         self
     }
 
-    fn encode_output(&self, buf: &[i16]) -> Bytes {
+    fn encode_output(&mut self, buf: &[i16]) -> Bytes {
         let mut read = 0;
         let mut written = vec![];
         loop {
             let end = std::cmp::min(read + 1024, buf.len());
-            let mut output = [0u8; 2048];
-            match moosicbox_converter::aac::encode_aac(&self.encoder, &buf[read..end], &mut output)
-            {
+            let mut output = [0u8; 4096];
+            match moosicbox_converter::flac::encode_flac(
+                &mut self.encoder,
+                &buf[read..end].iter().map(|x| *x as i32).collect::<Vec<_>>(),
+                &mut output,
+            ) {
                 Ok(info) => {
                     written.extend_from_slice(&output[..info.output_size]);
                     read += info.input_consumed;
@@ -132,15 +135,15 @@ impl AacEncoder {
     }
 }
 
-impl Default for AacEncoder {
+impl Default for FlacEncoder {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl AudioEncoder for AacEncoder {
+impl AudioEncoder for FlacEncoder {
     fn encode(&mut self, decoded: AudioBuffer<f32>) -> Result<Bytes, AudioOutputError> {
-        log::debug!("AacEncoder encode {} frames", decoded.frames());
+        log::debug!("FlacEncoder encode {} frames", decoded.frames());
 
         let decoded = self.resample_if_needed(decoded)?;
 
@@ -155,7 +158,7 @@ impl AudioEncoder for AacEncoder {
     }
 }
 
-impl AudioOutput for AacEncoder {
+impl AudioOutput for FlacEncoder {
     fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
         if self.writer.is_none() {
             return Ok(0);
@@ -184,37 +187,5 @@ impl AudioOutput for AacEncoder {
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
         Ok(())
-    }
-}
-
-pub fn encode_aac_stream(path: String) -> ByteStream {
-    let writer = ByteWriter::default();
-    let stream = writer.stream();
-
-    encode_aac_spawn(path, writer);
-
-    stream
-}
-
-pub fn encode_aac_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
-    path: String,
-    writer: T,
-) -> tokio::task::JoinHandle<()> {
-    let path = path.clone();
-    moosicbox_task::spawn_blocking("symphonia_player: encode_aac", move || {
-        encode_aac(path, writer)
-    })
-}
-
-pub fn encode_aac<T: std::io::Write + Send + Sync + Clone + 'static>(path: String, writer: T) {
-    let mut audio_output_handler =
-        AudioOutputHandler::new().with_output(Box::new(move |spec, duration| {
-            Ok(Box::new(
-                AacEncoder::with_writer(writer.clone()).open(spec, duration),
-            ))
-        }));
-
-    if let Err(err) = play_file_path_str(&path, &mut audio_output_handler, true, true, None, None) {
-        log::error!("Failed to encode to aac: {err:?}");
     }
 }

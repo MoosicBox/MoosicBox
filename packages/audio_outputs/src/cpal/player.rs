@@ -1,14 +1,12 @@
-use crate::resampler::Resampler;
-
-use crate::output::{AudioOutput, AudioOutputError};
-
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Host, SizedSample};
+use moosicbox_resampler::Resampler;
 use rb::{RbConsumer, RbProducer, SpscRb, RB};
 use symphonia::core::audio::{AudioBuffer, RawSample, SampleBuffer, Signal as _, SignalSpec};
 use symphonia::core::conv::{ConvertibleSample, IntoSample};
 use symphonia::core::units::Duration;
 
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use crate::{AudioOutput, AudioOutputError};
 
 pub struct CpalAudioOutput;
 

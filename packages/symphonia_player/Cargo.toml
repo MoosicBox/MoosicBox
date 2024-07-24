@@ -11,61 +11,40 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert       = { path = "../assert", default-features = false }
-moosicbox_converter    = { path = "../converter", default-features = false }
-moosicbox_env_utils    = { path = "../env_utils" }
-moosicbox_stream_utils = { path = "../stream_utils" }
-moosicbox_task         = { path = "../task", default-features = false }
+moosicbox_assert = { path = "../assert", default-features = false }
+moosicbox_audio_outputs = { path = "../audio_outputs", default-features = false }
+moosicbox_converter = { path = "../converter", default-features = false }
+moosicbox_env_utils = { path = "../env_utils", default-features = false }
+moosicbox_resampler = { path = "../resampler", default-features = false }
+moosicbox_stream_utils = { path = "../stream_utils", default-features = false, features = [
+    "remote-bytestream",
+    "stalled-monitor",
+] }
+moosicbox_task = { path = "../task", default-features = false }
 
-arrayvec                = { workspace = true }
-atomic_float            = { workspace = true }
-bytes                   = { workspace = true }
-clap                    = { workspace = true }
-cpal                    = { workspace = true, optional = true }
-fdk-aac                 = { workspace = true, optional = true }
-flume                   = { workspace = true }
-futures                 = { workspace = true }
-lazy_static             = { workspace = true }
-libpulse-binding        = { workspace = true, optional = true }
-libpulse-simple-binding = { workspace = true, optional = true }
-log                     = { workspace = true }
-mp3lame-encoder         = { workspace = true, optional = true }
-ogg                     = { workspace = true, optional = true }
-opus                    = { workspace = true, optional = true }
-pretty_env_logger       = { workspace = true }
-rangemap                = { workspace = true }
-rb                      = { workspace = true }
-reqwest                 = { workspace = true }
-rubato                  = { workspace = true }
-symphonia               = { workspace = true }
-thiserror               = { workspace = true }
-tokio                   = { workspace = true, features = ["rt-multi-thread", "tracing"] }
-tokio-stream            = { workspace = true }
-tokio-util              = { workspace = true }
+arrayvec          = { workspace = true }
+atomic_float      = { workspace = true }
+bytes             = { workspace = true }
+clap              = { workspace = true }
+flume             = { workspace = true }
+futures           = { workspace = true }
+lazy_static       = { workspace = true }
+log               = { workspace = true }
+pretty_env_logger = { workspace = true }
+rangemap          = { workspace = true }
+reqwest           = { workspace = true }
+symphonia         = { workspace = true }
+thiserror         = { workspace = true }
+tokio             = { workspace = true, features = ["rt-multi-thread", "tracing"] }
+tokio-stream      = { workspace = true }
+tokio-util        = { workspace = true }
 
 [features]
-default = [
-    "aac",
-    "cpal",
-    "flac",
-    "mp3",
-    "oboe-shared-stdcxx",
-    "opus",
-    "pulseaudio",
-]
+default = ["aac", "flac", "mp3", "opus"]
 
 fail-on-warnings = []
 
-# Player audio outputs
-asio                = ["cpal/asio"]
-cpal                = ["dep:cpal"]
-jack                = ["cpal/jack"]
-oboe-shared-stdcxx  = ["cpal/oboe-shared-stdcxx"]
-pulseaudio          = ["pulseaudio-simple", "pulseaudio-standard"]
-pulseaudio-simple   = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
-pulseaudio-standard = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
-
-aac  = ["dep:fdk-aac", "moosicbox_converter/aac"]
-flac = ["moosicbox_converter/flac"]
-mp3  = ["dep:mp3lame-encoder", "moosicbox_converter/mp3"]
-opus = ["dep:ogg", "dep:opus", "moosicbox_converter/opus"]
+aac  = ["moosicbox_audio_outputs/aac"]
+flac = ["moosicbox_audio_outputs/flac"]
+mp3  = ["moosicbox_audio_outputs/mp3"]
+opus = ["moosicbox_audio_outputs/opus"]

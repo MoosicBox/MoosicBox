@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
-use output::{AudioOutputError, AudioOutputHandler};
+use moosicbox_audio_outputs::{AudioOutputError, AudioOutputHandler};
 use symphonia::core::codecs::{DecoderOptions, FinalizeResult, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, Track};
@@ -17,9 +17,9 @@ use symphonia::core::units::Time;
 use thiserror::Error;
 use tokio::task::JoinError;
 
+pub mod encoders;
 pub mod media_sources;
 pub mod output;
-pub mod resampler;
 pub mod signal_chain;
 pub mod unsync;
 pub mod volume_mixer;

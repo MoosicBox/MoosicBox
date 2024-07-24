@@ -1,17 +1,12 @@
 use std::time::SystemTime;
-use symphonia::core::audio::SignalSpec;
-
-use crate::output::{
-    pulseaudio::common::map_channels_to_pa_channelmap, AudioOutput, AudioOutputError,
-};
-
-use symphonia::core::audio::*;
-use symphonia::core::units::Duration;
 
 use libpulse_binding as pulse;
 use libpulse_simple_binding as psimple;
+use symphonia::core::audio::SignalSpec;
+use symphonia::core::audio::*;
+use symphonia::core::units::Duration;
 
-use log::{error, trace};
+use crate::{pulseaudio::common::map_channels_to_pa_channelmap, AudioOutput, AudioOutputError};
 
 pub struct PulseAudioOutput {
     pa: psimple::Simple,
@@ -53,7 +48,7 @@ impl PulseAudioOutput {
         match pa_result {
             Ok(pa) => Ok(Box::new(PulseAudioOutput { pa, sample_buf })),
             Err(err) => {
-                error!("audio output stream open error: {}", err);
+                log::error!("audio output stream open error: {}", err);
 
                 Err(AudioOutputError::OpenStream)
             }
@@ -66,16 +61,16 @@ impl AudioOutput for PulseAudioOutput {
         let frame_count = decoded.frames();
         // Do nothing if there are no audio frames.
         if frame_count == 0 {
-            trace!("No decoded frames. Returning");
+            log::trace!("No decoded frames. Returning");
             return Ok(0);
         }
 
-        trace!("Interleaving samples");
+        log::trace!("Interleaving samples");
         // Interleave samples from the audio buffer into the sample buffer.
         self.sample_buf.copy_interleaved(&decoded);
         let buffer = self.sample_buf.as_bytes();
 
-        trace!(
+        log::trace!(
             "Writing to pulse audio {} frames, {} bytes",
             frame_count,
             buffer.len()
@@ -84,7 +79,7 @@ impl AudioOutput for PulseAudioOutput {
         // Write interleaved samples to PulseAudio.
         match self.pa.write(buffer) {
             Err(err) => {
-                error!("audio output stream write error: {}", err);
+                log::error!("audio output stream write error: {}", err);
 
                 Err(AudioOutputError::StreamClosed)
             }
@@ -92,10 +87,10 @@ impl AudioOutput for PulseAudioOutput {
                 let end = SystemTime::now();
                 let took_ms = end.duration_since(start).unwrap().as_millis();
                 if took_ms >= 500 {
-                    error!("Detected audio interrupt");
+                    log::error!("Detected audio interrupt");
                     return Err(AudioOutputError::Interrupt);
                 } else {
-                    trace!("Successfully wrote to pulse audio. Took {}ms", took_ms);
+                    log::trace!("Successfully wrote to pulse audio. Took {}ms", took_ms);
                 }
                 Ok(buffer.len())
             }
