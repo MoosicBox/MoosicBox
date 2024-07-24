@@ -369,6 +369,51 @@ pub enum RemoveTrackError {
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
+pub enum TrackOrId {
+    Track(Box<Track>),
+    Id(Id),
+}
+
+impl TrackOrId {
+    pub async fn track(self, api: &dyn MusicApi) -> Result<Option<Track>, TrackError> {
+        Ok(match self {
+            TrackOrId::Track(track) => Some(*track),
+            TrackOrId::Id(id) => api.track(&id).await?,
+        })
+    }
+
+    pub fn id(&self) -> &Id {
+        match self {
+            TrackOrId::Track(track) => &track.id,
+            TrackOrId::Id(id) => id,
+        }
+    }
+}
+
+impl From<Id> for TrackOrId {
+    fn from(value: Id) -> Self {
+        Self::Id(value)
+    }
+}
+
+impl From<&Id> for TrackOrId {
+    fn from(value: &Id) -> Self {
+        Self::Id(value.to_owned())
+    }
+}
+
+impl From<Track> for TrackOrId {
+    fn from(value: Track) -> Self {
+        Self::Track(Box::new(value))
+    }
+}
+
+impl From<&Track> for TrackOrId {
+    fn from(value: &Track) -> Self {
+        Self::Track(Box::new(value.to_owned()))
+    }
+}
+
 #[async_trait]
 pub trait MusicApi: Send + Sync {
     fn source(&self) -> ApiSource;
@@ -470,13 +515,13 @@ pub trait MusicApi: Send + Sync {
 
     async fn track_source(
         &self,
-        track: &Track,
+        track: TrackOrId,
         quality: TrackAudioQuality,
     ) -> Result<Option<TrackSource>, TrackError>;
 
     async fn track_size(
         &self,
-        track_id: &Id,
+        track: TrackOrId,
         source: &TrackSource,
         quality: PlaybackQuality,
     ) -> Result<Option<u64>, TrackError>;
@@ -962,7 +1007,7 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
 
     async fn track_source(
         &self,
-        track: &Track,
+        track: TrackOrId,
         quality: TrackAudioQuality,
     ) -> Result<Option<TrackSource>, TrackError> {
         self.inner.track_source(track, quality).await
@@ -970,11 +1015,11 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
 
     async fn track_size(
         &self,
-        track_id: &Id,
+        track: TrackOrId,
         source: &TrackSource,
         quality: PlaybackQuality,
     ) -> Result<Option<u64>, TrackError> {
-        self.inner.track_size(track_id, source, quality).await
+        self.inner.track_size(track, source, quality).await
     }
 }
 
@@ -1131,7 +1176,7 @@ mod test {
 
         async fn track_source(
             &self,
-            _track: &Track,
+            _track: TrackOrId,
             _quality: TrackAudioQuality,
         ) -> Result<Option<TrackSource>, TrackError> {
             Ok(None)
@@ -1139,7 +1184,7 @@ mod test {
 
         async fn track_size(
             &self,
-            _track_id: &Id,
+            _track: TrackOrId,
             _source: &TrackSource,
             _quality: PlaybackQuality,
         ) -> Result<Option<u64>, TrackError> {

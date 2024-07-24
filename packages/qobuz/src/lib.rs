@@ -33,7 +33,7 @@ use moosicbox_music_api::{
     AlbumType, AlbumsError, AlbumsRequest, ArtistAlbumsError, ArtistError, ArtistOrder,
     ArtistOrderDirection, ArtistsError, ImageCoverSize, ImageCoverSource, MusicApi,
     RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackAudioQuality, TrackError,
-    TrackOrder, TrackOrderDirection, TrackSource, TracksError,
+    TrackOrId, TrackOrder, TrackOrderDirection, TrackSource, TracksError,
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -2122,37 +2122,41 @@ impl MusicApi for QobuzMusicApi {
 
     async fn track_source(
         &self,
-        track: &Track,
+        track: TrackOrId,
         quality: TrackAudioQuality,
     ) -> Result<Option<TrackSource>, TrackError> {
         let url = track_file_url(
             #[cfg(feature = "db")]
             &**self.db,
-            &track.id,
+            track.id(),
             quality.into(),
             None,
             None,
             None,
         )
         .await?;
-        Ok(Some(TrackSource::RemoteUrl {
-            url,
-            format: track.format.unwrap_or(AudioFormat::Source),
-            track_id: Some(track.id.to_owned()),
-            source: track.source,
-        }))
+
+        Ok(track
+            .track(self)
+            .await?
+            .map(|track| TrackSource::RemoteUrl {
+                url,
+                format: track.format.unwrap_or(AudioFormat::Source),
+                track_id: Some(track.id.to_owned()),
+                source: track.source,
+            }))
     }
 
     async fn track_size(
         &self,
-        track_id: &Id,
+        track: TrackOrId,
         _source: &TrackSource,
         _quality: PlaybackQuality,
     ) -> Result<Option<u64>, TrackError> {
         let url = track_file_url(
             #[cfg(feature = "db")]
             &**self.db,
-            track_id,
+            track.id(),
             QobuzAudioQuality::Low,
             None,
             None,

@@ -26,7 +26,7 @@ use moosicbox_music_api::{
     AlbumType, AlbumsError, AlbumsRequest, ArtistAlbumsError, ArtistError, ArtistOrder,
     ArtistOrderDirection, ArtistsError, ImageCoverSize, ImageCoverSource, MusicApi,
     RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackAudioQuality, TrackError,
-    TrackOrder, TrackOrderDirection, TrackSource, TracksError,
+    TrackOrId, TrackOrder, TrackOrderDirection, TrackSource, TracksError,
 };
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use once_cell::sync::Lazy;
@@ -2569,30 +2569,40 @@ impl MusicApi for TidalMusicApi {
 
     async fn track_source(
         &self,
-        track: &Track,
+        track: TrackOrId,
         quality: TrackAudioQuality,
     ) -> Result<Option<TrackSource>, TrackError> {
-        Ok(track_file_url(
+        let url = track_file_url(
             #[cfg(feature = "db")]
             &**self.db,
             quality.into(),
-            &track.id,
+            track.id(),
             None,
         )
         .await?
         .first()
-        .map(|x| x.to_string())
-        .map(|url| TrackSource::RemoteUrl {
-            url,
-            format: track.format.unwrap_or(AudioFormat::Source),
-            track_id: Some(track.id.to_owned()),
-            source: track.source,
-        }))
+        .map(|x| x.to_string());
+
+        let url = if let Some(url) = url {
+            url
+        } else {
+            return Ok(None);
+        };
+
+        Ok(track
+            .track(self)
+            .await?
+            .map(|track| TrackSource::RemoteUrl {
+                url,
+                format: track.format.unwrap_or(AudioFormat::Source),
+                track_id: Some(track.id.to_owned()),
+                source: track.source,
+            }))
     }
 
     async fn track_size(
         &self,
-        track_id: &Id,
+        track: TrackOrId,
         _source: &TrackSource,
         _quality: PlaybackQuality,
     ) -> Result<Option<u64>, TrackError> {
@@ -2600,7 +2610,7 @@ impl MusicApi for TidalMusicApi {
             #[cfg(feature = "db")]
             &**self.db,
             TidalAudioQuality::High,
-            track_id,
+            track.id(),
             None,
         )
         .await?

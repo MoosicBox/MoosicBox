@@ -28,7 +28,7 @@ use moosicbox_music_api::{
     AlbumType, AlbumsError, AlbumsRequest, ArtistAlbumsError, ArtistError, ArtistOrder,
     ArtistOrderDirection, ArtistsError, ImageCoverSize, ImageCoverSource, MusicApi,
     RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackAudioQuality, TrackError,
-    TrackOrder, TrackOrderDirection, TrackSource, TracksError,
+    TrackOrId, TrackOrder, TrackOrderDirection, TrackSource, TracksError,
 };
 use moosicbox_paging::{Page, PagingRequest, PagingResponse, PagingResult};
 use moosicbox_search::{
@@ -1165,9 +1165,14 @@ impl MusicApi for LibraryMusicApi {
 
     async fn track_source(
         &self,
-        track: &Track,
+        track: TrackOrId,
         _quality: TrackAudioQuality,
     ) -> Result<Option<TrackSource>, TrackError> {
+        let track = if let Some(track) = track.track(self).await? {
+            track
+        } else {
+            return Ok(None);
+        };
         let mut path = if let Some(file) = &track.file {
             file.to_owned()
         } else {
@@ -1194,13 +1199,16 @@ impl MusicApi for LibraryMusicApi {
 
     async fn track_size(
         &self,
-        track_id: &Id,
+        track: TrackOrId,
         source: &TrackSource,
         quality: PlaybackQuality,
     ) -> Result<Option<u64>, TrackError> {
-        log::debug!("track_size: track_id={track_id} source={source:?} quality={quality:?}");
+        log::debug!(
+            "track_size: track_id={} source={source:?} quality={quality:?}",
+            track.id()
+        );
 
-        if let Some(size) = db::get_track_size(&**self.db, track_id, &quality)
+        if let Some(size) = db::get_track_size(&**self.db, track.id(), &quality)
             .await
             .map_err(|e| TrackError::Other(Box::new(e)))?
         {
@@ -1269,7 +1277,7 @@ impl MusicApi for LibraryMusicApi {
         db::set_track_size(
             &**self.db,
             SetTrackSize {
-                track_id: track_id.into(),
+                track_id: track.id().into(),
                 quality,
                 bytes: Some(Some(bytes)),
                 bit_depth: Some(None),

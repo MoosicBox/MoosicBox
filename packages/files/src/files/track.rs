@@ -134,9 +134,12 @@ pub async fn get_track_source(
 
     log::debug!("Got track {track:?}. Getting source={:?}", api.source());
 
-    api.track_source(track, quality.unwrap_or(TrackAudioQuality::FlacHighestRes))
-        .await?
-        .ok_or_else(|| TrackSourceError::NotFound(track.id.to_owned()))
+    api.track_source(
+        track.into(),
+        quality.unwrap_or(TrackAudioQuality::FlacHighestRes),
+    )
+    .await?
+    .ok_or_else(|| TrackSourceError::NotFound(track.id.to_owned()))
 }
 
 #[derive(Debug, Error)]
@@ -768,7 +771,7 @@ pub async fn get_or_init_track_size(
 ) -> Result<u64, TrackInfoError> {
     log::debug!("Getting track size track_id={track_id}");
 
-    api.track_size(track_id, source, quality)
+    api.track_size(track_id.into(), source, quality)
         .await?
         .ok_or_else(|| TrackInfoError::NotFound(track_id.to_owned()))
 }

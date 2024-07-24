@@ -534,7 +534,7 @@ async fn download_track_inner(
         "Starting download for track={track:?} quality={quality:?} source={source:?} path={path} start={start:?}"
     );
 
-    let req = api.track_source(track, quality);
+    let req = api.track_source(track.into(), quality);
 
     let result = if let Some(timeout_duration) = timeout_duration {
         select! {
