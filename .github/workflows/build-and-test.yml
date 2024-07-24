@@ -30,6 +30,34 @@ jobs:
                       path: packages/async_service
                       os: ubuntu-latest
 
+                    - name: audio_decoder-default
+                      path: packages/audio_decoder
+                      os: ubuntu-latest
+
+                    - name: audio_decoder-aac
+                      path: packages/audio_decoder
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: aac
+
+                    - name: audio_decoder-flac
+                      path: packages/audio_decoder
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: flac
+
+                    - name: audio_decoder-mp3
+                      path: packages/audio_decoder
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: mp3
+
+                    - name: audio_decoder-opus
+                      path: packages/audio_decoder
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: opus
+
                     - name: audio_outputs
                       path: packages/audio_outputs
                       os: ubuntu-latest
@@ -543,34 +571,6 @@ jobs:
                       os: ubuntu-latest
                       cargo: --no-default-features
                       features: stalled-monitor
-
-                    - name: symphonia_player-default
-                      path: packages/symphonia_player
-                      os: ubuntu-latest
-
-                    - name: symphonia_player-aac
-                      path: packages/symphonia_player
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: aac
-
-                    - name: symphonia_player-flac
-                      path: packages/symphonia_player
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: flac
-
-                    - name: symphonia_player-mp3
-                      path: packages/symphonia_player
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: mp3
-
-                    - name: symphonia_player-opus
-                      path: packages/symphonia_player
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: opus
 
                     - name: task
                       path: packages/task

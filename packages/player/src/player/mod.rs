@@ -10,6 +10,13 @@ use atomic_float::AtomicF64;
 use flume::{bounded, Receiver, SendError};
 use futures::{Future, StreamExt as _, TryStreamExt as _};
 use local_ip_address::local_ip;
+use moosicbox_audio_decoder::{
+    media_sources::{
+        bytestream_source::ByteStreamSource, remote_bytestream::RemoteByteStreamMediaSource,
+    },
+    signal_chain::{SignalChain, SignalChainError},
+    PlaybackError,
+};
 use moosicbox_core::{
     sqlite::{
         db::DbError,
@@ -26,13 +33,6 @@ use moosicbox_session::{
 };
 use moosicbox_stream_utils::{
     remote_bytestream::RemoteByteStream, stalled_monitor::StalledReadMonitor,
-};
-use moosicbox_symphonia_player::{
-    media_sources::{
-        bytestream_source::ByteStreamSource, remote_bytestream::RemoteByteStreamMediaSource,
-    },
-    signal_chain::{SignalChain, SignalChainError},
-    PlaybackError,
 };
 use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng as _};
@@ -79,7 +79,7 @@ pub enum PlayerError {
     #[error("Format not supported: {0:?}")]
     UnsupportedFormat(AudioFormat),
     #[error(transparent)]
-    PlaybackError(#[from] moosicbox_symphonia_player::PlaybackError),
+    PlaybackError(#[from] moosicbox_audio_decoder::PlaybackError),
     #[error("Track fetch failed: {0}")]
     TrackFetchFailed(String),
     #[error("Album fetch failed: {0}")]
@@ -1065,7 +1065,7 @@ pub trait Player: Clone + Send + 'static {
                 #[cfg(feature = "aac")]
                 AudioFormat::Aac => {
                     log::debug!("Encoding playback with AacEncoder");
-                    use moosicbox_symphonia_player::output::encoders::aac::AacEncoder;
+                    use moosicbox_audio_decoder::output::encoders::aac::AacEncoder;
                     let mut hint = Hint::new();
                     hint.with_extension("m4a");
                     signal_chain = signal_chain
@@ -1075,7 +1075,7 @@ pub trait Player: Clone + Send + 'static {
                 #[cfg(feature = "flac")]
                 AudioFormat::Flac => {
                     log::debug!("Encoding playback with FlacEncoder");
-                    use moosicbox_symphonia_player::output::encoders::flac::FlacEncoder;
+                    use moosicbox_audio_decoder::output::encoders::flac::FlacEncoder;
                     let mut hint = Hint::new();
                     hint.with_extension("flac");
                     signal_chain = signal_chain
@@ -1085,7 +1085,7 @@ pub trait Player: Clone + Send + 'static {
                 #[cfg(feature = "mp3")]
                 AudioFormat::Mp3 => {
                     log::debug!("Encoding playback with Mp3Encoder");
-                    use moosicbox_symphonia_player::output::encoders::mp3::Mp3Encoder;
+                    use moosicbox_audio_decoder::output::encoders::mp3::Mp3Encoder;
                     let mut hint = Hint::new();
                     hint.with_extension("mp3");
                     signal_chain = signal_chain
@@ -1095,7 +1095,7 @@ pub trait Player: Clone + Send + 'static {
                 #[cfg(feature = "opus")]
                 AudioFormat::Opus => {
                     log::debug!("Encoding playback with OpusEncoder");
-                    use moosicbox_symphonia_player::output::encoders::opus::OpusEncoder;
+                    use moosicbox_audio_decoder::output::encoders::opus::OpusEncoder;
                     let mut hint = Hint::new();
                     hint.with_extension("opus");
                     signal_chain = signal_chain
@@ -1134,10 +1134,10 @@ pub trait Player: Clone + Send + 'static {
                 Ok(stream) => stream,
                 Err(SignalChainError::Playback(err)) => {
                     return Err(PlayerError::PlaybackError(match err {
-                        moosicbox_symphonia_player::unsync::PlaybackError::AudioOutput(err) => {
+                        moosicbox_audio_decoder::unsync::PlaybackError::AudioOutput(err) => {
                             PlaybackError::AudioOutput(err)
                         }
-                        moosicbox_symphonia_player::unsync::PlaybackError::Symphonia(err) => {
+                        moosicbox_audio_decoder::unsync::PlaybackError::Symphonia(err) => {
                             PlaybackError::Symphonia(err)
                         }
                     }));

@@ -17,7 +17,7 @@ pub fn encode_mp3_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     writer: T,
 ) -> tokio::task::JoinHandle<()> {
     let path = path.clone();
-    moosicbox_task::spawn_blocking("symphonia_player: encode_mp3", move || {
+    moosicbox_task::spawn_blocking("audio_decoder: encode_mp3", move || {
         encode_mp3(path, writer)
     })
 }

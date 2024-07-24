@@ -35,7 +35,7 @@ RUN cat Cargo.toml | \
     \"packages\/server\",\r\
     \"packages\/session\",\r\
     \"packages\/stream_utils\",\r\
-    \"packages\/symphonia_player\",\r\
+    \"packages\/audio_decoder\",\r\
     \"packages\/task\",\r\
     \"packages\/tidal\",\r\
     \"packages\/tunnel\",\r\
@@ -74,7 +74,7 @@ COPY packages/search/Cargo.toml packages/search/Cargo.toml
 COPY packages/server/Cargo.toml packages/server/Cargo.toml
 COPY packages/session/Cargo.toml packages/session/Cargo.toml
 COPY packages/stream_utils/Cargo.toml packages/stream_utils/Cargo.toml
-COPY packages/symphonia_player/Cargo.toml packages/symphonia_player/Cargo.toml
+COPY packages/audio_decoder/Cargo.toml packages/audio_decoder/Cargo.toml
 COPY packages/task/Cargo.toml packages/task/Cargo.toml
 COPY packages/tidal/Cargo.toml packages/tidal/Cargo.toml
 COPY packages/tunnel/Cargo.toml packages/tunnel/Cargo.toml
@@ -116,7 +116,7 @@ packages/search|\
 packages/server|\
 packages/session|\
 packages/stream_utils|\
-packages/symphonia_player|\
+packages/audio_decoder|\
 packages/task|\
 packages/tidal|\
 packages/tunnel|\

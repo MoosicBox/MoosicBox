@@ -3430,6 +3430,7 @@ version = "0.1.0"
 dependencies = [
  "moosicbox_assert",
  "moosicbox_async_service",
+ "moosicbox_audio_decoder",
  "moosicbox_audio_outputs",
  "moosicbox_auth",
  "moosicbox_config",
@@ -3455,7 +3456,6 @@ dependencies = [
  "moosicbox_search",
  "moosicbox_session",
  "moosicbox_stream_utils",
- "moosicbox_symphonia_player",
  "moosicbox_task",
  "moosicbox_tidal",
  "moosicbox_tunnel",
@@ -3507,6 +3507,35 @@ dependencies = [
  "test-log",
  "thiserror",
  "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "moosicbox_audio_decoder"
+version = "0.1.0"
+dependencies = [
+ "arrayvec",
+ "atomic_float",
+ "bytes",
+ "clap 4.5.10",
+ "flume",
+ "futures",
+ "lazy_static",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_audio_outputs",
+ "moosicbox_converter",
+ "moosicbox_env_utils",
+ "moosicbox_resampler",
+ "moosicbox_stream_utils",
+ "moosicbox_task",
+ "pretty_env_logger",
+ "rangemap",
+ "reqwest 0.12.5",
+ "symphonia",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
  "tokio-util",
 ]
 
@@ -3705,6 +3734,7 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "moosicbox_async_service",
+ "moosicbox_audio_decoder",
  "moosicbox_config",
  "moosicbox_core",
  "moosicbox_database",
@@ -3712,7 +3742,6 @@ dependencies = [
  "moosicbox_json_utils",
  "moosicbox_music_api",
  "moosicbox_stream_utils",
- "moosicbox_symphonia_player",
  "moosicbox_task",
  "once_cell",
  "regex",
@@ -3775,6 +3804,7 @@ dependencies = [
  "futures",
  "log",
  "moosicbox_assert",
+ "moosicbox_audio_decoder",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_files",
@@ -3783,7 +3813,6 @@ dependencies = [
  "moosicbox_paging",
  "moosicbox_search",
  "moosicbox_stream_utils",
- "moosicbox_symphonia_player",
  "once_cell",
  "open",
  "regex",
@@ -3930,6 +3959,7 @@ dependencies = [
  "local-ip-address",
  "log",
  "moosicbox_assert",
+ "moosicbox_audio_decoder",
  "moosicbox_audio_outputs",
  "moosicbox_converter",
  "moosicbox_core",
@@ -3938,7 +3968,6 @@ dependencies = [
  "moosicbox_music_api",
  "moosicbox_session",
  "moosicbox_stream_utils",
- "moosicbox_symphonia_player",
  "moosicbox_task",
  "ogg",
  "once_cell",
@@ -4170,35 +4199,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "moosicbox_symphonia_player"
-version = "0.1.0"
-dependencies = [
- "arrayvec",
- "atomic_float",
- "bytes",
- "clap 4.5.10",
- "flume",
- "futures",
- "lazy_static",
- "log",
- "moosicbox_assert",
- "moosicbox_audio_outputs",
- "moosicbox_converter",
- "moosicbox_env_utils",
- "moosicbox_resampler",
- "moosicbox_stream_utils",
- "moosicbox_task",
- "pretty_env_logger",
- "rangemap",
- "reqwest 0.12.5",
- "symphonia",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tokio-util",
-]
-
-[[package]]
 name = "moosicbox_task"
 version = "0.1.0"
 dependencies = [
@@ -4272,6 +4272,7 @@ dependencies = [
  "lazy_static",
  "log",
  "moosicbox_assert",
+ "moosicbox_audio_decoder",
  "moosicbox_auth",
  "moosicbox_core",
  "moosicbox_database",
@@ -4280,7 +4281,6 @@ dependencies = [
  "moosicbox_image",
  "moosicbox_music_api",
  "moosicbox_stream_utils",
- "moosicbox_symphonia_player",
  "moosicbox_task",
  "moosicbox_tunnel",
  "moosicbox_ws",
@@ -4361,6 +4361,7 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "moosicbox_async_service",
+ "moosicbox_audio_decoder",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",
@@ -4368,7 +4369,6 @@ dependencies = [
  "moosicbox_player",
  "moosicbox_session",
  "moosicbox_stream_utils",
- "moosicbox_symphonia_player",
  "moosicbox_task",
  "once_cell",
  "pin-utils",

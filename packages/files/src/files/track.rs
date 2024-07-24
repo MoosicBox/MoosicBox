@@ -7,6 +7,10 @@ use bytes::{Bytes, BytesMut};
 use flume::RecvError;
 use futures::prelude::*;
 use futures_core::Stream;
+use moosicbox_audio_decoder::{
+    media_sources::remote_bytestream::RemoteByteStreamMediaSource, play_file_path_str_async,
+    play_media_source_async, PlaybackError,
+};
 use moosicbox_core::{
     sqlite::{
         db::DbError,
@@ -20,10 +24,6 @@ use moosicbox_music_api::{
 use moosicbox_stream_utils::{
     new_byte_writer_id, remote_bytestream::RemoteByteStream, stalled_monitor::StalledReadMonitor,
     ByteWriter,
-};
-use moosicbox_symphonia_player::{
-    media_sources::remote_bytestream::RemoteByteStreamMediaSource, play_file_path_str_async,
-    play_media_source_async, PlaybackError,
 };
 use serde::{Deserialize, Serialize};
 use symphonia::core::{
@@ -294,8 +294,8 @@ pub async fn get_audio_bytes(
                         Ok(match format {
                             #[cfg(feature = "aac")]
                             AudioFormat::Aac => {
-                                use moosicbox_symphonia_player::output::encoders::aac::AacEncoder;
-                                moosicbox_symphonia_player::output::AudioOutputHandler::new()
+                                use moosicbox_audio_decoder::output::encoders::aac::AacEncoder;
+                                moosicbox_audio_decoder::output::AudioOutputHandler::new()
                                     .with_output(Box::new(move |spec, duration| {
                                         Ok(Box::new(
                                             AacEncoder::with_writer(writer.clone())
@@ -305,8 +305,8 @@ pub async fn get_audio_bytes(
                             }
                             #[cfg(feature = "flac")]
                             AudioFormat::Flac => {
-                                use moosicbox_symphonia_player::output::encoders::flac::FlacEncoder;
-                                moosicbox_symphonia_player::output::AudioOutputHandler::new()
+                                use moosicbox_audio_decoder::output::encoders::flac::FlacEncoder;
+                                moosicbox_audio_decoder::output::AudioOutputHandler::new()
                                     .with_output(Box::new(move |spec, duration| {
                                         Ok(Box::new(
                                             FlacEncoder::with_writer(writer.clone())
@@ -316,9 +316,9 @@ pub async fn get_audio_bytes(
                             }
                             #[cfg(feature = "mp3")]
                             AudioFormat::Mp3 => {
-                                use moosicbox_symphonia_player::output::encoders::mp3::Mp3Encoder;
+                                use moosicbox_audio_decoder::output::encoders::mp3::Mp3Encoder;
                                 let encoder_writer = writer.clone();
-                                moosicbox_symphonia_player::output::AudioOutputHandler::new()
+                                moosicbox_audio_decoder::output::AudioOutputHandler::new()
                                     .with_output(Box::new(move |spec, duration| {
                                         Ok(Box::new(
                                             Mp3Encoder::with_writer(encoder_writer.clone())
@@ -328,9 +328,9 @@ pub async fn get_audio_bytes(
                             }
                             #[cfg(feature = "opus")]
                             AudioFormat::Opus => {
-                                use moosicbox_symphonia_player::output::encoders::opus::OpusEncoder;
+                                use moosicbox_audio_decoder::output::encoders::opus::OpusEncoder;
                                 let encoder_writer = writer.clone();
-                                moosicbox_symphonia_player::output::AudioOutputHandler::new()
+                                moosicbox_audio_decoder::output::AudioOutputHandler::new()
                                     .with_output(Box::new(move |spec, duration| {
                                         Ok(Box::new(
                                             OpusEncoder::with_writer(encoder_writer.clone())
@@ -339,9 +339,7 @@ pub async fn get_audio_bytes(
                                     }))
                             }
                             AudioFormat::Source => {
-                                return Err(
-                                    moosicbox_symphonia_player::PlaybackError::InvalidSource,
-                                )
+                                return Err(moosicbox_audio_decoder::PlaybackError::InvalidSource)
                             }
                         })
                     };
@@ -664,7 +662,7 @@ pub async fn get_or_init_track_visualization(
 
     let get_handler = move || {
         Ok(
-            moosicbox_symphonia_player::output::AudioOutputHandler::new().with_filter(Box::new(
+            moosicbox_audio_decoder::output::AudioOutputHandler::new().with_filter(Box::new(
                 move |decoded, _packet, _track| {
                     inner_viz
                         .write()

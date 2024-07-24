@@ -25,7 +25,7 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
 ] }
 moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
-moosicbox_symphonia_player = { path = "../symphonia_player", default-features = false }
+moosicbox_audio_decoder = { path = "../audio_decoder", default-features = false }
 moosicbox_task = { path = "../task", default-features = false }
 
 # API Dependencies
@@ -82,7 +82,7 @@ openapi     = ["dep:utoipa", "moosicbox_core/openapi"]
 range       = []
 track-range = []
 
-aac  = ["moosicbox_core/aac", "moosicbox_symphonia_player/aac"]
-flac = ["moosicbox_core/flac", "moosicbox_symphonia_player/flac"]
-mp3  = ["moosicbox_core/mp3", "moosicbox_symphonia_player/mp3"]
-opus = ["moosicbox_core/opus", "moosicbox_symphonia_player/opus"]
+aac  = ["moosicbox_core/aac", "moosicbox_audio_decoder/aac"]
+flac = ["moosicbox_core/flac", "moosicbox_audio_decoder/flac"]
+mp3  = ["moosicbox_core/mp3", "moosicbox_audio_decoder/mp3"]
+opus = ["moosicbox_core/opus", "moosicbox_audio_decoder/opus"]

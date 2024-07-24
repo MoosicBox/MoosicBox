@@ -17,7 +17,7 @@ pub fn encode_opus_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     writer: T,
 ) -> tokio::task::JoinHandle<()> {
     let path = path.clone();
-    moosicbox_task::spawn_blocking("symphonia_player: encode_aac", move || {
+    moosicbox_task::spawn_blocking("audio_decoder: encode_aac", move || {
         encode_opus(path, writer)
     })
 }

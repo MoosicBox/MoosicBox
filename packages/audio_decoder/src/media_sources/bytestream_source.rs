@@ -74,7 +74,7 @@ impl ByteStreamSourceFetcher {
         log::debug!("Starting fetch for byte stream with range start={start} end={end:?}");
 
         self.abort_handle = Some(moosicbox_task::spawn(
-            "symphonia_player: ByteStreamSource Fetcher",
+            "audio_decoder: ByteStreamSource Fetcher",
             async move {
                 log::debug!("Fetching byte stream with range start={start} end={end:?}");
 

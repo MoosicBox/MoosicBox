@@ -53,7 +53,7 @@ pub async fn play_file_path_str_async(
     seek: Option<f64>,
 ) -> Result<i32, PlaybackError> {
     let path_str = path_str.to_owned();
-    moosicbox_task::spawn_blocking("symphonia_player: Play file path", move || {
+    moosicbox_task::spawn_blocking("audio_decoder: Play file path", move || {
         let mut handler = get_audio_output_handler()?;
         play_file_path_str(
             &path_str,
@@ -116,7 +116,7 @@ pub async fn play_media_source_async(
     seek: Option<f64>,
 ) -> Result<i32, PlaybackError> {
     let hint = hint.clone();
-    moosicbox_task::spawn_blocking("symphonia_player: Play media source", move || {
+    moosicbox_task::spawn_blocking("audio_decoder: Play media source", move || {
         let mut handler = get_audio_output_handler()?;
         play_media_source(
             media_source_stream,

@@ -30,7 +30,7 @@ members = [
     "packages/server",
     "packages/session",
     "packages/stream_utils",
-    "packages/symphonia_player",
+    "packages/audio_decoder",
     "packages/task",
     "packages/tidal",
     "packages/tunnel",

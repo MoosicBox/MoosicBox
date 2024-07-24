@@ -2,9 +2,9 @@ use std::sync::{atomic::AtomicBool, Arc, RwLock, RwLockWriteGuard};
 
 use async_trait::async_trait;
 use flume::Receiver;
+use moosicbox_audio_decoder::{output::AudioOutputHandler, volume_mixer::mix_volume};
 use moosicbox_core::sqlite::models::{ToApi, TrackApiSource};
 use moosicbox_session::models::UpdateSession;
-use moosicbox_symphonia_player::{output::AudioOutputHandler, volume_mixer::mix_volume};
 use rand::{thread_rng, Rng as _};
 use symphonia::core::io::MediaSourceStream;
 use tokio_util::sync::CancellationToken;
@@ -123,32 +123,32 @@ impl Player for LocalPlayer {
             #[cfg(feature = "cpal")]
             {
                 audio_output_handler = audio_output_handler.with_output(Box::new(
-                    moosicbox_symphonia_player::output::cpal::player::try_open,
+                    moosicbox_audio_decoder::output::cpal::player::try_open,
                 ));
             }
             #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
             {
                 audio_output_handler = audio_output_handler.with_output(Box::new(
-                    moosicbox_symphonia_player::output::pulseaudio::simple::try_open,
+                    moosicbox_audio_decoder::output::pulseaudio::simple::try_open,
                 ));
             }
             #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
             {
                 audio_output_handler = audio_output_handler.with_output(Box::new(
-                    moosicbox_symphonia_player::output::pulseaudio::standard::try_open,
+                    moosicbox_audio_decoder::output::pulseaudio::standard::try_open,
                 ));
             }
 
             moosicbox_assert::assert_or_err!(
                 audio_output_handler.contains_outputs_to_open(),
-                moosicbox_symphonia_player::PlaybackError::NoAudioOutputs,
+                moosicbox_audio_decoder::PlaybackError::NoAudioOutputs,
                 "No outputs set for the audio_output_handler"
             );
 
             Ok(audio_output_handler)
         };
 
-        let response = moosicbox_symphonia_player::play_media_source_async(
+        let response = moosicbox_audio_decoder::play_media_source_async(
             mss,
             &playable_track.hint,
             get_handler,

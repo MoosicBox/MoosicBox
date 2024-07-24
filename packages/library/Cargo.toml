@@ -12,6 +12,7 @@ version     = "0.1.0"
 
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
+moosicbox_audio_decoder = { path = "../audio_decoder", default-features = false }
 moosicbox_core = { path = "../core", default-features = false }
 moosicbox_database = { path = "../database", default-features = false, features = [
     "rusqlite",
@@ -27,7 +28,6 @@ moosicbox_search = { path = "../search", default-features = false, features = [
     "db",
 ] }
 moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
-moosicbox_symphonia_player = { path = "../symphonia_player", default-features = false }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -60,7 +60,7 @@ fail-on-warnings = []
 api     = ["dep:actix-web"]
 openapi = ["dep:utoipa", "moosicbox_search/openapi"]
 
-aac  = ["moosicbox_core/aac", "moosicbox_symphonia_player/aac"]
-flac = ["moosicbox_core/flac", "moosicbox_symphonia_player/flac"]
-mp3  = ["moosicbox_core/mp3", "moosicbox_symphonia_player/mp3"]
-opus = ["moosicbox_core/opus", "moosicbox_symphonia_player/opus"]
+aac  = ["moosicbox_audio_decoder/aac", "moosicbox_core/aac"]
+flac = ["moosicbox_audio_decoder/flac", "moosicbox_core/flac"]
+mp3  = ["moosicbox_audio_decoder/mp3", "moosicbox_core/mp3"]
+opus = ["moosicbox_audio_decoder/opus", "moosicbox_core/opus"]

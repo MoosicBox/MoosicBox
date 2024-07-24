@@ -38,7 +38,7 @@ moosicbox_scan             = { version = "0.1.0", path = "../scan", default-feat
 moosicbox_search           = { version = "0.1.0", path = "../search", default-features = false }
 moosicbox_session          = { version = "0.1.0", path = "../session", default-features = false }
 moosicbox_stream_utils     = { version = "0.1.0", path = "../stream_utils", default-features = false }
-moosicbox_symphonia_player = { version = "0.1.0", path = "../symphonia_player", default-features = false }
+moosicbox_audio_decoder = { version = "0.1.0", path = "../audio_decoder", default-features = false }
 moosicbox_task             = { version = "0.1.0", path = "../task", default-features = false }
 moosicbox_tidal            = { version = "0.1.0", path = "../tidal", default-features = false }
 moosicbox_tunnel           = { version = "0.1.0", path = "../tunnel", default-features = false }

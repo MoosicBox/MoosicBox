@@ -159,7 +159,7 @@ impl Read for StreamableFileAsync {
             self.receivers.push((id, rx));
 
             moosicbox_task::spawn(
-                "symphonia_player: StreamableFileAsync read_chunk",
+                "audio_decoder: StreamableFileAsync read_chunk",
                 async move {
                     Self::read_chunk(tx, url, chunk_write_pos, file_size).await;
                 },
