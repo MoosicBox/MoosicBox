@@ -1,7 +1,7 @@
 use std::sync::RwLock;
 
 use bytes::Bytes;
-use moosicbox_converter::mp3::encoder_mp3;
+use moosicbox_audio_encoder::mp3::encoder_mp3;
 use symphonia::core::audio::*;
 use symphonia::core::units::Duration;
 
@@ -77,7 +77,7 @@ impl Mp3Encoder {
         loop {
             let end = std::cmp::min(read + 1024, buf.len());
             log::trace!("Encoding {} bytes {read}..{end}", end - read);
-            match moosicbox_converter::mp3::encode_mp3(&mut self.encoder, &buf[read..end]) {
+            match moosicbox_audio_encoder::mp3::encode_mp3(&mut self.encoder, &buf[read..end]) {
                 Ok((output, info)) => {
                     log::trace!(
                         "input_consumed={} output_size={} (output len={})",

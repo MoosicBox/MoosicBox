@@ -1,7 +1,7 @@
 use std::sync::{Mutex, RwLock};
 
 use bytes::Bytes;
-use moosicbox_converter::opus::{
+use moosicbox_audio_encoder::opus::{
     encoder_opus, OPUS_STREAM_COMMENTS_HEADER, OPUS_STREAM_IDENTIFICATION_HEADER,
 };
 use ogg::{PacketWriteEndInfo, PacketWriter};
@@ -99,7 +99,7 @@ impl OpusEncoder<'_> {
                 input.len(),
                 buf_size
             );
-            let info = moosicbox_converter::opus::encode_opus_float(
+            let info = moosicbox_audio_encoder::opus::encode_opus_float(
                 &mut self.encoder.lock().unwrap(),
                 &input[read..read + buf_size],
                 &mut output_buf,

@@ -1,14 +1,23 @@
 [package]
-authors     = ["Braden Steffaniak"]
-categories  = ["compression", "encoding"]
+authors = ["Braden Steffaniak"]
+categories = ["compression", "encoding"]
 description = "Audio converter helper"
-edition     = "2021"
-keywords    = ["audio", "convert", "converter", "encoding"]
-license     = "MPL-2.0"
-name        = "moosicbox_converter"
-readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBoxServer"
-version     = "0.1.0"
+edition = "2021"
+keywords = [
+    "aac",
+    "audio",
+    "convert",
+    "converter",
+    "encoding",
+    "flac",
+    "mp3",
+    "opus",
+]
+license = "MPL-2.0"
+name = "moosicbox_audio_encoder"
+readme = "README.md"
+repository = "https://github.com/MoosicBox/MoosicBoxServer"
+version = "0.1.0"
 
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }

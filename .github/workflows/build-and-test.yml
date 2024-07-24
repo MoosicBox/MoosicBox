@@ -58,6 +58,34 @@ jobs:
                       cargo: --no-default-features
                       features: opus
 
+                    - name: audio_encoder-default
+                      path: packages/audio_encoder
+                      os: ubuntu-latest
+
+                    - name: audio_encoder-aac
+                      path: packages/audio_encoder
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: aac
+
+                    - name: audio_encoder-flac
+                      path: packages/audio_encoder
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: flac
+
+                    - name: audio_encoder-mp3
+                      path: packages/audio_encoder
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: mp3
+
+                    - name: audio_encoder-opus
+                      path: packages/audio_encoder
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: opus
+
                     - name: audio_output
                       path: packages/audio_output
                       os: ubuntu-latest
@@ -162,34 +190,6 @@ jobs:
                     - name: config
                       path: packages/config
                       os: ubuntu-latest
-
-                    - name: converter-default
-                      path: packages/converter
-                      os: ubuntu-latest
-
-                    - name: converter-aac
-                      path: packages/converter
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: aac
-
-                    - name: converter-flac
-                      path: packages/converter
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: flac
-
-                    - name: converter-mp3
-                      path: packages/converter
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: mp3
-
-                    - name: converter-opus
-                      path: packages/converter
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: opus
 
                     - name: core
                       path: packages/core

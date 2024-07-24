@@ -10,10 +10,11 @@ RUN cat Cargo.toml | \
     sed -E "s/members = \[[^]]+\]/members = [\r\
     \"packages\/assert\",\r\
     \"packages\/async_service\",\r\
+    \"packages\/audio_decoder\",\r\
+    \"packages\/audio_encoder\",\r\
     \"packages\/audio_output\",\r\
     \"packages\/auth\",\r\
     \"packages\/config\",\r\
-    \"packages\/converter\",\r\
     \"packages\/core\",\r\
     \"packages\/database\",\r\
     \"packages\/downloader\",\r\
@@ -35,7 +36,6 @@ RUN cat Cargo.toml | \
     \"packages\/server\",\r\
     \"packages\/session\",\r\
     \"packages\/stream_utils\",\r\
-    \"packages\/audio_decoder\",\r\
     \"packages\/task\",\r\
     \"packages\/tidal\",\r\
     \"packages\/tunnel\",\r\
@@ -49,10 +49,11 @@ RUN cat Cargo.toml | \
 
 COPY packages/assert/Cargo.toml packages/assert/Cargo.toml
 COPY packages/async_service/Cargo.toml packages/async_service/Cargo.toml
+COPY packages/audio_decoder/Cargo.toml packages/audio_decoder/Cargo.toml
+COPY packages/audio_encoder/Cargo.toml packages/audio_encoder/Cargo.toml
 COPY packages/audio_output/Cargo.toml packages/audio_output/Cargo.toml
 COPY packages/auth/Cargo.toml packages/auth/Cargo.toml
 COPY packages/config/Cargo.toml packages/config/Cargo.toml
-COPY packages/converter/Cargo.toml packages/converter/Cargo.toml
 COPY packages/core/Cargo.toml packages/core/Cargo.toml
 COPY packages/database/Cargo.toml packages/database/Cargo.toml
 COPY packages/downloader/Cargo.toml packages/downloader/Cargo.toml
@@ -74,7 +75,6 @@ COPY packages/search/Cargo.toml packages/search/Cargo.toml
 COPY packages/server/Cargo.toml packages/server/Cargo.toml
 COPY packages/session/Cargo.toml packages/session/Cargo.toml
 COPY packages/stream_utils/Cargo.toml packages/stream_utils/Cargo.toml
-COPY packages/audio_decoder/Cargo.toml packages/audio_decoder/Cargo.toml
 COPY packages/task/Cargo.toml packages/task/Cargo.toml
 COPY packages/tidal/Cargo.toml packages/tidal/Cargo.toml
 COPY packages/tunnel/Cargo.toml packages/tunnel/Cargo.toml
@@ -91,10 +91,11 @@ RUN for file in $(\
     done | grep -E "^(\
 packages/assert|\
 packages/async_service|\
+packages/audio_decoder|\
+packages/audio_encoder|\
 packages/audio_output|\
 packages/auth|\
 packages/config|\
-packages/converter|\
 packages/core|\
 packages/database|\
 packages/downloader|\
@@ -116,7 +117,6 @@ packages/search|\
 packages/server|\
 packages/session|\
 packages/stream_utils|\
-packages/audio_decoder|\
 packages/task|\
 packages/tidal|\
 packages/tunnel|\

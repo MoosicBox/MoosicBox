@@ -3431,10 +3431,10 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_async_service",
  "moosicbox_audio_decoder",
+ "moosicbox_audio_encoder",
  "moosicbox_audio_output",
  "moosicbox_auth",
  "moosicbox_config",
- "moosicbox_converter",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_downloader",
@@ -3475,7 +3475,7 @@ dependencies = [
  "futures",
  "log",
  "moosicbox_assert",
- "moosicbox_converter",
+ "moosicbox_audio_encoder",
  "moosicbox_core",
  "moosicbox_files",
  "moosicbox_logging",
@@ -3523,8 +3523,8 @@ dependencies = [
  "lazy_static",
  "log",
  "moosicbox_assert",
+ "moosicbox_audio_encoder",
  "moosicbox_audio_output",
- "moosicbox_converter",
  "moosicbox_env_utils",
  "moosicbox_resampler",
  "moosicbox_stream_utils",
@@ -3540,6 +3540,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_audio_encoder"
+version = "0.1.0"
+dependencies = [
+ "audiopus",
+ "fdk-aac",
+ "flacenc",
+ "log",
+ "moosicbox_assert",
+ "mp3lame-encoder",
+ "ogg",
+ "opus",
+ "thiserror",
+]
+
+[[package]]
 name = "moosicbox_audio_output"
 version = "0.1.0"
 dependencies = [
@@ -3550,7 +3565,7 @@ dependencies = [
  "libpulse-simple-binding",
  "log",
  "moosicbox_assert",
- "moosicbox_converter",
+ "moosicbox_audio_encoder",
  "moosicbox_env_utils",
  "moosicbox_resampler",
  "moosicbox_stream_utils",
@@ -3593,21 +3608,6 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "rand",
- "thiserror",
-]
-
-[[package]]
-name = "moosicbox_converter"
-version = "0.1.0"
-dependencies = [
- "audiopus",
- "fdk-aac",
- "flacenc",
- "log",
- "moosicbox_assert",
- "mp3lame-encoder",
- "ogg",
- "opus",
  "thiserror",
 ]
 
@@ -3960,8 +3960,8 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "moosicbox_audio_decoder",
+ "moosicbox_audio_encoder",
  "moosicbox_audio_output",
- "moosicbox_converter",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",

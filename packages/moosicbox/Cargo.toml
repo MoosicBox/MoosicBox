@@ -14,10 +14,10 @@ version     = "0.1.0"
 moosicbox_assert        = { version = "0.1.0", path = "../assert", default-features = false }
 moosicbox_async_service = { version = "0.1.0", path = "../async_service", default-features = false }
 moosicbox_audio_decoder = { version = "0.1.0", path = "../audio_decoder", default-features = false }
+moosicbox_audio_encoder = { version = "0.1.0", path = "../audio_encoder", default-features = false }
 moosicbox_audio_output  = { version = "0.1.0", path = "../audio_output", default-features = false }
 moosicbox_auth          = { version = "0.1.0", path = "../auth", default-features = false }
 moosicbox_config        = { version = "0.1.0", path = "../config", default-features = false }
-moosicbox_converter     = { version = "0.1.0", path = "../converter", default-features = false }
 moosicbox_core          = { version = "0.1.0", path = "../core", default-features = false }
 moosicbox_database      = { version = "0.1.0", path = "../database", default-features = false }
 moosicbox_downloader    = { version = "0.1.0", path = "../downloader", default-features = false }

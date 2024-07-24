@@ -1,7 +1,7 @@
 use std::sync::RwLock;
 
 use bytes::Bytes;
-use moosicbox_converter::aac::encoder_aac;
+use moosicbox_audio_encoder::aac::encoder_aac;
 use symphonia::core::audio::*;
 use symphonia::core::units::Duration;
 
@@ -78,8 +78,11 @@ impl AacEncoder {
         loop {
             let end = std::cmp::min(read + 1024, buf.len());
             let mut output = [0u8; 2048];
-            match moosicbox_converter::aac::encode_aac(&self.encoder, &buf[read..end], &mut output)
-            {
+            match moosicbox_audio_encoder::aac::encode_aac(
+                &self.encoder,
+                &buf[read..end],
+                &mut output,
+            ) {
                 Ok(info) => {
                     written.extend_from_slice(&output[..info.output_size]);
                     read += info.input_consumed;

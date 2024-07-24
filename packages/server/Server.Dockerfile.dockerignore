@@ -2,10 +2,11 @@
 
 !/packages/assert
 !/packages/async_service
+!/packages/audio_decoder
+!/packages/audio_encoder
 !/packages/audio_output
 !/packages/auth
 !/packages/config
-!/packages/converter
 !/packages/core
 !/packages/database
 !/packages/downloader
@@ -27,7 +28,6 @@
 !/packages/server
 !/packages/session
 !/packages/stream_utils
-!/packages/audio_decoder
 !/packages/task
 !/packages/tidal
 !/packages/tunnel

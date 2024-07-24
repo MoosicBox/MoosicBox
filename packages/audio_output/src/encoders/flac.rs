@@ -1,7 +1,7 @@
 use std::sync::RwLock;
 
 use bytes::Bytes;
-use moosicbox_converter::flac::{encoder_flac, Encoder};
+use moosicbox_audio_encoder::flac::{encoder_flac, Encoder};
 use symphonia::core::audio::*;
 use symphonia::core::units::Duration;
 
@@ -78,7 +78,7 @@ impl FlacEncoder {
         loop {
             let end = std::cmp::min(read + 1024, buf.len());
             let mut output = [0u8; 4096];
-            match moosicbox_converter::flac::encode_flac(
+            match moosicbox_audio_encoder::flac::encode_flac(
                 &mut self.encoder,
                 &buf[read..end].iter().map(|x| *x as i32).collect::<Vec<_>>(),
                 &mut output,
