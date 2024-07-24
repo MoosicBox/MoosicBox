@@ -12,7 +12,7 @@ version     = "0.1.0"
 
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
-moosicbox_audio_outputs = { path = "../audio_outputs", default-features = false }
+moosicbox_audio_output = { path = "../audio_output", default-features = false }
 moosicbox_converter = { path = "../converter", default-features = false }
 moosicbox_core = { path = "../core", default-features = false }
 moosicbox_database = { path = "../database", default-features = false, features = [
@@ -74,34 +74,34 @@ api     = []
 openapi = ["dep:utoipa"]
 
 # Player audio outputs
-asio                = ["moosicbox_audio_outputs/asio"]
-cpal                = ["moosicbox_audio_outputs/cpal"]
-jack                = ["moosicbox_audio_outputs/jack"]
-oboe-shared-stdcxx  = ["moosicbox_audio_outputs/oboe-shared-stdcxx"]
+asio                = ["moosicbox_audio_output/asio"]
+cpal                = ["moosicbox_audio_output/cpal"]
+jack                = ["moosicbox_audio_output/jack"]
+oboe-shared-stdcxx  = ["moosicbox_audio_output/oboe-shared-stdcxx"]
 pulseaudio          = ["pulseaudio-simple", "pulseaudio-standard"]
-pulseaudio-simple   = ["moosicbox_audio_outputs/pulseaudio-simple"]
-pulseaudio-standard = ["moosicbox_audio_outputs/pulseaudio-standard"]
+pulseaudio-simple   = ["moosicbox_audio_output/pulseaudio-simple"]
+pulseaudio-standard = ["moosicbox_audio_output/pulseaudio-standard"]
 
 aac = [
-    "moosicbox_audio_outputs/aac",
+    "moosicbox_audio_output/aac",
     "moosicbox_converter/aac",
     "moosicbox_core/aac",
     "moosicbox_session/aac",
 ]
 flac = [
-    "moosicbox_audio_outputs/flac",
+    "moosicbox_audio_output/flac",
     "moosicbox_converter/flac",
     "moosicbox_core/flac",
     "moosicbox_session/flac",
 ]
 mp3 = [
-    "moosicbox_audio_outputs/mp3",
+    "moosicbox_audio_output/mp3",
     "moosicbox_converter/mp3",
     "moosicbox_core/mp3",
     "moosicbox_session/mp3",
 ]
 opus = [
-    "moosicbox_audio_outputs/opus",
+    "moosicbox_audio_output/opus",
     "moosicbox_converter/opus",
     "moosicbox_core/opus",
     "moosicbox_session/opus",

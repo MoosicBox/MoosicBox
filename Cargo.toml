@@ -3,7 +3,7 @@ members = [
     "packages/aconverter",
     "packages/assert",
     "packages/async_service",
-    "packages/audio_outputs",
+    "packages/audio_output",
     "packages/auth",
     "packages/config",
     "packages/converter",

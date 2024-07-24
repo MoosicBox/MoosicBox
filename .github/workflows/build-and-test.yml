@@ -58,98 +58,98 @@ jobs:
                       cargo: --no-default-features
                       features: opus
 
-                    - name: audio_outputs
-                      path: packages/audio_outputs
+                    - name: audio_output
+                      path: packages/audio_output
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev
 
-                    - name: audio_outputs
-                      path: packages/audio_outputs
+                    - name: audio_output
+                      path: packages/audio_output
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev
 
-                    - name: audio_outputs-aac
-                      path: packages/audio_outputs
+                    - name: audio_output-aac
+                      path: packages/audio_output
                       os: ubuntu-latest
                       cargo: --no-default-features
                       features: aac
 
-                    - name: audio_outputs-flac
-                      path: packages/audio_outputs
+                    - name: audio_output-flac
+                      path: packages/audio_output
                       os: ubuntu-latest
                       cargo: --no-default-features
                       features: flac
 
-                    - name: audio_outputs-mp3
-                      path: packages/audio_outputs
+                    - name: audio_output-mp3
+                      path: packages/audio_output
                       os: ubuntu-latest
                       cargo: --no-default-features
                       features: mp3
 
-                    - name: audio_outputs-opus
-                      path: packages/audio_outputs
+                    - name: audio_output-opus
+                      path: packages/audio_output
                       os: ubuntu-latest
                       cargo: --no-default-features
                       features: opus
 
-                    - name: audio_outputs-cpal-windows
-                      path: packages/audio_outputs
+                    - name: audio_output-cpal-windows
+                      path: packages/audio_output
                       os: windows-latest
                       cargo: --no-default-features
                       features: cpal
 
-                    - name: audio_outputs-all-windows
-                      path: packages/audio_outputs
+                    - name: audio_output-all-windows
+                      path: packages/audio_output
                       os: windows-latest
 
-                    - name: audio_outputs-cpal-ubuntu
-                      path: packages/audio_outputs
+                    - name: audio_output-cpal-ubuntu
+                      path: packages/audio_output
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
                       cargo: --no-default-features
                       features: cpal
 
-                    - name: audio_outputs-pulseaudio-standard-ubuntu
-                      path: packages/audio_outputs
+                    - name: audio_output-pulseaudio-standard-ubuntu
+                      path: packages/audio_output
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install pulseaudio
                       cargo: --no-default-features
                       features: pulseaudio-standard
 
-                    - name: audio_outputs-pulseaudio-simple-ubuntu
-                      path: packages/audio_outputs
+                    - name: audio_output-pulseaudio-simple-ubuntu
+                      path: packages/audio_output
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install pulseaudio
                       cargo: --no-default-features
                       features: pulseaudio-simple
 
-                    - name: audio_outputs-all-ubuntu
-                      path: packages/audio_outputs
+                    - name: audio_output-all-ubuntu
+                      path: packages/audio_output
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev
 
-                    - name: audio_outputs-cpal-macos
-                      path: packages/audio_outputs
+                    - name: audio_output-cpal-macos
+                      path: packages/audio_output
                       os: macos-latest
                       cargo: --no-default-features
                       features: cpal
 
-                    - name: audio_outputs-pulseaudio-standard-macos
-                      path: packages/audio_outputs
+                    - name: audio_output-pulseaudio-standard-macos
+                      path: packages/audio_output
                       os: macos-latest
                       dependencies: brew install pulseaudio
                       cargo: --no-default-features
                       features: pulseaudio-standard
 
-                    - name: audio_outputs-pulseaudio-simple-macos
-                      path: packages/audio_outputs
+                    - name: audio_output-pulseaudio-simple-macos
+                      path: packages/audio_output
                       os: macos-latest
                       dependencies: brew install pulseaudio
                       cargo: --no-default-features
                       features: pulseaudio-simple
 
-                    - name: audio_outputs-all-macos
-                      path: packages/audio_outputs
+                    - name: audio_output-all-macos
+                      path: packages/audio_output
                       os: macos-latest
                       dependencies: brew install pulseaudio
 

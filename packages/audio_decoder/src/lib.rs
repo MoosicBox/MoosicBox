@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
-use moosicbox_audio_outputs::{AudioOutputError, AudioOutputHandler};
+use moosicbox_audio_output::{AudioOutputError, AudioOutputHandler};
 use symphonia::core::codecs::{DecoderOptions, FinalizeResult, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, Track};

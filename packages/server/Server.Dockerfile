@@ -10,7 +10,7 @@ RUN cat Cargo.toml | \
     sed -E "s/members = \[[^]]+\]/members = [\r\
     \"packages\/assert\",\r\
     \"packages\/async_service\",\r\
-    \"packages\/audio_outputs\",\r\
+    \"packages\/audio_output\",\r\
     \"packages\/auth\",\r\
     \"packages\/config\",\r\
     \"packages\/converter\",\r\
@@ -49,7 +49,7 @@ RUN cat Cargo.toml | \
 
 COPY packages/assert/Cargo.toml packages/assert/Cargo.toml
 COPY packages/async_service/Cargo.toml packages/async_service/Cargo.toml
-COPY packages/audio_outputs/Cargo.toml packages/audio_outputs/Cargo.toml
+COPY packages/audio_output/Cargo.toml packages/audio_output/Cargo.toml
 COPY packages/auth/Cargo.toml packages/auth/Cargo.toml
 COPY packages/config/Cargo.toml packages/config/Cargo.toml
 COPY packages/converter/Cargo.toml packages/converter/Cargo.toml
@@ -91,7 +91,7 @@ RUN for file in $(\
     done | grep -E "^(\
 packages/assert|\
 packages/async_service|\
-packages/audio_outputs|\
+packages/audio_output|\
 packages/auth|\
 packages/config|\
 packages/converter|\

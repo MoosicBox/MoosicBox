@@ -1,1 +1,1 @@
-pub use moosicbox_audio_outputs::*;
+pub use moosicbox_audio_output::*;

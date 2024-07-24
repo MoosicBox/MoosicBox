@@ -3431,7 +3431,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_async_service",
  "moosicbox_audio_decoder",
- "moosicbox_audio_outputs",
+ "moosicbox_audio_output",
  "moosicbox_auth",
  "moosicbox_config",
  "moosicbox_converter",
@@ -3523,7 +3523,7 @@ dependencies = [
  "lazy_static",
  "log",
  "moosicbox_assert",
- "moosicbox_audio_outputs",
+ "moosicbox_audio_output",
  "moosicbox_converter",
  "moosicbox_env_utils",
  "moosicbox_resampler",
@@ -3540,7 +3540,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "moosicbox_audio_outputs"
+name = "moosicbox_audio_output"
 version = "0.1.0"
 dependencies = [
  "bytes",
@@ -3960,7 +3960,7 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "moosicbox_audio_decoder",
- "moosicbox_audio_outputs",
+ "moosicbox_audio_output",
  "moosicbox_converter",
  "moosicbox_core",
  "moosicbox_database",

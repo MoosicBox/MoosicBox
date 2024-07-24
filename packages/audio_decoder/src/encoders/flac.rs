@@ -1,4 +1,4 @@
-use moosicbox_audio_outputs::{encoders::flac::FlacEncoder, AudioOutputHandler};
+use moosicbox_audio_output::{encoders::flac::FlacEncoder, AudioOutputHandler};
 use moosicbox_stream_utils::{ByteStream, ByteWriter};
 
 use crate::play_file_path_str;
