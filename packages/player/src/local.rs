@@ -9,7 +9,7 @@ use rand::{thread_rng, Rng as _};
 use symphonia::core::io::MediaSourceStream;
 use tokio_util::sync::CancellationToken;
 
-use crate::player::{
+use crate::{
     send_playback_event, symphonia::play_media_source_async, trigger_playback_event,
     volume_mixer::mix_volume, ApiPlaybackStatus, Playback, PlaybackType, Player, PlayerError,
     PlayerSource,
@@ -157,7 +157,7 @@ impl Player for LocalPlayer {
 
             moosicbox_assert::assert_or_err!(
                 audio_output_handler.contains_outputs_to_open(),
-                crate::player::symphonia::PlaybackError::NoAudioOutputs,
+                crate::symphonia::PlaybackError::NoAudioOutputs,
                 "No outputs set for the audio_output_handler"
             );
 

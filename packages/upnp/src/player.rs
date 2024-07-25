@@ -16,7 +16,7 @@ use moosicbox_session::models::UpdateSession;
 use rand::{thread_rng, Rng as _};
 use rupnp::{Device, Service};
 
-use moosicbox_player::player::{
+use moosicbox_player::{
     get_track_url, send_playback_event, trigger_playback_event, ApiPlaybackStatus, Playback,
     PlaybackRetryOptions, Player, PlayerError, PlayerSource,
 };

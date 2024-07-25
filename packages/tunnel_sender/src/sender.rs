@@ -25,7 +25,7 @@ use moosicbox_files::files::track::{
 };
 use moosicbox_files::range::{parse_ranges, Range};
 use moosicbox_music_api::{MusicApis, TrackSource};
-use moosicbox_player::player::symphonia::play_media_source_async;
+use moosicbox_player::symphonia::play_media_source_async;
 use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;
 use moosicbox_stream_utils::ByteWriter;
 use moosicbox_tunnel::{Method, TunnelEncoding, TunnelWsResponse};

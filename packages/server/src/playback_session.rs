@@ -1,7 +1,7 @@
 use std::{fmt::Display, sync::OnceLock};
 
 use moosicbox_async_service::Arc;
-use moosicbox_player::player::Playback;
+use moosicbox_player::Playback;
 use moosicbox_session::models::UpdateSession;
 use moosicbox_ws::{update_session, WebsocketSender};
 use service::Commander as _;

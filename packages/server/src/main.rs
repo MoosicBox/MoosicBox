@@ -236,8 +236,8 @@ fn main() -> std::io::Result<()> {
 
         #[cfg(feature = "player")]
         {
-            moosicbox_player::player::set_service_port(service_port);
-            moosicbox_player::player::on_playback_event(crate::playback_session::on_playback_event);
+            moosicbox_player::set_service_port(service_port);
+            moosicbox_player::on_playback_event(crate::playback_session::on_playback_event);
         }
 
         #[cfg(feature = "postgres-raw")]
@@ -673,7 +673,7 @@ fn main() -> std::io::Result<()> {
 
                 #[cfg(feature = "player")]
                 {
-                    use moosicbox_player::player::Player as _;
+                    use moosicbox_player::Player as _;
 
                     log::debug!("Shutting down server players...");
                     let players = SERVER_PLAYERS.write().await.drain().collect::<Vec<_>>();
@@ -705,7 +705,7 @@ fn main() -> std::io::Result<()> {
 
                 #[cfg(feature = "upnp")]
                 {
-                    use moosicbox_player::player::Player as _;
+                    use moosicbox_player::Player as _;
 
                     log::debug!("Shutting down UPnP players...");
                     let players = UPNP_PLAYERS.write().await.drain().collect::<Vec<_>>();
@@ -845,14 +845,14 @@ fn main() -> std::io::Result<()> {
 
 #[cfg(feature = "player")]
 static SERVER_PLAYERS: Lazy<
-    tokio::sync::RwLock<HashMap<i32, moosicbox_player::player::local::LocalPlayer>>,
+    tokio::sync::RwLock<HashMap<i32, moosicbox_player::local::LocalPlayer>>,
 > = Lazy::new(|| tokio::sync::RwLock::new(HashMap::new()));
 
 #[cfg(feature = "player")]
 fn handle_server_playback_update(
     update: &moosicbox_session::models::UpdateSession,
 ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = ()> + Send>> {
-    use moosicbox_player::player::Player as _;
+    use moosicbox_player::Player as _;
 
     let update = update.clone();
 
@@ -873,8 +873,8 @@ fn handle_server_playback_update(
                         lock.clone().expect("No database")
                     };
 
-                    let player = moosicbox_player::player::local::LocalPlayer::new(
-                        moosicbox_player::player::PlayerSource::Local,
+                    let player = moosicbox_player::local::LocalPlayer::new(
+                        moosicbox_player::PlayerSource::Local,
                         None,
                     );
 
@@ -904,7 +904,7 @@ fn handle_server_playback_update(
                 update.playlist.as_ref().map(|x| {
                     x.tracks
                         .iter()
-                        .map(|t| moosicbox_player::player::Track {
+                        .map(|t| moosicbox_player::Track {
                             id: t.id.clone().into(),
                             source: t.r#type,
                             data: Some(serde_json::to_value(t).unwrap()),
@@ -914,7 +914,7 @@ fn handle_server_playback_update(
                 None,
                 Some(update.session_id.try_into().unwrap()),
                 None,
-                Some(moosicbox_player::player::DEFAULT_PLAYBACK_RETRY_OPTIONS),
+                Some(moosicbox_player::DEFAULT_PLAYBACK_RETRY_OPTIONS),
             )
             .await
         };
@@ -987,9 +987,7 @@ static UPNP_PLAYERS: Lazy<tokio::sync::RwLock<HashMap<i32, moosicbox_upnp::playe
 fn handle_upnp_playback_update(
     update: &moosicbox_session::models::UpdateSession,
 ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = ()> + Send>> {
-    use moosicbox_player::player::{
-        Player as _, PlayerSource, Track, DEFAULT_PLAYBACK_RETRY_OPTIONS,
-    };
+    use moosicbox_player::{Player as _, PlayerSource, Track, DEFAULT_PLAYBACK_RETRY_OPTIONS};
 
     let update = update.clone();
 
