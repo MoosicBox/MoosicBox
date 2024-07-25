@@ -1145,7 +1145,7 @@ impl TunnelSender {
         }
 
         match path.to_lowercase().as_str() {
-            "track" => {
+            "files/track" => {
                 match method {
                     Method::Get => {
                         let query = serde_json::from_value::<GetTrackQuery>(query)
@@ -1375,7 +1375,7 @@ impl TunnelSender {
                     _ => Err(TunnelRequestError::UnsupportedMethod),
                 }
             }
-            "track/info" => match method {
+            "files/track/info" => match method {
                 Method::Get => {
                     let query = serde_json::from_value::<GetTrackInfoQuery>(query)
                         .map_err(|e| TunnelRequestError::InvalidQuery(e.to_string()))?;
@@ -1396,7 +1396,7 @@ impl TunnelSender {
                 _ => Err(TunnelRequestError::UnsupportedMethod),
             },
             _ => {
-                let re = Regex::new(r"^albums/(\d+)/(\d+)x(\d+)$")?;
+                let re = Regex::new(r"^files/albums/(\d+)/(\d+)x(\d+)$")?;
                 if let Some(caps) = re.captures(&path) {
                     match method {
                         Method::Get => {

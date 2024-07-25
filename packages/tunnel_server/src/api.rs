@@ -131,7 +131,7 @@ pub async fn auth_validate_signature_token_endpoint(_: SignatureAuthorized) -> R
     Ok(Json(json!({"valid": true})))
 }
 
-#[route("/track", method = "GET", method = "HEAD", method = "OPTIONS")]
+#[route("/files/track", method = "GET", method = "HEAD", method = "OPTIONS")]
 pub async fn track_endpoint(
     body: Option<Bytes>,
     req: HttpRequest,
@@ -140,7 +140,7 @@ pub async fn track_endpoint(
     proxy_request(body, req).await
 }
 
-#[route("/artists/{artist_id}/{size}", method = "GET", method = "HEAD")]
+#[route("/files/artists/{artist_id}/{size}", method = "GET", method = "HEAD")]
 pub async fn artist_cover_endpoint(
     body: Option<Bytes>,
     req: HttpRequest,
@@ -149,7 +149,7 @@ pub async fn artist_cover_endpoint(
     proxy_request(body, req).await
 }
 
-#[route("/albums/{album_id}/{size}", method = "GET", method = "HEAD")]
+#[route("/files/albums/{album_id}/{size}", method = "GET", method = "HEAD")]
 pub async fn album_cover_endpoint(
     body: Option<Bytes>,
     req: HttpRequest,
