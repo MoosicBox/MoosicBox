@@ -19,7 +19,6 @@ use tokio_util::sync::CancellationToken;
 
 pub mod media_sources;
 pub mod unsync;
-pub mod volume_mixer;
 
 #[allow(dead_code)]
 #[allow(clippy::enum_variant_names)]

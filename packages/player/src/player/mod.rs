@@ -52,6 +52,7 @@ pub mod local;
 pub mod signal_chain;
 pub mod symphonia;
 pub mod symphonia_unsync;
+pub mod volume_mixer;
 
 pub const DEFAULT_SEEK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
     max_attempts: 10,

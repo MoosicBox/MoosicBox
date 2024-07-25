@@ -2,7 +2,7 @@ use std::sync::{atomic::AtomicBool, Arc, RwLock, RwLockWriteGuard};
 
 use async_trait::async_trait;
 use flume::Receiver;
-use moosicbox_audio_decoder::{volume_mixer::mix_volume, AudioDecodeError, AudioDecodeHandler};
+use moosicbox_audio_decoder::{AudioDecodeError, AudioDecodeHandler};
 use moosicbox_core::sqlite::models::{ToApi, TrackApiSource};
 use moosicbox_session::models::UpdateSession;
 use rand::{thread_rng, Rng as _};
@@ -11,7 +11,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::player::{
     send_playback_event, symphonia::play_media_source_async, trigger_playback_event,
-    ApiPlaybackStatus, Playback, PlaybackType, Player, PlayerError, PlayerSource,
+    volume_mixer::mix_volume, ApiPlaybackStatus, Playback, PlaybackType, Player, PlayerError,
+    PlayerSource,
 };
 
 #[derive(Clone)]
