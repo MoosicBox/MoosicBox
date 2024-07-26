@@ -30,11 +30,11 @@ jobs:
                       path: packages/async_service
                       os: ubuntu-latest
 
-                    - name: audio_decoder-default
+                    - name: audio_decoder
                       path: packages/audio_decoder
                       os: ubuntu-latest
 
-                    - name: audio_encoder-default
+                    - name: audio_encoder
                       path: packages/audio_encoder
                       os: ubuntu-latest
 
