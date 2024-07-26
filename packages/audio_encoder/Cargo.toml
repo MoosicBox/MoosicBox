@@ -20,7 +20,7 @@ repository = "https://github.com/MoosicBox/MoosicBoxServer"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { path = "../assert", default-features = false }
+moosicbox_assert       = { path = "../assert", default-features = false }
 moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
 
 # Aac dependencies

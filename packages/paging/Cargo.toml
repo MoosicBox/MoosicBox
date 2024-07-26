@@ -29,6 +29,6 @@ tokio     = { workspace = true, features = ["macros"] }
 [features]
 default = ["openapi"]
 
-openapi = ["dep:utoipa"]
-
 fail-on-warnings = []
+
+openapi = ["dep:utoipa"]
