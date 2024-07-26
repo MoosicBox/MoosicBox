@@ -89,7 +89,7 @@ chrono = { version = "0.4.38", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.10", features = ["derive"] }
+clap = { version = "4.5.11", features = ["derive"] }
 console-subscriber = "0.3.0"
 cpal = "0.15.3"
 debounce = "0.2.2"
