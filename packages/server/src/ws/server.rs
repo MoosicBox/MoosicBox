@@ -292,7 +292,7 @@ impl WsServer {
     }
 
     /// Returns list of created room names.
-    fn list_rooms(&mut self) -> Vec<String> {
+    fn list_rooms(&self) -> Vec<String> {
         self.rooms.keys().cloned().collect()
     }
 

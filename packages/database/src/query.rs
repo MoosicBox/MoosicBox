@@ -906,7 +906,7 @@ impl<'a> UpsertMultiStatement<'a> {
     /// # Errors
     ///
     /// Will return `Err` if the upsert multi execution failed.
-    pub async fn execute(&mut self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
+    pub async fn execute(&self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
         db.exec_upsert_multi(self).await
     }
 }

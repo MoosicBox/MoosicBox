@@ -285,8 +285,8 @@ pub async fn get_create_download_tasks_for_album_ids(
         if download_album_cover || download_artist_cover {
             let album_path = if let Some(track) = tracks.first() {
                 download_path
-                    .join(&sanitize_filename(&track.artist))
-                    .join(&sanitize_filename(&track.album))
+                    .join(sanitize_filename(&track.artist))
+                    .join(sanitize_filename(&track.album))
             } else {
                 let album = api
                     .album(album_id)
@@ -294,8 +294,8 @@ pub async fn get_create_download_tasks_for_album_ids(
                     .ok_or(GetCreateDownloadTasksError::NotFound)?;
 
                 download_path
-                    .join(&sanitize_filename(&album.artist))
-                    .join(&sanitize_filename(&album.title))
+                    .join(sanitize_filename(&album.artist))
+                    .join(sanitize_filename(&album.title))
             };
 
             let track = tracks.first().unwrap();
