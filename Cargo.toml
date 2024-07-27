@@ -160,7 +160,7 @@ reqwest = { version = "0.12.5", default-features = false, features = [
 roxmltree = "0.20"
 rubato = "=0.12.0"
 rupnp = { version = "2.0.0", features = ["full_device_spec"] }
-rusqlite = { version = "0.32.0", features = ["bundled"] }
+rusqlite = { version = "0.32.1", features = ["bundled"] }
 rustls = "0.23"
 serde = { version = "1", features = ["derive"] }
 serde-aux = "4.5.0"
