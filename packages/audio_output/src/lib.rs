@@ -17,6 +17,27 @@ pub mod pulseaudio;
 #[cfg(feature = "cpal")]
 pub mod cpal;
 
+pub struct AudioOutput<W: AudioWrite> {
+    pub name: String,
+    writer: W,
+}
+
+impl<W: AudioWrite> AudioOutput<W> {
+    pub fn new(name: String, writer: W) -> Self {
+        Self { name, writer }
+    }
+}
+
+impl<W: AudioWrite> AudioWrite for AudioOutput<W> {
+    fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+        self.writer.write(decoded)
+    }
+
+    fn flush(&mut self) -> Result<(), AudioOutputError> {
+        self.writer.flush()
+    }
+}
+
 pub trait AudioWrite {
     fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError>;
     fn flush(&mut self) -> Result<(), AudioOutputError>;
