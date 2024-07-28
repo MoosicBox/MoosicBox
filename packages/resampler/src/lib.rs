@@ -147,9 +147,9 @@ pub fn to_audio_buffer<S>(samples: &[S], spec: SignalSpec) -> AudioBuffer<S>
 where
     S: Sample,
 {
-    let duration = (samples.len() / 2) as u64;
+    let duration = samples.len() as u64;
     let mut buf: AudioBuffer<S> = AudioBuffer::new(duration, spec);
-    buf.render_reserved(Some(samples.len() / 2));
+    buf.render_reserved(Some(samples.len() / spec.channels.count()));
 
     let (left, right) = buf.chan_pair_mut(0, 1);
     let mut is_left = true;
