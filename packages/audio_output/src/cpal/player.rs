@@ -6,7 +6,7 @@ use symphonia::core::audio::{AudioBuffer, RawSample, SampleBuffer, Signal as _, 
 use symphonia::core::conv::{ConvertibleSample, IntoSample};
 use symphonia::core::units::Duration;
 
-use crate::{AudioOutput, AudioOutputError};
+use crate::{AudioOutputError, AudioWrite};
 
 pub struct CpalAudioOutput;
 
@@ -34,7 +34,7 @@ impl CpalAudioOutput {
     pub fn try_open(
         spec: SignalSpec,
         duration: Duration,
-    ) -> Result<Box<dyn AudioOutput>, AudioOutputError> {
+    ) -> Result<Box<dyn AudioWrite>, AudioOutputError> {
         // Get default host.
         let host = cpal::default_host();
 
@@ -117,7 +117,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         spec: SignalSpec,
         duration: Duration,
         device: &cpal::Device,
-    ) -> Result<Box<dyn AudioOutput>, AudioOutputError> {
+    ) -> Result<Box<dyn AudioWrite>, AudioOutputError> {
         let num_channels = spec.channels.count();
 
         // Output audio stream config.
@@ -194,7 +194,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
     }
 }
 
-impl<T: AudioOutputSample> AudioOutput for CpalAudioOutputImpl<T> {
+impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
     fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
         // Do nothing if there are no audio frames.
         if decoded.frames() == 0 {
@@ -268,6 +268,6 @@ fn list_devices(host: &Host) {
 pub fn try_open(
     spec: SignalSpec,
     duration: Duration,
-) -> Result<Box<dyn AudioOutput>, AudioOutputError> {
+) -> Result<Box<dyn AudioWrite>, AudioOutputError> {
     CpalAudioOutput::try_open(spec, duration)
 }

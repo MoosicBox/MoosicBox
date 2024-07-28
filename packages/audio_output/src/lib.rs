@@ -8,12 +8,21 @@ use thiserror::Error;
 
 pub mod encoders;
 
-pub trait AudioOutput {
+#[cfg(all(
+    not(windows),
+    any(feature = "pulseaudio-standard", feature = "pulseaudio-simple")
+))]
+pub mod pulseaudio;
+
+#[cfg(feature = "cpal")]
+pub mod cpal;
+
+pub trait AudioWrite {
     fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError>;
     fn flush(&mut self) -> Result<(), AudioOutputError>;
 }
 
-impl AudioDecode for Box<dyn AudioOutput> {
+impl AudioDecode for Box<dyn AudioWrite> {
     fn decoded(
         &mut self,
         decoded: symphonia::core::audio::AudioBuffer<f32>,
@@ -26,7 +35,7 @@ impl AudioDecode for Box<dyn AudioOutput> {
     }
 }
 
-impl AudioDecode for &mut dyn AudioOutput {
+impl AudioDecode for &mut dyn AudioWrite {
     fn decoded(
         &mut self,
         decoded: symphonia::core::audio::AudioBuffer<f32>,
@@ -39,8 +48,8 @@ impl AudioDecode for &mut dyn AudioOutput {
     }
 }
 
-impl From<Box<dyn AudioOutput>> for Box<dyn AudioDecode> {
-    fn from(value: Box<dyn AudioOutput>) -> Self {
+impl From<Box<dyn AudioWrite>> for Box<dyn AudioDecode> {
+    fn from(value: Box<dyn AudioWrite>) -> Self {
         Box::new(value)
     }
 }
@@ -62,15 +71,6 @@ pub enum AudioOutputError {
     #[error(transparent)]
     IO(#[from] std::io::Error),
 }
-
-#[cfg(all(
-    not(windows),
-    any(feature = "pulseaudio-standard", feature = "pulseaudio-simple")
-))]
-pub mod pulseaudio;
-
-#[cfg(feature = "cpal")]
-pub mod cpal;
 
 #[allow(unused)]
 fn to_samples<S: FromSample<f32> + Default + Clone>(decoded: AudioBuffer<f32>) -> Vec<S> {

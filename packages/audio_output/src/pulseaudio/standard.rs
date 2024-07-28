@@ -18,7 +18,7 @@ use symphonia::core::units::Duration;
 use thiserror::Error;
 
 use crate::pulseaudio::common::map_channels_to_pa_channelmap;
-use crate::{AudioOutput, AudioOutputError};
+use crate::{AudioOutputError, AudioWrite};
 
 pub struct PulseAudioOutput {
     mainloop: Rc<RefCell<Mainloop>>,
@@ -35,7 +35,7 @@ impl PulseAudioOutput {
     pub fn try_open(
         spec: SignalSpec,
         duration: Duration,
-    ) -> Result<Box<dyn AudioOutput>, AudioOutputError> {
+    ) -> Result<Box<dyn AudioWrite>, AudioOutputError> {
         let pa = {
             // An interleaved buffer is required to send data to PulseAudio. Use a SampleBuffer to
             // move data between Symphonia AudioBuffers and the byte buffers required by PulseAudio.
@@ -334,7 +334,7 @@ fn drain(mainloop: &mut Mainloop, stream: &mut Stream) -> Result<(), AudioOutput
     Ok(())
 }
 
-impl AudioOutput for PulseAudioOutput {
+impl AudioWrite for PulseAudioOutput {
     fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
         let frame_count = decoded.frames();
         // Do nothing if there are no audio frames.
@@ -459,6 +459,6 @@ impl Drop for PulseAudioOutput {
 pub fn try_open(
     spec: SignalSpec,
     duration: Duration,
-) -> Result<Box<dyn AudioOutput>, AudioOutputError> {
+) -> Result<Box<dyn AudioWrite>, AudioOutputError> {
     PulseAudioOutput::try_open(spec, duration)
 }

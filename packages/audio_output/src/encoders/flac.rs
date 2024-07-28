@@ -10,7 +10,7 @@ use symphonia::core::formats::Track;
 use symphonia::core::units::Duration;
 use symphonia::core::{audio::*, formats::Packet};
 
-use crate::{to_samples, AudioOutput, AudioOutputError};
+use crate::{to_samples, AudioOutputError, AudioWrite};
 use moosicbox_resampler::Resampler;
 
 use super::AudioEncoder;
@@ -201,7 +201,7 @@ impl AudioDecode for FlacEncoder {
     }
 }
 
-impl AudioOutput for FlacEncoder {
+impl AudioWrite for FlacEncoder {
     fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
         if self.writer.is_none() {
             return Ok(0);
