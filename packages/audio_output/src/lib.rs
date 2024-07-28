@@ -296,50 +296,111 @@ impl AudioOutputScanner {
     }
 
     pub async fn scan(&mut self) -> Result<(), AudioOutputScannerError> {
+        self.default_output = None;
+        self.outputs = vec![];
+
         #[cfg(feature = "cpal")]
         {
-            self.default_output = moosicbox_task::spawn(
-                "server: scan cpal default output",
-                moosicbox_task::spawn_blocking(
-                    "server: scan cpal default output (blocking)",
-                    || {
-                        let start = std::time::SystemTime::now();
-                        let output = crate::cpal::scan_default_output();
+            if self.default_output.is_none() {
+                self.default_output = moosicbox_task::spawn(
+                    "server: scan cpal default output",
+                    moosicbox_task::spawn_blocking(
+                        "server: scan cpal default output (blocking)",
+                        || {
+                            let start = std::time::SystemTime::now();
+                            let output = crate::cpal::scan_default_output();
 
-                        if let Some(output) = &output {
+                            if let Some(output) = &output {
+                                log::debug!("cpal output: {}", output.name);
+                            }
+
+                            let end = std::time::SystemTime::now();
+                            log::debug!(
+                                "took {}ms to scan default output",
+                                end.duration_since(start).unwrap().as_millis()
+                            );
+                            output
+                        },
+                    ),
+                )
+                .await??;
+            }
+
+            self.outputs.extend(
+                moosicbox_task::spawn(
+                    "server: scan cpal outputs",
+                    moosicbox_task::spawn_blocking("server: scan cpal outputs (blocking)", || {
+                        let start = std::time::SystemTime::now();
+                        let outputs = crate::cpal::scan_available_outputs().collect::<Vec<_>>();
+
+                        for output in &outputs {
                             log::debug!("cpal output: {}", output.name);
                         }
 
                         let end = std::time::SystemTime::now();
                         log::debug!(
-                            "took {}ms to scan default output",
+                            "took {}ms to scan outputs",
                             end.duration_since(start).unwrap().as_millis()
                         );
-                        output
-                    },
-                ),
-            )
-            .await??;
+                        outputs
+                    }),
+                )
+                .await??,
+            );
+        }
 
-            self.outputs = moosicbox_task::spawn(
-                "server: scan cpal outputs",
-                moosicbox_task::spawn_blocking("server: scan cpal outputs (blocking)", || {
-                    let start = std::time::SystemTime::now();
-                    let outputs = crate::cpal::scan_available_outputs().collect::<Vec<_>>();
+        #[cfg(feature = "pulseaudio-standard")]
+        {
+            if self.default_output.is_none() {
+                self.default_output = moosicbox_task::spawn(
+                    "server: scan pulseaudio-standard default output",
+                    moosicbox_task::spawn_blocking(
+                        "server: scan pulseaudio-standard default output (blocking)",
+                        || {
+                            let start = std::time::SystemTime::now();
+                            let output = crate::pulseaudio::standard::scan_default_output();
 
-                    for output in &outputs {
-                        log::debug!("cpal output: {}", output.name);
-                    }
+                            if let Some(output) = &output {
+                                log::debug!("pulseaudio-standard output: {}", output.name);
+                            }
 
-                    let end = std::time::SystemTime::now();
-                    log::debug!(
-                        "took {}ms to scan outputs",
-                        end.duration_since(start).unwrap().as_millis()
-                    );
-                    outputs
-                }),
-            )
-            .await??;
+                            let end = std::time::SystemTime::now();
+                            log::debug!(
+                                "took {}ms to scan default output",
+                                end.duration_since(start).unwrap().as_millis()
+                            );
+                            output
+                        },
+                    ),
+                )
+                .await??;
+            }
+
+            self.outputs.extend(
+                moosicbox_task::spawn(
+                    "server: scan pulseaudio-standard outputs",
+                    moosicbox_task::spawn_blocking(
+                        "server: scan pulseaudio-standard outputs (blocking)",
+                        || {
+                            let start = std::time::SystemTime::now();
+                            let outputs = crate::pulseaudio::standard::scan_available_outputs()
+                                .collect::<Vec<_>>();
+
+                            for output in &outputs {
+                                log::debug!("pulseaudio-standard output: {}", output.name);
+                            }
+
+                            let end = std::time::SystemTime::now();
+                            log::debug!(
+                                "took {}ms to scan outputs",
+                                end.duration_since(start).unwrap().as_millis()
+                            );
+                            outputs
+                        },
+                    ),
+                )
+                .await??,
+            );
         }
 
         Ok(())
