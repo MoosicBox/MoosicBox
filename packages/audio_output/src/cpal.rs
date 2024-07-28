@@ -172,12 +172,13 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         })
     }
 
-    fn init_sample_buf(&mut self, duration: Duration) {
+    fn init_sample_buf(&mut self, duration: Duration) -> &mut SampleBuffer<T> {
         if self.sample_buf.is_none() {
             let spec = self.spec;
             let sample_buf = SampleBuffer::<T>::new(duration, spec);
             self.sample_buf = Some(sample_buf);
         }
+        self.sample_buf.as_mut().unwrap()
     }
 }
 
