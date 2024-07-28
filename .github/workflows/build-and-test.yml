@@ -34,30 +34,6 @@ jobs:
                       path: packages/audio_decoder
                       os: ubuntu-latest
 
-                    - name: audio_decoder-aac
-                      path: packages/audio_decoder
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: aac
-
-                    - name: audio_decoder-flac
-                      path: packages/audio_decoder
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: flac
-
-                    - name: audio_decoder-mp3
-                      path: packages/audio_decoder
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: mp3
-
-                    - name: audio_decoder-opus
-                      path: packages/audio_decoder
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: opus
-
                     - name: audio_encoder-default
                       path: packages/audio_encoder
                       os: ubuntu-latest

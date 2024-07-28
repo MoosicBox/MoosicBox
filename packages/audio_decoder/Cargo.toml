@@ -13,7 +13,6 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
 moosicbox_audio_encoder = { path = "../audio_encoder", default-features = false }
-# moosicbox_audio_output = { path = "../audio_output", default-features = false }
 moosicbox_env_utils = { path = "../env_utils", default-features = false }
 moosicbox_resampler = { path = "../resampler", default-features = false }
 moosicbox_stream_utils = { path = "../stream_utils", default-features = false, features = [
@@ -40,11 +39,6 @@ tokio-stream      = { workspace = true }
 tokio-util        = { workspace = true }
 
 [features]
-default = ["aac", "flac", "mp3", "opus"]
+default = []
 
 fail-on-warnings = []
-
-aac  = []#"moosicbox_audio_output/aac"]
-flac = []#"moosicbox_audio_output/flac"]
-mp3  = []#"moosicbox_audio_output/mp3"]
-opus = []#"moosicbox_audio_output/opus"]
