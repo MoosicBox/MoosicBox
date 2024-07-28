@@ -41,15 +41,9 @@ tokio      = { workspace = true, features = ["rt-multi-thread", "tracing"] }
 tokio-util = { workspace = true }
 
 [features]
-default = [
-    "aac",
-    "cpal",
-    "flac",
-    "mp3",
-    "oboe-shared-stdcxx",
-    "opus",
-    "pulseaudio",
-]
+default = ["default-windows", "pulseaudio"]
+
+default-windows = ["aac", "cpal", "flac", "mp3", "oboe-shared-stdcxx", "opus"]
 
 fail-on-warnings = []
 

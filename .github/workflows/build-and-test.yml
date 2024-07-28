@@ -105,6 +105,8 @@ jobs:
                     - name: audio_output-all-windows
                       path: packages/audio_output
                       os: windows-latest
+                      cargo: --no-default-features
+                      features: default-windows
 
                     - name: audio_output-cpal-ubuntu
                       path: packages/audio_output
