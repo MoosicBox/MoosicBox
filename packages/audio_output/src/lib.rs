@@ -8,10 +8,7 @@ use thiserror::Error;
 
 pub mod encoders;
 
-#[cfg(all(
-    not(windows),
-    any(feature = "pulseaudio-standard", feature = "pulseaudio-simple")
-))]
+#[cfg(any(feature = "pulseaudio-standard", feature = "pulseaudio-simple"))]
 pub mod pulseaudio;
 
 #[cfg(feature = "cpal")]
