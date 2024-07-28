@@ -187,13 +187,13 @@ tantivy = "0.22.0"
 test-log = "0.2.16"
 thiserror = "1.0.63"
 throttle = "0.1.0"
-tokio = { version = "1.39.1", features = ["io-util", "sync", "tracing"] }
+tokio = { version = "1.39.2", features = ["io-util", "sync", "tracing"] }
 tokio-postgres = { version = "0.7.11", features = ["with-chrono-0_4"] }
 tokio-stream = "0.1.15"
 tokio-tungstenite = { version = "0.23.1", features = ["native-tls-vendored"] }
 tokio-util = "0.7.11"
 url = "2.5.2"
-utoipa = { version = "5.0.0-alpha.0", features = ["actix_extras"] }
+utoipa = { version = "5.0.0-alpha.1", features = ["actix_extras"] }
 utoipa-rapidoc = { version = "4.0.1-alpha.0", features = ["actix-web"] }
 utoipa-redoc = { version = "4.0.1-alpha.0", features = ["actix-web"] }
 utoipa-scalar = { version = "0.2.0-alpha.0", features = ["actix-web"] }
