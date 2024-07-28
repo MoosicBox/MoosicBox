@@ -1,14 +1,29 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Host, SizedSample};
-use moosicbox_resampler::Resampler;
+use cpal::{Device, Host, SampleFormat, SizedSample};
 use rb::{RbConsumer, RbProducer, SpscRb, RB};
-use symphonia::core::audio::{AudioBuffer, RawSample, SampleBuffer, Signal as _, SignalSpec};
+use symphonia::core::audio::{
+    AudioBuffer, Channels, RawSample, SampleBuffer, Signal as _, SignalSpec,
+};
 use symphonia::core::conv::{ConvertibleSample, IntoSample};
 use symphonia::core::units::Duration;
 
-use crate::{AudioOutputError, AudioWrite};
+use crate::{AudioOutputError, AudioOutputFactory, AudioWrite};
 
-pub struct CpalAudioOutput;
+pub struct CpalAudioOutput {
+    #[allow(unused)]
+    device: cpal::Device,
+    write: Box<dyn AudioWrite>,
+}
+
+impl AudioWrite for CpalAudioOutput {
+    fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+        self.write.write(decoded)
+    }
+
+    fn flush(&mut self) -> Result<(), AudioOutputError> {
+        self.write.flush()
+    }
+}
 
 trait AudioOutputSample:
     cpal::Sample
@@ -31,74 +46,56 @@ impl AudioOutputSample for u32 {}
 impl AudioOutputSample for f64 {}
 
 impl CpalAudioOutput {
-    pub fn try_open(
-        spec: SignalSpec,
-        duration: Duration,
-    ) -> Result<Box<dyn AudioWrite>, AudioOutputError> {
-        // Get default host.
-        let host = cpal::default_host();
+    pub fn new(device: cpal::Device, format: SampleFormat) -> Result<Self, AudioOutputError> {
+        Ok(Self {
+            write: match format {
+                cpal::SampleFormat::F32 => Box::new(CpalAudioOutputImpl::<f32>::new(&device)?),
+                cpal::SampleFormat::I16 => Box::new(CpalAudioOutputImpl::<i16>::new(&device)?),
+                cpal::SampleFormat::U16 => Box::new(CpalAudioOutputImpl::<u16>::new(&device)?),
+                cpal::SampleFormat::I8 => Box::new(CpalAudioOutputImpl::<i8>::new(&device)?),
+                cpal::SampleFormat::I32 => Box::new(CpalAudioOutputImpl::<i32>::new(&device)?),
+                cpal::SampleFormat::I64 => Box::new(CpalAudioOutputImpl::<i32>::new(&device)?),
+                cpal::SampleFormat::U8 => Box::new(CpalAudioOutputImpl::<u8>::new(&device)?),
+                cpal::SampleFormat::U32 => Box::new(CpalAudioOutputImpl::<u32>::new(&device)?),
+                cpal::SampleFormat::U64 => Box::new(CpalAudioOutputImpl::<u32>::new(&device)?),
+                cpal::SampleFormat::F64 => Box::new(CpalAudioOutputImpl::<f64>::new(&device)?),
+                _ => unreachable!(),
+            },
+            device,
+        })
+    }
+}
 
-        // Get the default audio output device.
-        let device = match host.default_output_device() {
-            Some(device) => device,
-            _ => {
-                log::error!("Failed to get default audio output device");
-                return Err(AudioOutputError::OpenStream);
-            }
-        };
+impl TryFrom<Device> for AudioOutputFactory {
+    type Error = AudioOutputError;
 
-        log::debug!(
-            "Using default audio device: {}",
-            device.name().unwrap_or("(Unknown)".to_string())
-        );
-
-        for output in device.supported_output_configs().unwrap() {
+    fn try_from(device: Device) -> Result<Self, Self::Error> {
+        for output in device
+            .supported_output_configs()
+            .map_err(|_e| AudioOutputError::NoOutputs)?
+        {
             log::debug!("\toutput: {output:?}",);
         }
-        for input in device.supported_input_configs().unwrap() {
+        for input in device
+            .supported_input_configs()
+            .map_err(|_e| AudioOutputError::NoOutputs)?
+        {
             log::debug!("\tinput: {input:?}",);
         }
 
-        let config = match device.default_output_config() {
-            Ok(config) => config,
-            Err(err) => {
-                log::error!("Failed to get default audio output device config: {}", err);
-                return Err(AudioOutputError::OpenStream);
-            }
+        let name = device.name().unwrap_or("(Unknown)".into());
+        let config = device
+            .default_output_config()
+            .map_err(|_e| AudioOutputError::NoOutputs)?;
+        let spec = SignalSpec {
+            rate: config.sample_rate().0,
+            channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
         };
 
-        log::debug!("Using default output: {config:?} with spec {spec:?}");
-
-        // Select proper playback routine based on sample format.
-        match config.sample_format() {
-            cpal::SampleFormat::F32 => {
-                CpalAudioOutputImpl::<f32>::try_open(spec, duration, &device)
-            }
-            cpal::SampleFormat::I16 => {
-                CpalAudioOutputImpl::<i16>::try_open(spec, duration, &device)
-            }
-            cpal::SampleFormat::U16 => {
-                CpalAudioOutputImpl::<u16>::try_open(spec, duration, &device)
-            }
-            cpal::SampleFormat::I8 => CpalAudioOutputImpl::<i8>::try_open(spec, duration, &device),
-            cpal::SampleFormat::I32 => {
-                CpalAudioOutputImpl::<i32>::try_open(spec, duration, &device)
-            }
-            cpal::SampleFormat::I64 => {
-                CpalAudioOutputImpl::<i32>::try_open(spec, duration, &device)
-            }
-            cpal::SampleFormat::U8 => CpalAudioOutputImpl::<u8>::try_open(spec, duration, &device),
-            cpal::SampleFormat::U32 => {
-                CpalAudioOutputImpl::<u32>::try_open(spec, duration, &device)
-            }
-            cpal::SampleFormat::U64 => {
-                CpalAudioOutputImpl::<u32>::try_open(spec, duration, &device)
-            }
-            cpal::SampleFormat::F64 => {
-                CpalAudioOutputImpl::<f64>::try_open(spec, duration, &device)
-            }
-            _ => unreachable!(),
-        }
+        Ok(Self::new(name, spec, move || {
+            let format = config.sample_format();
+            Ok(Box::new(CpalAudioOutput::new(device.clone(), format)?))
+        }))
     }
 }
 
@@ -106,36 +103,31 @@ struct CpalAudioOutputImpl<T: AudioOutputSample>
 where
     T: AudioOutputSample,
 {
+    spec: SignalSpec,
     ring_buf_producer: rb::Producer<T>,
-    sample_buf: SampleBuffer<T>,
+    sample_buf: Option<SampleBuffer<T>>,
     stream: cpal::Stream,
-    resampler: Option<Resampler<T>>,
 }
 
 impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
-    pub fn try_open(
-        spec: SignalSpec,
-        duration: Duration,
-        device: &cpal::Device,
-    ) -> Result<Box<dyn AudioWrite>, AudioOutputError> {
-        let num_channels = spec.channels.count();
+    pub fn new(device: &cpal::Device) -> Result<Self, AudioOutputError> {
+        let config = device
+            .default_output_config()
+            .map_err(|_e| AudioOutputError::NoOutputs)?
+            .config();
 
-        // Output audio stream config.
-        let config = if cfg!(not(target_os = "windows")) {
-            cpal::StreamConfig {
-                channels: num_channels as cpal::ChannelCount,
-                sample_rate: cpal::SampleRate(spec.rate),
-                buffer_size: cpal::BufferSize::Default,
-            }
-        } else {
-            // Use the default config for Windows.
-            device
-                .default_output_config()
-                .expect("Failed to get the default output config.")
-                .config()
+        let num_channels = config.channels as usize;
+
+        let spec = SignalSpec {
+            rate: config.sample_rate.0,
+            channels: if num_channels == 2 {
+                Channels::FRONT_LEFT | Channels::FRONT_RIGHT
+            } else {
+                return Err(AudioOutputError::NoOutputs);
+            },
         };
 
-        log::debug!("Using default output: {config:?} with spec {spec:?}");
+        log::debug!("Using default config: {config:?}");
 
         // Create a ring buffer with a capacity for up-to 200ms of audio.
         let ring_len = ((200 * config.sample_rate.0 as usize) / 1000) * num_channels;
@@ -172,25 +164,20 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
             return Err(AudioOutputError::PlayStream);
         }
 
-        let sample_buf = SampleBuffer::<T>::new(duration, spec);
-
-        let resampler = if spec.rate != config.sample_rate.0 {
-            log::info!("Resampling {} Hz to {} Hz", spec.rate, config.sample_rate.0);
-            Some(Resampler::new(
-                spec,
-                config.sample_rate.0 as usize,
-                duration,
-            ))
-        } else {
-            None
-        };
-
-        Ok(Box::new(CpalAudioOutputImpl {
+        Ok(Self {
+            spec,
             ring_buf_producer,
-            sample_buf,
             stream,
-            resampler,
-        }))
+            sample_buf: None,
+        })
+    }
+
+    fn init_sample_buf(&mut self, duration: Duration) {
+        if self.sample_buf.is_none() {
+            let spec = self.spec;
+            let sample_buf = SampleBuffer::<T>::new(duration, spec);
+            self.sample_buf = Some(sample_buf);
+        }
     }
 }
 
@@ -201,19 +188,13 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
             return Ok(0);
         }
 
-        let mut samples = if let Some(resampler) = &mut self.resampler {
-            // Resampling is required. The resampler will return interleaved samples in the
-            // correct sample format.
-            match resampler.resample(decoded) {
-                Some(resampled) => resampled,
-                None => return Ok(0),
-            }
-        } else {
-            // Resampling is not required. Interleave the sample for cpal using a sample buffer.
-            self.sample_buf.copy_interleaved_typed(&decoded);
+        self.init_sample_buf(decoded.capacity() as Duration);
+        let sample_buf = self.sample_buf.as_mut().unwrap();
 
-            self.sample_buf.samples()
-        };
+        // Resampling is not required. Interleave the sample for cpal using a sample buffer.
+        sample_buf.copy_interleaved_typed(&decoded);
+
+        let mut samples = sample_buf.samples();
 
         let bytes = samples.len();
 
@@ -237,13 +218,6 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
     fn flush(&mut self) -> Result<(), AudioOutputError> {
         // If there is a resampler, then it may need to be flushed
         // depending on the number of samples it has.
-        if let Some(resampler) = &mut self.resampler {
-            let mut remaining_samples = resampler.flush().unwrap_or_default();
-
-            while let Some(written) = self.ring_buf_producer.write_blocking(remaining_samples) {
-                remaining_samples = &remaining_samples[written..];
-            }
-        }
 
         // Flush is best-effort, ignore the returned result.
         let _ = self.stream.pause();
@@ -265,9 +239,17 @@ fn list_devices(host: &Host) {
     }
 }
 
-pub fn try_open(
-    spec: SignalSpec,
-    duration: Duration,
-) -> Result<Box<dyn AudioWrite>, AudioOutputError> {
-    CpalAudioOutput::try_open(spec, duration)
+pub fn scan_default_output() -> Option<AudioOutputFactory> {
+    cpal::default_host()
+        .default_output_device()
+        .and_then(|x| x.try_into().ok())
+}
+
+pub fn scan_available_outputs() -> impl Iterator<Item = AudioOutputFactory> {
+    cpal::ALL_HOSTS
+        .iter()
+        .filter_map(|id| cpal::host_from_id(*id).ok())
+        .filter_map(|host| host.devices().ok())
+        .flat_map(|devices| devices.into_iter())
+        .filter_map(|device| device.try_into().ok())
 }

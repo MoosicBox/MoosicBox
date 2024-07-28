@@ -36,6 +36,8 @@ pub enum AudioDecodeError {
     Interrupt,
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    #[error(transparent)]
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 pub trait AudioDecode {
@@ -48,14 +50,15 @@ pub trait AudioDecode {
 }
 
 type InnerType = Box<dyn AudioDecode>;
-type OpenFunc = Box<dyn FnMut(SignalSpec, Duration) -> Result<InnerType, AudioDecodeError> + Send>;
+pub type OpenAudioDecodeHandler =
+    Box<dyn FnMut(SignalSpec, Duration) -> Result<InnerType, AudioDecodeError> + Send>;
 type AudioFilter =
     Box<dyn FnMut(&mut AudioBuffer<f32>, &Packet, &Track) -> Result<(), AudioDecodeError> + Send>;
 
 pub struct AudioDecodeHandler {
     pub cancellation_token: Option<CancellationToken>,
     filters: Vec<AudioFilter>,
-    open_outputs: Vec<OpenFunc>,
+    open_decode_handlers: Vec<OpenAudioDecodeHandler>,
     outputs: Vec<InnerType>,
 }
 
@@ -64,7 +67,7 @@ impl AudioDecodeHandler {
         Self {
             cancellation_token: None,
             filters: vec![],
-            open_outputs: vec![],
+            open_decode_handlers: vec![],
             outputs: vec![],
         }
     }
@@ -74,8 +77,8 @@ impl AudioDecodeHandler {
         self
     }
 
-    pub fn with_output(mut self, open_output: OpenFunc) -> Self {
-        self.open_outputs.push(open_output);
+    pub fn with_output(mut self, open_output: OpenAudioDecodeHandler) -> Self {
+        self.open_decode_handlers.push(open_output);
         self
     }
 
@@ -124,7 +127,7 @@ impl AudioDecodeHandler {
     }
 
     pub fn contains_outputs_to_open(&self) -> bool {
-        !self.open_outputs.is_empty()
+        !self.open_decode_handlers.is_empty()
     }
 
     pub fn try_open(
@@ -132,7 +135,7 @@ impl AudioDecodeHandler {
         spec: SignalSpec,
         duration: Duration,
     ) -> Result<(), AudioDecodeError> {
-        for mut open_func in self.open_outputs.drain(..) {
+        for mut open_func in self.open_decode_handlers.drain(..) {
             self.outputs.push((*open_func)(spec, duration)?);
         }
         Ok(())

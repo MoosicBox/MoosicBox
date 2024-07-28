@@ -300,6 +300,11 @@ fn main() -> std::io::Result<()> {
         #[cfg(feature = "upnp")]
         moosicbox_task::spawn("server: upnp", moosicbox_upnp::scan_devices());
 
+        moosicbox_task::spawn(
+            "server: scan outputs",
+            moosicbox_audio_output::scan_outputs(),
+        );
+
         #[cfg(feature = "openapi")]
         let openapi = {
             use utoipa::{openapi::OpenApi, OpenApi as _};
@@ -873,10 +878,17 @@ fn handle_server_playback_update(
                         lock.clone().expect("No database")
                     };
 
-                    let player = moosicbox_player::local::LocalPlayer::new(
+                    let player = match moosicbox_player::local::LocalPlayer::new(
                         moosicbox_player::PlayerSource::Local,
                         None,
-                    );
+                    )
+                    .await
+                    {
+                        Ok(player) => player,
+                        Err(e) => {
+                            moosicbox_assert::die_or_panic!("Failed to create new player: {e:?}")
+                        }
+                    };
 
                     if let Err(e) = player.init_from_session(&**db, &update).await {
                         moosicbox_assert::die_or_error!(

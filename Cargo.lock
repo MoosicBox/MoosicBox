@@ -4116,6 +4116,7 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "moosicbox_async_service",
+ "moosicbox_audio_output",
  "moosicbox_auth",
  "moosicbox_config",
  "moosicbox_core",

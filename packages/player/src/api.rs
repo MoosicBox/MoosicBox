@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, sync::Arc};
 
 use actix_web::{
     error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
@@ -99,13 +96,13 @@ impl From<PlayerError> for actix_web::Error {
     }
 }
 
-static PLAYER_CACHE: Lazy<Arc<Mutex<HashMap<String, LocalPlayer>>>> =
-    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
+static PLAYER_CACHE: Lazy<Arc<tokio::sync::Mutex<HashMap<String, LocalPlayer>>>> =
+    Lazy::new(|| Arc::new(tokio::sync::Mutex::new(HashMap::new())));
 
-fn get_player(host: Option<&str>) -> LocalPlayer {
-    PLAYER_CACHE
+async fn get_player(host: Option<&str>) -> Result<LocalPlayer, actix_web::Error> {
+    Ok(PLAYER_CACHE
         .lock()
-        .unwrap_or_else(|e| e.into_inner())
+        .await
         .entry(match &host {
             Some(h) => format!("stream|{h}"),
             None => "local".into(),
@@ -119,10 +116,14 @@ fn get_player(host: Option<&str>) -> LocalPlayer {
                 },
                 Some(super::PlaybackType::Stream),
             )
+            .await
+            .map_err(ErrorInternalServerError)?
         } else {
             LocalPlayer::new(PlayerSource::Local, None)
+                .await
+                .map_err(ErrorInternalServerError)?
         })
-        .clone()
+        .clone())
 }
 
 pub async fn get_track_or_ids_from_track_id_ranges(
@@ -217,6 +218,7 @@ pub async fn play_album_endpoint(
         .map_err(|e| ErrorBadRequest(format!("Invalid album id: {e:?}")))?;
 
     get_player(query.host.as_deref())
+        .await?
         .play_album(
             &**api_state
                 .apis
@@ -297,6 +299,7 @@ pub async fn play_track_endpoint(
     )))?;
 
     get_player(query.host.as_deref())
+        .await?
         .play_track(
             &**data.database,
             query.session_id,
@@ -368,6 +371,7 @@ pub async fn play_tracks_endpoint(
     .await?;
 
     get_player(query.host.as_deref())
+        .await?
         .play_tracks(
             &**data.database,
             query.session_id,
@@ -415,6 +419,7 @@ pub async fn stop_track_endpoint(
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     get_player(query.host.as_deref())
+        .await?
         .stop(Some(DEFAULT_PLAYBACK_RETRY_OPTIONS))
         .await?;
 
@@ -452,6 +457,7 @@ pub async fn seek_track_endpoint(
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     get_player(query.host.as_deref())
+        .await?
         .seek(query.seek, Some(DEFAULT_PLAYBACK_RETRY_OPTIONS))
         .await?;
 
@@ -525,6 +531,7 @@ pub async fn update_playback_endpoint(
     };
 
     get_player(query.host.as_deref())
+        .await?
         .update_playback(
             true,
             query.play,
@@ -576,6 +583,7 @@ pub async fn next_track_endpoint(
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     get_player(query.host.as_deref())
+        .await?
         .next_track(query.seek, Some(DEFAULT_PLAYBACK_RETRY_OPTIONS))
         .await?;
 
@@ -612,6 +620,7 @@ pub async fn pause_playback_endpoint(
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     get_player(query.host.as_deref())
+        .await?
         .pause(Some(DEFAULT_PLAYBACK_RETRY_OPTIONS))
         .await?;
 
@@ -648,6 +657,7 @@ pub async fn resume_playback_endpoint(
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     get_player(query.host.as_deref())
+        .await?
         .resume(Some(DEFAULT_PLAYBACK_RETRY_OPTIONS))
         .await?;
 
@@ -686,6 +696,7 @@ pub async fn previous_track_endpoint(
     _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     get_player(query.host.as_deref())
+        .await?
         .previous_track(query.seek, Some(DEFAULT_PLAYBACK_RETRY_OPTIONS))
         .await?;
 
@@ -720,5 +731,7 @@ pub struct PlayerStatusQuery {
 pub async fn player_status_endpoint(
     query: web::Query<PlayerStatusQuery>,
 ) -> Result<Json<ApiPlaybackStatus>> {
-    Ok(Json(get_player(query.host.as_deref()).player_status()?))
+    Ok(Json(
+        get_player(query.host.as_deref()).await?.player_status()?,
+    ))
 }

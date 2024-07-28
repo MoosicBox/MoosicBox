@@ -13,6 +13,7 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
 moosicbox_async_service = { path = "../async_service", default-features = false }
+moosicbox_audio_output = { path = "../audio_output", default-features = false }
 moosicbox_auth = { path = "../auth", default-features = false }
 moosicbox_config = { path = "../config", default-features = false }
 moosicbox_core = { path = "../core", default-features = false }

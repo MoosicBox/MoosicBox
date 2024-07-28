@@ -1,8 +1,9 @@
-use std::sync::{atomic::AtomicBool, Arc, RwLock, RwLockWriteGuard};
+use std::sync::{atomic::AtomicBool, Arc, Mutex, RwLock, RwLockWriteGuard};
 
 use async_trait::async_trait;
 use flume::Receiver;
 use moosicbox_audio_decoder::{AudioDecodeError, AudioDecodeHandler};
+use moosicbox_audio_output::{default_output_factory, AudioOutput, AudioOutputFactory};
 use moosicbox_core::sqlite::models::{ToApi, TrackApiSource};
 use moosicbox_session::models::UpdateSession;
 use rand::{thread_rng, Rng as _};
@@ -20,6 +21,7 @@ pub struct LocalPlayer {
     pub id: usize,
     playback_type: PlaybackType,
     source: PlayerSource,
+    pub output: Arc<Mutex<AudioOutputFactory>>,
     pub active_playback: Arc<RwLock<Option<Playback>>>,
     receiver: Arc<tokio::sync::RwLock<Option<Receiver<()>>>>,
 }
@@ -67,10 +69,11 @@ impl Player for LocalPlayer {
 
         let active_playback = self.active_playback.clone();
         let sent_playback_start_event = AtomicBool::new(false);
+        let open_func = self.output.clone();
 
         let get_handler = move || {
             #[allow(unused_mut)]
-            let mut audio_output_handler = AudioDecodeHandler::new()
+            let mut audio_decode_handler = AudioDecodeHandler::new()
                 .with_filter(Box::new({
                     let active_playback = active_playback.clone();
                     move |_decoded, packet, track| {
@@ -119,49 +122,22 @@ impl Player for LocalPlayer {
                     );
                     Ok(())
                 }))
+                .with_output(Box::new(move |_spec, _duration| {
+                    let output: AudioOutput = (open_func.lock().unwrap())
+                        .try_into_output()
+                        .map_err(|e| AudioDecodeError::Other(Box::new(e)))?;
+
+                    Ok(Box::new(output))
+                }))
                 .with_cancellation_token(playback.abort.clone());
 
-            #[cfg(feature = "cpal")]
-            {
-                audio_output_handler =
-                    audio_output_handler.with_output(Box::new(|spec, duration| {
-                        Ok(
-                            moosicbox_audio_output::cpal::player::try_open(spec, duration)
-                                .map_err(|_e| AudioDecodeError::PlayStream)?
-                                .into(),
-                        )
-                    }));
-            }
-            #[cfg(all(not(windows), feature = "pulseaudio-simple"))]
-            {
-                audio_output_handler =
-                    audio_output_handler.with_output(Box::new(|spec, duration| {
-                        Ok(
-                            moosicbox_audio_output::pulseaudio::simple::try_open(spec, duration)
-                                .map_err(|_e| AudioDecodeError::PlayStream)?
-                                .into(),
-                        )
-                    }));
-            }
-            #[cfg(all(not(windows), feature = "pulseaudio-standard"))]
-            {
-                audio_output_handler =
-                    audio_output_handler.with_output(Box::new(|spec, duration| {
-                        Ok(
-                            moosicbox_audio_output::pulseaudio::standard::try_open(spec, duration)
-                                .map_err(|_e| AudioDecodeError::PlayStream)?
-                                .into(),
-                        )
-                    }));
-            }
-
             moosicbox_assert::assert_or_err!(
-                audio_output_handler.contains_outputs_to_open(),
+                audio_decode_handler.contains_outputs_to_open(),
                 crate::symphonia::PlaybackError::NoAudioOutputs,
-                "No outputs set for the audio_output_handler"
+                "No outputs set for the audio_decode_handler"
             );
 
-            Ok(audio_output_handler)
+            Ok(audio_decode_handler)
         };
 
         let response = play_media_source_async(
@@ -284,13 +260,29 @@ impl Player for LocalPlayer {
 }
 
 impl LocalPlayer {
-    pub fn new(source: PlayerSource, playback_type: Option<PlaybackType>) -> LocalPlayer {
-        LocalPlayer {
-            id: thread_rng().gen::<usize>(),
+    pub async fn new(
+        source: PlayerSource,
+        playback_type: Option<PlaybackType>,
+    ) -> Result<Self, PlayerError> {
+        Ok(Self {
+            id: moosicbox_task::spawn_blocking("player: local player rng", || {
+                thread_rng().gen::<usize>()
+            })
+            .await?,
             playback_type: playback_type.unwrap_or_default(),
             source,
+            output: Arc::new(Mutex::new(
+                default_output_factory()
+                    .await
+                    .ok_or(PlayerError::NoAudioOutputs)?,
+            )),
             active_playback: Arc::new(RwLock::new(None)),
             receiver: Arc::new(tokio::sync::RwLock::new(None)),
-        }
+        })
+    }
+
+    pub fn with_output(mut self, output: AudioOutputFactory) -> Self {
+        self.output = Arc::new(Mutex::new(output));
+        self
     }
 }
