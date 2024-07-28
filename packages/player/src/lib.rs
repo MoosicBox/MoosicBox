@@ -1078,7 +1078,7 @@ pub trait Player: Clone + Send + 'static {
                 #[cfg(feature = "aac")]
                 AudioFormat::Aac => {
                     log::debug!("Encoding playback with AacEncoder");
-                    use moosicbox_audio_output::encoders::aac::AacEncoder;
+                    use moosicbox_audio_output::encoder::aac::AacEncoder;
                     let mut hint = Hint::new();
                     hint.with_extension("m4a");
                     signal_chain = signal_chain
@@ -1088,7 +1088,7 @@ pub trait Player: Clone + Send + 'static {
                 #[cfg(feature = "flac")]
                 AudioFormat::Flac => {
                     log::debug!("Encoding playback with FlacEncoder");
-                    use moosicbox_audio_output::encoders::flac::FlacEncoder;
+                    use moosicbox_audio_output::encoder::flac::FlacEncoder;
                     let mut hint = Hint::new();
                     hint.with_extension("flac");
                     signal_chain = signal_chain
@@ -1098,7 +1098,7 @@ pub trait Player: Clone + Send + 'static {
                 #[cfg(feature = "mp3")]
                 AudioFormat::Mp3 => {
                     log::debug!("Encoding playback with Mp3Encoder");
-                    use moosicbox_audio_output::encoders::mp3::Mp3Encoder;
+                    use moosicbox_audio_output::encoder::mp3::Mp3Encoder;
                     let mut hint = Hint::new();
                     hint.with_extension("mp3");
                     signal_chain = signal_chain
@@ -1108,7 +1108,7 @@ pub trait Player: Clone + Send + 'static {
                 #[cfg(feature = "opus")]
                 AudioFormat::Opus => {
                     log::debug!("Encoding playback with OpusEncoder");
-                    use moosicbox_audio_output::encoders::opus::OpusEncoder;
+                    use moosicbox_audio_output::encoder::opus::OpusEncoder;
                     let mut hint = Hint::new();
                     hint.with_extension("opus");
                     signal_chain = signal_chain

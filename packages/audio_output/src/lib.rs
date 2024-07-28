@@ -12,7 +12,7 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 use tokio::task::JoinError;
 
-pub mod encoders;
+pub mod encoder;
 
 #[cfg(any(feature = "pulseaudio-standard", feature = "pulseaudio-simple"))]
 pub mod pulseaudio;
@@ -304,7 +304,7 @@ impl AudioOutputScanner {
                     "server: scan cpal default output (blocking)",
                     || {
                         let start = std::time::SystemTime::now();
-                        let output = crate::cpal::player::scan_default_output();
+                        let output = crate::cpal::scan_default_output();
 
                         if let Some(output) = &output {
                             log::debug!("cpal output: {}", output.name);
@@ -325,7 +325,7 @@ impl AudioOutputScanner {
                 "server: scan cpal outputs",
                 moosicbox_task::spawn_blocking("server: scan cpal outputs (blocking)", || {
                     let start = std::time::SystemTime::now();
-                    let outputs = crate::cpal::player::scan_available_outputs().collect::<Vec<_>>();
+                    let outputs = crate::cpal::scan_available_outputs().collect::<Vec<_>>();
 
                     for output in &outputs {
                         log::debug!("cpal output: {}", output.name);

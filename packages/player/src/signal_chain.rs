@@ -1,6 +1,6 @@
 use flume::Receiver;
 use moosicbox_audio_decoder::{AudioDecodeError, AudioDecodeHandler};
-use moosicbox_audio_output::encoders::AudioEncoder;
+use moosicbox_audio_output::encoder::AudioEncoder;
 use moosicbox_resampler::Resampler;
 use symphonia::core::{
     audio::{AudioBuffer, Signal},

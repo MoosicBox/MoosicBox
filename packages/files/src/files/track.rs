@@ -294,7 +294,7 @@ pub async fn get_audio_bytes(
                         Ok(match format {
                             #[cfg(feature = "aac")]
                             AudioFormat::Aac => {
-                                use moosicbox_audio_output::encoders::aac::AacEncoder;
+                                use moosicbox_audio_output::encoder::aac::AacEncoder;
                                 moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(
                                     Box::new(move |spec, duration| {
                                         Ok(Box::new(
@@ -306,7 +306,7 @@ pub async fn get_audio_bytes(
                             }
                             #[cfg(feature = "flac")]
                             AudioFormat::Flac => {
-                                use moosicbox_audio_output::encoders::flac::FlacEncoder;
+                                use moosicbox_audio_output::encoder::flac::FlacEncoder;
                                 moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(
                                     Box::new(move |spec, duration| {
                                         Ok(Box::new(
@@ -318,7 +318,7 @@ pub async fn get_audio_bytes(
                             }
                             #[cfg(feature = "mp3")]
                             AudioFormat::Mp3 => {
-                                use moosicbox_audio_output::encoders::mp3::Mp3Encoder;
+                                use moosicbox_audio_output::encoder::mp3::Mp3Encoder;
                                 let encoder_writer = writer.clone();
                                 moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(
                                     Box::new(move |spec, duration| {
@@ -331,7 +331,7 @@ pub async fn get_audio_bytes(
                             }
                             #[cfg(feature = "opus")]
                             AudioFormat::Opus => {
-                                use moosicbox_audio_output::encoders::opus::OpusEncoder;
+                                use moosicbox_audio_output::encoder::opus::OpusEncoder;
                                 let encoder_writer = writer.clone();
                                 moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(
                                     Box::new(move |spec, duration| {
