@@ -150,6 +150,10 @@ impl From<usize> for DatabaseValue {
     }
 }
 
+pub trait AsId {
+    fn as_id(&self) -> DatabaseValue;
+}
+
 #[derive(Debug, Error)]
 pub enum TryFromError {
     #[error("Could not convert to type '{0}'")]

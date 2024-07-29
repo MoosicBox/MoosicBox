@@ -8,7 +8,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use moosicbox_database::{Database, DatabaseValue};
+use moosicbox_database::{AsId, Database, DatabaseValue};
 use moosicbox_json_utils::{database::ToValue as _, MissingValue, ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -71,10 +71,6 @@ where
 
         Ok(values)
     }
-}
-
-pub trait AsId {
-    fn as_id(&self) -> DatabaseValue;
 }
 
 #[async_trait]
