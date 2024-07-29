@@ -486,21 +486,6 @@ fn main() -> std::io::Result<()> {
                     .service(utoipa_scalar::Scalar::with_url("/scalar", openapi.clone()));
             }
 
-            #[cfg(feature = "scan-api")]
-            {
-                app = app.service(
-                    web::scope("/scan")
-                        .service(moosicbox_scan::api::run_scan_endpoint)
-                        .service(moosicbox_scan::api::run_scan_path_endpoint)
-                        .service(moosicbox_scan::api::get_scan_origins_endpoint)
-                        .service(moosicbox_scan::api::enable_scan_origin_endpoint)
-                        .service(moosicbox_scan::api::disable_scan_origin_endpoint)
-                        .service(moosicbox_scan::api::get_scan_paths_endpoint)
-                        .service(moosicbox_scan::api::add_scan_path_endpoint)
-                        .service(moosicbox_scan::api::remove_scan_path_endpoint),
-                );
-            }
-
             #[cfg(feature = "audio-output-api")]
             {
                 app = app.service(
@@ -654,6 +639,21 @@ fn main() -> std::io::Result<()> {
                         .service(moosicbox_qobuz::api::artist_endpoint)
                         .service(moosicbox_qobuz::api::track_endpoint)
                         .service(moosicbox_qobuz::api::search_endpoint),
+                );
+            }
+
+            #[cfg(feature = "scan-api")]
+            {
+                app = app.service(
+                    web::scope("/scan")
+                        .service(moosicbox_scan::api::run_scan_endpoint)
+                        .service(moosicbox_scan::api::run_scan_path_endpoint)
+                        .service(moosicbox_scan::api::get_scan_origins_endpoint)
+                        .service(moosicbox_scan::api::enable_scan_origin_endpoint)
+                        .service(moosicbox_scan::api::disable_scan_origin_endpoint)
+                        .service(moosicbox_scan::api::get_scan_paths_endpoint)
+                        .service(moosicbox_scan::api::add_scan_path_endpoint)
+                        .service(moosicbox_scan::api::remove_scan_path_endpoint),
                 );
             }
 
