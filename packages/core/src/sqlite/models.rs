@@ -644,7 +644,6 @@ pub enum IdType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-// #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum Id {
     String(String),
     Number(u64),
