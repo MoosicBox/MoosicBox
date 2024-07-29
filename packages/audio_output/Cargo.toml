@@ -25,12 +25,6 @@ serde            = { workspace = true, optional = true }
 serde_json       = { workspace = true, optional = true }
 utoipa           = { workspace = true, optional = true }
 
-# DB Dependencies
-moosicbox_database   = { path = "../database", default-features = false, optional = true }
-moosicbox_json_utils = { path = "../json_utils", default-features = false, optional = true }
-strum                = { workspace = true, optional = true }
-strum_macros         = { workspace = true, optional = true }
-
 # CPAL
 cpal = { workspace = true, optional = true }
 rb   = { workspace = true, optional = true }
@@ -54,7 +48,7 @@ tokio      = { workspace = true, features = ["rt-multi-thread", "tracing"] }
 tokio-util = { workspace = true }
 
 [features]
-default = ["api", "db", "default-windows", "openapi", "pulseaudio"]
+default = ["api", "default-windows", "openapi", "pulseaudio"]
 
 default-windows = ["aac", "cpal", "flac", "mp3", "oboe-shared-stdcxx", "opus"]
 
@@ -62,13 +56,6 @@ fail-on-warnings = []
 
 api     = ["dep:actix-web", "dep:moosicbox_paging", "dep:serde", "dep:serde_json"]
 openapi = ["dep:utoipa", "moosicbox_paging/openapi"]
-
-db = [
-    "dep:moosicbox_database",
-    "dep:moosicbox_json_utils",
-    "dep:strum",
-    "dep:strum_macros",
-]
 
 asio                = ["cpal/asio"]
 cpal                = ["dep:cpal", "dep:rb"]
