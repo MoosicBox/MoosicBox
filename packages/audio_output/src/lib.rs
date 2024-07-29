@@ -17,6 +17,9 @@ pub mod encoder;
 #[cfg(feature = "api")]
 pub mod api;
 
+#[cfg(feature = "db")]
+pub mod db;
+
 #[cfg(any(feature = "pulseaudio-standard", feature = "pulseaudio-simple"))]
 pub mod pulseaudio;
 
