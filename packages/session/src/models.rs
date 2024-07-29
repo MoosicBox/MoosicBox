@@ -257,6 +257,7 @@ impl AsId for Session {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiSession {
     pub session_id: u64,
     pub name: String,
@@ -455,6 +456,7 @@ impl AsModelResult<SessionPlaylistTrack, ParseError> for &moosicbox_database::Ro
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiSessionPlaylistTrack {
     pub id: String,
     pub r#type: ApiSource,
@@ -474,6 +476,7 @@ impl ToApi<ApiSessionPlaylistTrack> for SessionPlaylistTrack {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiSessionPlaylist {
     pub session_playlist_id: u64,
     pub tracks: Vec<ApiTrack>,
@@ -662,6 +665,7 @@ impl AsId for ActivePlayer {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiPlayer {
     pub player_id: u64,
     pub name: String,

@@ -4177,16 +4177,19 @@ dependencies = [
 name = "moosicbox_session"
 version = "0.1.0"
 dependencies = [
+ "actix-web",
  "async-trait",
  "log",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",
  "moosicbox_library",
+ "moosicbox_paging",
  "serde",
  "serde_json",
  "strum",
  "strum_macros",
+ "utoipa",
 ]
 
 [[package]]

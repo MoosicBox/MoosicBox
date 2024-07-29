@@ -240,6 +240,7 @@ all-apis = [
     "qobuz-api",
     "scan-api",
     "search-api",
+    "session-api",
     "tidal-api",
     "upnp-api",
     "yt-api",
@@ -255,6 +256,7 @@ player-api       = ["moosicbox_player/api", "player"]
 qobuz-api        = ["dep:moosicbox_qobuz", "qobuz"]
 scan-api         = ["dep:moosicbox_scan", "scan"]
 search-api       = ["dep:moosicbox_search", "search"]
+session-api      = ["moosicbox_session/api"]
 tidal-api        = ["dep:moosicbox_tidal", "tidal"]
 upnp-api         = ["dep:moosicbox_upnp", "upnp"]
 yt-api           = ["dep:moosicbox_yt", "yt"]
@@ -277,6 +279,7 @@ openapi = [
     "moosicbox_qobuz/openapi",
     "moosicbox_scan/openapi",
     "moosicbox_search/openapi",
+    "moosicbox_session/openapi",
     "moosicbox_tidal/openapi",
     "moosicbox_upnp/openapi",
     "moosicbox_yt/openapi",

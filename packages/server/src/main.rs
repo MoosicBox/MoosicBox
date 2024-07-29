@@ -410,6 +410,8 @@ fn main() -> std::io::Result<()> {
             let api = nest_api(api, "/qobuz", moosicbox_qobuz::api::Api::openapi());
             #[cfg(feature = "scan-api")]
             let api = nest_api(api, "/scan", moosicbox_scan::api::Api::openapi());
+            #[cfg(feature = "session-api")]
+            let api = nest_api(api, "/session", moosicbox_session::api::Api::openapi());
             #[cfg(feature = "tidal-api")]
             let api = nest_api(api, "/tidal", moosicbox_tidal::api::Api::openapi());
             #[cfg(feature = "upnp-api")]
@@ -639,6 +641,19 @@ fn main() -> std::io::Result<()> {
                         .service(moosicbox_qobuz::api::artist_endpoint)
                         .service(moosicbox_qobuz::api::track_endpoint)
                         .service(moosicbox_qobuz::api::search_endpoint),
+                );
+            }
+
+            #[cfg(feature = "session-api")]
+            {
+                app = app.service(
+                    web::scope("/session")
+                        .service(moosicbox_session::api::session_playlist_endpoint)
+                        .service(moosicbox_session::api::session_playlist_tracks_endpoint)
+                        .service(moosicbox_session::api::session_active_players_endpoint)
+                        .service(moosicbox_session::api::session_playing_endpoint)
+                        .service(moosicbox_session::api::session_endpoint)
+                        .service(moosicbox_session::api::sessions_endpoint),
                 );
             }
 
