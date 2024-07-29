@@ -219,7 +219,7 @@ impl ToValueType<TrackApiSource> for rusqlite::types::Value {
 #[serde(rename_all = "camelCase")]
 pub struct Track {
     pub id: Id,
-    pub number: i32,
+    pub number: u32,
     pub title: String,
     pub duration: f64,
     pub album: String,
@@ -520,8 +520,8 @@ impl ToValueType<ApiSource> for DatabaseValue {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SetSeek {
-    pub session_id: i32,
-    pub seek: i32,
+    pub session_id: u64,
+    pub seek: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
@@ -592,8 +592,8 @@ impl AsId for MagicToken {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 pub struct TrackSize {
-    pub id: i32,
-    pub track_id: i32,
+    pub id: u64,
+    pub track_id: u64,
     pub bytes: Option<u64>,
     pub format: String,
 }

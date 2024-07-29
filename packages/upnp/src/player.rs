@@ -358,7 +358,7 @@ impl UpnpPlayer {
         let title = track.as_ref().map(|x| x.title.to_owned());
         let artist = track.as_ref().map(|x| x.artist.to_owned());
         let album = track.as_ref().map(|x| x.album.to_owned());
-        let track_number = track.map(|x| x.number as u32);
+        let track_number = track.map(|x| x.number);
 
         crate::set_av_transport_uri(
             &self.service,
@@ -518,7 +518,7 @@ impl UpnpPlayer {
                                             .store(true, std::sync::atomic::Ordering::SeqCst);
 
                                         let update = UpdateSession {
-                                            session_id: session_id as i32,
+                                            session_id,
                                             play: None,
                                             stop: None,
                                             name: None,
@@ -528,6 +528,7 @@ impl UpnpPlayer {
                                             seek: Some(position as f64),
                                             volume: None,
                                             playlist: None,
+                                            quality: None,
                                         };
                                         send_playback_event(&update, playback);
                                     }

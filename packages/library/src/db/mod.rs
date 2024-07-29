@@ -164,7 +164,7 @@ pub async fn get_artist_by_album_id(
 
 pub async fn get_artists_by_album_ids(
     db: &dyn Database,
-    album_ids: &[i32],
+    album_ids: &[u64],
 ) -> Result<Vec<LibraryArtist>, DbError> {
     Ok(db
         .select("artists")
@@ -178,7 +178,7 @@ pub async fn get_artists_by_album_ids(
 
 pub async fn get_album_artist(
     db: &dyn Database,
-    album_id: i32,
+    album_id: u64,
 ) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
         .select("artists")
@@ -193,7 +193,7 @@ pub async fn get_album_artist(
 
 pub async fn get_tidal_album_artist(
     db: &dyn Database,
-    tidal_album_id: i32,
+    tidal_album_id: u64,
 ) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
         .select("artists")
@@ -208,7 +208,7 @@ pub async fn get_tidal_album_artist(
 
 pub async fn get_qobuz_album_artist(
     db: &dyn Database,
-    qobuz_album_id: i32,
+    qobuz_album_id: u64,
 ) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
         .select("artists")
@@ -310,7 +310,7 @@ pub async fn get_artist_albums(
 
 #[derive(Debug, Clone)]
 pub struct SetTrackSize {
-    pub track_id: i32,
+    pub track_id: u64,
     pub quality: PlaybackQuality,
     pub bytes: Option<Option<u64>>,
     pub bit_depth: Option<Option<u8>>,
@@ -465,13 +465,13 @@ pub async fn get_tracks(
         .to_value_type()?)
 }
 
-pub async fn delete_track(db: &dyn Database, id: i32) -> Result<Option<LibraryTrack>, DbError> {
+pub async fn delete_track(db: &dyn Database, id: u64) -> Result<Option<LibraryTrack>, DbError> {
     Ok(delete_tracks(db, Some(&vec![id])).await?.into_iter().next())
 }
 
 pub async fn delete_tracks(
     db: &dyn Database,
-    ids: Option<&Vec<i32>>,
+    ids: Option<&Vec<u64>>,
 ) -> Result<Vec<LibraryTrack>, DbError> {
     if ids.is_some_and(|ids| ids.is_empty()) {
         return Ok(vec![]);
@@ -487,7 +487,7 @@ pub async fn delete_tracks(
 
 pub async fn delete_track_size_by_track_id(
     db: &dyn Database,
-    id: i32,
+    id: u64,
 ) -> Result<Option<TrackSize>, DbError> {
     Ok(delete_track_sizes_by_track_id(db, Some(&vec![id]))
         .await?
@@ -497,7 +497,7 @@ pub async fn delete_track_size_by_track_id(
 
 pub async fn delete_track_sizes_by_track_id(
     db: &dyn Database,
-    ids: Option<&Vec<i32>>,
+    ids: Option<&Vec<u64>>,
 ) -> Result<Vec<TrackSize>, DbError> {
     if ids.is_some_and(|ids| ids.is_empty()) {
         return Ok(vec![]);
@@ -662,7 +662,7 @@ pub async fn add_album_maps_and_get_albums(
 #[derive(Debug, Clone, Default)]
 pub struct InsertTrack {
     pub track: LibraryTrack,
-    pub album_id: i32,
+    pub album_id: u64,
     pub file: Option<String>,
     pub qobuz_id: Option<u64>,
     pub tidal_id: Option<u64>,

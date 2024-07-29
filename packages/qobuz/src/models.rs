@@ -404,7 +404,7 @@ impl From<QobuzTrack> for Track {
         let artwork = value.cover_url();
         Self {
             id: value.id.into(),
-            number: value.track_number as i32,
+            number: value.track_number,
             title: format_title(value.title.as_str(), value.version.as_deref()),
             duration: value.duration as f64,
             album: value.album,

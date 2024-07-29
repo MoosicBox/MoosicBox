@@ -424,7 +424,7 @@ impl From<TidalTrack> for Track {
     fn from(value: TidalTrack) -> Self {
         Self {
             id: value.id.into(),
-            number: value.track_number as i32,
+            number: value.track_number,
             title: value.title,
             duration: value.duration as f64,
             album: value.album,

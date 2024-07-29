@@ -568,7 +568,7 @@ pub enum TrackInfoError {
 #[serde(rename_all = "camelCase")]
 pub struct TrackInfo {
     pub id: Id,
-    pub number: i32,
+    pub number: u32,
     pub title: String,
     pub duration: f64,
     pub album: String,

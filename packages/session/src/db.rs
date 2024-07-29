@@ -16,7 +16,7 @@ use crate::models::{
 
 pub async fn get_session_playlist_tracks(
     db: &dyn Database,
-    session_playlist_id: i32,
+    session_playlist_id: u64,
 ) -> Result<Vec<SessionPlaylistTrack>, DbError> {
     Ok(db
         .select("session_playlist_tracks")
@@ -29,7 +29,7 @@ pub async fn get_session_playlist_tracks(
 
 pub async fn get_session_playlist(
     db: &dyn Database,
-    session_id: i32,
+    session_id: u64,
 ) -> Result<Option<SessionPlaylist>, DbError> {
     if let Some(ref playlist) = db
         .select("session_playlists")
@@ -45,7 +45,7 @@ pub async fn get_session_playlist(
 
 pub async fn get_session_active_players(
     db: &dyn Database,
-    session_id: i32,
+    session_id: u64,
 ) -> Result<Vec<Player>, DbError> {
     Ok(db
         .select("active_players")
@@ -57,7 +57,7 @@ pub async fn get_session_active_players(
         .to_value_type()?)
 }
 
-pub async fn get_session_playing(db: &dyn Database, id: i32) -> Result<Option<bool>, DbError> {
+pub async fn get_session_playing(db: &dyn Database, id: u64) -> Result<Option<bool>, DbError> {
     Ok(db
         .select("sessions")
         .columns(&["playing"])
@@ -70,7 +70,7 @@ pub async fn get_session_playing(db: &dyn Database, id: i32) -> Result<Option<bo
         .flatten())
 }
 
-pub async fn get_session(db: &dyn Database, id: i32) -> Result<Option<Session>, DbError> {
+pub async fn get_session(db: &dyn Database, id: u64) -> Result<Option<Session>, DbError> {
     Ok(
         if let Some(ref session) = db
             .select("sessions")
@@ -235,7 +235,7 @@ pub async fn update_session(db: &dyn Database, session: &UpdateSession) -> Resul
     Ok(())
 }
 
-pub async fn delete_session(db: &dyn Database, session_id: i32) -> Result<(), DbError> {
+pub async fn delete_session(db: &dyn Database, session_id: u64) -> Result<(), DbError> {
     db.delete("session_playlist_tracks")
         .where_in(
             "session_playlist_tracks.id",
@@ -384,7 +384,7 @@ pub async fn set_session_active_players(
     Ok(())
 }
 
-pub async fn delete_player(db: &dyn Database, player_id: i32) -> Result<(), DbError> {
+pub async fn delete_player(db: &dyn Database, player_id: u64) -> Result<(), DbError> {
     db.delete("players")
         .where_eq("id", player_id)
         .execute(db)
@@ -395,7 +395,7 @@ pub async fn delete_player(db: &dyn Database, player_id: i32) -> Result<(), DbEr
 
 pub async fn delete_session_playlist_track_by_track_id(
     db: &dyn Database,
-    id: i32,
+    id: u64,
 ) -> Result<Option<SessionPlaylistTrack>, DbError> {
     Ok(
         delete_session_playlist_tracks_by_track_id(db, Some(&vec![id]))
@@ -407,7 +407,7 @@ pub async fn delete_session_playlist_track_by_track_id(
 
 pub async fn delete_session_playlist_tracks_by_track_id(
     db: &dyn Database,
-    ids: Option<&Vec<i32>>,
+    ids: Option<&Vec<u64>>,
 ) -> Result<Vec<SessionPlaylistTrack>, DbError> {
     if ids.is_some_and(|ids| ids.is_empty()) {
         return Ok(vec![]);

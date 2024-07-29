@@ -245,7 +245,7 @@ async fn scan_tracks(
             .await
             .add_track(
                 &None,
-                track.number as u32,
+                track.number,
                 track.title.as_str(),
                 track.duration,
                 &None,

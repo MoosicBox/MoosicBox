@@ -78,7 +78,7 @@ pub type PlayerAction = fn(&UpdateSession) -> Pin<Box<dyn Future<Output = ()> + 
 #[derive(Clone, Default, Debug)]
 pub struct WebsocketContext {
     pub connection_id: String,
-    pub player_actions: Vec<(i32, PlayerAction)>,
+    pub player_actions: Vec<(u64, PlayerAction)>,
 }
 
 #[derive(Debug, Error)]
@@ -574,6 +574,7 @@ pub async fn update_session(
         seek: payload.seek,
         volume: payload.volume,
         playlist,
+        quality: payload.quality,
     };
 
     let session_updated = serde_json::json!({

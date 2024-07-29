@@ -90,9 +90,9 @@ pub enum ApiAlbum {
 impl ToApi<ApiAlbum> for LibraryAlbum {
     fn to_api(self) -> ApiAlbum {
         ApiAlbum::Library(ApiLibraryAlbum {
-            id: self.id as u64,
+            id: self.id,
             artist: self.artist,
-            artist_id: self.artist_id as u64,
+            artist_id: self.artist_id,
             contains_cover: self.artwork.is_some(),
             explicit: false,
             date_released: self.date_released,
@@ -125,12 +125,12 @@ pub enum ApiTrack {
 impl ToApi<ApiTrack> for LibraryTrack {
     fn to_api(self) -> ApiTrack {
         ApiTrack::Library(ApiLibraryTrack {
-            id: self.id as u64,
-            number: self.number as u32,
+            id: self.id,
+            number: self.number,
             album: self.album,
-            album_id: self.album_id as u64,
+            album_id: self.album_id,
             artist: self.artist,
-            artist_id: self.artist_id as u64,
+            artist_id: self.artist_id,
             contains_cover: self.artwork.is_some(),
             duration: self.duration,
             explicit: false,
@@ -166,7 +166,7 @@ pub enum ApiArtist {
 impl ToApi<ApiArtist> for LibraryArtist {
     fn to_api(self) -> ApiArtist {
         ApiArtist::Library(ApiLibraryArtist {
-            id: self.id as u64,
+            id: self.id,
             contains_cover: self.cover.is_some(),
             title: self.title,
         })

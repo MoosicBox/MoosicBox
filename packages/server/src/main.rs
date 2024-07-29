@@ -300,10 +300,44 @@ fn main() -> std::io::Result<()> {
         #[cfg(feature = "upnp")]
         moosicbox_task::spawn("server: upnp", moosicbox_upnp::scan_devices());
 
-        moosicbox_task::spawn(
-            "server: scan outputs",
-            moosicbox_audio_output::scan_outputs(),
-        );
+        moosicbox_task::spawn("server: scan outputs", {
+            let db = database.clone();
+            async move {
+                moosicbox_audio_output::scan_outputs()
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+                let connection_id = "self";
+
+                let context = moosicbox_ws::WebsocketContext {
+                    connection_id: connection_id.to_string(),
+                    ..Default::default()
+                };
+                let payload = moosicbox_audio_output::output_factories()
+                    .await
+                    .into_iter()
+                    .map(|x| moosicbox_session::models::RegisterPlayer {
+                        name: x.name,
+                        r#type: "SYMPHONIA".into(),
+                    })
+                    .collect::<Vec<_>>();
+
+                let handle = WS_SERVER_HANDLE
+                    .read()
+                    .await
+                    .clone()
+                    .ok_or(moosicbox_ws::WebsocketSendError::Unknown(
+                        "No ws server handle".into(),
+                    ))
+                    .map_err(|e| e.to_string())?;
+
+                moosicbox_ws::register_players(&**db, &handle, &context, &payload)
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+                Ok::<_, String>(())
+            }
+        });
 
         #[cfg(feature = "openapi")]
         let openapi = {
@@ -864,7 +898,7 @@ fn main() -> std::io::Result<()> {
 
 #[cfg(feature = "player")]
 static SERVER_PLAYERS: Lazy<
-    tokio::sync::RwLock<HashMap<i32, moosicbox_player::local::LocalPlayer>>,
+    tokio::sync::RwLock<HashMap<u64, moosicbox_player::local::LocalPlayer>>,
 > = Lazy::new(|| tokio::sync::RwLock::new(HashMap::new()));
 
 #[cfg(feature = "player")]
@@ -924,7 +958,7 @@ fn handle_server_playback_update(
                 update.play,
                 update.stop,
                 update.playing,
-                update.position.map(|x| x.try_into().unwrap()),
+                update.position,
                 update.seek,
                 update.volume,
                 update.playlist.as_ref().map(|x| {
@@ -938,7 +972,7 @@ fn handle_server_playback_update(
                         .collect::<Vec<_>>()
                 }),
                 None,
-                Some(update.session_id.try_into().unwrap()),
+                Some(update.session_id),
                 None,
                 Some(moosicbox_player::DEFAULT_PLAYBACK_RETRY_OPTIONS),
             )
@@ -1006,7 +1040,7 @@ async fn register_server_player(
 }
 
 #[cfg(feature = "upnp")]
-static UPNP_PLAYERS: Lazy<tokio::sync::RwLock<HashMap<i32, moosicbox_upnp::player::UpnpPlayer>>> =
+static UPNP_PLAYERS: Lazy<tokio::sync::RwLock<HashMap<u64, moosicbox_upnp::player::UpnpPlayer>>> =
     Lazy::new(|| tokio::sync::RwLock::new(HashMap::new()));
 
 #[cfg(feature = "upnp")]
@@ -1065,7 +1099,7 @@ fn handle_upnp_playback_update(
                 update.play,
                 update.stop,
                 update.playing,
-                update.position.map(|x| x.try_into().unwrap()),
+                update.position,
                 update.seek,
                 update.volume,
                 update.playlist.as_ref().map(|x| {
@@ -1079,7 +1113,7 @@ fn handle_upnp_playback_update(
                         .collect::<Vec<_>>()
                 }),
                 None,
-                Some(update.session_id.try_into().unwrap()),
+                Some(update.session_id),
                 None,
                 Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
             )

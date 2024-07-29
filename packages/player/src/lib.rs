@@ -106,13 +106,13 @@ pub enum PlayerError {
     #[error("No players playing")]
     NoPlayersPlaying,
     #[error("Position out of bounds: {0}")]
-    PositionOutOfBounds(i32),
+    PositionOutOfBounds(u16),
     #[error("No audio outputs")]
     NoAudioOutputs,
     #[error("Playback not playing: {0}")]
-    PlaybackNotPlaying(usize),
+    PlaybackNotPlaying(u64),
     #[error("Playback already playing: {0}")]
-    PlaybackAlreadyPlaying(usize),
+    PlaybackAlreadyPlaying(u64),
     #[error("Invalid Playback Type")]
     InvalidPlaybackType,
     #[error("Invalid state")]
@@ -124,7 +124,7 @@ pub enum PlayerError {
     #[error("Playback cancelled")]
     Cancelled,
     #[error("Invalid session with id {session_id}: {message}")]
-    InvalidSession { session_id: i32, message: String },
+    InvalidSession { session_id: u64, message: String },
 }
 
 impl std::fmt::Debug for PlayableTrack {
@@ -138,9 +138,9 @@ impl std::fmt::Debug for PlayableTrack {
 
 #[derive(Debug, Clone)]
 pub struct Playback {
-    pub id: usize,
-    pub session_id: Option<usize>,
-    pub session_playlist_id: Option<usize>,
+    pub id: u64,
+    pub session_id: Option<u64>,
+    pub session_playlist_id: Option<u64>,
     pub tracks: Vec<Track>,
     pub playing: bool,
     pub position: u16,
@@ -156,11 +156,11 @@ impl Playback {
         position: Option<u16>,
         volume: AtomicF64,
         quality: PlaybackQuality,
-        session_id: Option<usize>,
-        session_playlist_id: Option<usize>,
+        session_id: Option<u64>,
+        session_playlist_id: Option<u64>,
     ) -> Playback {
         Playback {
-            id: thread_rng().gen::<usize>(),
+            id: thread_rng().gen::<u64>(),
             session_id,
             session_playlist_id,
             tracks,
@@ -365,14 +365,14 @@ impl From<Track> for UpdateSessionPlaylistTrack {
 
 pub async fn get_session_playlist_id_from_session_id(
     db: &dyn Database,
-    session_id: Option<usize>,
-) -> Result<Option<usize>, PlayerError> {
+    session_id: Option<u64>,
+) -> Result<Option<u64>, PlayerError> {
     Ok(if let Some(session_id) = session_id {
         Some(
-            get_session_playlist(db, session_id as i32)
+            get_session_playlist(db, session_id)
                 .await?
                 .ok_or(PlayerError::Db(DbError::InvalidRequest))?
-                .id as usize,
+                .id,
         )
     } else {
         None
@@ -431,9 +431,7 @@ pub trait Player: Clone + Send + 'static {
                         None,
                         None,
                         init.playing.or(Some(session.playing)),
-                        init.position
-                            .or(session.position)
-                            .map(|x| x.try_into().unwrap()),
+                        init.position.or(session.position),
                         init.seek.map(std::convert::Into::into),
                         init.volume.or(session.volume),
                         Some(
@@ -449,8 +447,8 @@ pub trait Player: Clone + Send + 'static {
                                 .collect::<Vec<_>>(),
                         ),
                         None,
-                        Some(session.id.try_into().unwrap()),
-                        Some(session.playlist.id.try_into().unwrap()),
+                        Some(session.id),
+                        Some(session.playlist.id),
                         None,
                     )
                     .await
@@ -478,7 +476,7 @@ pub trait Player: Clone + Send + 'static {
         &self,
         api: &dyn MusicApi,
         db: &dyn Database,
-        session_id: Option<usize>,
+        session_id: Option<u64>,
         album_id: &Id,
         position: Option<u16>,
         seek: Option<f64>,
@@ -525,7 +523,7 @@ pub trait Player: Clone + Send + 'static {
     async fn play_track(
         &self,
         db: &dyn Database,
-        session_id: Option<usize>,
+        session_id: Option<u64>,
         track: Track,
         seek: Option<f64>,
         volume: Option<f64>,
@@ -599,7 +597,7 @@ pub trait Player: Clone + Send + 'static {
     async fn play_tracks(
         &self,
         db: &dyn Database,
-        session_id: Option<usize>,
+        session_id: Option<u64>,
         tracks: Vec<Track>,
         position: Option<u16>,
         seek: Option<f64>,
@@ -815,9 +813,7 @@ pub trait Player: Clone + Send + 'static {
         let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
 
         if playback.position + 1 >= playback.tracks.len() as u16 {
-            return Err(PlayerError::PositionOutOfBounds(
-                playback.position as i32 + 1,
-            ));
+            return Err(PlayerError::PositionOutOfBounds(playback.position + 1));
         }
 
         self.update_playback(
@@ -846,7 +842,7 @@ pub trait Player: Clone + Send + 'static {
         let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
 
         if playback.position == 0 {
-            return Err(PlayerError::PositionOutOfBounds(-1));
+            return Err(PlayerError::PositionOutOfBounds(0));
         }
 
         self.update_playback(
@@ -882,8 +878,8 @@ pub trait Player: Clone + Send + 'static {
         volume: Option<f64>,
         tracks: Option<Vec<Track>>,
         quality: Option<PlaybackQuality>,
-        session_id: Option<usize>,
-        session_playlist_id: Option<usize>,
+        session_id: Option<u64>,
+        session_playlist_id: Option<u64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
         log::debug!(
@@ -1350,13 +1346,13 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
     };
     let position = if current.position != previous.position {
         has_change = true;
-        Some(current.position as i32)
+        Some(current.position)
     } else {
         None
     };
     let seek = if current.progress as usize != previous.progress as usize {
         has_change = true;
-        Some(current.progress as i32 as f64)
+        Some(current.progress)
     } else {
         None
     };
@@ -1364,6 +1360,12 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
     let volume = if current_volume != previous.volume.load(std::sync::atomic::Ordering::SeqCst) {
         has_change = true;
         Some(current_volume)
+    } else {
+        None
+    };
+    let quality = if current.quality != previous.quality {
+        has_change = true;
+        Some(current.quality)
     } else {
         None
     };
@@ -1382,10 +1384,7 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
     let playlist = if tracks != prev_tracks {
         has_change = true;
         Some(UpdateSessionPlaylist {
-            session_playlist_id: current
-                .session_playlist_id
-                .map(|id| id as i32)
-                .unwrap_or(-1),
+            session_playlist_id: current.session_playlist_id.unwrap_or(0),
             tracks,
         })
     } else {
@@ -1402,13 +1401,14 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
         playing={playing:?}\n\t\
         position={position:?}\n\t\
         seek={seek:?}\n\t\
+        quality={quality:?}\n\t\
         volume={volume:?}\n\t\
         playlist={playlist:?}\
         "
     );
 
     let update = UpdateSession {
-        session_id: session_id as i32,
+        session_id,
         play: None,
         stop: None,
         name: None,
@@ -1418,6 +1418,7 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
         seek,
         volume,
         playlist,
+        quality,
     };
 
     send_playback_event(&update, current)

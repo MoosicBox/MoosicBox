@@ -351,7 +351,7 @@ impl From<YtTrack> for Track {
     fn from(value: YtTrack) -> Self {
         Self {
             id: value.id.as_str().into(),
-            number: value.track_number as i32,
+            number: value.track_number,
             title: value.title,
             duration: value.duration as f64,
             album: value.album,

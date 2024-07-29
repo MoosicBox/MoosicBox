@@ -1,11 +1,14 @@
 use std::str::FromStr as _;
 
 use async_trait::async_trait;
-use moosicbox_core::sqlite::{
-    db::DbError,
-    models::{
-        ApiSource, AsModel, AsModelQuery, AsModelResult, AsModelResultMappedQuery, Id, ToApi,
+use moosicbox_core::{
+    sqlite::{
+        db::DbError,
+        models::{
+            ApiSource, AsModel, AsModelQuery, AsModelResult, AsModelResultMappedQuery, Id, ToApi,
+        },
     },
+    types::PlaybackQuality,
 };
 use moosicbox_database::{AsId, Database, DatabaseValue};
 use moosicbox_json_utils::{database::ToValue as _, MissingValue, ParseError, ToValueType};
@@ -23,15 +26,15 @@ use crate::db::{
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SetSessionActivePlayers {
-    pub session_id: i32,
-    pub players: Vec<i32>,
+    pub session_id: u64,
+    pub players: Vec<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSession {
     pub name: String,
-    pub active_players: Vec<i32>,
+    pub active_players: Vec<u64>,
     pub playlist: CreateSessionPlaylist,
 }
 
@@ -44,7 +47,7 @@ pub struct CreateSessionPlaylist {
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSession {
-    pub session_id: i32,
+    pub session_id: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub play: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -56,13 +59,15 @@ pub struct UpdateSession {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub playing: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub position: Option<i32>,
+    pub position: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub seek: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub volume: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub playlist: Option<UpdateSessionPlaylist>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quality: Option<PlaybackQuality>,
 }
 
 impl UpdateSession {
@@ -91,6 +96,7 @@ impl ToApi<ApiUpdateSession> for UpdateSession {
             seek: self.seek,
             volume: self.volume,
             playlist: self.playlist.as_ref().map(|p| p.to_api()),
+            quality: self.quality,
         }
     }
 }
@@ -98,7 +104,7 @@ impl ToApi<ApiUpdateSession> for UpdateSession {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSessionPlaylist {
-    pub session_playlist_id: i32,
+    pub session_playlist_id: u64,
     pub tracks: Vec<UpdateSessionPlaylistTrack>,
 }
 
@@ -157,7 +163,7 @@ impl ToApi<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiUpdateSession {
-    pub session_id: i32,
+    pub session_id: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub play: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -169,37 +175,39 @@ pub struct ApiUpdateSession {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub playing: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub position: Option<i32>,
+    pub position: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub seek: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub volume: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub playlist: Option<ApiUpdateSessionPlaylist>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quality: Option<PlaybackQuality>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiUpdateSessionPlaylist {
-    pub session_playlist_id: i32,
+    pub session_playlist_id: u64,
     pub tracks: Vec<ApiTrack>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteSession {
-    pub session_id: i32,
+    pub session_id: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Session {
-    pub id: i32,
+    pub id: u64,
     pub name: String,
     pub active: bool,
     pub playing: bool,
-    pub position: Option<i32>,
-    pub seek: Option<i32>,
+    pub position: Option<u16>,
+    pub seek: Option<u64>,
     pub volume: Option<f64>,
     pub active_players: Vec<Player>,
     pub playlist: SessionPlaylist,
@@ -250,12 +258,12 @@ impl AsId for Session {
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiSession {
-    pub session_id: i32,
+    pub session_id: u64,
     pub name: String,
     pub active: bool,
     pub playing: bool,
-    pub position: Option<i32>,
-    pub seek: Option<i32>,
+    pub position: Option<u16>,
+    pub seek: Option<u64>,
     pub volume: Option<f64>,
     pub active_players: Vec<ApiPlayer>,
     pub playlist: ApiSessionPlaylist,
@@ -280,7 +288,7 @@ impl ToApi<ApiSession> for Session {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionPlaylist {
-    pub id: i32,
+    pub id: u64,
     pub tracks: Vec<ApiTrack>,
 }
 
@@ -368,7 +376,7 @@ impl ToApi<ApiTrack> for SessionPlaylistTrack {
                 ApiTrack::Library {
                     track_id: id,
                     data: ApiLibraryTrack {
-                        track_id: id as i32,
+                        track_id: id,
                         ..Default::default()
                     },
                 }
@@ -467,7 +475,7 @@ impl ToApi<ApiSessionPlaylistTrack> for SessionPlaylistTrack {
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiSessionPlaylist {
-    pub session_playlist_id: i32,
+    pub session_playlist_id: u64,
     pub tracks: Vec<ApiTrack>,
 }
 
@@ -583,7 +591,7 @@ impl ToValueType<PlayerType> for DatabaseValue {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Player {
-    pub id: i32,
+    pub id: u64,
     pub name: String,
     pub r#type: PlayerType,
     pub playing: bool,
@@ -614,9 +622,9 @@ impl AsId for Player {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ActivePlayer {
-    pub id: i32,
-    pub session_id: i32,
-    pub player_id: i32,
+    pub id: u64,
+    pub session_id: u64,
+    pub player_id: u64,
     pub created: String,
     pub updated: String,
 }
@@ -655,7 +663,7 @@ impl AsId for ActivePlayer {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiPlayer {
-    pub player_id: i32,
+    pub player_id: u64,
     pub name: String,
     pub r#type: PlayerType,
     pub playing: bool,

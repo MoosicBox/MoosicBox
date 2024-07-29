@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 pub struct LibraryArtist {
-    pub id: i32,
+    pub id: u64,
     pub title: String,
     pub cover: Option<String>,
     pub tidal_id: Option<u64>,
@@ -82,7 +82,7 @@ impl AsId for LibraryArtist {
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiLibraryArtist {
-    pub artist_id: i32,
+    pub artist_id: u64,
     pub title: String,
     pub contains_cover: bool,
     pub tidal_id: Option<u64>,
@@ -113,10 +113,10 @@ impl ToApi<ApiArtist> for LibraryArtist {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 pub struct LibraryAlbum {
-    pub id: i32,
+    pub id: u64,
     pub title: String,
     pub artist: String,
-    pub artist_id: i32,
+    pub artist_id: u64,
     pub date_released: Option<String>,
     pub date_added: Option<String>,
     pub artwork: Option<String>,
@@ -266,7 +266,7 @@ impl AsModelResultMapped<LibraryAlbum, DbError> for Vec<moosicbox_database::Row>
         let mut last_album_id = 0;
 
         for row in self {
-            let album_id: i32 = row
+            let album_id: u64 = row
                 .get("album_id")
                 .ok_or(DbError::InvalidRequest)?
                 .try_into()
@@ -417,10 +417,10 @@ pub enum ApiAlbum {
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiLibraryAlbum {
-    pub album_id: i32,
+    pub album_id: u64,
     pub title: String,
     pub artist: String,
-    pub artist_id: i32,
+    pub artist_id: u64,
     pub contains_cover: bool,
     pub date_released: Option<String>,
     pub date_added: Option<String>,
@@ -461,16 +461,16 @@ impl ToApi<ApiAlbum> for LibraryAlbum {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryTrack {
-    pub id: i32,
-    pub number: i32,
+    pub id: u64,
+    pub number: u32,
     pub title: String,
     pub duration: f64,
     pub album: String,
-    pub album_id: i32,
+    pub album_id: u64,
     pub date_released: Option<String>,
     pub date_added: Option<String>,
     pub artist: String,
-    pub artist_id: i32,
+    pub artist_id: u64,
     pub file: Option<String>,
     pub artwork: Option<String>,
     pub blur: bool,
@@ -677,7 +677,7 @@ impl<'de> Deserialize<'de> for ApiTrack {
     {
         Ok(match ApiTrackInner::deserialize(deserializer)? {
             ApiTrackInner::Library(track) => ApiTrack::Library {
-                track_id: track.track_id.try_into().unwrap(),
+                track_id: track.track_id,
                 data: track,
             },
             ApiTrackInner::Tidal(data) => ApiTrack::Tidal {
@@ -741,16 +741,16 @@ impl ApiTrack {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiLibraryTrack {
-    pub track_id: i32,
-    pub number: i32,
+    pub track_id: u64,
+    pub number: u32,
     pub title: String,
     pub duration: f64,
     pub artist: String,
-    pub artist_id: i32,
+    pub artist_id: u64,
     pub date_released: Option<String>,
     pub date_added: Option<String>,
     pub album: String,
-    pub album_id: i32,
+    pub album_id: u64,
     pub contains_cover: bool,
     pub blur: bool,
     pub bytes: u64,
@@ -766,7 +766,7 @@ pub struct ApiLibraryTrack {
 impl ToApi<ApiTrack> for LibraryTrack {
     fn to_api(self) -> ApiTrack {
         ApiTrack::Library {
-            track_id: self.id as u64,
+            track_id: self.id,
             data: ApiLibraryTrack {
                 track_id: self.id,
                 number: self.number,

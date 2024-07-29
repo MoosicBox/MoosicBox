@@ -92,7 +92,7 @@ impl Player for LocalPlayer {
                                             .store(true, std::sync::atomic::Ordering::SeqCst);
 
                                         let update = UpdateSession {
-                                            session_id: session_id as i32,
+                                            session_id,
                                             play: None,
                                             stop: None,
                                             name: None,
@@ -102,6 +102,7 @@ impl Player for LocalPlayer {
                                             seek: Some(secs),
                                             volume: None,
                                             playlist: None,
+                                            quality: None,
                                         };
                                         send_playback_event(&update, playback);
                                     }

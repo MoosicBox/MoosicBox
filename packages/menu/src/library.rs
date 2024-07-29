@@ -100,7 +100,7 @@ pub async fn get_artist(
                 Err(err) => Err(GetArtistError::DbError(err)),
             }
         } else if let Some(album_id) = album_id {
-            match db::get_album_artist(&**data.database, album_id as i32).await {
+            match db::get_album_artist(&**data.database, album_id).await {
                 Ok(artist) => {
                     if artist.is_none() {
                         return Err(GetArtistError::AlbumArtistNotFound(album_id));
@@ -113,7 +113,7 @@ pub async fn get_artist(
                 Err(err) => Err(GetArtistError::DbError(err)),
             }
         } else if let Some(tidal_album_id) = tidal_album_id {
-            match db::get_tidal_album_artist(&**data.database, tidal_album_id as i32).await {
+            match db::get_tidal_album_artist(&**data.database, tidal_album_id).await {
                 Ok(artist) => {
                     if artist.is_none() {
                         return Err(GetArtistError::AlbumArtistNotFound(tidal_album_id));
@@ -126,7 +126,7 @@ pub async fn get_artist(
                 Err(err) => Err(GetArtistError::DbError(err)),
             }
         } else if let Some(qobuz_album_id) = qobuz_album_id {
-            match db::get_qobuz_album_artist(&**data.database, qobuz_album_id as i32).await {
+            match db::get_qobuz_album_artist(&**data.database, qobuz_album_id).await {
                 Ok(artist) => {
                     if artist.is_none() {
                         return Err(GetArtistError::AlbumArtistNotFound(qobuz_album_id));

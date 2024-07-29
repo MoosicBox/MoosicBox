@@ -71,7 +71,7 @@ impl WebsocketSender for WsServer {
 pub enum Command {
     #[cfg(feature = "player")]
     AddPlayerAction {
-        id: i32,
+        id: u64,
         action: PlayerAction,
     },
 
@@ -142,7 +142,7 @@ pub struct WsServer {
 
     senders: Vec<Box<dyn WebsocketSender>>,
 
-    player_actions: Vec<(i32, PlayerAction)>,
+    player_actions: Vec<(u64, PlayerAction)>,
 
     token: CancellationToken,
 }
@@ -178,7 +178,7 @@ impl WsServer {
     }
 
     #[cfg(feature = "player")]
-    pub fn add_player_action(&mut self, id: i32, action: PlayerAction) {
+    pub fn add_player_action(&mut self, id: u64, action: PlayerAction) {
         self.player_actions.push((id, action));
     }
 
@@ -488,7 +488,7 @@ impl WebsocketSender for WsServerHandle {
 
 impl WsServerHandle {
     #[cfg(feature = "player")]
-    pub async fn add_player_action(&self, id: i32, action: PlayerAction) {
+    pub async fn add_player_action(&self, id: u64, action: PlayerAction) {
         log::trace!("Sending AddPlayerAction command");
 
         if let Err(e) = self

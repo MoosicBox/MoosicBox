@@ -63,7 +63,7 @@ pub enum CloseError {
 pub struct TunnelSenderHandle {
     sender: Arc<RwLock<Option<UnboundedSender<TunnelResponseMessage>>>>,
     cancellation_token: CancellationToken,
-    player_actions: Arc<RwLock<Vec<(i32, PlayerAction)>>>,
+    player_actions: Arc<RwLock<Vec<(u64, PlayerAction)>>>,
 }
 
 impl TunnelSenderHandle {
@@ -73,7 +73,7 @@ impl TunnelSenderHandle {
         Ok(())
     }
 
-    pub fn add_player_action(&self, id: i32, action: PlayerAction) {
+    pub fn add_player_action(&self, id: u64, action: PlayerAction) {
         self.player_actions.write().unwrap().push((id, action));
     }
 }
@@ -173,7 +173,7 @@ pub struct TunnelSender {
     sender: Arc<RwLock<Option<UnboundedSender<TunnelResponseMessage>>>>,
     cancellation_token: CancellationToken,
     abort_request_tokens: Arc<RwLock<HashMap<usize, CancellationToken>>>,
-    player_actions: Arc<RwLock<Vec<(i32, PlayerAction)>>>,
+    player_actions: Arc<RwLock<Vec<(u64, PlayerAction)>>>,
 }
 
 static BINARY_REQUEST_BUFFER_OFFSET: Lazy<usize> = Lazy::new(|| {
@@ -224,7 +224,7 @@ impl TunnelSender {
         self
     }
 
-    pub fn add_player_action(self, id: i32, action: PlayerAction) -> Self {
+    pub fn add_player_action(self, id: u64, action: PlayerAction) -> Self {
         self.player_actions.write().unwrap().push((id, action));
         self
     }

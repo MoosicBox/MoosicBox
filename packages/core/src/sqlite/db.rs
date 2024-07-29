@@ -159,7 +159,7 @@ pub async fn save_magic_token(
 
 pub async fn get_all_album_version_qualities(
     db: &dyn Database,
-    album_ids: Vec<i32>,
+    album_ids: Vec<u64>,
 ) -> Result<Vec<AlbumVersionQuality>, DbError> {
     let mut versions: Vec<AlbumVersionQuality> = db
         .select("albums")
@@ -200,7 +200,7 @@ pub async fn get_all_album_version_qualities(
 
 pub async fn get_album_version_qualities(
     db: &dyn Database,
-    album_id: i32,
+    album_id: u64,
 ) -> Result<Vec<AlbumVersionQuality>, DbError> {
     let mut versions: Vec<AlbumVersionQuality> = db
         .select("albums")

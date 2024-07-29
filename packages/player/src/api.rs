@@ -172,7 +172,7 @@ pub async fn get_track_or_ids_from_track_id_ranges(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayAlbumQuery {
-    pub session_id: Option<usize>,
+    pub session_id: Option<u64>,
     pub album_id: String,
     pub position: Option<u16>,
     pub seek: Option<f64>,
@@ -189,7 +189,7 @@ pub struct PlayAlbumQuery {
         path = "/play/album",
         description = "Play the given album for the specified host or local player",
         params(
-            ("sessionId" = Option<usize>, Query, description = "Session ID to play the album on"),
+            ("sessionId" = Option<u64>, Query, description = "Session ID to play the album on"),
             ("albumId" = String, Query, description = "Album ID to play"),
             ("position" = Option<u16>, Query, description = "Position in the playlist to play from"),
             ("seek" = Option<f64>, Query, description = "Seek position to begin playback from"),
@@ -243,7 +243,7 @@ pub async fn play_album_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayTrackQuery {
-    pub session_id: Option<usize>,
+    pub session_id: Option<u64>,
     pub track_id: i32,
     pub seek: Option<f64>,
     pub volume: Option<f64>,
@@ -259,7 +259,7 @@ pub struct PlayTrackQuery {
         path = "/play/track",
         description = "Play the given track for the specified host or local player",
         params(
-            ("sessionId" = Option<usize>, Query, description = "Session ID to play the album on"),
+            ("sessionId" = Option<u64>, Query, description = "Session ID to play the album on"),
             ("trackId" = i32, Query, description = "Track ID to play"),
             ("seek" = Option<f64>, Query, description = "Seek position to begin playback from"),
             ("volume" = Option<f64>, Query, description = "Volume level to play at"),
@@ -319,7 +319,7 @@ pub async fn play_track_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayTracksQuery {
-    pub session_id: Option<usize>,
+    pub session_id: Option<u64>,
     pub track_ids: String,
     pub position: Option<u16>,
     pub seek: Option<f64>,
@@ -336,7 +336,7 @@ pub struct PlayTracksQuery {
         path = "/play/tracks",
         description = "Play the given tracks for the specified host or local player",
         params(
-            ("sessionId" = Option<usize>, Query, description = "Session ID to play the album on"),
+            ("sessionId" = Option<u64>, Query, description = "Session ID to play the album on"),
             ("trackIds" = String, Query, description = "Comma-separated list of track IDs to play"),
             ("position" = Option<u16>, Query, description = "Position in the list of tracks to play from"),
             ("seek" = Option<f64>, Query, description = "Seek position to begin playback from"),
@@ -476,7 +476,7 @@ pub struct UpdatePlaybackQuery {
     pub host: Option<String>,
     pub track_ids: Option<String>,
     pub format: Option<AudioFormat>,
-    pub session_id: Option<usize>,
+    pub session_id: Option<u64>,
     pub source: Option<ApiSource>,
 }
 
@@ -496,7 +496,7 @@ pub struct UpdatePlaybackQuery {
             ("host" = Option<String>, Query, description = "Remote host to fetch track audio from"),
             ("trackIds" = String, Query, description = "Comma-separated list of track IDs to update the playback with"),
             ("format" = Option<AudioFormat>, Query, description = "Update the 'format' status on the playback"),
-            ("sessionId" = Option<usize>, Query, description = "Session ID to update the playback for"),
+            ("sessionId" = Option<u64>, Query, description = "Session ID to update the playback for"),
             ("source" = Option<ApiSource>, Query, description = "Update the 'source' status on the playback"),
         ),
         responses(

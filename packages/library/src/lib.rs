@@ -185,7 +185,7 @@ pub fn filter_albums<'a>(
             !request.filters.as_ref().is_some_and(|x| {
                 x.artist_id
                     .as_ref()
-                    .is_some_and(|id| &Id::Number(album.artist_id as u64) != id)
+                    .is_some_and(|id| &Id::Number(album.artist_id) != id)
             })
         })
         .filter(|album| {

@@ -568,7 +568,7 @@ impl ScanOutput {
             .await?
             .iter()
             .map(|id| id.id().unwrap().try_into())
-            .collect::<Result<HashSet<i32>, _>>()?;
+            .collect::<Result<HashSet<u64>, _>>()?;
 
         let db_artists = add_artist_maps_and_get_artists(
             db,
@@ -605,13 +605,13 @@ impl ScanOutput {
             .await?
             .iter()
             .map(|id| id.id().unwrap().try_into())
-            .collect::<Result<HashSet<i32>, _>>()?;
+            .collect::<Result<HashSet<u64>, _>>()?;
 
         let album_maps = join_all(artists.iter().zip(db_artists.iter()).map(
             |(artist, db)| async {
                 join_all(artist.albums.read().await.iter().map(|album| async {
                     let album = album.read().await;
-                    album.clone().to_database_values(db.id as u64)
+                    album.clone().to_database_values(db.id)
                 }))
                 .await
             },
@@ -649,7 +649,7 @@ impl ScanOutput {
             .await?
             .iter()
             .map(|id| id.id().unwrap().try_into())
-            .collect::<Result<HashSet<i32>, _>>()?;
+            .collect::<Result<HashSet<u64>, _>>()?;
 
         let insert_tracks = join_all(albums.iter().zip(db_albums.iter()).map(
             |(album, db)| async {
@@ -671,7 +671,7 @@ impl ScanOutput {
                             ApiSource::Yt => None,
                         },
                         track: LibraryTrack {
-                            number: track.number as i32,
+                            number: track.number,
                             title: track.name.clone(),
                             duration: track.duration,
                             format: Some(track.format),
