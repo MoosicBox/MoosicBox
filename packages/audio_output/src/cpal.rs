@@ -92,7 +92,9 @@ impl TryFrom<Device> for AudioOutputFactory {
             channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
         };
 
-        Ok(Self::new(name, spec, move || {
+        let id = format!("cpal:{name}");
+
+        Ok(Self::new(id, name, spec, move || {
             let format = config.sample_format();
             Ok(Box::new(CpalAudioOutput::new(device.clone(), format)?))
         }))

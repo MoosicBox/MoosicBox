@@ -439,7 +439,11 @@ pub fn scan_default_output() -> Option<AudioOutputFactory> {
         rate: SAMPLE_RATE.unwrap_or(pulse::sample::Spec::RATE_MAX),
         channels: Layout::Stereo.into_channels(),
     };
+
+    let id = "pulseaudio-standard:default".to_string();
+
     Some(AudioOutputFactory::new(
+        id,
         "PulseAudio".to_string(),
         spec,
         move || Ok(Box::new(PulseAudioOutput::try_open(spec)?)),

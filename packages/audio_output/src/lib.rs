@@ -24,6 +24,7 @@ pub mod pulseaudio;
 pub mod cpal;
 
 pub struct AudioOutput {
+    pub id: String,
     pub name: String,
     pub spec: SignalSpec,
     resampler: Option<Resampler<f32>>,
@@ -31,8 +32,9 @@ pub struct AudioOutput {
 }
 
 impl AudioOutput {
-    pub fn new(name: String, spec: SignalSpec, writer: Box<dyn AudioWrite>) -> Self {
+    pub fn new(id: String, name: String, spec: SignalSpec, writer: Box<dyn AudioWrite>) -> Self {
         Self {
+            id,
             name,
             spec,
             resampler: None,
@@ -121,6 +123,7 @@ pub type GetWriter = Box<dyn Fn() -> Result<InnerType, AudioOutputError> + Send>
 
 #[derive(Clone)]
 pub struct AudioOutputFactory {
+    pub id: String,
     pub name: String,
     pub spec: SignalSpec,
     get_writer: Arc<std::sync::Mutex<GetWriter>>,
@@ -128,19 +131,22 @@ pub struct AudioOutputFactory {
 
 impl AudioOutputFactory {
     pub fn new(
+        id: String,
         name: String,
         spec: SignalSpec,
         writer: impl (Fn() -> Result<InnerType, AudioOutputError>) + Send + 'static,
     ) -> Self {
         Self {
+            id,
             name,
             spec,
             get_writer: Arc::new(std::sync::Mutex::new(Box::new(writer))),
         }
     }
 
-    pub fn new_box(name: String, spec: SignalSpec, writer: GetWriter) -> Self {
+    pub fn new_box(id: String, name: String, spec: SignalSpec, writer: GetWriter) -> Self {
         Self {
+            id,
             name,
             spec,
             get_writer: Arc::new(std::sync::Mutex::new(writer)),
@@ -157,6 +163,7 @@ impl TryFrom<AudioOutputFactory> for AudioOutput {
 
     fn try_from(value: AudioOutputFactory) -> Result<Self, Self::Error> {
         Ok(Self {
+            id: value.id,
             name: value.name,
             spec: value.spec,
             resampler: None,
@@ -170,6 +177,7 @@ impl TryFrom<&AudioOutputFactory> for AudioOutput {
 
     fn try_from(value: &AudioOutputFactory) -> Result<Self, Self::Error> {
         Ok(Self {
+            id: value.id.to_owned(),
             name: value.name.to_owned(),
             spec: value.spec.to_owned(),
             resampler: None,

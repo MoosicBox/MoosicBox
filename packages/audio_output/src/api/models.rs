@@ -5,6 +5,7 @@ use crate::{AudioOutputFactory, SignalSpec};
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiAudioOutput {
+    pub id: String,
     pub name: String,
     pub spec: ApiSignalSpec,
 }
@@ -12,6 +13,7 @@ pub struct ApiAudioOutput {
 impl From<AudioOutputFactory> for ApiAudioOutput {
     fn from(value: AudioOutputFactory) -> Self {
         Self {
+            id: value.id,
             name: value.name,
             spec: value.spec.into(),
         }
