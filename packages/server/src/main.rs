@@ -350,6 +350,12 @@ fn main() -> std::io::Result<()> {
             #[allow(clippy::let_and_return)]
             let api = ApiDoc::openapi();
 
+            #[cfg(feature = "audio-output-api")]
+            let api = nest_api(
+                api,
+                "/audio-output",
+                moosicbox_audio_output::api::Api::openapi(),
+            );
             #[cfg(feature = "auth-api")]
             let api = nest_api(api, "/auth", moosicbox_auth::api::Api::openapi());
             #[cfg(feature = "downloader-api")]
@@ -458,6 +464,14 @@ fn main() -> std::io::Result<()> {
                         .service(moosicbox_scan::api::get_scan_paths_endpoint)
                         .service(moosicbox_scan::api::add_scan_path_endpoint)
                         .service(moosicbox_scan::api::remove_scan_path_endpoint),
+                );
+            }
+
+            #[cfg(feature = "audio-output-api")]
+            {
+                app = app.service(
+                    web::scope("/audio-output")
+                        .service(moosicbox_audio_output::api::audio_outputs_endpoint),
                 );
             }
 

@@ -14,6 +14,9 @@ use tokio::task::JoinError;
 
 pub mod encoder;
 
+#[cfg(feature = "api")]
+pub mod api;
+
 #[cfg(any(feature = "pulseaudio-standard", feature = "pulseaudio-simple"))]
 pub mod pulseaudio;
 
@@ -255,6 +258,10 @@ static AUDIO_OUTPUT_SCANNER: LazyLock<Arc<Mutex<AudioOutputScanner>>> =
 
 pub async fn scan_outputs() -> Result<(), AudioOutputScannerError> {
     AUDIO_OUTPUT_SCANNER.lock().await.scan().await
+}
+
+pub async fn output_factories() -> Vec<AudioOutputFactory> {
+    AUDIO_OUTPUT_SCANNER.lock().await.outputs.clone()
 }
 
 pub async fn default_output_factory() -> Option<AudioOutputFactory> {

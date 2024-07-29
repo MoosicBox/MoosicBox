@@ -3557,6 +3557,7 @@ dependencies = [
 name = "moosicbox_audio_output"
 version = "0.1.0"
 dependencies = [
+ "actix-web",
  "bytes",
  "cpal",
  "fdk-aac",
@@ -3567,6 +3568,7 @@ dependencies = [
  "moosicbox_audio_decoder",
  "moosicbox_audio_encoder",
  "moosicbox_env_utils",
+ "moosicbox_paging",
  "moosicbox_resampler",
  "moosicbox_stream_utils",
  "moosicbox_task",
@@ -3574,10 +3576,13 @@ dependencies = [
  "ogg",
  "opus",
  "rb",
+ "serde",
+ "serde_json",
  "symphonia",
  "thiserror",
  "tokio",
  "tokio-util",
+ "utoipa",
 ]
 
 [[package]]

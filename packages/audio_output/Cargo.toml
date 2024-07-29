@@ -18,6 +18,13 @@ moosicbox_resampler     = { path = "../resampler", default-features = false }
 moosicbox_stream_utils  = { path = "../stream_utils", default-features = false }
 moosicbox_task          = { path = "../task", default-features = false }
 
+# API Dependencies
+actix-web        = { workspace = true, optional = true }
+moosicbox_paging = { path = "../paging", optional = true }
+serde            = { workspace = true, optional = true }
+serde_json       = { workspace = true, optional = true }
+utoipa           = { workspace = true, optional = true }
+
 # CPAL
 cpal = { workspace = true, optional = true }
 rb   = { workspace = true, optional = true }
@@ -41,11 +48,14 @@ tokio      = { workspace = true, features = ["rt-multi-thread", "tracing"] }
 tokio-util = { workspace = true }
 
 [features]
-default = ["default-windows", "pulseaudio"]
+default = ["api", "default-windows", "openapi", "pulseaudio"]
 
 default-windows = ["aac", "cpal", "flac", "mp3", "oboe-shared-stdcxx", "opus"]
 
 fail-on-warnings = []
+
+api     = ["dep:actix-web", "dep:moosicbox_paging", "dep:serde", "dep:serde_json"]
+openapi = ["dep:utoipa", "moosicbox_paging/openapi"]
 
 asio                = ["cpal/asio"]
 cpal                = ["dep:cpal", "dep:rb"]

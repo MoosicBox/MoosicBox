@@ -230,6 +230,7 @@ yt         = ["moosicbox_yt/api"]
 
 # APIs
 all-apis = [
+    "audio-output-api",
     "auth-api",
     "downloader-api",
     "files-api",
@@ -244,18 +245,19 @@ all-apis = [
     "yt-api",
 ]
 
-auth-api       = ["moosicbox_auth/api"]
-downloader-api = ["dep:moosicbox_downloader", "downloader"]
-files-api      = ["moosicbox_files/api"]
-library-api    = ["dep:moosicbox_library", "library"]
-menu-api       = ["dep:moosicbox_menu", "menu"]
-player-api     = ["moosicbox_player/api", "player"]
-qobuz-api      = ["dep:moosicbox_qobuz", "qobuz"]
-scan-api       = ["dep:moosicbox_scan", "scan"]
-search-api     = ["dep:moosicbox_search", "search"]
-tidal-api      = ["dep:moosicbox_tidal", "tidal"]
-upnp-api       = ["dep:moosicbox_upnp", "upnp"]
-yt-api         = ["dep:moosicbox_yt", "yt"]
+audio-output-api = ["moosicbox_audio_output/api"]
+auth-api         = ["moosicbox_auth/api"]
+downloader-api   = ["dep:moosicbox_downloader", "downloader"]
+files-api        = ["moosicbox_files/api"]
+library-api      = ["dep:moosicbox_library", "library"]
+menu-api         = ["dep:moosicbox_menu", "menu"]
+player-api       = ["moosicbox_player/api", "player"]
+qobuz-api        = ["dep:moosicbox_qobuz", "qobuz"]
+scan-api         = ["dep:moosicbox_scan", "scan"]
+search-api       = ["dep:moosicbox_search", "search"]
+tidal-api        = ["dep:moosicbox_tidal", "tidal"]
+upnp-api         = ["dep:moosicbox_upnp", "upnp"]
+yt-api           = ["dep:moosicbox_yt", "yt"]
 
 openapi = [
     "dep:utoipa",
@@ -263,6 +265,7 @@ openapi = [
     "dep:utoipa-redoc",
     "dep:utoipa-scalar",
     "dep:utoipa-swagger-ui",
+    "moosicbox_audio_output/openapi",
     "moosicbox_auth/openapi",
     "moosicbox_core/openapi",
     "moosicbox_downloader/openapi",

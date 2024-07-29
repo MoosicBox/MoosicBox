@@ -67,10 +67,19 @@ jobs:
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev
 
-                    - name: audio_output
+                    - name: audio_output-no-default-features-api
                       path: packages/audio_output
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev
+                      cargo: --no-default-features
+                      features: api
+
+                    - name: audio_output-cpal-api
+                      path: packages/audio_output
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
+                      cargo: --no-default-features
+                      features: api,cpal
 
                     - name: audio_output-aac
                       path: packages/audio_output
