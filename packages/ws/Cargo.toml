@@ -18,31 +18,49 @@ moosicbox_database = { path = "../database", default-features = false, features 
 ] }
 moosicbox_session = { path = "../session", default-features = false }
 
-actix-cors                   = { workspace = true }
-actix-files                  = { workspace = true }
-actix-rt                     = { workspace = true }
-actix-web                    = { workspace = true }
-async-once-cell              = { workspace = true }
-async-trait                  = { workspace = true }
-awc                          = { workspace = true }
-aws-config                   = { workspace = true }
-aws-sdk-apigatewaymanagement = { workspace = true }
-env_logger                   = { workspace = true }
-log                          = { workspace = true }
-once_cell                    = { workspace = true }
-regex                        = { workspace = true }
-serde                        = { workspace = true, features = ["derive"] }
-serde_json                   = { workspace = true }
-strum                        = { workspace = true }
-strum_macros                 = { workspace = true }
-thiserror                    = { workspace = true }
+actix-cors                   = { workspace = true, optional = true }
+actix-files                  = { workspace = true, optional = true }
+actix-rt                     = { workspace = true, optional = true }
+actix-web                    = { workspace = true, optional = true }
+async-once-cell              = { workspace = true, optional = true }
+async-trait                  = { workspace = true, optional = true }
+awc                          = { workspace = true, optional = true }
+aws-config                   = { workspace = true, optional = true }
+aws-sdk-apigatewaymanagement = { workspace = true, optional = true }
+env_logger                   = { workspace = true, optional = true }
+log                          = { workspace = true, optional = true }
+once_cell                    = { workspace = true, optional = true }
+regex                        = { workspace = true, optional = true }
+thiserror                    = { workspace = true, optional = true }
+
+serde        = { workspace = true, features = ["derive"] }
+serde_json   = { workspace = true }
+strum        = { workspace = true }
+strum_macros = { workspace = true }
 
 rusqlite = { workspace = true }
 
 [features]
-default = ["aac", "flac", "mp3", "opus"]
+default = ["aac", "flac", "mp3", "opus", "ws"]
 
 fail-on-warnings = []
+
+ws = [
+    "dep:actix-cors",
+    "dep:actix-files",
+    "dep:actix-rt",
+    "dep:actix-web",
+    "dep:async-once-cell",
+    "dep:async-trait",
+    "dep:awc",
+    "dep:aws-config",
+    "dep:aws-sdk-apigatewaymanagement",
+    "dep:env_logger",
+    "dep:log",
+    "dep:once_cell",
+    "dep:regex",
+    "dep:thiserror",
+]
 
 aac  = ["moosicbox_session/aac"]
 flac = ["moosicbox_session/flac"]

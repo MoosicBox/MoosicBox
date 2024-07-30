@@ -36,7 +36,7 @@ moosicbox_session = { path = "../session", default-features = false, features = 
 moosicbox_task = { path = "../task", default-features = false }
 moosicbox_tunnel = { path = "../tunnel", default-features = false }
 moosicbox_tunnel_sender = { path = "../tunnel_sender", default-features = false }
-moosicbox_ws = { path = "../ws", default-features = false }
+moosicbox_ws = { path = "../ws", default-features = false, features = ["ws"] }
 
 # APIs
 moosicbox_downloader = { path = "../downloader", default-features = false, features = [

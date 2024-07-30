@@ -34,7 +34,7 @@ moosicbox_player = { path = "../player", default-features = false }
 moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
 moosicbox_task = { path = "../task", default-features = false }
 moosicbox_tunnel = { path = "../tunnel", default-features = false }
-moosicbox_ws = { path = "../ws", default-features = false }
+moosicbox_ws = { path = "../ws", default-features = false, features = ["ws"] }
 
 # Base64 dependencies
 base64 = { workspace = true, optional = true }
