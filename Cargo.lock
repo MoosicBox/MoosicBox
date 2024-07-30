@@ -3972,6 +3972,7 @@ dependencies = [
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",
+ "moosicbox_library",
  "moosicbox_music_api",
  "moosicbox_resampler",
  "moosicbox_session",

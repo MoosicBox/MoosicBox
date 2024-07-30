@@ -254,15 +254,6 @@ fn main() -> std::io::Result<()> {
 
         let ws_server_handle = moosicbox_task::spawn("server: WsServer", ws_server.run());
 
-        #[cfg(feature = "player")]
-        if let Err(err) =
-            register_server_player(&**database.clone(), handle.clone(), &tunnel_handle).await
-        {
-            log::error!("Failed to register server player: {err:?}");
-        } else {
-            log::debug!("Registered server player");
-        }
-
         let (track_pool_handle, track_pool_join_handle) = {
             use moosicbox_files::files::track_pool::{service::Service, Context, HANDLE};
 
@@ -281,12 +272,12 @@ fn main() -> std::io::Result<()> {
         let upnp_service =
             moosicbox_upnp::listener::Service::new(moosicbox_upnp::listener::UpnpContext::new());
 
-        #[cfg(feature = "upnp")]
-        if let Err(err) = register_upnp_players(&**database.clone(), handle, &tunnel_handle).await {
-            log::error!("Failed to register server player: {err:?}");
-        } else {
-            log::debug!("Registered server player");
-        }
+        // #[cfg(feature = "upnp")]
+        // if let Err(err) = register_upnp_players(&**database.clone(), handle, &tunnel_handle).await {
+        //     log::error!("Failed to register server player: {err:?}");
+        // } else {
+        //     log::debug!("Registered server player");
+        // }
 
         #[cfg(feature = "upnp")]
         let upnp_service_handle = upnp_service.handle();
@@ -300,27 +291,14 @@ fn main() -> std::io::Result<()> {
         #[cfg(feature = "upnp")]
         moosicbox_task::spawn("server: upnp", moosicbox_upnp::scan_devices());
 
+        #[cfg(feature = "player")]
         moosicbox_task::spawn("server: scan outputs", {
             let db = database.clone();
+            let tunnel_handle = tunnel_handle.clone();
             async move {
                 moosicbox_audio_output::scan_outputs()
                     .await
                     .map_err(|e| e.to_string())?;
-
-                let connection_id = "self";
-
-                let context = moosicbox_ws::WebsocketContext {
-                    connection_id: connection_id.to_string(),
-                    ..Default::default()
-                };
-                let payload = moosicbox_audio_output::output_factories()
-                    .await
-                    .into_iter()
-                    .map(|x| moosicbox_session::models::RegisterPlayer {
-                        name: x.name,
-                        r#type: "SYMPHONIA".into(),
-                    })
-                    .collect::<Vec<_>>();
 
                 let handle = WS_SERVER_HANDLE
                     .read()
@@ -331,9 +309,16 @@ fn main() -> std::io::Result<()> {
                     ))
                     .map_err(|e| e.to_string())?;
 
-                moosicbox_ws::register_players(&**db, &handle, &context, &payload)
-                    .await
-                    .map_err(|e| e.to_string())?;
+                for audio_output in moosicbox_audio_output::output_factories().await {
+                    if let Err(err) =
+                        register_server_player(&**db, handle.clone(), &tunnel_handle, audio_output)
+                            .await
+                    {
+                        log::error!("Failed to register server player: {err:?}");
+                    } else {
+                        log::debug!("Registered server player");
+                    }
+                }
 
                 Ok::<_, String>(())
             }
@@ -672,6 +657,23 @@ fn main() -> std::io::Result<()> {
                 );
             }
 
+            #[cfg(feature = "upnp-api")]
+            {
+                app = app.service(
+                    web::scope("/upnp")
+                        .service(moosicbox_upnp::api::scan_devices_endpoint)
+                        .service(moosicbox_upnp::api::get_transport_info_endpoint)
+                        .service(moosicbox_upnp::api::get_media_info_endpoint)
+                        .service(moosicbox_upnp::api::get_position_info_endpoint)
+                        .service(moosicbox_upnp::api::get_volume_endpoint)
+                        .service(moosicbox_upnp::api::set_volume_endpoint)
+                        .service(moosicbox_upnp::api::subscribe_endpoint)
+                        .service(moosicbox_upnp::api::pause_endpoint)
+                        .service(moosicbox_upnp::api::play_endpoint)
+                        .service(moosicbox_upnp::api::seek_endpoint),
+                );
+            }
+
             #[cfg(feature = "yt-api")]
             {
                 app = app.service(
@@ -695,23 +697,6 @@ fn main() -> std::io::Result<()> {
                         .service(moosicbox_yt::api::artist_endpoint)
                         .service(moosicbox_yt::api::track_endpoint)
                         .service(moosicbox_yt::api::search_endpoint),
-                );
-            }
-
-            #[cfg(feature = "upnp-api")]
-            {
-                app = app.service(
-                    web::scope("/upnp")
-                        .service(moosicbox_upnp::api::scan_devices_endpoint)
-                        .service(moosicbox_upnp::api::get_transport_info_endpoint)
-                        .service(moosicbox_upnp::api::get_media_info_endpoint)
-                        .service(moosicbox_upnp::api::get_position_info_endpoint)
-                        .service(moosicbox_upnp::api::get_volume_endpoint)
-                        .service(moosicbox_upnp::api::set_volume_endpoint)
-                        .service(moosicbox_upnp::api::subscribe_endpoint)
-                        .service(moosicbox_upnp::api::pause_endpoint)
-                        .service(moosicbox_upnp::api::play_endpoint)
-                        .service(moosicbox_upnp::api::seek_endpoint),
                 );
             }
 
@@ -917,15 +902,21 @@ static SERVER_PLAYERS: Lazy<
 > = Lazy::new(|| tokio::sync::RwLock::new(HashMap::new()));
 
 #[cfg(feature = "player")]
+#[allow(clippy::too_many_lines)]
 fn handle_server_playback_update(
     update: &moosicbox_session::models::UpdateSession,
 ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = ()> + Send>> {
+    use moosicbox_core::sqlite::models::Id;
     use moosicbox_player::Player as _;
 
     let update = update.clone();
+    let db = DB.read().unwrap().clone().unwrap().clone();
 
     Box::pin(async move {
         log::debug!("Handling server playback update");
+
+        let update = update;
+
         let updated = {
             {
                 if SERVER_PLAYERS
@@ -934,6 +925,32 @@ fn handle_server_playback_update(
                     .get(&update.session_id)
                     .is_none()
                 {
+                    let players = match moosicbox_session::db::get_session_active_players(
+                        &**db,
+                        update.session_id,
+                    )
+                    .await
+                    {
+                        Ok(players) => players,
+                        Err(e) => moosicbox_assert::die_or_panic!(
+                            "Failed to get session active players: {e:?}"
+                        ),
+                    };
+
+                    let outputs = moosicbox_audio_output::output_factories().await;
+
+                    // TODO: handle more than one output
+                    let output = players
+                        .into_iter()
+                        .find_map(|x| outputs.iter().find(|output| output.id == x.audio_output_id))
+                        .cloned();
+
+                    if output.is_none() {
+                        moosicbox_assert::die_or_panic!("No output available");
+                    }
+
+                    let output = output.unwrap();
+
                     let mut players = SERVER_PLAYERS.write().await;
 
                     let db = {
@@ -951,7 +968,8 @@ fn handle_server_playback_update(
                         Err(e) => {
                             moosicbox_assert::die_or_panic!("Failed to create new player: {e:?}")
                         }
-                    };
+                    }
+                    .with_output(output);
 
                     if let Err(e) = player.init_from_session(&**db, &update).await {
                         moosicbox_assert::die_or_error!(
@@ -976,16 +994,46 @@ fn handle_server_playback_update(
                 update.position,
                 update.seek,
                 update.volume,
-                update.playlist.as_ref().map(|x| {
-                    x.tracks
+                if let Some(playlist) = update.playlist {
+                    let track_ids = playlist
+                        .tracks
                         .iter()
-                        .map(|t| moosicbox_player::Track {
-                            id: t.id.clone().into(),
-                            source: t.r#type,
-                            data: Some(serde_json::to_value(t).unwrap()),
-                        })
-                        .collect::<Vec<_>>()
-                }),
+                        .filter_map(|x| x.id.parse::<u64>().ok())
+                        .map(std::convert::Into::into)
+                        .collect::<Vec<Id>>();
+
+                    let tracks = match moosicbox_library::db::get_tracks(&**db, Some(&track_ids))
+                        .await
+                    {
+                        Ok(tracks) => tracks,
+                        Err(e) => moosicbox_assert::die_or_panic!("Failed to get tracks: {e:?}"),
+                    };
+
+                    Some(
+                        playlist
+                            .tracks
+                            .iter()
+                            .map(|x| {
+                                let data = if x.r#type == ApiSource::Library {
+                                    tracks
+                                        .iter()
+                                        .find(|track| x.id == track.id.to_string())
+                                        .and_then(|x| serde_json::to_value(x).ok())
+                                } else {
+                                    x.data.clone().and_then(|x| serde_json::to_value(x).ok())
+                                };
+
+                                moosicbox_player::Track {
+                                    id: x.id.clone().into(),
+                                    source: x.r#type,
+                                    data,
+                                }
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                } else {
+                    None
+                },
                 None,
                 Some(update.session_id),
                 None,
@@ -1010,6 +1058,7 @@ async fn register_server_player(
     db: &dyn Database,
     ws: ws::server::WsServerHandle,
     tunnel_handle: &Option<moosicbox_tunnel_sender::sender::TunnelSenderHandle>,
+    audio_output: moosicbox_audio_output::AudioOutputFactory,
 ) -> Result<(), moosicbox_ws::WebsocketSendError> {
     let connection_id = "self";
 
@@ -1021,8 +1070,8 @@ async fn register_server_player(
         connection_id: connection_id.to_string(),
         name: "MoosicBox Server".to_string(),
         players: vec![moosicbox_session::models::RegisterPlayer {
-            name: "MoosicBox Server".into(),
-            r#type: "SYMPHONIA".into(),
+            name: audio_output.name,
+            audio_output_id: audio_output.id,
         }],
     };
 
@@ -1059,6 +1108,7 @@ static UPNP_PLAYERS: Lazy<tokio::sync::RwLock<HashMap<u64, moosicbox_upnp::playe
     Lazy::new(|| tokio::sync::RwLock::new(HashMap::new()));
 
 #[cfg(feature = "upnp")]
+#[allow(unused)]
 fn handle_upnp_playback_update(
     update: &moosicbox_session::models::UpdateSession,
 ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = ()> + Send>> {
@@ -1123,7 +1173,7 @@ fn handle_upnp_playback_update(
                         .map(|t| Track {
                             id: t.id.clone().into(),
                             source: t.r#type,
-                            data: Some(serde_json::to_value(t).unwrap()),
+                            data: t.data.clone().and_then(|x| serde_json::to_value(x).ok()),
                         })
                         .collect::<Vec<_>>()
                 }),
@@ -1147,10 +1197,12 @@ fn handle_upnp_playback_update(
 }
 
 #[cfg(feature = "upnp")]
+#[allow(unused)]
 async fn register_upnp_players(
     db: &dyn Database,
     ws: ws::server::WsServerHandle,
     tunnel_handle: &Option<moosicbox_tunnel_sender::sender::TunnelSenderHandle>,
+    audio_output: moosicbox_audio_output::AudioOutputFactory,
 ) -> Result<(), moosicbox_ws::WebsocketSendError> {
     let connection_id = "self";
 
@@ -1159,8 +1211,8 @@ async fn register_upnp_players(
         ..Default::default()
     };
     let payload = vec![moosicbox_session::models::RegisterPlayer {
-        name: "MoosicBox UPnP".into(),
-        r#type: "SYMPHONIA".into(),
+        name: audio_output.name,
+        audio_output_id: audio_output.id,
     }];
 
     let handle =

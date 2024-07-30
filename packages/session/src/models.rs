@@ -1,5 +1,3 @@
-use std::str::FromStr as _;
-
 use async_trait::async_trait;
 use moosicbox_core::{
     sqlite::{
@@ -17,7 +15,6 @@ use moosicbox_library::{
     models::{ApiLibraryTrack, ApiTrack},
 };
 use serde::{Deserialize, Serialize};
-use strum_macros::EnumString;
 
 use crate::db::{
     get_players, get_session_active_players, get_session_playlist, get_session_playlist_tracks,
@@ -565,38 +562,16 @@ impl ToApi<ApiConnection> for Connection {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterPlayer {
+    pub audio_output_id: String,
     pub name: String,
-    pub r#type: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default, EnumString)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
-pub enum PlayerType {
-    Symphonia,
-    Howler,
-    #[default]
-    Unknown,
-}
-
-impl MissingValue<PlayerType> for &moosicbox_database::Row {}
-impl ToValueType<PlayerType> for DatabaseValue {
-    fn to_value_type(self) -> Result<PlayerType, ParseError> {
-        match self {
-            DatabaseValue::String(str) | DatabaseValue::StringOpt(Some(str)) => {
-                Ok(PlayerType::from_str(&str).unwrap_or(PlayerType::Unknown))
-            }
-            _ => Err(ParseError::ConvertType("PlayerType".into())),
-        }
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Player {
     pub id: u64,
+    pub audio_output_id: String,
     pub name: String,
-    pub r#type: PlayerType,
     pub playing: bool,
     pub created: String,
     pub updated: String,
@@ -607,8 +582,8 @@ impl ToValueType<Player> for &moosicbox_database::Row {
     fn to_value_type(self) -> Result<Player, ParseError> {
         Ok(Player {
             id: self.to_value("id")?,
+            audio_output_id: self.to_value("audio_output_id")?,
             name: self.to_value("name")?,
-            r#type: self.to_value("type")?,
             playing: self.to_value("playing")?,
             created: self.to_value("created")?,
             updated: self.to_value("updated")?,
@@ -668,8 +643,8 @@ impl AsId for ActivePlayer {
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiPlayer {
     pub player_id: u64,
+    pub audio_output_id: String,
     pub name: String,
-    pub r#type: PlayerType,
     pub playing: bool,
 }
 
@@ -677,8 +652,8 @@ impl ToApi<ApiPlayer> for Player {
     fn to_api(self) -> ApiPlayer {
         ApiPlayer {
             player_id: self.id,
+            audio_output_id: self.audio_output_id.clone(),
             name: self.name.clone(),
-            r#type: self.r#type.clone(),
             playing: self.playing,
         }
     }

@@ -354,11 +354,11 @@ pub async fn create_player(
     Ok(db
         .upsert("players")
         .where_eq("connection_id", connection_id)
-        .where_eq("name", player.name.clone())
-        .where_eq("type", player.r#type.clone())
+        .where_eq("audio_output_id", &player.audio_output_id)
+        .where_eq("name", &player.name)
         .value("connection_id", connection_id)
-        .value("name", player.name.clone())
-        .value("type", player.r#type.clone())
+        .value("name", &player.name)
+        .value("audio_output_id", &player.audio_output_id)
         .execute_first(db)
         .await?
         .to_value_type()?)

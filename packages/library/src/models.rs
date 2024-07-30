@@ -763,6 +763,36 @@ pub struct ApiLibraryTrack {
     pub source: TrackApiSource,
 }
 
+impl From<ApiLibraryTrack> for Track {
+    fn from(value: ApiLibraryTrack) -> Self {
+        Self {
+            id: value.track_id.into(),
+            number: value.number,
+            title: value.title,
+            duration: value.duration,
+            album: value.album,
+            album_id: value.album_id.into(),
+            date_released: value.date_released,
+            date_added: value.date_added,
+            artist: value.artist,
+            artist_id: value.artist_id.into(),
+            file: None,
+            artwork: None,
+            blur: value.blur,
+            bytes: value.bytes,
+            format: value.format,
+            bit_depth: value.bit_depth,
+            audio_bitrate: value.audio_bitrate,
+            overall_bitrate: value.overall_bitrate,
+            sample_rate: value.sample_rate,
+            channels: value.channels,
+            source: value.source,
+            api_source: ApiSource::Library,
+            sources: ApiSources::default().with_source(ApiSource::Library, value.track_id.into()),
+        }
+    }
+}
+
 impl ToApi<ApiTrack> for LibraryTrack {
     fn to_api(self) -> ApiTrack {
         ApiTrack::Library {

@@ -215,7 +215,7 @@ impl ToValueType<TrackApiSource> for rusqlite::types::Value {
     }
 }
 
-#[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Default, Debug, Serialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Track {
     pub id: Id,
@@ -241,6 +241,77 @@ pub struct Track {
     pub source: TrackApiSource,
     pub api_source: ApiSource,
     pub sources: ApiSources,
+}
+
+#[derive(Default, Debug, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct TrackInner {
+    id: Id,
+    number: u32,
+    title: String,
+    duration: f64,
+    album: String,
+    album_id: Id,
+    date_released: Option<String>,
+    date_added: Option<String>,
+    artist: String,
+    artist_id: Id,
+    file: Option<String>,
+    artwork: Option<String>,
+    blur: bool,
+    bytes: u64,
+    format: Option<AudioFormat>,
+    bit_depth: Option<u8>,
+    audio_bitrate: Option<u32>,
+    overall_bitrate: Option<u32>,
+    sample_rate: Option<u32>,
+    channels: Option<u8>,
+    source: TrackApiSource,
+    qobuz_id: Option<u64>,
+    tidal_id: Option<u64>,
+    yt_id: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for Track {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(TrackInner::deserialize(deserializer)?.into())
+    }
+}
+
+impl From<TrackInner> for Track {
+    fn from(value: TrackInner) -> Self {
+        Self {
+            id: value.id,
+            number: value.number,
+            title: value.title,
+            duration: value.duration,
+            album: value.album,
+            album_id: value.album_id,
+            date_released: value.date_released,
+            date_added: value.date_added,
+            artist: value.artist,
+            artist_id: value.artist_id,
+            file: value.file,
+            artwork: value.artwork,
+            blur: value.blur,
+            bytes: value.bytes,
+            format: value.format,
+            bit_depth: value.bit_depth,
+            audio_bitrate: value.audio_bitrate,
+            overall_bitrate: value.overall_bitrate,
+            sample_rate: value.sample_rate,
+            channels: value.channels,
+            source: value.source,
+            api_source: ApiSource::Library,
+            sources: ApiSources::default()
+                .with_source_opt(ApiSource::Tidal, value.tidal_id.map(|x| x.into()))
+                .with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(|x| x.into()))
+                .with_source_opt(ApiSource::Yt, value.yt_id.map(|x| x.into())),
+        }
+    }
 }
 
 impl Track {

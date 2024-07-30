@@ -6,6 +6,7 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
+use moosicbox_audio_output::default_output_factory;
 use moosicbox_core::{
     app::AppState,
     integer_range::{parse_integer_ranges_to_ids, ParseIntegersError},
@@ -118,10 +119,20 @@ async fn get_player(host: Option<&str>) -> Result<LocalPlayer, actix_web::Error>
             )
             .await
             .map_err(ErrorInternalServerError)?
+            .with_output(
+                default_output_factory()
+                    .await
+                    .ok_or(ErrorInternalServerError("Missing default audio output"))?,
+            )
         } else {
             LocalPlayer::new(PlayerSource::Local, None)
                 .await
                 .map_err(ErrorInternalServerError)?
+                .with_output(
+                    default_output_factory()
+                        .await
+                        .ok_or(ErrorInternalServerError("Missing default audio output"))?,
+                )
         })
         .clone())
 }

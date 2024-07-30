@@ -3,7 +3,7 @@ use std::sync::{atomic::AtomicBool, Arc, Mutex, RwLock, RwLockWriteGuard};
 use async_trait::async_trait;
 use flume::Receiver;
 use moosicbox_audio_decoder::{AudioDecodeError, AudioDecodeHandler};
-use moosicbox_audio_output::{default_output_factory, AudioOutput, AudioOutputFactory};
+use moosicbox_audio_output::{AudioOutput, AudioOutputFactory};
 use moosicbox_core::sqlite::models::{ToApi, TrackApiSource};
 use moosicbox_session::models::UpdateSession;
 use rand::{thread_rng, Rng as _};
@@ -21,7 +21,7 @@ pub struct LocalPlayer {
     pub id: usize,
     playback_type: PlaybackType,
     source: PlayerSource,
-    pub output: Arc<Mutex<AudioOutputFactory>>,
+    pub output: Option<Arc<Mutex<AudioOutputFactory>>>,
     pub active_playback: Arc<RwLock<Option<Playback>>>,
     receiver: Arc<tokio::sync::RwLock<Option<Receiver<()>>>>,
 }
@@ -69,7 +69,12 @@ impl Player for LocalPlayer {
 
         let active_playback = self.active_playback.clone();
         let sent_playback_start_event = AtomicBool::new(false);
-        let open_func = self.output.clone();
+
+        if self.output.is_none() {
+            return Err(PlayerError::NoAudioOutputs);
+        }
+
+        let open_func = self.output.clone().unwrap();
 
         let get_handler = move || {
             #[allow(unused_mut)]
@@ -272,18 +277,14 @@ impl LocalPlayer {
             .await?,
             playback_type: playback_type.unwrap_or_default(),
             source,
-            output: Arc::new(Mutex::new(
-                default_output_factory()
-                    .await
-                    .ok_or(PlayerError::NoAudioOutputs)?,
-            )),
+            output: None,
             active_playback: Arc::new(RwLock::new(None)),
             receiver: Arc::new(tokio::sync::RwLock::new(None)),
         })
     }
 
     pub fn with_output(mut self, output: AudioOutputFactory) -> Self {
-        self.output = Arc::new(Mutex::new(output));
+        self.output.replace(Arc::new(Mutex::new(output)));
         self
     }
 }
