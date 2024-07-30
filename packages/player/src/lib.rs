@@ -587,6 +587,7 @@ pub trait Player: Clone + Send + 'static {
                         continue;
                     } else {
                         log::debug!("No retry options");
+                        break Err(e);
                     }
                 }
             }
