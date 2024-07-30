@@ -301,10 +301,6 @@ pub async fn register_connection(
         .await?
         .to_value_type()?;
 
-    for player in &connection.players {
-        create_player(db, &connection.connection_id, player).await?;
-    }
-
     Ok(models::Connection {
         id: row.id.clone(),
         name: row.name,

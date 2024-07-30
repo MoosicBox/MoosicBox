@@ -6,6 +6,7 @@ allowed-duplicate-crates = [
     "crc-catalog",
     "env_logger",
     "fallible-iterator",
+    "h2",
     "hashbrown",
     "hashlink",
     "heck",

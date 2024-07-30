@@ -30,7 +30,9 @@ moosicbox_files = { path = "../files", default-features = false, features = [
 moosicbox_logging = { path = "../logging", default-features = false }
 moosicbox_middleware = { path = "../middleware", default-features = false }
 moosicbox_music_api = { path = "../music_api", default-features = false }
-moosicbox_session = { path = "../session", default-features = false }
+moosicbox_session = { path = "../session", default-features = false, features = [
+    "events",
+] }
 moosicbox_task = { path = "../task", default-features = false }
 moosicbox_tunnel = { path = "../tunnel", default-features = false }
 moosicbox_tunnel_sender = { path = "../tunnel_sender", default-features = false }

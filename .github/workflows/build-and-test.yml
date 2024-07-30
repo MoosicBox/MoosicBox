@@ -521,6 +521,12 @@ jobs:
                       cargo: --no-default-features
                       features: search-api
 
+                    - name: server-session-api
+                      path: packages/server
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: session-api
+
                     - name: server-tidal-api
                       path: packages/server
                       os: ubuntu-latest
@@ -542,6 +548,12 @@ jobs:
                     - name: session
                       path: packages/session
                       os: ubuntu-latest
+
+                    - name: session-api
+                      path: packages/session
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: api
 
                     - name: stream_utils
                       path: packages/stream_utils

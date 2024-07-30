@@ -561,6 +561,7 @@ impl ToApi<ApiConnection> for Connection {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct RegisterPlayer {
     pub audio_output_id: String,
     pub name: String,

@@ -4187,6 +4187,7 @@ dependencies = [
  "actix-web",
  "async-trait",
  "log",
+ "moosicbox_assert",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",
@@ -4196,6 +4197,7 @@ dependencies = [
  "serde_json",
  "strum",
  "strum_macros",
+ "tokio",
  "utoipa",
 ]
 

@@ -29,7 +29,7 @@ use moosicbox_database::Database;
 use moosicbox_json_utils::{serde_json::ToValue as _, ParseError};
 use moosicbox_music_api::MusicApi;
 use moosicbox_session::{
-    db::{get_session, get_session_playlist},
+    get_session, get_session_playlist,
     models::{UpdateSession, UpdateSessionPlaylist, UpdateSessionPlaylistTrack},
 };
 use moosicbox_stream_utils::{

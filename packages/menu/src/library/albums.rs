@@ -19,7 +19,7 @@ use moosicbox_search::{
     data::{AsDataValues, AsDeleteTerm},
     DeleteFromIndexError, PopulateIndexError,
 };
-use moosicbox_session::db::delete_session_playlist_tracks_by_track_id;
+use moosicbox_session::delete_session_playlist_tracks_by_track_id;
 use serde::Serialize;
 use thiserror::Error;
 use tokio::sync::RwLock;

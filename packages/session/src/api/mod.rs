@@ -8,7 +8,9 @@ use moosicbox_core::sqlite::models::ToApi as _;
 use moosicbox_paging::Page;
 use serde::Deserialize;
 
-use crate::models::{ApiPlayer, ApiSession, ApiSessionPlaylist, ApiSessionPlaylistTrack};
+use crate::models::{
+    ApiPlayer, ApiSession, ApiSessionPlaylist, ApiSessionPlaylistTrack, RegisterPlayer,
+};
 
 pub mod models;
 
@@ -23,12 +25,14 @@ pub mod models;
         session_playing_endpoint,
         session_endpoint,
         sessions_endpoint,
+        register_players_endpoint,
     ),
     components(schemas(
         ApiSessionPlaylist,
         ApiSessionPlaylistTrack,
         ApiPlayer,
         ApiSession,
+        RegisterPlayer,
     ))
 )]
 pub struct Api;
@@ -68,10 +72,9 @@ pub async fn session_playlist_tracks_endpoint(
 ) -> Result<Json<Page<ApiSessionPlaylistTrack>>> {
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(30);
-    let outputs =
-        crate::db::get_session_playlist_tracks(&**data.database, query.session_playlist_id)
-            .await
-            .map_err(ErrorInternalServerError)?;
+    let outputs = crate::get_session_playlist_tracks(&**data.database, query.session_playlist_id)
+        .await
+        .map_err(ErrorInternalServerError)?;
     let total = outputs.len() as u32;
     let outputs = outputs
         .into_iter()
@@ -117,7 +120,7 @@ pub async fn session_playlist_endpoint(
     query: web::Query<GetSessionPlaylist>,
     data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<Option<ApiSessionPlaylist>>> {
-    let playlist = crate::db::get_session_playlist(&**data.database, query.session_playlist_id)
+    let playlist = crate::get_session_playlist(&**data.database, query.session_playlist_id)
         .await?
         .map(|x| x.to_api());
 
@@ -159,7 +162,7 @@ pub async fn session_active_players_endpoint(
 ) -> Result<Json<Page<ApiPlayer>>> {
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(30);
-    let players = crate::db::get_session_active_players(&**data.database, query.session_id).await?;
+    let players = crate::get_session_active_players(&**data.database, query.session_id).await?;
     let total = players.len() as u32;
     let players = players
         .into_iter()
@@ -205,7 +208,7 @@ pub async fn session_playing_endpoint(
     query: web::Query<GetSessionPlaying>,
     data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<Option<bool>>> {
-    let playing = crate::db::get_session_playing(&**data.database, query.session_id).await?;
+    let playing = crate::get_session_playing(&**data.database, query.session_id).await?;
 
     Ok(Json(playing))
 }
@@ -239,7 +242,7 @@ pub async fn session_endpoint(
     query: web::Query<GetSession>,
     data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<Option<ApiSession>>> {
-    let session = crate::db::get_session(&**data.database, query.session_id)
+    let session = crate::get_session(&**data.database, query.session_id)
         .await?
         .map(|x| x.to_api());
 
@@ -279,7 +282,7 @@ pub async fn sessions_endpoint(
 ) -> Result<Json<Page<ApiSession>>> {
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(30);
-    let sessions = crate::db::get_sessions(&**data.database).await?;
+    let sessions = crate::get_sessions(&**data.database).await?;
     let total = sessions.len() as u32;
     let sessions = sessions
         .into_iter()
@@ -294,4 +297,44 @@ pub async fn sessions_endpoint(
         limit,
         total,
     }))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterPlayers {
+    connection_id: String,
+}
+
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Session"],
+        post,
+        path = "/register-players",
+        description = "Register the players to a connection",
+        request_body = Vec<RegisterPlayer>,
+        params(
+            ("connectionId" = Option<u32>, Query, description = "The ID of the connection to register the players to"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The successfully registered players",
+                body = Vec<ApiPlayer>,
+            )
+        )
+    )
+)]
+#[route("/register-players", method = "POST")]
+pub async fn register_players_endpoint(
+    players: web::Json<Vec<RegisterPlayer>>,
+    query: web::Query<RegisterPlayers>,
+    data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<Vec<ApiPlayer>>> {
+    let registered = crate::create_players(&**data.database, &query.connection_id, &players)
+        .await?
+        .into_iter()
+        .map(|x| x.to_api())
+        .collect::<Vec<_>>();
+
+    Ok(Json(registered))
 }

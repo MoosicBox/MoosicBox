@@ -17,6 +17,7 @@ use moosicbox_database::Database;
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 use moosicbox_files::files::track_pool::service::Commander as _;
 use moosicbox_music_api::{MusicApi, MusicApiState};
+use moosicbox_session::events::BoxErrorSend;
 use once_cell::sync::Lazy;
 use std::{collections::HashMap, env, sync::Arc};
 use tokio::try_join;
@@ -239,6 +240,37 @@ fn main() -> std::io::Result<()> {
             moosicbox_player::set_service_port(service_port);
             moosicbox_player::on_playback_event(crate::playback_session::on_playback_event);
         }
+
+        moosicbox_session::events::on_players_updated_event({
+            let db = database.clone();
+            move || {
+                let db = db.clone();
+                async move {
+                    log::debug!("on_players_updated_event: Players updated");
+                    let connection_id = "self";
+                    let context = moosicbox_ws::WebsocketContext {
+                        connection_id: connection_id.to_string(),
+                        ..Default::default()
+                    };
+                    let handle = WS_SERVER_HANDLE
+                        .read()
+                        .await
+                        .clone()
+                        .ok_or(moosicbox_ws::WebsocketSendError::Unknown(
+                            "No ws server handle".into(),
+                        ))
+                        .map_err(|e| Box::new(e) as BoxErrorSend)?;
+                    moosicbox_ws::get_sessions(&**db, &handle, &context, true)
+                        .await
+                        .map_err(|e| Box::new(e) as BoxErrorSend)?;
+                    moosicbox_ws::broadcast_connections(&**db, &handle)
+                        .await
+                        .map_err(|e| Box::new(e) as BoxErrorSend)?;
+                    Ok(())
+                }
+            }
+        })
+        .await;
 
         #[cfg(feature = "postgres-raw")]
         let db_connection_handle = moosicbox_task::spawn("server: postgres", db_connection);
@@ -642,7 +674,8 @@ fn main() -> std::io::Result<()> {
                         .service(moosicbox_session::api::session_active_players_endpoint)
                         .service(moosicbox_session::api::session_playing_endpoint)
                         .service(moosicbox_session::api::session_endpoint)
-                        .service(moosicbox_session::api::sessions_endpoint),
+                        .service(moosicbox_session::api::sessions_endpoint)
+                        .service(moosicbox_session::api::register_players_endpoint),
                 );
             }
 
@@ -923,17 +956,15 @@ fn handle_server_playback_update(
 
         let updated = {
             {
-                let players = match moosicbox_session::db::get_session_active_players(
-                    &**db,
-                    update.session_id,
-                )
-                .await
-                {
-                    Ok(players) => players,
-                    Err(e) => moosicbox_assert::die_or_panic!(
-                        "Failed to get session active players: {e:?}"
-                    ),
-                };
+                let players =
+                    match moosicbox_session::get_session_active_players(&**db, update.session_id)
+                        .await
+                    {
+                        Ok(players) => players,
+                        Err(e) => moosicbox_assert::die_or_panic!(
+                            "Failed to get session active players: {e:?}"
+                        ),
+                    };
 
                 if !SERVER_PLAYERS
                     .read()
