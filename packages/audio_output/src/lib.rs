@@ -129,6 +129,17 @@ pub struct AudioOutputFactory {
     get_writer: Arc<std::sync::Mutex<GetWriter>>,
 }
 
+impl std::fmt::Debug for AudioOutputFactory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AudioOutputFactory")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("spec", &self.spec)
+            .field("get_writer", &"{{get_writer}}")
+            .finish()
+    }
+}
+
 impl AudioOutputFactory {
     pub fn new(
         id: String,
