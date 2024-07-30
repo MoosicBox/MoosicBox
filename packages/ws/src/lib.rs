@@ -12,9 +12,19 @@ use std::{
 
 use async_trait::async_trait;
 use log::{debug, info, trace};
-use moosicbox_core::sqlite::{db::DbError, models::{SetSeek, ToApi as _}};
+use moosicbox_core::sqlite::{
+    db::DbError,
+    models::{SetSeek, ToApi as _},
+};
 use moosicbox_database::Database;
-use moosicbox_session::{get_session_playlist, models::{ApiUpdateSession, ApiUpdateSessionPlaylist, Connection, CreateSession, DeleteSession, RegisterConnection, RegisterPlayer, SetSessionActivePlayers, UpdateSession}};
+use moosicbox_session::{
+    get_session_playlist,
+    models::{
+        ApiConnection, ApiSession, ApiUpdateSession, ApiUpdateSessionPlaylist, Connection,
+        CreateSession, DeleteSession, RegisterConnection, RegisterPlayer, SetSessionActivePlayers,
+        UpdateSession,
+    },
+};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -73,6 +83,54 @@ pub enum OutboundMessageType {
     SetSeek,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
+pub enum OutboundPayload {
+    ConnectionId(ConnectionIdPayload),
+    Sessions(SessionsPayload),
+    SessionUpdated(SessionUpdatedPayload),
+    DownloadEvent(DownloadEventPayload),
+    Connections(ConnectionsPayload),
+    SetSeek(SetSeekPayload),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionIdPayload {
+    connection_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionsPayload {
+    payload: Vec<ApiSession>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionUpdatedPayload {
+    payload: ApiUpdateSession,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadEventPayload {
+    payload: Value,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionsPayload {
+    payload: Vec<ApiConnection>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SetSeekPayload {
+    payload: SetSeek,
+}
+
 pub type PlayerAction = fn(&UpdateSession) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 
 #[derive(Clone, Default, Debug)]
@@ -89,6 +147,8 @@ pub enum WebsocketSendError {
     Unknown(String),
     #[error(transparent)]
     ParseInt(#[from] ParseIntError),
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -101,7 +161,11 @@ pub struct WebsocketConnectionData {
 pub trait WebsocketSender: Send + Sync {
     async fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError>;
     async fn send_all(&self, data: &str) -> Result<(), WebsocketSendError>;
-    async fn send_all_except(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError>;
+    async fn send_all_except(
+        &self,
+        connection_id: &str,
+        data: &str,
+    ) -> Result<(), WebsocketSendError>;
     async fn ping(&self) -> Result<(), WebsocketSendError>;
 }
 
@@ -211,6 +275,8 @@ pub enum WebsocketMessageError {
     Db(#[from] DbError),
     #[error("Unknown {message:?}")]
     Unknown { message: String },
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
 }
 
 pub async fn message(
@@ -280,7 +346,9 @@ pub async fn message(
 
             set_session_active_players(db, sender, context, &payload).await?;
 
-            sender.send_all_except(&context.connection_id, &get_connections(db).await?).await?;
+            sender
+                .send_all_except(&context.connection_id, &get_connections(db).await?)
+                .await?;
 
             Ok(())
         }
@@ -337,14 +405,13 @@ pub async fn message(
                 }
             })?;
 
-            sender.send_all_except(
-                &context.connection_id,
-                &serde_json::json!({
-                    "type": OutboundMessageType::SetSeek,
-                    "payload": payload,
-                })
-                .to_string(),
-            ).await?;
+            sender
+                .send_all_except(
+                    &context.connection_id,
+                    &serde_json::to_value(OutboundPayload::SetSeek(SetSeekPayload { payload }))?
+                        .to_string(),
+                )
+                .await?;
 
             Ok(())
         }
@@ -374,10 +441,9 @@ pub async fn get_sessions(
             .collect::<Vec<_>>()
     };
 
-    let sessions_json = serde_json::json!({
-        "type": OutboundMessageType::Sessions,
-        "payload": sessions,
-    })
+    let sessions_json = serde_json::to_value(OutboundPayload::Sessions(SessionsPayload {
+        payload: sessions,
+    }))?
     .to_string();
 
     if send_all {
@@ -414,11 +480,11 @@ async fn get_connections(db: &dyn Database) -> Result<String, WebsocketSendError
             .collect::<Vec<_>>()
     };
 
-    let connections_json = serde_json::json!({
-        "type": OutboundMessageType::Connections,
-        "payload": connections,
-    })
-    .to_string();
+    let connections_json =
+        serde_json::to_value(OutboundPayload::Connections(ConnectionsPayload {
+            payload: connections,
+        }))?
+        .to_string();
 
     Ok(connections_json)
 }
@@ -446,9 +512,7 @@ pub async fn register_players(
 ) -> Result<Vec<moosicbox_session::models::Player>, WebsocketSendError> {
     let mut players = vec![];
     for player in payload {
-        players.push(
-            moosicbox_session::create_player(db, &context.connection_id, player).await?,
-        );
+        players.push(moosicbox_session::create_player(db, &context.connection_id, player).await?);
     }
 
     Ok(players)
@@ -479,16 +543,18 @@ pub async fn send_download_event<ProgressEvent: Serialize>(
     context: Option<&WebsocketContext>,
     payload: ProgressEvent,
 ) -> Result<(), WebsocketSendError> {
-    let session_updated = serde_json::json!({
-        "type": OutboundMessageType::DownloadEvent,
-        "payload": payload,
-    })
-    .to_string();
+    let download_even =
+        serde_json::to_value(OutboundPayload::DownloadEvent(DownloadEventPayload {
+            payload: serde_json::to_value(payload)?,
+        }))?
+        .to_string();
 
     if let Some(context) = context {
-        sender.send_all_except(&context.connection_id, &session_updated).await?;
+        sender
+            .send_all_except(&context.connection_id, &download_even)
+            .await?;
     } else {
-        sender.send_all(&session_updated).await?;
+        sender.send_all(&download_even).await?;
     }
 
     Ok(())
@@ -502,6 +568,8 @@ pub enum UpdateSessionError {
     WebsocketSend(#[from] WebsocketSendError),
     #[error(transparent)]
     Db(#[from] DbError),
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
 }
 
 pub async fn update_session(
@@ -512,23 +580,25 @@ pub async fn update_session(
 ) -> Result<(), UpdateSessionError> {
     if let Some(actions) = context.map(|x| &x.player_actions) {
         if payload.playback_updated() {
-            if let Some(session) =
-                moosicbox_session::get_session(db, payload.session_id).await?
-            {
+            if let Some(session) = moosicbox_session::get_session(db, payload.session_id).await? {
                 let funcs = session
                     .active_players
                     .iter()
                     .filter_map(|p| {
-                        actions
-                            .iter()
-                            .find_map(|(player_id, action)| if *player_id == p.id { Some(action) } else { None })
+                        actions.iter().find_map(|(player_id, action)| {
+                            if *player_id == p.id {
+                                Some(action)
+                            } else {
+                                None
+                            }
+                        })
                     })
                     .collect::<Vec<_>>();
 
                 if log::log_enabled!(log::Level::Trace) {
                     log::trace!(
                         "Running player actions on existing session id={} count_of_funcs={} payload={payload:?} session={session:?} active_players={:?} action_player_ids={:?}",
-                        session.id, 
+                        session.id,
                         funcs.len(),
                         session.active_players,
                         actions.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
@@ -549,7 +619,10 @@ pub async fn update_session(
     }
 
     if log::log_enabled!(log::Level::Trace) {
-        log::trace!("Updating session id={} payload={payload:?}", payload.session_id);
+        log::trace!(
+            "Updating session id={} payload={payload:?}",
+            payload.session_id
+        );
     } else {
         log::debug!("Updating session id={}", payload.session_id);
     }
@@ -581,14 +654,16 @@ pub async fn update_session(
         quality: payload.quality,
     };
 
-    let session_updated = serde_json::json!({
-        "type": OutboundMessageType::SessionUpdated,
-        "payload": response,
-    })
-    .to_string();
+    let session_updated =
+        serde_json::to_value(OutboundPayload::SessionUpdated(SessionUpdatedPayload {
+            payload: response,
+        }))?
+        .to_string();
 
     if let Some(context) = context {
-        sender.send_all_except(&context.connection_id, &session_updated).await?;
+        sender
+            .send_all_except(&context.connection_id, &session_updated)
+            .await?;
     } else {
         sender.send_all(&session_updated).await?;
     }
@@ -613,15 +688,15 @@ async fn get_connection_id(
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
 ) -> Result<(), WebsocketSendError> {
-    sender.send(
-        &context.connection_id,
-        &serde_json::json!({
-            "connectionId": context.connection_id,
-            "type": OutboundMessageType::ConnectionId
-        })
-        .to_string(),
-    )
-    .await
+    sender
+        .send(
+            &context.connection_id,
+            &serde_json::to_value(OutboundPayload::ConnectionId(ConnectionIdPayload {
+                connection_id: context.connection_id.clone(),
+            }))?
+            .to_string(),
+        )
+        .await
 }
 
 fn playback_action(
