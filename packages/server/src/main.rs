@@ -310,13 +310,17 @@ fn main() -> std::io::Result<()> {
                     .map_err(|e| e.to_string())?;
 
                 for audio_output in moosicbox_audio_output::output_factories().await {
-                    if let Err(err) =
-                        register_server_player(&**db, handle.clone(), &tunnel_handle, audio_output)
-                            .await
+                    if let Err(err) = register_server_player(
+                        &**db,
+                        handle.clone(),
+                        &tunnel_handle,
+                        audio_output.clone(),
+                    )
+                    .await
                     {
                         log::error!("Failed to register server player: {err:?}");
                     } else {
-                        log::debug!("Registered server player");
+                        log::debug!("Registered server player audio_output={audio_output:?}");
                     }
                 }
 
@@ -919,24 +923,30 @@ fn handle_server_playback_update(
 
         let updated = {
             {
-                if SERVER_PLAYERS
+                let players = match moosicbox_session::db::get_session_active_players(
+                    &**db,
+                    update.session_id,
+                )
+                .await
+                {
+                    Ok(players) => players,
+                    Err(e) => moosicbox_assert::die_or_panic!(
+                        "Failed to get session active players: {e:?}"
+                    ),
+                };
+
+                if !SERVER_PLAYERS
                     .read()
                     .await
                     .get(&update.session_id)
-                    .is_none()
+                    .is_some_and(|player| {
+                        !players.iter().any(|x| {
+                            player.output.as_ref().is_some_and(|output| {
+                                x.audio_output_id != output.lock().unwrap().id
+                            })
+                        })
+                    })
                 {
-                    let players = match moosicbox_session::db::get_session_active_players(
-                        &**db,
-                        update.session_id,
-                    )
-                    .await
-                    {
-                        Ok(players) => players,
-                        Err(e) => moosicbox_assert::die_or_panic!(
-                            "Failed to get session active players: {e:?}"
-                        ),
-                    };
-
                     let outputs = moosicbox_audio_output::output_factories().await;
 
                     // TODO: handle more than one output
@@ -1071,7 +1081,7 @@ async fn register_server_player(
         name: "MoosicBox Server".to_string(),
         players: vec![moosicbox_session::models::RegisterPlayer {
             name: audio_output.name,
-            audio_output_id: audio_output.id,
+            audio_output_id: audio_output.id.clone(),
         }],
     };
 
@@ -1088,7 +1098,8 @@ async fn register_server_player(
 
     let player = connection
         .players
-        .first()
+        .iter()
+        .find(|x| x.audio_output_id == audio_output.id)
         .ok_or(moosicbox_ws::WebsocketSendError::Unknown(
             "No player on connection".into(),
         ))?;

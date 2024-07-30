@@ -488,12 +488,15 @@ impl WebsocketSender for WsServerHandle {
 
 impl WsServerHandle {
     #[cfg(feature = "player")]
-    pub async fn add_player_action(&self, id: u64, action: PlayerAction) {
-        log::trace!("Sending AddPlayerAction command");
+    pub async fn add_player_action(&self, player_id: u64, action: PlayerAction) {
+        log::trace!("Sending AddPlayerAction command id={player_id}");
 
         if let Err(e) = self
             .cmd_tx
-            .send_async(Command::AddPlayerAction { id, action })
+            .send_async(Command::AddPlayerAction {
+                id: player_id,
+                action,
+            })
             .await
         {
             moosicbox_assert::die_or_error!("Failed to send command: {e:?}");

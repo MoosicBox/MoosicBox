@@ -519,15 +519,17 @@ pub async fn update_session(
                     .filter_map(|p| {
                         actions
                             .iter()
-                            .find_map(|x| if x.0 == p.id { Some(x.1) } else { None })
+                            .find_map(|(player_id, action)| if *player_id == p.id { Some(action) } else { None })
                     })
                     .collect::<Vec<_>>();
 
                 if log::log_enabled!(log::Level::Trace) {
                     log::trace!(
-                        "Running player actions on existing session id={} count_of_funcs={} payload={payload:?} session={session:?}",
+                        "Running player actions on existing session id={} count_of_funcs={} payload={payload:?} session={session:?} active_players={:?} action_player_ids={:?}",
                         session.id, 
                         funcs.len(),
+                        session.active_players,
+                        actions.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
                     );
                 } else {
                     log::debug!(

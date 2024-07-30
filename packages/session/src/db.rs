@@ -189,7 +189,7 @@ pub async fn update_session(db: &dyn Database, session: &UpdateSession) -> Resul
             log::trace!("update_session: Inserting track {track:?}");
             db.insert("session_playlist_tracks")
                 .value("session_playlist_id", playlist_id)
-                .value("track_id", track.id.clone())
+                .value("track_id", &track.id)
                 .value("type", track.r#type.as_ref())
                 .value("data", track.data.clone())
                 .execute(db)

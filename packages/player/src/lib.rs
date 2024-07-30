@@ -425,6 +425,13 @@ pub trait Player: Clone + Send + 'static {
         if let Ok(session) = get_session(db, session_id).await {
             if let Some(session) = session {
                 log::debug!("Got session {session:?}");
+                let track_ids = session
+                    .playlist
+                    .tracks
+                    .iter()
+                    .map(|x| x.track_id())
+                    .collect::<Vec<_>>();
+                let tracks = moosicbox_library::db::get_tracks(db, Some(&track_ids)).await?;
                 if let Err(err) = self
                     .update_playback(
                         false,
@@ -442,7 +449,17 @@ pub trait Player: Clone + Send + 'static {
                                 .map(|x| Track {
                                     id: x.track_id(),
                                     source: x.api_source(),
-                                    data: Some(x.data()),
+                                    data: if x.api_source() == ApiSource::Library {
+                                        tracks
+                                            .iter()
+                                            .find(|t| {
+                                                let track_id: u64 = x.track_id().into();
+                                                t.id == track_id
+                                            })
+                                            .and_then(|x| serde_json::to_value(x).ok())
+                                    } else {
+                                        x.data()
+                                    },
                                 })
                                 .collect::<Vec<_>>(),
                         ),

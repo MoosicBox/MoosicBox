@@ -728,12 +728,12 @@ impl ApiTrack {
         }
     }
 
-    pub fn data(&self) -> serde_json::Value {
+    pub fn data(&self) -> Option<serde_json::Value> {
         match self {
-            ApiTrack::Library { data, .. } => serde_json::to_value(data).unwrap(),
-            ApiTrack::Tidal { data, .. } => data.clone(),
-            ApiTrack::Qobuz { data, .. } => data.clone(),
-            ApiTrack::Yt { data, .. } => data.clone(),
+            ApiTrack::Library { .. } => None,
+            ApiTrack::Tidal { data, .. } => Some(data.clone()),
+            ApiTrack::Qobuz { data, .. } => Some(data.clone()),
+            ApiTrack::Yt { data, .. } => Some(data.clone()),
         }
     }
 }
@@ -761,6 +761,43 @@ pub struct ApiLibraryTrack {
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
     pub source: TrackApiSource,
+}
+
+impl From<&ApiLibraryTrack> for LibraryTrack {
+    fn from(value: &ApiLibraryTrack) -> Self {
+        value.clone().into()
+    }
+}
+
+impl From<ApiLibraryTrack> for LibraryTrack {
+    fn from(value: ApiLibraryTrack) -> Self {
+        Self {
+            id: value.track_id,
+            number: value.number,
+            title: value.title,
+            duration: value.duration,
+            album: value.album,
+            album_id: value.album_id,
+            date_released: value.date_released,
+            date_added: value.date_added,
+            artist: value.artist,
+            artist_id: value.artist_id,
+            file: None,
+            artwork: None,
+            blur: value.blur,
+            bytes: value.bytes,
+            format: value.format,
+            bit_depth: value.bit_depth,
+            audio_bitrate: value.audio_bitrate,
+            overall_bitrate: value.overall_bitrate,
+            sample_rate: value.sample_rate,
+            channels: value.channels,
+            source: value.source,
+            qobuz_id: None,
+            tidal_id: None,
+            yt_id: None,
+        }
+    }
 }
 
 impl From<ApiLibraryTrack> for Track {
