@@ -720,6 +720,14 @@ jobs:
                         --verbose \
                         --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }} ${{ matrix.package.cargo }}
 
+            - name: Format ${{ matrix.package.name }}
+              shell: bash
+              working-directory: MoosicBoxServer
+              run: |
+                  ${{ matrix.package.env }} cargo fmt \
+                        --manifest-path=${{ matrix.package.path }}/Cargo.toml \
+                        --verbose
+
             - name: Run ${{ matrix.package.name }} tests
               shell: bash
               working-directory: MoosicBoxServer
