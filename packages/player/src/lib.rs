@@ -1239,50 +1239,34 @@ pub trait Player: Clone + Send + 'static {
         quality: PlaybackQuality,
     ) -> Result<PlayableTrack, PlayerError> {
         log::trace!("track_or_id_to_playable playback_type={playback_type:?} track={track:?} quality={quality:?}");
-        Ok(match playback_type {
-            PlaybackType::File => match track.source {
-                ApiSource::Library => {
-                    self.track_to_playable_file(
-                        &serde_json::from_value(
-                            track
-                                .data
-                                .clone()
-                                .ok_or(PlayerError::TrackNotFound(track.id.to_owned()))?,
-                        )
-                        .map_err(|e| {
-                            log::error!("Failed to parse track: {e:?}");
-                            PlayerError::TrackNotFound(track.id.to_owned())
-                        })?,
-                        quality,
+        Ok(match (playback_type, track.source) {
+            (PlaybackType::File, ApiSource::Library)
+            | (PlaybackType::Default, ApiSource::Library) => {
+                self.track_to_playable_file(
+                    &serde_json::from_value(
+                        track
+                            .data
+                            .clone()
+                            .ok_or(PlayerError::TrackNotFound(track.id.to_owned()))?,
                     )
-                    .await?
-                }
-                ApiSource::Tidal => self.track_to_playable_stream(track, quality).await?,
-                ApiSource::Qobuz => self.track_to_playable_stream(track, quality).await?,
-                ApiSource::Yt => self.track_to_playable_stream(track, quality).await?,
-            },
-            PlaybackType::Stream => self.track_to_playable_stream(track, quality).await?,
-            PlaybackType::Default => match track.source {
-                ApiSource::Library => {
-                    self.track_to_playable_file(
-                        &serde_json::from_value(
-                            track
-                                .data
-                                .clone()
-                                .ok_or(PlayerError::TrackNotFound(track.id.to_owned()))?,
-                        )
-                        .map_err(|e| {
-                            log::error!("Failed to parse track: {e:?}");
-                            PlayerError::TrackNotFound(track.id.to_owned())
-                        })?,
-                        quality,
-                    )
-                    .await?
-                }
-                ApiSource::Tidal => self.track_to_playable_stream(track, quality).await?,
-                ApiSource::Qobuz => self.track_to_playable_stream(track, quality).await?,
-                ApiSource::Yt => self.track_to_playable_stream(track, quality).await?,
-            },
+                    .map_err(|e| {
+                        moosicbox_assert::die_or_error!(
+                            "Failed to parse track: {e:?} ({:?})",
+                            track.data
+                        );
+                        PlayerError::TrackNotFound(track.id.to_owned())
+                    })?,
+                    quality,
+                )
+                .await?
+            }
+            (PlaybackType::File, ApiSource::Tidal)
+            | (PlaybackType::File, ApiSource::Qobuz)
+            | (PlaybackType::File, ApiSource::Yt)
+            | (PlaybackType::Default, ApiSource::Tidal)
+            | (PlaybackType::Default, ApiSource::Qobuz)
+            | (PlaybackType::Default, ApiSource::Yt)
+            | (PlaybackType::Stream, _) => self.track_to_playable_stream(track, quality).await?,
         })
     }
 
