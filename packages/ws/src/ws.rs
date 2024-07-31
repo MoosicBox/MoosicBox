@@ -4,16 +4,12 @@ use std::{
     future::Future,
     num::ParseIntError,
     pin::Pin,
-    str::FromStr as _,
     sync::{Arc, RwLock},
 };
 
 use async_trait::async_trait;
 use log::{debug, info, trace};
-use moosicbox_core::sqlite::{
-    db::DbError,
-    models::{SetSeek, ToApi as _},
-};
+use moosicbox_core::sqlite::{db::DbError, models::ToApi as _};
 use moosicbox_database::Database;
 use moosicbox_session::{
     get_session_playlist,
@@ -28,7 +24,7 @@ use serde_json::Value;
 use thiserror::Error;
 
 use crate::models::{
-    ConnectionIdPayload, ConnectionsPayload, DownloadEventPayload, InboundMessageType,
+    ConnectionIdPayload, ConnectionsPayload, DownloadEventPayload, InboundMessagePayload,
     OutboundPayload, SessionUpdatedPayload, SessionsPayload, SetSeekPayload,
 };
 
@@ -152,17 +148,10 @@ pub async fn process_message(
     context: WebsocketContext,
     sender: &impl WebsocketSender,
 ) -> Result<Response, WebsocketMessageError> {
-    let message_type = InboundMessageType::from_str(
-        body.get("type")
-            .ok_or(WebsocketMessageError::MissingMessageType)?
-            .as_str()
-            .ok_or(WebsocketMessageError::InvalidMessageType)?,
-    )
-    .map_err(|_| WebsocketMessageError::InvalidMessageType)?;
+    let payload: InboundMessagePayload =
+        serde_json::from_value(body).map_err(|_| WebsocketMessageError::InvalidMessageType)?;
 
-    let payload = body.get("payload");
-
-    message(db, sender, payload, message_type, &context).await
+    message(db, sender, payload, &context).await
 }
 
 #[derive(Debug, Error)]
@@ -190,48 +179,32 @@ pub enum WebsocketMessageError {
 pub async fn message(
     db: &dyn Database,
     sender: &impl WebsocketSender,
-    payload: Option<&Value>,
-    message_type: InboundMessageType,
+    message: InboundMessagePayload,
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketMessageError> {
+    let message_type = message.as_ref().to_string();
     debug!(
         "Received message type {} from {}: {:?}",
-        message_type, context.connection_id, payload
+        message_type, context.connection_id, message
     );
-    match message_type {
-        InboundMessageType::GetConnectionId => {
+    match message {
+        InboundMessagePayload::GetConnectionId(_) => {
             get_connection_id(sender, context).await?;
             Ok::<_, WebsocketMessageError>(())
         }
-        InboundMessageType::GetSessions => {
+        InboundMessagePayload::GetSessions(_) => {
             get_sessions(db, sender, context, false).await?;
             Ok(())
         }
-        InboundMessageType::RegisterConnection => {
-            let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
-            let payload =
-                serde_json::from_value::<RegisterConnection>(payload.clone()).map_err(|e| {
-                    WebsocketMessageError::Unknown {
-                        message: e.to_string(),
-                    }
-                })?;
-
-            register_connection(db, sender, context, &payload).await?;
+        InboundMessagePayload::RegisterConnection(payload) => {
+            register_connection(db, sender, context, &payload.payload).await?;
 
             sender.send_all(&get_connections(db).await?).await?;
 
             Ok(())
         }
-        InboundMessageType::RegisterPlayers => {
-            let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
-            let payload =
-                serde_json::from_value::<Vec<RegisterPlayer>>(payload.clone()).map_err(|e| {
-                    WebsocketMessageError::Unknown {
-                        message: e.to_string(),
-                    }
-                })?;
-
-            register_players(db, sender, context, &payload)
+        InboundMessagePayload::RegisterPlayers(payload) => {
+            register_players(db, sender, context, &payload.payload)
                 .await
                 .map_err(|e| WebsocketMessageError::Unknown {
                     message: e.to_string(),
@@ -245,14 +218,8 @@ pub async fn message(
 
             Ok(())
         }
-        InboundMessageType::SetActivePlayers => {
-            let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
-            let payload = serde_json::from_value::<SetSessionActivePlayers>(payload.clone())
-                .map_err(|e| WebsocketMessageError::Unknown {
-                    message: e.to_string(),
-                })?;
-
-            set_session_active_players(db, sender, context, &payload).await?;
+        InboundMessagePayload::SetActivePlayers(payload) => {
+            set_session_active_players(db, sender, context, &payload.payload).await?;
 
             sender
                 .send_all_except(&context.connection_id, &get_connections(db).await?)
@@ -260,64 +227,34 @@ pub async fn message(
 
             Ok(())
         }
-        InboundMessageType::CreateSession => {
-            let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
-            let payload =
-                serde_json::from_value::<CreateSession>(payload.clone()).map_err(|e| {
-                    WebsocketMessageError::Unknown {
-                        message: e.to_string(),
-                    }
-                })?;
-
-            create_session(db, sender, context, &payload).await?;
+        InboundMessagePayload::CreateSession(payload) => {
+            create_session(db, sender, context, &payload.payload).await?;
             Ok(())
         }
-        InboundMessageType::UpdateSession => {
-            let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
-            let payload =
-                serde_json::from_value::<UpdateSession>(payload.clone()).map_err(|e| {
-                    WebsocketMessageError::Unknown {
-                        message: e.to_string(),
-                    }
-                })?;
-
-            update_session(db, sender, Some(context), &payload).await?;
+        InboundMessagePayload::UpdateSession(payload) => {
+            update_session(db, sender, Some(context), &payload.payload).await?;
             Ok(())
         }
-        InboundMessageType::DeleteSession => {
-            let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
-            let payload =
-                serde_json::from_value::<DeleteSession>(payload.clone()).map_err(|e| {
-                    WebsocketMessageError::Unknown {
-                        message: e.to_string(),
-                    }
-                })?;
-
-            delete_session(db, sender, context, &payload).await?;
+        InboundMessagePayload::DeleteSession(payload) => {
+            delete_session(db, sender, context, &payload.payload).await?;
             Ok(())
         }
-        InboundMessageType::Ping => {
-            trace!("Ping {payload:?}");
+        InboundMessagePayload::Ping(_) => {
+            trace!("Ping");
             Ok(())
         }
-        InboundMessageType::PlaybackAction => {
-            let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
-            playback_action(sender, context, payload)?;
+        InboundMessagePayload::PlaybackAction(payload) => {
+            playback_action(sender, context, &payload.payload)?;
             Ok(())
         }
-        InboundMessageType::SetSeek => {
-            let payload = payload.ok_or(WebsocketMessageError::MissingPayload)?;
-            let payload = serde_json::from_value::<SetSeek>(payload.clone()).map_err(|e| {
-                WebsocketMessageError::Unknown {
-                    message: e.to_string(),
-                }
-            })?;
-
+        InboundMessagePayload::SetSeek(payload) => {
             sender
                 .send_all_except(
                     &context.connection_id,
-                    &serde_json::to_value(OutboundPayload::SetSeek(SetSeekPayload { payload }))?
-                        .to_string(),
+                    &serde_json::to_value(OutboundPayload::SetSeek(SetSeekPayload {
+                        payload: payload.payload,
+                    }))?
+                    .to_string(),
                 )
                 .await?;
 
