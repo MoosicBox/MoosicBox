@@ -62,9 +62,14 @@ pub async fn handle_ws(
                     process_text_msg(&ws_server, &mut session, &text, conn_id, &mut name).await;
                 }
 
-                Message::Binary(_bin) => {
-                    log::warn!("unexpected binary message");
-                }
+                Message::Binary(bytes) => match String::from_utf8(bytes.to_vec()) {
+                    Ok(text) => {
+                        process_text_msg(&ws_server, &mut session, &text, conn_id, &mut name).await;
+                    }
+                    Err(e) => {
+                        log::warn!("unexpected binary message: {e:?}");
+                    }
+                },
 
                 Message::Close(reason) => break reason,
 
