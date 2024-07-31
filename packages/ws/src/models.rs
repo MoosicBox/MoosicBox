@@ -5,44 +5,12 @@ use moosicbox_session::models::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use strum_macros::{AsRefStr, EnumString};
-
-#[derive(Debug, Serialize, Deserialize, EnumString)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
-pub enum EventType {
-    Connect,
-    Disconnect,
-    Message,
-}
-
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
-pub enum InboundMessageType {
-    Ping,
-    GetConnectionId,
-    GetSessions,
-    CreateSession,
-    UpdateSession,
-    DeleteSession,
-    RegisterConnection,
-    RegisterPlayers,
-    SetActivePlayers,
-    PlaybackAction,
-    SetSeek,
-}
-
-impl std::fmt::Display for InboundMessageType {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
+use strum_macros::AsRefStr;
 
 #[derive(Debug, Serialize, Deserialize, Clone, AsRefStr)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
-pub enum InboundMessagePayload {
+pub enum InboundPayload {
     Ping(EmptyPayload),
     GetConnectionId(EmptyPayload),
     GetSessions(EmptyPayload),
@@ -56,7 +24,25 @@ pub enum InboundMessagePayload {
     SetSeek(SetSeekPayload),
 }
 
-impl std::fmt::Display for InboundMessagePayload {
+impl std::fmt::Display for InboundPayload {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str(self.as_ref())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, AsRefStr)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
+pub enum OutboundPayload {
+    ConnectionId(ConnectionIdPayload),
+    Sessions(SessionsPayload),
+    SessionUpdated(SessionUpdatedPayload),
+    DownloadEvent(DownloadEventPayload),
+    Connections(ConnectionsPayload),
+    SetSeek(SetSeekPayload),
+}
+
+impl std::fmt::Display for OutboundPayload {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.write_str(self.as_ref())
     }
@@ -106,32 +92,6 @@ pub struct SetActivePlayersPayload {
 #[serde(rename_all = "camelCase")]
 pub struct PlaybackActionPayload {
     pub payload: Value,
-}
-
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
-pub enum OutboundMessageType {
-    Connect,
-    NewConnection,
-    ConnectionId,
-    Sessions,
-    SessionUpdated,
-    DownloadEvent,
-    Connections,
-    SetSeek,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[serde(tag = "type")]
-pub enum OutboundPayload {
-    ConnectionId(ConnectionIdPayload),
-    Sessions(SessionsPayload),
-    SessionUpdated(SessionUpdatedPayload),
-    DownloadEvent(DownloadEventPayload),
-    Connections(ConnectionsPayload),
-    SetSeek(SetSeekPayload),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

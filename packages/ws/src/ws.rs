@@ -24,8 +24,8 @@ use serde_json::Value;
 use thiserror::Error;
 
 use crate::models::{
-    ConnectionIdPayload, ConnectionsPayload, DownloadEventPayload, InboundMessagePayload,
-    OutboundPayload, SessionUpdatedPayload, SessionsPayload, SetSeekPayload,
+    ConnectionIdPayload, ConnectionsPayload, DownloadEventPayload, InboundPayload, OutboundPayload,
+    SessionUpdatedPayload, SessionsPayload, SetSeekPayload,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -148,7 +148,7 @@ pub async fn process_message(
     context: WebsocketContext,
     sender: &impl WebsocketSender,
 ) -> Result<Response, WebsocketMessageError> {
-    let payload: InboundMessagePayload =
+    let payload: InboundPayload =
         serde_json::from_value(body).map_err(|_| WebsocketMessageError::InvalidMessageType)?;
 
     message(db, sender, payload, &context).await
@@ -179,7 +179,7 @@ pub enum WebsocketMessageError {
 pub async fn message(
     db: &dyn Database,
     sender: &impl WebsocketSender,
-    message: InboundMessagePayload,
+    message: InboundPayload,
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketMessageError> {
     let message_type = message.as_ref().to_string();
@@ -188,22 +188,22 @@ pub async fn message(
         message_type, context.connection_id, message
     );
     match message {
-        InboundMessagePayload::GetConnectionId(_) => {
+        InboundPayload::GetConnectionId(_) => {
             get_connection_id(sender, context).await?;
             Ok::<_, WebsocketMessageError>(())
         }
-        InboundMessagePayload::GetSessions(_) => {
+        InboundPayload::GetSessions(_) => {
             get_sessions(db, sender, context, false).await?;
             Ok(())
         }
-        InboundMessagePayload::RegisterConnection(payload) => {
+        InboundPayload::RegisterConnection(payload) => {
             register_connection(db, sender, context, &payload.payload).await?;
 
             sender.send_all(&get_connections(db).await?).await?;
 
             Ok(())
         }
-        InboundMessagePayload::RegisterPlayers(payload) => {
+        InboundPayload::RegisterPlayers(payload) => {
             register_players(db, sender, context, &payload.payload)
                 .await
                 .map_err(|e| WebsocketMessageError::Unknown {
@@ -218,7 +218,7 @@ pub async fn message(
 
             Ok(())
         }
-        InboundMessagePayload::SetActivePlayers(payload) => {
+        InboundPayload::SetActivePlayers(payload) => {
             set_session_active_players(db, sender, context, &payload.payload).await?;
 
             sender
@@ -227,27 +227,27 @@ pub async fn message(
 
             Ok(())
         }
-        InboundMessagePayload::CreateSession(payload) => {
+        InboundPayload::CreateSession(payload) => {
             create_session(db, sender, context, &payload.payload).await?;
             Ok(())
         }
-        InboundMessagePayload::UpdateSession(payload) => {
+        InboundPayload::UpdateSession(payload) => {
             update_session(db, sender, Some(context), &payload.payload).await?;
             Ok(())
         }
-        InboundMessagePayload::DeleteSession(payload) => {
+        InboundPayload::DeleteSession(payload) => {
             delete_session(db, sender, context, &payload.payload).await?;
             Ok(())
         }
-        InboundMessagePayload::Ping(_) => {
+        InboundPayload::Ping(_) => {
             trace!("Ping");
             Ok(())
         }
-        InboundMessagePayload::PlaybackAction(payload) => {
+        InboundPayload::PlaybackAction(payload) => {
             playback_action(sender, context, &payload.payload)?;
             Ok(())
         }
-        InboundMessagePayload::SetSeek(payload) => {
+        InboundPayload::SetSeek(payload) => {
             sender
                 .send_all_except(
                     &context.connection_id,
