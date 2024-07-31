@@ -555,6 +555,7 @@ pub async fn update_playback_endpoint(
             query.format.map(|format| PlaybackQuality { format }),
             query.session_id,
             get_session_playlist_id_from_session_id(&**data.database, query.session_id).await?,
+            true,
             Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
         )
         .await?;

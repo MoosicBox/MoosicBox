@@ -782,6 +782,7 @@ fn main() -> std::io::Result<()> {
                                 None,
                                 None,
                                 None,
+                                true,
                                 None,
                             )
                             .await
@@ -814,6 +815,7 @@ fn main() -> std::io::Result<()> {
                                 None,
                                 None,
                                 None,
+                                true,
                                 None,
                             )
                             .await
@@ -1078,6 +1080,7 @@ fn handle_server_playback_update(
                 None,
                 Some(update.session_id),
                 None,
+                true,
                 Some(moosicbox_player::DEFAULT_PLAYBACK_RETRY_OPTIONS),
             )
             .await
@@ -1222,6 +1225,7 @@ fn handle_upnp_playback_update(
                 None,
                 Some(update.session_id),
                 None,
+                true,
                 Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
             )
             .await

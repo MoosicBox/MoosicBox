@@ -466,6 +466,7 @@ pub trait Player: Clone + Send + 'static {
                         None,
                         Some(session.id),
                         Some(session.playlist.id),
+                        true,
                         None,
                     )
                     .await
@@ -846,6 +847,7 @@ pub trait Player: Clone + Send + 'static {
             None,
             None,
             None,
+            true,
             retry_options,
         )
         .await
@@ -875,6 +877,7 @@ pub trait Player: Clone + Send + 'static {
             None,
             None,
             None,
+            true,
             retry_options,
         )
         .await
@@ -898,6 +901,7 @@ pub trait Player: Clone + Send + 'static {
         quality: Option<PlaybackQuality>,
         session_id: Option<u64>,
         session_playlist_id: Option<u64>,
+        trigger_event: bool,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
         log::debug!(
@@ -912,7 +916,8 @@ pub trait Player: Clone + Send + 'static {
             volume={volume:?}\n\t\
             tracks={tracks:?}\n\t\
             quality={quality:?}\n\t\
-            session_id={session_id:?}\
+            session_id={session_id:?}\n\t\
+            trigger_event={trigger_event}\
             "
         );
 
@@ -935,9 +940,9 @@ pub trait Player: Clone + Send + 'static {
 
         let playing = playing.unwrap_or(original.playing);
         let same_track = same_active_track(position, tracks.as_deref(), &original);
-        let should_seek = same_track && seek.is_some();
         let wants_to_play = play.unwrap_or(false) || playing;
         let should_start = wants_to_play && (!original.playing || !same_track);
+        let should_seek = tracks.is_none() && seek.is_some();
         let should_stop = stop.unwrap_or(false);
         let is_playing = (playing || should_start) && !should_stop;
         let should_resume = same_track && !original.playing && playing && seek.is_none();
@@ -988,9 +993,13 @@ pub trait Player: Clone + Send + 'static {
             "
         );
 
-        trigger_playback_event(&playback, &original);
+        if trigger_event {
+            trigger_playback_event(&playback, &original);
+        }
 
-        let progress = if playback.progress != 0.0 {
+        let progress = if let Some(seek) = seek {
+            Some(seek)
+        } else if playback.progress != 0.0 {
             Some(playback.progress)
         } else {
             None
