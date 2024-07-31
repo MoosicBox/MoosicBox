@@ -39,7 +39,7 @@ impl std::fmt::Display for InboundMessageType {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, AsRefStr)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
 pub enum InboundMessagePayload {
@@ -54,6 +54,12 @@ pub enum InboundMessagePayload {
     SetActivePlayers(SetActivePlayersPayload),
     PlaybackAction(PlaybackActionPayload),
     SetSeek(SetSeekPayload),
+}
+
+impl std::fmt::Display for InboundMessagePayload {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str(self.as_ref())
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
