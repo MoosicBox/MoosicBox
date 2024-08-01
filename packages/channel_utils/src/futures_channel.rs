@@ -1,4 +1,5 @@
 use std::{
+    ops::Deref,
     pin::{pin, Pin},
     task::{Context, Poll},
 };
@@ -20,7 +21,23 @@ impl<T> MoosicBoxUnboundedSender<T> {
     }
 }
 
+impl<T> Deref for MoosicBoxUnboundedSender<T> {
+    type Target = UnboundedSender<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 pub struct MoosicBoxUnboundedReceiver<T>(UnboundedReceiver<T>);
+
+impl<T> Deref for MoosicBoxUnboundedReceiver<T> {
+    type Target = UnboundedReceiver<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 impl<T> FusedStream for MoosicBoxUnboundedReceiver<T> {
     fn is_terminated(&self) -> bool {
