@@ -84,12 +84,12 @@ aws-config = "1.5.4"
 aws-sdk-apigatewaymanagement = "1.36.0"
 aws-sdk-ssm = "1.40.0"
 base64 = "0.22.1"
-bytes = "1.6.1"
+bytes = "1.7.0"
 chrono = { version = "0.4.38", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.11", features = ["derive"] }
+clap = { version = "4.5.13", features = ["derive"] }
 console-subscriber = "0.4.0"
 cpal = "0.15.3"
 debounce = "0.2.2"
