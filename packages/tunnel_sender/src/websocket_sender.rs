@@ -1,5 +1,6 @@
 use async_trait::async_trait;
-use futures_channel::mpsc::{TrySendError, UnboundedSender};
+use futures_channel::mpsc::TrySendError;
+use moosicbox_channel_utils::futures_channel::MoosicBoxUnboundedSender;
 use moosicbox_ws::{WebsocketSendError, WebsocketSender};
 use serde_json::{json, Value};
 use tokio_tungstenite::tungstenite::Message;
@@ -15,7 +16,7 @@ where
     pub request_id: usize,
     pub packet_id: u32,
     pub root_sender: T,
-    pub tunnel_sender: UnboundedSender<TunnelResponseMessage>,
+    pub tunnel_sender: MoosicBoxUnboundedSender<TunnelResponseMessage>,
 }
 
 impl<T> TunnelWebsocketSender<T>

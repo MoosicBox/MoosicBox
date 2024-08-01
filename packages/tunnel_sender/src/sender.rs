@@ -8,12 +8,12 @@ use async_trait::async_trait;
 #[cfg(feature = "base64")]
 use base64::{engine::general_purpose, Engine as _};
 use bytes::Bytes;
-use futures_channel::mpsc::UnboundedSender;
 use futures_util::future::ready;
 use futures_util::{future, pin_mut, Future, Stream, StreamExt};
 use moosicbox_audio_decoder::media_sources::remote_bytestream::RemoteByteStreamMediaSource;
 use moosicbox_audio_decoder::AudioDecodeHandler;
 use moosicbox_auth::FetchSignatureError;
+use moosicbox_channel_utils::futures_channel::MoosicBoxUnboundedSender;
 use moosicbox_core::sqlite::models::{ApiSource, Id};
 use moosicbox_core::types::AudioFormat;
 use moosicbox_database::Database;
@@ -61,7 +61,7 @@ pub enum CloseError {
 
 #[derive(Clone)]
 pub struct TunnelSenderHandle {
-    sender: Arc<RwLock<Option<UnboundedSender<TunnelResponseMessage>>>>,
+    sender: Arc<RwLock<Option<MoosicBoxUnboundedSender<TunnelResponseMessage>>>>,
     cancellation_token: CancellationToken,
     player_actions: Arc<RwLock<Vec<(u64, PlayerAction)>>>,
 }
@@ -170,7 +170,7 @@ pub struct TunnelSender {
     url: String,
     client_id: String,
     access_token: String,
-    sender: Arc<RwLock<Option<UnboundedSender<TunnelResponseMessage>>>>,
+    sender: Arc<RwLock<Option<MoosicBoxUnboundedSender<TunnelResponseMessage>>>>,
     cancellation_token: CancellationToken,
     abort_request_tokens: Arc<RwLock<HashMap<usize, CancellationToken>>>,
     player_actions: Arc<RwLock<Vec<(u64, PlayerAction)>>>,
@@ -309,7 +309,7 @@ impl TunnelSender {
             loop {
                 let close_token = CancellationToken::new();
 
-                let (txf, rxf) = futures_channel::mpsc::unbounded();
+                let (txf, rxf) = moosicbox_channel_utils::futures_channel::unbounded();
 
                 sender_arc.write().unwrap().replace(txf.clone());
 

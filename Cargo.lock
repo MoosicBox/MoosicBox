@@ -4307,6 +4307,7 @@ dependencies = [
  "moosicbox_audio_decoder",
  "moosicbox_audio_output",
  "moosicbox_auth",
+ "moosicbox_channel_utils",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_env_utils",
