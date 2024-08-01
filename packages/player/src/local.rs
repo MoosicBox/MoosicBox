@@ -96,6 +96,10 @@ impl Player for LocalPlayer {
                                         sent_playback_start_event
                                             .store(true, std::sync::atomic::Ordering::SeqCst);
 
+                                        log::debug!(
+                                            "trigger_play: Sending initial progress event seek={secs}"
+                                        );
+
                                         let update = UpdateSession {
                                             session_id,
                                             play: None,
