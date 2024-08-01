@@ -1,0 +1,27 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools"]
+description = "MoosicBox channel utils package"
+edition     = "2021"
+keywords    = ["async", "channel", "receiver", "sender", "util", "utility"]
+license     = "MPL-2.0"
+name        = "moosicbox_channel_utils"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_assert = { path = "../assert", default-features = false }
+
+# Futures Channel
+futures-channel = { workspace = true, optional = true }
+futures-core    = { workspace = true, optional = true }
+
+log = { workspace = true }
+
+[features]
+default = ["futures-channel"]
+
+fail-on-warnings = []
+
+futures-channel = ["dep:futures-channel", "dep:futures-core"]

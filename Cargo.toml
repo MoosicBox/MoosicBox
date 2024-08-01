@@ -7,6 +7,7 @@ members = [
     "packages/audio_encoder",
     "packages/audio_output",
     "packages/auth",
+    "packages/channel_utils",
     "packages/config",
     "packages/core",
     "packages/database",

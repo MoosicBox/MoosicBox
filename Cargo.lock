@@ -3439,6 +3439,7 @@ dependencies = [
  "moosicbox_audio_encoder",
  "moosicbox_audio_output",
  "moosicbox_auth",
+ "moosicbox_channel_utils",
  "moosicbox_config",
  "moosicbox_core",
  "moosicbox_database",
@@ -3610,6 +3611,16 @@ dependencies = [
  "url",
  "utoipa",
  "uuid",
+]
+
+[[package]]
+name = "moosicbox_channel_utils"
+version = "0.1.0"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "log",
+ "moosicbox_assert",
 ]
 
 [[package]]
