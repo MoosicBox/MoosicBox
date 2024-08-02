@@ -85,7 +85,7 @@ aws-config = "1.5.4"
 aws-sdk-apigatewaymanagement = "1.36.0"
 aws-sdk-ssm = "1.40.0"
 base64 = "0.22.1"
-bytes = "1.7.0"
+bytes = "1.7.1"
 chrono = { version = "0.4.38", default-features = false, features = [
     "clock",
     "serde",
@@ -165,7 +165,7 @@ rusqlite = { version = "0.32.1", features = ["bundled"] }
 rustls = "0.23"
 serde = { version = "1", features = ["derive"] }
 serde-aux = "4.5.0"
-serde_json = "1.0.121"
+serde_json = "1.0.122"
 serial_test = "3.1.1"
 sha2 = "0.10.8"
 sqlx = { version = "=0.7", default-features = false, features = [
