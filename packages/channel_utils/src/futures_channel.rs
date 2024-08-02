@@ -48,8 +48,9 @@ impl<T> FusedStream for MoosicBoxUnboundedReceiver<T> {
 impl<T> Stream for MoosicBoxUnboundedReceiver<T> {
     type Item = T;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<T>> {
-        let stream = pin!(self);
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<T>> {
+        let receiver = &mut self.get_mut().0;
+        let stream = pin!(receiver);
         stream.poll_next(cx)
     }
 
