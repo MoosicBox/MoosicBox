@@ -47,4 +47,6 @@ allowed-duplicate-crates = [
     "windows_x86_64_msvc",
     "winnow",
     "winreg",
+    "zerocopy",
+    "zerocopy-derive",
 ]
