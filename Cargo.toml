@@ -83,7 +83,7 @@ audiotags = { git = "https://github.com/BSteffaniak/audiotags.git", branch = "ma
 awc = "3.5.0"
 aws-config = "1.5.4"
 aws-sdk-apigatewaymanagement = "1.36.0"
-aws-sdk-ssm = "1.40.0"
+aws-sdk-ssm = "1.41.0"
 base64 = "0.22.1"
 bytes = "1.7.1"
 chrono = { version = "0.4.38", default-features = false, features = [
@@ -152,7 +152,7 @@ qstring = "0.7.2"
 rand = "0.8"
 rangemap = "1.5.1"
 rb = "0.4.1"
-regex = "1.10.5"
+regex = "1.10.6"
 reqwest = { version = "0.12.5", default-features = false, features = [
     "blocking",
     "rustls-tls",
