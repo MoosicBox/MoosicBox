@@ -327,6 +327,28 @@ impl AudioOutputScanner {
 
         #[cfg(feature = "cpal")]
         {
+            self.outputs.extend(
+                moosicbox_task::spawn(
+                    "server: scan cpal outputs",
+                    moosicbox_task::spawn_blocking("server: scan cpal outputs (blocking)", || {
+                        let start = std::time::SystemTime::now();
+                        let outputs = crate::cpal::scan_available_outputs().collect::<Vec<_>>();
+
+                        for output in &outputs {
+                            log::debug!("cpal output: {}", output.name);
+                        }
+
+                        let end = std::time::SystemTime::now();
+                        log::debug!(
+                            "took {}ms to scan outputs",
+                            end.duration_since(start).unwrap().as_millis()
+                        );
+                        outputs
+                    }),
+                )
+                .await??,
+            );
+
             if self.default_output.is_none() {
                 self.default_output = moosicbox_task::spawn(
                     "server: scan cpal default output",
@@ -350,58 +372,21 @@ impl AudioOutputScanner {
                     ),
                 )
                 .await??;
-            }
 
-            self.outputs.extend(
-                moosicbox_task::spawn(
-                    "server: scan cpal outputs",
-                    moosicbox_task::spawn_blocking("server: scan cpal outputs (blocking)", || {
-                        let start = std::time::SystemTime::now();
-                        let outputs = crate::cpal::scan_available_outputs().collect::<Vec<_>>();
-
-                        for output in &outputs {
-                            log::debug!("cpal output: {}", output.name);
+                if let Some(output) = &self.default_output {
+                    if !self.outputs.iter().any(|x| x.id == output.id) {
+                        if !self.outputs.is_empty() {
+                            self.outputs.insert(0, output.clone());
+                        } else {
+                            self.outputs.push(output.clone());
                         }
-
-                        let end = std::time::SystemTime::now();
-                        log::debug!(
-                            "took {}ms to scan outputs",
-                            end.duration_since(start).unwrap().as_millis()
-                        );
-                        outputs
-                    }),
-                )
-                .await??,
-            );
+                    }
+                }
+            }
         }
 
         #[cfg(feature = "pulseaudio-standard")]
         {
-            if self.default_output.is_none() {
-                self.default_output = moosicbox_task::spawn(
-                    "server: scan pulseaudio-standard default output",
-                    moosicbox_task::spawn_blocking(
-                        "server: scan pulseaudio-standard default output (blocking)",
-                        || {
-                            let start = std::time::SystemTime::now();
-                            let output = crate::pulseaudio::standard::scan_default_output();
-
-                            if let Some(output) = &output {
-                                log::debug!("pulseaudio-standard output: {}", output.name);
-                            }
-
-                            let end = std::time::SystemTime::now();
-                            log::debug!(
-                                "took {}ms to scan default output",
-                                end.duration_since(start).unwrap().as_millis()
-                            );
-                            output
-                        },
-                    ),
-                )
-                .await??;
-            }
-
             self.outputs.extend(
                 moosicbox_task::spawn(
                     "server: scan pulseaudio-standard outputs",
@@ -427,21 +412,18 @@ impl AudioOutputScanner {
                 )
                 .await??,
             );
-        }
 
-        #[cfg(feature = "pulseaudio-simple")]
-        {
             if self.default_output.is_none() {
                 self.default_output = moosicbox_task::spawn(
-                    "server: scan pulseaudio-simple default output",
+                    "server: scan pulseaudio-standard default output",
                     moosicbox_task::spawn_blocking(
-                        "server: scan pulseaudio-simple default output (blocking)",
+                        "server: scan pulseaudio-standard default output (blocking)",
                         || {
                             let start = std::time::SystemTime::now();
-                            let output = crate::pulseaudio::simple::scan_default_output();
+                            let output = crate::pulseaudio::standard::scan_default_output();
 
                             if let Some(output) = &output {
-                                log::debug!("pulseaudio-simple output: {}", output.name);
+                                log::debug!("pulseaudio-standard output: {}", output.name);
                             }
 
                             let end = std::time::SystemTime::now();
@@ -454,8 +436,21 @@ impl AudioOutputScanner {
                     ),
                 )
                 .await??;
-            }
 
+                if let Some(output) = &self.default_output {
+                    if !self.outputs.iter().any(|x| x.id == output.id) {
+                        if !self.outputs.is_empty() {
+                            self.outputs.insert(0, output.clone());
+                        } else {
+                            self.outputs.push(output.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        #[cfg(feature = "pulseaudio-simple")]
+        {
             self.outputs.extend(
                 moosicbox_task::spawn(
                     "server: scan pulseaudio-simple outputs",
@@ -481,6 +476,41 @@ impl AudioOutputScanner {
                 )
                 .await??,
             );
+
+            if self.default_output.is_none() {
+                self.default_output = moosicbox_task::spawn(
+                    "server: scan pulseaudio-simple default output",
+                    moosicbox_task::spawn_blocking(
+                        "server: scan pulseaudio-simple default output (blocking)",
+                        || {
+                            let start = std::time::SystemTime::now();
+                            let output = crate::pulseaudio::simple::scan_default_output();
+
+                            if let Some(output) = &output {
+                                log::debug!("pulseaudio-simple output: {}", output.name);
+                            }
+
+                            let end = std::time::SystemTime::now();
+                            log::debug!(
+                                "took {}ms to scan default output",
+                                end.duration_since(start).unwrap().as_millis()
+                            );
+                            output
+                        },
+                    ),
+                )
+                .await??;
+
+                if let Some(output) = &self.default_output {
+                    if !self.outputs.iter().any(|x| x.id == output.id) {
+                        if !self.outputs.is_empty() {
+                            self.outputs.insert(0, output.clone());
+                        } else {
+                            self.outputs.push(output.clone());
+                        }
+                    }
+                }
+            }
         }
 
         Ok(())
