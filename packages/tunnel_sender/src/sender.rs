@@ -14,6 +14,7 @@ use moosicbox_audio_decoder::media_sources::remote_bytestream::RemoteByteStreamM
 use moosicbox_audio_decoder::AudioDecodeHandler;
 use moosicbox_auth::FetchSignatureError;
 use moosicbox_channel_utils::futures_channel::MoosicBoxUnboundedSender;
+use moosicbox_channel_utils::MoosicBoxSender as _;
 use moosicbox_core::sqlite::models::{ApiSource, Id};
 use moosicbox_core::types::AudioFormat;
 use moosicbox_database::Database;
@@ -61,6 +62,7 @@ pub enum CloseError {
 
 #[derive(Clone)]
 pub struct TunnelSenderHandle {
+    #[allow(clippy::type_complexity)]
     sender: Arc<RwLock<Option<MoosicBoxUnboundedSender<TunnelResponseMessage>>>>,
     cancellation_token: CancellationToken,
     player_actions: Arc<RwLock<Vec<(u64, PlayerAction)>>>,
@@ -92,7 +94,7 @@ impl WebsocketSender for TunnelSenderHandle {
     ) -> Result<(), moosicbox_ws::WebsocketSendError> {
         if let Some(sender) = self.sender.read().unwrap().as_ref() {
             sender
-                .unbounded_send(TunnelResponseMessage::Ws(TunnelResponseWs {
+                .send(TunnelResponseMessage::Ws(TunnelResponseWs {
                     message: data.into(),
                     exclude_connection_ids: None,
                     to_connection_ids: Some(vec![conn_id.parse::<usize>()?]),
@@ -105,7 +107,7 @@ impl WebsocketSender for TunnelSenderHandle {
     async fn send_all(&self, data: &str) -> Result<(), moosicbox_ws::WebsocketSendError> {
         if let Some(sender) = self.sender.read().unwrap().as_ref() {
             sender
-                .unbounded_send(TunnelResponseMessage::Ws(TunnelResponseWs {
+                .send(TunnelResponseMessage::Ws(TunnelResponseWs {
                     message: data.into(),
                     exclude_connection_ids: None,
                     to_connection_ids: None,
@@ -122,7 +124,7 @@ impl WebsocketSender for TunnelSenderHandle {
     ) -> Result<(), moosicbox_ws::WebsocketSendError> {
         if let Some(sender) = self.sender.read().unwrap().as_ref() {
             sender
-                .unbounded_send(TunnelResponseMessage::Ws(TunnelResponseWs {
+                .send(TunnelResponseMessage::Ws(TunnelResponseWs {
                     message: data.into(),
                     exclude_connection_ids: Some(vec![conn_id.parse::<usize>()?]),
                     to_connection_ids: None,
@@ -135,7 +137,7 @@ impl WebsocketSender for TunnelSenderHandle {
     async fn ping(&self) -> Result<(), moosicbox_ws::WebsocketSendError> {
         if let Some(sender) = self.sender.read().unwrap().as_ref() {
             sender
-                .unbounded_send(TunnelResponseMessage::Ping)
+                .send(TunnelResponseMessage::Ping)
                 .map_err(|e| WebsocketSendError::Unknown(e.to_string()))?;
         }
         Ok(())
@@ -310,12 +312,33 @@ impl TunnelSender {
                 let close_token = CancellationToken::new();
 
                 let (txf, rxf) = moosicbox_channel_utils::futures_channel::unbounded();
+                let txf = txf.with_priority(|message: &TunnelResponseMessage| match message {
+                    TunnelResponseMessage::Packet(packet) => {
+                        log::debug!(
+                            "determining priority for packet: packet_id={} len={}",
+                            packet.packet_id,
+                            packet.message.len()
+                        );
+                        usize::MAX - packet.message.len()
+                    }
+                    TunnelResponseMessage::Ws(ws) => {
+                        log::debug!("determining priority for ws: len={}", ws.message.len());
+                        usize::MAX - ws.message.len()
+                    }
+                    TunnelResponseMessage::Ping => {
+                        log::debug!("determining priority for ping");
+                        usize::MAX
+                    }
+                });
 
                 sender_arc.write().unwrap().replace(txf.clone());
 
                 log::debug!("Connecting to websocket...");
+
                 match select!(
-                    resp = connect_async(format!("{url}?clientId={client_id}&sender=true&signature={token}")) => resp,
+                    resp = connect_async(
+                        format!("{url}?clientId={client_id}&sender=true&signature={token}"),
+                    ) => resp,
                     _ = cancellation_token.cancelled() => {
                         log::debug!("Cancelling connect");
                         break;
@@ -438,7 +461,7 @@ impl TunnelSender {
                                         _ = cancellation_token.cancelled() => { break; }
                                         _ = tokio::time::sleep(std::time::Duration::from_millis(5000)) => {
                                             log::trace!("Sending ping to tunnel");
-                                            if let Err(e) = txf.unbounded_send(TunnelResponseMessage::Ping) {
+                                            if let Err(e) = txf.send(TunnelResponseMessage::Ping) {
                                                 log::error!("Pinger Send Loop error: {e:?}");
                                                 close_token.cancel();
                                                 break;
@@ -505,7 +528,7 @@ impl TunnelSender {
     ) -> Result<(), SendBytesError> {
         if let Some(sender) = self.sender.read().unwrap().as_ref() {
             sender
-                .unbounded_send(TunnelResponseMessage::Packet(TunnelResponsePacket {
+                .send(TunnelResponseMessage::Packet(TunnelResponsePacket {
                     request_id,
                     packet_id,
                     broadcast: true,
@@ -531,7 +554,7 @@ impl TunnelSender {
     ) -> Result<(), SendMessageError> {
         if let Some(sender) = self.sender.read().unwrap().as_ref() {
             sender
-                .unbounded_send(TunnelResponseMessage::Packet(TunnelResponsePacket {
+                .send(TunnelResponseMessage::Packet(TunnelResponsePacket {
                     request_id,
                     packet_id,
                     broadcast: true,
