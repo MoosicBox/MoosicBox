@@ -10,7 +10,7 @@ use futures_core::{FusedStream, Stream};
 
 use crate::MoosicBoxSender;
 
-pub struct MoosicBoxUnboundedSender<T: Send> {
+pub struct PrioritizedSender<T: Send> {
     inner: UnboundedSender<T>,
     #[allow(clippy::type_complexity)]
     priority: Option<Arc<Box<dyn (Fn(&T) -> usize) + Send + Sync>>>,
@@ -18,7 +18,7 @@ pub struct MoosicBoxUnboundedSender<T: Send> {
     ready_to_send: Arc<AtomicBool>,
 }
 
-impl<T: Send> MoosicBoxUnboundedSender<T> {
+impl<T: Send> PrioritizedSender<T> {
     pub fn with_priority(mut self, func: impl (Fn(&T) -> usize) + Send + Sync + 'static) -> Self {
         self.priority.replace(Arc::new(Box::new(func)));
         self
@@ -50,7 +50,7 @@ impl<T: Send> MoosicBoxUnboundedSender<T> {
     }
 }
 
-impl<T: Send> MoosicBoxSender<T, TrySendError<T>> for MoosicBoxUnboundedSender<T> {
+impl<T: Send> MoosicBoxSender<T, TrySendError<T>> for PrioritizedSender<T> {
     fn send(&self, msg: T) -> Result<(), TrySendError<T>> {
         if !self
             .ready_to_send
@@ -83,7 +83,7 @@ impl<T: Send> MoosicBoxSender<T, TrySendError<T>> for MoosicBoxUnboundedSender<T
     }
 }
 
-impl<T: Send> Clone for MoosicBoxUnboundedSender<T> {
+impl<T: Send> Clone for PrioritizedSender<T> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -94,13 +94,13 @@ impl<T: Send> Clone for MoosicBoxUnboundedSender<T> {
     }
 }
 
-impl<T: Send> MoosicBoxUnboundedSender<T> {
+impl<T: Send> PrioritizedSender<T> {
     pub fn unbounded_send(&self, msg: T) -> Result<(), TrySendError<T>> {
         self.inner.unbounded_send(msg)
     }
 }
 
-impl<T: Send> Deref for MoosicBoxUnboundedSender<T> {
+impl<T: Send> Deref for PrioritizedSender<T> {
     type Target = UnboundedSender<T>;
 
     fn deref(&self) -> &Self::Target {
@@ -108,12 +108,12 @@ impl<T: Send> Deref for MoosicBoxUnboundedSender<T> {
     }
 }
 
-pub struct MoosicBoxUnboundedReceiver<T: Send> {
+pub struct PrioritizedReceiver<T: Send> {
     inner: UnboundedReceiver<T>,
-    sender: MoosicBoxUnboundedSender<T>,
+    sender: PrioritizedSender<T>,
 }
 
-impl<T: Send> Deref for MoosicBoxUnboundedReceiver<T> {
+impl<T: Send> Deref for PrioritizedReceiver<T> {
     type Target = UnboundedReceiver<T>;
 
     fn deref(&self) -> &Self::Target {
@@ -121,13 +121,13 @@ impl<T: Send> Deref for MoosicBoxUnboundedReceiver<T> {
     }
 }
 
-impl<T: Send> FusedStream for MoosicBoxUnboundedReceiver<T> {
+impl<T: Send> FusedStream for PrioritizedReceiver<T> {
     fn is_terminated(&self) -> bool {
         self.inner.is_terminated()
     }
 }
 
-impl<T: Send> Stream for MoosicBoxUnboundedReceiver<T> {
+impl<T: Send> Stream for PrioritizedReceiver<T> {
     type Item = T;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<T>> {
@@ -150,18 +150,18 @@ impl<T: Send> Stream for MoosicBoxUnboundedReceiver<T> {
     }
 }
 
-pub fn unbounded<T: Send>() -> (MoosicBoxUnboundedSender<T>, MoosicBoxUnboundedReceiver<T>) {
+pub fn unbounded<T: Send>() -> (PrioritizedSender<T>, PrioritizedReceiver<T>) {
     let (tx, rx) = futures_channel::mpsc::unbounded();
     let ready_to_send = Arc::new(AtomicBool::new(true));
 
-    let tx = MoosicBoxUnboundedSender {
+    let tx = PrioritizedSender {
         inner: tx,
         priority: None,
         buffer: Arc::new(RwLock::new(vec![])),
         ready_to_send: ready_to_send.clone(),
     };
 
-    let rx = MoosicBoxUnboundedReceiver {
+    let rx = PrioritizedReceiver {
         inner: rx,
         sender: tx.clone(),
     };

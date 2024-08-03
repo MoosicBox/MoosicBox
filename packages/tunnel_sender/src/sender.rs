@@ -13,7 +13,7 @@ use futures_util::{future, pin_mut, Future, Stream, StreamExt};
 use moosicbox_audio_decoder::media_sources::remote_bytestream::RemoteByteStreamMediaSource;
 use moosicbox_audio_decoder::AudioDecodeHandler;
 use moosicbox_auth::FetchSignatureError;
-use moosicbox_channel_utils::futures_channel::MoosicBoxUnboundedSender;
+use moosicbox_channel_utils::futures_channel::PrioritizedSender;
 use moosicbox_channel_utils::MoosicBoxSender as _;
 use moosicbox_core::sqlite::models::{ApiSource, Id};
 use moosicbox_core::types::AudioFormat;
@@ -63,7 +63,7 @@ pub enum CloseError {
 #[derive(Clone)]
 pub struct TunnelSenderHandle {
     #[allow(clippy::type_complexity)]
-    sender: Arc<RwLock<Option<MoosicBoxUnboundedSender<TunnelResponseMessage>>>>,
+    sender: Arc<RwLock<Option<PrioritizedSender<TunnelResponseMessage>>>>,
     cancellation_token: CancellationToken,
     player_actions: Arc<RwLock<Vec<(u64, PlayerAction)>>>,
 }
@@ -172,7 +172,7 @@ pub struct TunnelSender {
     url: String,
     client_id: String,
     access_token: String,
-    sender: Arc<RwLock<Option<MoosicBoxUnboundedSender<TunnelResponseMessage>>>>,
+    sender: Arc<RwLock<Option<PrioritizedSender<TunnelResponseMessage>>>>,
     cancellation_token: CancellationToken,
     abort_request_tokens: Arc<RwLock<HashMap<usize, CancellationToken>>>,
     player_actions: Arc<RwLock<Vec<(u64, PlayerAction)>>>,
