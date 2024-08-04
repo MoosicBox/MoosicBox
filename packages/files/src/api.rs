@@ -552,6 +552,7 @@ pub struct ArtistCoverQuery {
         description = "Get source quality artist cover",
         params(
             ("artistId" = u64, Path, description = "The Artist ID"),
+            ("source" = Option<ApiSource>, Query, description = "The artist source"),
         ),
         responses(
             (
@@ -606,7 +607,6 @@ pub async fn artist_source_artwork_endpoint(
     Ok(file.into_response(&req))
 }
 
-#[cfg(feature = "openapi")]
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Files", "head"],
@@ -616,35 +616,7 @@ pub async fn artist_source_artwork_endpoint(
         params(
             ("artistId" = u64, Path, description = "The Artist ID"),
             ("size" = String, Path, description = "The {width}x{height} of the image"),
-        ),
-        responses(
-            (
-                status = 200,
-                description = "The artist cover at the specified dimensions",
-            )
-        )
-    )
-)]
-#[route("/artists/{artist_id}/{size}", method = "GET", method = "HEAD")]
-#[allow(unused)]
-pub async fn artist_cover_head_endpoint(
-    _path: web::Path<(String, String)>,
-    _query: web::Query<ArtistCoverQuery>,
-    _data: web::Data<AppState>,
-    _api_state: web::Data<MusicApiState>,
-) -> Result<HttpResponse> {
-    unimplemented!()
-}
-
-#[cfg_attr(
-    feature = "openapi", utoipa::path(
-        tags = ["Files", "head"],
-        get,
-        path = "/artists/{artistId}/{size}",
-        description = "Get artist cover at the specified dimensions",
-        params(
-            ("artistId" = u64, Path, description = "The Artist ID"),
-            ("size" = String, Path, description = "The {width}x{height} of the image"),
+            ("source" = Option<ApiSource>, Query, description = "The artist source"),
         ),
         responses(
             (
@@ -732,10 +704,11 @@ pub struct AlbumCoverQuery {
     feature = "openapi", utoipa::path(
         tags = ["Files", "head"],
         get,
-        path = "/albums/{artistId}/source",
+        path = "/albums/{albumId}/source",
         description = "Get source quality album cover",
         params(
-            ("artistId" = u64, Path, description = "The Artist ID"),
+            ("albumId" = u64, Path, description = "The Album ID"),
+            ("source" = Option<ApiSource>, Query, description = "The album source"),
         ),
         responses(
             (
@@ -794,11 +767,12 @@ pub async fn album_source_artwork_endpoint(
     feature = "openapi", utoipa::path(
         tags = ["Files", "head"],
         get,
-        path = "/albums/{artistId}/{size}",
+        path = "/albums/{albumId}/{size}",
         description = "Get album cover at the specified dimensions",
         params(
-            ("artistId" = u64, Path, description = "The Artist ID"),
+            ("albumId" = u64, Path, description = "The Album ID"),
             ("size" = String, Path, description = "The {width}x{height} of the image"),
+            ("source" = Option<ApiSource>, Query, description = "The album source"),
         ),
         responses(
             (
