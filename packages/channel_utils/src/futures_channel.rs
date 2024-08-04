@@ -27,7 +27,7 @@ impl<T: Send> PrioritizedSender<T> {
     fn flush(&self) -> Result<(), TrySendError<T>> {
         let empty_buffer = { self.buffer.read().unwrap().is_empty() };
         if empty_buffer {
-            log::debug!("flush: already empty");
+            log::trace!("flush: already empty");
             self.ready_to_send
                 .store(true, std::sync::atomic::Ordering::SeqCst);
             return Ok(());
