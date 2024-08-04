@@ -2015,9 +2015,9 @@ dependencies = [
 
 [[package]]
 name = "fdk-aac"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82783876563cce8326c5aad3b6e95b4be4abaa913e3343e8dc2239046fc2c649"
+checksum = "30947372907d8433fe9645d3076f7f4681c3d7336c5eb7840a3c3347bcd619cf"
 dependencies = [
  "fdk-aac-sys",
 ]

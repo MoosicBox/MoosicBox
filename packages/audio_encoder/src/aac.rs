@@ -26,6 +26,7 @@ impl From<fdk_aac::enc::EncoderError> for EncoderError {
 
 pub fn encoder_aac() -> Result<Encoder, EncoderError> {
     let encoder = Encoder::new(EncoderParams {
+        audio_object_type: fdk_aac::enc::AudioObjectType::Mpeg4LowComplexity,
         bit_rate: BitRate::VbrVeryHigh,
         sample_rate: 44_100,
         transport: Transport::Adts,
