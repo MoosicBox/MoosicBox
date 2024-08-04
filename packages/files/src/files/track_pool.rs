@@ -451,11 +451,16 @@ pub async fn get_or_fetch_track(
         return fetch(start, end, size).await;
     }
 
+    let handle = if let Some(handle) = HANDLE.get() {
+        handle
+    } else {
+        log::debug!("get_or_fetch_track: No service handle, eagerly fetching bytes");
+        return fetch(start, end, size).await;
+    };
+
     log::debug!("get_or_fetch_track: Fetching bytes from cache");
     let (tx, rx) = bounded(1);
-    HANDLE
-        .get()
-        .unwrap()
+    handle
         .send_command_async(Command::FetchTrackBytes {
             tx,
             source: source.clone(),
