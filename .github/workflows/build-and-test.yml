@@ -168,6 +168,16 @@ jobs:
                       os: macos-latest
                       dependencies: brew install pulseaudio
 
+                    - name: audio_zone
+                      path: packages/audio_zone
+                      os: ubuntu-latest
+
+                    - name: audio_zone-no-default-features-api
+                      path: packages/audio_zone
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: api
+
                     - name: auth-api
                       path: packages/auth
                       os: ubuntu-latest

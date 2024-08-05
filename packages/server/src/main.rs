@@ -411,6 +411,12 @@ fn main() -> std::io::Result<()> {
                 "/audio-output",
                 moosicbox_audio_output::api::Api::openapi(),
             );
+            #[cfg(feature = "audio-zone-api")]
+            let api = nest_api(
+                api,
+                "/audio-zone",
+                moosicbox_audio_zone::api::Api::openapi(),
+            );
             #[cfg(feature = "auth-api")]
             let api = nest_api(api, "/auth", moosicbox_auth::api::Api::openapi());
             #[cfg(feature = "downloader-api")]
@@ -514,6 +520,14 @@ fn main() -> std::io::Result<()> {
                 app = app.service(
                     web::scope("/audio-output")
                         .service(moosicbox_audio_output::api::audio_outputs_endpoint),
+                );
+            }
+
+            #[cfg(feature = "audio-zone-api")]
+            {
+                app = app.service(
+                    web::scope("/audio-zone")
+                        .service(moosicbox_audio_zone::api::audio_zones_endpoint),
                 );
             }
 

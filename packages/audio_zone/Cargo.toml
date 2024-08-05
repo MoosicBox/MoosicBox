@@ -1,0 +1,40 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools"]
+description = "MoosicBox audio zone package"
+edition     = "2021"
+keywords    = ["audio", "group", "grouping", "playback"]
+license     = "MPL-2.0"
+name        = "moosicbox_audio_zone"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_assert = { path = "../assert", default-features = false }
+moosicbox_core = { path = "../core", default-features = false }
+moosicbox_database = { path = "../database", default-features = false }
+moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
+    "database",
+] }
+
+# API Dependencies
+actix-web        = { workspace = true, optional = true }
+moosicbox_paging = { path = "../paging", optional = true }
+utoipa           = { workspace = true, optional = true }
+
+bytes      = { workspace = true }
+log        = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+thiserror  = { workspace = true }
+tokio      = { workspace = true, features = ["rt-multi-thread", "tracing"] }
+tokio-util = { workspace = true }
+
+[features]
+default = ["api", "openapi"]
+
+fail-on-warnings = []
+
+api     = ["dep:actix-web", "dep:moosicbox_paging"]
+openapi = ["dep:utoipa", "moosicbox_paging/openapi"]

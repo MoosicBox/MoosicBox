@@ -3438,6 +3438,7 @@ dependencies = [
  "moosicbox_audio_decoder",
  "moosicbox_audio_encoder",
  "moosicbox_audio_output",
+ "moosicbox_audio_zone",
  "moosicbox_auth",
  "moosicbox_channel_utils",
  "moosicbox_config",
@@ -3586,6 +3587,26 @@ dependencies = [
  "serde",
  "serde_json",
  "symphonia",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "utoipa",
+]
+
+[[package]]
+name = "moosicbox_audio_zone"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "bytes",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_core",
+ "moosicbox_database",
+ "moosicbox_json_utils",
+ "moosicbox_paging",
+ "serde",
+ "serde_json",
  "thiserror",
  "tokio",
  "tokio-util",
@@ -4140,6 +4161,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_async_service",
  "moosicbox_audio_output",
+ "moosicbox_audio_zone",
  "moosicbox_auth",
  "moosicbox_config",
  "moosicbox_core",

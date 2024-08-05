@@ -6,6 +6,7 @@ members = [
     "packages/audio_decoder",
     "packages/audio_encoder",
     "packages/audio_output",
+    "packages/audio_zone",
     "packages/auth",
     "packages/channel_utils",
     "packages/config",

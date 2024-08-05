@@ -39,6 +39,9 @@ moosicbox_tunnel_sender = { path = "../tunnel_sender", default-features = false 
 moosicbox_ws = { path = "../ws", default-features = false, features = ["ws"] }
 
 # APIs
+moosicbox_audio_zone = { path = "../audio_zone", default-features = false, features = [
+    "api",
+], optional = true }
 moosicbox_downloader = { path = "../downloader", default-features = false, features = [
     "api",
 ], optional = true }
@@ -233,6 +236,7 @@ yt         = ["moosicbox_yt/api"]
 # APIs
 all-apis = [
     "audio-output-api",
+    "audio-zone-api",
     "auth-api",
     "downloader-api",
     "files-api",
@@ -249,6 +253,7 @@ all-apis = [
 ]
 
 audio-output-api = ["moosicbox_audio_output/api"]
+audio-zone-api   = ["moosicbox_audio_zone/api"]
 auth-api         = ["moosicbox_auth/api"]
 downloader-api   = ["dep:moosicbox_downloader", "downloader"]
 files-api        = ["moosicbox_files/api"]
@@ -270,6 +275,7 @@ openapi = [
     "dep:utoipa-scalar",
     "dep:utoipa-swagger-ui",
     "moosicbox_audio_output/openapi",
+    "moosicbox_audio_zone/openapi",
     "moosicbox_auth/openapi",
     "moosicbox_core/openapi",
     "moosicbox_downloader/openapi",
