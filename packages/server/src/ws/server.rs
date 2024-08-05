@@ -16,6 +16,7 @@ use moosicbox_ws::{
 };
 use rand::{thread_rng, Rng as _};
 use serde_json::Value;
+use strum_macros::AsRefStr;
 use tokio::sync::{mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 
@@ -67,7 +68,7 @@ impl WebsocketSender for WsServer {
 }
 
 /// A command received by the [`WsServer`].
-#[derive(Debug)]
+#[derive(Debug, AsRefStr)]
 pub enum Command {
     #[cfg(feature = "player")]
     AddPlayerAction {
@@ -116,6 +117,12 @@ pub enum Command {
         conn: ConnId,
         res_tx: OneshotAsyncSender<()>,
     },
+}
+
+impl std::fmt::Display for Command {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_ref())
+    }
 }
 
 /// A multi-room ws server.
