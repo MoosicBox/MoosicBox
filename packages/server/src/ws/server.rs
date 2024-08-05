@@ -327,6 +327,8 @@ impl WsServer {
     }
 
     async fn process_command(ctx: Arc<RwLock<Self>>, cmd: Command) -> io::Result<()> {
+        let cmd_str = cmd.to_string();
+
         match cmd {
             #[cfg(feature = "player")]
             Command::AddPlayerAction { id, action } => {
@@ -415,6 +417,8 @@ impl WsServer {
                 let _ = res_tx.send(()).await;
             }
         }
+
+        log::debug!("process_command: Finished processing cmd {cmd_str}");
 
         Ok(())
     }
