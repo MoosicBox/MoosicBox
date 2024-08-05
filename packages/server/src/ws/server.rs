@@ -430,7 +430,7 @@ impl WsServer {
             }
             cmd = cmd_rx.recv_async() => { Ok(cmd) }
         ) {
-            log::trace!("Received WsServer command");
+            log::trace!("Received WsServer command {cmd}");
             moosicbox_task::spawn(
                 "server: WsServer process_command",
                 Self::process_command(ctx.clone(), cmd),
