@@ -1,7 +1,16 @@
 use chrono::NaiveDateTime;
 use moosicbox_database::{DatabaseValue, Row};
+use thiserror::Error;
 
 use crate::{MissingValue, ParseError, ToValueType};
+
+#[derive(Debug, Error)]
+pub enum DatabaseFetchError {
+    #[error(transparent)]
+    Database(#[from] moosicbox_database::DatabaseError),
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+}
 
 impl<'a> ToValueType<&'a str> for &'a DatabaseValue {
     fn to_value_type(self) -> Result<&'a str, ParseError> {
