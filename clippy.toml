@@ -22,6 +22,7 @@ allowed-duplicate-crates = [
     "regex-syntax",
     "reqwest",
     "roxmltree",
+    "rustc-hash",
     "rustls",
     "rustls-pemfile",
     "rustls-webpki",
