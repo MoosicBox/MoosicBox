@@ -2583,9 +2583,7 @@ impl MusicApi for TidalMusicApi {
         .first()
         .map(|x| x.to_string());
 
-        let url = if let Some(url) = url {
-            url
-        } else {
+        let Some(url) = url else {
             return Ok(None);
         };
 
@@ -2606,7 +2604,7 @@ impl MusicApi for TidalMusicApi {
         _source: &TrackSource,
         _quality: PlaybackQuality,
     ) -> Result<Option<u64>, TrackError> {
-        let url = if let Some(url) = track_file_url(
+        let Some(url) = track_file_url(
             #[cfg(feature = "db")]
             &**self.db,
             TidalAudioQuality::High,
@@ -2615,10 +2613,7 @@ impl MusicApi for TidalMusicApi {
         )
         .await?
         .into_iter()
-        .next()
-        {
-            url
-        } else {
+        .next() else {
             return Ok(None);
         };
 

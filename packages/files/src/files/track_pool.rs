@@ -451,9 +451,7 @@ pub async fn get_or_fetch_track(
         return fetch(start, end, size).await;
     }
 
-    let handle = if let Some(handle) = HANDLE.get() {
-        handle
-    } else {
+    let Some(handle) = HANDLE.get() else {
         log::debug!("get_or_fetch_track: No service handle, eagerly fetching bytes");
         return fetch(start, end, size).await;
     };

@@ -2565,9 +2565,7 @@ impl MusicApi for YtMusicApi {
         .first()
         .map(|x| x.to_string());
 
-        let url = if let Some(url) = url {
-            url
-        } else {
+        let Some(url) = url else {
             return Ok(None);
         };
 

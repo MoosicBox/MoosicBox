@@ -433,13 +433,11 @@ pub trait MusicApi: Send + Sync {
     async fn remove_artist(&self, artist_id: &Id) -> Result<(), RemoveArtistError>;
 
     async fn album_artist(&self, album_id: &Id) -> Result<Option<Artist>, ArtistError> {
-        let album = if let Some(album) = self
+        let Some(album) = self
             .album(album_id)
             .await
             .map_err(|e| ArtistError::Other(e.into()))?
-        {
-            album
-        } else {
+        else {
             return Ok(None);
         };
 
@@ -640,9 +638,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
         let mut album_ids = vec![];
 
         self.albums.write().await.retain(|album_id, album| {
-            let album = if let Some(album) = album {
-                album
-            } else {
+            let Some(album) = album else {
                 return true;
             };
 
@@ -663,9 +659,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
 
     async fn remove_cache_tracks_for_album_ids(&self, ids: &[&Id]) {
         self.tracks.write().await.retain(|_track_id, track| {
-            let track = if let Some(track) = track {
-                track
-            } else {
+            let Some(track) = track else {
                 return true;
             };
 

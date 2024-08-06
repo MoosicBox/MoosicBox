@@ -518,9 +518,7 @@ pub async fn refavorite_album(
         })
         .map(|x| x.id.clone());
 
-    let new_album_id = if let Some(album_id) = new_album_id {
-        album_id
-    } else {
+    let Some(new_album_id) = new_album_id else {
         log::debug!("No corresponding album to re-favorite album_id={album_id}");
         return Err(ReFavoriteAlbumError::NoAlbum);
     };

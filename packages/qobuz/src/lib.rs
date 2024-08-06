@@ -280,9 +280,7 @@ async fn authenticated_request_inner(
     )
     .await?;
 
-    let app_id = if let Some(ref app_id) = credentials.app_id {
-        app_id
-    } else {
+    let Some(ref app_id) = credentials.app_id else {
         log::debug!("No app_id available");
         return Err(AuthenticatedRequestError::Unauthorized);
     };

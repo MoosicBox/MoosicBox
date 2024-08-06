@@ -1168,9 +1168,7 @@ impl MusicApi for LibraryMusicApi {
         track: TrackOrId,
         _quality: TrackAudioQuality,
     ) -> Result<Option<TrackSource>, TrackError> {
-        let track = if let Some(track) = track.track(self).await? {
-            track
-        } else {
+        let Some(track) = track.track(self).await? else {
             return Ok(None);
         };
         let mut path = if let Some(file) = &track.file {

@@ -162,9 +162,7 @@ impl<T, E> PagingResponse<T, E> {
     }
 
     async fn rest_of_pages_in_batches_inner(self, include_self: bool) -> Result<Vec<Page<T>>, E> {
-        let total = if let Some(total) = self.total() {
-            total
-        } else {
+        let Some(total) = self.total() else {
             return self.rest_of_pages_inner(include_self).await;
         };
 
