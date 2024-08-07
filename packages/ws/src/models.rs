@@ -1,7 +1,8 @@
+use moosicbox_audio_zone::models::CreateAudioZone;
 use moosicbox_core::sqlite::models::SetSeek;
 use moosicbox_session::models::{
     ApiConnection, ApiSession, ApiUpdateSession, CreateSession, DeleteSession, RegisterConnection,
-    RegisterPlayer, SetSessionActivePlayers, UpdateSession,
+    RegisterPlayer, UpdateSession,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -19,7 +20,7 @@ pub enum InboundPayload {
     DeleteSession(DeleteSessionPayload),
     RegisterConnection(RegisterConnectionPayload),
     RegisterPlayers(RegisterPlayersPayload),
-    SetActivePlayers(SetActivePlayersPayload),
+    CreateAudioZone(CreateAudioZonePayload),
     PlaybackAction(PlaybackActionPayload),
     SetSeek(SetSeekPayload),
 }
@@ -84,8 +85,8 @@ pub struct RegisterPlayersPayload {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct SetActivePlayersPayload {
-    pub payload: SetSessionActivePlayers,
+pub struct CreateAudioZonePayload {
+    pub payload: CreateAudioZone,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

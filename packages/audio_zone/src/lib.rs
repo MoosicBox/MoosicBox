@@ -1,18 +1,23 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
-use models::AudioZone;
-use moosicbox_database::Database;
-use moosicbox_json_utils::{database::DatabaseFetchError, ToValueType as _};
+use db::models::AudioZoneModel;
+use models::{AudioZone, CreateAudioZone};
+use moosicbox_database::{Database, TryIntoDb};
+use moosicbox_json_utils::database::DatabaseFetchError;
 
 #[cfg(feature = "api")]
 pub mod api;
 
+pub mod db;
 pub mod models;
 
 pub async fn zones(db: &dyn Database) -> Result<Vec<AudioZone>, DatabaseFetchError> {
-    Ok(db
-        .select("audio_zones")
-        .execute(db)
-        .await?
-        .to_value_type()?)
+    crate::db::get_zones(db).await?.try_into_db(db).await
+}
+
+pub async fn create_audio_zone(
+    db: &dyn Database,
+    zone: &CreateAudioZone,
+) -> Result<AudioZoneModel, DatabaseFetchError> {
+    crate::db::create_audio_zone(db, zone).await
 }

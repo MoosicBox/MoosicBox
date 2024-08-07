@@ -110,6 +110,7 @@ impl Player for LocalPlayer {
                                             position: None,
                                             seek: Some(secs),
                                             volume: None,
+                                            audio_zone_id: None,
                                             playlist: None,
                                             quality: None,
                                         };

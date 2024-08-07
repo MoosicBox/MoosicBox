@@ -527,7 +527,8 @@ fn main() -> std::io::Result<()> {
             {
                 app = app.service(
                     web::scope("/audio-zone")
-                        .service(moosicbox_audio_zone::api::audio_zones_endpoint),
+                        .service(moosicbox_audio_zone::api::audio_zones_endpoint)
+                        .service(moosicbox_audio_zone::api::create_audio_zone_endpoint),
                 );
             }
 
@@ -685,7 +686,7 @@ fn main() -> std::io::Result<()> {
                     web::scope("/session")
                         .service(moosicbox_session::api::session_playlist_endpoint)
                         .service(moosicbox_session::api::session_playlist_tracks_endpoint)
-                        .service(moosicbox_session::api::session_active_players_endpoint)
+                        .service(moosicbox_session::api::session_audio_zone_endpoint)
                         .service(moosicbox_session::api::session_playing_endpoint)
                         .service(moosicbox_session::api::session_endpoint)
                         .service(moosicbox_session::api::sessions_endpoint)
@@ -796,6 +797,7 @@ fn main() -> std::io::Result<()> {
                                 None,
                                 None,
                                 None,
+                                None,
                                 true,
                                 None,
                             )
@@ -821,6 +823,7 @@ fn main() -> std::io::Result<()> {
                                 true,
                                 None,
                                 Some(true),
+                                None,
                                 None,
                                 None,
                                 None,
@@ -972,9 +975,8 @@ fn handle_server_playback_update(
 
         let updated = {
             {
-                let players =
-                    match moosicbox_session::get_session_active_players(&**db, update.session_id)
-                        .await
+                let audio_zone =
+                    match moosicbox_session::get_session_audio_zone(&**db, update.session_id).await
                     {
                         Ok(players) => players,
                         Err(e) => moosicbox_assert::die_or_panic!(
@@ -982,22 +984,28 @@ fn handle_server_playback_update(
                         ),
                     };
 
+                let Some(audio_zone) = audio_zone else {
+                    return;
+                };
+
                 if !SERVER_PLAYERS
                     .read()
                     .await
                     .get(&update.session_id)
                     .is_some_and(|player| {
-                        !players.iter().any(|x| {
-                            player.output.as_ref().is_some_and(|output| {
-                                x.audio_output_id != output.lock().unwrap().id
-                            })
+                        player.output.as_ref().is_some_and(|output| {
+                            !audio_zone
+                                .players
+                                .iter()
+                                .any(|p| p.audio_output_id != output.lock().unwrap().id)
                         })
                     })
                 {
                     let outputs = moosicbox_audio_output::output_factories().await;
 
                     // TODO: handle more than one output
-                    let output = players
+                    let output = audio_zone
+                        .players
                         .into_iter()
                         .find_map(|x| outputs.iter().find(|output| output.id == x.audio_output_id))
                         .cloned();
@@ -1094,6 +1102,7 @@ fn handle_server_playback_update(
                 None,
                 Some(update.session_id),
                 None,
+                update.audio_zone_id,
                 true,
                 Some(moosicbox_player::DEFAULT_PLAYBACK_RETRY_OPTIONS),
             )
@@ -1171,9 +1180,11 @@ static UPNP_PLAYERS: Lazy<tokio::sync::RwLock<HashMap<u64, moosicbox_upnp::playe
 fn handle_upnp_playback_update(
     update: &moosicbox_session::models::UpdateSession,
 ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = ()> + Send>> {
+    use moosicbox_database::TryIntoDb as _;
     use moosicbox_player::{Player as _, PlayerSource, Track, DEFAULT_PLAYBACK_RETRY_OPTIONS};
 
     let update = update.clone();
+    let db = DB.read().unwrap().clone().unwrap().clone();
 
     Box::pin(async move {
         log::debug!("Handling UPnP playback update={update:?}");
@@ -1239,6 +1250,7 @@ fn handle_upnp_playback_update(
                 None,
                 Some(update.session_id),
                 None,
+                update.audio_zone_id,
                 true,
                 Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
             )

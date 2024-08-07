@@ -12,9 +12,13 @@ version     = "0.1.0"
 
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
+moosicbox_audio_zone = { path = "../audio_zone", default-features = false }
 moosicbox_core = { path = "../core", default-features = false }
 moosicbox_database = { path = "../database", default-features = false, features = [
     "rusqlite",
+] }
+moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
+    "database",
 ] }
 moosicbox_session = { path = "../session", default-features = false }
 

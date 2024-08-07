@@ -529,6 +529,7 @@ impl UpnpPlayer {
                                             volume: None,
                                             playlist: None,
                                             quality: None,
+                                            audio_zone_id: None,
                                         };
                                         send_playback_event(&update, playback);
                                     }

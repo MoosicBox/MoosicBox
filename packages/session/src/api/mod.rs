@@ -4,13 +4,12 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
+use moosicbox_audio_zone::models::{ApiAudioZone, ApiPlayer};
 use moosicbox_core::sqlite::models::ToApi as _;
 use moosicbox_paging::Page;
 use serde::Deserialize;
 
-use crate::models::{
-    ApiPlayer, ApiSession, ApiSessionPlaylist, ApiSessionPlaylistTrack, RegisterPlayer,
-};
+use crate::models::{ApiSession, ApiSessionPlaylist, ApiSessionPlaylistTrack, RegisterPlayer};
 
 pub mod models;
 
@@ -21,7 +20,7 @@ pub mod models;
     paths(
         session_playlist_endpoint,
         session_playlist_tracks_endpoint,
-        session_active_players_endpoint,
+        session_audio_zone_endpoint,
         session_playing_endpoint,
         session_endpoint,
         sessions_endpoint,
@@ -131,52 +130,36 @@ pub async fn session_playlist_endpoint(
 #[serde(rename_all = "camelCase")]
 pub struct GetSessionActivePlayers {
     session_id: u64,
-    offset: Option<u32>,
-    limit: Option<u32>,
 }
 
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Session"],
         get,
-        path = "/session-active-players",
-        description = "Get a session active players by session ID",
+        path = "/session-audio-zone",
+        description = "Get a session audio zone by session ID",
         params(
-            ("sessionId" = u64, Query, description = "Session ID to fetch active players for"),
-            ("offset" = Option<u32>, Query, description = "Page offset"),
-            ("limit" = Option<u32>, Query, description = "Page limit"),
+            ("sessionId" = u64, Query, description = "Session ID to fetch the audio zone for"),
         ),
         responses(
             (
                 status = 200,
-                description = "A paginated response of active players for the session",
+                description = "The session's active audio zone",
                 body = Value,
             )
         )
     )
 )]
-#[route("/session-active-players", method = "GET")]
-pub async fn session_active_players_endpoint(
+#[route("/session-audio-zone", method = "GET")]
+pub async fn session_audio_zone_endpoint(
     query: web::Query<GetSessionActivePlayers>,
     data: web::Data<moosicbox_core::app::AppState>,
-) -> Result<Json<Page<ApiPlayer>>> {
-    let offset = query.offset.unwrap_or(0);
-    let limit = query.limit.unwrap_or(30);
-    let players = crate::get_session_active_players(&**data.database, query.session_id).await?;
-    let total = players.len() as u32;
-    let players = players
-        .into_iter()
-        .skip(offset as usize)
-        .take(limit as usize)
-        .map(|x| x.to_api())
-        .collect::<Vec<_>>();
+) -> Result<Json<Option<ApiAudioZone>>> {
+    let zone = crate::get_session_audio_zone(&**data.database, query.session_id)
+        .await?
+        .map(|x| x.into());
 
-    Ok(Json(Page::WithTotal {
-        items: players,
-        offset,
-        limit,
-        total,
-    }))
+    Ok(Json(zone))
 }
 
 #[derive(Deserialize)]

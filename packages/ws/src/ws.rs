@@ -9,13 +9,15 @@ use std::{
 
 use async_trait::async_trait;
 use log::{debug, info, trace};
+use moosicbox_audio_zone::models::CreateAudioZone;
 use moosicbox_core::sqlite::{db::DbError, models::ToApi as _};
 use moosicbox_database::Database;
+use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_session::{
     get_session_playlist,
     models::{
         ApiUpdateSession, ApiUpdateSessionPlaylist, Connection, CreateSession, DeleteSession,
-        RegisterConnection, RegisterPlayer, SetSessionActivePlayers, UpdateSession,
+        RegisterConnection, RegisterPlayer, UpdateSession,
     },
 };
 use once_cell::sync::Lazy;
@@ -170,6 +172,8 @@ pub enum WebsocketMessageError {
     UpdateSession(#[from] UpdateSessionError),
     #[error(transparent)]
     Db(#[from] DbError),
+    #[error(transparent)]
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error("Unknown {message:?}")]
     Unknown { message: String },
     #[error(transparent)]
@@ -218,8 +222,8 @@ pub async fn message(
 
             Ok(())
         }
-        InboundPayload::SetActivePlayers(payload) => {
-            set_session_active_players(db, sender, context, &payload.payload).await?;
+        InboundPayload::CreateAudioZone(payload) => {
+            create_audio_zone(db, sender, context, &payload.payload).await?;
 
             sender
                 .send_all_except(&context.connection_id, &get_connections(db).await?)
@@ -354,7 +358,7 @@ pub async fn register_players(
     _sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &Vec<RegisterPlayer>,
-) -> Result<Vec<moosicbox_session::models::Player>, WebsocketSendError> {
+) -> Result<Vec<moosicbox_audio_zone::models::Player>, WebsocketSendError> {
     let mut players = vec![];
     for player in payload {
         players.push(moosicbox_session::create_player(db, &context.connection_id, player).await?);
@@ -372,13 +376,13 @@ pub async fn broadcast_connections(
     Ok(())
 }
 
-async fn set_session_active_players(
+async fn create_audio_zone(
     db: &dyn Database,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
-    payload: &SetSessionActivePlayers,
+    payload: &CreateAudioZone,
 ) -> Result<(), WebsocketMessageError> {
-    moosicbox_session::set_session_active_players(db, payload).await?;
+    moosicbox_audio_zone::create_audio_zone(db, payload).await?;
     get_sessions(db, sender, context, true).await?;
     Ok(())
 }
@@ -414,6 +418,8 @@ pub enum UpdateSessionError {
     #[error(transparent)]
     Db(#[from] DbError),
     #[error(transparent)]
+    DatabaseFetch(#[from] DatabaseFetchError),
+    #[error(transparent)]
     Serde(#[from] serde_json::Error),
 }
 
@@ -426,26 +432,31 @@ pub async fn update_session(
     if let Some(actions) = context.map(|x| &x.player_actions) {
         if payload.playback_updated() {
             if let Some(session) = moosicbox_session::get_session(db, payload.session_id).await? {
-                let funcs = session
-                    .active_players
-                    .iter()
-                    .filter_map(|p| {
-                        actions.iter().find_map(|(player_id, action)| {
-                            if *player_id == p.id {
-                                Some(action)
-                            } else {
-                                None
-                            }
+                let funcs = if let Some(audio_zone_id) = session.audio_zone_id {
+                    let players = moosicbox_audio_zone::db::get_players(db, audio_zone_id).await?;
+
+                    players
+                        .iter()
+                        .filter_map(|p| {
+                            actions.iter().find_map(|(player_id, action)| {
+                                if *player_id == p.id {
+                                    Some(action)
+                                } else {
+                                    None
+                                }
+                            })
                         })
-                    })
-                    .collect::<Vec<_>>();
+                        .collect::<Vec<_>>()
+                } else {
+                    vec![]
+                };
 
                 if log::log_enabled!(log::Level::Trace) {
                     log::trace!(
-                        "Running player actions on existing session id={} count_of_funcs={} payload={payload:?} session={session:?} active_players={:?} action_player_ids={:?}",
+                        "Running player actions on existing session id={} count_of_funcs={} payload={payload:?} session={session:?} audio_zone_id={:?} action_player_ids={:?}",
                         session.id,
                         funcs.len(),
-                        session.active_players,
+                        session.audio_zone_id,
                         actions.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
                     );
                 } else {
@@ -495,6 +506,7 @@ pub async fn update_session(
         position: payload.position,
         seek: payload.seek,
         volume: payload.volume,
+        audio_zone_id: payload.audio_zone_id,
         playlist,
         quality: payload.quality,
     };

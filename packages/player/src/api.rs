@@ -191,6 +191,7 @@ pub struct PlayAlbumQuery {
     pub host: Option<String>,
     pub format: Option<AudioFormat>,
     pub source: Option<ApiSource>,
+    pub audio_zone_id: Option<u64>,
 }
 
 #[cfg_attr(
@@ -208,6 +209,7 @@ pub struct PlayAlbumQuery {
             ("host" = Option<String>, Query, description = "Remote host to fetch track audio from"),
             ("format" = Option<AudioFormat>, Query, description = "Audio format to play the tracks in"),
             ("source" = Option<ApiSource>, Query, description = "API source to fetch the tracks from"),
+            ("audioZoneId" = Option<u64>, Query, description = "Audio zone ID to play from"),
         ),
         responses(
             (
@@ -244,6 +246,7 @@ pub async fn play_album_endpoint(
             PlaybackQuality {
                 format: query.format.unwrap_or_default(),
             },
+            query.audio_zone_id,
             Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
         )
         .await?;
@@ -261,6 +264,7 @@ pub struct PlayTrackQuery {
     pub host: Option<String>,
     pub format: Option<AudioFormat>,
     pub source: Option<ApiSource>,
+    pub audio_zone_id: Option<u64>,
 }
 
 #[cfg_attr(
@@ -277,6 +281,7 @@ pub struct PlayTrackQuery {
             ("host" = Option<String>, Query, description = "Remote host to fetch track audio from"),
             ("format" = Option<AudioFormat>, Query, description = "Audio format to play the tracks in"),
             ("source" = Option<ApiSource>, Query, description = "API source to fetch the tracks from"),
+            ("audioZoneId" = Option<u64>, Query, description = "Audio zone ID to play from"),
         ),
         responses(
             (
@@ -320,6 +325,7 @@ pub async fn play_track_endpoint(
             PlaybackQuality {
                 format: query.format.unwrap_or_default(),
             },
+            query.audio_zone_id,
             Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
         )
         .await?;
@@ -338,6 +344,7 @@ pub struct PlayTracksQuery {
     pub host: Option<String>,
     pub format: Option<AudioFormat>,
     pub source: Option<ApiSource>,
+    pub audio_zone_id: Option<u64>,
 }
 
 #[cfg_attr(
@@ -355,6 +362,7 @@ pub struct PlayTracksQuery {
             ("host" = Option<String>, Query, description = "Remote host to fetch track audio from"),
             ("format" = Option<AudioFormat>, Query, description = "Audio format to play the tracks in"),
             ("source" = Option<ApiSource>, Query, description = "API source to fetch the tracks from"),
+            ("audioZoneId" = Option<u64>, Query, description = "Audio zone ID to play from"),
         ),
         responses(
             (
@@ -393,6 +401,7 @@ pub async fn play_tracks_endpoint(
             PlaybackQuality {
                 format: query.format.unwrap_or_default(),
             },
+            query.audio_zone_id,
             Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
         )
         .await?;
@@ -489,6 +498,7 @@ pub struct UpdatePlaybackQuery {
     pub format: Option<AudioFormat>,
     pub session_id: Option<u64>,
     pub source: Option<ApiSource>,
+    pub audio_zone_id: Option<Option<u64>>,
 }
 
 #[cfg_attr(
@@ -509,6 +519,7 @@ pub struct UpdatePlaybackQuery {
             ("format" = Option<AudioFormat>, Query, description = "Update the 'format' status on the playback"),
             ("sessionId" = Option<u64>, Query, description = "Session ID to update the playback for"),
             ("source" = Option<ApiSource>, Query, description = "Update the 'source' status on the playback"),
+            ("audioZoneId" = Option<u64>, Query, description = "Audio zone ID to update the playback for"),
         ),
         responses(
             (
@@ -555,6 +566,7 @@ pub async fn update_playback_endpoint(
             query.format.map(|format| PlaybackQuality { format }),
             query.session_id,
             get_session_playlist_id_from_session_id(&**data.database, query.session_id).await?,
+            query.audio_zone_id,
             true,
             Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
         )

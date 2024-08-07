@@ -147,6 +147,7 @@ pub struct Playback {
     pub quality: PlaybackQuality,
     pub progress: f64,
     pub volume: Arc<AtomicF64>,
+    pub audio_zone_id: Option<u64>,
     pub abort: CancellationToken,
 }
 
@@ -158,6 +159,7 @@ impl Playback {
         quality: PlaybackQuality,
         session_id: Option<u64>,
         session_playlist_id: Option<u64>,
+        audio_zone_id: Option<u64>,
     ) -> Playback {
         Playback {
             id: thread_rng().gen::<u64>(),
@@ -169,6 +171,7 @@ impl Playback {
             quality,
             progress: 0.0,
             volume: Arc::new(volume),
+            audio_zone_id,
             abort: CancellationToken::new(),
         }
     }
@@ -466,6 +469,7 @@ pub trait Player: Clone + Send + 'static {
                         None,
                         Some(session.id),
                         Some(session.playlist.id),
+                        Some(session.audio_zone_id),
                         true,
                         None,
                     )
@@ -500,6 +504,7 @@ pub trait Player: Clone + Send + 'static {
         seek: Option<f64>,
         volume: Option<f64>,
         quality: PlaybackQuality,
+        audio_zone_id: Option<u64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
         let tracks = {
@@ -532,6 +537,7 @@ pub trait Player: Clone + Send + 'static {
             seek,
             volume,
             quality,
+            audio_zone_id,
             retry_options,
         )
         .await
@@ -546,6 +552,7 @@ pub trait Player: Clone + Send + 'static {
         seek: Option<f64>,
         volume: Option<f64>,
         quality: PlaybackQuality,
+        audio_zone_id: Option<u64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
         self.play_tracks(
@@ -556,6 +563,7 @@ pub trait Player: Clone + Send + 'static {
             seek,
             volume,
             quality,
+            audio_zone_id,
             retry_options,
         )
         .await
@@ -622,6 +630,7 @@ pub trait Player: Clone + Send + 'static {
         seek: Option<f64>,
         volume: Option<f64>,
         quality: PlaybackQuality,
+        audio_zone_id: Option<u64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
         if let Some(playback) = self.get_playback() {
@@ -636,6 +645,7 @@ pub trait Player: Clone + Send + 'static {
             quality,
             session_id,
             get_session_playlist_id_from_session_id(db, session_id).await?,
+            audio_zone_id,
         );
 
         self.active_playback_write().replace(playback);
@@ -847,6 +857,7 @@ pub trait Player: Clone + Send + 'static {
             None,
             None,
             None,
+            None,
             true,
             retry_options,
         )
@@ -877,6 +888,7 @@ pub trait Player: Clone + Send + 'static {
             None,
             None,
             None,
+            None,
             true,
             retry_options,
         )
@@ -901,6 +913,7 @@ pub trait Player: Clone + Send + 'static {
         quality: Option<PlaybackQuality>,
         session_id: Option<u64>,
         session_playlist_id: Option<u64>,
+        audio_zone_id: Option<Option<u64>>,
         trigger_event: bool,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
@@ -917,6 +930,7 @@ pub trait Player: Clone + Send + 'static {
             tracks={tracks:?}\n\t\
             quality={quality:?}\n\t\
             session_id={session_id:?}\n\t\
+            audio_zone_id={audio_zone_id:?}\n\t\
             trigger_event={trigger_event}\
             "
         );
@@ -936,6 +950,7 @@ pub trait Player: Clone + Send + 'static {
             quality.unwrap_or_default(),
             session_id,
             session_playlist_id,
+            audio_zone_id.flatten(),
         ));
 
         let playing = playing.unwrap_or(original.playing);
@@ -962,6 +977,7 @@ pub trait Player: Clone + Send + 'static {
                 seek.unwrap_or(original.progress)
             },
             volume: original.volume.clone(),
+            audio_zone_id: audio_zone_id.unwrap_or(original.audio_zone_id),
             abort: if original.abort.is_cancelled() {
                 CancellationToken::new()
             } else {
@@ -1374,6 +1390,12 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
     } else {
         None
     };
+    let audio_zone_id = if current.audio_zone_id != previous.audio_zone_id {
+        has_change = true;
+        Some(current.audio_zone_id)
+    } else {
+        None
+    };
     let quality = if current.quality != previous.quality {
         has_change = true;
         Some(current.quality)
@@ -1414,6 +1436,7 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
         seek={seek:?}\n\t\
         quality={quality:?}\n\t\
         volume={volume:?}\n\t\
+        audio_zone_id={audio_zone_id:?}\n\t\
         playlist={playlist:?}\
         "
     );
@@ -1428,6 +1451,7 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
         position,
         seek,
         volume,
+        audio_zone_id,
         playlist,
         quality,
     };

@@ -1,3 +1,4 @@
+use moosicbox_audio_zone::{db::models::AudioZoneModel, models::Player};
 use moosicbox_core::sqlite::{
     db::DbError,
     models::{AsModelQuery as _, Id},
@@ -6,12 +7,12 @@ use moosicbox_database::{
     query::{select, where_in, FilterableQuery as _, SortDirection},
     Database, DatabaseValue,
 };
-use moosicbox_json_utils::ToValueType as _;
+use moosicbox_json_utils::ToValueType;
 use moosicbox_library::db::get_tracks;
 
 use crate::models::{
-    self, CreateSession, Player, Session, SessionPlaylist, SessionPlaylistTrack,
-    SetSessionActivePlayers, UpdateSession,
+    self, CreateSession, Session, SessionPlaylist, SessionPlaylistTrack, SetSessionAudioZone,
+    UpdateSession,
 };
 
 pub async fn get_session_playlist_tracks(
@@ -43,18 +44,22 @@ pub async fn get_session_playlist(
     }
 }
 
-pub async fn get_session_active_players(
+pub async fn get_session_audio_zone(
     db: &dyn Database,
     session_id: u64,
-) -> Result<Vec<Player>, DbError> {
+) -> Result<Option<AudioZoneModel>, DbError> {
     Ok(db
-        .select("active_players")
-        .columns(&["players.*"])
-        .join("players", "players.id=active_players.player_id")
-        .where_eq("active_players.session_id", session_id)
-        .execute(db)
+        .select("audio_zones")
+        .columns(&["audio_zones.*"])
+        .join(
+            "audio_zone_sessions",
+            "audio_zones.id=audio_zone_sessions.audio_zone_id",
+        )
+        .where_eq("audio_zone_sessions.session_id", session_id)
+        .execute_first(db)
         .await?
-        .to_value_type()?)
+        .map(|x| x.to_value_type())
+        .transpose()?)
 }
 
 pub async fn get_session_playing(db: &dyn Database, id: u64) -> Result<Option<bool>, DbError> {
@@ -133,10 +138,10 @@ pub async fn create_session(
         .await?
         .to_value_type()?;
 
-    for player_id in &session.active_players {
-        db.insert("active_players")
+    if let Some(id) = session.audio_zone_id {
+        db.insert("audio_zone_sessions")
             .value("session_id", new_session.id)
-            .value("player_id", *player_id)
+            .value("audio_zone_id", id)
             .execute(db)
             .await?;
     }
@@ -149,7 +154,7 @@ pub async fn create_session(
         seek: new_session.seek,
         volume: new_session.volume,
         name: new_session.name,
-        active_players: get_session_active_players(db, new_session.id).await?,
+        audio_zone_id: session.audio_zone_id,
         playlist,
     })
 }
@@ -254,7 +259,7 @@ pub async fn delete_session(db: &dyn Database, session_id: u64) -> Result<(), Db
         .execute(db)
         .await?;
 
-    db.delete("active_players")
+    db.delete("audio_zone_sessions")
         .where_eq("session_id", session_id)
         .execute(db)
         .await?
@@ -330,10 +335,7 @@ pub async fn delete_connection(db: &dyn Database, connection_id: &str) -> Result
     Ok(())
 }
 
-pub async fn get_players(
-    db: &dyn Database,
-    connection_id: &str,
-) -> Result<Vec<models::Player>, DbError> {
+pub async fn get_players(db: &dyn Database, connection_id: &str) -> Result<Vec<Player>, DbError> {
     Ok(db
         .select("players")
         .where_eq("connection_id", connection_id)
@@ -346,7 +348,7 @@ pub async fn create_player(
     db: &dyn Database,
     connection_id: &str,
     player: &models::RegisterPlayer,
-) -> Result<models::Player, DbError> {
+) -> Result<Player, DbError> {
     Ok(db
         .upsert("players")
         .where_eq("connection_id", connection_id)
@@ -360,22 +362,20 @@ pub async fn create_player(
         .to_value_type()?)
 }
 
-pub async fn set_session_active_players(
+pub async fn set_session_audio_zone(
     db: &dyn Database,
-    set_session_active_players: &SetSessionActivePlayers,
+    set_session_audio_zone: &SetSessionAudioZone,
 ) -> Result<(), DbError> {
-    db.delete("active_players")
-        .where_eq("session_id", set_session_active_players.session_id)
+    db.delete("audio_zone_sessions")
+        .where_eq("session_id", set_session_audio_zone.session_id)
         .execute(db)
         .await?;
 
-    for player_id in &set_session_active_players.players {
-        db.insert("active_players")
-            .value("session_id", set_session_active_players.session_id)
-            .value("player_id", *player_id)
-            .execute(db)
-            .await?;
-    }
+    db.insert("audio_zone_sessions")
+        .value("session_id", set_session_audio_zone.session_id)
+        .value("audio_zone_id", set_session_audio_zone.audio_zone_id)
+        .execute(db)
+        .await?;
 
     Ok(())
 }

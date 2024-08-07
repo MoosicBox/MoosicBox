@@ -4,10 +4,11 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
+use moosicbox_database::TryIntoDb as _;
 use moosicbox_paging::Page;
 use serde::Deserialize;
 
-use crate::api::models::ApiAudioZone;
+use crate::models::{ApiAudioZone, AudioZone, CreateAudioZone};
 
 pub mod models;
 
@@ -15,8 +16,8 @@ pub mod models;
 #[derive(utoipa::OpenApi)]
 #[openapi(
     tags((name = "Audio Zone")),
-    paths(audio_zones_endpoint),
-    components(schemas())
+    paths(audio_zones_endpoint, create_audio_zone_endpoint),
+    components(schemas(ApiAudioZone))
 )]
 pub struct Api;
 
@@ -31,7 +32,7 @@ pub struct GetAudioZones {
     feature = "openapi", utoipa::path(
         tags = ["Audio Zone"],
         get,
-        path = "/audio-zones",
+        path = "",
         description = "Get a list of the enabled audio zones",
         params(
             ("offset" = Option<u32>, Query, description = "Page offset"),
@@ -46,7 +47,7 @@ pub struct GetAudioZones {
         )
     )
 )]
-#[route("/audio-zones", method = "GET")]
+#[route("", method = "GET")]
 pub async fn audio_zones_endpoint(
     query: web::Query<GetAudioZones>,
     data: web::Data<moosicbox_core::app::AppState>,
@@ -70,4 +71,48 @@ pub async fn audio_zones_endpoint(
         limit,
         total,
     }))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateAudioZoneQuery {
+    pub name: String,
+}
+
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Audio Zone"],
+        post,
+        path = "",
+        description = "Create a new audio zone",
+        params(
+            ("name" = String, Query, description = "Name of the audio zone to create"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The audio zone that was successfully created",
+                body = ApiAudioZone,
+            )
+        )
+    )
+)]
+#[route("", method = "POST")]
+pub async fn create_audio_zone_endpoint(
+    query: web::Query<CreateAudioZoneQuery>,
+    data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<ApiAudioZone>> {
+    let create = CreateAudioZone {
+        name: query.name.clone(),
+    };
+    let zone = crate::create_audio_zone(&**data.database, &create)
+        .await
+        .map_err(ErrorInternalServerError)?;
+    let zone: AudioZone = zone
+        .try_into_db(&**data.database)
+        .await
+        .map_err(ErrorInternalServerError)?;
+    let zone = zone.into();
+
+    Ok(Json(zone))
 }
