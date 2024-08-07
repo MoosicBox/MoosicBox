@@ -1091,15 +1091,38 @@ impl<'a> UpsertStatement<'a> {
     /// # Errors
     ///
     /// Will return `Err` if the upsert execution failed.
-    pub async fn execute(&self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
-        db.exec_upsert(self).await
+    pub async fn execute(self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
+        if self.values.is_empty() {
+            return db.query(&self.into()).await;
+        }
+        db.exec_upsert(&self).await
     }
 
     /// # Errors
     ///
     /// Will return `Err` if the upsert execution failed.
-    pub async fn execute_first(&self, db: &dyn Database) -> Result<Row, DatabaseError> {
-        db.exec_upsert_first(self).await
+    pub async fn execute_first(self, db: &dyn Database) -> Result<Row, DatabaseError> {
+        if self.values.is_empty() {
+            return db
+                .query_first(&self.into())
+                .await?
+                .ok_or(DatabaseError::NoRow);
+        }
+        db.exec_upsert_first(&self).await
+    }
+}
+
+impl<'a> From<UpsertStatement<'a>> for SelectQuery<'a> {
+    fn from(value: UpsertStatement<'a>) -> Self {
+        Self {
+            table_name: value.table_name,
+            distinct: false,
+            columns: &["*"],
+            filters: value.filters,
+            joins: None,
+            sorts: None,
+            limit: value.limit,
+        }
     }
 }
 

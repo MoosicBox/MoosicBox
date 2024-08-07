@@ -206,6 +206,8 @@ pub enum DatabaseError {
     #[cfg(feature = "postgres-sqlx")]
     #[error(transparent)]
     PostgresSqlx(sqlx::postgres::SqlxDatabaseError),
+    #[error("No row")]
+    NoRow,
 }
 
 #[derive(Debug)]
