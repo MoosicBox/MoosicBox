@@ -274,3 +274,68 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     async fn exec_delete(&self, statement: &DeleteStatement<'_>)
         -> Result<Vec<Row>, DatabaseError>;
 }
+
+#[async_trait]
+pub trait TryFromDb<T>
+where
+    Self: Sized,
+{
+    type Error;
+
+    async fn try_from_db(value: T, db: &dyn Database) -> Result<Self, Self::Error>;
+}
+
+#[async_trait]
+impl<T, U: Send + 'static> TryFromDb<Vec<U>> for Vec<T>
+where
+    T: TryFromDb<U> + Send,
+{
+    type Error = T::Error;
+
+    async fn try_from_db(value: Vec<U>, db: &dyn Database) -> Result<Self, T::Error> {
+        let mut converted = Self::with_capacity(value.len());
+
+        for x in value {
+            converted.push(T::try_from_db(x, db).await?);
+        }
+
+        Ok(converted)
+    }
+}
+
+#[async_trait]
+impl<T, U: Send + 'static> TryFromDb<Option<U>> for Option<T>
+where
+    T: TryFromDb<U>,
+{
+    type Error = T::Error;
+
+    async fn try_from_db(value: Option<U>, db: &dyn Database) -> Result<Self, T::Error> {
+        Ok(match value {
+            Some(x) => Some(T::try_from_db(x, db).await?),
+            None => None,
+        })
+    }
+}
+
+#[async_trait]
+pub trait TryIntoDb<T>
+where
+    Self: Sized,
+{
+    type Error;
+
+    async fn try_into_db(self, db: &dyn Database) -> Result<T, Self::Error>;
+}
+
+#[async_trait]
+impl<T: Send, U> TryIntoDb<U> for T
+where
+    U: TryFromDb<T>,
+{
+    type Error = U::Error;
+
+    async fn try_into_db(self, db: &dyn Database) -> Result<U, U::Error> {
+        U::try_from_db(self, db).await
+    }
+}
