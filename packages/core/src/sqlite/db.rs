@@ -1,6 +1,6 @@
 use actix_web::error::ErrorInternalServerError;
 use moosicbox_database::{boxed, query::*, Database, DatabaseError, DatabaseValue};
-use moosicbox_json_utils::{ParseError, ToValueType as _};
+use moosicbox_json_utils::{database::DatabaseFetchError, ParseError, ToValueType as _};
 use std::{fmt::Debug, sync::PoisonError};
 use thiserror::Error;
 
@@ -30,6 +30,8 @@ pub enum DbError {
     Parse(#[from] ParseError),
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    #[error(transparent)]
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 impl From<DbError> for actix_web::Error {
