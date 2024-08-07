@@ -1065,6 +1065,18 @@ impl<'a> UpsertStatement<'a> {
     }
 
     #[must_use]
+    pub fn value_opt<T: Into<Box<dyn Expression>>>(
+        mut self,
+        name: &'a str,
+        value: Option<T>,
+    ) -> Self {
+        if let Some(value) = value {
+            self.values.push((name, value.into()));
+        }
+        self
+    }
+
+    #[must_use]
     pub fn unique(mut self, unique: &'a [&'a str]) -> Self {
         self.unique.replace(unique);
         self
