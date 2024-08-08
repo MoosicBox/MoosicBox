@@ -85,16 +85,6 @@ pub enum Command {
         conn: ConnId,
     },
 
-    List {
-        res_tx: OneshotAsyncSender<Vec<RoomId>>,
-    },
-
-    Join {
-        conn: ConnId,
-        room: RoomId,
-        res_tx: OneshotAsyncSender<()>,
-    },
-
     Send {
         msg: Msg,
         conn: ConnId,
@@ -298,34 +288,6 @@ impl WsServer {
         Ok(())
     }
 
-    /// Returns list of created room names.
-    fn list_rooms(&self) -> Vec<String> {
-        self.rooms.keys().cloned().collect()
-    }
-
-    /// Join room, send disconnect message to old room send join message to new room.
-    fn join_room(&mut self, conn_id: ConnId, room: &str) {
-        let mut rooms = Vec::new();
-
-        // remove session from all rooms
-        for (n, sessions) in &mut self.rooms {
-            if sessions.remove(&conn_id) {
-                rooms.push(n.to_owned());
-            }
-        }
-        // send message to other users
-        for room in rooms {
-            self.send_system_message(&room, 0, "Someone disconnected");
-        }
-
-        self.rooms
-            .entry(room.to_string())
-            .or_default()
-            .insert(conn_id);
-
-        self.send_system_message(room, conn_id, "Someone connected");
-    }
-
     async fn process_command(ctx: Arc<RwLock<Self>>, cmd: Command) -> io::Result<()> {
         let cmd_str = cmd.to_string();
 
@@ -356,15 +318,6 @@ impl WsServer {
                         error
                     );
                 }
-            }
-
-            Command::List { res_tx } => {
-                let _ = res_tx.send(ctx.write().await.list_rooms()).await;
-            }
-
-            Command::Join { conn, room, res_tx } => {
-                ctx.write().await.join_room(conn, &room);
-                let _ = res_tx.send(()).await;
             }
 
             Command::Send { msg, conn, res_tx } => {
@@ -531,42 +484,6 @@ impl WsServerHandle {
         res_rx.recv().await.unwrap_or_else(|e| {
             moosicbox_assert::die_or_panic!("Failed to recv response from ws server: {e:?}")
         })
-    }
-
-    /// List all created rooms.
-    pub async fn list_rooms(&self) -> Vec<String> {
-        log::trace!("Sending List command");
-        let (res_tx, res_rx) = kanal::oneshot_async();
-
-        if let Err(e) = self.cmd_tx.send_async(Command::List { res_tx }).await {
-            moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
-        }
-
-        res_rx.recv().await.unwrap_or_else(|e| {
-            moosicbox_assert::die_or_panic!("Failed to recv response from ws server: {e:?}")
-        })
-    }
-
-    /// Join `room`, creating it if it does not exist.
-    pub async fn join_room(&self, conn: ConnId, room: impl Into<String> + Send) {
-        log::trace!("Sending Join command");
-        let (res_tx, res_rx) = kanal::oneshot_async();
-
-        if let Err(e) = self
-            .cmd_tx
-            .send_async(Command::Join {
-                conn,
-                room: room.into(),
-                res_tx,
-            })
-            .await
-        {
-            moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
-        }
-
-        res_rx.recv().await.unwrap_or_else(|e| {
-            moosicbox_assert::die_or_error!("Failed to recv response from ws server: {e:?}");
-        });
     }
 
     pub async fn send(&self, conn: ConnId, msg: impl Into<String> + Send) {
