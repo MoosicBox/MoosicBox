@@ -1,4 +1,3 @@
-use moosicbox_core::sqlite::db::DbError;
 use moosicbox_database::{boxed, query::*, Database, DatabaseValue};
 use moosicbox_json_utils::{database::DatabaseFetchError, ToValueType};
 
@@ -8,11 +7,14 @@ use self::models::AudioZoneModel;
 
 pub mod models;
 
-pub async fn update_audio_zone(db: &dyn Database, zone: UpdateAudioZone) -> Result<(), DbError> {
+pub async fn update_audio_zone(
+    db: &dyn Database,
+    zone: UpdateAudioZone,
+) -> Result<models::AudioZoneModel, DatabaseFetchError> {
     let inserted: models::AudioZoneModel = db
         .upsert("audio_zones")
         .where_eq("id", zone.id)
-        .value("name", zone.name)
+        .value_opt("name", zone.name)
         .execute_first(db)
         .await?
         .to_value_type()?;
@@ -32,11 +34,11 @@ pub async fn update_audio_zone(db: &dyn Database, zone: UpdateAudioZone) -> Resu
 
         let values = players
             .into_iter()
-            .filter(|x| !existing.iter().any(|existing| existing.player_id == x.id))
+            .filter(|x| !existing.iter().any(|existing| existing.player_id == *x))
             .map(|x| {
                 vec![
                     ("audio_zone_id", DatabaseValue::UNumber(inserted.id)),
-                    ("player_id", DatabaseValue::UNumber(x.id)),
+                    ("player_id", DatabaseValue::UNumber(x)),
                 ]
             })
             .collect::<Vec<_>>();
@@ -48,7 +50,7 @@ pub async fn update_audio_zone(db: &dyn Database, zone: UpdateAudioZone) -> Resu
             .await?;
     }
 
-    Ok(())
+    Ok(inserted)
 }
 
 pub async fn get_zones(

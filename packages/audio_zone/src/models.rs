@@ -138,8 +138,11 @@ pub struct CreateAudioZone {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct UpdateAudioZone {
     pub id: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    pub players: Option<Vec<Player>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub players: Option<Vec<u64>>,
 }

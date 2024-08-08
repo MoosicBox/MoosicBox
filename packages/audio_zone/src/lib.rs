@@ -1,7 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 use db::models::AudioZoneModel;
-use models::{AudioZone, CreateAudioZone};
+use models::{AudioZone, CreateAudioZone, UpdateAudioZone};
 use moosicbox_database::{Database, TryIntoDb};
 use moosicbox_json_utils::database::DatabaseFetchError;
 
@@ -20,4 +20,11 @@ pub async fn create_audio_zone(
     zone: &CreateAudioZone,
 ) -> Result<AudioZoneModel, DatabaseFetchError> {
     crate::db::create_audio_zone(db, zone).await
+}
+
+pub async fn update_audio_zone(
+    db: &dyn Database,
+    update: UpdateAudioZone,
+) -> Result<AudioZoneModel, DatabaseFetchError> {
+    crate::db::update_audio_zone(db, update).await
 }
