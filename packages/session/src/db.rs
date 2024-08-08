@@ -134,6 +134,7 @@ pub async fn create_session(
         .insert("sessions")
         .value("session_playlist_id", playlist.id)
         .value("name", session.name.clone())
+        .value("audio_zone_id", session.audio_zone_id)
         .execute(db)
         .await?
         .to_value_type()?;
@@ -204,7 +205,10 @@ pub async fn update_session(db: &dyn Database, session: &UpdateSession) -> Resul
         log::trace!("update_session: No tracks to insert");
     }
 
-    let mut values = Vec::new();
+    let mut values = vec![(
+        "audio_zone_id",
+        DatabaseValue::UNumberOpt(Some(session.audio_zone_id)),
+    )];
 
     if let Some(name) = &session.name {
         values.push(("name", DatabaseValue::String(name.clone())))

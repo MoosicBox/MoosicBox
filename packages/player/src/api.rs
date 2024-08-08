@@ -18,8 +18,8 @@ use once_cell::sync::Lazy;
 use serde::Deserialize;
 
 use crate::{
-    get_session_playlist_id_from_session_id, local::LocalPlayer, ApiPlaybackStatus, PlaybackStatus,
-    Player as _, PlayerError, PlayerSource, Track, DEFAULT_PLAYBACK_RETRY_OPTIONS,
+    local::LocalPlayer, ApiPlaybackStatus, PlaybackStatus, Player as _, PlayerError, PlayerSource,
+    Track, DEFAULT_PLAYBACK_RETRY_OPTIONS,
 };
 
 #[cfg(feature = "openapi")]
@@ -223,7 +223,7 @@ pub struct PlayAlbumQuery {
 #[post("/play/album")]
 pub async fn play_album_endpoint(
     query: web::Query<PlayAlbumQuery>,
-    data: web::Data<AppState>,
+    _data: web::Data<AppState>,
     api_state: web::Data<MusicApiState>,
 ) -> Result<Json<PlaybackStatus>> {
     let source = query.source.unwrap_or(ApiSource::Library);
@@ -237,7 +237,6 @@ pub async fn play_album_endpoint(
                 .apis
                 .get(source)
                 .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
-            &**data.database,
             query.session_id,
             &album_id,
             query.position,
@@ -295,7 +294,7 @@ pub struct PlayTrackQuery {
 #[post("/play/track")]
 pub async fn play_track_endpoint(
     query: web::Query<PlayTrackQuery>,
-    data: web::Data<AppState>,
+    _data: web::Data<AppState>,
     api_state: web::Data<MusicApiState>,
 ) -> Result<Json<PlaybackStatus>> {
     let track_id = get_track_or_ids_from_track_id_ranges(
@@ -317,7 +316,6 @@ pub async fn play_track_endpoint(
     get_player(query.host.as_deref())
         .await?
         .play_track(
-            &**data.database,
             query.session_id,
             track_id,
             query.seek,
@@ -376,7 +374,7 @@ pub struct PlayTracksQuery {
 #[post("/play/tracks")]
 pub async fn play_tracks_endpoint(
     query: web::Query<PlayTracksQuery>,
-    data: web::Data<AppState>,
+    _data: web::Data<AppState>,
     api_state: web::Data<MusicApiState>,
 ) -> Result<Json<PlaybackStatus>> {
     let track_ids = get_track_or_ids_from_track_id_ranges(
@@ -392,7 +390,6 @@ pub async fn play_tracks_endpoint(
     get_player(query.host.as_deref())
         .await?
         .play_tracks(
-            &**data.database,
             query.session_id,
             track_ids,
             query.position,
@@ -497,8 +494,8 @@ pub struct UpdatePlaybackQuery {
     pub track_ids: Option<String>,
     pub format: Option<AudioFormat>,
     pub session_id: Option<u64>,
+    pub audio_zone_id: Option<u64>,
     pub source: Option<ApiSource>,
-    pub audio_zone_id: Option<Option<u64>>,
 }
 
 #[cfg_attr(
@@ -518,8 +515,8 @@ pub struct UpdatePlaybackQuery {
             ("trackIds" = String, Query, description = "Comma-separated list of track IDs to update the playback with"),
             ("format" = Option<AudioFormat>, Query, description = "Update the 'format' status on the playback"),
             ("sessionId" = Option<u64>, Query, description = "Session ID to update the playback for"),
-            ("source" = Option<ApiSource>, Query, description = "Update the 'source' status on the playback"),
             ("audioZoneId" = Option<u64>, Query, description = "Audio zone ID to update the playback for"),
+            ("source" = Option<ApiSource>, Query, description = "Update the 'source' status on the playback"),
         ),
         responses(
             (
@@ -533,7 +530,7 @@ pub struct UpdatePlaybackQuery {
 #[post("/update-playback")]
 pub async fn update_playback_endpoint(
     query: web::Query<UpdatePlaybackQuery>,
-    data: web::Data<AppState>,
+    _data: web::Data<AppState>,
     api_state: web::Data<MusicApiState>,
 ) -> Result<Json<PlaybackStatus>> {
     let track_ids = if let Some(track_ids) = &query.track_ids {
@@ -565,7 +562,6 @@ pub async fn update_playback_endpoint(
             track_ids,
             query.format.map(|format| PlaybackQuality { format }),
             query.session_id,
-            get_session_playlist_id_from_session_id(&**data.database, query.session_id).await?,
             query.audio_zone_id,
             true,
             Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),

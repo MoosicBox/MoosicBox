@@ -140,7 +140,6 @@ impl std::fmt::Debug for PlayableTrack {
 pub struct Playback {
     pub id: u64,
     pub session_id: Option<u64>,
-    pub session_playlist_id: Option<u64>,
     pub tracks: Vec<Track>,
     pub playing: bool,
     pub position: u16,
@@ -158,13 +157,11 @@ impl Playback {
         volume: AtomicF64,
         quality: PlaybackQuality,
         session_id: Option<u64>,
-        session_playlist_id: Option<u64>,
         audio_zone_id: Option<u64>,
     ) -> Playback {
         Playback {
             id: thread_rng().gen::<u64>(),
             session_id,
-            session_playlist_id,
             tracks,
             playing: false,
             position: position.unwrap_or_default(),
@@ -468,8 +465,7 @@ pub trait Player: Clone + Send + 'static {
                         ),
                         None,
                         Some(session.id),
-                        Some(session.playlist.id),
-                        Some(session.audio_zone_id),
+                        session.audio_zone_id,
                         true,
                         None,
                     )
@@ -497,7 +493,6 @@ pub trait Player: Clone + Send + 'static {
     async fn play_album(
         &self,
         api: &dyn MusicApi,
-        db: &dyn Database,
         session_id: Option<u64>,
         album_id: &Id,
         position: Option<u16>,
@@ -530,7 +525,6 @@ pub trait Player: Clone + Send + 'static {
         };
 
         self.play_tracks(
-            db,
             session_id,
             tracks,
             position,
@@ -546,7 +540,6 @@ pub trait Player: Clone + Send + 'static {
     #[allow(clippy::too_many_arguments)]
     async fn play_track(
         &self,
-        db: &dyn Database,
         session_id: Option<u64>,
         track: Track,
         seek: Option<f64>,
@@ -556,7 +549,6 @@ pub trait Player: Clone + Send + 'static {
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
         self.play_tracks(
-            db,
             session_id,
             vec![track],
             None,
@@ -623,7 +615,6 @@ pub trait Player: Clone + Send + 'static {
     #[allow(clippy::too_many_arguments)]
     async fn play_tracks(
         &self,
-        db: &dyn Database,
         session_id: Option<u64>,
         tracks: Vec<Track>,
         position: Option<u16>,
@@ -644,7 +635,6 @@ pub trait Player: Clone + Send + 'static {
             AtomicF64::new(volume.unwrap_or(1.0)),
             quality,
             session_id,
-            get_session_playlist_id_from_session_id(db, session_id).await?,
             audio_zone_id,
         );
 
@@ -857,7 +847,6 @@ pub trait Player: Clone + Send + 'static {
             None,
             None,
             None,
-            None,
             true,
             retry_options,
         )
@@ -888,7 +877,6 @@ pub trait Player: Clone + Send + 'static {
             None,
             None,
             None,
-            None,
             true,
             retry_options,
         )
@@ -912,8 +900,7 @@ pub trait Player: Clone + Send + 'static {
         tracks: Option<Vec<Track>>,
         quality: Option<PlaybackQuality>,
         session_id: Option<u64>,
-        session_playlist_id: Option<u64>,
-        audio_zone_id: Option<Option<u64>>,
+        audio_zone_id: Option<u64>,
         trigger_event: bool,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
@@ -949,8 +936,7 @@ pub trait Player: Clone + Send + 'static {
             AtomicF64::new(volume.unwrap_or(1.0)),
             quality.unwrap_or_default(),
             session_id,
-            session_playlist_id,
-            audio_zone_id.flatten(),
+            audio_zone_id,
         ));
 
         let playing = playing.unwrap_or(original.playing);
@@ -965,8 +951,8 @@ pub trait Player: Clone + Send + 'static {
 
         let playback = Playback {
             id: original.id,
-            session_id: original.session_id,
-            session_playlist_id: original.session_playlist_id,
+            session_id: session_id.or(original.session_id),
+            audio_zone_id: audio_zone_id.or(original.audio_zone_id),
             tracks: tracks.clone().unwrap_or_else(|| original.tracks.clone()),
             playing: is_playing,
             quality: quality.unwrap_or(original.quality),
@@ -977,7 +963,6 @@ pub trait Player: Clone + Send + 'static {
                 seek.unwrap_or(original.progress)
             },
             volume: original.volume.clone(),
-            audio_zone_id: audio_zone_id.unwrap_or(original.audio_zone_id),
             abort: if original.abort.is_cancelled() {
                 CancellationToken::new()
             } else {
@@ -1359,10 +1344,13 @@ pub fn on_playback_event(listener: PlaybackEventCallback) {
 }
 
 pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
-    if current.session_id.is_none() {
+    let Some(session_id) = current.session_id else {
         return;
-    }
-    let session_id = current.session_id.unwrap();
+    };
+    let Some(audio_zone_id) = current.audio_zone_id else {
+        return;
+    };
+
     let mut has_change = false;
 
     let playing = if current.playing != previous.playing {
@@ -1390,12 +1378,6 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
     } else {
         None
     };
-    let audio_zone_id = if current.audio_zone_id != previous.audio_zone_id {
-        has_change = true;
-        Some(current.audio_zone_id)
-    } else {
-        None
-    };
     let quality = if current.quality != previous.quality {
         has_change = true;
         Some(current.quality)
@@ -1417,7 +1399,7 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
     let playlist = if tracks != prev_tracks {
         has_change = true;
         Some(UpdateSessionPlaylist {
-            session_playlist_id: current.session_playlist_id.unwrap_or(0),
+            session_playlist_id: 0,
             tracks,
         })
     } else {
@@ -1443,6 +1425,7 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
 
     let update = UpdateSession {
         session_id,
+        audio_zone_id,
         play: None,
         stop: None,
         name: None,
@@ -1451,7 +1434,6 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
         position,
         seek,
         volume,
-        audio_zone_id,
         playlist,
         quality,
     };

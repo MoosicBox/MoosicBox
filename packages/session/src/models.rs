@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use moosicbox_audio_zone::models::{ApiPlayer, AudioZone, Player};
+use moosicbox_audio_zone::models::{ApiPlayer, Player};
 use moosicbox_core::{
     sqlite::{
         db::DbError,
@@ -7,7 +7,7 @@ use moosicbox_core::{
     },
     types::PlaybackQuality,
 };
-use moosicbox_database::{AsId, Database, DatabaseValue, TryIntoDb};
+use moosicbox_database::{AsId, Database, DatabaseValue};
 use moosicbox_json_utils::{database::ToValue as _, ParseError, ToValueType};
 use moosicbox_library::{
     db::get_tracks,
@@ -15,9 +15,7 @@ use moosicbox_library::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::db::{
-    get_players, get_session_audio_zone, get_session_playlist, get_session_playlist_tracks,
-};
+use crate::db::{get_players, get_session_playlist, get_session_playlist_tracks};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -44,6 +42,7 @@ pub struct CreateSessionPlaylist {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSession {
     pub session_id: u64,
+    pub audio_zone_id: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub play: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -61,8 +60,6 @@ pub struct UpdateSession {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub volume: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub audio_zone_id: Option<Option<u64>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub playlist: Option<UpdateSessionPlaylist>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub quality: Option<PlaybackQuality>,
@@ -77,7 +74,6 @@ impl UpdateSession {
             || self.position.is_some()
             || self.volume.is_some()
             || self.seek.is_some()
-            || self.audio_zone_id.is_some()
             || self.playlist.is_some()
     }
 }
@@ -86,6 +82,7 @@ impl From<ApiUpdateSession> for UpdateSession {
     fn from(value: ApiUpdateSession) -> Self {
         Self {
             session_id: value.session_id,
+            audio_zone_id: value.audio_zone_id,
             play: value.play,
             stop: value.stop,
             name: value.name,
@@ -94,7 +91,6 @@ impl From<ApiUpdateSession> for UpdateSession {
             position: value.position,
             seek: value.seek,
             volume: value.volume,
-            audio_zone_id: value.audio_zone_id,
             playlist: value.playlist.map(|x| x.into()),
             quality: value.quality,
         }
@@ -105,6 +101,7 @@ impl From<UpdateSession> for ApiUpdateSession {
     fn from(value: UpdateSession) -> Self {
         Self {
             session_id: value.session_id,
+            audio_zone_id: value.audio_zone_id,
             play: value.play,
             stop: value.stop,
             name: value.name,
@@ -113,7 +110,6 @@ impl From<UpdateSession> for ApiUpdateSession {
             position: value.position,
             seek: value.seek,
             volume: value.volume,
-            audio_zone_id: value.audio_zone_id,
             playlist: value.playlist.as_ref().map(|p| p.to_api()),
             quality: value.quality,
         }
@@ -216,6 +212,7 @@ impl ToApi<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
 #[serde(rename_all = "camelCase")]
 pub struct ApiUpdateSession {
     pub session_id: u64,
+    pub audio_zone_id: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub play: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -232,8 +229,6 @@ pub struct ApiUpdateSession {
     pub seek: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub volume: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub audio_zone_id: Option<Option<u64>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub playlist: Option<ApiUpdateSessionPlaylist>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -277,6 +272,7 @@ impl ToValueType<Session> for &moosicbox_database::Row {
             position: self.to_value("position")?,
             seek: self.to_value("seek")?,
             volume: self.to_value("volume")?,
+            audio_zone_id: self.to_value("audio_zone_id")?,
             ..Default::default()
         })
     }
@@ -287,11 +283,6 @@ impl AsModelQuery<Session> for &moosicbox_database::Row {
     async fn as_model_query(&self, db: &dyn Database) -> Result<Session, DbError> {
         let id = self.to_value("id")?;
 
-        let audio_zone: Option<AudioZone> = get_session_audio_zone(db, id)
-            .await?
-            .try_into_db(db)
-            .await?;
-
         match get_session_playlist(db, id).await? {
             Some(playlist) => Ok(Session {
                 id,
@@ -301,7 +292,7 @@ impl AsModelQuery<Session> for &moosicbox_database::Row {
                 position: self.to_value("position")?,
                 seek: self.to_value("seek")?,
                 volume: self.to_value("volume")?,
-                audio_zone_id: audio_zone.map(|x| x.id),
+                audio_zone_id: self.to_value("audio_zone_id")?,
                 playlist,
             }),
             None => Err(DbError::InvalidRequest),

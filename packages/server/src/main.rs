@@ -798,7 +798,6 @@ fn main() -> std::io::Result<()> {
                                 None,
                                 None,
                                 None,
-                                None,
                                 true,
                                 None,
                             )
@@ -824,7 +823,6 @@ fn main() -> std::io::Result<()> {
                                 true,
                                 None,
                                 Some(true),
-                                None,
                                 None,
                                 None,
                                 None,
@@ -1102,8 +1100,7 @@ fn handle_server_playback_update(
                 },
                 None,
                 Some(update.session_id),
-                None,
-                update.audio_zone_id,
+                Some(update.audio_zone_id),
                 true,
                 Some(moosicbox_player::DEFAULT_PLAYBACK_RETRY_OPTIONS),
             )
@@ -1250,8 +1247,7 @@ fn handle_upnp_playback_update(
                 }),
                 None,
                 Some(update.session_id),
-                None,
-                update.audio_zone_id,
+                Some(update.audio_zone_id),
                 true,
                 Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
             )

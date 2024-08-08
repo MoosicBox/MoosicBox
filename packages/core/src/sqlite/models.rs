@@ -592,6 +592,7 @@ impl ToValueType<ApiSource> for DatabaseValue {
 #[serde(rename_all = "camelCase")]
 pub struct SetSeek {
     pub session_id: u64,
+    pub audio_zone_id: u64,
     pub seek: u64,
 }
 
