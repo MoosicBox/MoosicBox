@@ -95,7 +95,7 @@ clap = { version = "4.5.13", features = ["derive"] }
 console-subscriber = "0.4.0"
 cpal = "0.15.3"
 debounce = "0.2.2"
-derive_more = "0.99.18"
+derive_more = "1.0.0"
 dotenv = "0.15"
 enum-as-inner = "0.6.0"
 env_logger = "0.11"
