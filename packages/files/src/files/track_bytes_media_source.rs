@@ -48,7 +48,7 @@ impl TrackBytesMediaSource {
                 log::debug!("Acquired lock for inner bytes for writer id={id}");
 
                 tokio::select!(
-                    _ = tokio::time::sleep(Duration::from_millis(5000)) => {
+                    _ = tokio::time::sleep(Duration::from_millis(15000)) => {
                         moosicbox_assert::die_or_error!(
                             "Timed out waiting for bytes from stream for writer id={id}"
                         );
@@ -108,7 +108,7 @@ impl Read for TrackBytesMediaSource {
 
         let bytes = self
             .receiver
-            .recv_timeout(Duration::from_millis(10 * 1000))
+            .recv_timeout(Duration::from_millis(15 * 1000))
             .map_err(|e| {
                 moosicbox_assert::die_or_error!(
                     "Timed out waiting for bytes buf.len={} self.buf.len={} writer id={}: {e:?}",
