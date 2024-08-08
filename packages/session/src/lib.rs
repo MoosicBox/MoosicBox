@@ -117,9 +117,11 @@ pub async fn create_player(
 
     #[cfg(feature = "events")]
     {
-        if let Err(e) = crate::events::trigger_players_updated_event().await {
-            moosicbox_assert::die_or_error!("Failed to trigger event: {e:?}");
-        }
+        moosicbox_task::spawn("create_player updated_events", async move {
+            if let Err(e) = crate::events::trigger_players_updated_event().await {
+                moosicbox_assert::die_or_error!("Failed to trigger event: {e:?}");
+            }
+        });
     }
 
     Ok(result)
@@ -138,9 +140,11 @@ pub async fn create_players(
 
     #[cfg(feature = "events")]
     {
-        if let Err(e) = crate::events::trigger_players_updated_event().await {
-            moosicbox_assert::die_or_error!("Failed to trigger event: {e:?}");
-        }
+        moosicbox_task::spawn("create_players updated_events", async move {
+            if let Err(e) = crate::events::trigger_players_updated_event().await {
+                moosicbox_assert::die_or_error!("Failed to trigger event: {e:?}");
+            }
+        });
     }
 
     Ok(results)
@@ -151,9 +155,11 @@ pub async fn delete_player(db: &dyn Database, player_id: u64) -> Result<(), DbEr
 
     #[cfg(feature = "events")]
     {
-        if let Err(e) = crate::events::trigger_players_updated_event().await {
-            moosicbox_assert::die_or_error!("Failed to trigger event: {e:?}");
-        }
+        moosicbox_task::spawn("delete_player updated_events", async move {
+            if let Err(e) = crate::events::trigger_players_updated_event().await {
+                moosicbox_assert::die_or_error!("Failed to trigger event: {e:?}");
+            }
+        });
     }
 
     Ok(())

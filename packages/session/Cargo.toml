@@ -24,7 +24,8 @@ moosicbox_paging = { path = "../paging", optional = true }
 utoipa           = { workspace = true, optional = true }
 
 # Events Dependencies
-tokio = { workspace = true, optional = true }
+moosicbox_task = { path = "../task", default-features = false, optional = true }
+tokio          = { workspace = true, optional = true }
 
 async-trait  = { workspace = true }
 log          = { workspace = true }
@@ -45,7 +46,7 @@ openapi = [
     "moosicbox_paging/openapi",
 ]
 
-events = ["dep:tokio"]
+events = ["dep:moosicbox_task", "dep:tokio"]
 
 aac  = ["moosicbox_library/aac"]
 flac = ["moosicbox_library/flac"]
