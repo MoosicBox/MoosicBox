@@ -291,6 +291,12 @@ impl WsServer {
     async fn process_command(ctx: Arc<RwLock<Self>>, cmd: Command) -> io::Result<()> {
         let cmd_str = cmd.to_string();
 
+        if log::log_enabled!(log::Level::Trace) {
+            log::trace!("process_command: cmd={cmd:?}");
+        } else {
+            log::debug!("process_command: cmd={cmd_str}");
+        }
+
         match cmd {
             #[cfg(feature = "player")]
             Command::AddPlayerAction { id, action } => {
