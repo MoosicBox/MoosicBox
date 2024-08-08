@@ -6,7 +6,17 @@ where
     Fut: futures::Future + Send + 'static,
     Fut::Output: Send + 'static,
 {
-    log::trace!("spawn: {name}");
+    log::trace!("spawn start: {name}");
+    #[cfg(debug_assertions)]
+    let future = {
+        let name = name.to_owned();
+        async move {
+            let response = future.await;
+            log::trace!("spawn finished: {name}");
+
+            response
+        }
+    };
     tokio::task::Builder::new()
         .name(name)
         .spawn(future)
@@ -19,7 +29,17 @@ where
     Fut: futures::Future + Send + 'static,
     Fut::Output: Send + 'static,
 {
-    log::trace!("spawn: {name}");
+    log::trace!("spawn start: {name}");
+    #[cfg(debug_assertions)]
+    let future = {
+        let name = name.to_owned();
+        async move {
+            let response = future.await;
+            log::trace!("spawn finished: {name}");
+
+            response
+        }
+    };
     tokio::task::spawn(future)
 }
 
@@ -32,7 +52,17 @@ where
     Function: FnOnce() -> Output + Send + 'static,
     Output: Send + 'static,
 {
-    log::trace!("spawn_blocking: {name}");
+    log::trace!("spawn_blocking start: {name}");
+    #[cfg(debug_assertions)]
+    let function = {
+        let name = name.to_owned();
+        move || {
+            let response = function();
+            log::trace!("spawn_blocking finished: {name}");
+
+            response
+        }
+    };
     tokio::task::Builder::new()
         .name(name)
         .spawn_blocking(function)
@@ -48,7 +78,17 @@ where
     Function: FnOnce() -> Output + Send + 'static,
     Output: Send + 'static,
 {
-    log::trace!("spawn_blocking: {name}");
+    log::trace!("spawn_blocking start: {name}");
+    #[cfg(debug_assertions)]
+    let function = {
+        let name = name.to_owned();
+        move || {
+            let response = function();
+            log::trace!("spawn_blocking finished: {name}");
+
+            response
+        }
+    };
     tokio::task::spawn_blocking(function)
 }
 
@@ -58,7 +98,17 @@ where
     Fut: futures::Future + 'static,
     Fut::Output: 'static,
 {
-    log::trace!("spawn_local: {name}");
+    log::trace!("spawn_local start: {name}");
+    #[cfg(debug_assertions)]
+    let future = {
+        let name = name.to_owned();
+        async move {
+            let response = future.await;
+            log::trace!("spawn_local finished: {name}");
+
+            response
+        }
+    };
     tokio::task::Builder::new()
         .name(name)
         .spawn_local(future)
@@ -71,6 +121,16 @@ where
     Fut: futures::Future + 'static,
     Fut::Output: 'static,
 {
-    log::trace!("spawn_local: {name}");
+    log::trace!("spawn_local start: {name}");
+    #[cfg(debug_assertions)]
+    let future = {
+        let name = name.to_owned();
+        async move {
+            let response = future.await;
+            log::trace!("spawn_local finished: {name}");
+
+            response
+        }
+    };
     tokio::task::spawn_local(future)
 }
