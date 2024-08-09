@@ -479,13 +479,17 @@ impl WsServerHandle {
 
         let (res_tx, res_rx) = kanal::oneshot_async();
 
-        if let Err(e) = self
-            .cmd_tx
-            .send_async(Command::Connect { conn_tx, res_tx })
-            .await
-        {
-            moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
-        }
+        moosicbox_task::spawn("ws server connect", {
+            let cmd_tx = self.cmd_tx.clone();
+            async move {
+                if let Err(e) = cmd_tx
+                    .send_async(Command::Connect { conn_tx, res_tx })
+                    .await
+                {
+                    moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
+                }
+            }
+        });
 
         res_rx.recv().await.unwrap_or_else(|e| {
             moosicbox_assert::die_or_panic!("Failed to recv response from ws server: {e:?}")
@@ -496,17 +500,15 @@ impl WsServerHandle {
         log::trace!("Sending Send command");
         let (res_tx, res_rx) = kanal::oneshot_async();
 
-        if let Err(e) = self
-            .cmd_tx
-            .send_async(Command::Send {
-                msg: msg.into(),
-                conn,
-                res_tx,
-            })
-            .await
-        {
-            moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
-        }
+        moosicbox_task::spawn("ws server send", {
+            let cmd_tx = self.cmd_tx.clone();
+            let msg = msg.into();
+            async move {
+                if let Err(e) = cmd_tx.send_async(Command::Send { msg, conn, res_tx }).await {
+                    moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
+                }
+            }
+        });
 
         res_rx.recv().await.unwrap_or_else(|e| {
             moosicbox_assert::die_or_error!("Failed to recv response from ws server: {e:?}");
@@ -517,16 +519,15 @@ impl WsServerHandle {
         log::trace!("Sending Broadcast command");
         let (res_tx, res_rx) = kanal::oneshot_async();
 
-        if let Err(e) = self
-            .cmd_tx
-            .send_async(Command::Broadcast {
-                msg: msg.into(),
-                res_tx,
-            })
-            .await
-        {
-            moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
-        };
+        moosicbox_task::spawn("ws server broadcast", {
+            let cmd_tx = self.cmd_tx.clone();
+            let msg = msg.into();
+            async move {
+                if let Err(e) = cmd_tx.send_async(Command::Broadcast { msg, res_tx }).await {
+                    moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
+                }
+            }
+        });
 
         res_rx.recv().await.unwrap_or_else(|e| {
             moosicbox_assert::die_or_error!("Failed to recv response from ws server: {e:?}");
@@ -537,17 +538,18 @@ impl WsServerHandle {
         log::trace!("Sending BroadcastExcept command");
         let (res_tx, res_rx) = kanal::oneshot_async();
 
-        if let Err(e) = self
-            .cmd_tx
-            .send_async(Command::BroadcastExcept {
-                msg: msg.into(),
-                conn,
-                res_tx,
-            })
-            .await
-        {
-            moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
-        }
+        moosicbox_task::spawn("ws server broadcast_except", {
+            let cmd_tx = self.cmd_tx.clone();
+            let msg = msg.into();
+            async move {
+                if let Err(e) = cmd_tx
+                    .send_async(Command::BroadcastExcept { msg, conn, res_tx })
+                    .await
+                {
+                    moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
+                }
+            }
+        });
 
         res_rx.recv().await.unwrap_or_else(|e| {
             moosicbox_assert::die_or_error!("Failed to recv response from ws server: {e:?}");
@@ -559,17 +561,18 @@ impl WsServerHandle {
         log::trace!("Sending Message command");
         let (res_tx, res_rx) = kanal::oneshot_async();
 
-        if let Err(e) = self
-            .cmd_tx
-            .send_async(Command::Message {
-                msg: msg.into(),
-                conn,
-                res_tx,
-            })
-            .await
-        {
-            moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
-        }
+        moosicbox_task::spawn("ws server send_message", {
+            let cmd_tx = self.cmd_tx.clone();
+            let msg = msg.into();
+            async move {
+                if let Err(e) = cmd_tx
+                    .send_async(Command::Message { msg, conn, res_tx })
+                    .await
+                {
+                    moosicbox_assert::die_or_error!("Failed to send command: {e:?}");
+                }
+            }
+        });
 
         res_rx.recv().await.unwrap_or_else(|e| {
             moosicbox_assert::die_or_error!("Failed to recv response from ws server: {e:?}");
