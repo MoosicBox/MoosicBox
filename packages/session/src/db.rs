@@ -245,6 +245,7 @@ pub async fn update_session(db: &dyn Database, session: &UpdateSession) -> Resul
 }
 
 pub async fn delete_session(db: &dyn Database, session_id: u64) -> Result<(), DbError> {
+    log::debug!("Deleting session_playlist_tracks for session_id={session_id}");
     db.delete("session_playlist_tracks")
         .where_in(
             "session_playlist_tracks.id",
@@ -263,14 +264,19 @@ pub async fn delete_session(db: &dyn Database, session_id: u64) -> Result<(), Db
         .execute(db)
         .await?;
 
+    log::debug!("Deleting active_players for session_id={session_id}");
+    db.delete("active_players")
+        .where_eq("session_id", session_id)
+        .execute(db)
+        .await?;
+
+    log::debug!("Deleting audio_zone_sessions for session_id={session_id}");
     db.delete("audio_zone_sessions")
         .where_eq("session_id", session_id)
         .execute(db)
-        .await?
-        .into_iter()
-        .next()
-        .ok_or(DbError::NoRow)?;
+        .await?;
 
+    log::debug!("Deleting session for session_id={session_id}");
     db.delete("sessions")
         .where_eq("id", session_id)
         .execute(db)
@@ -279,6 +285,7 @@ pub async fn delete_session(db: &dyn Database, session_id: u64) -> Result<(), Db
         .next()
         .ok_or(DbError::NoRow)?;
 
+    log::debug!("Deleting session_playlists for session_id={session_id}");
     db.delete("session_playlists")
         .where_eq("id", session_id)
         .execute(db)
