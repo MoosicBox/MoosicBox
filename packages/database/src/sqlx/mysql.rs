@@ -45,6 +45,9 @@ impl<T: Expression + ?Sized> ToSql for T {
             ExpressionType::In(value) => {
                 format!("{} IN ({})", value.left.to_sql(), value.values.to_sql())
             }
+            ExpressionType::NotIn(value) => {
+                format!("{} NOT IN ({})", value.left.to_sql(), value.values.to_sql())
+            }
             ExpressionType::Lt(value) => {
                 if value.right.is_null() {
                     panic!("Invalid < comparison with NULL");

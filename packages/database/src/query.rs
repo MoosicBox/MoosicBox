@@ -44,6 +44,7 @@ pub enum ExpressionType<'a> {
     Lte(&'a Lte),
     Join(&'a Join<'a>),
     Sort(&'a Sort),
+    NotIn(&'a NotIn<'a>),
     NotEq(&'a NotEq),
     InList(&'a InList),
     Literal(&'a Literal),
@@ -373,6 +374,33 @@ impl Expression for In<'_> {
     }
 }
 
+#[derive(Debug)]
+pub struct NotIn<'a> {
+    pub(crate) left: Identifier,
+    pub(crate) values: Box<dyn List + 'a>,
+}
+
+impl BooleanExpression for NotIn<'_> {}
+impl Expression for NotIn<'_> {
+    fn expression_type(&self) -> ExpressionType {
+        ExpressionType::NotIn(self)
+    }
+
+    fn values(&self) -> Option<Vec<&DatabaseValue>> {
+        let values = [
+            self.left.values().unwrap_or_default(),
+            self.values.values().unwrap_or_default(),
+        ]
+        .concat();
+
+        if values.is_empty() {
+            None
+        } else {
+            Some(values)
+        }
+    }
+}
+
 pub fn sort<T>(expression: T, direction: SortDirection) -> Sort
 where
     T: Into<Box<dyn Expression>>,
@@ -558,6 +586,17 @@ where
     }
 }
 
+pub fn where_not_in<'a, L, V>(left: L, values: V) -> NotIn<'a>
+where
+    L: Into<Identifier>,
+    V: Into<Box<dyn List + 'a>>,
+{
+    NotIn {
+        left: left.into(),
+        values: values.into(),
+    }
+}
+
 #[macro_export]
 macro_rules! boxed {
     () => (
@@ -601,6 +640,15 @@ where
         V: Into<Box<dyn List>>,
     {
         self.filter(Box::new(where_in(left, values)))
+    }
+
+    #[must_use]
+    fn where_not_in<L, V>(self, left: L, values: V) -> Self
+    where
+        L: Into<Identifier>,
+        V: Into<Box<dyn List>>,
+    {
+        self.filter(Box::new(where_not_in(left, values)))
     }
 
     #[must_use]
