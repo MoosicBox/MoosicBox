@@ -337,6 +337,21 @@ impl Database for PostgresSqlxDatabase {
         .await?)
     }
 
+    async fn exec_delete_first(
+        &self,
+        statement: &DeleteStatement<'_>,
+    ) -> Result<Option<crate::Row>, DatabaseError> {
+        Ok(delete(
+            self.get_connection().await?.lock().await.as_mut(),
+            statement.table_name,
+            statement.filters.as_deref(),
+            Some(1),
+        )
+        .await?
+        .into_iter()
+        .next())
+    }
+
     async fn exec_insert(
         &self,
         statement: &InsertStatement<'_>,

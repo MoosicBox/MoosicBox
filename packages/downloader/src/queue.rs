@@ -498,6 +498,13 @@ mod tests {
             Ok(vec![])
         }
 
+        async fn exec_delete_first(
+            &self,
+            _statement: &DeleteStatement<'_>,
+        ) -> Result<Option<Row>, DatabaseError> {
+            Ok(None)
+        }
+
         async fn exec_insert(
             &self,
             _statement: &InsertStatement<'_>,

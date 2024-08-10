@@ -275,6 +275,10 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     ) -> Result<Vec<Row>, DatabaseError>;
     async fn exec_delete(&self, statement: &DeleteStatement<'_>)
         -> Result<Vec<Row>, DatabaseError>;
+    async fn exec_delete_first(
+        &self,
+        statement: &DeleteStatement<'_>,
+    ) -> Result<Option<Row>, DatabaseError>;
 }
 
 #[async_trait]

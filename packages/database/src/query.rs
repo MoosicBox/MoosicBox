@@ -1165,4 +1165,11 @@ impl<'a> DeleteStatement<'a> {
     pub async fn execute(&self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
         db.exec_delete(self).await
     }
+
+    /// # Errors
+    ///
+    /// Will return `Err` if the delete execution failed.
+    pub async fn execute_first(&self, db: &dyn Database) -> Result<Option<Row>, DatabaseError> {
+        db.exec_delete_first(self).await
+    }
 }

@@ -257,6 +257,20 @@ impl Database for RusqliteDatabase {
         )?)
     }
 
+    async fn exec_delete_first(
+        &self,
+        statement: &DeleteStatement<'_>,
+    ) -> Result<Option<crate::Row>, DatabaseError> {
+        Ok(delete(
+            self.connection.lock().as_ref().unwrap(),
+            statement.table_name,
+            statement.filters.as_deref(),
+            Some(1),
+        )?
+        .into_iter()
+        .next())
+    }
+
     async fn exec_insert(
         &self,
         statement: &InsertStatement<'_>,

@@ -312,6 +312,21 @@ impl Database for PostgresDatabase {
         .await?)
     }
 
+    async fn exec_delete_first(
+        &self,
+        statement: &DeleteStatement<'_>,
+    ) -> Result<Option<crate::Row>, DatabaseError> {
+        Ok(delete(
+            &self.connection,
+            statement.table_name,
+            statement.filters.as_deref(),
+            Some(1),
+        )
+        .await?
+        .into_iter()
+        .next())
+    }
+
     async fn exec_insert(
         &self,
         statement: &InsertStatement<'_>,

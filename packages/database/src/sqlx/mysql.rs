@@ -269,6 +269,21 @@ impl Database for MySqlSqlxDatabase {
         .await?)
     }
 
+    async fn exec_delete_first(
+        &self,
+        statement: &DeleteStatement<'_>,
+    ) -> Result<Option<crate::Row>, DatabaseError> {
+        Ok(delete(
+            &*self.connection.lock().await,
+            statement.table_name,
+            statement.filters.as_deref(),
+            Some(1),
+        )
+        .await?
+        .into_iter()
+        .next())
+    }
+
     async fn exec_insert(
         &self,
         statement: &InsertStatement<'_>,
