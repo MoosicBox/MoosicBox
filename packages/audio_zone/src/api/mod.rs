@@ -1,14 +1,13 @@
 use actix_web::{
-    error::ErrorInternalServerError,
+    error::{ErrorInternalServerError, ErrorNotFound},
     route,
     web::{self, Json},
     Result,
 };
-use moosicbox_database::TryIntoDb as _;
 use moosicbox_paging::Page;
 use serde::Deserialize;
 
-use crate::models::{ApiAudioZone, AudioZone, CreateAudioZone, UpdateAudioZone};
+use crate::models::{ApiAudioZone, CreateAudioZone, UpdateAudioZone};
 
 pub mod models;
 
@@ -115,12 +114,46 @@ pub async fn create_audio_zone_endpoint(
     };
     let zone = crate::create_audio_zone(&**data.database, &create)
         .await
-        .map_err(ErrorInternalServerError)?;
-    let zone: AudioZone = zone
-        .try_into_db(&**data.database)
+        .map_err(ErrorInternalServerError)?
+        .into();
+
+    Ok(Json(zone))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteAudioZoneQuery {
+    pub id: u64,
+}
+
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Audio Zone"],
+        post,
+        path = "",
+        description = "Delete a new audio zone",
+        params(
+            ("name" = String, Query, description = "Name of the audio zone to delete"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The audio zone that was successfully deleted",
+                body = ApiAudioZone,
+            )
+        )
+    )
+)]
+#[route("", method = "DELETE")]
+pub async fn delete_audio_zone_endpoint(
+    query: web::Query<DeleteAudioZoneQuery>,
+    data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<ApiAudioZone>> {
+    let zone = crate::delete_audio_zone(&**data.database, query.id)
         .await
-        .map_err(ErrorInternalServerError)?;
-    let zone = zone.into();
+        .map_err(ErrorInternalServerError)?
+        .ok_or(ErrorNotFound("Audio zone not found"))?
+        .into();
 
     Ok(Json(zone))
 }
@@ -154,12 +187,8 @@ pub async fn update_audio_zone_endpoint(
 ) -> Result<Json<ApiAudioZone>> {
     let zone = crate::update_audio_zone(&**data.database, update.clone())
         .await
-        .map_err(ErrorInternalServerError)?;
-    let zone: AudioZone = zone
-        .try_into_db(&**data.database)
-        .await
-        .map_err(ErrorInternalServerError)?;
-    let zone = zone.into();
+        .map_err(ErrorInternalServerError)?
+        .into();
 
     Ok(Json(zone))
 }

@@ -75,6 +75,19 @@ pub async fn create_audio_zone(
         .to_value_type()?)
 }
 
+pub async fn delete_audio_zone(
+    db: &dyn Database,
+    id: u64,
+) -> Result<Option<AudioZoneModel>, DatabaseFetchError> {
+    Ok(db
+        .delete("audio_zones")
+        .where_eq("id", id)
+        .execute_first(db)
+        .await?
+        .map(|x| x.to_value_type())
+        .transpose()?)
+}
+
 pub async fn get_zone(
     db: &dyn Database,
     id: u64,

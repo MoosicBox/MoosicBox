@@ -1,6 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
-use db::models::AudioZoneModel;
 use models::{AudioZone, CreateAudioZone, UpdateAudioZone};
 use moosicbox_database::{Database, TryIntoDb};
 use moosicbox_json_utils::database::DatabaseFetchError;
@@ -15,16 +14,39 @@ pub async fn zones(db: &dyn Database) -> Result<Vec<AudioZone>, DatabaseFetchErr
     crate::db::get_zones(db).await?.try_into_db(db).await
 }
 
+pub async fn get_zone(db: &dyn Database, id: u64) -> Result<Option<AudioZone>, DatabaseFetchError> {
+    crate::db::get_zone(db, id).await?.try_into_db(db).await
+}
+
 pub async fn create_audio_zone(
     db: &dyn Database,
     zone: &CreateAudioZone,
-) -> Result<AudioZoneModel, DatabaseFetchError> {
-    crate::db::create_audio_zone(db, zone).await
+) -> Result<AudioZone, DatabaseFetchError> {
+    crate::db::create_audio_zone(db, zone)
+        .await?
+        .try_into_db(db)
+        .await
 }
 
 pub async fn update_audio_zone(
     db: &dyn Database,
     update: UpdateAudioZone,
-) -> Result<AudioZoneModel, DatabaseFetchError> {
-    crate::db::update_audio_zone(db, update).await
+) -> Result<AudioZone, DatabaseFetchError> {
+    crate::db::update_audio_zone(db, update)
+        .await?
+        .try_into_db(db)
+        .await
+}
+
+pub async fn delete_audio_zone(
+    db: &dyn Database,
+    id: u64,
+) -> Result<Option<AudioZone>, DatabaseFetchError> {
+    Ok(if let Some(zone) = get_zone(db, id).await? {
+        crate::db::delete_audio_zone(db, id).await?;
+
+        Some(zone)
+    } else {
+        None
+    })
 }
