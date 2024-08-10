@@ -20,15 +20,21 @@ pub async fn update_audio_zone(
         .to_value_type()?;
 
     if let Some(players) = zone.players {
-        let existing: Vec<models::AudioZonePlayer> = db
+        let mut existing: Vec<models::AudioZonePlayer> = db
             .select("audio_zone_players")
             .where_eq("audio_zone_id", inserted.id)
             .execute(db)
             .await?
             .to_value_type()?;
 
+        existing.retain(|p| players.iter().any(|new_p| *new_p == p.player_id));
+
         db.delete("audio_zone_players")
             .where_eq("audio_zone_id", inserted.id)
+            .where_not_in(
+                "player_id",
+                existing.iter().map(|x| x.player_id).collect::<Vec<_>>(),
+            )
             .execute(db)
             .await?;
 
