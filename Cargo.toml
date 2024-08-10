@@ -72,7 +72,7 @@ actix = "0.13.5"
 actix-cors = "0.7.0"
 actix-files = "0.6.6"
 actix-rt = "2.10.0"
-actix-web = "4.8.0"
+actix-web = "4.9.0"
 actix-ws = "0.3.0"
 arrayvec = "0.7.4"
 async-once-cell = "0.5.3"
@@ -82,16 +82,16 @@ atomic_float = "1.0.0"
 audiopus = "0.2.0"
 audiotags = { git = "https://github.com/BSteffaniak/audiotags.git", branch = "master-shallow" }
 awc = "3.5.0"
-aws-config = "1.5.4"
-aws-sdk-apigatewaymanagement = "1.36.0"
-aws-sdk-ssm = "1.41.0"
+aws-config = "1.5.5"
+aws-sdk-apigatewaymanagement = "1.37.0"
+aws-sdk-ssm = "1.42.0"
 base64 = "0.22.1"
 bytes = "1.7.1"
 chrono = { version = "0.4.38", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.14", features = ["derive"] }
+clap = { version = "4.5.15", features = ["derive"] }
 console-subscriber = "0.4.0"
 cpal = "0.15.3"
 debounce = "0.2.2"
