@@ -797,15 +797,35 @@ fn delete(
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
+    let where_clause = build_where_clause(filters);
+
+    let select_query = limit.map(|_| format!("SELECT rowid FROM {table_name} {where_clause}",));
+
     let query = format!(
-        "DELETE FROM {table_name} {} RETURNING * {}",
-        build_where_clause(filters),
-        limit.map_or_else(String::new, |limit| format!("LIMIT {limit}"))
+        "DELETE FROM {table_name} {} RETURNING *",
+        build_update_where_clause(filters, limit, select_query.as_deref()),
     );
+
+    let mut all_filter_values: Vec<RusqliteDatabaseValue> = filters
+        .map(|filters| {
+            filters
+                .iter()
+                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+                .map(std::convert::Into::into)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    if limit.is_some() {
+        all_filter_values.extend(all_filter_values.clone());
+    }
 
     log::trace!(
         "Running delete query: {query} with params: {:?}",
-        filters.map(|f| f.iter().filter_map(|x| x.params()).collect::<Vec<_>>())
+        all_filter_values
+            .iter()
+            .filter_map(super::query::Expression::params)
+            .collect::<Vec<_>>()
     );
 
     let mut statement = connection.prepare_cached(&query)?;
@@ -815,12 +835,7 @@ fn delete(
         .map(std::string::ToString::to_string)
         .collect::<Vec<_>>();
 
-    bind_values(
-        &mut statement,
-        bexprs_to_values_opt(filters).as_deref(),
-        false,
-        0,
-    )?;
+    bind_values(&mut statement, Some(&all_filter_values), false, 0)?;
 
     to_rows(&column_names, statement.raw_query())
 }
