@@ -14,6 +14,10 @@ version     = "0.1.0"
 moosicbox_assert = { path = "../assert", default-features = false }
 moosicbox_async_service = { path = "../async_service", default-features = false }
 moosicbox_audio_output = { path = "../audio_output", default-features = false }
+moosicbox_audio_zone = { path = "../audio_zone", default-features = false, features = [
+    "api",
+    "events",
+] }
 moosicbox_auth = { path = "../auth", default-features = false }
 moosicbox_config = { path = "../config", default-features = false }
 moosicbox_core = { path = "../core", default-features = false }
@@ -39,9 +43,6 @@ moosicbox_tunnel_sender = { path = "../tunnel_sender", default-features = false 
 moosicbox_ws = { path = "../ws", default-features = false, features = ["ws"] }
 
 # APIs
-moosicbox_audio_zone = { path = "../audio_zone", default-features = false, features = [
-    "api",
-], optional = true }
 moosicbox_downloader = { path = "../downloader", default-features = false, features = [
     "api",
 ], optional = true }
