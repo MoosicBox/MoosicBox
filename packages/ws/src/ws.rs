@@ -285,7 +285,7 @@ pub async fn get_sessions(
     let sessions = {
         moosicbox_session::get_sessions(db)
             .await?
-            .iter()
+            .into_iter()
             .map(|session| session.to_api())
             .collect::<Vec<_>>()
     };
@@ -318,11 +318,12 @@ async fn get_connections(db: &dyn Database) -> Result<String, WebsocketSendError
     let connections = {
         moosicbox_session::get_connections(db)
             .await?
-            .iter()
+            .into_iter()
             .map(|connection| {
+                let id = connection.id.clone();
                 let mut api = connection.to_api();
 
-                api.alive = connection_data.values().any(|c| c.id == connection.id);
+                api.alive = connection_data.values().any(|c| c.id == id);
 
                 api
             })
