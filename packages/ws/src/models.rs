@@ -1,4 +1,4 @@
-use moosicbox_audio_zone::models::CreateAudioZone;
+use moosicbox_audio_zone::models::{ApiAudioZoneWithSession, CreateAudioZone};
 use moosicbox_core::sqlite::models::SetSeek;
 use moosicbox_session::models::{
     ApiConnection, ApiSession, ApiUpdateSession, CreateSession, DeleteSession, RegisterConnection,
@@ -38,6 +38,7 @@ pub enum OutboundPayload {
     ConnectionId(ConnectionIdPayload),
     Sessions(SessionsPayload),
     SessionUpdated(SessionUpdatedPayload),
+    AudioZoneWithSessions(AudioZoneWithSessionsPayload),
     DownloadEvent(DownloadEventPayload),
     Connections(ConnectionsPayload),
     SetSeek(SetSeekPayload),
@@ -105,6 +106,12 @@ pub struct ConnectionIdPayload {
 #[serde(rename_all = "camelCase")]
 pub struct SessionsPayload {
     pub payload: Vec<ApiSession>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioZoneWithSessionsPayload {
+    pub payload: Vec<ApiAudioZoneWithSession>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

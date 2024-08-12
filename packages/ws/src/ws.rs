@@ -26,8 +26,8 @@ use serde_json::Value;
 use thiserror::Error;
 
 use crate::models::{
-    ConnectionIdPayload, ConnectionsPayload, DownloadEventPayload, InboundPayload, OutboundPayload,
-    SessionUpdatedPayload, SessionsPayload, SetSeekPayload,
+    AudioZoneWithSessionsPayload, ConnectionIdPayload, ConnectionsPayload, DownloadEventPayload,
+    InboundPayload, OutboundPayload, SessionUpdatedPayload, SessionsPayload, SetSeekPayload,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -47,6 +47,8 @@ pub struct WebsocketContext {
 
 #[derive(Debug, Error)]
 pub enum WebsocketSendError {
+    #[error(transparent)]
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
     Db(#[from] DbError),
     #[error("Unknown: {0}")]
@@ -274,6 +276,34 @@ pub async fn message(
         status_code: 200,
         body: "Received".into(),
     })
+}
+
+pub async fn broadcast_audio_zones(
+    db: &dyn Database,
+    sender: &impl WebsocketSender,
+    context: &WebsocketContext,
+    send_all: bool,
+) -> Result<(), WebsocketSendError> {
+    let audio_zones = {
+        moosicbox_audio_zone::zones_with_sessions(db)
+            .await?
+            .into_iter()
+            .map(|zone| zone.into())
+            .collect::<Vec<_>>()
+    };
+
+    let audio_zones_json = serde_json::to_value(OutboundPayload::AudioZoneWithSessions(
+        AudioZoneWithSessionsPayload {
+            payload: audio_zones,
+        },
+    ))?
+    .to_string();
+
+    if send_all {
+        sender.send_all(&audio_zones_json).await
+    } else {
+        sender.send(&context.connection_id, &audio_zones_json).await
+    }
 }
 
 pub async fn get_sessions(
