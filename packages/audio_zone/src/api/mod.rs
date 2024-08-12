@@ -19,6 +19,7 @@ pub mod models;
         audio_zones_endpoint,
         create_audio_zone_endpoint,
         update_audio_zone_endpoint,
+        delete_audio_zone_endpoint,
     ),
     components(schemas(
         ApiAudioZone,
