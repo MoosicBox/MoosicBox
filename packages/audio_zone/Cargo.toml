@@ -24,6 +24,9 @@ actix-web        = { workspace = true, optional = true }
 moosicbox_paging = { path = "../paging", optional = true }
 utoipa           = { workspace = true, optional = true }
 
+# Events Dependencies
+moosicbox_task = { path = "../task", default-features = false, optional = true }
+
 async-trait = { workspace = true }
 bytes       = { workspace = true }
 log         = { workspace = true }
@@ -34,9 +37,11 @@ tokio       = { workspace = true, features = ["rt-multi-thread", "tracing"] }
 tokio-util  = { workspace = true }
 
 [features]
-default = ["api", "openapi"]
+default = ["api", "openapi", "events"]
 
 fail-on-warnings = []
 
 api     = ["dep:actix-web", "dep:moosicbox_paging"]
 openapi = ["dep:utoipa", "moosicbox_paging/openapi"]
+
+events = ["dep:moosicbox_task"]

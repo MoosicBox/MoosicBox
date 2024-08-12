@@ -3597,6 +3597,7 @@ dependencies = [
  "moosicbox_database",
  "moosicbox_json_utils",
  "moosicbox_paging",
+ "moosicbox_task",
  "serde",
  "serde_json",
  "thiserror",

@@ -7,6 +7,9 @@ use moosicbox_json_utils::database::DatabaseFetchError;
 #[cfg(feature = "api")]
 pub mod api;
 
+#[cfg(feature = "events")]
+pub mod events;
+
 pub mod db;
 pub mod models;
 
@@ -31,31 +34,64 @@ pub async fn create_audio_zone(
     db: &dyn Database,
     zone: &CreateAudioZone,
 ) -> Result<AudioZone, DatabaseFetchError> {
-    crate::db::create_audio_zone(db, zone)
+    let resp = crate::db::create_audio_zone(db, zone)
         .await?
         .try_into_db(db)
-        .await
+        .await?;
+
+    #[cfg(feature = "events")]
+    {
+        moosicbox_task::spawn("create_audio_zone updated_events", async move {
+            if let Err(e) = crate::events::trigger_audio_zones_updated_event().await {
+                moosicbox_assert::die_or_error!("Failed to trigger event: {e:?}");
+            }
+        });
+    }
+
+    Ok(resp)
 }
 
 pub async fn update_audio_zone(
     db: &dyn Database,
     update: UpdateAudioZone,
 ) -> Result<AudioZone, DatabaseFetchError> {
-    crate::db::update_audio_zone(db, update)
+    let resp = crate::db::update_audio_zone(db, update)
         .await?
         .try_into_db(db)
-        .await
+        .await?;
+
+    #[cfg(feature = "events")]
+    {
+        moosicbox_task::spawn("create_audio_zone updated_events", async move {
+            if let Err(e) = crate::events::trigger_audio_zones_updated_event().await {
+                moosicbox_assert::die_or_error!("Failed to trigger event: {e:?}");
+            }
+        });
+    }
+
+    Ok(resp)
 }
 
 pub async fn delete_audio_zone(
     db: &dyn Database,
     id: u64,
 ) -> Result<Option<AudioZone>, DatabaseFetchError> {
-    Ok(if let Some(zone) = get_zone(db, id).await? {
+    let resp = if let Some(zone) = get_zone(db, id).await? {
         crate::db::delete_audio_zone(db, id).await?;
 
         Some(zone)
     } else {
         None
-    })
+    };
+
+    #[cfg(feature = "events")]
+    {
+        moosicbox_task::spawn("create_audio_zone updated_events", async move {
+            if let Err(e) = crate::events::trigger_audio_zones_updated_event().await {
+                moosicbox_assert::die_or_error!("Failed to trigger event: {e:?}");
+            }
+        });
+    }
+
+    Ok(resp)
 }
