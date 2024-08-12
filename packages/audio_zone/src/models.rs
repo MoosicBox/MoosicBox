@@ -7,7 +7,7 @@ use moosicbox_json_utils::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::db::models::AudioZoneModel;
+use crate::db::models::{AudioZoneModel, AudioZoneWithSessionModel};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AudioZone {
@@ -56,6 +56,71 @@ impl From<AudioZone> for ApiAudioZone {
     fn from(value: AudioZone) -> Self {
         Self {
             id: value.id,
+            name: value.name,
+            players: value
+                .players
+                .into_iter()
+                .map(|x| x.to_api())
+                .collect::<Vec<_>>(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AudioZoneWithSession {
+    pub id: u64,
+    pub session_id: u64,
+    pub name: String,
+    pub players: Vec<Player>,
+}
+
+impl From<ApiAudioZoneWithSession> for AudioZoneWithSession {
+    fn from(value: ApiAudioZoneWithSession) -> Self {
+        Self {
+            id: value.id,
+            session_id: value.session_id,
+            name: value.name,
+            players: value
+                .players
+                .into_iter()
+                .map(|x| x.into())
+                .collect::<Vec<_>>(),
+        }
+    }
+}
+
+#[async_trait]
+impl TryFromDb<AudioZoneWithSessionModel> for AudioZoneWithSession {
+    type Error = DatabaseFetchError;
+
+    async fn try_from_db(
+        value: AudioZoneWithSessionModel,
+        db: &dyn Database,
+    ) -> Result<Self, Self::Error> {
+        Ok(AudioZoneWithSession {
+            id: value.id,
+            session_id: value.session_id,
+            name: value.name,
+            players: crate::db::get_players(db, value.id).await?,
+        })
+    }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct ApiAudioZoneWithSession {
+    pub id: u64,
+    pub session_id: u64,
+    pub name: String,
+    pub players: Vec<ApiPlayer>,
+}
+
+impl From<AudioZoneWithSession> for ApiAudioZoneWithSession {
+    fn from(value: AudioZoneWithSession) -> Self {
+        Self {
+            id: value.id,
+            session_id: value.session_id,
             name: value.name,
             players: value
                 .players

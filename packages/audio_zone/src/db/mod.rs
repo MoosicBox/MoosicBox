@@ -69,6 +69,18 @@ pub async fn get_zones(
         .to_value_type()?)
 }
 
+pub async fn get_zone_with_sessions(
+    db: &dyn Database,
+) -> Result<Vec<models::AudioZoneWithSessionModel>, DatabaseFetchError> {
+    Ok(db
+        .select("audio_zones")
+        .columns(&["audio_zones.*", "sessions.id as session_id"])
+        .join("sessions", "sessions.audio_zone_id = audio_zones.id")
+        .execute(db)
+        .await?
+        .to_value_type()?)
+}
+
 pub async fn create_audio_zone(
     db: &dyn Database,
     zone: &CreateAudioZone,

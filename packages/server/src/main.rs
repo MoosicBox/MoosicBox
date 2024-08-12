@@ -528,6 +528,7 @@ fn main() -> std::io::Result<()> {
                 app = app.service(
                     web::scope("/audio-zone")
                         .service(moosicbox_audio_zone::api::audio_zones_endpoint)
+                        .service(moosicbox_audio_zone::api::audio_zone_with_sessions_endpoint)
                         .service(moosicbox_audio_zone::api::create_audio_zone_endpoint)
                         .service(moosicbox_audio_zone::api::update_audio_zone_endpoint)
                         .service(moosicbox_audio_zone::api::delete_audio_zone_endpoint),

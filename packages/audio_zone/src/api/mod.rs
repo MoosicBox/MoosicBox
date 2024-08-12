@@ -7,7 +7,7 @@ use actix_web::{
 use moosicbox_paging::Page;
 use serde::Deserialize;
 
-use crate::models::{ApiAudioZone, CreateAudioZone, UpdateAudioZone};
+use crate::models::{ApiAudioZone, ApiAudioZoneWithSession, CreateAudioZone, UpdateAudioZone};
 
 pub mod models;
 
@@ -17,6 +17,7 @@ pub mod models;
     tags((name = "Audio Zone")),
     paths(
         audio_zones_endpoint,
+        audio_zone_with_sessions_endpoint,
         create_audio_zone_endpoint,
         update_audio_zone_endpoint,
         delete_audio_zone_endpoint,
@@ -63,6 +64,58 @@ pub async fn audio_zones_endpoint(
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(30);
     let zones = crate::zones(&**data.database)
+        .await
+        .map_err(ErrorInternalServerError)?;
+    let total = zones.len() as u32;
+    let zones = zones
+        .into_iter()
+        .skip(offset as usize)
+        .take(limit as usize)
+        .map(|x| x.into())
+        .collect::<Vec<_>>();
+
+    Ok(Json(Page::WithTotal {
+        items: zones,
+        offset,
+        limit,
+        total,
+    }))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetAudioZoneWithSessions {
+    offset: Option<u32>,
+    limit: Option<u32>,
+}
+
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Audio Zone"],
+        get,
+        path = "/with-session",
+        description = "Get a list of the enabled audio zones with their corresponding session",
+        params(
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "A paginated response of audio zones with their corresponding session",
+                body = Value,
+            )
+        )
+    )
+)]
+#[route("/with-session", method = "GET")]
+pub async fn audio_zone_with_sessions_endpoint(
+    query: web::Query<GetAudioZoneWithSessions>,
+    data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<Page<ApiAudioZoneWithSession>>> {
+    let offset = query.offset.unwrap_or(0);
+    let limit = query.limit.unwrap_or(30);
+    let zones = crate::zones_with_sessions(&**data.database)
         .await
         .map_err(ErrorInternalServerError)?;
     let total = zones.len() as u32;

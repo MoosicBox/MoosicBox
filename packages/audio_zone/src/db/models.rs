@@ -16,6 +16,23 @@ impl ToValueType<AudioZoneModel> for &moosicbox_database::Row {
 }
 
 #[derive(Debug, Clone)]
+pub struct AudioZoneWithSessionModel {
+    pub id: u64,
+    pub session_id: u64,
+    pub name: String,
+}
+
+impl ToValueType<AudioZoneWithSessionModel> for &moosicbox_database::Row {
+    fn to_value_type(self) -> Result<AudioZoneWithSessionModel, ParseError> {
+        Ok(AudioZoneWithSessionModel {
+            id: self.to_value("id")?,
+            session_id: self.to_value("session_id")?,
+            name: self.to_value("name")?,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct AudioZonePlayer {
     pub audio_zone_id: u64,
     pub player_id: u64,
