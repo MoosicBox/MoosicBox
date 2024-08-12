@@ -965,6 +965,7 @@ fn handle_server_playback_update(
 ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = ()> + Send>> {
     use moosicbox_core::sqlite::models::Id;
     use moosicbox_player::Player as _;
+    use moosicbox_session::get_session;
 
     let update = update.clone();
     let db = DB.read().unwrap().clone().unwrap().clone();
@@ -1037,10 +1038,12 @@ fn handle_server_playback_update(
                     }
                     .with_output(output);
 
-                    if let Err(e) = player.init_from_session(&**db, &update).await {
-                        moosicbox_assert::die_or_error!(
-                            "Failed to create new player from session: {e:?}"
-                        );
+                    if let Ok(Some(session)) = get_session(&**db, update.session_id).await {
+                        if let Err(e) = player.init_from_session(session, &update).await {
+                            moosicbox_assert::die_or_error!(
+                                "Failed to create new player from session: {e:?}"
+                            );
+                        }
                     }
 
                     players.insert(update.session_id, player);
@@ -1182,6 +1185,7 @@ fn handle_upnp_playback_update(
 ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = ()> + Send>> {
     use moosicbox_database::TryIntoDb as _;
     use moosicbox_player::{Player as _, PlayerSource, Track, DEFAULT_PLAYBACK_RETRY_OPTIONS};
+    use moosicbox_session::get_session;
 
     let update = update.clone();
     let db = DB.read().unwrap().clone().unwrap().clone();
@@ -1214,10 +1218,12 @@ fn handle_upnp_playback_update(
                         UPNP_LISTENER_HANDLE.get().unwrap().clone(),
                     );
 
-                    if let Err(e) = player.init_from_session(&**db, &update).await {
-                        moosicbox_assert::die_or_error!(
-                            "Failed to create new player from session: {e:?}"
-                        );
+                    if let Ok(Some(session)) = get_session(&**db, update.session_id).await {
+                        if let Err(e) = player.init_from_session(session, &update).await {
+                            moosicbox_assert::die_or_error!(
+                                "Failed to create new player from session: {e:?}"
+                            );
+                        }
                     }
 
                     players.insert(update.session_id, player);

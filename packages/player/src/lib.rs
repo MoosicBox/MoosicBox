@@ -29,8 +29,10 @@ use moosicbox_database::Database;
 use moosicbox_json_utils::{serde_json::ToValue as _, ParseError};
 use moosicbox_music_api::MusicApi;
 use moosicbox_session::{
-    get_session, get_session_playlist,
-    models::{UpdateSession, UpdateSessionPlaylist, UpdateSessionPlaylistTrack},
+    get_session_playlist,
+    models::{
+        ApiSession, Session, UpdateSession, UpdateSessionPlaylist, UpdateSessionPlaylistTrack,
+    },
 };
 use moosicbox_stream_utils::{
     remote_bytestream::RemoteByteStream, stalled_monitor::StalledReadMonitor,
@@ -415,74 +417,84 @@ pub trait Player: Clone + Send + 'static {
     fn active_playback_write(&self) -> RwLockWriteGuard<'_, Option<Playback>>;
     async fn receiver_write(&self) -> tokio::sync::RwLockWriteGuard<'_, Option<Receiver<()>>>;
 
+    async fn init_from_api_session(&self, session: ApiSession) -> Result<(), PlayerError> {
+        let session_id = session.session_id;
+        if let Err(err) = self
+            .update_playback(
+                false,
+                None,
+                None,
+                Some(session.playing),
+                session.position,
+                session.seek.map(|x| x as f64),
+                session.volume,
+                Some(
+                    session
+                        .playlist
+                        .tracks
+                        .iter()
+                        .map(|x| Track {
+                            id: x.track_id(),
+                            source: x.api_source(),
+                            data: x.data(),
+                        })
+                        .collect::<Vec<_>>(),
+                ),
+                None,
+                Some(session.session_id),
+                session.audio_zone_id,
+                true,
+                None,
+            )
+            .await
+        {
+            return Err(PlayerError::InvalidSession {
+                session_id,
+                message: format!("Failed to update playback: {err:?}"),
+            });
+        }
+
+        Ok(())
+    }
+
     async fn init_from_session(
         &self,
-        db: &dyn Database,
+        session: Session,
         init: &UpdateSession,
     ) -> Result<(), PlayerError> {
         let session_id = init.session_id;
-        log::trace!("Searching for existing session id {}", session_id);
-        if let Ok(session) = get_session(db, session_id).await {
-            if let Some(session) = session {
-                log::debug!("Got session {session:?}");
-                let track_ids = session
-                    .playlist
-                    .tracks
-                    .iter()
-                    .map(|x| x.track_id())
-                    .collect::<Vec<_>>();
-                let tracks = moosicbox_library::db::get_tracks(db, Some(&track_ids)).await?;
-                if let Err(err) = self
-                    .update_playback(
-                        false,
-                        None,
-                        None,
-                        init.playing.or(Some(session.playing)),
-                        init.position.or(session.position),
-                        init.seek.map(std::convert::Into::into),
-                        init.volume.or(session.volume),
-                        Some(
-                            session
-                                .playlist
-                                .tracks
-                                .iter()
-                                .map(|x| Track {
-                                    id: x.track_id(),
-                                    source: x.api_source(),
-                                    data: if x.api_source() == ApiSource::Library {
-                                        tracks
-                                            .iter()
-                                            .find(|t| {
-                                                let track_id: u64 = x.track_id().into();
-                                                t.id == track_id
-                                            })
-                                            .and_then(|x| serde_json::to_value(x).ok())
-                                    } else {
-                                        x.data()
-                                    },
-                                })
-                                .collect::<Vec<_>>(),
-                        ),
-                        None,
-                        Some(session.id),
-                        session.audio_zone_id,
-                        true,
-                        None,
-                    )
-                    .await
-                {
-                    return Err(PlayerError::InvalidSession {
-                        session_id,
-                        message: format!("Failed to update playback: {err:?}"),
-                    });
-                }
-            } else {
-                log::debug!("No session with id {}", session_id);
-            }
-        } else {
+        if let Err(err) = self
+            .update_playback(
+                false,
+                None,
+                None,
+                init.playing.or(Some(session.playing)),
+                init.position.or(session.position),
+                init.seek.map(std::convert::Into::into),
+                init.volume.or(session.volume),
+                Some(
+                    session
+                        .playlist
+                        .tracks
+                        .iter()
+                        .map(|x| Track {
+                            id: x.track_id(),
+                            source: x.api_source(),
+                            data: x.data(),
+                        })
+                        .collect::<Vec<_>>(),
+                ),
+                None,
+                Some(session.id),
+                session.audio_zone_id,
+                true,
+                None,
+            )
+            .await
+        {
             return Err(PlayerError::InvalidSession {
                 session_id,
-                message: format!("Failed to get session with id {}", session_id),
+                message: format!("Failed to update playback: {err:?}"),
             });
         }
 
