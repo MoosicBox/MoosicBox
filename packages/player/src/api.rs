@@ -14,6 +14,7 @@ use moosicbox_core::{
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_music_api::{MusicApi, MusicApiState};
+use moosicbox_session::models::PlaybackTarget;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 
@@ -245,7 +246,9 @@ pub async fn play_album_endpoint(
             PlaybackQuality {
                 format: query.format.unwrap_or_default(),
             },
-            query.audio_zone_id,
+            query
+                .audio_zone_id
+                .map(|audio_zone_id| PlaybackTarget::AudioZone { audio_zone_id }),
             Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
         )
         .await?;
@@ -323,7 +326,9 @@ pub async fn play_track_endpoint(
             PlaybackQuality {
                 format: query.format.unwrap_or_default(),
             },
-            query.audio_zone_id,
+            query
+                .audio_zone_id
+                .map(|audio_zone_id| PlaybackTarget::AudioZone { audio_zone_id }),
             Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
         )
         .await?;
@@ -398,7 +403,9 @@ pub async fn play_tracks_endpoint(
             PlaybackQuality {
                 format: query.format.unwrap_or_default(),
             },
-            query.audio_zone_id,
+            query
+                .audio_zone_id
+                .map(|audio_zone_id| PlaybackTarget::AudioZone { audio_zone_id }),
             Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
         )
         .await?;
@@ -562,7 +569,9 @@ pub async fn update_playback_endpoint(
             track_ids,
             query.format.map(|format| PlaybackQuality { format }),
             query.session_id,
-            query.audio_zone_id,
+            query
+                .audio_zone_id
+                .map(|audio_zone_id| PlaybackTarget::AudioZone { audio_zone_id }),
             true,
             Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
         )

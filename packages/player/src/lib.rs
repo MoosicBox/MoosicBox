@@ -31,7 +31,8 @@ use moosicbox_music_api::MusicApi;
 use moosicbox_session::{
     get_session_playlist,
     models::{
-        ApiSession, Session, UpdateSession, UpdateSessionPlaylist, UpdateSessionPlaylistTrack,
+        ApiSession, PlaybackTarget, Session, UpdateSession, UpdateSessionPlaylist,
+        UpdateSessionPlaylistTrack,
     },
 };
 use moosicbox_stream_utils::{
@@ -148,7 +149,7 @@ pub struct Playback {
     pub quality: PlaybackQuality,
     pub progress: f64,
     pub volume: Arc<AtomicF64>,
-    pub audio_zone_id: Option<u64>,
+    pub playback_target: Option<PlaybackTarget>,
     pub abort: CancellationToken,
 }
 
@@ -159,7 +160,7 @@ impl Playback {
         volume: AtomicF64,
         quality: PlaybackQuality,
         session_id: Option<u64>,
-        audio_zone_id: Option<u64>,
+        playback_target: Option<PlaybackTarget>,
     ) -> Playback {
         Playback {
             id: thread_rng().gen::<u64>(),
@@ -170,7 +171,7 @@ impl Playback {
             quality,
             progress: 0.0,
             volume: Arc::new(volume),
-            audio_zone_id,
+            playback_target,
             abort: CancellationToken::new(),
         }
     }
@@ -442,7 +443,7 @@ pub trait Player: Clone + Send + 'static {
                 ),
                 None,
                 Some(session.session_id),
-                session.audio_zone_id,
+                session.playback_target,
                 true,
                 None,
             )
@@ -486,7 +487,7 @@ pub trait Player: Clone + Send + 'static {
                 ),
                 None,
                 Some(session.id),
-                session.audio_zone_id,
+                session.playback_target,
                 true,
                 None,
             )
@@ -511,7 +512,7 @@ pub trait Player: Clone + Send + 'static {
         seek: Option<f64>,
         volume: Option<f64>,
         quality: PlaybackQuality,
-        audio_zone_id: Option<u64>,
+        playback_target: Option<PlaybackTarget>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
         let tracks = {
@@ -543,7 +544,7 @@ pub trait Player: Clone + Send + 'static {
             seek,
             volume,
             quality,
-            audio_zone_id,
+            playback_target,
             retry_options,
         )
         .await
@@ -557,7 +558,7 @@ pub trait Player: Clone + Send + 'static {
         seek: Option<f64>,
         volume: Option<f64>,
         quality: PlaybackQuality,
-        audio_zone_id: Option<u64>,
+        playback_target: Option<PlaybackTarget>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
         self.play_tracks(
@@ -567,7 +568,7 @@ pub trait Player: Clone + Send + 'static {
             seek,
             volume,
             quality,
-            audio_zone_id,
+            playback_target,
             retry_options,
         )
         .await
@@ -633,7 +634,7 @@ pub trait Player: Clone + Send + 'static {
         seek: Option<f64>,
         volume: Option<f64>,
         quality: PlaybackQuality,
-        audio_zone_id: Option<u64>,
+        playback_target: Option<PlaybackTarget>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
         if let Some(playback) = self.get_playback() {
@@ -647,7 +648,7 @@ pub trait Player: Clone + Send + 'static {
             AtomicF64::new(volume.unwrap_or(1.0)),
             quality,
             session_id,
-            audio_zone_id,
+            playback_target,
         );
 
         self.active_playback_write().replace(playback);
@@ -912,7 +913,7 @@ pub trait Player: Clone + Send + 'static {
         tracks: Option<Vec<Track>>,
         quality: Option<PlaybackQuality>,
         session_id: Option<u64>,
-        audio_zone_id: Option<u64>,
+        playback_target: Option<PlaybackTarget>,
         trigger_event: bool,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
@@ -929,7 +930,7 @@ pub trait Player: Clone + Send + 'static {
             tracks={tracks:?}\n\t\
             quality={quality:?}\n\t\
             session_id={session_id:?}\n\t\
-            audio_zone_id={audio_zone_id:?}\n\t\
+            playback_target={playback_target:?}\n\t\
             trigger_event={trigger_event}\
             "
         );
@@ -948,7 +949,7 @@ pub trait Player: Clone + Send + 'static {
             AtomicF64::new(volume.unwrap_or(1.0)),
             quality.unwrap_or_default(),
             session_id,
-            audio_zone_id,
+            playback_target.clone(),
         ));
 
         let playing = playing.unwrap_or(original.playing);
@@ -964,7 +965,7 @@ pub trait Player: Clone + Send + 'static {
         let playback = Playback {
             id: original.id,
             session_id: session_id.or(original.session_id),
-            audio_zone_id: audio_zone_id.or(original.audio_zone_id),
+            playback_target: playback_target.or_else(|| original.playback_target.clone()),
             tracks: tracks.clone().unwrap_or_else(|| original.tracks.clone()),
             playing: is_playing,
             quality: quality.unwrap_or(original.quality),
@@ -1359,7 +1360,7 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
     let Some(session_id) = current.session_id else {
         return;
     };
-    let Some(audio_zone_id) = current.audio_zone_id else {
+    let Some(playback_target) = current.playback_target.clone() else {
         return;
     };
 
@@ -1430,14 +1431,14 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
         seek={seek:?}\n\t\
         quality={quality:?}\n\t\
         volume={volume:?}\n\t\
-        audio_zone_id={audio_zone_id:?}\n\t\
+        playback_target={playback_target:?}\n\t\
         playlist={playlist:?}\
         "
     );
 
     let update = UpdateSession {
         session_id,
-        audio_zone_id,
+        playback_target,
         play: None,
         stop: None,
         name: None,

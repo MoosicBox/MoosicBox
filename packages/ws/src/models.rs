@@ -1,8 +1,7 @@
 use moosicbox_audio_zone::models::{ApiAudioZoneWithSession, CreateAudioZone};
-use moosicbox_core::sqlite::models::SetSeek;
 use moosicbox_session::models::{
-    ApiConnection, ApiSession, ApiUpdateSession, CreateSession, DeleteSession, RegisterConnection,
-    RegisterPlayer, UpdateSession,
+    ApiConnection, ApiPlaybackTarget, ApiSession, ApiUpdateSession, CreateSession, DeleteSession,
+    RegisterConnection, RegisterPlayer, UpdateSession,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -136,4 +135,12 @@ pub struct ConnectionsPayload {
 #[serde(rename_all = "camelCase")]
 pub struct SetSeekPayload {
     pub payload: SetSeek,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SetSeek {
+    pub session_id: u64,
+    pub playback_target: ApiPlaybackTarget,
+    pub seek: u64,
 }

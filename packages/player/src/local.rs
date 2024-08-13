@@ -92,7 +92,7 @@ impl Player for LocalPlayer {
                                 if !sent_playback_start_event
                                     .load(std::sync::atomic::Ordering::SeqCst)
                                 {
-                                    if let (Some(session_id), Some(audio_zone_id)) = (playback.session_id, playback.audio_zone_id) {
+                                    if let (Some(session_id), Some(playback_target)) = (playback.session_id, playback.playback_target.clone()) {
                                         sent_playback_start_event
                                             .store(true, std::sync::atomic::Ordering::SeqCst);
 
@@ -102,7 +102,7 @@ impl Player for LocalPlayer {
 
                                         let update = UpdateSession {
                                             session_id,
-                                            audio_zone_id,
+                                            playback_target,
                                             play: None,
                                             stop: None,
                                             name: None,

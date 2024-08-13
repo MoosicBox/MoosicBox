@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use async_trait::async_trait;
 use moosicbox_audio_zone::models::{ApiPlayer, Player};
 use moosicbox_core::{
@@ -14,6 +16,7 @@ use moosicbox_library::{
     models::{ApiLibraryTrack, ApiTrack},
 };
 use serde::{Deserialize, Serialize};
+use strum_macros::{AsRefStr, EnumString};
 
 use crate::db::{get_players, get_session_playlist, get_session_playlist_tracks};
 
@@ -38,11 +41,67 @@ pub struct CreateSessionPlaylist {
     pub tracks: Vec<u64>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, EnumString, AsRefStr, PartialEq)]
+#[serde(tag = "type")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum PlaybackTarget {
+    #[serde(rename_all = "camelCase")]
+    AudioZone { audio_zone_id: u64 },
+    #[serde(rename_all = "camelCase")]
+    ConnectionOutput {
+        connection_id: u64,
+        output_id: String,
+    },
+}
+
+const DEFAULT_AUDIO_ZONE: PlaybackTarget = PlaybackTarget::AudioZone { audio_zone_id: 0 };
+static DEFAULT_CONNECTION_OUTPUT: LazyLock<PlaybackTarget> =
+    LazyLock::new(|| PlaybackTarget::ConnectionOutput {
+        connection_id: 0,
+        output_id: "".to_string(),
+    });
+
+impl PlaybackTarget {
+    pub fn default_from_str(r#type: &str) -> Option<PlaybackTarget> {
+        if DEFAULT_AUDIO_ZONE.as_ref() == r#type {
+            Some(DEFAULT_AUDIO_ZONE)
+        } else if DEFAULT_CONNECTION_OUTPUT.as_ref() == r#type {
+            Some(DEFAULT_CONNECTION_OUTPUT.clone())
+        } else {
+            None
+        }
+    }
+}
+
+impl Default for PlaybackTarget {
+    fn default() -> Self {
+        Self::AudioZone { audio_zone_id: 0 }
+    }
+}
+
+impl From<ApiPlaybackTarget> for PlaybackTarget {
+    fn from(value: ApiPlaybackTarget) -> Self {
+        match value {
+            ApiPlaybackTarget::AudioZone { audio_zone_id } => {
+                PlaybackTarget::AudioZone { audio_zone_id }
+            }
+            ApiPlaybackTarget::ConnectionOutput {
+                connection_id,
+                output_id,
+            } => PlaybackTarget::ConnectionOutput {
+                connection_id,
+                output_id,
+            },
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSession {
     pub session_id: u64,
-    pub audio_zone_id: u64,
+    pub playback_target: PlaybackTarget,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub play: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -82,7 +141,7 @@ impl From<ApiUpdateSession> for UpdateSession {
     fn from(value: ApiUpdateSession) -> Self {
         Self {
             session_id: value.session_id,
-            audio_zone_id: value.audio_zone_id,
+            playback_target: value.playback_target.into(),
             play: value.play,
             stop: value.stop,
             name: value.name,
@@ -101,7 +160,7 @@ impl From<UpdateSession> for ApiUpdateSession {
     fn from(value: UpdateSession) -> Self {
         Self {
             session_id: value.session_id,
-            audio_zone_id: value.audio_zone_id,
+            playback_target: value.playback_target.into(),
             play: value.play,
             stop: value.stop,
             name: value.name,
@@ -208,11 +267,48 @@ impl ToApi<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, EnumString, AsRefStr, PartialEq)]
+#[serde(tag = "type")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum ApiPlaybackTarget {
+    #[serde(rename_all = "camelCase")]
+    AudioZone { audio_zone_id: u64 },
+    #[serde(rename_all = "camelCase")]
+    ConnectionOutput {
+        connection_id: u64,
+        output_id: String,
+    },
+}
+
+impl Default for ApiPlaybackTarget {
+    fn default() -> Self {
+        Self::AudioZone { audio_zone_id: 0 }
+    }
+}
+
+impl From<PlaybackTarget> for ApiPlaybackTarget {
+    fn from(value: PlaybackTarget) -> Self {
+        match value {
+            PlaybackTarget::AudioZone { audio_zone_id } => {
+                ApiPlaybackTarget::AudioZone { audio_zone_id }
+            }
+            PlaybackTarget::ConnectionOutput {
+                connection_id,
+                output_id,
+            } => ApiPlaybackTarget::ConnectionOutput {
+                connection_id,
+                output_id,
+            },
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiUpdateSession {
     pub session_id: u64,
-    pub audio_zone_id: u64,
+    pub playback_target: ApiPlaybackTarget,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub play: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -258,12 +354,16 @@ pub struct Session {
     pub position: Option<u16>,
     pub seek: Option<u64>,
     pub volume: Option<f64>,
-    pub audio_zone_id: Option<u64>,
+    pub playback_target: Option<PlaybackTarget>,
     pub playlist: SessionPlaylist,
 }
 
 impl ToValueType<Session> for &moosicbox_database::Row {
     fn to_value_type(self) -> Result<Session, ParseError> {
+        let playback_target_type: Option<String> = self.to_value("playback_target")?;
+        let playback_target_type =
+            playback_target_type.and_then(|x| PlaybackTarget::default_from_str(&x));
+
         Ok(Session {
             id: self.to_value("id")?,
             name: self.to_value("name")?,
@@ -272,7 +372,18 @@ impl ToValueType<Session> for &moosicbox_database::Row {
             position: self.to_value("position")?,
             seek: self.to_value("seek")?,
             volume: self.to_value("volume")?,
-            audio_zone_id: self.to_value("audio_zone_id")?,
+            playback_target: match playback_target_type {
+                Some(PlaybackTarget::AudioZone { .. }) => Some(PlaybackTarget::AudioZone {
+                    audio_zone_id: self.to_value("audio_zone_id")?,
+                }),
+                Some(PlaybackTarget::ConnectionOutput { .. }) => {
+                    Some(PlaybackTarget::ConnectionOutput {
+                        connection_id: self.to_value("connection_id")?,
+                        output_id: self.to_value("output_id")?,
+                    })
+                }
+                None => None,
+            },
             ..Default::default()
         })
     }
@@ -282,6 +393,9 @@ impl ToValueType<Session> for &moosicbox_database::Row {
 impl AsModelQuery<Session> for &moosicbox_database::Row {
     async fn as_model_query(&self, db: &dyn Database) -> Result<Session, DbError> {
         let id = self.to_value("id")?;
+        let playback_target_type: Option<String> = self.to_value("playback_target")?;
+        let playback_target_type =
+            playback_target_type.and_then(|x| PlaybackTarget::default_from_str(&x));
 
         match get_session_playlist(db, id).await? {
             Some(playlist) => Ok(Session {
@@ -292,7 +406,18 @@ impl AsModelQuery<Session> for &moosicbox_database::Row {
                 position: self.to_value("position")?,
                 seek: self.to_value("seek")?,
                 volume: self.to_value("volume")?,
-                audio_zone_id: self.to_value("audio_zone_id")?,
+                playback_target: match playback_target_type {
+                    Some(PlaybackTarget::AudioZone { .. }) => Some(PlaybackTarget::AudioZone {
+                        audio_zone_id: self.to_value("audio_zone_id")?,
+                    }),
+                    Some(PlaybackTarget::ConnectionOutput { .. }) => {
+                        Some(PlaybackTarget::ConnectionOutput {
+                            connection_id: self.to_value("connection_id")?,
+                            output_id: self.to_value("output_id")?,
+                        })
+                    }
+                    None => None,
+                },
                 playlist,
             }),
             None => Err(DbError::InvalidRequest),
@@ -317,7 +442,7 @@ pub struct ApiSession {
     pub position: Option<u16>,
     pub seek: Option<u64>,
     pub volume: Option<f64>,
-    pub audio_zone_id: Option<u64>,
+    pub playback_target: Option<PlaybackTarget>,
     pub playlist: ApiSessionPlaylist,
 }
 
@@ -331,7 +456,7 @@ impl ToApi<ApiSession> for Session {
             position: self.position,
             seek: self.seek,
             volume: self.volume,
-            audio_zone_id: self.audio_zone_id,
+            playback_target: self.playback_target,
             playlist: self.playlist.to_api(),
         }
     }

@@ -590,14 +590,6 @@ impl ToValueType<ApiSource> for DatabaseValue {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct SetSeek {
-    pub session_id: u64,
-    pub audio_zone_id: u64,
-    pub seek: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
 pub struct ClientAccessToken {
     pub token: String,
     pub client_id: String,

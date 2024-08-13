@@ -11,8 +11,8 @@ use moosicbox_json_utils::ToValueType;
 use moosicbox_library::db::get_tracks;
 
 use crate::models::{
-    self, CreateSession, Session, SessionPlaylist, SessionPlaylistTrack, SetSessionAudioZone,
-    UpdateSession,
+    self, CreateSession, PlaybackTarget, Session, SessionPlaylist, SessionPlaylistTrack,
+    SetSessionAudioZone, UpdateSession,
 };
 
 pub async fn get_session_playlist_tracks(
@@ -155,7 +155,9 @@ pub async fn create_session(
         seek: new_session.seek,
         volume: new_session.volume,
         name: new_session.name,
-        audio_zone_id: session.audio_zone_id,
+        playback_target: session
+            .audio_zone_id
+            .map(|audio_zone_id| PlaybackTarget::AudioZone { audio_zone_id }),
         playlist,
     })
 }
@@ -205,11 +207,16 @@ pub async fn update_session(db: &dyn Database, session: &UpdateSession) -> Resul
         log::trace!("update_session: No tracks to insert");
     }
 
-    let mut values = vec![(
-        "audio_zone_id",
-        DatabaseValue::UNumberOpt(Some(session.audio_zone_id)),
-    )];
+    let mut values = vec![];
 
+    if let PlaybackTarget::AudioZone { audio_zone_id } = session.playback_target {
+        values.push((
+            "audio_zone_id",
+            DatabaseValue::UNumberOpt(Some(audio_zone_id)),
+        ))
+    } else {
+        values.push(("audio_zone_id", DatabaseValue::UNumberOpt(None)))
+    }
     if let Some(name) = &session.name {
         values.push(("name", DatabaseValue::String(name.clone())))
     }

@@ -17,7 +17,7 @@ use moosicbox_session::{
     get_session_playlist,
     models::{
         ApiUpdateSession, ApiUpdateSessionPlaylist, Connection, CreateSession, DeleteSession,
-        RegisterConnection, RegisterPlayer, UpdateSession,
+        PlaybackTarget, RegisterConnection, RegisterPlayer, UpdateSession,
     },
 };
 use once_cell::sync::Lazy;
@@ -152,8 +152,10 @@ pub async fn process_message(
     context: WebsocketContext,
     sender: &impl WebsocketSender,
 ) -> Result<Response, WebsocketMessageError> {
-    let payload: InboundPayload =
-        serde_json::from_value(body).map_err(|_| WebsocketMessageError::InvalidMessageType)?;
+    let payload: InboundPayload = serde_json::from_value(body).map_err(|e| {
+        moosicbox_assert::die_or_error!("Invalid message type: {e:?}");
+        WebsocketMessageError::InvalidMessageType
+    })?;
 
     message(db, sender, payload, &context).await
 }
@@ -463,7 +465,9 @@ pub async fn update_session(
     if let Some(actions) = context.map(|x| &x.player_actions) {
         if payload.playback_updated() {
             if let Some(session) = moosicbox_session::get_session(db, payload.session_id).await? {
-                let funcs = if let Some(audio_zone_id) = session.audio_zone_id {
+                let funcs = if let Some(PlaybackTarget::AudioZone { audio_zone_id }) =
+                    session.playback_target
+                {
                     let players = moosicbox_audio_zone::db::get_players(db, audio_zone_id).await?;
 
                     players
@@ -484,10 +488,10 @@ pub async fn update_session(
 
                 if log::log_enabled!(log::Level::Trace) {
                     log::trace!(
-                        "Running player actions on existing session id={} count_of_funcs={} payload={payload:?} session={session:?} audio_zone_id={:?} action_player_ids={:?}",
+                        "Running player actions on existing session id={} count_of_funcs={} payload={payload:?} session={session:?} playback_target={:?} action_player_ids={:?}",
                         session.id,
                         funcs.len(),
-                        session.audio_zone_id,
+                        session.playback_target,
                         actions.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
                     );
                 } else {
@@ -537,7 +541,7 @@ pub async fn update_session(
         position: payload.position,
         seek: payload.seek,
         volume: payload.volume,
-        audio_zone_id: payload.audio_zone_id,
+        playback_target: payload.playback_target.clone().into(),
         playlist,
         quality: payload.quality,
     };

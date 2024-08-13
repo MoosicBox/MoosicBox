@@ -1133,7 +1133,7 @@ fn handle_server_playback_update(
                 },
                 None,
                 Some(update.session_id),
-                Some(update.audio_zone_id),
+                Some(update.playback_target),
                 true,
                 Some(moosicbox_player::DEFAULT_PLAYBACK_RETRY_OPTIONS),
             )
@@ -1283,7 +1283,7 @@ fn handle_upnp_playback_update(
                 }),
                 None,
                 Some(update.session_id),
-                Some(update.audio_zone_id),
+                Some(update.playback_target),
                 true,
                 Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
             )
