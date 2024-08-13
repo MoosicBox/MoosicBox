@@ -207,16 +207,33 @@ pub async fn update_session(db: &dyn Database, session: &UpdateSession) -> Resul
         log::trace!("update_session: No tracks to insert");
     }
 
-    let mut values = vec![];
+    let mut values = vec![(
+        "playback_target",
+        DatabaseValue::String(session.playback_target.as_ref().to_string()),
+    )];
 
-    if let PlaybackTarget::AudioZone { audio_zone_id } = session.playback_target {
-        values.push((
-            "audio_zone_id",
-            DatabaseValue::UNumberOpt(Some(audio_zone_id)),
-        ))
-    } else {
-        values.push(("audio_zone_id", DatabaseValue::UNumberOpt(None)))
+    match &session.playback_target {
+        PlaybackTarget::AudioZone { audio_zone_id } => {
+            values.push((
+                "audio_zone_id",
+                DatabaseValue::UNumberOpt(Some(*audio_zone_id)),
+            ));
+        }
+        PlaybackTarget::ConnectionOutput {
+            connection_id,
+            output_id,
+        } => {
+            values.push((
+                "connection_id",
+                DatabaseValue::UNumberOpt(Some(*connection_id)),
+            ));
+            values.push((
+                "output_id",
+                DatabaseValue::StringOpt(Some(output_id.to_owned())),
+            ));
+        }
     }
+
     if let Some(name) = &session.name {
         values.push(("name", DatabaseValue::String(name.clone())))
     }
