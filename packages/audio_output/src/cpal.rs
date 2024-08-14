@@ -137,27 +137,25 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         let ring_buf = SpscRb::new(ring_len);
         let (ring_buf_producer, ring_buf_consumer) = (ring_buf.producer(), ring_buf.consumer());
 
-        let stream_result = device.build_output_stream(
-            &config,
-            move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
-                // Write out as many samples as possible from the ring buffer to the audio
-                // output.
-                let written = ring_buf_consumer.read(data).unwrap_or(0);
+        let stream = device
+            .build_output_stream(
+                &config,
+                move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+                    // Write out as many samples as possible from the ring buffer to the audio
+                    // output.
+                    let written = ring_buf_consumer.read(data).unwrap_or(0);
 
-                // Mute any remaining samples.
-                data[written..].iter_mut().for_each(|s| *s = T::MID);
-            },
-            move |err| log::error!("Audio output error: {}", err),
-            None,
-        );
+                    // Mute any remaining samples.
+                    data[written..].iter_mut().for_each(|s| *s = T::MID);
+                },
+                move |err| log::error!("Audio output error: {}", err),
+                None,
+            )
+            .map_err(|e| {
+                log::error!("Audio output stream open error: {e:?}");
 
-        if let Err(err) = stream_result {
-            log::error!("Audio output stream open error: {}", err);
-
-            return Err(AudioOutputError::OpenStream);
-        }
-
-        let stream = stream_result.unwrap();
+                AudioOutputError::OpenStream
+            })?;
 
         // Start the output stream.
         if let Err(err) = stream.play() {
