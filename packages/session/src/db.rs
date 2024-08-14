@@ -214,10 +214,7 @@ pub async fn update_session(db: &dyn Database, session: &UpdateSession) -> Resul
 
     match &session.playback_target {
         PlaybackTarget::AudioZone { audio_zone_id } => {
-            values.push((
-                "audio_zone_id",
-                DatabaseValue::UNumberOpt(Some(*audio_zone_id)),
-            ));
+            values.push(("audio_zone_id", DatabaseValue::UNumber(*audio_zone_id)));
         }
         PlaybackTarget::ConnectionOutput {
             connection_id,
@@ -225,12 +222,9 @@ pub async fn update_session(db: &dyn Database, session: &UpdateSession) -> Resul
         } => {
             values.push((
                 "connection_id",
-                DatabaseValue::UNumberOpt(Some(*connection_id)),
+                DatabaseValue::String(connection_id.to_owned()),
             ));
-            values.push((
-                "output_id",
-                DatabaseValue::StringOpt(Some(output_id.to_owned())),
-            ));
+            values.push(("output_id", DatabaseValue::String(output_id.to_owned())));
         }
     }
 

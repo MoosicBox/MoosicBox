@@ -50,7 +50,7 @@ pub enum PlaybackTarget {
     AudioZone { audio_zone_id: u64 },
     #[serde(rename_all = "camelCase")]
     ConnectionOutput {
-        connection_id: u64,
+        connection_id: String,
         output_id: String,
     },
 }
@@ -58,7 +58,7 @@ pub enum PlaybackTarget {
 const DEFAULT_AUDIO_ZONE: PlaybackTarget = PlaybackTarget::AudioZone { audio_zone_id: 0 };
 static DEFAULT_CONNECTION_OUTPUT: LazyLock<PlaybackTarget> =
     LazyLock::new(|| PlaybackTarget::ConnectionOutput {
-        connection_id: 0,
+        connection_id: "".to_string(),
         output_id: "".to_string(),
     });
 
@@ -276,7 +276,7 @@ pub enum ApiPlaybackTarget {
     AudioZone { audio_zone_id: u64 },
     #[serde(rename_all = "camelCase")]
     ConnectionOutput {
-        connection_id: u64,
+        connection_id: String,
         output_id: String,
     },
 }
