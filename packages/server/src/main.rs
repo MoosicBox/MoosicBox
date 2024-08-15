@@ -788,6 +788,68 @@ fn main() -> std::io::Result<()> {
 
         let mut http_server = actix_web::HttpServer::new(app);
 
+        #[cfg(feature = "tls")]
+        {
+            use std::io::Write as _;
+
+            use openssl::ssl::{SslAcceptor, SslMethod};
+
+            let config_dir =
+                moosicbox_config::get_config_dir_path().expect("Failed to get config dir");
+
+            let tls_dir = config_dir.join("tls");
+            let cert_path = tls_dir.join("cert.pem");
+            let key_path = tls_dir.join("key.pem");
+
+            if !tls_dir.is_dir() {
+                std::fs::create_dir_all(&tls_dir).expect("Failed to create tls dir");
+            }
+
+            if !cert_path.is_file() || !key_path.is_file() {
+                use rcgen::{generate_simple_self_signed, CertifiedKey};
+
+                let subject_alt_names = vec!["localhost".to_string()];
+
+                let CertifiedKey { cert, key_pair } =
+                    generate_simple_self_signed(subject_alt_names).unwrap();
+
+                let mut cert_file = std::fs::OpenOptions::new()
+                    .create(true) // To create a new file
+                    .truncate(true)
+                    .write(true)
+                    .open(&cert_path)
+                    .unwrap();
+                cert_file
+                    .write_all(cert.pem().as_bytes())
+                    .expect("Failed to create cert file");
+
+                let mut key_file = std::fs::OpenOptions::new()
+                    .create(true) // To create a new file
+                    .truncate(true)
+                    .write(true)
+                    .open(&key_path)
+                    .unwrap();
+                key_file
+                    .write_all(key_pair.serialize_pem().as_bytes())
+                    .expect("Failed to create key file");
+            }
+
+            let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
+
+            builder
+                .set_private_key_file(&key_path, openssl::ssl::SslFiletype::PEM)
+                .unwrap();
+
+            builder.set_certificate_chain_file(&cert_path).unwrap();
+
+            http_server = http_server
+                .bind_openssl((default_env("BIND_ADDR", "0.0.0.0"), service_port), builder)?;
+        }
+        #[cfg(not(feature = "tls"))]
+        {
+            http_server = http_server.bind((default_env("BIND_ADDR", "0.0.0.0"), service_port))?;
+        }
+
         if let Ok(Some(workers)) = option_env_usize("ACTIX_WORKERS") {
             log::debug!("Running with {workers} Actix workers");
             http_server = http_server.workers(workers);
@@ -799,9 +861,7 @@ fn main() -> std::io::Result<()> {
             Ok::<_, std::io::Error>(())
         });
 
-        let http_server = http_server
-            .bind((default_env("BIND_ADDR", "0.0.0.0"), service_port))?
-            .run();
+        let http_server = http_server.run();
 
         if let Err(err) = try_join!(
             async move {

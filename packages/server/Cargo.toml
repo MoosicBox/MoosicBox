@@ -103,6 +103,9 @@ tokio-postgres = { workspace = true, optional = true, features = [] }
 # auth
 qstring = { workspace = true, optional = true }
 
+# TLS
+rcgen = { workspace = true, optional = true }
+
 actix-cors         = { workspace = true }
 actix-files        = { workspace = true }
 actix-web          = { workspace = true }
@@ -150,6 +153,8 @@ default = [
 ]
 
 fail-on-warnings = []
+
+tls = ["actix-web/openssl", "dep:openssl", "dep:rcgen"]
 
 base64 = ["moosicbox_tunnel/base64", "moosicbox_tunnel_sender/base64"]
 
