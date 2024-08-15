@@ -463,6 +463,16 @@ pub trait Player: Clone + Send + 'static {
         session: Session,
         init: &UpdateSession,
     ) -> Result<(), PlayerError> {
+        moosicbox_logging::debug_or_trace!(
+            (
+                "init_from_session: Initializing player from session_id={}",
+                session.id
+            ),
+            (
+                "init_from_session: Initializing player from session_id={} init={init:?}",
+                session.id
+            )
+        );
         let session_id = init.session_id;
         if let Err(err) = self
             .update_playback(

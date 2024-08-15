@@ -4016,6 +4016,7 @@ dependencies = [
  "moosicbox_database",
  "moosicbox_json_utils",
  "moosicbox_library",
+ "moosicbox_logging",
  "moosicbox_music_api",
  "moosicbox_resampler",
  "moosicbox_session",

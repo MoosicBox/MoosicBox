@@ -24,6 +24,7 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
     "serde_json",
 ] }
 moosicbox_library = { path = "../library", default-features = false }
+moosicbox_logging = { path = "../logging", default-features = false }
 moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_resampler = { path = "../resampler", default-features = false }
 moosicbox_session = { path = "../session", default-features = false }
