@@ -16,8 +16,13 @@ use models::{UpnpDevice, UpnpService};
 use once_cell::sync::Lazy;
 pub use rupnp::{http::Uri, ssdp::SearchTarget, Device, DeviceSpec, Service};
 use serde::Serialize;
-use std::{collections::HashMap, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::{Arc, LazyLock},
+    time::Duration,
+};
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 mod cache {
     use std::{collections::HashMap, sync::RwLock};
@@ -822,36 +827,81 @@ pub async fn scan_device(
     Ok(upnp_devices)
 }
 
-pub async fn scan_devices() -> Result<Vec<UpnpDevice>, ScanError> {
-    let search_target = SearchTarget::RootDevice;
-    let devices = rupnp::discover(&search_target, Duration::from_secs(3)).await?;
-    pin_utils::pin_mut!(devices);
+static UPNP_DEVICE_SCANNER: LazyLock<Arc<Mutex<UpnpDeviceScanner>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(UpnpDeviceScanner::new())));
 
-    let mut upnp_devices = vec![];
+pub async fn scan_devices() -> Result<(), UpnpDeviceScannerError> {
+    UPNP_DEVICE_SCANNER.lock().await.scan().await
+}
 
-    loop {
-        match devices.try_next().await {
-            Ok(Some(device)) => {
-                cache::insert_device(device.clone());
-                let spec: &DeviceSpec = &device;
-                upnp_devices
-                    .extend_from_slice(&scan_device(Some(device.clone()), spec, None).await?);
-            }
-            Ok(None) => {
-                break;
-            }
-            Err(e) => {
-                log::error!("Received error device response: {e:?}");
+pub async fn devices() -> Vec<UpnpDevice> {
+    UPNP_DEVICE_SCANNER.lock().await.devices.clone()
+}
+
+#[derive(Default)]
+pub struct UpnpDeviceScanner {
+    scanning: bool,
+    pub devices: Vec<UpnpDevice>,
+}
+
+#[allow(dead_code)]
+#[allow(clippy::enum_variant_names)]
+#[derive(Debug, Error)]
+pub enum UpnpDeviceScannerError {
+    #[error("No outputs available")]
+    NoOutputs,
+    #[error(transparent)]
+    Rupnp(#[from] rupnp::Error),
+    #[error(transparent)]
+    Scan(#[from] ScanError),
+}
+
+impl UpnpDeviceScanner {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub async fn scan(&mut self) -> Result<(), UpnpDeviceScannerError> {
+        if self.scanning {
+            return Ok(());
+        }
+
+        self.scanning = true;
+
+        let search_target = SearchTarget::RootDevice;
+        let devices = rupnp::discover(&search_target, Duration::from_secs(3)).await?;
+        pin_utils::pin_mut!(devices);
+
+        let mut upnp_devices = vec![];
+
+        loop {
+            match devices.try_next().await {
+                Ok(Some(device)) => {
+                    cache::insert_device(device.clone());
+                    let spec: &DeviceSpec = &device;
+                    upnp_devices
+                        .extend_from_slice(&scan_device(Some(device.clone()), spec, None).await?);
+                }
+                Ok(None) => {
+                    break;
+                }
+                Err(e) => {
+                    log::error!("Received error device response: {e:?}");
+                }
             }
         }
-    }
 
-    if upnp_devices.is_empty() {
-        log::debug!("No UPnP devices discovered");
-    }
+        if upnp_devices.is_empty() {
+            log::debug!("No UPnP devices discovered");
+        }
 
-    Ok(upnp_devices
-        .into_iter()
-        .unique_by(|x| x.udn.clone())
-        .collect::<Vec<_>>())
+        self.devices = upnp_devices
+            .into_iter()
+            .unique_by(|x| x.udn.clone())
+            .collect::<Vec<_>>();
+
+        self.scanning = false;
+
+        Ok(())
+    }
 }

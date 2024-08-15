@@ -10,10 +10,10 @@ use futures::TryStreamExt;
 use serde::Deserialize;
 
 use crate::{
-    cache::get_device_and_service_from_url, get_device_and_service, get_media_info,
+    cache::get_device_and_service_from_url, devices, get_device_and_service, get_media_info,
     get_position_info, get_transport_info, get_volume, models::UpnpDevice, pause, play,
     scan_devices, seek, set_volume, subscribe_events, ActionError, MediaInfo, PositionInfo,
-    ScanError, TransportInfo,
+    ScanError, TransportInfo, UpnpDeviceScannerError,
 };
 
 #[cfg(feature = "openapi")]
@@ -61,16 +61,13 @@ impl From<ActionError> for actix_web::Error {
 
 impl From<ScanError> for actix_web::Error {
     fn from(e: ScanError) -> Self {
-        match e {
-            ScanError::RenderingControlNotFound => ErrorFailedDependency(e.to_string()),
-            ScanError::MediaRendererNotFound => ErrorFailedDependency(e.to_string()),
-            ScanError::DeviceUdnNotFound { .. } => ErrorFailedDependency(e.to_string()),
-            ScanError::DeviceUrlNotFound { .. } => ErrorFailedDependency(e.to_string()),
-            ScanError::ServiceIdNotFound { .. } => ErrorFailedDependency(e.to_string()),
-            ScanError::Rupnp(rupnp_err) => {
-                ErrorFailedDependency(format!("UPnP error: {rupnp_err:?}"))
-            }
-        }
+        ErrorFailedDependency(e.to_string())
+    }
+}
+
+impl From<UpnpDeviceScannerError> for actix_web::Error {
+    fn from(e: UpnpDeviceScannerError) -> Self {
+        ErrorFailedDependency(e.to_string())
     }
 }
 
@@ -92,7 +89,8 @@ impl From<ScanError> for actix_web::Error {
 )]
 #[route("/scan-devices", method = "GET")]
 pub async fn scan_devices_endpoint() -> Result<Json<Vec<UpnpDevice>>> {
-    Ok(Json(scan_devices().await?))
+    scan_devices().await?;
+    Ok(Json(devices().await))
 }
 
 #[derive(Deserialize)]
