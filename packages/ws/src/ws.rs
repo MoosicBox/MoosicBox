@@ -462,6 +462,8 @@ pub async fn update_session(
     context: Option<&WebsocketContext>,
     payload: &UpdateSession,
 ) -> Result<(), UpdateSessionError> {
+    moosicbox_session::update_session(db, payload).await?;
+
     if let Some(actions) = context.map(|x| &x.player_actions) {
         if payload.playback_updated() {
             if let Some(session) = moosicbox_session::get_session(db, payload.session_id).await? {
@@ -517,8 +519,6 @@ pub async fn update_session(
     } else {
         log::debug!("Updating session id={}", payload.session_id);
     }
-    moosicbox_session::update_session(db, payload).await?;
-
     let playlist = if payload.playlist.is_some() {
         get_session_playlist(db, payload.session_id)
             .await?
