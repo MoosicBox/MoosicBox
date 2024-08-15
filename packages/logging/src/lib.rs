@@ -3,6 +3,7 @@
 use std::fs::create_dir_all;
 
 use free_log_client::FreeLogLayer;
+pub use log;
 use moosicbox_config::get_config_dir_path;
 use moosicbox_env_utils::default_env;
 use thiserror::Error;
@@ -47,4 +48,15 @@ pub fn init(filename: &str) -> Result<FreeLogLayer, InitError> {
     )))?;
 
     Ok(layer)
+}
+
+#[macro_export]
+macro_rules! debug_or_trace {
+    (($($debug:tt)+), ($($trace:tt)+)) => {
+        if $crate::log::log_enabled!(log::Level::Trace) {
+            $crate::log::trace!($($trace)*);
+        } else {
+            $crate::log::debug!($($debug)*);
+        }
+    }
 }
