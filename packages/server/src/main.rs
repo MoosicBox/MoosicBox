@@ -1349,15 +1349,22 @@ fn handle_upnp_playback_update(
         log::debug!("Handling UPnP playback update={update:?}");
         let updated = {
             {
-                if SESSION_UPNP_PLAYERS
-                    .read()
-                    .await
-                    .get(&update.session_id)
-                    .is_none()
-                {
+                let existing = {
+                    SESSION_UPNP_PLAYERS
+                        .read()
+                        .await
+                        .get(&update.session_id)
+                        .cloned()
+                };
+
+                if let Some(player) = existing {
+                    player
+                } else {
                     load_upnp_players().await;
 
-                    if let Some(player) = UPNP_PLAYERS.read().await.iter().next() {
+                    let binding = UPNP_PLAYERS.read().await;
+
+                    if let Some(player) = binding.iter().next().cloned() {
                         if let Ok(Some(session)) = get_session(&**db, update.session_id).await {
                             if let Err(e) = player.init_from_session(session, &update).await {
                                 moosicbox_assert::die_or_error!(
@@ -1370,14 +1377,12 @@ fn handle_upnp_playback_update(
                                 .await
                                 .insert(update.session_id, player.clone());
                         }
+
+                        player
+                    } else {
+                        moosicbox_assert::die_or_panic!("No UPNP player found");
                     }
                 }
-
-                SESSION_UPNP_PLAYERS
-                    .read()
-                    .await
-                    .get(&update.session_id)
-                    .expect("No player")
             }
             .update_playback(
                 true,
