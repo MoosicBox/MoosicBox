@@ -1231,7 +1231,7 @@ fn handle_server_playback_update(
                 None,
                 Some(update.session_id),
                 Some(update.playback_target),
-                true,
+                false,
                 Some(moosicbox_player::DEFAULT_PLAYBACK_RETRY_OPTIONS),
             )
             .await
