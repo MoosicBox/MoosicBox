@@ -1414,7 +1414,7 @@ fn handle_upnp_playback_update(
                 None,
                 Some(update.session_id),
                 Some(update.playback_target),
-                true,
+                false,
                 Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
             )
             .await
