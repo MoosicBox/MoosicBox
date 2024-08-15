@@ -4427,6 +4427,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_async_service",
  "moosicbox_audio_decoder",
+ "moosicbox_audio_output",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",

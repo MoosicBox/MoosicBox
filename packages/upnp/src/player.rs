@@ -9,6 +9,9 @@ use std::{
 use async_trait::async_trait;
 use flume::{unbounded, Receiver, Sender};
 use moosicbox_async_service::CancellationToken;
+use moosicbox_audio_output::{
+    AudioOutputError, AudioOutputFactory, AudioWrite, Channels, SignalSpec,
+};
 use moosicbox_core::sqlite::{db::DbError, models::ToApi};
 use moosicbox_database::Database;
 use moosicbox_music_api::MusicApiState;
@@ -20,6 +23,7 @@ use moosicbox_player::{
     get_track_url, send_playback_event, trigger_playback_event, ApiPlaybackStatus, Playback,
     PlaybackRetryOptions, Player, PlayerError, PlayerSource,
 };
+use symphonia::core::audio::AudioBuffer;
 
 use crate::listener::Handle;
 
@@ -574,5 +578,33 @@ impl UpnpPlayer {
 
     fn unsubscribe(&self, position_info_subscription_id: usize) -> Result<(), PlayerError> {
         Self::unsubscribe_events(&self.handle, position_info_subscription_id)
+    }
+}
+
+impl AudioWrite for UpnpPlayer {
+    fn write(&mut self, _decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+        unimplemented!()
+    }
+
+    fn flush(&mut self) -> Result<(), AudioOutputError> {
+        unimplemented!()
+    }
+}
+
+impl TryFrom<UpnpPlayer> for AudioOutputFactory {
+    type Error = AudioOutputError;
+
+    fn try_from(player: UpnpPlayer) -> Result<Self, Self::Error> {
+        let name = player.device.friendly_name().to_string();
+        let spec = SignalSpec {
+            rate: 384_000,
+            channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
+        };
+
+        let id = format!("upnp:{name}");
+
+        Ok(Self::new(id, name, spec, move || {
+            Ok(Box::new(player.clone()))
+        }))
     }
 }
