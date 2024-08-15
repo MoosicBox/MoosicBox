@@ -1358,12 +1358,21 @@ fn handle_upnp_playback_update(
                 };
 
                 if let Some(player) = existing {
+                    log::debug!(
+                        "handle_upnp_playback_update: Using existing player for session_id={}",
+                        update.session_id
+                    );
                     player
                 } else {
+                    log::debug!(
+                        "handle_upnp_playback_update: No existing player for session_id={}",
+                        update.session_id
+                    );
                     load_upnp_players().await;
 
                     let binding = UPNP_PLAYERS.read().await;
 
+                    // TODO: This needs to handle multiple players
                     if let Some(player) = binding.iter().next().cloned() {
                         if let Ok(Some(session)) = get_session(&**db, update.session_id).await {
                             if let Err(e) = player.init_from_session(session, &update).await {
