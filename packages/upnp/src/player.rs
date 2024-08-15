@@ -38,7 +38,7 @@ pub struct UpnpPlayer {
     pub active_playback: Arc<RwLock<Option<Playback>>>,
     receiver: Arc<tokio::sync::RwLock<Option<Receiver<()>>>>,
     handle: Handle,
-    device: Device,
+    pub device: Device,
     service: Service,
     instance_id: u32,
     position_info_subscription_id: Arc<tokio::sync::RwLock<usize>>,
