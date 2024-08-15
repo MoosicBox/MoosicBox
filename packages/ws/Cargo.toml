@@ -20,6 +20,7 @@ moosicbox_database = { path = "../database", default-features = false, features 
 moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
     "database",
 ] }
+moosicbox_logging = { path = "../logging", default-features = false }
 moosicbox_session = { path = "../session", default-features = false }
 
 actix-cors                   = { workspace = true, optional = true }

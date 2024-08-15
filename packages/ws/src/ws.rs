@@ -462,6 +462,13 @@ pub async fn update_session(
     context: Option<&WebsocketContext>,
     payload: &UpdateSession,
 ) -> Result<(), UpdateSessionError> {
+    moosicbox_logging::debug_or_trace!(
+        ("Updating session id={}", payload.session_id),
+        (
+            "Updating session id={} payload={payload:?}",
+            payload.session_id
+        )
+    );
     moosicbox_session::update_session(db, payload).await?;
 
     if let Some(actions) = context.map(|x| &x.player_actions) {
@@ -511,14 +518,6 @@ pub async fn update_session(
         }
     }
 
-    if log::log_enabled!(log::Level::Trace) {
-        log::trace!(
-            "Updating session id={} payload={payload:?}",
-            payload.session_id
-        );
-    } else {
-        log::debug!("Updating session id={}", payload.session_id);
-    }
     let playlist = if payload.playlist.is_some() {
         get_session_playlist(db, payload.session_id)
             .await?

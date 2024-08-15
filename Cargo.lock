@@ -4477,6 +4477,7 @@ dependencies = [
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",
+ "moosicbox_logging",
  "moosicbox_session",
  "once_cell",
  "regex",
