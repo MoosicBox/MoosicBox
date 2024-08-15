@@ -63,6 +63,7 @@ impl Player for UpnpPlayer {
         let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
         log::trace!("before_play_playback: playback={playback:?} seek={seek:?}");
         if playback.playing {
+            log::trace!("before_play_playback: Aborting existing playback");
             playback.abort.cancel();
             self.active_playback_write().as_mut().unwrap().abort = CancellationToken::new();
         }

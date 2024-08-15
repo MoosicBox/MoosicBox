@@ -707,8 +707,6 @@ pub trait Player: Clone + Send + 'static {
 
         moosicbox_task::spawn("player: Play playback", async move {
             let mut seek = seek;
-            let mut playback = playback.clone();
-            let abort = playback.abort.clone();
 
             while playback.playing && (playback.position as usize) < playback.tracks.len() {
                 let track_or_id = &playback.tracks[playback.position as usize];
@@ -716,9 +714,10 @@ pub trait Player: Clone + Send + 'static {
 
                 let seek = if seek.is_some() { seek.take() } else { None };
 
+                log::debug!("player cancelled={}", playback.abort.is_cancelled());
                 tokio::select! {
-                    _ = abort.cancelled() => {
-                        log::debug!("Playback cancelled");
+                    _ = playback.abort.cancelled() => {
+                        log::debug!("play_playback: Playback cancelled");
                         return Err(PlayerError::Cancelled);
                     }
                     resp = player.play(seek, retry_options) => {
@@ -739,7 +738,14 @@ pub trait Player: Clone + Send + 'static {
                     }
                 }
 
-                log::debug!("play_playback: playback finished track={track_or_id:?}");
+                log::debug!(
+                    "play_playback: playback finished track={track_or_id:?} cancelled={}",
+                    playback.abort.is_cancelled()
+                );
+
+                if playback.abort.is_cancelled() {
+                    break;
+                }
 
                 let mut binding = player.active_playback_write();
                 let active = binding.as_mut().unwrap();
