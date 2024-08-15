@@ -4,8 +4,8 @@ use std::sync::{Arc, LazyLock};
 
 use moosicbox_audio_decoder::{AudioDecode, AudioDecodeError};
 use moosicbox_resampler::{to_audio_buffer, Resampler};
-pub use symphonia::core::audio::SignalSpec;
 use symphonia::core::audio::{AudioBuffer, Signal as _};
+pub use symphonia::core::audio::{Channels, SignalSpec};
 use symphonia::core::conv::{FromSample, IntoSample as _};
 use symphonia::core::formats::{Packet, Track};
 use thiserror::Error;
