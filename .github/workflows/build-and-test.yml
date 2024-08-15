@@ -356,6 +356,13 @@ jobs:
                       features: static-token-auth,cpal
                       env: STATIC_TOKEN=123
 
+                    - name: server-tls
+                      path: packages/server
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
+                      cargo: --no-default-features
+                      features: tls
+
                     - name: server-cpal
                       path: packages/server
                       os: ubuntu-latest
