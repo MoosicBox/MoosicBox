@@ -640,10 +640,11 @@ pub enum LibraryTrackError {
     Db(#[from] DbError),
 }
 
-pub async fn track(db: &dyn Database, track_id: &Id) -> Result<LibraryTrack, LibraryTrackError> {
-    db::get_track(db, track_id)
-        .await?
-        .ok_or(LibraryTrackError::NotFound)
+pub async fn track(
+    db: &dyn Database,
+    track_id: &Id,
+) -> Result<Option<LibraryTrack>, LibraryTrackError> {
+    Ok(db::get_track(db, track_id).await?)
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, EnumString, AsRefStr)]
@@ -727,7 +728,9 @@ pub async fn track_file_url(
     _audio_quality: LibraryAudioQuality,
     track_id: &Id,
 ) -> Result<String, LibraryTrackFileUrlError> {
-    let track = track(db, track_id).await?;
+    let track = track(db, track_id)
+        .await?
+        .ok_or(LibraryTrackFileUrlError::NoFile)?;
     log::trace!("Received track file url response: {track:?}");
 
     track.file.ok_or(LibraryTrackFileUrlError::NoFile)
@@ -948,7 +951,7 @@ impl LibraryMusicApi {
     }
 
     pub async fn library_track(&self, track_id: &Id) -> Result<Option<LibraryTrack>, TrackError> {
-        Ok(Some(track(&**self.db, track_id).await?))
+        Ok(track(&**self.db, track_id).await?)
     }
 
     pub async fn library_album_tracks(

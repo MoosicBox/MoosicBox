@@ -947,7 +947,9 @@ pub async fn track_endpoint(
     query: web::Query<LibraryTrackQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<ApiTrack>> {
-    let track = track(&**data.database, &query.track_id.into()).await?;
+    let track = track(&**data.database, &query.track_id.into())
+        .await?
+        .ok_or_else(|| ErrorNotFound("Track not found"))?;
 
     Ok(Json(track.to_api()))
 }
