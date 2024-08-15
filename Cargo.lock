@@ -948,9 +948,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.6.2"
+version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce87155eba55e11768b8c1afa607f3e864ae82f03caf63258b37455b0ad02537"
+checksum = "0abbf454960d0db2ad12684a1640120e7557294b0ff8e2f11236290a1b293225"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
@@ -992,9 +992,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfe321a6b21f5d8eabd0ade9c55d3d0335f3c3157fc2b3e87f05f34b539e4df5"
+checksum = "f37570a4e8ce26bd3a69c7c011f13eee6b2a1135c4518cb57030f4257077ca36"
 dependencies = [
  "base64-simd",
  "bytes",
@@ -1311,12 +1311,13 @@ checksum = "4964518bd3b4a8190e832886cdc0da9794f12e8e6c1613a9e90ff331c4c8724b"
 
 [[package]]
 name = "cc"
-version = "1.1.10"
+version = "1.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9e8aabfac534be767c909e0690571677d49f41bd8465ae876fe043d52ba5292"
+checksum = "5fb8dd288a69fc53a1996d7ecfbf4a20d59065bff137ce7e56bbd620de191189"
 dependencies = [
  "jobserver",
  "libc",
+ "shlex",
 ]
 
 [[package]]
@@ -2106,12 +2107,12 @@ dependencies = [
 [[package]]
 name = "free_log_client"
 version = "0.2.1"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#c3bef18c183e2d7e7d5de30cb27ae989e79e67db"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#b61384619f836fd0c7575985e9de6191a53de407"
 dependencies = [
  "free_log_models",
  "futures-util",
  "once_cell",
- "reqwest 0.11.27",
+ "reqwest 0.12.5",
  "serde",
  "serde_json",
  "strum",
@@ -2126,7 +2127,7 @@ dependencies = [
 [[package]]
 name = "free_log_models"
 version = "0.1.2"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#c3bef18c183e2d7e7d5de30cb27ae989e79e67db"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#b61384619f836fd0c7575985e9de6191a53de407"
 dependencies = [
  "log",
  "serde",
@@ -2479,6 +2480,12 @@ name = "hermit-abi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
+
+[[package]]
+name = "hermit-abi"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fbf6a919d6cf397374f7dfeeea91d974c7c0a7221d0d0f4f20d859d329e53fcc"
 
 [[package]]
 name = "hex"
@@ -2872,11 +2879,11 @@ dependencies = [
 
 [[package]]
 name = "is-terminal"
-version = "0.4.12"
+version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f23ff5ef2b80d608d61efee834934d862cd92461afc0560dedf493e4c033738b"
+checksum = "261f68e344040fbd0edea105bef17c66edf46f984ddb1115b775ce31be948f4b"
 dependencies = [
- "hermit-abi 0.3.9",
+ "hermit-abi 0.4.0",
  "libc",
  "windows-sys 0.52.0",
 ]
@@ -5958,12 +5965,10 @@ dependencies = [
  "system-configuration",
  "tokio",
  "tokio-rustls 0.24.1",
- "tokio-util",
  "tower-service",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
- "wasm-streams",
  "web-sys",
  "webpki-roots 0.25.4",
  "winreg 0.50.0",
