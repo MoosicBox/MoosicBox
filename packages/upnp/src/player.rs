@@ -13,7 +13,6 @@ use moosicbox_audio_output::{
     AudioOutputError, AudioOutputFactory, AudioWrite, Channels, SignalSpec,
 };
 use moosicbox_core::sqlite::{db::DbError, models::ToApi};
-use moosicbox_database::Database;
 use moosicbox_music_api::MusicApiState;
 use moosicbox_session::models::UpdateSession;
 use rand::{thread_rng, Rng as _};
@@ -34,7 +33,6 @@ pub const DEFAULT_SEEK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOption
 
 #[derive(Clone)]
 pub struct UpnpPlayer {
-    pub db: Arc<Box<dyn Database>>,
     pub api_state: MusicApiState,
     pub id: usize,
     source: PlayerSource,
@@ -286,7 +284,6 @@ impl Player for UpnpPlayer {
 
 impl UpnpPlayer {
     pub fn new(
-        db: Arc<Box<dyn Database>>,
         api_state: MusicApiState,
         device: Device,
         service: Service,
@@ -295,7 +292,6 @@ impl UpnpPlayer {
     ) -> UpnpPlayer {
         UpnpPlayer {
             id: thread_rng().gen::<usize>(),
-            db,
             api_state,
             source,
             transport_uri: Arc::new(tokio::sync::RwLock::new(None)),

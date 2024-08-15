@@ -1320,7 +1320,6 @@ async fn load_upnp_players() -> Result<(), moosicbox_upnp::UpnpDeviceScannerErro
                     moosicbox_upnp::get_device_and_service(&device.udn, service_id)
                 {
                     let player = moosicbox_upnp::player::UpnpPlayer::new(
-                        DB.read().unwrap().clone().unwrap(),
                         MUSIC_API_STATE.read().unwrap().clone().unwrap(),
                         device,
                         service,
