@@ -3459,6 +3459,7 @@ dependencies = [
  "moosicbox_paging",
  "moosicbox_player",
  "moosicbox_qobuz",
+ "moosicbox_remote_library",
  "moosicbox_resampler",
  "moosicbox_scan",
  "moosicbox_search",
@@ -4069,6 +4070,40 @@ dependencies = [
  "tokio-util",
  "url",
  "utoipa",
+]
+
+[[package]]
+name = "moosicbox_remote_library"
+version = "0.1.0"
+dependencies = [
+ "async-recursion",
+ "async-trait",
+ "enum-as-inner",
+ "futures",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_audio_output",
+ "moosicbox_core",
+ "moosicbox_database",
+ "moosicbox_files",
+ "moosicbox_json_utils",
+ "moosicbox_music_api",
+ "moosicbox_paging",
+ "moosicbox_search",
+ "moosicbox_stream_utils",
+ "once_cell",
+ "open",
+ "regex",
+ "reqwest 0.12.5",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "strum",
+ "strum_macros",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "url",
 ]
 
 [[package]]

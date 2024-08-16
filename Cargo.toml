@@ -27,6 +27,7 @@ members = [
     "packages/paging",
     "packages/player",
     "packages/qobuz",
+    "packages/remote_library",
     "packages/resampler",
     "packages/scan",
     "packages/search",

@@ -312,6 +312,10 @@ jobs:
                       cargo: --no-default-features
                       features: db
 
+                    - name: remote_library
+                      path: packages/remote_library
+                      os: ubuntu-latest
+
                     - name: resampler
                       path: packages/resampler
                       os: ubuntu-latest

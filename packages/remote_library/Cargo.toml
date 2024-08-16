@@ -1,0 +1,59 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["multimedia", "network-programming"]
+description = "MoosicBox Remote Library Music API package"
+edition     = "2021"
+keywords    = ["audio", "library", "remote"]
+license     = "MPL-2.0"
+name        = "moosicbox_remote_library"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_assert = { path = "../assert", default-features = false }
+moosicbox_audio_output = { path = "../audio_output", default-features = false }
+moosicbox_core = { path = "../core", default-features = false }
+moosicbox_database = { path = "../database", default-features = false, features = [
+    "rusqlite",
+] }
+moosicbox_files = { path = "../files", default-features = false }
+moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
+    "database",
+    "serde_json",
+] }
+moosicbox_music_api = { path = "../music_api", default-features = false }
+moosicbox_paging = { path = "../paging", default-features = false }
+moosicbox_search = { path = "../search", default-features = false, features = [
+    "db",
+] }
+moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
+
+async-recursion = { workspace = true }
+async-trait     = { workspace = true }
+enum-as-inner   = { workspace = true }
+futures         = { workspace = true }
+log             = { workspace = true }
+once_cell       = { workspace = true }
+open            = { workspace = true }
+regex           = { workspace = true }
+reqwest         = { workspace = true, features = ["json"] }
+rusqlite        = { workspace = true }
+serde           = { workspace = true, features = ["derive"] }
+serde_json      = { workspace = true }
+strum           = { workspace = true }
+strum_macros    = { workspace = true }
+thiserror       = { workspace = true }
+tokio           = { workspace = true, features = ["macros", "tracing"] }
+tokio-util      = { workspace = true }
+url             = { workspace = true }
+
+[features]
+default = ["aac", "flac", "mp3", "opus"]
+
+fail-on-warnings = []
+
+aac  = ["moosicbox_audio_output/aac", "moosicbox_core/aac"]
+flac = ["moosicbox_audio_output/flac", "moosicbox_core/flac"]
+mp3  = ["moosicbox_audio_output/mp3", "moosicbox_core/mp3"]
+opus = ["moosicbox_audio_output/opus", "moosicbox_core/opus"]
