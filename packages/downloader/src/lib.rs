@@ -40,7 +40,7 @@ use moosicbox_files::{
 };
 use moosicbox_music_api::{
     AlbumError, ArtistError, ImageCoverSize, MusicApi, MusicApiState, MusicApisError,
-    TrackAudioQuality, TrackError, TrackSource, TracksError,
+    SourceToMusicApi as _, TrackAudioQuality, TrackError, TrackSource, TracksError,
 };
 use queue::ProgressListener;
 use thiserror::Error;

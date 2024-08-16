@@ -21,7 +21,7 @@ use moosicbox_library::{
     models::{ApiAlbum, ApiArtist, ApiTrack},
     LibraryMusicApiState,
 };
-use moosicbox_music_api::{AlbumFilters, AlbumsRequest, MusicApiState};
+use moosicbox_music_api::{AlbumFilters, AlbumsRequest, MusicApiState, SourceToMusicApi as _};
 use moosicbox_paging::{Page, PagingRequest};
 use serde::Deserialize;
 use thiserror::Error;

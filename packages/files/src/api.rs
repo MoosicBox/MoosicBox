@@ -13,7 +13,9 @@ use moosicbox_core::{
     sqlite::models::{ApiSource, Id, IdType},
     types::AudioFormat,
 };
-use moosicbox_music_api::{ImageCoverSize, MusicApiState, TrackAudioQuality, TrackSource};
+use moosicbox_music_api::{
+    ImageCoverSize, MusicApiState, SourceToMusicApi as _, TrackAudioQuality, TrackSource,
+};
 use serde::Deserialize;
 
 use crate::files::{

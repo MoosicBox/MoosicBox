@@ -25,7 +25,7 @@ use moosicbox_files::files::track::{
     audio_format_to_content_type, get_track_id_source, get_track_info,
 };
 use moosicbox_files::range::{parse_ranges, Range};
-use moosicbox_music_api::{MusicApis, TrackSource};
+use moosicbox_music_api::{MusicApis, SourceToMusicApi as _, TrackSource};
 use moosicbox_player::symphonia::play_media_source_async;
 use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;
 use moosicbox_stream_utils::ByteWriter;

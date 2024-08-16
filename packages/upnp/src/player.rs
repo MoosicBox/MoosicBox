@@ -13,7 +13,7 @@ use moosicbox_audio_output::{
     AudioOutputError, AudioOutputFactory, AudioWrite, Channels, SignalSpec,
 };
 use moosicbox_core::sqlite::{db::DbError, models::ToApi};
-use moosicbox_music_api::MusicApiState;
+use moosicbox_music_api::SourceToMusicApi;
 use moosicbox_session::models::UpdateSession;
 use rand::{thread_rng, Rng as _};
 use rupnp::{Device, Service};
@@ -33,7 +33,7 @@ pub const DEFAULT_SEEK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOption
 
 #[derive(Clone)]
 pub struct UpnpPlayer {
-    pub api_state: MusicApiState,
+    pub source_to_music_api: Arc<Box<dyn SourceToMusicApi + Send + Sync>>,
     pub id: usize,
     source: PlayerSource,
     transport_uri: Arc<tokio::sync::RwLock<Option<String>>>,
@@ -284,7 +284,7 @@ impl Player for UpnpPlayer {
 
 impl UpnpPlayer {
     pub fn new(
-        api_state: MusicApiState,
+        source_to_music_api: Arc<Box<dyn SourceToMusicApi + Send + Sync>>,
         device: Device,
         service: Service,
         source: PlayerSource,
@@ -292,7 +292,7 @@ impl UpnpPlayer {
     ) -> UpnpPlayer {
         UpnpPlayer {
             id: thread_rng().gen::<usize>(),
-            api_state,
+            source_to_music_api,
             source,
             transport_uri: Arc::new(tokio::sync::RwLock::new(None)),
             active_playback: Arc::new(RwLock::new(None)),
@@ -347,8 +347,7 @@ impl UpnpPlayer {
             .get("content-length")
             .map(|length| length.to_str().unwrap().parse::<u64>().unwrap());
         let api = self
-            .api_state
-            .apis
+            .source_to_music_api
             .get(track_or_id.source)
             .map_err(|_e| PlayerError::InvalidSource)?;
         let track = api

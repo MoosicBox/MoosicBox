@@ -10,7 +10,7 @@ use moosicbox_core::sqlite::{
     models::{ApiSource, TrackApiSource},
 };
 use moosicbox_database::Database;
-use moosicbox_music_api::{MusicApi, MusicApiState, MusicApisError};
+use moosicbox_music_api::{MusicApi, MusicApiState, MusicApisError, SourceToMusicApi as _};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};

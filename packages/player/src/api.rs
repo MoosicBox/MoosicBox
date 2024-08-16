@@ -13,7 +13,7 @@ use moosicbox_core::{
     sqlite::models::{ApiSource, Id, IdType},
     types::{AudioFormat, PlaybackQuality},
 };
-use moosicbox_music_api::{MusicApi, MusicApiState};
+use moosicbox_music_api::{MusicApi, MusicApiState, SourceToMusicApi as _};
 use moosicbox_session::models::PlaybackTarget;
 use once_cell::sync::Lazy;
 use serde::Deserialize;

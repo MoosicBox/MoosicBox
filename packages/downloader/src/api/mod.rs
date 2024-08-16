@@ -24,6 +24,7 @@ use actix_web::{
 use moosicbox_core::sqlite::models::Id;
 use moosicbox_database::Database;
 use moosicbox_music_api::MusicApiState;
+use moosicbox_music_api::SourceToMusicApi as _;
 use moosicbox_music_api::TrackAudioQuality;
 use moosicbox_paging::Page;
 use once_cell::sync::Lazy;

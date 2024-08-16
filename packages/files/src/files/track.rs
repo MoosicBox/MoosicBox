@@ -19,7 +19,8 @@ use moosicbox_core::{
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_music_api::{
-    MusicApi, MusicApis, MusicApisError, TrackAudioQuality, TrackError, TrackSource, TracksError,
+    MusicApi, MusicApis, MusicApisError, SourceToMusicApi as _, TrackAudioQuality, TrackError,
+    TrackSource, TracksError,
 };
 use moosicbox_stream_utils::{
     new_byte_writer_id, remote_bytestream::RemoteByteStream, stalled_monitor::StalledReadMonitor,

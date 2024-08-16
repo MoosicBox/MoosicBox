@@ -24,8 +24,8 @@ pub enum MusicApisError {
     NotFound(ApiSource),
 }
 
-impl MusicApis {
-    pub fn get(&self, source: ApiSource) -> Result<Arc<Box<dyn MusicApi>>, MusicApisError> {
+impl SourceToMusicApi for MusicApis {
+    fn get(&self, source: ApiSource) -> Result<Arc<Box<dyn MusicApi>>, MusicApisError> {
         let api = self
             .0
             .get(&source)
@@ -50,6 +50,10 @@ impl MusicApiState {
             )),
         }
     }
+}
+
+pub trait SourceToMusicApi {
+    fn get(&self, source: ApiSource) -> Result<Arc<Box<dyn MusicApi>>, MusicApisError>;
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
