@@ -604,3 +604,37 @@ impl TryFrom<UpnpPlayer> for AudioOutputFactory {
         }))
     }
 }
+
+#[derive(Clone)]
+pub struct UpnpAvTransportService {
+    pub device: Device,
+    pub service: Service,
+}
+
+impl AudioWrite for UpnpAvTransportService {
+    fn write(&mut self, _decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+        unimplemented!()
+    }
+
+    fn flush(&mut self) -> Result<(), AudioOutputError> {
+        unimplemented!()
+    }
+}
+
+impl TryFrom<UpnpAvTransportService> for AudioOutputFactory {
+    type Error = AudioOutputError;
+
+    fn try_from(player: UpnpAvTransportService) -> Result<Self, Self::Error> {
+        let name = player.device.friendly_name().to_string();
+        let spec = SignalSpec {
+            rate: 384_000,
+            channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
+        };
+
+        let id = format!("upnp:{name}");
+
+        Ok(Self::new(id, name, spec, move || {
+            Ok(Box::new(player.clone()))
+        }))
+    }
+}
