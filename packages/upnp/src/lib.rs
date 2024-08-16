@@ -862,7 +862,7 @@ impl UpnpDeviceScanner {
     }
 
     pub async fn scan(&mut self) -> Result<(), UpnpDeviceScannerError> {
-        if self.scanning {
+        if self.scanning || !self.devices.is_empty() {
             return Ok(());
         }
 
