@@ -584,57 +584,6 @@ pub trait Player: Clone + Send + 'static {
         .await
     }
 
-    async fn handle_retry<
-        T,
-        E: std::fmt::Debug + Into<PlayerError>,
-        F: Future<Output = Result<T, E>> + Send,
-    >(
-        &self,
-        retry_options: Option<PlaybackRetryOptions>,
-        func: impl Fn() -> F + Send,
-    ) -> Result<T, PlayerError> {
-        let mut retry_count = 0;
-
-        loop {
-            if retry_count > 0 {
-                tokio::time::sleep(retry_options.unwrap().retry_delay).await;
-            }
-
-            match func().await {
-                Ok(value) => {
-                    log::trace!("Finished action");
-                    return Ok(value);
-                }
-                Err(e) => {
-                    let e = e.into();
-                    if let PlayerError::Cancelled = e {
-                        log::debug!("Action cancelled");
-                        return Err(e);
-                    }
-                    log::error!("Action failed: {e:?}");
-                    if let Some(retry_options) = retry_options {
-                        retry_count += 1;
-                        if retry_count >= retry_options.max_attempts {
-                            log::error!(
-                                "Action retry failed after {retry_count} attempts. Not retrying"
-                            );
-                            return Err(e);
-                        }
-                        log::info!(
-                            "Retrying action attempt {}/{}",
-                            retry_count + 1,
-                            retry_options.max_attempts
-                        );
-                        continue;
-                    } else {
-                        log::debug!("No retry options");
-                        break Err(e);
-                    }
-                }
-            }
-        }
-    }
-
     #[allow(clippy::too_many_arguments)]
     async fn play_tracks(
         &self,
@@ -794,7 +743,7 @@ pub trait Player: Clone + Send + 'static {
     ) -> Result<(), PlayerError> {
         log::debug!("play: seek={seek:?}");
 
-        self.handle_retry(retry_options, {
+        handle_retry(retry_options, {
             let this = self.clone();
 
             move || {
@@ -813,7 +762,7 @@ pub trait Player: Clone + Send + 'static {
     async fn stop(&self, retry_options: Option<PlaybackRetryOptions>) -> Result<(), PlayerError> {
         log::debug!("stop: Stopping playback");
 
-        self.handle_retry(retry_options, {
+        handle_retry(retry_options, {
             let this = self.clone();
 
             move || {
@@ -836,7 +785,7 @@ pub trait Player: Clone + Send + 'static {
     ) -> Result<(), PlayerError> {
         log::debug!("seek: seek={seek:?}");
 
-        self.handle_retry(retry_options, {
+        handle_retry(retry_options, {
             let this = self.clone();
 
             move || {
@@ -1060,7 +1009,7 @@ pub trait Player: Clone + Send + 'static {
     async fn pause(&self, retry_options: Option<PlaybackRetryOptions>) -> Result<(), PlayerError> {
         log::debug!("pause: Pausing playback");
 
-        self.handle_retry(retry_options, {
+        handle_retry(retry_options, {
             let this = self.clone();
 
             move || {
@@ -1078,7 +1027,7 @@ pub trait Player: Clone + Send + 'static {
     async fn resume(&self, retry_options: Option<PlaybackRetryOptions>) -> Result<(), PlayerError> {
         log::debug!("resume: Resuming playback");
 
-        self.handle_retry(retry_options, {
+        handle_retry(retry_options, {
             let this = self.clone();
 
             move || {
@@ -1468,6 +1417,56 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
     };
 
     send_playback_event(&update, current)
+}
+
+async fn handle_retry<
+    T,
+    E: std::fmt::Debug + Into<PlayerError>,
+    F: Future<Output = Result<T, E>> + Send,
+>(
+    retry_options: Option<PlaybackRetryOptions>,
+    func: impl Fn() -> F + Send,
+) -> Result<T, PlayerError> {
+    let mut retry_count = 0;
+
+    loop {
+        if retry_count > 0 {
+            tokio::time::sleep(retry_options.unwrap().retry_delay).await;
+        }
+
+        match func().await {
+            Ok(value) => {
+                log::trace!("Finished action");
+                return Ok(value);
+            }
+            Err(e) => {
+                let e = e.into();
+                if let PlayerError::Cancelled = e {
+                    log::debug!("Action cancelled");
+                    return Err(e);
+                }
+                log::error!("Action failed: {e:?}");
+                if let Some(retry_options) = retry_options {
+                    retry_count += 1;
+                    if retry_count >= retry_options.max_attempts {
+                        log::error!(
+                            "Action retry failed after {retry_count} attempts. Not retrying"
+                        );
+                        return Err(e);
+                    }
+                    log::info!(
+                        "Retrying action attempt {}/{}",
+                        retry_count + 1,
+                        retry_options.max_attempts
+                    );
+                    continue;
+                } else {
+                    log::debug!("No retry options");
+                    break Err(e);
+                }
+            }
+        }
+    }
 }
 
 pub fn send_playback_event(update: &UpdateSession, playback: &Playback) {
