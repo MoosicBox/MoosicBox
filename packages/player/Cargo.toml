@@ -49,6 +49,7 @@ log              = { workspace = true }
 ogg              = { workspace = true }
 once_cell        = { workspace = true }
 rand             = { workspace = true }
+regex            = { workspace = true }
 reqwest          = { workspace = true, features = ["json"] }
 serde            = { workspace = true, features = ["derive"] }
 serde_json       = { workspace = true }

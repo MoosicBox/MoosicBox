@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     fs::File,
     path::Path,
-    sync::{Arc, RwLock, RwLockWriteGuard},
+    sync::{Arc, LazyLock, RwLock, RwLockWriteGuard},
 };
 
 use ::symphonia::core::{io::MediaSource, probe::Hint};
@@ -40,6 +40,7 @@ use moosicbox_stream_utils::{
 };
 use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng as _};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
@@ -249,7 +250,24 @@ pub async fn get_track_url(
             host,
             query,
             headers,
-        } => (host.to_string(), query, headers.to_owned()),
+        } => {
+            static LOCALHOST: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"^http://localhost[:/].*?").unwrap());
+
+            let host = if use_local_network_ip && LOCALHOST.is_match(host) {
+                host.replacen(
+                    "localhost",
+                    &local_ip().map(|x| x.to_string()).unwrap_or_else(|e| {
+                        log::warn!("Failed to get local ip address: {e:?}");
+                        "127.0.0.1".to_string()
+                    }),
+                    1,
+                )
+            } else {
+                host.to_string()
+            };
+            (host, query, headers.to_owned())
+        }
         PlayerSource::Local => {
             let ip = if use_local_network_ip {
                 local_ip().map(|x| x.to_string()).unwrap_or_else(|e| {
