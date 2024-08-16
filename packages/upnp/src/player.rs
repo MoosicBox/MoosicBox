@@ -1,7 +1,7 @@
 use std::{
     sync::{
         atomic::{AtomicBool, AtomicUsize},
-        Arc, RwLock, RwLockWriteGuard,
+        Arc, RwLock,
     },
     time::Duration,
 };
@@ -37,8 +37,8 @@ pub struct UpnpPlayer {
     pub id: usize,
     source: PlayerSource,
     transport_uri: Arc<tokio::sync::RwLock<Option<String>>>,
-    pub active_playback: Arc<RwLock<Option<Playback>>>,
-    receiver: Arc<tokio::sync::RwLock<Option<Receiver<()>>>>,
+    pub playback: Arc<RwLock<Option<Playback>>>,
+    pub receiver: Arc<tokio::sync::RwLock<Option<Receiver<()>>>>,
     handle: Handle,
     pub device: Device,
     service: Service,
@@ -49,35 +49,39 @@ pub struct UpnpPlayer {
 
 #[async_trait]
 impl Player for UpnpPlayer {
-    fn active_playback_write(&self) -> RwLockWriteGuard<'_, Option<Playback>> {
-        self.active_playback.write().unwrap()
-    }
-
-    async fn receiver_write(&self) -> tokio::sync::RwLockWriteGuard<'_, Option<Receiver<()>>> {
-        self.receiver.write().await
-    }
-
     async fn before_play_playback(&self, seek: Option<f64>) -> Result<(), PlayerError> {
-        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
-        log::trace!("before_play_playback: playback={playback:?} seek={seek:?}");
-        if playback.playing {
+        let playing = {
+            self.playback
+                .read()
+                .unwrap()
+                .as_ref()
+                .ok_or(PlayerError::NoPlayersPlaying)?
+                .playing
+        };
+        log::trace!("before_play_playback: playing={playing:?} seek={seek:?}");
+        if playing {
             log::trace!("before_play_playback: Aborting existing playback");
+            let mut binding = self.playback.write().unwrap();
+            let playback = binding.as_mut().unwrap();
             playback.abort.cancel();
-            self.active_playback_write().as_mut().unwrap().abort = CancellationToken::new();
+            playback.abort = CancellationToken::new();
         }
 
         Ok(())
     }
 
     async fn trigger_play(&self, seek: Option<f64>) -> Result<(), PlayerError> {
+        log::debug!("trigger_play: seek={seek:?}");
         let transport_uri = self.update_av_transport().await?;
 
-        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
+        let Some(playback) = self.playback.read().unwrap().clone() else {
+            return Err(PlayerError::NoPlayersPlaying);
+        };
 
         if let Some(seek) = seek {
             if seek > 0.0 {
                 log::debug!("trigger_play: Seeking track to seek={seek}");
-                self.seek(seek, Some(DEFAULT_SEEK_RETRY_OPTIONS)).await?;
+                self.trigger_seek(seek).await?;
             }
         }
 
@@ -132,7 +136,9 @@ impl Player for UpnpPlayer {
 
     async fn trigger_stop(&self) -> Result<(), PlayerError> {
         log::info!("Stopping playback");
-        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
+        let Some(playback) = self.playback.read().unwrap().clone() else {
+            return Err(PlayerError::NoPlayersPlaying);
+        };
 
         if let Err(e) = self.wait_for_expected_transport_state().await {
             log::warn!("Playback not in a stoppable state: {e:?}");
@@ -153,7 +159,7 @@ impl Player for UpnpPlayer {
         playback.abort.cancel();
 
         log::trace!("Waiting for playback completion response");
-        if let Some(receiver) = self.receiver_write().await.take() {
+        if let Some(receiver) = self.receiver.write().await.take() {
             tokio::select! {
                 resp = receiver.recv_async() => {
                     match resp {
@@ -173,7 +179,7 @@ impl Player for UpnpPlayer {
             log::debug!("No receiver to wait for completion response with");
         }
 
-        self.active_playback_write().as_mut().unwrap().abort = CancellationToken::new();
+        self.playback.write().unwrap().as_mut().unwrap().abort = CancellationToken::new();
 
         Ok(())
     }
@@ -206,7 +212,9 @@ impl Player for UpnpPlayer {
 
     async fn trigger_pause(&self) -> Result<(), PlayerError> {
         log::info!("trigger_pause: pausing playback");
-        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
+        let Some(playback) = self.playback.read().unwrap().clone() else {
+            return Err(PlayerError::NoPlayersPlaying);
+        };
 
         let id = playback.id;
         log::debug!("trigger_pause: playback id={id}");
@@ -238,7 +246,9 @@ impl Player for UpnpPlayer {
 
     async fn trigger_resume(&self) -> Result<(), PlayerError> {
         log::info!("Resuming playback id");
-        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
+        let Some(playback) = self.playback.read().unwrap().clone() else {
+            return Err(PlayerError::NoPlayersPlaying);
+        };
 
         let id = playback.id;
 
@@ -264,17 +274,13 @@ impl Player for UpnpPlayer {
     fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
         Ok(ApiPlaybackStatus {
             active_playbacks: self
-                .active_playback
+                .playback
                 .clone()
                 .read()
                 .unwrap()
                 .clone()
                 .map(|x| x.to_api()),
         })
-    }
-
-    fn get_playback(&self) -> Option<Playback> {
-        self.active_playback.read().unwrap().clone()
     }
 
     fn get_source(&self) -> &PlayerSource {
@@ -295,7 +301,7 @@ impl UpnpPlayer {
             source_to_music_api,
             source,
             transport_uri: Arc::new(tokio::sync::RwLock::new(None)),
-            active_playback: Arc::new(RwLock::new(None)),
+            playback: Arc::new(RwLock::new(None)),
             receiver: Arc::new(tokio::sync::RwLock::new(None)),
             handle,
             device,
@@ -307,11 +313,15 @@ impl UpnpPlayer {
     }
 
     async fn update_av_transport(&self) -> Result<String, PlayerError> {
-        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
+        log::debug!("update_av_transport");
+        let Some(playback) = self.playback.read().unwrap().clone() else {
+            return Err(PlayerError::NoPlayersPlaying);
+        };
+
         let track_or_id = &playback.tracks[playback.position as usize];
         let track_id = &track_or_id.id;
         log::info!(
-            "Updating UPnP AV Transport URI: {} {:?} {track_or_id:?}",
+            "update_av_transport: Updating UPnP AV Transport URI: {} {:?} {track_or_id:?}",
             track_id,
             playback.abort,
         );
@@ -457,7 +467,7 @@ impl UpnpPlayer {
                 self.device.udn().to_owned(),
                 self.service.service_id().to_owned(),
                 Box::new({
-                    let active_playback = self.active_playback.clone();
+                    let active_playback = self.playback.clone();
                     let transport_uri = self.transport_uri.read().await.clone();
                     let handle = self.handle.clone();
                     let this_sub = this_sub.clone();
@@ -471,14 +481,10 @@ impl UpnpPlayer {
                         let this_sub = this_sub.clone();
 
                         Box::pin(async move {
-                            if log::log_enabled!(log::Level::Trace) {
-                                log::debug!(
-                                    "position_info={position_info:?} active_playback={:?}",
-                                    active_playback.read().unwrap()
-                                );
-                            } else {
-                                log::debug!("position_info={position_info:?}");
-                            }
+                            moosicbox_logging::debug_or_trace!(
+                                ("position_info={position_info:?}"), 
+                                ("position_info={position_info:?} active_playback={:?}", active_playback.read().unwrap())
+                            );
                             if position_info.track == 0
                                 || transport_uri.as_ref().map(|x| xml::escape::escape_str_attribute(x).to_string()).is_some_and(|x| x != position_info.track_uri)
                             {
@@ -592,12 +598,13 @@ impl TryFrom<UpnpPlayer> for AudioOutputFactory {
 
     fn try_from(player: UpnpPlayer) -> Result<Self, Self::Error> {
         let name = player.device.friendly_name().to_string();
+        let udn = player.device.udn();
         let spec = SignalSpec {
             rate: 384_000,
             channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
         };
 
-        let id = format!("upnp:{name}");
+        let id = format!("upnp:{udn}");
 
         Ok(Self::new(id, name, spec, move || {
             Ok(Box::new(player.clone()))
@@ -626,12 +633,13 @@ impl TryFrom<UpnpAvTransportService> for AudioOutputFactory {
 
     fn try_from(player: UpnpAvTransportService) -> Result<Self, Self::Error> {
         let name = player.device.friendly_name().to_string();
+        let udn = player.device.udn();
         let spec = SignalSpec {
             rate: 384_000,
             channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
         };
 
-        let id = format!("upnp:{name}");
+        let id = format!("upnp:{udn}");
 
         Ok(Self::new(id, name, spec, move || {
             Ok(Box::new(player.clone()))

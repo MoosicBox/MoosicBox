@@ -19,8 +19,8 @@ use once_cell::sync::Lazy;
 use serde::Deserialize;
 
 use crate::{
-    local::LocalPlayer, ApiPlaybackStatus, PlaybackStatus, Player as _, PlayerError, PlayerSource,
-    Track, DEFAULT_PLAYBACK_RETRY_OPTIONS,
+    local::LocalPlayer, ApiPlaybackStatus, PlaybackHandler, PlaybackStatus, PlayerError,
+    PlayerSource, Track, DEFAULT_PLAYBACK_RETRY_OPTIONS,
 };
 
 #[cfg(feature = "openapi")]
@@ -98,10 +98,10 @@ impl From<PlayerError> for actix_web::Error {
     }
 }
 
-static PLAYER_CACHE: Lazy<Arc<tokio::sync::Mutex<HashMap<String, LocalPlayer>>>> =
+static PLAYER_CACHE: Lazy<Arc<tokio::sync::Mutex<HashMap<String, PlaybackHandler>>>> =
     Lazy::new(|| Arc::new(tokio::sync::Mutex::new(HashMap::new())));
 
-async fn get_player(host: Option<&str>) -> Result<LocalPlayer, actix_web::Error> {
+async fn get_player(host: Option<&str>) -> Result<PlaybackHandler, actix_web::Error> {
     Ok(PLAYER_CACHE
         .lock()
         .await
@@ -110,7 +110,7 @@ async fn get_player(host: Option<&str>) -> Result<LocalPlayer, actix_web::Error>
             None => "local".into(),
         })
         .or_insert(if let Some(host) = host {
-            LocalPlayer::new(
+            let local_player = LocalPlayer::new(
                 PlayerSource::Remote {
                     host: host.to_string(),
                     query: None,
@@ -124,16 +124,34 @@ async fn get_player(host: Option<&str>) -> Result<LocalPlayer, actix_web::Error>
                 default_output_factory()
                     .await
                     .ok_or(ErrorInternalServerError("Missing default audio output"))?,
-            )
+            );
+
+            let playback = local_player.playback.clone();
+            let output = local_player.output.clone();
+            let receiver = local_player.receiver.clone();
+
+            PlaybackHandler::new(local_player)
+                .with_playback(playback)
+                .with_output(output)
+                .with_receiver(receiver)
         } else {
-            LocalPlayer::new(PlayerSource::Local, None)
+            let local_player = LocalPlayer::new(PlayerSource::Local, None)
                 .await
                 .map_err(ErrorInternalServerError)?
                 .with_output(
                     default_output_factory()
                         .await
                         .ok_or(ErrorInternalServerError("Missing default audio output"))?,
-                )
+                );
+
+            let playback = local_player.playback.clone();
+            let output = local_player.output.clone();
+            let receiver = local_player.receiver.clone();
+
+            PlaybackHandler::new(local_player)
+                .with_playback(playback)
+                .with_output(output)
+                .with_receiver(receiver)
         })
         .clone())
 }
@@ -761,6 +779,9 @@ pub async fn player_status_endpoint(
     query: web::Query<PlayerStatusQuery>,
 ) -> Result<Json<ApiPlaybackStatus>> {
     Ok(Json(
-        get_player(query.host.as_deref()).await?.player_status()?,
+        get_player(query.host.as_deref())
+            .await?
+            .player
+            .player_status()?,
     ))
 }

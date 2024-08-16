@@ -10,7 +10,10 @@ use moosicbox_core::{
     types::PlaybackQuality,
 };
 use moosicbox_database::{AsId, Database, DatabaseValue};
-use moosicbox_json_utils::{database::ToValue as _, ParseError, ToValueType};
+use moosicbox_json_utils::{
+    database::{DatabaseFetchError, ToValue as _},
+    ParseError, ToValueType,
+};
 use moosicbox_library::{
     db::get_tracks,
     models::{ApiLibraryTrack, ApiTrack},
@@ -134,6 +137,26 @@ impl UpdateSession {
             || self.volume.is_some()
             || self.seek.is_some()
             || self.playlist.is_some()
+    }
+
+    pub async fn audio_output_ids(
+        &self,
+        db: &dyn Database,
+    ) -> Result<Vec<String>, DatabaseFetchError> {
+        Ok(match &self.playback_target {
+            PlaybackTarget::AudioZone { audio_zone_id } => {
+                let Some(output) = moosicbox_audio_zone::get_zone(db, *audio_zone_id).await? else {
+                    return Ok(vec![]);
+                };
+
+                output
+                    .players
+                    .into_iter()
+                    .map(|x| x.audio_output_id)
+                    .collect::<Vec<_>>()
+            }
+            PlaybackTarget::ConnectionOutput { output_id, .. } => vec![output_id.to_owned()],
+        })
     }
 }
 

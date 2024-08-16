@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     fs::File,
     path::Path,
-    sync::{Arc, LazyLock, RwLock, RwLockWriteGuard},
+    sync::{Arc, LazyLock, RwLock},
 };
 
 use ::symphonia::core::{io::MediaSource, probe::Hint};
@@ -17,6 +17,7 @@ use local_ip_address::local_ip;
 use moosicbox_audio_decoder::media_sources::{
     bytestream_source::ByteStreamSource, remote_bytestream::RemoteByteStreamMediaSource,
 };
+use moosicbox_audio_output::AudioOutputFactory;
 use moosicbox_core::sqlite::models::ApiSource;
 use moosicbox_core::{
     sqlite::{
@@ -431,12 +432,58 @@ pub enum PlayerSource {
     },
 }
 
-#[async_trait]
-pub trait Player: Clone + Send + 'static {
-    fn active_playback_write(&self) -> RwLockWriteGuard<'_, Option<Playback>>;
-    async fn receiver_write(&self) -> tokio::sync::RwLockWriteGuard<'_, Option<Receiver<()>>>;
+#[derive(Clone)]
+pub struct PlaybackHandler {
+    pub id: usize,
+    pub playback: Arc<std::sync::RwLock<Option<Playback>>>,
+    pub output: Option<Arc<std::sync::Mutex<AudioOutputFactory>>>,
+    pub player: Arc<Box<dyn Player + Sync>>,
+    receiver: Arc<tokio::sync::RwLock<Option<Receiver<()>>>>,
+}
 
-    async fn init_from_api_session(&self, session: ApiSession) -> Result<(), PlayerError> {
+impl PlaybackHandler {
+    pub fn new(player: impl Player + Sync + 'static) -> Self {
+        Self::new_boxed(Box::new(player))
+    }
+
+    pub fn new_boxed(player: Box<dyn Player + Sync>) -> Self {
+        let playback = Arc::new(std::sync::RwLock::new(None));
+        let output = None;
+        let receiver = Arc::new(tokio::sync::RwLock::new(None));
+
+        Self {
+            id: thread_rng().gen::<usize>(),
+            playback,
+            output,
+            player: Arc::new(player),
+            receiver,
+        }
+    }
+
+    pub fn with_playback(mut self, playback: Arc<std::sync::RwLock<Option<Playback>>>) -> Self {
+        self.playback = playback;
+        self
+    }
+
+    pub fn with_output(
+        mut self,
+        output: Option<Arc<std::sync::Mutex<AudioOutputFactory>>>,
+    ) -> Self {
+        self.output = output;
+        self
+    }
+
+    pub fn with_receiver(
+        mut self,
+        receiver: Arc<tokio::sync::RwLock<Option<Receiver<()>>>>,
+    ) -> Self {
+        self.receiver = receiver;
+        self
+    }
+}
+
+impl PlaybackHandler {
+    pub async fn init_from_api_session(&mut self, session: ApiSession) -> Result<(), PlayerError> {
         let session_id = session.session_id;
         if let Err(err) = self
             .update_playback(
@@ -476,8 +523,8 @@ pub trait Player: Clone + Send + 'static {
         Ok(())
     }
 
-    async fn init_from_session(
-        &self,
+    pub async fn init_from_session(
+        &mut self,
         session: Session,
         init: &UpdateSession,
     ) -> Result<(), PlayerError> {
@@ -531,8 +578,8 @@ pub trait Player: Clone + Send + 'static {
     }
 
     #[allow(clippy::too_many_arguments)]
-    async fn play_album(
-        &self,
+    pub async fn play_album(
+        &mut self,
         api: &dyn MusicApi,
         session_id: Option<u64>,
         album_id: &Id,
@@ -579,8 +626,8 @@ pub trait Player: Clone + Send + 'static {
     }
 
     #[allow(clippy::too_many_arguments)]
-    async fn play_track(
-        &self,
+    pub async fn play_track(
+        &mut self,
         session_id: Option<u64>,
         track: Track,
         seek: Option<f64>,
@@ -603,8 +650,8 @@ pub trait Player: Clone + Send + 'static {
     }
 
     #[allow(clippy::too_many_arguments)]
-    async fn play_tracks(
-        &self,
+    pub async fn play_tracks(
+        &mut self,
         session_id: Option<u64>,
         tracks: Vec<Track>,
         position: Option<u16>,
@@ -614,57 +661,57 @@ pub trait Player: Clone + Send + 'static {
         playback_target: Option<PlaybackTarget>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
-        if let Some(playback) = self.get_playback() {
+        let playback = { self.playback.read().unwrap().clone() };
+
+        if let Some(playback) = playback {
             log::debug!("Stopping existing playback {}", playback.id);
             self.stop(retry_options).await?;
         }
 
-        let playback = Playback::new(
-            tracks,
-            position,
-            AtomicF64::new(volume.unwrap_or(1.0)),
-            quality,
-            session_id,
-            playback_target,
-        );
+        {
+            let playback = Playback::new(
+                tracks,
+                position,
+                AtomicF64::new(volume.unwrap_or(1.0)),
+                quality,
+                session_id,
+                playback_target,
+            );
 
-        self.active_playback_write().replace(playback);
+            self.playback.write().unwrap().replace(playback);
+        }
 
         self.play_playback(seek, retry_options).await
     }
 
-    async fn before_play_playback(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
-        Ok(())
-    }
-
-    async fn play_playback(
-        &self,
+    pub async fn play_playback(
+        &mut self,
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
-        self.before_play_playback(seek).await?;
-
-        let mut playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
-        log::info!("play_playback: playback={playback:?}");
-
-        if playback.tracks.is_empty() {
-            log::debug!("No tracks to play for {playback:?}");
-            return Ok(());
-        }
+        self.player.before_play_playback(seek).await?;
 
         let (tx, rx) = bounded(1);
+        self.receiver.write().await.replace(rx);
 
-        self.receiver_write().await.replace(rx);
+        let (playback, old) = {
+            let mut binding = self.playback.write().unwrap();
+            let playback = binding.as_mut().ok_or(PlayerError::NoPlayersPlaying)?;
+            log::info!("play_playback: playback={playback:?}");
 
-        let old = playback.clone();
+            if playback.tracks.is_empty() {
+                log::debug!("No tracks to play for {playback:?}");
+                return Ok(());
+            }
 
-        playback.playing = true;
+            let old = playback.clone();
+
+            playback.playing = true;
+
+            (playback.clone(), old)
+        };
 
         trigger_playback_event(&playback, &old);
-
-        self.active_playback_write().replace(playback.clone());
-
-        let player = self.clone();
 
         log::debug!(
             "Playing playback: position={} tracks={:?}",
@@ -672,8 +719,17 @@ pub trait Player: Clone + Send + 'static {
             playback.tracks.iter().map(|t| &t.id).collect::<Vec<_>>()
         );
 
+        let mut player = self.clone();
+
         moosicbox_task::spawn("player: Play playback", async move {
             let mut seek = seek;
+
+            let mut playback = player
+                .playback
+                .read()
+                .unwrap()
+                .clone()
+                .ok_or(PlayerError::NoPlayersPlaying)?;
 
             while playback.playing && (playback.position as usize) < playback.tracks.len() {
                 let track_or_id = &playback.tracks[playback.position as usize];
@@ -692,11 +748,10 @@ pub trait Player: Clone + Send + 'static {
                             log::error!("Playback error occurred: {err:?}");
 
                             {
-                                let mut binding = player.active_playback_write();
-                                let active = binding.as_mut().unwrap();
-                                let old = active.clone();
-                                active.playing = false;
-                                trigger_playback_event(active, &old);
+                                let old = playback.clone();
+                                    playback.playing = false;
+                                    player.playback.write().unwrap().replace(playback.clone());
+                                trigger_playback_event(&playback, &old);
                             }
 
                             tx.send_async(()).await?;
@@ -714,20 +769,16 @@ pub trait Player: Clone + Send + 'static {
                     break;
                 }
 
-                let mut binding = player.active_playback_write();
-                let active = binding.as_mut().unwrap();
-
-                if ((active.position + 1) as usize) >= active.tracks.len() {
+                if ((playback.position + 1) as usize) >= playback.tracks.len() {
                     log::debug!("Playback position at end of tracks. Breaking");
                     break;
                 }
 
-                let old = active.clone();
-                active.position += 1;
-                active.progress = 0.0;
-                trigger_playback_event(active, &old);
-
-                playback = active.clone();
+                let old = playback.clone();
+                playback.position += 1;
+                playback.progress = 0.0;
+                player.playback.write().unwrap().replace(playback.clone());
+                trigger_playback_event(&playback, &old);
             }
 
             log::debug!(
@@ -738,12 +789,10 @@ pub trait Player: Clone + Send + 'static {
             );
 
             {
-                let mut binding = player.active_playback_write();
-                let active = binding.as_mut().unwrap();
-                let old = active.clone();
-                active.playing = false;
-
-                trigger_playback_event(active, &old);
+                let old = playback.clone();
+                playback.playing = false;
+                player.playback.write().unwrap().replace(playback.clone());
+                trigger_playback_event(&playback, &old);
             }
 
             tx.send_async(()).await?;
@@ -754,8 +803,8 @@ pub trait Player: Clone + Send + 'static {
         Ok(())
     }
 
-    async fn play(
-        &self,
+    pub async fn play(
+        &mut self,
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
@@ -766,7 +815,7 @@ pub trait Player: Clone + Send + 'static {
 
             move || {
                 let this = this.clone();
-                async move { this.trigger_play(seek).await }
+                async move { this.player.trigger_play(seek).await }
             }
         })
         .await?;
@@ -774,10 +823,10 @@ pub trait Player: Clone + Send + 'static {
         Ok(())
     }
 
-    #[doc(hidden)]
-    async fn trigger_play(&self, seek: Option<f64>) -> Result<(), PlayerError>;
-
-    async fn stop(&self, retry_options: Option<PlaybackRetryOptions>) -> Result<(), PlayerError> {
+    pub async fn stop(
+        &mut self,
+        retry_options: Option<PlaybackRetryOptions>,
+    ) -> Result<(), PlayerError> {
         log::debug!("stop: Stopping playback");
 
         handle_retry(retry_options, {
@@ -785,7 +834,7 @@ pub trait Player: Clone + Send + 'static {
 
             move || {
                 let this = this.clone();
-                async move { this.trigger_stop().await }
+                async move { this.player.trigger_stop().await }
             }
         })
         .await?;
@@ -793,11 +842,8 @@ pub trait Player: Clone + Send + 'static {
         Ok(())
     }
 
-    #[doc(hidden)]
-    async fn trigger_stop(&self) -> Result<(), PlayerError>;
-
-    async fn seek(
-        &self,
+    pub async fn seek(
+        &mut self,
         seek: f64,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
@@ -808,7 +854,7 @@ pub trait Player: Clone + Send + 'static {
 
             move || {
                 let this = this.clone();
-                async move { this.trigger_seek(seek).await }
+                async move { this.player.trigger_seek(seek).await }
             }
         })
         .await?;
@@ -816,16 +862,19 @@ pub trait Player: Clone + Send + 'static {
         Ok(())
     }
 
-    #[doc(hidden)]
-    async fn trigger_seek(&self, seek: f64) -> Result<(), PlayerError>;
-
-    async fn next_track(
-        &self,
+    pub async fn next_track(
+        &mut self,
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
         log::info!("Playing next track seek {seek:?}");
-        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
+        let playback = {
+            self.playback
+                .read()
+                .unwrap()
+                .clone()
+                .ok_or(PlayerError::NoPlayersPlaying)?
+        };
 
         if playback.position + 1 >= playback.tracks.len() as u16 {
             return Err(PlayerError::PositionOutOfBounds(playback.position + 1));
@@ -849,13 +898,19 @@ pub trait Player: Clone + Send + 'static {
         .await
     }
 
-    async fn previous_track(
-        &self,
+    pub async fn previous_track(
+        &mut self,
         seek: Option<f64>,
         retry_options: Option<PlaybackRetryOptions>,
     ) -> Result<(), PlayerError> {
         log::info!("Playing next track seek {seek:?}");
-        let playback = self.get_playback().ok_or(PlayerError::NoPlayersPlaying)?;
+        let playback = {
+            self.playback
+                .read()
+                .unwrap()
+                .clone()
+                .ok_or(PlayerError::NoPlayersPlaying)?
+        };
 
         if playback.position == 0 {
             return Err(PlayerError::PositionOutOfBounds(0));
@@ -879,13 +934,13 @@ pub trait Player: Clone + Send + 'static {
         .await
     }
 
-    async fn before_update_playback(&self) -> Result<(), PlayerError> {
+    pub async fn before_update_playback(&mut self) -> Result<(), PlayerError> {
         Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
-    async fn update_playback(
-        &self,
+    pub async fn update_playback(
+        &mut self,
         modify_playback: bool,
         play: Option<bool>,
         stop: Option<bool>,
@@ -920,7 +975,7 @@ pub trait Player: Clone + Send + 'static {
 
         self.before_update_playback().await?;
 
-        let original = self.get_playback();
+        let original = self.playback.read().unwrap().clone();
 
         if let Some(original) = &original {
             log::trace!("update_playback: existing playback={original:?}");
@@ -973,7 +1028,7 @@ pub trait Player: Clone + Send + 'static {
         }
 
         log::debug!("update_playback: updating active playback to {playback:?}");
-        self.active_playback_write().replace(playback.clone());
+        self.playback.write().unwrap().replace(playback.clone());
 
         if !modify_playback {
             return Ok(());
@@ -1024,7 +1079,10 @@ pub trait Player: Clone + Send + 'static {
         Ok(())
     }
 
-    async fn pause(&self, retry_options: Option<PlaybackRetryOptions>) -> Result<(), PlayerError> {
+    pub async fn pause(
+        &mut self,
+        retry_options: Option<PlaybackRetryOptions>,
+    ) -> Result<(), PlayerError> {
         log::debug!("pause: Pausing playback");
 
         handle_retry(retry_options, {
@@ -1032,7 +1090,7 @@ pub trait Player: Clone + Send + 'static {
 
             move || {
                 let this = this.clone();
-                async move { this.trigger_pause().await }
+                async move { this.player.trigger_pause().await }
             }
         })
         .await?;
@@ -1040,9 +1098,10 @@ pub trait Player: Clone + Send + 'static {
         Ok(())
     }
 
-    async fn trigger_pause(&self) -> Result<(), PlayerError>;
-
-    async fn resume(&self, retry_options: Option<PlaybackRetryOptions>) -> Result<(), PlayerError> {
+    pub async fn resume(
+        &mut self,
+        retry_options: Option<PlaybackRetryOptions>,
+    ) -> Result<(), PlayerError> {
         log::debug!("resume: Resuming playback");
 
         handle_retry(retry_options, {
@@ -1050,253 +1109,36 @@ pub trait Player: Clone + Send + 'static {
 
             move || {
                 let this = this.clone();
-                async move { this.trigger_resume().await }
+                async move { this.player.trigger_resume().await }
             }
         })
         .await?;
 
         Ok(())
     }
+}
+
+#[async_trait]
+pub trait Player: Send {
+    async fn before_play_playback(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
+        Ok(())
+    }
+
+    async fn trigger_play(&self, seek: Option<f64>) -> Result<(), PlayerError>;
+
+    async fn trigger_stop(&self) -> Result<(), PlayerError>;
+
+    async fn trigger_seek(&self, seek: f64) -> Result<(), PlayerError>;
+
+    async fn before_update_playback(&self) -> Result<(), PlayerError> {
+        Ok(())
+    }
+
+    async fn trigger_pause(&self) -> Result<(), PlayerError>;
 
     async fn trigger_resume(&self) -> Result<(), PlayerError>;
 
-    async fn track_to_playable_file(
-        &self,
-        track: &moosicbox_core::sqlite::models::Track,
-        quality: PlaybackQuality,
-    ) -> Result<PlayableTrack, PlayerError> {
-        log::trace!("track_to_playable_file track={track:?} quality={quality:?}");
-
-        let mut hint = Hint::new();
-
-        let file = track.file.clone().unwrap();
-        let path = Path::new(&file);
-
-        // Provide the file extension as a hint.
-        if let Some(extension) = path.extension() {
-            if let Some(extension_str) = extension.to_str() {
-                hint.with_extension(extension_str);
-            }
-        }
-
-        let same_source = match quality.format {
-            AudioFormat::Source => true,
-            #[allow(unreachable_patterns)]
-            _ => match track.format {
-                Some(format) => format == quality.format,
-                None => true,
-            },
-        };
-
-        let source: Box<dyn MediaSource> = if same_source {
-            Box::new(File::open(path)?)
-        } else {
-            #[allow(unused_mut)]
-            let mut signal_chain = SignalChain::new();
-
-            match quality.format {
-                #[cfg(feature = "aac")]
-                AudioFormat::Aac => {
-                    log::debug!("Encoding playback with AacEncoder");
-                    use moosicbox_audio_output::encoder::aac::AacEncoder;
-                    let mut hint = Hint::new();
-                    hint.with_extension("m4a");
-                    signal_chain = signal_chain
-                        .add_encoder_step(|| Box::new(AacEncoder::new()))
-                        .with_hint(hint);
-                }
-                #[cfg(feature = "flac")]
-                AudioFormat::Flac => {
-                    log::debug!("Encoding playback with FlacEncoder");
-                    use moosicbox_audio_output::encoder::flac::FlacEncoder;
-                    let mut hint = Hint::new();
-                    hint.with_extension("flac");
-                    signal_chain = signal_chain
-                        .add_encoder_step(|| Box::new(FlacEncoder::new()))
-                        .with_hint(hint);
-                }
-                #[cfg(feature = "mp3")]
-                AudioFormat::Mp3 => {
-                    log::debug!("Encoding playback with Mp3Encoder");
-                    use moosicbox_audio_output::encoder::mp3::Mp3Encoder;
-                    let mut hint = Hint::new();
-                    hint.with_extension("mp3");
-                    signal_chain = signal_chain
-                        .add_encoder_step(|| Box::new(Mp3Encoder::new()))
-                        .with_hint(hint);
-                }
-                #[cfg(feature = "opus")]
-                AudioFormat::Opus => {
-                    log::debug!("Encoding playback with OpusEncoder");
-                    use moosicbox_audio_output::encoder::opus::OpusEncoder;
-                    let mut hint = Hint::new();
-                    hint.with_extension("opus");
-                    signal_chain = signal_chain
-                        .add_encoder_step(|| Box::new(OpusEncoder::new()))
-                        .with_hint(hint);
-                }
-                #[allow(unreachable_patterns)]
-                _ => {
-                    moosicbox_assert::die!("Invalid format {}", quality.format);
-                }
-            }
-
-            log::trace!("track_to_playable_file: getting file at path={path:?}");
-            let file = tokio::fs::File::open(path.to_path_buf()).await?;
-
-            log::trace!("track_to_playable_file: Creating ByteStreamSource");
-            let ms = Box::new(ByteStreamSource::new(
-                Box::new(
-                    StalledReadMonitor::new(
-                        FramedRead::new(file, BytesCodec::new())
-                            .map_ok(bytes::BytesMut::freeze)
-                            .boxed(),
-                    )
-                    .map(|x| match x {
-                        Ok(Ok(x)) => Ok(x),
-                        Ok(Err(err)) | Err(err) => Err(err),
-                    }),
-                ),
-                None,
-                true,
-                false,
-                CancellationToken::new(),
-            ));
-
-            match signal_chain.process(ms) {
-                Ok(stream) => stream,
-                Err(SignalChainError::Playback(e)) => {
-                    return Err(PlayerError::PlaybackError(match e {
-                        symphonia_unsync::PlaybackError::Symphonia(e) => {
-                            PlaybackError::Symphonia(e)
-                        }
-                        symphonia_unsync::PlaybackError::Decode(e) => PlaybackError::Decode(e),
-                    }));
-                }
-                Err(SignalChainError::Empty) => unreachable!("Empty signal chain"),
-            }
-        };
-
-        Ok(PlayableTrack {
-            track_id: track.id.to_owned(),
-            source,
-            hint,
-        })
-    }
-
-    async fn track_to_playable_stream(
-        &self,
-        track: &Track,
-        quality: PlaybackQuality,
-    ) -> Result<PlayableTrack, PlayerError> {
-        self.track_id_to_playable_stream(&track.id, track.source, quality)
-            .await
-    }
-
-    async fn track_id_to_playable_stream(
-        &self,
-        track_id: &Id,
-        source: ApiSource,
-        quality: PlaybackQuality,
-    ) -> Result<PlayableTrack, PlayerError> {
-        let (url, headers) =
-            get_track_url(track_id, source, self.get_source(), quality, false).await?;
-
-        log::debug!("Fetching track bytes from url: {url}");
-
-        let mut client = reqwest::Client::new().head(&url);
-
-        if let Some(headers) = headers {
-            for (key, value) in headers {
-                client = client.header(key, value);
-            }
-        }
-
-        let res = client.send().await.unwrap();
-        let headers = res.headers();
-        let size = headers
-            .get("content-length")
-            .map(|length| length.to_str().unwrap().parse::<u64>().unwrap());
-
-        let source: RemoteByteStreamMediaSource = RemoteByteStream::new(
-            url,
-            size,
-            true,
-            #[cfg(feature = "flac")]
-            {
-                quality.format == moosicbox_core::types::AudioFormat::Flac
-            },
-            #[cfg(not(feature = "flac"))]
-            false,
-            self.get_playback()
-                .as_ref()
-                .map(|p| p.abort.clone())
-                .unwrap_or_default(),
-        )
-        .into();
-
-        let mut hint = Hint::new();
-
-        if let Some(Ok(content_type)) = headers
-            .get(actix_web::http::header::CONTENT_TYPE.to_string())
-            .map(|x| x.to_str())
-        {
-            if let Some(audio_type) = content_type.strip_prefix("audio/") {
-                log::debug!("Setting hint extension to {audio_type}");
-                hint.with_extension(audio_type);
-            } else {
-                log::warn!("Invalid audio content_type: {content_type}");
-            }
-        }
-
-        Ok(PlayableTrack {
-            track_id: track_id.to_owned(),
-            source: Box::new(source),
-            hint,
-        })
-    }
-
-    async fn track_or_id_to_playable(
-        &self,
-        playback_type: PlaybackType,
-        track: &Track,
-        quality: PlaybackQuality,
-    ) -> Result<PlayableTrack, PlayerError> {
-        log::trace!("track_or_id_to_playable playback_type={playback_type:?} track={track:?} quality={quality:?}");
-        Ok(match (playback_type, track.source) {
-            (PlaybackType::File, ApiSource::Library)
-            | (PlaybackType::Default, ApiSource::Library) => {
-                self.track_to_playable_file(
-                    &serde_json::from_value(
-                        track
-                            .data
-                            .clone()
-                            .ok_or(PlayerError::TrackNotFound(track.id.to_owned()))?,
-                    )
-                    .map_err(|e| {
-                        moosicbox_assert::die_or_error!(
-                            "Failed to parse track: {e:?} ({:?})",
-                            track.data
-                        );
-                        PlayerError::TrackNotFound(track.id.to_owned())
-                    })?,
-                    quality,
-                )
-                .await?
-            }
-            (PlaybackType::File, ApiSource::Tidal)
-            | (PlaybackType::File, ApiSource::Qobuz)
-            | (PlaybackType::File, ApiSource::Yt)
-            | (PlaybackType::Default, ApiSource::Tidal)
-            | (PlaybackType::Default, ApiSource::Qobuz)
-            | (PlaybackType::Default, ApiSource::Yt)
-            | (PlaybackType::Stream, _) => self.track_to_playable_stream(track, quality).await?,
-        })
-    }
-
     fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError>;
-
-    fn get_playback(&self) -> Option<Playback>;
 
     fn get_source(&self) -> &PlayerSource;
 }
@@ -1435,6 +1277,240 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
     };
 
     send_playback_event(&update, current)
+}
+
+#[allow(unused)]
+async fn track_to_playable_file(
+    track: &moosicbox_core::sqlite::models::Track,
+    quality: PlaybackQuality,
+) -> Result<PlayableTrack, PlayerError> {
+    log::trace!("track_to_playable_file track={track:?} quality={quality:?}");
+
+    let mut hint = Hint::new();
+
+    let file = track.file.clone().unwrap();
+    let path = Path::new(&file);
+
+    // Provide the file extension as a hint.
+    if let Some(extension) = path.extension() {
+        if let Some(extension_str) = extension.to_str() {
+            hint.with_extension(extension_str);
+        }
+    }
+
+    let same_source = match quality.format {
+        AudioFormat::Source => true,
+        #[allow(unreachable_patterns)]
+        _ => match track.format {
+            Some(format) => format == quality.format,
+            None => true,
+        },
+    };
+
+    let source: Box<dyn MediaSource> = if same_source {
+        Box::new(File::open(path)?)
+    } else {
+        #[allow(unused_mut)]
+        let mut signal_chain = SignalChain::new();
+
+        match quality.format {
+            #[cfg(feature = "aac")]
+            AudioFormat::Aac => {
+                log::debug!("Encoding playback with AacEncoder");
+                use moosicbox_audio_output::encoder::aac::AacEncoder;
+                let mut hint = Hint::new();
+                hint.with_extension("m4a");
+                signal_chain = signal_chain
+                    .add_encoder_step(|| Box::new(AacEncoder::new()))
+                    .with_hint(hint);
+            }
+            #[cfg(feature = "flac")]
+            AudioFormat::Flac => {
+                log::debug!("Encoding playback with FlacEncoder");
+                use moosicbox_audio_output::encoder::flac::FlacEncoder;
+                let mut hint = Hint::new();
+                hint.with_extension("flac");
+                signal_chain = signal_chain
+                    .add_encoder_step(|| Box::new(FlacEncoder::new()))
+                    .with_hint(hint);
+            }
+            #[cfg(feature = "mp3")]
+            AudioFormat::Mp3 => {
+                log::debug!("Encoding playback with Mp3Encoder");
+                use moosicbox_audio_output::encoder::mp3::Mp3Encoder;
+                let mut hint = Hint::new();
+                hint.with_extension("mp3");
+                signal_chain = signal_chain
+                    .add_encoder_step(|| Box::new(Mp3Encoder::new()))
+                    .with_hint(hint);
+            }
+            #[cfg(feature = "opus")]
+            AudioFormat::Opus => {
+                log::debug!("Encoding playback with OpusEncoder");
+                use moosicbox_audio_output::encoder::opus::OpusEncoder;
+                let mut hint = Hint::new();
+                hint.with_extension("opus");
+                signal_chain = signal_chain
+                    .add_encoder_step(|| Box::new(OpusEncoder::new()))
+                    .with_hint(hint);
+            }
+            #[allow(unreachable_patterns)]
+            _ => {
+                moosicbox_assert::die!("Invalid format {}", quality.format);
+            }
+        }
+
+        log::trace!("track_to_playable_file: getting file at path={path:?}");
+        let file = tokio::fs::File::open(path.to_path_buf()).await?;
+
+        log::trace!("track_to_playable_file: Creating ByteStreamSource");
+        let ms = Box::new(ByteStreamSource::new(
+            Box::new(
+                StalledReadMonitor::new(
+                    FramedRead::new(file, BytesCodec::new())
+                        .map_ok(bytes::BytesMut::freeze)
+                        .boxed(),
+                )
+                .map(|x| match x {
+                    Ok(Ok(x)) => Ok(x),
+                    Ok(Err(err)) | Err(err) => Err(err),
+                }),
+            ),
+            None,
+            true,
+            false,
+            CancellationToken::new(),
+        ));
+
+        match signal_chain.process(ms) {
+            Ok(stream) => stream,
+            Err(SignalChainError::Playback(e)) => {
+                return Err(PlayerError::PlaybackError(match e {
+                    symphonia_unsync::PlaybackError::Symphonia(e) => PlaybackError::Symphonia(e),
+                    symphonia_unsync::PlaybackError::Decode(e) => PlaybackError::Decode(e),
+                }));
+            }
+            Err(SignalChainError::Empty) => unreachable!("Empty signal chain"),
+        }
+    };
+
+    Ok(PlayableTrack {
+        track_id: track.id.to_owned(),
+        source,
+        hint,
+    })
+}
+
+#[allow(unused)]
+async fn track_to_playable_stream(
+    track: &Track,
+    quality: PlaybackQuality,
+    player_source: &PlayerSource,
+    abort: CancellationToken,
+) -> Result<PlayableTrack, PlayerError> {
+    track_id_to_playable_stream(&track.id, track.source, quality, player_source, abort).await
+}
+
+#[allow(unused)]
+async fn track_id_to_playable_stream(
+    track_id: &Id,
+    source: ApiSource,
+    quality: PlaybackQuality,
+    player_source: &PlayerSource,
+    abort: CancellationToken,
+) -> Result<PlayableTrack, PlayerError> {
+    let (url, headers) = get_track_url(track_id, source, player_source, quality, false).await?;
+
+    log::debug!("Fetching track bytes from url: {url}");
+
+    let mut client = reqwest::Client::new().head(&url);
+
+    if let Some(headers) = headers {
+        for (key, value) in headers {
+            client = client.header(key, value);
+        }
+    }
+
+    let res = client.send().await.unwrap();
+    let headers = res.headers();
+    let size = headers
+        .get("content-length")
+        .map(|length| length.to_str().unwrap().parse::<u64>().unwrap());
+
+    let source: RemoteByteStreamMediaSource = RemoteByteStream::new(
+        url,
+        size,
+        true,
+        #[cfg(feature = "flac")]
+        {
+            quality.format == moosicbox_core::types::AudioFormat::Flac
+        },
+        #[cfg(not(feature = "flac"))]
+        false,
+        abort,
+    )
+    .into();
+
+    let mut hint = Hint::new();
+
+    if let Some(Ok(content_type)) = headers
+        .get(actix_web::http::header::CONTENT_TYPE.to_string())
+        .map(|x| x.to_str())
+    {
+        if let Some(audio_type) = content_type.strip_prefix("audio/") {
+            log::debug!("Setting hint extension to {audio_type}");
+            hint.with_extension(audio_type);
+        } else {
+            log::warn!("Invalid audio content_type: {content_type}");
+        }
+    }
+
+    Ok(PlayableTrack {
+        track_id: track_id.to_owned(),
+        source: Box::new(source),
+        hint,
+    })
+}
+
+#[allow(unused)]
+async fn track_or_id_to_playable(
+    playback_type: PlaybackType,
+    track: &Track,
+    quality: PlaybackQuality,
+    player_source: &PlayerSource,
+    abort: CancellationToken,
+) -> Result<PlayableTrack, PlayerError> {
+    log::trace!("track_or_id_to_playable playback_type={playback_type:?} track={track:?} quality={quality:?}");
+    Ok(match (playback_type, track.source) {
+        (PlaybackType::File, ApiSource::Library) | (PlaybackType::Default, ApiSource::Library) => {
+            track_to_playable_file(
+                &serde_json::from_value(
+                    track
+                        .data
+                        .clone()
+                        .ok_or(PlayerError::TrackNotFound(track.id.to_owned()))?,
+                )
+                .map_err(|e| {
+                    moosicbox_assert::die_or_error!(
+                        "Failed to parse track: {e:?} ({:?})",
+                        track.data
+                    );
+                    PlayerError::TrackNotFound(track.id.to_owned())
+                })?,
+                quality,
+            )
+            .await?
+        }
+        (PlaybackType::File, ApiSource::Tidal)
+        | (PlaybackType::File, ApiSource::Qobuz)
+        | (PlaybackType::File, ApiSource::Yt)
+        | (PlaybackType::Default, ApiSource::Tidal)
+        | (PlaybackType::Default, ApiSource::Qobuz)
+        | (PlaybackType::Default, ApiSource::Yt)
+        | (PlaybackType::Stream, _) => {
+            track_to_playable_stream(track, quality, player_source, abort).await?
+        }
+    })
 }
 
 async fn handle_retry<
