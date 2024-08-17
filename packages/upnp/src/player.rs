@@ -20,7 +20,7 @@ use rupnp::{Device, Service};
 
 use moosicbox_player::{
     get_track_url, send_playback_event, trigger_playback_event, ApiPlaybackStatus, Playback,
-    PlaybackRetryOptions, Player, PlayerError, PlayerSource,
+    PlaybackHandler, PlaybackRetryOptions, Player, PlayerError, PlayerSource,
 };
 use symphonia::core::audio::AudioBuffer;
 
@@ -38,6 +38,7 @@ pub struct UpnpPlayer {
     source: PlayerSource,
     transport_uri: Arc<tokio::sync::RwLock<Option<String>>>,
     pub playback: Arc<RwLock<Option<Playback>>>,
+    pub playback_handler: Arc<RwLock<Option<PlaybackHandler>>>,
     pub receiver: Arc<tokio::sync::RwLock<Option<Receiver<()>>>>,
     handle: Handle,
     pub device: Device,
@@ -302,6 +303,7 @@ impl UpnpPlayer {
             source,
             transport_uri: Arc::new(tokio::sync::RwLock::new(None)),
             playback: Arc::new(RwLock::new(None)),
+            playback_handler: Arc::new(RwLock::new(None)),
             receiver: Arc::new(tokio::sync::RwLock::new(None)),
             handle,
             device,

@@ -12,8 +12,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     send_playback_event, symphonia::play_media_source_async, track_or_id_to_playable,
-    trigger_playback_event, volume_mixer::mix_volume, ApiPlaybackStatus, Playback, PlaybackType,
-    Player, PlayerError, PlayerSource,
+    trigger_playback_event, volume_mixer::mix_volume, ApiPlaybackStatus, Playback, PlaybackHandler,
+    PlaybackType, Player, PlayerError, PlayerSource,
 };
 
 #[derive(Clone)]
@@ -24,6 +24,7 @@ pub struct LocalPlayer {
     pub output: Option<Arc<Mutex<AudioOutputFactory>>>,
     pub receiver: Arc<tokio::sync::RwLock<Option<Receiver<()>>>>,
     pub playback: Arc<RwLock<Option<Playback>>>,
+    pub playback_handler: Arc<RwLock<Option<PlaybackHandler>>>,
 }
 
 #[async_trait]
@@ -255,7 +256,8 @@ impl Player for LocalPlayer {
                 .progress
         };
 
-        self.trigger_play(Some(progress)).await?;
+        let mut playback_handler = { self.playback_handler.read().unwrap().clone().unwrap() };
+        playback_handler.play_playback(Some(progress), None).await?;
 
         Ok(())
     }
@@ -274,7 +276,8 @@ impl Player for LocalPlayer {
             return Ok(());
         }
 
-        self.trigger_play(Some(seek)).await?;
+        let mut playback_handler = { self.playback_handler.read().unwrap().clone().unwrap() };
+        playback_handler.play_playback(Some(seek), None).await?;
 
         Ok(())
     }
@@ -311,6 +314,7 @@ impl LocalPlayer {
             output: None,
             playback: Arc::new(RwLock::new(None)),
             receiver: Arc::new(tokio::sync::RwLock::new(None)),
+            playback_handler: Arc::new(RwLock::new(None)),
         })
     }
 

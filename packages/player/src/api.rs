@@ -130,10 +130,18 @@ async fn get_player(host: Option<&str>) -> Result<PlaybackHandler, actix_web::Er
             let output = local_player.output.clone();
             let receiver = local_player.receiver.clone();
 
-            PlaybackHandler::new(local_player)
+            let handler = PlaybackHandler::new(local_player.clone())
                 .with_playback(playback)
                 .with_output(output)
-                .with_receiver(receiver)
+                .with_receiver(receiver);
+
+            local_player
+                .playback_handler
+                .write()
+                .unwrap()
+                .replace(handler.clone());
+
+            handler
         } else {
             let local_player = LocalPlayer::new(PlayerSource::Local, None)
                 .await
@@ -148,10 +156,18 @@ async fn get_player(host: Option<&str>) -> Result<PlaybackHandler, actix_web::Er
             let output = local_player.output.clone();
             let receiver = local_player.receiver.clone();
 
-            PlaybackHandler::new(local_player)
+            let handler = PlaybackHandler::new(local_player.clone())
                 .with_playback(playback)
                 .with_output(output)
-                .with_receiver(receiver)
+                .with_receiver(receiver);
+
+            local_player
+                .playback_handler
+                .write()
+                .unwrap()
+                .replace(handler.clone());
+
+            handler
         })
         .clone())
 }

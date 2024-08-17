@@ -1160,6 +1160,12 @@ fn handle_server_playback_update(
                         .with_output(output)
                         .with_receiver(receiver);
 
+                    local_player
+                        .playback_handler
+                        .write()
+                        .unwrap()
+                        .replace(player.clone());
+
                     if let Ok(Some(session)) = get_session(&**db, update.session_id).await {
                         if let Err(e) = player.init_from_session(session, &update).await {
                             moosicbox_assert::die_or_error!(
@@ -1350,14 +1356,18 @@ async fn load_upnp_players() -> Result<(), moosicbox_upnp::UpnpDeviceScannerErro
                         .try_into()
                         .expect("Failed to create audio output factory for UpnpPlayer");
 
-                    players.push((
-                        output.clone(),
-                        player.clone(),
-                        PlaybackHandler::new(player)
-                            .with_playback(playback)
-                            .with_output(Some(Arc::new(std::sync::Mutex::new(output))))
-                            .with_receiver(receiver),
-                    ));
+                    let handler = PlaybackHandler::new(player.clone())
+                        .with_playback(playback)
+                        .with_output(Some(Arc::new(std::sync::Mutex::new(output.clone()))))
+                        .with_receiver(receiver);
+
+                    player
+                        .playback_handler
+                        .write()
+                        .unwrap()
+                        .replace(handler.clone());
+
+                    players.push((output.clone(), player.clone(), handler));
                 }
             }
         }
