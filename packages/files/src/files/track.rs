@@ -395,11 +395,10 @@ pub async fn get_audio_bytes(
                             #[cfg(feature = "mp3")]
                             AudioFormat::Mp3 => {
                                 use moosicbox_audio_output::encoder::mp3::Mp3Encoder;
-                                let encoder_writer = writer.clone();
                                 moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(
                                     Box::new(move |spec, duration| {
                                         Ok(Box::new(
-                                            Mp3Encoder::with_writer(encoder_writer.clone())
+                                            Mp3Encoder::with_writer(writer.clone())
                                                 .open(spec, duration),
                                         ))
                                     }),
@@ -408,11 +407,10 @@ pub async fn get_audio_bytes(
                             #[cfg(feature = "opus")]
                             AudioFormat::Opus => {
                                 use moosicbox_audio_output::encoder::opus::OpusEncoder;
-                                let encoder_writer = writer.clone();
                                 moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(
                                     Box::new(move |spec, duration| {
                                         Ok(Box::new(
-                                            OpusEncoder::with_writer(encoder_writer.clone())
+                                            OpusEncoder::with_writer(writer.clone())
                                                 .open(spec, duration),
                                         ))
                                     }),
