@@ -23,9 +23,10 @@ use crate::files::{
     artist::{get_artist_cover, ArtistCoverError},
     resize_image_path,
     track::{
-        audio_format_to_content_type, get_or_init_track_visualization, get_track_bytes,
-        get_track_id_source, get_track_info, get_tracks_info, track_source_to_content_type,
-        GetTrackBytesError, TrackInfo, TrackInfoError, TrackSourceError,
+        audio_format_to_content_type, get_or_init_track_visualization, get_silence_bytes,
+        get_track_bytes, get_track_id_source, get_track_info, get_tracks_info,
+        track_source_to_content_type, GetSilenceBytesError, GetTrackBytesError, TrackInfo,
+        TrackInfoError, TrackSourceError,
     },
 };
 
@@ -35,6 +36,7 @@ use crate::files::{
     tags((name = "Files")),
     paths(
         track_visualization_endpoint,
+        get_silence_endpoint,
         track_endpoint,
         track_info_endpoint,
         tracks_info_endpoint,
@@ -123,6 +125,85 @@ pub async fn track_visualization_endpoint(
     Ok(Json(
         get_or_init_track_visualization(&source, query.max.unwrap_or(333)).await?,
     ))
+}
+
+impl From<GetSilenceBytesError> for actix_web::Error {
+    fn from(err: GetSilenceBytesError) -> Self {
+        match err {
+            GetSilenceBytesError::AudioOutput(_) => ErrorInternalServerError(err),
+            GetSilenceBytesError::InvalidSource => ErrorBadRequest(err),
+        }
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct GetSilenceQuery {
+    pub duration: Option<u64>,
+    pub format: Option<AudioFormat>,
+}
+
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Files", "head"],
+        get,
+        path = "/silence",
+        description = "Get silent audio for the specified duration",
+        params(
+            ("duration" = Option<u64>, Query, description = "Duration in seconds to return silent audio for"),
+            ("format" = Option<AudioFormat>, Query, description = "The audio format to return"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "Silence audio bytes",
+            )
+        )
+    )
+)]
+#[route("/silence", method = "GET", method = "HEAD")]
+pub async fn get_silence_endpoint(query: web::Query<GetSilenceQuery>) -> Result<HttpResponse> {
+    #[cfg(feature = "aac")]
+    let default = AudioFormat::Aac;
+    #[cfg(not(feature = "aac"))]
+    let default = AudioFormat::Source;
+    let format = query.format.unwrap_or(default);
+    let content_type = audio_format_to_content_type(&format).unwrap();
+
+    let mut response = HttpResponse::Ok();
+    response.insert_header((actix_web::http::header::CONTENT_ENCODING, "identity"));
+    response.insert_header((actix_web::http::header::CONTENT_TYPE, content_type));
+
+    let bytes = get_silence_bytes(format, query.duration.unwrap_or(5)).await?;
+
+    response.insert_header((
+        actix_web::http::header::CONTENT_DISPOSITION,
+        "inline".to_string(),
+    ));
+
+    log::debug!(
+        "Got silent bytes with size={:?} original_size={:?}",
+        bytes.size,
+        bytes.original_size
+    );
+
+    let stream = bytes.stream.filter_map(|x| async { x.ok() });
+
+    if let Some(original_size) = bytes.original_size {
+        let size = original_size;
+
+        response.insert_header((
+            actix_web::http::header::CONTENT_RANGE,
+            format!("bytes -{end}/{original_size}", end = original_size - 1),
+        ));
+
+        log::debug!("Returning stream body with size={:?}", size);
+        Ok(response.body(actix_web::body::SizedStream::new(size, stream)))
+    } else {
+        log::debug!("No size was found for stream");
+        Ok(response.streaming(stream))
+    }
 }
 
 impl From<GetTrackBytesError> for actix_web::Error {

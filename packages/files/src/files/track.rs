@@ -11,6 +11,7 @@ use moosicbox_audio_decoder::{
     decode_file_path_str_async, decode_media_source_async,
     media_sources::remote_bytestream::RemoteByteStreamMediaSource, DecodeError,
 };
+use moosicbox_audio_output::{AudioOutputError, AudioWrite, Channels, SignalSpec};
 use moosicbox_core::{
     sqlite::{
         db::DbError,
@@ -257,6 +258,80 @@ pub async fn get_track_bytes(
     };
 
     get_audio_bytes(source, format, size, start, end).await
+}
+
+#[derive(Debug, Error)]
+pub enum GetSilenceBytesError {
+    #[error("Invalid source")]
+    InvalidSource,
+    #[error(transparent)]
+    AudioOutput(#[from] AudioOutputError),
+}
+
+pub async fn get_silence_bytes(
+    format: AudioFormat,
+    duration: u64,
+) -> Result<TrackBytes, GetSilenceBytesError> {
+    log::debug!("get_silence_bytes: format={format:?} duration={duration:?}");
+    let writer = ByteWriter::default();
+    let writer_id = writer.id;
+    #[allow(unused)]
+    let stream = writer.stream();
+
+    let spec = SignalSpec {
+        rate: 44_100,
+        channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
+    };
+    #[allow(unused)]
+    let duration: u64 = (spec.rate as u64) * duration;
+
+    moosicbox_task::spawn_blocking("get_silence_bytes: encode", move || {
+        #[allow(unused)]
+        let mut encoder: Box<dyn AudioWrite> = match format {
+            #[cfg(feature = "aac")]
+            AudioFormat::Aac => {
+                use moosicbox_audio_output::encoder::aac::AacEncoder;
+                Box::new(AacEncoder::with_writer(writer.clone()).open(spec, duration))
+            }
+            #[cfg(feature = "flac")]
+            AudioFormat::Flac => {
+                use moosicbox_audio_output::encoder::flac::FlacEncoder;
+                Box::new(FlacEncoder::with_writer(writer.clone()).open(spec, duration))
+            }
+            #[cfg(feature = "mp3")]
+            AudioFormat::Mp3 => {
+                use moosicbox_audio_output::encoder::mp3::Mp3Encoder;
+                let encoder_writer = writer.clone();
+                Box::new(Mp3Encoder::with_writer(encoder_writer.clone()).open(spec, duration))
+            }
+            #[cfg(feature = "opus")]
+            AudioFormat::Opus => {
+                use moosicbox_audio_output::encoder::opus::OpusEncoder;
+                let encoder_writer = writer.clone();
+                Box::new(OpusEncoder::with_writer(encoder_writer.clone()).open(spec, duration))
+            }
+            AudioFormat::Source => return Err::<(), _>(GetSilenceBytesError::InvalidSource),
+        };
+
+        #[cfg(any(feature = "aac", feature = "flac", feature = "mp3", feature = "opus"))]
+        {
+            let mut buffer = AudioBuffer::<f32>::new(duration, spec);
+            buffer.render_silence(None);
+            encoder.write(buffer)?;
+            encoder.flush()?;
+
+            Ok(())
+        }
+    });
+
+    Ok(TrackBytes {
+        id: writer_id,
+        stream: StalledReadMonitor::new(stream.boxed()),
+        size: None,
+        original_size: None,
+        format,
+        filename: None,
+    })
 }
 
 pub async fn get_audio_bytes(

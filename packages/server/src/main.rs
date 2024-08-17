@@ -607,6 +607,7 @@ fn main() -> std::io::Result<()> {
             {
                 app = app.service(
                     web::scope("/files")
+                        .service(moosicbox_files::api::get_silence_endpoint)
                         .service(moosicbox_files::api::track_endpoint)
                         .service(moosicbox_files::api::track_visualization_endpoint)
                         .service(moosicbox_files::api::track_info_endpoint)
