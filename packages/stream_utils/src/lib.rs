@@ -69,7 +69,12 @@ impl std::io::Write for ByteWriter {
         let len = buf.len();
 
         {
-            *self.written.write().unwrap() += len as u64;
+            let written = {
+                let mut written = self.written.write().unwrap();
+                *written += len as u64;
+                *written
+            };
+            log::trace!("ByteWriter written={written}");
 
             if self.senders.read().unwrap().is_empty() {
                 log::trace!(
