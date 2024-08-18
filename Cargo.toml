@@ -75,7 +75,7 @@ actix-files = "0.6.6"
 actix-rt = "2.10.0"
 actix-web = "4.9.0"
 actix-ws = "0.3.0"
-arrayvec = "0.7.4"
+arrayvec = "0.7.6"
 async-once-cell = "0.5.3"
 async-recursion = "1.1.1"
 async-trait = "0.1.81"
@@ -192,7 +192,7 @@ tantivy = "0.22.0"
 test-log = "0.2.16"
 thiserror = "1.0.63"
 throttle = "0.1.0"
-tokio = { version = "1.39.2", features = ["io-util", "sync", "tracing"] }
+tokio = { version = "1.39.3", features = ["io-util", "sync", "tracing"] }
 tokio-postgres = { version = "0.7.11", features = ["with-chrono-0_4"] }
 tokio-stream = "0.1.15"
 tokio-tungstenite = { version = "0.23.1", features = ["native-tls-vendored"] }
