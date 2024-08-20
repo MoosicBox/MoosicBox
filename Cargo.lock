@@ -2111,12 +2111,12 @@ dependencies = [
 [[package]]
 name = "free_log_client"
 version = "0.3.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#0dbbb785eb358ca1854f24a8005627192bd1deca"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#2b6d7aa6e0b30270fd68addcb47dcbe0ccc30b1b"
 dependencies = [
  "free_log_models",
  "futures-util",
  "once_cell",
- "reqwest 0.12.5",
+ "reqwest 0.12.7",
  "serde",
  "serde_json",
  "strum",
@@ -2131,7 +2131,7 @@ dependencies = [
 [[package]]
 name = "free_log_models"
 version = "0.2.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#0dbbb785eb358ca1854f24a8005627192bd1deca"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#2b6d7aa6e0b30270fd68addcb47dcbe0ccc30b1b"
 dependencies = [
  "log",
  "serde",
@@ -2361,9 +2361,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.4.5"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa82e28a107a8cc405f0839610bdc9b15f1e25ec7d696aa5cf173edbcb1486ab"
+checksum = "524e8ac6999421f49a846c2d4411f337e53497d8ec55d67753beffa43c5d9205"
 dependencies = [
  "atomic-waker",
  "bytes",
@@ -2654,7 +2654,7 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
- "h2 0.4.5",
+ "h2 0.4.6",
  "http 1.1.0",
  "http-body 1.0.1",
  "httparse",
@@ -3050,9 +3050,9 @@ checksum = "0c2cdeb66e45e9f36bfad5bbdb4d2384e70936afbee843c6f6543f0c551ebb25"
 
 [[package]]
 name = "libc"
-version = "0.2.157"
+version = "0.2.158"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "374af5f94e54fa97cf75e945cce8a6b201e88a1a07e688b47dfd2a59c66dbd86"
+checksum = "d8adc4bb1803a324070e64a98ae98f38934d91957a99cfb3a43dcbc01bc56439"
 
 [[package]]
 name = "libfuzzer-sys"
@@ -3539,7 +3539,7 @@ dependencies = [
  "moosicbox_task",
  "pretty_env_logger",
  "rangemap",
- "reqwest 0.12.5",
+ "reqwest 0.12.7",
  "symphonia",
  "thiserror",
  "tokio",
@@ -3629,7 +3629,7 @@ dependencies = [
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",
- "reqwest 0.12.5",
+ "reqwest 0.12.7",
  "rusqlite",
  "serde",
  "serde_json",
@@ -3742,7 +3742,7 @@ dependencies = [
  "mp3-duration",
  "once_cell",
  "pretty_assertions",
- "reqwest 0.12.5",
+ "reqwest 0.12.7",
  "rusqlite",
  "serde",
  "serde_json",
@@ -3795,7 +3795,7 @@ dependencies = [
  "moosicbox_task",
  "once_cell",
  "regex",
- "reqwest 0.12.5",
+ "reqwest 0.12.7",
  "rusqlite",
  "serde",
  "serde_json",
@@ -3866,7 +3866,7 @@ dependencies = [
  "once_cell",
  "open",
  "regex",
- "reqwest 0.12.5",
+ "reqwest 0.12.7",
  "rusqlite",
  "serde",
  "serde_json",
@@ -3963,7 +3963,7 @@ dependencies = [
  "once_cell",
  "open",
  "pretty_assertions",
- "reqwest 0.12.5",
+ "reqwest 0.12.7",
  "rusqlite",
  "serde",
  "serde_json",
@@ -4027,7 +4027,7 @@ dependencies = [
  "once_cell",
  "rand",
  "regex",
- "reqwest 0.12.5",
+ "reqwest 0.12.7",
  "serde",
  "serde_json",
  "symphonia",
@@ -4060,7 +4060,7 @@ dependencies = [
  "once_cell",
  "open",
  "regex",
- "reqwest 0.12.5",
+ "reqwest 0.12.7",
  "rusqlite",
  "serde",
  "serde_json",
@@ -4095,7 +4095,7 @@ dependencies = [
  "once_cell",
  "open",
  "regex",
- "reqwest 0.12.5",
+ "reqwest 0.12.7",
  "rusqlite",
  "serde",
  "serde_json",
@@ -4144,7 +4144,7 @@ dependencies = [
  "mp3-duration",
  "once_cell",
  "regex",
- "reqwest 0.12.5",
+ "reqwest 0.12.7",
  "rusqlite",
  "serde",
  "serde_json",
@@ -4291,7 +4291,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_task",
  "pin-project",
- "reqwest 0.12.5",
+ "reqwest 0.12.7",
  "thiserror",
  "tokio",
  "tokio-util",
@@ -4326,7 +4326,7 @@ dependencies = [
  "moosicbox_search",
  "once_cell",
  "open",
- "reqwest 0.12.5",
+ "reqwest 0.12.7",
  "rusqlite",
  "serde",
  "serde_json",
@@ -4389,7 +4389,7 @@ dependencies = [
  "once_cell",
  "rand",
  "regex",
- "reqwest 0.12.5",
+ "reqwest 0.12.7",
  "serde",
  "serde-aux",
  "serde_json",
@@ -4478,7 +4478,7 @@ dependencies = [
  "pin-utils",
  "rand",
  "regex",
- "reqwest 0.12.5",
+ "reqwest 0.12.7",
  "roxmltree 0.20.0",
  "rupnp",
  "serde",
@@ -4547,7 +4547,7 @@ dependencies = [
  "moosicbox_search",
  "once_cell",
  "open",
- "reqwest 0.12.5",
+ "reqwest 0.12.7",
  "rusqlite",
  "serde",
  "serde_json",
@@ -5243,7 +5243,7 @@ dependencies = [
  "daemonize",
  "flate2",
  "futures",
- "h2 0.4.5",
+ "h2 0.4.6",
  "http 1.1.0",
  "httparse",
  "httpdate",
@@ -5391,7 +5391,7 @@ dependencies = [
  "bytes",
  "clap 3.2.25",
  "futures",
- "h2 0.4.5",
+ "h2 0.4.6",
  "http 1.1.0",
  "log",
  "once_cell",
@@ -6039,14 +6039,14 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "webpki-roots 0.25.4",
- "winreg 0.50.0",
+ "winreg",
 ]
 
 [[package]]
 name = "reqwest"
-version = "0.12.5"
+version = "0.12.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7d6d2a27d57148378eb5e111173f4276ad26340ecc5c49a4a2152167a2d6a37"
+checksum = "f8f4955649ef5c38cc7f9e8aa41761d48fb9677197daea9984dc54f56aad5e63"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -6084,7 +6084,7 @@ dependencies = [
  "wasm-streams",
  "web-sys",
  "webpki-roots 0.26.3",
- "winreg 0.52.0",
+ "windows-registry",
 ]
 
 [[package]]
@@ -6258,9 +6258,9 @@ dependencies = [
 
 [[package]]
 name = "rust_decimal"
-version = "1.35.0"
+version = "1.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1790d1c4c0ca81211399e0e0af16333276f375209e71a37b67698a373db5b47a"
+checksum = "b082d80e3e3cc52b2ed634388d436fe1f4de6af5786cc2de9ba9737527bdf555"
 dependencies = [
  "arrayvec",
  "num-traits",
@@ -7346,6 +7346,9 @@ name = "sync_wrapper"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7065abeca94b6a8a577f9bd45aa0867a2238b74e8eb67cf10d492bc39351394"
+dependencies = [
+ "futures-core",
+]
 
 [[package]]
 name = "system-configuration"
@@ -7887,7 +7890,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "bytes",
- "h2 0.4.5",
+ "h2 0.4.6",
  "http 1.1.0",
  "http-body 1.0.1",
  "http-body-util",
@@ -8111,9 +8114,9 @@ dependencies = [
 
 [[package]]
 name = "unicode-properties"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4259d9d4425d9f0661581b804cb85fe66a4c631cadd8f490d1c13a35d5d9291"
+checksum = "52ea75f83c0137a9b98608359a5f1af8144876eb67bcb1ce837368e906a9f524"
 
 [[package]]
 name = "unicode-segmentation"
@@ -8238,7 +8241,7 @@ dependencies = [
  "actix-web",
  "mime_guess",
  "regex",
- "reqwest 0.12.5",
+ "reqwest 0.12.7",
  "rust-embed",
  "serde",
  "serde_json",
@@ -8541,7 +8544,18 @@ version = "0.54.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "12661b9c89351d684a50a8a643ce5f608e20243b9fb84687800163429f161d65"
 dependencies = [
- "windows-result",
+ "windows-result 0.1.2",
+ "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "windows-registry"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e400001bb720a623c1c69032f8e3e4cf09984deec740f007dd2b03ec864804b0"
+dependencies = [
+ "windows-result 0.2.0",
+ "windows-strings",
  "windows-targets 0.52.6",
 ]
 
@@ -8551,6 +8565,25 @@ version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e383302e8ec8515204254685643de10811af0ed97ea37210dc26fb0032647f8"
 dependencies = [
+ "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "windows-result"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d1043d8214f791817bab27572aaa8af63732e11bf84aa21a45a78d6c317ae0e"
+dependencies = [
+ "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "windows-strings"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cd9b125c486025df0eabcb585e62173c6c9eddcec5d117d3b6e8c30e2ee4d10"
+dependencies = [
+ "windows-result 0.2.0",
  "windows-targets 0.52.6",
 ]
 
@@ -8791,16 +8824,6 @@ name = "winreg"
 version = "0.50.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "524e57b2c537c0f9b1e69f1965311ec12182b4122e45035b1508cd24d2adadb1"
-dependencies = [
- "cfg-if",
- "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "winreg"
-version = "0.52.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a277a57398d4bfa075df44f501a17cfdf8542d224f0d36095a2adc7aee4ef0a5"
 dependencies = [
  "cfg-if",
  "windows-sys 0.48.0",
