@@ -369,12 +369,13 @@ checksum = "5c6cb57a04249c6480766f7f7cef5467412af1490f8d1e243141daddada3264f"
 
 [[package]]
 name = "alsa"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37fe60779335388a88c01ac6c3be40304d1e349de3ada3b15f7808bb90fa9dce"
+checksum = "ed7572b7ba83a31e20d1b48970ee402d2e3e0537dcfe0a3ff4d6eb7508617d43"
 dependencies = [
  "alsa-sys",
  "bitflags 2.6.0",
+ "cfg-if",
  "libc",
 ]
 
@@ -1194,9 +1195,9 @@ dependencies = [
 
 [[package]]
 name = "bitstream-io"
-version = "2.5.2"
+version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b80895c12b34217892edc4718b2293748796b6570c6ff9f0935df8e10e26534"
+checksum = "b81e1519b0d82120d2fd469d5bfb2919a9361c48b02d82d04befc1cdd2002452"
 
 [[package]]
 name = "blake2"
@@ -2117,7 +2118,7 @@ dependencies = [
 [[package]]
 name = "free_log_client"
 version = "0.3.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#563ef620b2d4671beda65faa6dbfbece8d71c20e"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#c6ebbb70ffa42fd516162271bb1bca8e3fa7bf32"
 dependencies = [
  "free_log_models",
  "futures-util",
@@ -2137,7 +2138,7 @@ dependencies = [
 [[package]]
 name = "free_log_models"
 version = "0.2.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#563ef620b2d4671beda65faa6dbfbece8d71c20e"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#c6ebbb70ffa42fd516162271bb1bca8e3fa7bf32"
 dependencies = [
  "log",
  "serde",
