@@ -2118,7 +2118,7 @@ dependencies = [
 [[package]]
 name = "free_log_client"
 version = "0.3.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#c6ebbb70ffa42fd516162271bb1bca8e3fa7bf32"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#3218d1d7a737a3f2434eb9ed64b1f32f0dbf33ed"
 dependencies = [
  "free_log_models",
  "futures-util",
@@ -2138,7 +2138,7 @@ dependencies = [
 [[package]]
 name = "free_log_models"
 version = "0.2.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#c6ebbb70ffa42fd516162271bb1bca8e3fa7bf32"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#3218d1d7a737a3f2434eb9ed64b1f32f0dbf33ed"
 dependencies = [
  "log",
  "serde",
@@ -5784,9 +5784,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.36"
+version = "1.0.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fa76aaf39101c457836aec0ce2316dbdc3ab723cdda1c6bd4e6ad4208acaca7"
+checksum = "b5b9d34b8991d19d98081b46eacdd8eb58c6f2b201139f7c5f643cc155a633af"
 dependencies = [
  "proc-macro2",
 ]
