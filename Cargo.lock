@@ -1322,9 +1322,9 @@ checksum = "4964518bd3b4a8190e832886cdc0da9794f12e8e6c1613a9e90ff331c4c8724b"
 
 [[package]]
 name = "cc"
-version = "1.1.13"
+version = "1.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72db2f7947ecee9b03b510377e8bb9077afa27176fdbff55c51027e976fdcc48"
+checksum = "50d2eb3cd3d1bf4529e31c215ee6f93ec5a3d536d9f578f93d9d33ee19562932"
 dependencies = [
  "jobserver",
  "libc",
@@ -2013,9 +2013,9 @@ checksum = "59668941c55e5c186b8b58c391629af56774ec768f73c08bbcd56f09348eb00b"
 
 [[package]]
 name = "fastrand"
-version = "2.1.0"
+version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fc0510504f03c51ada170672ac806f1f105a88aa97a5281117e1ddc3368e51a"
+checksum = "e8c02a5121d4ea3eb16a80748c74f5549a5665e4c21333c6098f283870fbdea6"
 
 [[package]]
 name = "fdeflate"
@@ -2118,7 +2118,7 @@ dependencies = [
 [[package]]
 name = "free_log_client"
 version = "0.3.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#3218d1d7a737a3f2434eb9ed64b1f32f0dbf33ed"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#576b6e56b40b70a6046f99ae1093e9a3a72104b1"
 dependencies = [
  "free_log_models",
  "futures-util",
@@ -2138,7 +2138,7 @@ dependencies = [
 [[package]]
 name = "free_log_models"
 version = "0.2.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#3218d1d7a737a3f2434eb9ed64b1f32f0dbf33ed"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#576b6e56b40b70a6046f99ae1093e9a3a72104b1"
 dependencies = [
  "log",
  "serde",
@@ -3236,6 +3236,12 @@ dependencies = [
  "autocfg",
  "scopeguard",
 ]
+
+[[package]]
+name = "lockfree-object-pool"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9374ef4228402d4b7e403e5838cb880d9ee663314b0a900d5a6aabf0c213552e"
 
 [[package]]
 name = "lofty"
@@ -6657,9 +6663,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.125"
+version = "1.0.127"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83c8e735a073ccf5be70aa8066aa984eaf2fa000db6c8d0100ae605b366d31ed"
+checksum = "8043c06d9f82bd7271361ed64f415fe5e12a77fdb52e573e7f06a516dea329ad"
 dependencies = [
  "itoa",
  "memchr",
@@ -8190,9 +8196,9 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "utoipa"
-version = "5.0.0-alpha.1"
+version = "5.0.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c082de846a4d434a9dcfe3358dbe4a0aa5d4f826c3af29cdbd97404e1ffe71f4"
+checksum = "cba8a777adb4d042176d5ad9259b484ecaf6f0b2f3ca6cb49b7fe357ff43a1da"
 dependencies = [
  "indexmap 2.4.0",
  "serde",
@@ -8202,9 +8208,9 @@ dependencies = [
 
 [[package]]
 name = "utoipa-gen"
-version = "5.0.0-alpha.1"
+version = "5.0.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84a71c23e17df16027cc552b5b249a2a5e6a1ea36ab37363a1ac29b69ab36035"
+checksum = "59849befa84b0caa1bbfe94119f78e14ce25d3c495bc4befd34b43cdfb0061bb"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -8214,9 +8220,9 @@ dependencies = [
 
 [[package]]
 name = "utoipa-rapidoc"
-version = "4.0.1-alpha.0"
+version = "4.0.1-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d27e2155a9deb3d227d3bd4065f66fdd5b684a41703763aa72b80974398fb19b"
+checksum = "6f435144b4d5f8d8aa5e001e1d9b39f198c99d822d9359549973aeccd29e870a"
 dependencies = [
  "actix-web",
  "serde",
@@ -8250,9 +8256,9 @@ dependencies = [
 
 [[package]]
 name = "utoipa-swagger-ui"
-version = "7.1.1-alpha.0"
+version = "7.1.1-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be05f58341ccce730a08897e273a71604b477d3ac4700af731a2fe97dbb8dd5e"
+checksum = "65b6e619d2a6f3ff81e5cd5d14435fb34fb171dd1f9c94e81b436238ac1e4096"
 dependencies = [
  "actix-web",
  "mime_guess",
@@ -8919,9 +8925,9 @@ checksum = "ced3678a2879b30306d323f4542626697a464a97c0a07c9aebf7ebca65cd4dde"
 
 [[package]]
 name = "zip"
-version = "1.1.4"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cc23c04387f4da0374be4533ad1208cbb091d5c11d070dfef13676ad6497164"
+checksum = "dc5e4288ea4057ae23afc69a4472434a87a2495cafce6632fd1c4ec9f5cf3494"
 dependencies = [
  "arbitrary",
  "crc32fast",
@@ -8929,8 +8935,23 @@ dependencies = [
  "displaydoc",
  "flate2",
  "indexmap 2.4.0",
- "num_enum",
+ "memchr",
  "thiserror",
+ "zopfli",
+]
+
+[[package]]
+name = "zopfli"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5019f391bac5cf252e93bbcc53d039ffd62c7bfb7c150414d61369afe57e946"
+dependencies = [
+ "bumpalo",
+ "crc32fast",
+ "lockfree-object-pool",
+ "log",
+ "once_cell",
+ "simd-adler32",
 ]
 
 [[package]]
