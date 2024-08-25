@@ -575,10 +575,18 @@ impl ToApi<ApiTrack> for SessionPlaylistTrack {
                 let id = self.id.parse::<u64>().expect("Invalid Library Track ID");
                 ApiTrack::Library {
                     track_id: id,
-                    data: ApiLibraryTrack {
-                        track_id: id,
-                        ..Default::default()
-                    },
+                    data: self
+                        .data
+                        .and_then(|x| {
+                            log::debug!("Mapping track data string: {x}");
+                            serde_json::from_str(&x)
+                                .map_err(|e| log::warn!("Failed to parse track json: {e:?}"))
+                                .ok()
+                        })
+                        .unwrap_or_else(|| ApiLibraryTrack {
+                            track_id: id,
+                            ..Default::default()
+                        }),
                 }
             }
             ApiSource::Tidal => {
@@ -591,10 +599,20 @@ impl ToApi<ApiTrack> for SessionPlaylistTrack {
                     },
                     None => ApiTrack::Tidal {
                         track_id: id,
-                        data: serde_json::json!({
-                            "id": id,
-                            "type": self.r#type,
-                        }),
+                        data: self
+                            .data
+                            .and_then(|x| {
+                                log::debug!("Mapping track data string: {x}");
+                                serde_json::from_str(&x)
+                                    .map_err(|e| log::warn!("Failed to parse track json: {e:?}"))
+                                    .ok()
+                            })
+                            .unwrap_or_else(|| {
+                                serde_json::json!({
+                                    "id": id,
+                                    "type": self.r#type,
+                                })
+                            }),
                     },
                 }
             }
@@ -608,10 +626,20 @@ impl ToApi<ApiTrack> for SessionPlaylistTrack {
                     },
                     None => ApiTrack::Qobuz {
                         track_id: id,
-                        data: serde_json::json!({
-                            "id": id,
-                            "type": self.r#type,
-                        }),
+                        data: self
+                            .data
+                            .and_then(|x| {
+                                log::debug!("Mapping track data string: {x}");
+                                serde_json::from_str(&x)
+                                    .map_err(|e| log::warn!("Failed to parse track json: {e:?}"))
+                                    .ok()
+                            })
+                            .unwrap_or_else(|| {
+                                serde_json::json!({
+                                    "id": id,
+                                    "type": self.r#type,
+                                })
+                            }),
                     },
                 }
             }
@@ -623,10 +651,20 @@ impl ToApi<ApiTrack> for SessionPlaylistTrack {
                 },
                 None => ApiTrack::Yt {
                     track_id: self.id.clone(),
-                    data: serde_json::json!({
-                        "id": self.id,
-                        "type": self.r#type,
-                    }),
+                    data: self
+                        .data
+                        .and_then(|x| {
+                            log::debug!("Mapping track data string: {x}");
+                            serde_json::from_str(&x)
+                                .map_err(|e| log::warn!("Failed to parse track json: {e:?}"))
+                                .ok()
+                        })
+                        .unwrap_or_else(|| {
+                            serde_json::json!({
+                                "id": self.id,
+                                "type": self.r#type,
+                            })
+                        }),
                 },
             },
         }
