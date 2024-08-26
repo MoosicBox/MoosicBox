@@ -20,7 +20,7 @@ pub enum InitError {
     BuildFileWriterConfig(#[from] free_log_client::BuildFileWriterConfigError),
 }
 
-pub fn init(filename: &str) -> Result<FreeLogLayer, InitError> {
+pub fn init(filename: Option<&str>) -> Result<FreeLogLayer, InitError> {
     #[cfg(debug_assertions)]
     const DEFAULT_LOG_LEVEL: &str = "moosicbox=trace";
     #[cfg(not(debug_assertions))]
@@ -28,18 +28,20 @@ pub fn init(filename: &str) -> Result<FreeLogLayer, InitError> {
 
     let mut logs_config = free_log_client::LogsConfig::builder();
 
-    if let Some(log_dir) = get_config_dir_path().map(|p| p.join("logs")) {
-        if create_dir_all(&log_dir).is_ok() {
-            logs_config = logs_config.with_file_writer(
-                free_log_client::FileWriterConfig::builder()
-                    .file_path(log_dir.join(filename))
-                    .log_level(free_log_client::Level::Debug),
-            )?;
+    if let Some(filename) = filename {
+        if let Some(log_dir) = get_config_dir_path().map(|p| p.join("logs")) {
+            if create_dir_all(&log_dir).is_ok() {
+                logs_config = logs_config.with_file_writer(
+                    free_log_client::FileWriterConfig::builder()
+                        .file_path(log_dir.join(filename))
+                        .log_level(free_log_client::Level::Debug),
+                )?;
+            } else {
+                log::warn!("Could not create directory path for logs files at {log_dir:?}");
+            }
         } else {
-            log::warn!("Could not create directory path for logs files at {log_dir:?}");
+            log::warn!("Could not get config dir to put the logs into");
         }
-    } else {
-        log::warn!("Could not get config dir to put the logs into");
     }
 
     let layer = free_log_client::init(logs_config.env_filter(default_env!(

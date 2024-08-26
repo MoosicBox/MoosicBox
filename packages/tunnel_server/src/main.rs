@@ -21,7 +21,7 @@ fn main() -> Result<(), std::io::Error> {
     if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {
         console_subscriber::init();
     } else {
-        moosicbox_logging::init("moosicbox_tunnel_server.log")
+        moosicbox_logging::init(Some("moosicbox_tunnel_server.log"))
             .expect("Failed to initialize FreeLog");
     }
 

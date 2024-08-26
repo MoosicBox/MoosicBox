@@ -12,7 +12,7 @@ use pingora_load_balancing::{health_check::TcpHealthCheck, selection::RoundRobin
 use pingora_proxy::{http_proxy_service, HttpProxy};
 
 pub fn serve() {
-    moosicbox_logging::init("moosicbox_lb.log").expect("Failed to initialize FreeLog");
+    moosicbox_logging::init(Some("moosicbox_lb.log")).expect("Failed to initialize FreeLog");
 
     let mut pingora_server = Server::new(None).unwrap();
     pingora_server.bootstrap();

@@ -58,7 +58,8 @@ fn main() -> std::io::Result<()> {
     if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {
         console_subscriber::init();
     } else {
-        moosicbox_logging::init("moosicbox_server.log").expect("Failed to initialize FreeLog");
+        moosicbox_logging::init(Some("moosicbox_server.log"))
+            .expect("Failed to initialize FreeLog");
     }
 
     let args: Vec<String> = env::args().collect();
