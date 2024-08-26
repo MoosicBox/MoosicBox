@@ -2118,7 +2118,7 @@ dependencies = [
 [[package]]
 name = "free_log_client"
 version = "0.3.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#cac151deb85982b2256d5612275cc5447fbad21f"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#9cc755dcdc59c4e2019fef5d6db999686f95d3c8"
 dependencies = [
  "free_log_models",
  "futures-util",
@@ -2138,7 +2138,7 @@ dependencies = [
 [[package]]
 name = "free_log_models"
 version = "0.2.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#cac151deb85982b2256d5612275cc5447fbad21f"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#9cc755dcdc59c4e2019fef5d6db999686f95d3c8"
 dependencies = [
  "log",
  "serde",
@@ -5585,9 +5585,9 @@ dependencies = [
 
 [[package]]
 name = "prettyplease"
-version = "0.2.21"
+version = "0.2.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a909e6e8053fa1a5ad670f5816c7d93029ee1fa8898718490544a6b0d5d38b3e"
+checksum = "479cf940fbbb3426c32c5d5176f62ad57549a0bb84773423ba8be9d089f5faba"
 dependencies = [
  "proc-macro2",
  "syn 2.0.76",
