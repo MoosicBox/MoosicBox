@@ -122,7 +122,7 @@ lazy_static = "1.5.0"
 libpulse-binding = "2.28.1"
 libpulse-simple-binding = "2.28.1"
 libvips = { git = "https://github.com/BSteffaniak/libvips-rust-bindings.git", branch = "support-windows-shallow" }
-local-ip-address = "0.6.1"
+local-ip-address = "0.6.2"
 lofty = { git = "https://github.com/BSteffaniak/lofty-rs.git", branch = "master-shallow" }
 log = { version = "0.4", features = ["release_max_level_trace"] }
 md5 = "0.7.0"
