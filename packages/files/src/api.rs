@@ -146,8 +146,8 @@ pub struct GetSilenceQuery {
 
 #[cfg_attr(
     feature = "openapi", utoipa::path(
-        tags = ["Files", "head"],
-        get,
+        tags = ["Files"],
+        method(head, get),
         path = "/silence",
         description = "Get silent audio for the specified duration",
         params(
@@ -238,8 +238,8 @@ pub struct GetTrackQuery {
 
 #[cfg_attr(
     feature = "openapi", utoipa::path(
-        tags = ["Files", "head"],
-        get,
+        tags = ["Files"],
+        method(head, get),
         path = "/track",
         description = "Get the track file stream audio bytes with a chunked encoding",
         params(
@@ -629,8 +629,8 @@ pub struct ArtistCoverQuery {
 
 #[cfg_attr(
     feature = "openapi", utoipa::path(
-        tags = ["Files", "head"],
-        get,
+        tags = ["Files"],
+        method(head, get),
         path = "/artists/{artistId}/source",
         description = "Get source quality artist cover",
         params(
@@ -692,8 +692,8 @@ pub async fn artist_source_artwork_endpoint(
 
 #[cfg_attr(
     feature = "openapi", utoipa::path(
-        tags = ["Files", "head"],
-        get,
+        tags = ["Files"],
+        method(head, get),
         path = "/artists/{artistId}/{size}",
         description = "Get artist cover at the specified dimensions",
         params(
@@ -785,8 +785,8 @@ pub struct AlbumCoverQuery {
 
 #[cfg_attr(
     feature = "openapi", utoipa::path(
-        tags = ["Files", "head"],
-        get,
+        tags = ["Files"],
+        method(head, get),
         path = "/albums/{albumId}/source",
         description = "Get source quality album cover",
         params(
@@ -848,8 +848,8 @@ pub async fn album_source_artwork_endpoint(
 
 #[cfg_attr(
     feature = "openapi", utoipa::path(
-        tags = ["Files", "head"],
-        get,
+        tags = ["Files"],
+        method(head, get),
         path = "/albums/{albumId}/{size}",
         description = "Get album cover at the specified dimensions",
         params(

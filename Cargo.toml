@@ -78,7 +78,7 @@ actix-ws = "0.3.0"
 arrayvec = "0.7.6"
 async-once-cell = "0.5.3"
 async-recursion = "1.1.1"
-async-trait = "0.1.81"
+async-trait = "0.1.82"
 atomic_float = "1.1.0"
 audiopus = "0.2.0"
 audiotags = { git = "https://github.com/BSteffaniak/audiotags.git", branch = "master-shallow" }
@@ -199,11 +199,11 @@ tokio-stream = "0.1.15"
 tokio-tungstenite = { version = "0.23.1", features = ["native-tls-vendored"] }
 tokio-util = "0.7.11"
 url = "2.5.2"
-utoipa = { version = "5.0.0-alpha.2", features = ["actix_extras"] }
-utoipa-rapidoc = { version = "4.0.1-alpha.1", features = ["actix-web"] }
-utoipa-redoc = { version = "4.0.1-alpha.0", features = ["actix-web"] }
-utoipa-scalar = { version = "0.2.0-alpha.0", features = ["actix-web"] }
-utoipa-swagger-ui = { version = "7.1.1-alpha.1", features = ["actix-web"] }
+utoipa = { version = "5.0.0-beta.0", features = ["actix_extras"] }
+utoipa-rapidoc = { version = "4.0.1-beta.0", features = ["actix-web"] }
+utoipa-redoc = { version = "4.0.1-beta.0", features = ["actix-web"] }
+utoipa-scalar = { version = "0.2.0-beta.0", features = ["actix-web"] }
+utoipa-swagger-ui = { version = "7.1.1-beta.0", features = ["actix-web"] }
 uuid = { version = "1.10.0", features = ["v4"] }
 webp = "0.3.0"
 xml = "0.8.20"

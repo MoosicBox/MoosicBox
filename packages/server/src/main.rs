@@ -421,33 +421,6 @@ fn main() -> std::io::Result<()> {
                         operation.operation_id = Some(path.to_owned());
                     });
                 });
-                nested.paths.paths.iter_mut().for_each(|(_, item)| {
-                    if let Some(key) = item
-                        .operations
-                        .clone()
-                        .iter()
-                        .find(|(_key, operation)| {
-                            operation
-                                .tags
-                                .as_ref()
-                                .is_some_and(|x| x.iter().any(|x| x == "head"))
-                        })
-                        .map(|x| x.0)
-                    {
-                        let mut operation = {
-                            let operation = item.operations.get_mut(key).unwrap();
-                            let tags = operation.tags.as_mut().unwrap();
-                            tags.remove(tags.iter().position(|x| x == "head").unwrap());
-                            operation.clone()
-                        };
-                        operation.operation_id = operation
-                            .operation_id
-                            .as_ref()
-                            .map(|x| format!("{x} (HEAD)"));
-                        item.operations
-                            .insert(utoipa::openapi::PathItemType::Head, operation);
-                    }
-                });
 
                 api.nest(path, nested)
             }
