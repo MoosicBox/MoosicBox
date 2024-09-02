@@ -645,7 +645,7 @@ pub struct ArtistCoverQuery {
         )
     )
 )]
-#[route("/artists/{artist_id}/source", method = "GET", method = "HEAD")]
+#[route("/artists/{artistId}/source", method = "GET", method = "HEAD")]
 pub async fn artist_source_artwork_endpoint(
     req: HttpRequest,
     path: web::Path<String>,
@@ -709,7 +709,7 @@ pub async fn artist_source_artwork_endpoint(
         )
     )
 )]
-#[route("/artists/{artist_id}/{size}", method = "GET", method = "HEAD")]
+#[route("/artists/{artistId}/{size}", method = "GET", method = "HEAD")]
 pub async fn artist_cover_endpoint(
     path: web::Path<(String, String)>,
     query: web::Query<ArtistCoverQuery>,
@@ -801,7 +801,7 @@ pub struct AlbumCoverQuery {
         )
     )
 )]
-#[route("/albums/{album_id}/source", method = "GET", method = "HEAD")]
+#[route("/albums/{albumId}/source", method = "GET", method = "HEAD")]
 pub async fn album_source_artwork_endpoint(
     req: HttpRequest,
     path: web::Path<String>,
@@ -865,7 +865,7 @@ pub async fn album_source_artwork_endpoint(
         )
     )
 )]
-#[route("/albums/{album_id}/{size}", method = "GET", method = "HEAD")]
+#[route("/albums/{albumId}/{size}", method = "GET", method = "HEAD")]
 pub async fn album_artwork_endpoint(
     path: web::Path<(String, String)>,
     query: web::Query<AlbumCoverQuery>,
