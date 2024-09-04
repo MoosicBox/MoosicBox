@@ -355,7 +355,20 @@ pub async fn add_scan_path_endpoint(
     data: web::Data<AppState>,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    crate::add_scan_path(&**data.database, &query.path)
+    static REGEX: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r"/mnt/(\w+)").unwrap());
+
+    let path = if std::env::consts::OS == "windows" {
+        REGEX
+            .replace(&query.path, |caps: &regex::Captures| {
+                format!("{}:", caps[1].to_uppercase())
+            })
+            .replace('/', "\\")
+    } else {
+        query.path.clone()
+    };
+
+    crate::add_scan_path(&**data.database, &path)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to add scan path: {e:?}")))?;
 
