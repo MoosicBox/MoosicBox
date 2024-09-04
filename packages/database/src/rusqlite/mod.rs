@@ -1,11 +1,9 @@
-use std::{
-    ops::Deref,
-    sync::{Arc, Mutex},
-};
+use std::{ops::Deref, sync::Arc};
 
 use async_trait::async_trait;
 use rusqlite::{types::Value, Connection, Row, Rows, Statement};
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 use crate::{
     BooleanExpression, Database, DatabaseError, DatabaseValue, DeleteStatement, Expression,
@@ -222,7 +220,7 @@ impl From<RusqliteDatabaseError> for DatabaseError {
 impl Database for RusqliteDatabase {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(select(
-            self.connection.lock().as_ref().unwrap(),
+            &*self.connection.lock().await,
             query.table_name,
             query.distinct,
             query.columns,
@@ -238,7 +236,7 @@ impl Database for RusqliteDatabase {
         query: &SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
         Ok(find_row(
-            self.connection.lock().as_ref().unwrap(),
+            &*self.connection.lock().await,
             query.table_name,
             query.distinct,
             query.columns,
@@ -253,7 +251,7 @@ impl Database for RusqliteDatabase {
         statement: &DeleteStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(delete(
-            self.connection.lock().as_ref().unwrap(),
+            &*self.connection.lock().await,
             statement.table_name,
             statement.filters.as_deref(),
             statement.limit,
@@ -265,7 +263,7 @@ impl Database for RusqliteDatabase {
         statement: &DeleteStatement<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
         Ok(delete(
-            self.connection.lock().as_ref().unwrap(),
+            &*self.connection.lock().await,
             statement.table_name,
             statement.filters.as_deref(),
             Some(1),
@@ -279,7 +277,7 @@ impl Database for RusqliteDatabase {
         statement: &InsertStatement<'_>,
     ) -> Result<crate::Row, DatabaseError> {
         Ok(insert_and_get_row(
-            self.connection.lock().as_ref().unwrap(),
+            &*self.connection.lock().await,
             statement.table_name,
             &statement.values,
         )?)
@@ -290,7 +288,7 @@ impl Database for RusqliteDatabase {
         statement: &UpdateStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(update_and_get_rows(
-            self.connection.lock().as_ref().unwrap(),
+            &*self.connection.lock().await,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -303,7 +301,7 @@ impl Database for RusqliteDatabase {
         statement: &UpdateStatement<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
         Ok(update_and_get_row(
-            self.connection.lock().as_ref().unwrap(),
+            &*self.connection.lock().await,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -316,7 +314,7 @@ impl Database for RusqliteDatabase {
         statement: &UpsertStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(upsert(
-            self.connection.lock().as_ref().unwrap(),
+            &*self.connection.lock().await,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -329,7 +327,7 @@ impl Database for RusqliteDatabase {
         statement: &UpsertStatement<'_>,
     ) -> Result<crate::Row, DatabaseError> {
         Ok(upsert_and_get_row(
-            self.connection.lock().as_ref().unwrap(),
+            &*self.connection.lock().await,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -342,7 +340,7 @@ impl Database for RusqliteDatabase {
         statement: &UpsertMultiStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(upsert_multi(
-            self.connection.lock().as_ref().unwrap(),
+            &*self.connection.lock().await,
             statement.table_name,
             statement
                 .unique
@@ -772,7 +770,7 @@ fn select(
     distinct: bool,
     columns: &[&str],
     filters: Option<&[Box<dyn BooleanExpression>]>,
-    joins: Option<&[Join]>,
+    joins: Option<&[Join<'_>]>,
     sort: Option<&[Sort]>,
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {

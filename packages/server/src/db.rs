@@ -14,7 +14,7 @@ pub fn init_sqlite() -> Result<Box<dyn Database>, InitSqliteError> {
     library
         .busy_timeout(std::time::Duration::from_millis(10))
         .expect("Failed to set busy timeout");
-    let library = std::sync::Arc::new(std::sync::Mutex::new(library));
+    let library = std::sync::Arc::new(tokio::sync::Mutex::new(library));
 
     Ok(Box::new(
         moosicbox_database::rusqlite::RusqliteDatabase::new(library),
