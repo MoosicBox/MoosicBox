@@ -726,6 +726,7 @@ fn main() -> std::io::Result<()> {
                 app = app.service(
                     web::scope("/scan")
                         .service(moosicbox_scan::api::run_scan_endpoint)
+                        .service(moosicbox_scan::api::start_scan_endpoint)
                         .service(moosicbox_scan::api::run_scan_path_endpoint)
                         .service(moosicbox_scan::api::get_scan_origins_endpoint)
                         .service(moosicbox_scan::api::enable_scan_origin_endpoint)

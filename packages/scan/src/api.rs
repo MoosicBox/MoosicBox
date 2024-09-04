@@ -21,6 +21,7 @@ use crate::{disable_scan_origin, enable_scan_origin, scan, ScanOrigin};
     tags((name = "Scan")),
     paths(
         run_scan_endpoint,
+        start_scan_endpoint,
         run_scan_path_endpoint,
         get_scan_origins_endpoint,
         enable_scan_origin_endpoint,
@@ -84,6 +85,54 @@ pub async fn run_scan_endpoint(
     scan(api_state.as_ref().clone(), data.database.clone(), origins)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
+
+    Ok(Json(serde_json::json!({"success": true})))
+}
+
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Scan"],
+        post,
+        path = "/start-scan",
+        description = "Start a scan for the specified origin(s)",
+        params(
+            ("origins" = Option<String>, Query, description = "Comma-separated list of ScanOrigins"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The scan has successfully started",
+                body = Value,
+            )
+        )
+    )
+)]
+#[post("/start-scan")]
+pub async fn start_scan_endpoint(
+    query: web::Query<ScanQuery>,
+    data: web::Data<AppState>,
+    api_state: web::Data<MusicApiState>,
+    _: NonTunnelRequestAuthorized,
+) -> Result<Json<Value>> {
+    let origins = query
+        .origins
+        .as_ref()
+        .map(|origins| {
+            origins
+                .split(',')
+                .map(|s| s.trim())
+                .map(|s| {
+                    ScanOrigin::from_str(s)
+                        .map_err(|_e| ErrorBadRequest(format!("Invalid ScanOrigin value: {s}")))
+                })
+                .collect::<Result<Vec<_>>>()
+        })
+        .transpose()?;
+
+    moosicbox_task::spawn(
+        "scan",
+        scan(api_state.as_ref().clone(), data.database.clone(), origins),
+    );
 
     Ok(Json(serde_json::json!({"success": true})))
 }
