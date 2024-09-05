@@ -158,7 +158,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 .collect::<Vec<_>>()
                 .join(","),
             ExpressionType::Coalesce(value) => format!(
-                "COALESCE({})",
+                "ifnull({})",
                 value
                     .values
                     .iter()
