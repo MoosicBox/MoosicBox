@@ -1,14 +1,14 @@
 use moosicbox_database::Database;
 use thiserror::Error;
 
-#[cfg(not(feature = "postgres"))]
+#[cfg(feature = "sqlite-rusqlite")]
 #[derive(Debug, Error)]
 pub enum InitSqliteError {
     #[error(transparent)]
     Sqlite(#[from] ::rusqlite::Error),
 }
 
-#[cfg(not(feature = "postgres"))]
+#[cfg(feature = "sqlite-rusqlite")]
 pub fn init_sqlite() -> Result<Box<dyn Database>, InitSqliteError> {
     let library = ::rusqlite::Connection::open("library.db")?;
     library
@@ -126,6 +126,42 @@ async fn get_db_config() -> Result<(String, String, String, Option<String>), Ini
             )
         },
     )
+}
+
+#[cfg(all(
+    not(feature = "postgres"),
+    not(feature = "postgres-sqlx"),
+    not(feature = "sqlite-rusqlite")
+))]
+#[derive(Debug, Error)]
+pub enum InitDatabaseError {
+    #[error(transparent)]
+    SqliteSqlx(#[from] sqlx::Error),
+}
+
+#[cfg(all(
+    not(feature = "postgres"),
+    not(feature = "postgres-sqlx"),
+    not(feature = "sqlite-rusqlite")
+))]
+#[allow(unused)]
+pub async fn init_sqlite_sqlx() -> Result<Box<dyn Database>, InitDatabaseError> {
+    use std::sync::Arc;
+
+    use moosicbox_database::sqlx::sqlite::SqliteSqlxDatabase;
+    use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+
+    let connect_options = SqliteConnectOptions::new();
+    let mut connect_options = connect_options.filename("library.db");
+
+    let pool = SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect_with(connect_options)
+        .await?;
+
+    Ok(Box::new(SqliteSqlxDatabase::new(Arc::new(
+        tokio::sync::Mutex::new(pool),
+    ))))
 }
 
 #[cfg(feature = "postgres")]

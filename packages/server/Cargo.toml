@@ -22,7 +22,7 @@ moosicbox_auth = { path = "../auth", default-features = false }
 moosicbox_config = { path = "../config", default-features = false }
 moosicbox_core = { path = "../core", default-features = false }
 moosicbox_database = { path = "../database", default-features = false, features = [
-    "rusqlite",
+    "sqlite-sqlx",
 ] }
 moosicbox_env_utils = { path = "../env_utils", default-features = false }
 moosicbox_files = { path = "../files", default-features = false, features = [
@@ -87,18 +87,14 @@ utoipa-scalar     = { workspace = true, optional = true }
 utoipa-swagger-ui = { workspace = true, optional = true }
 
 # Postgres
-aws-config = { workspace = true, optional = true }
-aws-sdk-ssm = { workspace = true, optional = true }
-native-tls = { workspace = true, optional = true }
-openssl = { workspace = true, optional = true }
+aws-config          = { workspace = true, optional = true }
+aws-sdk-ssm         = { workspace = true, optional = true }
+native-tls          = { workspace = true, optional = true }
+openssl             = { workspace = true, optional = true }
 postgres-native-tls = { workspace = true, optional = true }
-postgres-openssl = { workspace = true, optional = true }
-sqlx = { workspace = true, optional = true, features = [
-    "postgres",
-    "runtime-tokio",
-    "tls-rustls",
-] }
-tokio-postgres = { workspace = true, optional = true, features = [] }
+postgres-openssl    = { workspace = true, optional = true }
+sqlx                = { workspace = true, features = ["runtime-tokio"] }
+tokio-postgres      = { workspace = true, optional = true, features = [] }
 
 # auth
 qstring = { workspace = true, optional = true }
@@ -122,7 +118,7 @@ log                = { workspace = true }
 once_cell          = { workspace = true }
 rand               = { workspace = true }
 regex              = { workspace = true }
-rusqlite           = { workspace = true }
+rusqlite           = { workspace = true, optional = true }
 serde              = { workspace = true, features = ["derive"] }
 serde_json         = { workspace = true }
 strum              = { workspace = true }
@@ -148,7 +144,7 @@ default = [
     "postgres-raw",
     "postgres-sqlx",
     "pulseaudio",
-    "sqlite",
+    "sqlite-sqlx",
     "static-token-auth",
 ]
 
@@ -225,8 +221,15 @@ postgres-raw = [
     "moosicbox_database/postgres-raw",
     "postgres",
 ]
-postgres-sqlx = ["dep:sqlx", "moosicbox_database/postgres-sqlx", "postgres"]
-sqlite = ["moosicbox_database/rusqlite"]
+postgres-sqlx = [
+    "moosicbox_database/postgres-sqlx",
+    "postgres",
+    "sqlx/postgres",
+    "sqlx/tls-rustls",
+]
+sqlite = []
+sqlite-rusqlite = ["dep:rusqlite", "moosicbox_database/rusqlite"]
+sqlite-sqlx = ["moosicbox_database/sqlite-sqlx", "sqlite"]
 
 downloader = ["moosicbox_downloader/api"]
 library    = ["moosicbox_library/api"]

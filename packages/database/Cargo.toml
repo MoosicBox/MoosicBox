@@ -46,7 +46,7 @@ tokio           = { workspace = true, features = ["macros", "rt", "tracing"] }
 tokio-util      = { workspace = true }
 
 [features]
-default = ["mysql", "postgres", "rusqlite"]
+default = ["mysql", "postgres", "rusqlite", "sqlite"]
 
 fail-on-warnings = []
 
@@ -69,4 +69,6 @@ postgres-sqlx = [
     "sqlx/postgres",
 ]
 rusqlite = ["dep:rusqlite"]
+sqlite = ["sqlite-sqlx"]
+sqlite-sqlx = ["dep:regex", "dep:sqlx", "sqlx", "sqlx/sqlite"]
 sqlx = []

@@ -110,9 +110,18 @@ fn main() -> std::io::Result<()> {
         let db = db::init_postgres_sqlx()
             .await
             .expect("Failed to init postgres DB");
-        #[cfg(not(feature = "postgres"))]
+        #[cfg(feature = "sqlite-rusqlite")]
         #[allow(unused_variables)]
         let db = db::init_sqlite().expect("Failed to init sqlite DB");
+        #[cfg(all(
+            not(feature = "postgres"),
+            not(feature = "postgres-sqlx"),
+            not(feature = "sqlite-rusqlite")
+        ))]
+        #[allow(unused_variables)]
+        let db = db::init_sqlite_sqlx()
+            .await
+            .expect("Failed to init sqlite DB");
 
         let database: Arc<Box<dyn Database>> = Arc::new(db);
         DB.write().unwrap().replace(database.clone());

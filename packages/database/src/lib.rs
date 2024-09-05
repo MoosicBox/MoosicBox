@@ -200,6 +200,9 @@ pub enum DatabaseError {
     #[cfg(feature = "mysql-sqlx")]
     #[error(transparent)]
     MysqlSqlx(sqlx::mysql::SqlxDatabaseError),
+    #[cfg(feature = "sqlite-sqlx")]
+    #[error(transparent)]
+    SqliteSqlx(sqlx::sqlite::SqlxDatabaseError),
     #[cfg(feature = "postgres-raw")]
     #[error(transparent)]
     Postgres(postgres::postgres::PostgresDatabaseError),

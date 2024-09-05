@@ -15,13 +15,12 @@ moosicbox_assert = { path = "../assert", default-features = false }
 moosicbox_config = { path = "../config", default-features = false }
 moosicbox_core = { path = "../core", default-features = false }
 moosicbox_database = { path = "../database", default-features = false, features = [
-    "rusqlite",
+    "sqlite-sqlx",
 ] }
 moosicbox_files = { path = "../files", default-features = false, features = [
     "files",
 ] }
 moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
-    "rusqlite",
     "serde_json",
 ] }
 moosicbox_library = { path = "../library", default-features = false }
