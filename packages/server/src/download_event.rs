@@ -38,13 +38,9 @@ pub async fn init() {
 
             let api_event: moosicbox_downloader::api::models::ApiProgressEvent = event.into();
 
-            if let Err(err) = moosicbox_ws::send_download_event(
-                WS_SERVER_HANDLE.read().await.as_ref().unwrap(),
-                None,
-                api_event,
-            )
-            .await
-            {
+            let handle = { WS_SERVER_HANDLE.read().await.clone().unwrap() };
+
+            if let Err(err) = moosicbox_ws::send_download_event(&handle, None, api_event).await {
                 log::error!("Failed to broadcast download event: {err:?}");
             }
         }) as moosicbox_downloader::queue::ProgressListenerRefFut

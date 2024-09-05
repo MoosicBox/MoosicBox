@@ -80,16 +80,14 @@ impl ProxyHttp for Router {
         let lb = if Self::is_challenge(session) {
             log::debug!("upstream_peer: Received challenge request");
             static NAME: &str = "solver";
-            self.0.get(NAME).map(|x| {
+            self.0.get(NAME).inspect(|_x| {
                 log::debug!("upstream_peer: Using cluster name={NAME}");
-                x
             })
         } else {
             self.0
                 .get(host)
-                .map(|x| {
+                .inspect(|_x| {
                     log::debug!("upstream_peer: Using cluster name={host}");
-                    x
                 })
                 .or_else(|| match self.0.get("*") {
                     Some(fallback) => {

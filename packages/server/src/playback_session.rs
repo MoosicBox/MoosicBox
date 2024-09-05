@@ -62,9 +62,10 @@ impl service::Processor for service::Service {
                         std::io::Error::new(std::io::ErrorKind::Other, "No DB connection").into(),
                     );
                 };
-                if let Err(err) =
-                    update_session(&**db, &ctx.read().await.sender, None, &update).await
-                {
+
+                let handle = { ctx.read().await.sender.clone() };
+
+                if let Err(err) = update_session(&**db, &handle, None, &update).await {
                     moosicbox_assert::die_or_error!("Failed to update_session: {err:?}");
                 }
             }

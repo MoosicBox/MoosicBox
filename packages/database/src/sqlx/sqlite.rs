@@ -269,9 +269,11 @@ impl SqliteSqlxDatabase {
     pub async fn get_connection(
         &self,
     ) -> Result<Arc<Mutex<PoolConnection<Sqlite>>>, SqlxDatabaseError> {
-        if let Some(connection) = self.connection.lock().await.as_ref() {
+        let connection = { self.connection.lock().await.clone() };
+
+        if let Some(connection) = connection {
             log::trace!("Returning existing connection from sqlite db pool");
-            return Ok(connection.clone());
+            return Ok(connection);
         }
 
         log::debug!("Fetching new connection from sqlite db pool");

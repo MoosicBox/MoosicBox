@@ -23,12 +23,10 @@ pub async fn init() {
                     }
                     let api_event: Option<ApiProgressEvent> = event.into();
                     if let Some(api_event) = api_event {
-                        if let Err(err) = moosicbox_ws::send_scan_event(
-                            WS_SERVER_HANDLE.read().await.as_ref().unwrap(),
-                            None,
-                            api_event,
-                        )
-                        .await
+                        let handle = { WS_SERVER_HANDLE.read().await.clone().unwrap() };
+
+                        if let Err(err) =
+                            moosicbox_ws::send_scan_event(&handle, None, api_event).await
                         {
                             log::error!("Failed to broadcast scan event: {err:?}");
                         }
@@ -37,12 +35,10 @@ pub async fn init() {
                 ProgressEvent::ScanFinished { .. } => {
                     let api_event: Option<ApiProgressEvent> = event.into();
                     if let Some(api_event) = api_event {
-                        if let Err(err) = moosicbox_ws::send_scan_event(
-                            WS_SERVER_HANDLE.read().await.as_ref().unwrap(),
-                            None,
-                            api_event,
-                        )
-                        .await
+                        let handle = { WS_SERVER_HANDLE.read().await.clone().unwrap() };
+
+                        if let Err(err) =
+                            moosicbox_ws::send_scan_event(&handle, None, api_event).await
                         {
                             log::error!("Failed to broadcast scan event: {err:?}");
                         }

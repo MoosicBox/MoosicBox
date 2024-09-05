@@ -896,7 +896,8 @@ fn main() -> std::io::Result<()> {
                 }
 
                 log::debug!("Shutting down ws server...");
-                if let Some(x) = WS_SERVER_HANDLE.write().await.take() {
+                let server = WS_SERVER_HANDLE.write().await.take();
+                if let Some(x) = server {
                     x.shutdown();
                 }
 

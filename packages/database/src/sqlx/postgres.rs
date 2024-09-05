@@ -267,9 +267,11 @@ impl PostgresSqlxDatabase {
     pub async fn get_connection(
         &self,
     ) -> Result<Arc<Mutex<PoolConnection<Postgres>>>, SqlxDatabaseError> {
-        if let Some(connection) = self.connection.lock().await.as_ref() {
+        let connection = { self.connection.lock().await.clone() };
+
+        if let Some(connection) = connection {
             log::trace!("Returning existing connection from postgres db pool");
-            return Ok(connection.clone());
+            return Ok(connection);
         }
 
         log::debug!("Fetching new connection from postgres db pool");

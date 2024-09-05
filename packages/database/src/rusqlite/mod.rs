@@ -18,7 +18,7 @@ pub struct RusqliteDatabase {
 }
 
 impl RusqliteDatabase {
-    pub fn new(connection: Arc<Mutex<Connection>>) -> Self {
+    pub const fn new(connection: Arc<Mutex<Connection>>) -> Self {
         Self { connection }
     }
 }

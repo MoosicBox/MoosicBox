@@ -318,7 +318,8 @@ impl WsServer {
             }
 
             Command::Disconnect { conn } => {
-                if let Err(error) = ctx.write().await.disconnect(conn).await {
+                let response = ctx.write().await.disconnect(conn).await;
+                if let Err(error) = response {
                     moosicbox_assert::die_or_error!(
                         "Failed to disconnect connection {conn}: {:?}",
                         error
@@ -327,7 +328,8 @@ impl WsServer {
             }
 
             Command::Send { msg, conn, res_tx } => {
-                if let Err(error) = ctx.read().await.send(&conn.to_string(), &msg).await {
+                let response = ctx.read().await.send(&conn.to_string(), &msg).await;
+                if let Err(error) = response {
                     moosicbox_assert::die_or_error!(
                         "Failed to send message to {conn} {msg:?}: {error:?}",
                     );
@@ -336,7 +338,8 @@ impl WsServer {
             }
 
             Command::Broadcast { msg, res_tx } => {
-                if let Err(error) = ctx.read().await.send_all(&msg).await {
+                let response = ctx.read().await.send_all(&msg).await;
+                if let Err(error) = response {
                     moosicbox_assert::die_or_error!(
                         "Failed to broadcast message {msg:?}: {error:?}",
                     );
@@ -345,12 +348,12 @@ impl WsServer {
             }
 
             Command::BroadcastExcept { msg, conn, res_tx } => {
-                if let Err(error) = ctx
+                let response = ctx
                     .read()
                     .await
                     .send_all_except(&conn.to_string(), &msg)
-                    .await
-                {
+                    .await;
+                if let Err(error) = response {
                     moosicbox_assert::die_or_error!(
                         "Failed to broadcast message {msg:?}: {error:?}",
                     );
@@ -359,7 +362,8 @@ impl WsServer {
             }
 
             Command::Message { conn, msg, res_tx } => {
-                if let Err(error) = ctx.read().await.on_message(conn, msg.clone()).await {
+                let response = ctx.read().await.on_message(conn, msg.clone()).await;
+                if let Err(error) = response {
                     if log::log_enabled!(log::Level::Debug) {
                         moosicbox_assert::die_or_error!(
                             "Failed to process message from {}: {msg:?}: {error:?}",

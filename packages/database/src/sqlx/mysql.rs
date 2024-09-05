@@ -202,7 +202,7 @@ pub struct MySqlSqlxDatabase {
 }
 
 impl MySqlSqlxDatabase {
-    pub fn new(connection: Arc<Mutex<MySqlPool>>) -> Self {
+    pub const fn new(connection: Arc<Mutex<MySqlPool>>) -> Self {
         Self { connection }
     }
 }
