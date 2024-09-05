@@ -9,6 +9,8 @@ mod db;
 mod download_event;
 #[cfg(feature = "player")]
 mod playback_session;
+#[cfg(feature = "scan")]
+mod scan_event;
 mod tunnel;
 mod ws;
 
@@ -177,6 +179,8 @@ fn main() -> std::io::Result<()> {
         #[cfg(feature = "downloader")]
         download_event::init().await;
 
+        #[cfg(feature = "scan")]
+        scan_event::init().await;
 
         let (mut ws_server, server_tx) = WsServer::new(database.clone());
         #[cfg(feature = "player")]

@@ -30,7 +30,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     output::{ScanOutput, UpdateDatabaseError},
-    CACHE_DIR,
+    Scanner, CACHE_DIR,
 };
 
 #[derive(Debug, Error)]
@@ -53,6 +53,7 @@ pub async fn scan(
     directory: &str,
     db: Arc<Box<dyn Database>>,
     token: CancellationToken,
+    scanner: Scanner,
 ) -> Result<(), ScanError> {
     let total_start = std::time::SystemTime::now();
     let start = std::time::SystemTime::now();
@@ -61,7 +62,14 @@ pub async fn scan(
         Path::new(directory).to_path_buf(),
         output.clone(),
         token,
-        Arc::new(Box::new(|a, b, c| Box::pin(scan_track(a, b, c)))),
+        {
+            let scanner = scanner.clone();
+            Arc::new(Box::new(move |a, b, c| {
+                let scanner = scanner.clone();
+                Box::pin(async move { scan_track(a, b, c, scanner.clone()).await })
+            }))
+        },
+        scanner,
     )
     .await?;
 
@@ -125,6 +133,7 @@ fn scan_track(
     path: PathBuf,
     output: Arc<RwLock<ScanOutput>>,
     metadata: Metadata,
+    scanner: Scanner,
 ) -> Pin<Box<dyn Future<Output = Result<(), ScanError>> + Send>> {
     Box::pin(async move {
         let (
@@ -299,6 +308,8 @@ fn scan_track(
 
         log::info!("Scanning track {count}");
 
+        scanner.on_scanned_track().await;
+
         let artist = output
             .add_artist(&album_artist, &None, ApiSource::Library)
             .await;
@@ -396,6 +407,7 @@ async fn process_dir_entry<F>(
     output: Arc<RwLock<ScanOutput>>,
     token: CancellationToken,
     fun: Arc<Box<dyn Fn(PathBuf, Arc<RwLock<ScanOutput>>, Metadata) -> Pin<Box<F>> + Send + Sync>>,
+    scanner: Scanner,
 ) -> Result<Vec<JoinHandle<Result<(), ScanError>>>, ScanError>
 where
     F: Future<Output = Result<(), ScanError>> + Send + 'static,
@@ -403,14 +415,22 @@ where
     let metadata = p.metadata().await?;
 
     if metadata.is_dir() {
-        Ok(scan_dir(p.path(), output.clone(), token.clone(), fun).await?)
+        Ok(scan_dir(
+            p.path(),
+            output.clone(),
+            token.clone(),
+            fun,
+            scanner.clone(),
+        )
+        .await?)
     } else if metadata.is_file()
         && MUSIC_FILE_PATTERN.is_match(p.path().file_name().unwrap().to_str().unwrap())
     {
+        scanner.increase_total(1).await;
         Ok(vec![moosicbox_task::spawn(
             "scan: Local process_dir_entry",
             async move {
-                (fun)(p.path(), output.clone(), metadata).await?;
+                fun(p.path(), output.clone(), metadata).await?;
                 Ok::<_, ScanError>(())
             },
         )])
@@ -425,6 +445,7 @@ async fn scan_dir<F>(
     output: Arc<RwLock<ScanOutput>>,
     token: CancellationToken,
     fun: Arc<Box<dyn Fn(PathBuf, Arc<RwLock<ScanOutput>>, Metadata) -> Pin<Box<F>> + Send + Sync>>,
+    scanner: Scanner,
 ) -> Result<Vec<JoinHandle<Result<(), ScanError>>>, ScanError>
 where
     F: Future<Output = Result<(), ScanError>> + Send + 'static,
@@ -434,18 +455,25 @@ where
         Err(_err) => return Ok(vec![]),
     };
 
-    let mut handles = vec![];
+    let mut entries = vec![];
 
     while let Some(entry) = dir.next_entry().await? {
-        tokio::select! {
-            resp = process_dir_entry(entry, output.clone(), token.clone(), fun.clone()) => {
-                handles.extend(resp?)
-            }
-            _ = token.cancelled() => {
-                log::debug!("Scan cancelled");
-                break;
-            }
-        }
+        entries.push(entry);
+    }
+
+    let mut handles = vec![];
+
+    for entry in entries {
+        handles.extend(
+            process_dir_entry(
+                entry,
+                output.clone(),
+                token.clone(),
+                fun.clone(),
+                scanner.clone(),
+            )
+            .await?,
+        );
     }
 
     Ok(handles)

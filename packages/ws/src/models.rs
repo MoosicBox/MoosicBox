@@ -39,6 +39,7 @@ pub enum OutboundPayload {
     SessionUpdated(SessionUpdatedPayload),
     AudioZoneWithSessions(AudioZoneWithSessionsPayload),
     DownloadEvent(DownloadEventPayload),
+    ScanEvent(ScanEventPayload),
     Connections(ConnectionsPayload),
     SetSeek(SetSeekPayload),
 }
@@ -122,6 +123,12 @@ pub struct SessionUpdatedPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadEventPayload {
+    pub payload: Value,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanEventPayload {
     pub payload: Value,
 }
 

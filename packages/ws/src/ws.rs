@@ -27,7 +27,8 @@ use thiserror::Error;
 
 use crate::models::{
     AudioZoneWithSessionsPayload, ConnectionIdPayload, ConnectionsPayload, DownloadEventPayload,
-    InboundPayload, OutboundPayload, SessionUpdatedPayload, SessionsPayload, SetSeekPayload,
+    InboundPayload, OutboundPayload, ScanEventPayload, SessionUpdatedPayload, SessionsPayload,
+    SetSeekPayload,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -437,6 +438,27 @@ pub async fn send_download_event<ProgressEvent: Serialize>(
             .await?;
     } else {
         sender.send_all(&download_even).await?;
+    }
+
+    Ok(())
+}
+
+pub async fn send_scan_event<ProgressEvent: Serialize>(
+    sender: &impl WebsocketSender,
+    context: Option<&WebsocketContext>,
+    payload: ProgressEvent,
+) -> Result<(), WebsocketSendError> {
+    let scan_even = serde_json::to_value(OutboundPayload::ScanEvent(ScanEventPayload {
+        payload: serde_json::to_value(payload)?,
+    }))?
+    .to_string();
+
+    if let Some(context) = context {
+        sender
+            .send_all_except(&context.connection_id, &scan_even)
+            .await?;
+    } else {
+        sender.send_all(&scan_even).await?;
     }
 
     Ok(())

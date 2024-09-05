@@ -13,7 +13,7 @@ use moosicbox_music_api::MusicApiState;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::{disable_scan_origin, enable_scan_origin, scan, ScanOrigin};
+use crate::{disable_scan_origin, enable_scan_origin, ScanOrigin, SCANNER};
 
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
@@ -82,7 +82,8 @@ pub async fn run_scan_endpoint(
         })
         .transpose()?;
 
-    scan(api_state.as_ref().clone(), data.database.clone(), origins)
+    SCANNER
+        .scan(api_state.as_ref().clone(), data.database.clone(), origins)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
 
@@ -129,10 +130,11 @@ pub async fn start_scan_endpoint(
         })
         .transpose()?;
 
-    moosicbox_task::spawn(
-        "scan",
-        scan(api_state.as_ref().clone(), data.database.clone(), origins),
-    );
+    moosicbox_task::spawn("scan", async move {
+        SCANNER
+            .scan(api_state.as_ref().clone(), data.database.clone(), origins)
+            .await
+    });
 
     Ok(Json(serde_json::json!({"success": true})))
 }
@@ -173,6 +175,7 @@ pub async fn run_scan_path_endpoint(
         &query.path,
         data.database.clone(),
         crate::CANCELLATION_TOKEN.clone(),
+        SCANNER.clone(),
     )
     .await
     .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;

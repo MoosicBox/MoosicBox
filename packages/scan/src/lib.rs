@@ -1,9 +1,11 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::ops::Deref;
+use std::sync::{Arc, LazyLock};
+use std::{path::PathBuf, sync::atomic::AtomicUsize};
 
 use db::get_enabled_scan_origins;
+use event::{ProgressEvent, ProgressListenerRef, ScanTask};
 use moosicbox_config::get_cache_dir_path;
 use moosicbox_core::sqlite::{
     db::DbError,
@@ -15,6 +17,7 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
+use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
 #[cfg(feature = "api")]
@@ -23,8 +26,11 @@ pub mod api;
 pub mod local;
 
 pub mod db;
+pub mod event;
 pub mod music_api;
 pub mod output;
+
+static SCANNER: LazyLock<Scanner> = LazyLock::new(Scanner::new);
 
 static CACHE_DIR: Lazy<PathBuf> =
     Lazy::new(|| get_cache_dir_path().expect("Could not get cache directory"));
@@ -119,72 +125,149 @@ pub enum ScanError {
     MusicApi(#[from] music_api::ScanError),
 }
 
-pub async fn scan(
-    api_state: MusicApiState,
-    db: Arc<Box<dyn Database>>,
-    origins: Option<Vec<ScanOrigin>>,
-) -> Result<(), ScanError> {
-    let enabled_origins = get_enabled_scan_origins(&**db).await?;
+#[derive(Clone)]
+pub struct Scanner {
+    scanned: Arc<AtomicUsize>,
+    total: Arc<AtomicUsize>,
+    listeners: Arc<Mutex<Vec<event::ProgressListenerRef>>>,
+    task: Arc<ScanTask>,
+}
 
-    let search_origins = origins
-        .map(|origins| {
-            origins
-                .iter()
-                .filter(|o| enabled_origins.iter().any(|enabled| enabled == *o))
-                .cloned()
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or(enabled_origins);
-
-    for origin in search_origins {
-        match origin {
-            #[cfg(feature = "local")]
-            ScanOrigin::Local => scan_local(db.clone()).await?,
-            _ => scan_music_api(&**api_state.apis.get(origin.into())?, &**db).await?,
+impl Scanner {
+    fn new() -> Self {
+        Self {
+            scanned: Arc::new(AtomicUsize::new(0)),
+            total: Arc::new(AtomicUsize::new(0)),
+            listeners: Arc::new(Mutex::new(vec![])),
+            task: Arc::new(ScanTask { paths: vec![] }),
         }
     }
 
-    Ok(())
-}
-
-#[cfg(feature = "local")]
-pub async fn scan_local(db: Arc<Box<dyn Database>>) -> Result<(), local::ScanError> {
-    use db::get_scan_locations_for_origin;
-
-    let locations = get_scan_locations_for_origin(&**db, ScanOrigin::Local).await?;
-    let paths = locations
-        .iter()
-        .map(|location| {
-            location
-                .path
-                .as_ref()
-                .expect("Local ScanLocation is missing path")
-        })
-        .collect::<Vec<_>>();
-
-    for path in paths {
-        local::scan(path, db.clone(), CANCELLATION_TOKEN.clone()).await?;
+    async fn add_progress_listener(&self, listener: ProgressListenerRef) {
+        self.listeners.lock().await.push(listener);
     }
 
-    Ok(())
-}
-
-pub async fn scan_music_api(
-    api: &dyn MusicApi,
-    db: &dyn Database,
-) -> Result<(), music_api::ScanError> {
-    let enabled_origins = get_enabled_scan_origins(db).await?;
-    let enabled = enabled_origins
-        .into_iter()
-        .any(|origin| origin == ScanOrigin::Tidal);
-
-    if !enabled {
-        return Ok(());
+    #[allow(unused)]
+    async fn increase_total(&self, count: usize) {
+        let total = self.total.load(std::sync::atomic::Ordering::SeqCst) + count;
+        self.on_total_updated(total).await
     }
 
-    music_api::scan(api, db, CANCELLATION_TOKEN.clone()).await?;
+    #[allow(unused)]
+    async fn on_total_updated(&self, total: usize) {
+        let scanned = self.scanned.load(std::sync::atomic::Ordering::SeqCst);
+        self.total.store(total, std::sync::atomic::Ordering::SeqCst);
 
-    Ok(())
+        let event = ProgressEvent::ScanCountUpdated {
+            scanned,
+            total,
+            task: self.task.deref().clone(),
+        };
+
+        for listener in self.listeners.lock().await.iter_mut() {
+            listener(&event).await;
+        }
+    }
+
+    #[allow(unused)]
+    async fn on_scanned_track(&self) {
+        let total = self.total.load(std::sync::atomic::Ordering::SeqCst);
+        let scanned = self
+            .scanned
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1;
+        let event = ProgressEvent::ItemScanned {
+            scanned,
+            total,
+            task: self.task.deref().clone(),
+        };
+
+        for listener in self.listeners.lock().await.iter_mut() {
+            listener(&event).await;
+        }
+    }
+
+    pub async fn scan(
+        &self,
+        api_state: MusicApiState,
+        db: Arc<Box<dyn Database>>,
+        origins: Option<Vec<ScanOrigin>>,
+    ) -> Result<(), ScanError> {
+        let enabled_origins = get_enabled_scan_origins(&**db).await?;
+
+        let search_origins = origins
+            .map(|origins| {
+                origins
+                    .iter()
+                    .filter(|o| enabled_origins.iter().any(|enabled| enabled == *o))
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or(enabled_origins);
+
+        self.scanned.store(0, std::sync::atomic::Ordering::SeqCst);
+        self.total.store(0, std::sync::atomic::Ordering::SeqCst);
+
+        for origin in search_origins {
+            match origin {
+                #[cfg(feature = "local")]
+                ScanOrigin::Local => self.scan_local(db.clone()).await?,
+                _ => {
+                    self.scan_music_api(&**api_state.apis.get(origin.into())?, &**db)
+                        .await?
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    #[cfg(feature = "local")]
+    pub async fn scan_local(&self, db: Arc<Box<dyn Database>>) -> Result<(), local::ScanError> {
+        use db::get_scan_locations_for_origin;
+
+        let locations = get_scan_locations_for_origin(&**db, ScanOrigin::Local).await?;
+        let paths = locations
+            .iter()
+            .map(|location| {
+                location
+                    .path
+                    .as_ref()
+                    .expect("Local ScanLocation is missing path")
+            })
+            .collect::<Vec<_>>();
+
+        for path in paths {
+            let path = path.clone();
+            let db = db.clone();
+            let scanner = self.clone();
+
+            moosicbox_task::spawn("scan_local: scan", async move {
+                local::scan(&path, db.clone(), CANCELLATION_TOKEN.clone(), scanner).await
+            });
+        }
+
+        Ok(())
+    }
+
+    pub async fn scan_music_api(
+        &self,
+        api: &dyn MusicApi,
+        db: &dyn Database,
+    ) -> Result<(), music_api::ScanError> {
+        let enabled_origins = get_enabled_scan_origins(db).await?;
+        let enabled = enabled_origins
+            .into_iter()
+            .any(|origin| origin == ScanOrigin::Tidal);
+
+        if !enabled {
+            return Ok(());
+        }
+
+        music_api::scan(api, db, CANCELLATION_TOKEN.clone()).await?;
+
+        Ok(())
+    }
 }
 
 pub async fn get_scan_origins(db: &dyn Database) -> Result<Vec<ScanOrigin>, DbError> {
