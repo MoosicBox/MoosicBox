@@ -267,14 +267,17 @@ impl Scanner {
         db: Arc<Box<dyn Database>>,
         paths: &[String],
     ) -> Result<(), local::ScanError> {
-        for path in paths {
-            let path = path.clone();
+        let handles = paths.iter().cloned().map(|path| {
             let db = db.clone();
             let scanner = self.clone();
 
-            moosicbox_task::spawn("scan_local: scan", async move {
+            moosicbox_task::spawn(&format!("scan_local: scan '{path}'"), async move {
                 local::scan(&path, db.clone(), CANCELLATION_TOKEN.clone(), scanner).await
-            });
+            })
+        });
+
+        for resp in futures::future::join_all(handles).await {
+            resp??
         }
 
         Ok(())
