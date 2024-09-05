@@ -22,6 +22,7 @@ moosicbox_database = { path = "../database", default-features = false, features 
 moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
     "tantivy",
 ] }
+moosicbox_task = { path = "../task" }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -35,6 +36,7 @@ serde      = { workspace = true }
 serde_json = { workspace = true }
 tantivy    = { workspace = true }
 thiserror  = { workspace = true }
+tokio      = { workspace = true }
 
 [dev-dependencies]
 moosicbox_config = { path = "../config", features = ["test"] }

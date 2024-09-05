@@ -4193,6 +4193,7 @@ dependencies = [
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",
+ "moosicbox_task",
  "once_cell",
  "pretty_assertions",
  "regex",

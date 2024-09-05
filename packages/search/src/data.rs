@@ -5,6 +5,7 @@ use moosicbox_core::sqlite::{
     models::{Album, Artist, Track},
 };
 use thiserror::Error;
+use tokio::task::JoinError;
 
 use crate::{DataValue, PopulateIndexError, RecreateIndexError, GLOBAL_SEARCH_INDEX_PATH};
 
@@ -172,10 +173,15 @@ pub enum ReindexFromDbError {
     RecreateIndex(#[from] RecreateIndexError),
     #[error(transparent)]
     PopulateIndex(#[from] PopulateIndexError),
+    #[error(transparent)]
+    Join(#[from] JoinError),
 }
 
 pub async fn recreate_global_search_index() -> Result<(), RecreateIndexError> {
-    let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
-    crate::recreate_global_search_index(path)?;
+    moosicbox_task::spawn_blocking("recreate_global_search_index", || {
+        let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
+        crate::recreate_global_search_index(path)
+    })
+    .await??;
     Ok(())
 }

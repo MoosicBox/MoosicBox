@@ -12,6 +12,7 @@ use tantivy::query_grammar::Occur;
 use tantivy::{schema::*, Directory, IndexWriter};
 use tantivy::{Index, IndexReader, ReloadPolicy};
 use thiserror::Error;
+use tokio::task::JoinError;
 
 #[cfg(feature = "api")]
 pub mod api;
@@ -217,6 +218,8 @@ pub enum RecreateIndexError {
     CreateIndex(#[from] CreateIndexError),
     #[error(transparent)]
     GetIndexReader(#[from] GetIndexReaderError),
+    #[error(transparent)]
+    Join(#[from] JoinError),
 }
 
 fn recreate_global_search_index(path: &Path) -> Result<(), RecreateIndexError> {
