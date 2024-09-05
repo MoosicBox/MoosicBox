@@ -27,7 +27,7 @@ use moosicbox_search::{
 };
 use once_cell::sync::Lazy;
 use thiserror::Error;
-use tokio::sync::RwLock;
+use tokio::{sync::RwLock, task::JoinError};
 
 use crate::CACHE_DIR;
 
@@ -462,6 +462,8 @@ pub enum UpdateDatabaseError {
     PopulateIndex(#[from] PopulateIndexError),
     #[error(transparent)]
     RecreateIndex(#[from] RecreateIndexError),
+    #[error(transparent)]
+    Join(#[from] JoinError),
 }
 
 #[derive(Clone)]
@@ -773,7 +775,10 @@ impl ScanOutput {
             .map(|artist: Artist| artist.as_data_values())
             .collect::<Vec<_>>();
 
-        populate_global_search_index(&artists, false)?;
+        moosicbox_task::spawn_blocking("recreate_global_search_index: artists", move || {
+            populate_global_search_index(&artists, false)
+        })
+        .await??;
 
         let albums = db::get_albums(db)
             .await?
@@ -782,7 +787,10 @@ impl ScanOutput {
             .map(|album: Album| album.as_data_values())
             .collect::<Vec<_>>();
 
-        populate_global_search_index(&albums, false)?;
+        moosicbox_task::spawn_blocking("recreate_global_search_index: albums", move || {
+            populate_global_search_index(&albums, false)
+        })
+        .await??;
 
         let tracks = db::get_tracks(db, None)
             .await?
@@ -791,7 +799,10 @@ impl ScanOutput {
             .map(|track: Track| track.as_data_values())
             .collect::<Vec<_>>();
 
-        populate_global_search_index(&tracks, false)?;
+        moosicbox_task::spawn_blocking("recreate_global_search_index: tracks", move || {
+            populate_global_search_index(&tracks, false)
+        })
+        .await??;
 
         let reindex_end = std::time::SystemTime::now();
         log::info!(
