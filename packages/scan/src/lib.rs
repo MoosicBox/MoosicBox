@@ -223,6 +223,22 @@ impl Scanner {
         }
     }
 
+    #[allow(unused)]
+    async fn on_scan_finished(&self) {
+        let scanned = self.scanned.load(std::sync::atomic::Ordering::SeqCst);
+        let total = self.total.load(std::sync::atomic::Ordering::SeqCst);
+
+        let event = ProgressEvent::ScanFinished {
+            scanned,
+            total,
+            task: self.task.deref().clone(),
+        };
+
+        for listener in PROGRESS_LISTENERS.read().await.clone().iter_mut() {
+            listener(&event).await;
+        }
+    }
+
     pub async fn scan(
         &self,
         api_state: MusicApiState,
@@ -239,6 +255,8 @@ impl Scanner {
                     .await?
             }
         }
+
+        self.on_scan_finished().await;
 
         Ok(())
     }

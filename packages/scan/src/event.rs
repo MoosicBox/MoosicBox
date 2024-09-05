@@ -10,21 +10,81 @@ use tokio::sync::RwLock;
 
 use crate::ScanOrigin;
 
-#[derive(Clone, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(tag = "type")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ApiScanTask {
+    #[cfg(feature = "local")]
+    #[serde(rename_all = "camelCase")]
+    Local { paths: Vec<String> },
+    #[serde(rename_all = "camelCase")]
+    Api { origin: ScanOrigin },
+}
+
+impl From<ScanTask> for ApiScanTask {
+    fn from(value: ScanTask) -> Self {
+        match value {
+            #[cfg(feature = "local")]
+            ScanTask::Local { paths } => ApiScanTask::Local { paths },
+            ScanTask::Api { origin } => ApiScanTask::Api { origin },
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(tag = "type")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ApiProgressEvent {
-    Count { scanned: usize, total: usize },
-    Scanned { scanned: usize, total: usize },
+    #[serde(rename_all = "camelCase")]
+    Finished {
+        scanned: usize,
+        total: usize,
+        task: ApiScanTask,
+    },
+    #[serde(rename_all = "camelCase")]
+    Count {
+        scanned: usize,
+        total: usize,
+        task: ApiScanTask,
+    },
+    #[serde(rename_all = "camelCase")]
+    Scanned {
+        scanned: usize,
+        total: usize,
+        task: ApiScanTask,
+    },
 }
 
 impl From<ProgressEvent> for Option<ApiProgressEvent> {
     fn from(value: ProgressEvent) -> Self {
         match value {
-            ProgressEvent::ScanCountUpdated { scanned, total, .. } => {
-                Some(ApiProgressEvent::Count { scanned, total })
-            }
-            ProgressEvent::ItemScanned { scanned, total, .. } => {
-                Some(ApiProgressEvent::Scanned { scanned, total })
-            }
+            ProgressEvent::ScanFinished {
+                scanned,
+                total,
+                task,
+            } => Some(ApiProgressEvent::Finished {
+                scanned,
+                total,
+                task: task.into(),
+            }),
+            ProgressEvent::ScanCountUpdated {
+                scanned,
+                total,
+                task,
+            } => Some(ApiProgressEvent::Count {
+                scanned,
+                total,
+                task: task.into(),
+            }),
+            ProgressEvent::ItemScanned {
+                scanned,
+                total,
+                task,
+            } => Some(ApiProgressEvent::Scanned {
+                scanned,
+                total,
+                task: task.into(),
+            }),
             ProgressEvent::State { .. } => None,
         }
     }
@@ -32,6 +92,11 @@ impl From<ProgressEvent> for Option<ApiProgressEvent> {
 
 #[derive(Clone)]
 pub enum ProgressEvent {
+    ScanFinished {
+        task: ScanTask,
+        scanned: usize,
+        total: usize,
+    },
     ScanCountUpdated {
         task: ScanTask,
         scanned: usize,
@@ -48,15 +113,15 @@ pub enum ProgressEvent {
     },
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(tag = "type")]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ScanTask {
     #[cfg(feature = "local")]
-    #[serde(rename_all = "camelCase")]
-    Local { paths: Vec<String> },
-    #[serde(rename_all = "camelCase")]
-    Api { origin: ScanOrigin },
+    Local {
+        paths: Vec<String>,
+    },
+    Api {
+        origin: ScanOrigin,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Clone, Copy, PartialEq, Default)]
