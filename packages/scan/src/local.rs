@@ -24,7 +24,7 @@ use thiserror::Error;
 use tokio::{
     fs::{self, DirEntry},
     sync::RwLock,
-    task::{JoinError, JoinHandle},
+    task::JoinError,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -58,20 +58,25 @@ pub async fn scan(
     let total_start = std::time::SystemTime::now();
     let start = std::time::SystemTime::now();
     let output = Arc::new(RwLock::new(ScanOutput::new()));
-    let handles = scan_dir(
+    let scan_items = scan_dir(
         Path::new(directory).to_path_buf(),
         output.clone(),
         token,
-        {
-            let scanner = scanner.clone();
-            Arc::new(Box::new(move |a, b, c| {
-                let scanner = scanner.clone();
-                Box::pin(async move { scan_track(a, b, c, scanner.clone()).await })
-            }))
-        },
-        scanner,
+        scanner.clone(),
     )
     .await?;
+
+    let handles = scan_items.into_iter().map({
+        let output = output.clone();
+        let scanner = scanner.clone();
+        move |item| {
+            let output = output.clone();
+            let scanner = scanner.clone();
+            moosicbox_task::spawn("scan: scan item", async move {
+                scan_track(item.path, output, item.metadata, scanner).await
+            })
+        }
+    });
 
     for resp in futures::future::join_all(handles).await {
         resp??
@@ -400,56 +405,43 @@ static MUSIC_FILE_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r".+\.(flac|m4a|mp3|opus)").unwrap());
 static MULTI_ARTIST_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\S,\S").unwrap());
 
+struct ScanItem {
+    path: PathBuf,
+    metadata: Metadata,
+}
+
 #[allow(clippy::type_complexity)]
 #[async_recursion]
-async fn process_dir_entry<F>(
+async fn process_dir_entry(
     p: DirEntry,
     output: Arc<RwLock<ScanOutput>>,
     token: CancellationToken,
-    fun: Arc<Box<dyn Fn(PathBuf, Arc<RwLock<ScanOutput>>, Metadata) -> Pin<Box<F>> + Send + Sync>>,
     scanner: Scanner,
-) -> Result<Vec<JoinHandle<Result<(), ScanError>>>, ScanError>
-where
-    F: Future<Output = Result<(), ScanError>> + Send + 'static,
-{
+) -> Result<Vec<ScanItem>, ScanError> {
     let metadata = p.metadata().await?;
 
     if metadata.is_dir() {
-        Ok(scan_dir(
-            p.path(),
-            output.clone(),
-            token.clone(),
-            fun,
-            scanner.clone(),
-        )
-        .await?)
+        Ok(scan_dir(p.path(), output.clone(), token.clone(), scanner.clone()).await?)
     } else if metadata.is_file()
         && MUSIC_FILE_PATTERN.is_match(p.path().file_name().unwrap().to_str().unwrap())
     {
         scanner.increase_total(1).await;
-        Ok(vec![moosicbox_task::spawn(
-            "scan: Local process_dir_entry",
-            async move {
-                fun(p.path(), output.clone(), metadata).await?;
-                Ok::<_, ScanError>(())
-            },
-        )])
+        Ok(vec![ScanItem {
+            path: p.path(),
+            metadata,
+        }])
     } else {
         Ok(vec![])
     }
 }
 
 #[allow(clippy::type_complexity)]
-async fn scan_dir<F>(
+async fn scan_dir(
     path: PathBuf,
     output: Arc<RwLock<ScanOutput>>,
     token: CancellationToken,
-    fun: Arc<Box<dyn Fn(PathBuf, Arc<RwLock<ScanOutput>>, Metadata) -> Pin<Box<F>> + Send + Sync>>,
     scanner: Scanner,
-) -> Result<Vec<JoinHandle<Result<(), ScanError>>>, ScanError>
-where
-    F: Future<Output = Result<(), ScanError>> + Send + 'static,
-{
+) -> Result<Vec<ScanItem>, ScanError> {
     let mut dir = match fs::read_dir(path).await {
         Ok(dir) => dir,
         Err(_err) => return Ok(vec![]),
@@ -465,14 +457,7 @@ where
 
     for entry in entries {
         handles.extend(
-            process_dir_entry(
-                entry,
-                output.clone(),
-                token.clone(),
-                fun.clone(),
-                scanner.clone(),
-            )
-            .await?,
+            process_dir_entry(entry, output.clone(), token.clone(), scanner.clone()).await?,
         );
     }
 
