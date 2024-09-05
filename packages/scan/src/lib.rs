@@ -17,7 +17,6 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
-use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
 #[cfg(feature = "api")]
@@ -145,7 +144,6 @@ pub enum ScanError {
 pub struct Scanner {
     scanned: Arc<AtomicUsize>,
     total: Arc<AtomicUsize>,
-    listeners: Arc<Mutex<Vec<Arc<event::ProgressListenerRef>>>>,
     task: Arc<ScanTask>,
 }
 
@@ -178,11 +176,9 @@ impl Scanner {
     }
 
     async fn new(task: ScanTask) -> Self {
-        let listeners = PROGRESS_LISTENERS.read().await.clone();
         Self {
             scanned: Arc::new(AtomicUsize::new(0)),
             total: Arc::new(AtomicUsize::new(0)),
-            listeners: Arc::new(Mutex::new(listeners)),
             task: Arc::new(task),
         }
     }
@@ -204,7 +200,7 @@ impl Scanner {
             task: self.task.deref().clone(),
         };
 
-        for listener in self.listeners.lock().await.iter_mut() {
+        for listener in PROGRESS_LISTENERS.read().await.clone().iter_mut() {
             listener(&event).await;
         }
     }
@@ -222,7 +218,7 @@ impl Scanner {
             task: self.task.deref().clone(),
         };
 
-        for listener in self.listeners.lock().await.iter_mut() {
+        for listener in PROGRESS_LISTENERS.read().await.clone().iter_mut() {
             listener(&event).await;
         }
     }
