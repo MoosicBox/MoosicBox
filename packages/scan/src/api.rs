@@ -13,7 +13,9 @@ use moosicbox_music_api::MusicApiState;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::{disable_scan_origin, enable_scan_origin, ScanOrigin, SCANNER};
+use crate::{
+    disable_scan_origin, enable_scan_origin, get_origins_or_default, ScanError, ScanOrigin, Scanner,
+};
 
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
@@ -82,10 +84,16 @@ pub async fn run_scan_endpoint(
         })
         .transpose()?;
 
-    SCANNER
-        .scan(api_state.as_ref().clone(), data.database.clone(), origins)
-        .await
-        .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
+    let db = data.database.clone();
+    let origins = get_origins_or_default(&**db, origins).await?;
+
+    for origin in origins {
+        Scanner::from_origin(&**db, origin)
+            .await?
+            .scan(api_state.as_ref().clone(), db.clone())
+            .await
+            .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
+    }
 
     Ok(Json(serde_json::json!({"success": true})))
 }
@@ -130,10 +138,18 @@ pub async fn start_scan_endpoint(
         })
         .transpose()?;
 
+    let db = data.database.clone();
+    let origins = get_origins_or_default(&**db, origins).await?;
+
     moosicbox_task::spawn("scan", async move {
-        SCANNER
-            .scan(api_state.as_ref().clone(), data.database.clone(), origins)
-            .await
+        for origin in origins {
+            Scanner::from_origin(&**db, origin)
+                .await?
+                .scan(api_state.as_ref().clone(), db.clone())
+                .await?;
+        }
+
+        Ok::<_, ScanError>(())
     });
 
     Ok(Json(serde_json::json!({"success": true})))
@@ -169,13 +185,24 @@ pub struct ScanPathQuery {
 pub async fn run_scan_path_endpoint(
     query: web::Query<ScanPathQuery>,
     data: web::Data<AppState>,
+    api_state: web::Data<MusicApiState>,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
+    let scanner = Scanner::new(crate::event::ScanTask::Local {
+        paths: vec![query.path.clone()],
+    })
+    .await;
+
+    scanner
+        .scan(api_state.as_ref().clone(), data.database.clone())
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
+
     crate::local::scan(
         &query.path,
         data.database.clone(),
         crate::CANCELLATION_TOKEN.clone(),
-        SCANNER.clone(),
+        scanner,
     )
     .await
     .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;

@@ -1,11 +1,11 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 use std::ops::Deref;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 use std::{path::PathBuf, sync::atomic::AtomicUsize};
 
 use db::get_enabled_scan_origins;
-use event::{ProgressEvent, ProgressListenerRef, ScanTask};
+use event::{ProgressEvent, ScanTask, PROGRESS_LISTENERS};
 use moosicbox_config::get_cache_dir_path;
 use moosicbox_core::sqlite::{
     db::DbError,
@@ -29,8 +29,6 @@ pub mod db;
 pub mod event;
 pub mod music_api;
 pub mod output;
-
-static SCANNER: LazyLock<Scanner> = LazyLock::new(Scanner::new);
 
 static CACHE_DIR: Lazy<PathBuf> =
     Lazy::new(|| get_cache_dir_path().expect("Could not get cache directory"));
@@ -112,6 +110,24 @@ impl From<ScanOrigin> for TrackApiSource {
     }
 }
 
+#[allow(unused)]
+async fn get_origins_or_default(
+    db: &dyn Database,
+    origins: Option<Vec<ScanOrigin>>,
+) -> Result<Vec<ScanOrigin>, DbError> {
+    let enabled_origins = get_enabled_scan_origins(db).await?;
+
+    Ok(if let Some(origins) = origins {
+        origins
+            .iter()
+            .filter(|o| enabled_origins.iter().any(|enabled| enabled == *o))
+            .cloned()
+            .collect::<Vec<_>>()
+    } else {
+        enabled_origins
+    })
+}
+
 #[derive(Debug, Error)]
 pub enum ScanError {
     #[error(transparent)]
@@ -129,22 +145,46 @@ pub enum ScanError {
 pub struct Scanner {
     scanned: Arc<AtomicUsize>,
     total: Arc<AtomicUsize>,
-    listeners: Arc<Mutex<Vec<event::ProgressListenerRef>>>,
+    listeners: Arc<Mutex<Vec<Arc<event::ProgressListenerRef>>>>,
     task: Arc<ScanTask>,
 }
 
 impl Scanner {
-    fn new() -> Self {
+    #[allow(unused)]
+    async fn from_origin(db: &dyn Database, origin: ScanOrigin) -> Result<Self, DbError> {
+        let task = match origin {
+            #[cfg(feature = "local")]
+            ScanOrigin::Local => {
+                use crate::db::get_scan_locations_for_origin;
+
+                let locations = get_scan_locations_for_origin(db, origin).await?;
+                let paths = locations
+                    .iter()
+                    .map(|location| {
+                        location
+                            .path
+                            .as_ref()
+                            .expect("Local ScanLocation is missing path")
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+
+                ScanTask::Local { paths }
+            }
+            _ => ScanTask::Api { origin },
+        };
+
+        Ok(Self::new(task).await)
+    }
+
+    async fn new(task: ScanTask) -> Self {
+        let listeners = PROGRESS_LISTENERS.read().await.clone();
         Self {
             scanned: Arc::new(AtomicUsize::new(0)),
             total: Arc::new(AtomicUsize::new(0)),
-            listeners: Arc::new(Mutex::new(vec![])),
-            task: Arc::new(ScanTask { paths: vec![] }),
+            listeners: Arc::new(Mutex::new(listeners)),
+            task: Arc::new(task),
         }
-    }
-
-    async fn add_progress_listener(&self, listener: ProgressListenerRef) {
-        self.listeners.lock().await.push(listener);
     }
 
     #[allow(unused)]
@@ -191,31 +231,16 @@ impl Scanner {
         &self,
         api_state: MusicApiState,
         db: Arc<Box<dyn Database>>,
-        origins: Option<Vec<ScanOrigin>>,
     ) -> Result<(), ScanError> {
-        let enabled_origins = get_enabled_scan_origins(&**db).await?;
-
-        let search_origins = origins
-            .map(|origins| {
-                origins
-                    .iter()
-                    .filter(|o| enabled_origins.iter().any(|enabled| enabled == *o))
-                    .cloned()
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or(enabled_origins);
-
         self.scanned.store(0, std::sync::atomic::Ordering::SeqCst);
         self.total.store(0, std::sync::atomic::Ordering::SeqCst);
 
-        for origin in search_origins {
-            match origin {
-                #[cfg(feature = "local")]
-                ScanOrigin::Local => self.scan_local(db.clone()).await?,
-                _ => {
-                    self.scan_music_api(&**api_state.apis.get(origin.into())?, &**db)
-                        .await?
-                }
+        match self.task.deref() {
+            #[cfg(feature = "local")]
+            ScanTask::Local { paths } => self.scan_local(db.clone(), paths).await?,
+            ScanTask::Api { origin } => {
+                self.scan_music_api(&**api_state.apis.get((*origin).into())?, &**db)
+                    .await?
             }
         }
 
@@ -223,20 +248,11 @@ impl Scanner {
     }
 
     #[cfg(feature = "local")]
-    pub async fn scan_local(&self, db: Arc<Box<dyn Database>>) -> Result<(), local::ScanError> {
-        use db::get_scan_locations_for_origin;
-
-        let locations = get_scan_locations_for_origin(&**db, ScanOrigin::Local).await?;
-        let paths = locations
-            .iter()
-            .map(|location| {
-                location
-                    .path
-                    .as_ref()
-                    .expect("Local ScanLocation is missing path")
-            })
-            .collect::<Vec<_>>();
-
+    pub async fn scan_local(
+        &self,
+        db: Arc<Box<dyn Database>>,
+        paths: &[String],
+    ) -> Result<(), local::ScanError> {
         for path in paths {
             let path = path.clone();
             let db = db.clone();

@@ -1,10 +1,14 @@
-use std::pin::Pin;
+use std::{
+    pin::Pin,
+    sync::{Arc, LazyLock},
+};
 
 use futures::Future;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
+use tokio::sync::RwLock;
 
-use crate::SCANNER;
+use crate::ScanOrigin;
 
 #[derive(Clone, Serialize)]
 pub enum ApiProgressEvent {
@@ -60,9 +64,14 @@ pub enum ProgressEvent {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct ScanTask {
-    pub paths: Vec<String>,
+#[serde(tag = "type")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ScanTask {
+    #[cfg(feature = "local")]
+    #[serde(rename_all = "camelCase")]
+    Local { paths: Vec<String> },
+    #[serde(rename_all = "camelCase")]
+    Api { origin: ScanOrigin },
 }
 
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Clone, Copy, PartialEq, Default)]
@@ -85,6 +94,9 @@ pub type ProgressListenerRefFut = Pin<Box<dyn Future<Output = ()> + Send>>;
 pub type ProgressListenerRef =
     Box<dyn (Fn(&ProgressEvent) -> ProgressListenerRefFut) + Send + Sync>;
 
+pub(crate) static PROGRESS_LISTENERS: LazyLock<Arc<RwLock<Vec<Arc<ProgressListenerRef>>>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(vec![])));
+
 pub async fn add_progress_listener(listener: ProgressListenerRef) {
-    SCANNER.add_progress_listener(listener).await;
+    PROGRESS_LISTENERS.write().await.push(Arc::new(listener));
 }
