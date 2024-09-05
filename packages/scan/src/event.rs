@@ -16,15 +16,6 @@ pub enum ApiProgressEvent {
     Scanned { scanned: usize, total: usize },
 }
 
-impl From<GenericProgressEvent> for ApiProgressEvent {
-    fn from(value: GenericProgressEvent) -> Self {
-        match value {
-            GenericProgressEvent::Count { scanned, total } => Self::Count { scanned, total },
-            GenericProgressEvent::Scanned { scanned, total } => Self::Scanned { scanned, total },
-        }
-    }
-}
-
 impl From<ProgressEvent> for Option<ApiProgressEvent> {
     fn from(value: ProgressEvent) -> Self {
         match value {
@@ -37,12 +28,6 @@ impl From<ProgressEvent> for Option<ApiProgressEvent> {
             ProgressEvent::State { .. } => None,
         }
     }
-}
-
-#[derive(Clone)]
-pub enum GenericProgressEvent {
-    Count { scanned: usize, total: usize },
-    Scanned { scanned: usize, total: usize },
 }
 
 #[derive(Clone)]
@@ -87,9 +72,6 @@ pub enum ScanTaskState {
     Error,
 }
 
-pub type ProgressListenerFut = Pin<Box<dyn Future<Output = ()> + Send>>;
-pub type ProgressListener =
-    Box<dyn (FnMut(GenericProgressEvent) -> ProgressListenerFut) + Send + Sync>;
 pub type ProgressListenerRefFut = Pin<Box<dyn Future<Output = ()> + Send>>;
 pub type ProgressListenerRef =
     Box<dyn (Fn(&ProgressEvent) -> ProgressListenerRefFut) + Send + Sync>;
