@@ -115,7 +115,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
     pub fn new(device: &cpal::Device) -> Result<Self, AudioOutputError> {
         let config = device
             .default_output_config()
-            .map_err(|_e| AudioOutputError::NoOutputs)?
+            .map_err(|_e| AudioOutputError::UnsupportedOutputConfiguration)?
             .config();
 
         let num_channels = config.channels as usize;

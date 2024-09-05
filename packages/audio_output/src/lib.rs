@@ -240,6 +240,10 @@ impl From<Box<dyn AudioWrite>> for Box<dyn AudioDecode> {
 pub enum AudioOutputError {
     #[error("No audio outputs")]
     NoOutputs,
+    #[error("Unsupported output configuration")]
+    UnsupportedOutputConfiguration,
+    #[error("Unsupported channels: {0}")]
+    UnsupportedChannels(usize),
     #[error("OpenStreamError")]
     OpenStream,
     #[error("PlayStreamError")]
@@ -252,6 +256,9 @@ pub enum AudioOutputError {
     Interrupt,
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    #[cfg(feature = "cpal")]
+    #[error(transparent)]
+    SupportedStreamConfigs(#[from] ::cpal::SupportedStreamConfigsError),
 }
 
 #[allow(unused)]
