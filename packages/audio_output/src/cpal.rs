@@ -1,8 +1,8 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Device, Host, SampleFormat, SizedSample};
+use cpal::{Device, Host, SampleFormat, SizedSample, StreamConfig};
 use rb::{RbConsumer, RbProducer, SpscRb, RB};
 use symphonia::core::audio::{
-    AudioBuffer, Channels, RawSample, SampleBuffer, Signal as _, SignalSpec,
+    AudioBuffer, Channels, Layout, RawSample, SampleBuffer, Signal as _, SignalSpec,
 };
 use symphonia::core::conv::{ConvertibleSample, IntoSample};
 use symphonia::core::units::Duration;
@@ -118,18 +118,28 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
             .map_err(|_e| AudioOutputError::UnsupportedOutputConfiguration)?
             .config();
 
+        log::debug!("Got default config: {config:?}");
+
         let num_channels = config.channels as usize;
+
+        let config = if num_channels <= 2 {
+            config
+        } else {
+            StreamConfig {
+                channels: 2,
+                sample_rate: config.sample_rate,
+                buffer_size: cpal::BufferSize::Default,
+            }
+        };
 
         let spec = SignalSpec {
             rate: config.sample_rate.0,
-            channels: if num_channels == 2 {
-                Channels::FRONT_LEFT | Channels::FRONT_RIGHT
+            channels: if num_channels >= 2 {
+                Layout::Stereo.into_channels()
             } else {
-                return Err(AudioOutputError::NoOutputs);
+                Layout::Mono.into_channels()
             },
         };
-
-        log::debug!("Using default config: {config:?}");
 
         // Create a ring buffer with a capacity for up-to 200ms of audio.
         let ring_len = ((200 * config.sample_rate.0 as usize) / 1000) * num_channels;
