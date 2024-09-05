@@ -141,16 +141,27 @@ pub async fn start_scan_endpoint(
     let db = data.database.clone();
     let origins = get_origins_or_default(&**db, origins).await?;
 
-    moosicbox_task::spawn("scan", async move {
-        for origin in origins {
-            Scanner::from_origin(&**db, origin)
-                .await?
-                .scan(api_state.as_ref().clone(), db.clone())
-                .await?;
-        }
+    for origin in origins {
+        let db = db.clone();
+        let api_state = api_state.as_ref().clone();
 
-        Ok::<_, ScanError>(())
-    });
+        moosicbox_task::spawn("scan", async move {
+            Scanner::from_origin(&**db, origin)
+                .await
+                .map_err(|e| {
+                    moosicbox_assert::die_or_error!("Scan error: {e:?}");
+                    e
+                })?
+                .scan(api_state, db)
+                .await
+                .map_err(|e| {
+                    moosicbox_assert::die_or_error!("Scan error: {e:?}");
+                    e
+                })?;
+
+            Ok::<_, ScanError>(())
+        });
+    }
 
     Ok(Json(serde_json::json!({"success": true})))
 }
