@@ -1,0 +1,22 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["network-programming"]
+description = "MoosicBox mdns service discovery package"
+edition     = "2021"
+keywords    = ["discovery", "dns", "mdns", "multicast", "service"]
+license     = "MPL-2.0"
+name        = "moosicbox_mdns_sd"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_assert = { path = "../assert", default-features = false }
+
+hostname  = { workspace = true }
+log       = { workspace = true }
+mdns-sd   = { workspace = true }
+thiserror = { workspace = true }
+
+[features]
+fail-on-warnings = []

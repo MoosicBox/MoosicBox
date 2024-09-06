@@ -20,6 +20,7 @@ members = [
     "packages/library",
     "packages/load_balancer",
     "packages/logging",
+    "packages/mdns_sd",
     "packages/menu",
     "packages/middleware",
     "packages/moosicbox",
@@ -113,6 +114,7 @@ futures-util = { version = "0.3.30", default-features = false, features = [
 ] }
 hex = "0.4.3"
 home = "0.5.9"
+hostname = "0.4.0"
 id3 = "1.14.0"
 image = "0.25.2"
 io-streams = "0.16.3"
@@ -126,6 +128,7 @@ local-ip-address = "0.6.2"
 lofty = { git = "https://github.com/BSteffaniak/lofty-rs.git", branch = "master-shallow" }
 log = { version = "0.4", features = ["release_max_level_trace"] }
 md5 = "0.7.0"
+mdns-sd = "0.11.3"
 mp3-duration = "0.1.10"
 mp3lame-encoder = "0.2.0"
 mysql = { version = "25.0.1", features = [
