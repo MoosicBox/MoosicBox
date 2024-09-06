@@ -16,6 +16,7 @@ mod ws;
 
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App};
+use moosicbox_config::db::get_or_init_server_identity;
 use moosicbox_core::{app::AppState, sqlite::models::ApiSource};
 use moosicbox_database::Database;
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
@@ -51,6 +52,8 @@ static MUSIC_API_STATE: Lazy<std::sync::RwLock<Option<MusicApiState>>> =
 #[allow(clippy::type_complexity)]
 static LIBRARY_API_STATE: Lazy<std::sync::RwLock<Option<moosicbox_library::LibraryMusicApiState>>> =
     Lazy::new(|| std::sync::RwLock::new(None));
+
+static SERVER_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
@@ -126,6 +129,14 @@ fn main() -> std::io::Result<()> {
         let db = db::init_sqlite_sqlx()
             .await
             .expect("Failed to init sqlite DB");
+
+        SERVER_ID
+            .set(
+                get_or_init_server_identity(&*db)
+                    .await
+                    .expect("Failed to get or init server identity"),
+            )
+            .expect("Failed to set SERVER_ID");
 
         let database: Arc<Box<dyn Database>> = Arc::new(db);
         DB.write().unwrap().replace(database.clone());
