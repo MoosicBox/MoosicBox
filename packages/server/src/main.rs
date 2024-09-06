@@ -836,6 +836,22 @@ fn main() -> std::io::Result<()> {
 
         let http_server = http_server.run();
 
+        let ip = local_ip_address::local_ip().map_or_else(
+            |e| {
+                moosicbox_assert::die_or_warn!("Failed to get local ip address: {e:?}");
+                "127.0.0.1".to_string()
+            },
+            |x| x.to_string(),
+        );
+
+        if let Err(e) = moosicbox_mdns_sd::register_service(
+            SERVER_ID.get().expect("No SERVER_ID"),
+            &ip,
+            service_port,
+        ) {
+            moosicbox_assert::die_or_error!("Failed to register mdns service: {e:?}");
+        }
+
         if let Err(err) = try_join!(
             async move {
                 let resp = http_server.await;

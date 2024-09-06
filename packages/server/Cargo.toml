@@ -34,6 +34,7 @@ moosicbox_files = { path = "../files", default-features = false, features = [
     "track-range",
 ] }
 moosicbox_logging = { path = "../logging", default-features = false }
+moosicbox_mdns_sd = { path = "../mdns_sd", default-features = false }
 moosicbox_middleware = { path = "../middleware", default-features = false }
 moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_session = { path = "../session", default-features = false, features = [
@@ -116,6 +117,7 @@ futures            = { workspace = true }
 futures-util       = { workspace = true }
 kanal              = { workspace = true }
 lazy_static        = { workspace = true }
+local-ip-address   = { workspace = true }
 log                = { workspace = true }
 once_cell          = { workspace = true }
 rand               = { workspace = true }
