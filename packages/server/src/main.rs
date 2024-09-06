@@ -844,7 +844,7 @@ fn main() -> std::io::Result<()> {
             |x| x.to_string(),
         );
 
-        if let Err(e) = moosicbox_mdns_sd::register_service(
+        if let Err(e) = moosicbox_mdns::register_service(
             SERVER_ID.get().expect("No SERVER_ID"),
             &ip,
             service_port,

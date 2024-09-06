@@ -20,7 +20,7 @@ members = [
     "packages/library",
     "packages/load_balancer",
     "packages/logging",
-    "packages/mdns_sd",
+    "packages/mdns",
     "packages/menu",
     "packages/middleware",
     "packages/moosicbox",

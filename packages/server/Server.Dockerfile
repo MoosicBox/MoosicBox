@@ -26,7 +26,7 @@ RUN cat Cargo.toml | \
     \"packages\/json_utils\",\r\
     \"packages\/library\",\r\
     \"packages\/logging\",\r\
-    \"packages\/mdns_sd\",\r\
+    \"packages\/mdns\",\r\
     \"packages\/menu\",\r\
     \"packages\/middleware\",\r\
     \"packages\/music_api\",\r\
@@ -68,7 +68,7 @@ COPY packages/image/Cargo.toml packages/image/Cargo.toml
 COPY packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
 COPY packages/library/Cargo.toml packages/library/Cargo.toml
 COPY packages/logging/Cargo.toml packages/logging/Cargo.toml
-COPY packages/mdns_sd/Cargo.toml packages/mdns_sd/Cargo.toml
+COPY packages/mdns/Cargo.toml packages/mdns/Cargo.toml
 COPY packages/menu/Cargo.toml packages/menu/Cargo.toml
 COPY packages/middleware/Cargo.toml packages/middleware/Cargo.toml
 COPY packages/music_api/Cargo.toml packages/music_api/Cargo.toml
@@ -113,7 +113,7 @@ packages/image|\
 packages/json_utils|\
 packages/library|\
 packages/logging|\
-packages/mdns_sd|\
+packages/mdns|\
 packages/menu|\
 packages/middleware|\
 packages/music_api|\

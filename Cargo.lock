@@ -3512,7 +3512,7 @@ dependencies = [
  "moosicbox_library",
  "moosicbox_load_balancer",
  "moosicbox_logging",
- "moosicbox_mdns_sd",
+ "moosicbox_mdns",
  "moosicbox_menu",
  "moosicbox_middleware",
  "moosicbox_music_api",
@@ -3972,7 +3972,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "moosicbox_mdns_sd"
+name = "moosicbox_mdns"
 version = "0.1.0"
 dependencies = [
  "hostname 0.4.0",
@@ -4289,7 +4289,7 @@ dependencies = [
  "moosicbox_files",
  "moosicbox_library",
  "moosicbox_logging",
- "moosicbox_mdns_sd",
+ "moosicbox_mdns",
  "moosicbox_menu",
  "moosicbox_middleware",
  "moosicbox_music_api",

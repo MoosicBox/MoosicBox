@@ -269,8 +269,8 @@ jobs:
                       path: packages/logging
                       os: ubuntu-latest
 
-                    - name: mdns_sd
-                      path: packages/mdns_sd
+                    - name: mdns
+                      path: packages/mdns
                       os: ubuntu-latest
 
                     - name: menu

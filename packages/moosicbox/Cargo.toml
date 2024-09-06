@@ -30,7 +30,7 @@ moosicbox_json_utils     = { version = "0.1.0", path = "../json_utils", default-
 moosicbox_library        = { version = "0.1.0", path = "../library", default-features = false }
 moosicbox_load_balancer  = { version = "0.1.0", path = "../load_balancer", default-features = false }
 moosicbox_logging        = { version = "0.1.0", path = "../logging", default-features = false }
-moosicbox_mdns_sd        = { version = "0.1.0", path = "../mdns_sd", default-features = false }
+moosicbox_mdns           = { version = "0.1.0", path = "../mdns", default-features = false }
 moosicbox_menu           = { version = "0.1.0", path = "../menu", default-features = false }
 moosicbox_middleware     = { version = "0.1.0", path = "../middleware", default-features = false }
 moosicbox_music_api      = { version = "0.1.0", path = "../music_api", default-features = false }
