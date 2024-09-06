@@ -3976,9 +3976,14 @@ name = "moosicbox_mdns"
 version = "0.1.0"
 dependencies = [
  "hostname 0.4.0",
+ "kanal",
  "log",
  "mdns-sd",
  "moosicbox_assert",
+ "moosicbox_async_service",
+ "moosicbox_task",
+ "strum",
+ "strum_macros",
  "thiserror",
 ]
 

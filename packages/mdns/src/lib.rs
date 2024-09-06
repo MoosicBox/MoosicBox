@@ -3,6 +3,9 @@
 use mdns_sd::{ServiceDaemon, ServiceInfo};
 use thiserror::Error;
 
+#[cfg(feature = "scanner")]
+pub mod scanner;
+
 #[derive(Debug, Error)]
 pub enum RegisterServiceError {
     #[error(transparent)]
