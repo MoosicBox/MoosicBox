@@ -2,6 +2,9 @@
 
 use std::path::PathBuf;
 
+#[cfg(feature = "db")]
+pub mod db;
+
 pub fn get_config_dir_path() -> Option<PathBuf> {
     home::home_dir().map(|home| home.join(".local").join("moosicbox"))
 }
