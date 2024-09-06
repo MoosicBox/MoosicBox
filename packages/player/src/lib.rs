@@ -258,10 +258,13 @@ pub async fn get_track_url(
             let host = if use_local_network_ip && LOCALHOST.is_match(host) {
                 host.replacen(
                     "localhost",
-                    &local_ip().map(|x| x.to_string()).unwrap_or_else(|e| {
-                        log::warn!("Failed to get local ip address: {e:?}");
-                        "127.0.0.1".to_string()
-                    }),
+                    &local_ip().map_or_else(
+                        |e| {
+                            log::warn!("Failed to get local ip address: {e:?}");
+                            "127.0.0.1".to_string()
+                        },
+                        |x| x.to_string(),
+                    ),
                     1,
                 )
             } else {
@@ -271,10 +274,13 @@ pub async fn get_track_url(
         }
         PlayerSource::Local => {
             let ip = if use_local_network_ip {
-                local_ip().map(|x| x.to_string()).unwrap_or_else(|e| {
-                    log::warn!("Failed to get local ip address: {e:?}");
-                    "127.0.0.1".to_string()
-                })
+                local_ip().map_or_else(
+                    |e| {
+                        log::warn!("Failed to get local ip address: {e:?}");
+                        "127.0.0.1".to_string()
+                    },
+                    |x| x.to_string(),
+                )
             } else {
                 "127.0.0.1".to_string()
             };
