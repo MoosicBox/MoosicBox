@@ -1,0 +1,30 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["web-programming"]
+description = "MoosicBox admin htmx package"
+edition     = "2021"
+keywords    = ["admin", "html", "htmx", "web"]
+license     = "MPL-2.0"
+name        = "moosicbox_admin_htmx"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_assert = { path = "../assert", default-features = false }
+moosicbox_core = { path = "../core", default-features = false }
+moosicbox_scan = { path = "../scan", default-features = false, features = [
+    "local",
+] }
+
+actix-htmx = { workspace = true }
+actix-web  = { workspace = true }
+log        = { workspace = true }
+maud       = { workspace = true, features = ["actix-web"] }
+
+[features]
+default = []
+
+fail-on-warnings = []
+
+static-token-auth = []

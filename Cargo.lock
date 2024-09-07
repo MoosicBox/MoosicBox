@@ -83,6 +83,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "actix-htmx"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b85ab2fab5f5e2b58bdcb6508a0d022c3ccbc411765ac969f26d40ac70d52cfa"
+dependencies = [
+ "actix-web",
+ "futures-util",
+ "indexmap 2.5.0",
+ "log",
+ "regex",
+]
+
+[[package]]
 name = "actix-http"
 version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3460,6 +3473,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e7465ac9959cc2b1404e8e2367b43684a6d13790fe23056cc8c6c5a6b7bcb94"
 
 [[package]]
+name = "maud"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df518b75016b4289cdddffa1b01f2122f4a49802c93191f3133f6dc2472ebcaa"
+dependencies = [
+ "actix-web",
+ "futures-util",
+ "itoa",
+ "maud_macros",
+]
+
+[[package]]
+name = "maud_macros"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa453238ec218da0af6b11fc5978d3b5c3a45ed97b722391a2a11f3306274e18"
+dependencies = [
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.77",
+]
+
+[[package]]
 name = "maybe-rayon"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3620,6 +3657,7 @@ dependencies = [
 name = "moosicbox"
 version = "0.1.0"
 dependencies = [
+ "moosicbox_admin_htmx",
  "moosicbox_assert",
  "moosicbox_async_service",
  "moosicbox_audio_decoder",
@@ -3680,6 +3718,19 @@ dependencies = [
  "opus",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "moosicbox_admin_htmx"
+version = "0.1.0"
+dependencies = [
+ "actix-htmx",
+ "actix-web",
+ "log",
+ "maud",
+ "moosicbox_assert",
+ "moosicbox_core",
+ "moosicbox_scan",
 ]
 
 [[package]]
@@ -4419,6 +4470,7 @@ dependencies = [
  "lazy_static",
  "local-ip-address",
  "log",
+ "moosicbox_admin_htmx",
  "moosicbox_assert",
  "moosicbox_async_service",
  "moosicbox_audio_output",

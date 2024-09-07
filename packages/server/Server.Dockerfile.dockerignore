@@ -1,5 +1,6 @@
 /packages/*
 
+!/packages/admin_htmx
 !/packages/assert
 !/packages/async_service
 !/packages/audio_decoder

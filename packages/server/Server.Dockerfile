@@ -8,6 +8,7 @@ COPY Cargo.lock Cargo.lock
 RUN cat Cargo.toml | \
     tr '\n' '\r' | \
     sed -E "s/members = \[[^]]+\]/members = [\r\
+    \"packages\/admin_htmx\",\r\
     \"packages\/assert\",\r\
     \"packages\/async_service\",\r\
     \"packages\/audio_decoder\",\r\
@@ -51,6 +52,7 @@ RUN cat Cargo.toml | \
     > Cargo2.toml && \
     mv Cargo2.toml Cargo.toml
 
+COPY packages/admin_htmx/Cargo.toml packages/admin_htmx/Cargo.toml
 COPY packages/assert/Cargo.toml packages/assert/Cargo.toml
 COPY packages/async_service/Cargo.toml packages/async_service/Cargo.toml
 COPY packages/audio_decoder/Cargo.toml packages/audio_decoder/Cargo.toml
@@ -97,6 +99,7 @@ RUN for file in $(\
     for file in packages/*/Cargo.toml; \
       do printf "$file\n"; \
     done | grep -E "^(\
+packages/admin_htmx|\
 packages/assert|\
 packages/async_service|\
 packages/audio_decoder|\

@@ -524,6 +524,12 @@ fn main() -> std::io::Result<()> {
                     .service(utoipa_scalar::Scalar::with_url("/scalar", openapi.clone()));
             }
 
+            #[cfg(feature = "admin-htmx-api")]
+            {
+                app =
+                    app.service(web::scope("/admin").service(moosicbox_admin_htmx::index_endpoint));
+            }
+
             #[cfg(feature = "audio-output-api")]
             {
                 app = app.service(

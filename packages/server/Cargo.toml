@@ -52,6 +52,8 @@ moosicbox_tunnel_sender = { path = "../tunnel_sender", default-features = false 
 moosicbox_ws = { path = "../ws", default-features = false, features = ["ws"] }
 
 # APIs
+moosicbox_admin_htmx = { path = "../admin_htmx", default-features = false, features = [
+], optional = true }
 moosicbox_downloader = { path = "../downloader", default-features = false, features = [
     "api",
 ], optional = true }
@@ -246,6 +248,7 @@ sqlite = ["moosicbox_schema/sqlite"]
 sqlite-rusqlite = ["dep:rusqlite", "moosicbox_database/rusqlite"]
 sqlite-sqlx = ["moosicbox_database/sqlite-sqlx", "sqlite"]
 
+admin-htmx = ["admin-htmx-api"]
 downloader = ["moosicbox_downloader/api"]
 library    = ["moosicbox_library/api"]
 menu       = ["moosicbox_menu/api"]
@@ -259,6 +262,7 @@ yt         = ["moosicbox_yt/api"]
 
 # APIs
 all-apis = [
+    "admin-htmx-api",
     "audio-output-api",
     "audio-zone-api",
     "auth-api",
@@ -276,6 +280,7 @@ all-apis = [
     "yt-api",
 ]
 
+admin-htmx-api   = ["dep:moosicbox_admin_htmx"]
 audio-output-api = ["moosicbox_audio_output/api"]
 audio-zone-api   = ["moosicbox_audio_zone/api"]
 auth-api         = ["moosicbox_auth/api"]
