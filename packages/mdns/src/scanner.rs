@@ -5,6 +5,7 @@ use moosicbox_async_service::{tokio::sync::RwLock, Arc, CancellationToken, JoinE
 use strum_macros::AsRefStr;
 use thiserror::Error;
 
+#[derive(Debug, Clone)]
 pub struct MoosicBoxServer {
     pub id: String,
     pub name: String,
