@@ -5,6 +5,12 @@ use moosicbox_async_service::{tokio::sync::RwLock, Arc, CancellationToken, JoinE
 use strum_macros::AsRefStr;
 use thiserror::Error;
 
+pub struct MoosicBoxServer {
+    pub id: String,
+    pub host: SocketAddr,
+    pub dns: String,
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error(transparent)]
@@ -27,11 +33,11 @@ impl std::fmt::Display for Command {
 pub struct Context {
     token: CancellationToken,
     handle: Option<JoinHandle<Result<(), Error>>>,
-    sender: kanal::AsyncSender<SocketAddr>,
+    sender: kanal::AsyncSender<MoosicBoxServer>,
 }
 
 impl Context {
-    pub fn new(sender: kanal::AsyncSender<SocketAddr>) -> Self {
+    pub fn new(sender: kanal::AsyncSender<MoosicBoxServer>) -> Self {
         Self {
             token: CancellationToken::new(),
             handle: None,
@@ -76,10 +82,17 @@ impl service::Processor for service::Service {
                         );
 
                         for addr in info.get_addresses().clone() {
-                            let addr = SocketAddr::new(addr, info.get_port());
+                            let socket_addr = SocketAddr::new(addr, info.get_port());
                             log::debug!("mdns scanner: Server address: {}", addr);
+                            let dns = info.get_fullname().to_string();
 
-                            moosicbox_assert::die_or_propagate!(tx.send(addr).await);
+                            let server = MoosicBoxServer {
+                                id: dns.split_once(".").expect("Invalid dns").0.to_string(),
+                                host: socket_addr,
+                                dns,
+                            };
+
+                            moosicbox_assert::die_or_propagate!(tx.send(server).await);
                         }
                     }
                 }
