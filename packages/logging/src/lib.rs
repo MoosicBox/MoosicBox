@@ -1,10 +1,8 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
-use std::fs::create_dir_all;
-
 use free_log_client::FreeLogLayer;
 pub use log;
-use moosicbox_config::get_config_dir_path;
+use moosicbox_config::make_config_dir_path;
 use moosicbox_env_utils::default_env;
 use thiserror::Error;
 
@@ -29,16 +27,12 @@ pub fn init(filename: Option<&str>) -> Result<FreeLogLayer, InitError> {
     let mut logs_config = free_log_client::LogsConfig::builder();
 
     if let Some(filename) = filename {
-        if let Some(log_dir) = get_config_dir_path().map(|p| p.join("logs")) {
-            if create_dir_all(&log_dir).is_ok() {
-                logs_config = logs_config.with_file_writer(
-                    free_log_client::FileWriterConfig::builder()
-                        .file_path(log_dir.join(filename))
-                        .log_level(free_log_client::Level::Debug),
-                )?;
-            } else {
-                log::warn!("Could not create directory path for logs files at {log_dir:?}");
-            }
+        if let Some(log_dir) = make_config_dir_path().map(|p| p.join("logs")) {
+            logs_config = logs_config.with_file_writer(
+                free_log_client::FileWriterConfig::builder()
+                    .file_path(log_dir.join(filename))
+                    .log_level(free_log_client::Level::Debug),
+            )?;
         } else {
             log::warn!("Could not get config dir to put the logs into");
         }

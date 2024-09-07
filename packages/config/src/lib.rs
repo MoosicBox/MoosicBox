@@ -13,6 +13,16 @@ pub fn get_cache_dir_path() -> Option<PathBuf> {
     get_config_dir_path().map(|config| config.join("cache"))
 }
 
+pub fn make_config_dir_path() -> Option<PathBuf> {
+    if let Some(path) = get_config_dir_path() {
+        if path.is_dir() || std::fs::create_dir_all(&path).is_ok() {
+            return Some(path);
+        }
+    }
+
+    None
+}
+
 #[cfg(feature = "test")]
 pub fn get_tests_dir_path() -> PathBuf {
     std::env::temp_dir().join(format!(
