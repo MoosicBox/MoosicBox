@@ -344,6 +344,18 @@ jobs:
                       path: packages/schema
                       os: ubuntu-latest
 
+                    - name: schema
+                      path: packages/schema
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: sqlite
+
+                    - name: schema
+                      path: packages/schema
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: postgres
+
                     - name: search
                       path: packages/search
                       os: ubuntu-latest
