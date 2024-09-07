@@ -62,9 +62,14 @@ macro_rules! async_service_body {
                 self
             }
 
-            pub fn start(mut self) -> $crate::JoinHandle<Result<(), Error>> {
-                $crate::moosicbox_task::spawn(
+            pub fn start(self) -> $crate::JoinHandle<Result<(), Error>> {
+                self.start_on(&$crate::tokio::runtime::Handle::current())
+            }
+
+            pub fn start_on(mut self, handle: &$crate::tokio::runtime::Handle) -> $crate::JoinHandle<Result<(), Error>> {
+                $crate::moosicbox_task::spawn_on(
                     &format!("async_service: {}", self.name),
+                    handle,
                     async move {
                         self.on_start().await?;
                         let ctx = self.ctx;
@@ -136,6 +141,8 @@ macro_rules! async_service_body {
             #[allow(unused)]
             async fn send_command_and_wait_async(&self, command: $command) -> Result<(), Self::Error>;
             #[allow(unused)]
+            async fn send_command_and_wait_async_on(&self, command: $command, handle: &$crate::tokio::runtime::Handle) -> Result<(), Self::Error>;
+            #[allow(unused)]
             fn shutdown(&self) -> Result<(), Self::Error>;
         }
 
@@ -179,10 +186,15 @@ macro_rules! async_service_body {
             }
 
             async fn send_command_and_wait_async(&self, command: $command) -> Result<(), Self::Error> {
+                self.send_command_and_wait_async_on(command, &$crate::tokio::runtime::Handle::current()).await
+            }
+
+            async fn send_command_and_wait_async_on(&self, command: $command, handle: &$crate::tokio::runtime::Handle) -> Result<(), Self::Error> {
                 let (tx, rx) = $crate::unbounded();
                 let sender = self.sender.clone();
-                $crate::moosicbox_task::spawn(
+                $crate::moosicbox_task::spawn_on(
                     &format!("async_service: {} - send_command_and_wait_async", self.name),
+                    handle,
                     async move {
                         sender.send_async(Command {
                             cmd: command,
