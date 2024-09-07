@@ -41,7 +41,11 @@ pub async fn index_endpoint(
                             button type="button" { "Remove" }
                         }
                     }
-                    button type="button" { "Start Scan" }
+                    button
+                        type="button"
+                        hx-post="/scan/start-scan?origins=LOCAL"
+                        hx-swap="none"
+                        { "Start Scan" }
                 }
             }
         }
