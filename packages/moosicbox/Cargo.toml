@@ -40,6 +40,7 @@ moosicbox_qobuz          = { version = "0.1.0", path = "../qobuz", default-featu
 moosicbox_remote_library = { version = "0.1.0", path = "../remote_library", default-features = false }
 moosicbox_resampler      = { version = "0.1.0", path = "../resampler", default-features = false }
 moosicbox_scan           = { version = "0.1.0", path = "../scan", default-features = false }
+moosicbox_schema         = { version = "0.1.0", path = "../schema", default-features = false }
 moosicbox_search         = { version = "0.1.0", path = "../search", default-features = false }
 moosicbox_session        = { version = "0.1.0", path = "../session", default-features = false }
 moosicbox_stream_utils   = { version = "0.1.0", path = "../stream_utils", default-features = false }

@@ -37,6 +37,7 @@ moosicbox_logging = { path = "../logging", default-features = false }
 moosicbox_mdns = { path = "../mdns", default-features = false }
 moosicbox_middleware = { path = "../middleware", default-features = false }
 moosicbox_music_api = { path = "../music_api", default-features = false }
+moosicbox_schema = { path = "../schema", default-features = false }
 moosicbox_session = { path = "../session", default-features = false, features = [
     "events",
 ] }
@@ -217,7 +218,12 @@ opus = [
     "moosicbox_tunnel_sender/opus",
 ]
 
-postgres = ["dep:aws-config", "dep:aws-sdk-ssm", "moosicbox_database/postgres"]
+postgres = [
+    "dep:aws-config",
+    "dep:aws-sdk-ssm",
+    "moosicbox_database/postgres",
+    "moosicbox_schema/postgres",
+]
 postgres-native-tls = ["dep:native-tls", "dep:postgres-native-tls"]
 postgres-openssl = ["dep:native-tls", "dep:openssl", "dep:postgres-openssl"]
 postgres-raw = [
@@ -231,7 +237,7 @@ postgres-sqlx = [
     "sqlx/postgres",
     "sqlx/tls-rustls",
 ]
-sqlite = []
+sqlite = ["moosicbox_schema/sqlite"]
 sqlite-rusqlite = ["dep:rusqlite", "moosicbox_database/rusqlite"]
 sqlite-sqlx = ["moosicbox_database/sqlite-sqlx", "sqlite"]
 

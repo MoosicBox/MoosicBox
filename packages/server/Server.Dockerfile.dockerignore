@@ -27,6 +27,7 @@
 !/packages/qobuz
 !/packages/resampler
 !/packages/scan
+!/packages/schema
 !/packages/search
 !/packages/server
 !/packages/session

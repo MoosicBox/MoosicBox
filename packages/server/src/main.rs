@@ -130,6 +130,10 @@ fn main() -> std::io::Result<()> {
             .await
             .expect("Failed to init sqlite DB");
 
+        if let Err(e) = moosicbox_schema::migrate_library("./library.db") {
+            moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
+        };
+
         SERVER_ID
             .set(
                 get_or_init_server_identity(&*db)

@@ -340,6 +340,10 @@ jobs:
                       cargo: --no-default-features
                       features: api
 
+                    - name: schema
+                      path: packages/schema
+                      os: ubuntu-latest
+
                     - name: search
                       path: packages/search
                       os: ubuntu-latest

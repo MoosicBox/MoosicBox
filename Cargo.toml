@@ -31,6 +31,7 @@ members = [
     "packages/remote_library",
     "packages/resampler",
     "packages/scan",
+    "packages/schema",
     "packages/search",
     "packages/server",
     "packages/session",
@@ -98,6 +99,8 @@ console-subscriber = "0.4.0"
 cpal = "0.15.3"
 debounce = "0.2.2"
 derive_more = "1.0.0"
+diesel = { version = "2.2.4", default-features = false }
+diesel_migrations = { version = "2.2.0", default-features = false }
 dotenv = "0.15"
 enum-as-inner = "0.6.0"
 env_logger = "0.11"

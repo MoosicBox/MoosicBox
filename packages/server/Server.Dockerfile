@@ -35,6 +35,7 @@ RUN cat Cargo.toml | \
     \"packages\/qobuz\",\r\
     \"packages\/resampler\",\r\
     \"packages\/scan\",\r\
+    \"packages\/schema\",\r\
     \"packages\/search\",\r\
     \"packages\/server\",\r\
     \"packages\/session\",\r\
@@ -77,6 +78,7 @@ COPY packages/player/Cargo.toml packages/player/Cargo.toml
 COPY packages/qobuz/Cargo.toml packages/qobuz/Cargo.toml
 COPY packages/resampler/Cargo.toml packages/resampler/Cargo.toml
 COPY packages/scan/Cargo.toml packages/scan/Cargo.toml
+COPY packages/schema/Cargo.toml packages/schema/Cargo.toml
 COPY packages/search/Cargo.toml packages/search/Cargo.toml
 COPY packages/server/Cargo.toml packages/server/Cargo.toml
 COPY packages/session/Cargo.toml packages/session/Cargo.toml
@@ -122,6 +124,7 @@ packages/player|\
 packages/qobuz|\
 packages/resampler|\
 packages/scan|\
+packages/schema|\
 packages/search|\
 packages/server|\
 packages/session|\
