@@ -7,6 +7,7 @@ use thiserror::Error;
 
 pub struct MoosicBoxServer {
     pub id: String,
+    pub name: String,
     pub host: SocketAddr,
     pub dns: String,
 }
@@ -88,6 +89,7 @@ impl service::Processor for service::Service {
 
                             let server = MoosicBoxServer {
                                 id: dns.split_once(".").expect("Invalid dns").0.to_string(),
+                                name: info.get_hostname().to_string(),
                                 host: socket_addr,
                                 dns,
                             };
