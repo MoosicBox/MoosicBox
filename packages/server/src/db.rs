@@ -9,8 +9,8 @@ pub enum InitSqliteError {
 }
 
 #[cfg(feature = "sqlite-rusqlite")]
-pub fn init_sqlite() -> Result<Box<dyn Database>, InitSqliteError> {
-    let library = ::rusqlite::Connection::open("library.db")?;
+pub fn init_sqlite(db_location: &std::path::Path) -> Result<Box<dyn Database>, InitSqliteError> {
+    let library = ::rusqlite::Connection::open(db_location)?;
     library
         .busy_timeout(std::time::Duration::from_millis(10))
         .expect("Failed to set busy timeout");
@@ -145,14 +145,16 @@ pub enum InitDatabaseError {
     not(feature = "sqlite-rusqlite")
 ))]
 #[allow(unused)]
-pub async fn init_sqlite_sqlx() -> Result<Box<dyn Database>, InitDatabaseError> {
+pub async fn init_sqlite_sqlx(
+    db_location: &std::path::Path,
+) -> Result<Box<dyn Database>, InitDatabaseError> {
     use std::sync::Arc;
 
     use moosicbox_database::sqlx::sqlite::SqliteSqlxDatabase;
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 
     let connect_options = SqliteConnectOptions::new();
-    let mut connect_options = connect_options.filename("library.db");
+    let mut connect_options = connect_options.filename(db_location);
 
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
