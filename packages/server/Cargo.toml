@@ -10,6 +10,11 @@ readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
+[[bin]]
+name              = "moosicbox_server"
+path              = "src/main.rs"
+required-features = []
+
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
 moosicbox_async_service = { path = "../async_service", default-features = false }
