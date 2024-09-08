@@ -1336,9 +1336,9 @@ checksum = "4964518bd3b4a8190e832886cdc0da9794f12e8e6c1613a9e90ff331c4c8724b"
 
 [[package]]
 name = "cc"
-version = "1.1.17"
+version = "1.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a93fe60e2fc87b6ba2c117f67ae14f66e3fc7d6a1e612a25adb238cc980eadb3"
+checksum = "b62ac837cdb5cb22e10a256099b4fc502b1dfe560cb282963a974d7abd80e476"
 dependencies = [
  "jobserver",
  "libc",
@@ -2246,7 +2246,7 @@ dependencies = [
 [[package]]
 name = "free_log_client"
 version = "0.3.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#74ed196b9b6d697134f153e917f2240a009508cb"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#7b6ee9018de3f5d196e6bc9db45221b4a4e3e62b"
 dependencies = [
  "free_log_models",
  "futures-util",
@@ -2266,7 +2266,7 @@ dependencies = [
 [[package]]
 name = "free_log_models"
 version = "0.2.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#74ed196b9b6d697134f153e917f2240a009508cb"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#7b6ee9018de3f5d196e6bc9db45221b4a4e3e62b"
 dependencies = [
  "log",
  "serde",
@@ -3018,9 +3018,9 @@ dependencies = [
 
 [[package]]
 name = "ipnet"
-version = "2.9.0"
+version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f518f335dce6725a761382244631d86cf0ccb2863413590b31338feb467f9c3"
+checksum = "187674a687eed5fe42285b40c6291f9a01517d415fad1c3cbc6a9f778af7fcd4"
 
 [[package]]
 name = "is-docker"
@@ -4892,9 +4892,9 @@ checksum = "2195bf6aa996a481483b29d62a7663eed3fe39600c460e323f8ff41e90bdd89b"
 
 [[package]]
 name = "mysqlclient-sys"
-version = "0.2.5"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f61b381528ba293005c42a409dd73d034508e273bf90481f17ec2e964a6e969b"
+checksum = "478e2040dbc35c73927b77a2be91a496de19deab376a6982ed61e89592434619"
 dependencies = [
  "pkg-config",
  "vcpkg",
@@ -5335,9 +5335,9 @@ dependencies = [
 
 [[package]]
 name = "parking"
-version = "2.2.0"
+version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb813b8af86854136c6922af0598d719255ecb2179515e6e7730d468f05c9cae"
+checksum = "f38d5652c16fde515bb1ecef450ab0f6a219d619a7274976324d5e377f7dceba"
 
 [[package]]
 name = "parking_lot"
@@ -5862,9 +5862,9 @@ dependencies = [
 
 [[package]]
 name = "pq-sys"
-version = "0.5.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb954aedd3cf61784ee8e2ee2e8fbd74c445efc3a7405967d1834864d7bf873a"
+checksum = "a24ff9e4cf6945c988f0db7005d87747bf72864965c3529d259ad155ac41d584"
 dependencies = [
  "vcpkg",
 ]
@@ -6783,11 +6783,11 @@ dependencies = [
 
 [[package]]
 name = "schannel"
-version = "0.1.23"
+version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbc91545643bcf3a0bbb6569265615222618bdf33ce4ffbbd13c4bbd4c093534"
+checksum = "e9aaafd5a2b6e3d657ff009d82fbd630b6bd54dd4eb06f21693925cdf80f9b8b"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
