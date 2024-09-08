@@ -526,8 +526,9 @@ fn main() -> std::io::Result<()> {
 
             #[cfg(feature = "admin-htmx-api")]
             {
-                app =
-                    app.service(web::scope("/admin").service(moosicbox_admin_htmx::index_endpoint));
+                app = app.service(moosicbox_admin_htmx::api::bind_services(web::scope(
+                    "/admin",
+                )));
             }
 
             #[cfg(feature = "audio-output-api")]

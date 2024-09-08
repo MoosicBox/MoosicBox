@@ -13,9 +13,7 @@ use moosicbox_music_api::MusicApiState;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::{
-    disable_scan_origin, enable_scan_origin, get_origins_or_default, ScanError, ScanOrigin, Scanner,
-};
+use crate::{disable_scan_origin, enable_scan_origin, run_scan, ScanError, ScanOrigin};
 
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
@@ -84,16 +82,9 @@ pub async fn run_scan_endpoint(
         })
         .transpose()?;
 
-    let db = data.database.clone();
-    let origins = get_origins_or_default(&**db, origins).await?;
-
-    for origin in origins {
-        Scanner::from_origin(&**db, origin)
-            .await?
-            .scan(api_state.as_ref().clone(), db.clone())
-            .await
-            .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
-    }
+    run_scan(origins, data.database.clone(), api_state.as_ref().clone())
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
 
     Ok(Json(serde_json::json!({"success": true})))
 }
@@ -138,30 +129,16 @@ pub async fn start_scan_endpoint(
         })
         .transpose()?;
 
-    let db = data.database.clone();
-    let origins = get_origins_or_default(&**db, origins).await?;
+    moosicbox_task::spawn("scan", async move {
+        run_scan(origins, data.database.clone(), api_state.as_ref().clone())
+            .await
+            .map_err(|e| {
+                moosicbox_assert::die_or_error!("Scan error: {e:?}");
+                e
+            })?;
 
-    for origin in origins {
-        let db = db.clone();
-        let api_state = api_state.as_ref().clone();
-
-        moosicbox_task::spawn("scan", async move {
-            Scanner::from_origin(&**db, origin)
-                .await
-                .map_err(|e| {
-                    moosicbox_assert::die_or_error!("Scan error: {e:?}");
-                    e
-                })?
-                .scan(api_state, db)
-                .await
-                .map_err(|e| {
-                    moosicbox_assert::die_or_error!("Scan error: {e:?}");
-                    e
-                })?;
-
-            Ok::<_, ScanError>(())
-        });
-    }
+        Ok::<_, ScanError>(())
+    });
 
     Ok(Json(serde_json::json!({"success": true})))
 }
@@ -199,7 +176,7 @@ pub async fn run_scan_path_endpoint(
     api_state: web::Data<MusicApiState>,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    let scanner = Scanner::new(crate::event::ScanTask::Local {
+    let scanner = crate::Scanner::new(crate::event::ScanTask::Local {
         paths: vec![query.path.clone()],
     })
     .await;

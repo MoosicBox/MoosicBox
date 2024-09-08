@@ -280,7 +280,7 @@ all-apis = [
     "yt-api",
 ]
 
-admin-htmx-api   = ["dep:moosicbox_admin_htmx"]
+admin-htmx-api   = ["dep:moosicbox_admin_htmx", "moosicbox_admin_htmx/api"]
 audio-output-api = ["moosicbox_audio_output/api"]
 audio-zone-api   = ["moosicbox_audio_zone/api"]
 auth-api         = ["moosicbox_auth/api"]

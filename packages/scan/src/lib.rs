@@ -332,6 +332,23 @@ pub async fn disable_scan_origin(db: &dyn Database, origin: ScanOrigin) -> Resul
     db::disable_scan_origin(db, origin).await
 }
 
+pub async fn run_scan(
+    origins: Option<Vec<ScanOrigin>>,
+    db: Arc<Box<dyn Database>>,
+    api_state: MusicApiState,
+) -> Result<(), ScanError> {
+    let origins = get_origins_or_default(&**db, origins).await?;
+
+    for origin in origins {
+        Scanner::from_origin(&**db, origin)
+            .await?
+            .scan(api_state.clone(), db.clone())
+            .await?;
+    }
+
+    Ok(())
+}
+
 #[cfg(feature = "local")]
 pub async fn get_scan_paths(db: &dyn Database) -> Result<Vec<String>, DbError> {
     let locations = db::get_scan_locations_for_origin(db, ScanOrigin::Local).await?;

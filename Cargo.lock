@@ -3730,7 +3730,12 @@ dependencies = [
  "maud",
  "moosicbox_assert",
  "moosicbox_core",
+ "moosicbox_database",
+ "moosicbox_music_api",
  "moosicbox_scan",
+ "serde",
+ "serde_json",
+ "urlencoding",
 ]
 
 [[package]]
