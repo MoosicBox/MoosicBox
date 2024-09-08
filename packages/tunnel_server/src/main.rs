@@ -71,8 +71,19 @@ fn main() -> Result<(), std::io::Error> {
             let cors = Cors::default()
                 .allow_any_origin()
                 .allowed_methods(vec!["GET", "POST", "OPTIONS", "DELETE", "PUT", "PATCH"])
-                .allowed_headers(vec![http::header::AUTHORIZATION, http::header::ACCEPT])
-                .allowed_header(http::header::CONTENT_TYPE)
+                .allowed_headers(vec![
+                    http::header::AUTHORIZATION,
+                    http::header::ACCEPT,
+                    http::header::CONTENT_TYPE,
+                    http::header::HeaderName::from_static("hx-boosted"),
+                    http::header::HeaderName::from_static("hx-current-url"),
+                    http::header::HeaderName::from_static("hx-history-restore-request"),
+                    http::header::HeaderName::from_static("hx-prompt"),
+                    http::header::HeaderName::from_static("hx-request"),
+                    http::header::HeaderName::from_static("hx-target"),
+                    http::header::HeaderName::from_static("hx-trigger-name"),
+                    http::header::HeaderName::from_static("hx-trigger"),
+                ])
                 .supports_credentials()
                 .max_age(3600);
 
