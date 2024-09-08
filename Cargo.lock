@@ -3729,6 +3729,7 @@ dependencies = [
  "log",
  "maud",
  "moosicbox_assert",
+ "moosicbox_config",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_music_api",

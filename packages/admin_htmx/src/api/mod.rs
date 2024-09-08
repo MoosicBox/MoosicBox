@@ -5,6 +5,7 @@ use actix_web::{
 };
 use maud::{html, DOCTYPE};
 
+mod info;
 mod scan;
 
 pub fn bind_services<
@@ -12,7 +13,7 @@ pub fn bind_services<
 >(
     scope: Scope<T>,
 ) -> Scope<T> {
-    scan::bind_services(scope.service(index_endpoint))
+    info::bind_services(scan::bind_services(scope.service(index_endpoint)))
 }
 
 #[route("", method = "GET")]
@@ -37,6 +38,9 @@ pub async fn index_endpoint(
                 }
                 body {
                     h1 { "MoosicBox Admin" }
+                    hr {}
+                    h2 { "Server Info" }
+                    (info::info(&**data.database).await?)
                     hr {}
                     h2 { "Scan" }
                     (scan::scan(&**data.database).await?)
