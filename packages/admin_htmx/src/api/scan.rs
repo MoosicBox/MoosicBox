@@ -83,13 +83,17 @@ pub async fn scan_paths(db: &dyn Database) -> Result<Markup, DbError> {
     let paths = moosicbox_scan::get_scan_paths(db).await?;
 
     Ok(html! {
-        div id="scan-paths" {
-            @for path in paths {
-                form hx-delete="/admin/scan-paths" {
-                    div.scan-path {
-                        p { (path) }
-                        input type="hidden" name="path" value=(path) {}
-                        button type="submit" { "Remove" }
+        table id="scan-paths" {
+            tbody {
+                @for path in paths {
+                    tr {
+                        td { (path) }
+                        td {
+                            form hx-delete="/admin/scan-paths" {
+                                input type="hidden" name="path" value=(path) {}
+                                button type="submit" { "Remove" }
+                            }
+                        }
                     }
                 }
             }
@@ -99,11 +103,6 @@ pub async fn scan_paths(db: &dyn Database) -> Result<Markup, DbError> {
 
 pub async fn scan(db: &dyn Database) -> Result<Markup, DbError> {
     Ok(html! {
-        style {("
-            .scan-path {
-                display: flex;
-            }
-        ")}
         (scan_paths(db).await?)
         form
             hx-post="/admin/scan-paths"
