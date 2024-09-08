@@ -29,11 +29,6 @@ pub async fn index_endpoint(
             html {
                 head {
                     title { "MoosicBox Admin" }
-                    style {("
-                        .scan-path {
-                            display: flex;
-                        }
-                    ")}
                     script
                         src="https://unpkg.com/htmx.org@2.0.2"
                         integrity="sha384-Y7hw+L/jvKeWIRRkqWYfPcvVxHzVzn5REgzbawhxAuQGwX1XWe70vji+VSeHOThJ"

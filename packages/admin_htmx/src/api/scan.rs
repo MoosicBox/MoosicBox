@@ -99,6 +99,11 @@ pub async fn scan_paths(db: &dyn Database) -> Result<Markup, DbError> {
 
 pub async fn scan(db: &dyn Database) -> Result<Markup, DbError> {
     Ok(html! {
+        style {("
+            .scan-path {
+                display: flex;
+            }
+        ")}
         (scan_paths(db).await?)
         form
             hx-post="/admin/scan-paths"
