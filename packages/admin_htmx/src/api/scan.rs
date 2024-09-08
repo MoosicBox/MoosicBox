@@ -91,7 +91,7 @@ pub async fn scan_paths(db: &dyn Database) -> Result<Markup, DbError> {
                     tr {
                         td { (path) }
                         td {
-                            form hx-delete="/admin/scan-paths" {
+                            form hx-delete="/admin/scan-paths" hx-target="closest tr" {
                                 input type="hidden" name="path" value=(path) {}
                                 button type="submit" { "Remove" }
                             }
