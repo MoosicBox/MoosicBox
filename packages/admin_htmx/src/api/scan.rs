@@ -11,6 +11,8 @@ use moosicbox_music_api::MusicApiState;
 use moosicbox_scan::ScanOrigin;
 use serde::Deserialize;
 
+use crate::api::util::*;
+
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -107,7 +109,7 @@ pub async fn scan(db: &dyn Database) -> Result<Markup, DbError> {
         form
             hx-post="/admin/scan-paths"
             hx-target="#scan-paths"
-            hx-on--after-request="document.querySelector('#new-scan-path').value = ''"
+            hx-on--after-request=(clear_input("#new-scan-path"))
             {
                 input id="new-scan-path" type="text" name="path" {}
                 button type="submit" { "Add new scan source" }

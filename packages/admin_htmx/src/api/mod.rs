@@ -7,6 +7,7 @@ use maud::{html, DOCTYPE};
 
 mod info;
 mod scan;
+pub(crate) mod util;
 
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
