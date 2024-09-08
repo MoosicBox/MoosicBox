@@ -22,6 +22,7 @@ pub fn bind_services<
         .service(add_scan_paths_endpoint)
         .service(delete_scan_paths_endpoint)
         .service(start_scan_endpoint)
+        .service(get_scans_endpoint)
 }
 
 #[derive(Deserialize)]
@@ -79,6 +80,16 @@ pub async fn start_scan_endpoint(
     .map_err(|e| ErrorInternalServerError(format!("Failed to run scan: {e:?}")))?;
 
     Ok(html! {})
+}
+
+#[route("scans", method = "GET", method = "OPTIONS", method = "HEAD")]
+pub async fn get_scans_endpoint(
+    _htmx: Htmx,
+    data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Markup, actix_web::Error> {
+    scan(&**data.database)
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to run scan: {e:?}")))
 }
 
 pub async fn scan_paths(db: &dyn Database) -> Result<Markup, DbError> {
