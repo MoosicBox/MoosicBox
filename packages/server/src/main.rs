@@ -477,6 +477,14 @@ fn main() -> std::io::Result<()> {
                     http::header::AUTHORIZATION,
                     http::header::ACCEPT,
                     http::header::CONTENT_TYPE,
+                    http::header::HeaderName::from_static("hx-boosted"),
+                    http::header::HeaderName::from_static("hx-current-url"),
+                    http::header::HeaderName::from_static("hx-history-restore-request"),
+                    http::header::HeaderName::from_static("hx-prompt"),
+                    http::header::HeaderName::from_static("hx-request"),
+                    http::header::HeaderName::from_static("hx-target"),
+                    http::header::HeaderName::from_static("hx-trigger-name"),
+                    http::header::HeaderName::from_static("hx-trigger"),
                 ])
                 .supports_credentials()
                 .max_age(3600);
