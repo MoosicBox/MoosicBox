@@ -10,6 +10,7 @@ RUN cat Cargo.toml | \
     sed -E "s/members = \[[^]]+\]/members = [\r\
     \"packages\/assert\",\r\
     \"packages\/config\",\r\
+    \"packages\/database\",\r\
     \"packages\/env_utils\",\r\
     \"packages\/load_balancer\",\r\
     \"packages\/logging\",\r\
@@ -19,6 +20,7 @@ RUN cat Cargo.toml | \
 
 COPY packages/assert/Cargo.toml packages/assert/Cargo.toml
 COPY packages/config/Cargo.toml packages/config/Cargo.toml
+COPY packages/database/Cargo.toml packages/database/Cargo.toml
 COPY packages/env_utils/Cargo.toml packages/env_utils/Cargo.toml
 COPY packages/load_balancer/Cargo.toml packages/load_balancer/Cargo.toml
 COPY packages/logging/Cargo.toml packages/logging/Cargo.toml
@@ -31,6 +33,7 @@ RUN for file in $(\
     done | grep -E "^(\
 packages/assert|\
 packages/config|\
+packages/database|\
 packages/env_utils|\
 packages/load_balancer|\
 packages/logging|\
