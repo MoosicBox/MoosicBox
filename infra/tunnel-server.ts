@@ -1,7 +1,7 @@
 import { parse } from 'yaml';
 import fs from 'node:fs';
 import { clusterProvider } from './cluster';
-import { certManager } from './cert-manager';
+import { certManagers } from './cert-manager';
 
 function createDeployment() {
     let tunnelServerDeploymentSpecYaml = fs.readFileSync(
@@ -23,7 +23,7 @@ function createDeployment() {
     return new kubernetes.apps.v1.Deployment(
         'tunnel-server',
         tunnelServerDeploymentSpec,
-        { provider: clusterProvider, dependsOn: [certManager] },
+        { provider: clusterProvider, dependsOn: [certManagers] },
     );
 }
 
@@ -43,7 +43,7 @@ function createService() {
     return new kubernetes.core.v1.Service(
         'tunnel-server',
         tunnelServerServiceSpec,
-        { provider: clusterProvider, dependsOn: [certManager] },
+        { provider: clusterProvider, dependsOn: [certManagers] },
     );
 }
 

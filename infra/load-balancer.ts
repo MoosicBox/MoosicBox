@@ -1,130 +1,140 @@
-import { parse } from 'yaml';
 import fs from 'node:fs';
+import { parse } from 'yaml';
 import { clusterProvider } from './cluster';
-import { certManager } from './cert-manager';
+import { certManagers } from './cert-manager';
+
+export const domainName = 'moosicbox.com';
+export const domain =
+    $app.stage === 'prod'
+        ? `tunnel.${domainName}`
+        : `tunnel-${$app.stage}.${domainName}`;
 
 function createCertificate() {
-    let tunnelServerCertificateSpecYaml = fs.readFileSync(
+    let specYaml = fs.readFileSync(
         '../kubernetes/tunnel-server/moosicbox-tunnel-server-certificate.yaml'.substring(
             1,
         ),
         'utf8',
     );
-    tunnelServerCertificateSpecYaml =
-        tunnelServerCertificateSpecYaml.replaceAll(
-            ' moosicbox-tunnel-server-cert',
-            ` moosicbox-tunnel-server-cert-${$app.stage}`,
-        );
-    tunnelServerCertificateSpecYaml =
-        tunnelServerCertificateSpecYaml.replaceAll(
-            ' moosicbox-tunnel-server-issuer',
-            ` moosicbox-tunnel-server-issuer-${$app.stage}`,
-        );
-    tunnelServerCertificateSpecYaml =
-        tunnelServerCertificateSpecYaml.replaceAll(
-            ' tunnel.moosicbox.com',
-            ` tunnel-${$app.stage}.moosicbox.com`,
-        );
+    specYaml = specYaml.replaceAll(
+        ' moosicbox-tunnel-server-cert',
+        ` moosicbox-tunnel-server-cert-${$app.stage}`,
+    );
+    specYaml = specYaml.replaceAll(
+        ' moosicbox-tunnel-server-issuer',
+        ` moosicbox-tunnel-server-issuer-${$app.stage}`,
+    );
+    specYaml = specYaml.replaceAll(' tunnel.moosicbox.com', ` ${domain}`);
 
     return kubernetes.yaml.parse(
-        { yaml: tunnelServerCertificateSpecYaml },
-        { provider: clusterProvider, dependsOn: [certManager] },
+        { yaml: specYaml },
+        { provider: clusterProvider, dependsOn: [certManagers] },
     )[0];
 }
 
 function createIngress() {
-    let tunnelServerIngressSpecYaml = fs.readFileSync(
+    let specYaml = fs.readFileSync(
         '../kubernetes/tunnel-server/moosicbox-tunnel-server-ingress.yaml'.substring(
             1,
         ),
         'utf8',
     );
-    tunnelServerIngressSpecYaml = tunnelServerIngressSpecYaml.replaceAll(
+    specYaml = specYaml.replaceAll(
         ' moosicbox-tunnel-server-ingress',
         ` moosicbox-tunnel-server-ingress-${$app.stage}`,
     );
-    const tunnelServerIngressSpec = parse(tunnelServerIngressSpecYaml);
-
-    return new kubernetes.networking.v1.Ingress(
-        'tunnel-server',
-        tunnelServerIngressSpec,
-        { provider: clusterProvider, dependsOn: [certManager] },
+    specYaml = specYaml.replaceAll(
+        ' moosicbox-tunnel-server-issuer',
+        ` moosicbox-tunnel-server-issuer-${$app.stage}`,
     );
+    const specJson = parse(specYaml);
+
+    return new kubernetes.networking.v1.Ingress('tunnel-server', specJson, {
+        provider: clusterProvider,
+        dependsOn: [certManagers],
+    });
 }
 
 function createIssuer() {
-    let tunnelServerIssuerSpecYaml = fs.readFileSync(
+    let specYaml = fs.readFileSync(
         '../kubernetes/tunnel-server/moosicbox-tunnel-server-issuer.yaml'.substring(
             1,
         ),
         'utf8',
     );
-    tunnelServerIssuerSpecYaml = tunnelServerIssuerSpecYaml.replaceAll(
+    specYaml = specYaml.replaceAll(
         ' moosicbox-tunnel-server-ingress',
         ` moosicbox-tunnel-server-ingress-${$app.stage}`,
     );
-    tunnelServerIssuerSpecYaml = tunnelServerIssuerSpecYaml.replaceAll(
+    specYaml = specYaml.replaceAll(
         ' moosicbox-tunnel-server-issuer',
         ` moosicbox-tunnel-server-issuer-${$app.stage}`,
     );
 
     return kubernetes.yaml.parse(
-        { yaml: tunnelServerIssuerSpecYaml },
-        { provider: clusterProvider, dependsOn: [certManager] },
+        { yaml: specYaml },
+        { provider: clusterProvider, dependsOn: [certManagers] },
     )[0];
 }
 
 function createLb() {
-    let tunnelServerLbDeploymentSpecYaml = fs.readFileSync(
+    let specYaml = fs.readFileSync(
         '../kubernetes/tunnel-server/moosicbox-tunnel-server-lb-deployment.yaml'.substring(
             1,
         ),
         'utf8',
     );
-    tunnelServerLbDeploymentSpecYaml =
-        tunnelServerLbDeploymentSpecYaml.replaceAll(
-            ' moosicbox-tunnel-server-lb',
-            ` moosicbox-tunnel-server-lb-${$app.stage}`,
-        );
-    tunnelServerLbDeploymentSpecYaml =
-        tunnelServerLbDeploymentSpecYaml.replaceAll(
-            ' moosicbox-tunnel-server-cert',
-            ` moosicbox-tunnel-server-cert-${$app.stage}`,
-        );
-    const tunnelServerLbDeploymentSpec = parse(
-        tunnelServerLbDeploymentSpecYaml,
+    specYaml = specYaml.replaceAll(
+        ' moosicbox-tunnel-server-lb',
+        ` moosicbox-tunnel-server-lb-${$app.stage}`,
+    );
+    specYaml = specYaml.replaceAll(
+        ' moosicbox-tunnel-server-cert',
+        ` moosicbox-tunnel-server-cert-${$app.stage}`,
+    );
+    const specJson = parse(specYaml);
+
+    const containers = specJson.spec.template.spec.containers;
+
+    containers.forEach(
+        (container: { env: Record<string, string>[] | undefined }) => {
+            const env = container.env ?? [];
+
+            env.push({
+                name: 'CLUSTERS',
+                value: `${domain}:moosicbox-tunnel-service-${$app.stage}:8004`,
+            });
+
+            container.env = env;
+        },
     );
 
-    return new kubernetes.apps.v1.Deployment(
-        'tunnel-server-lb',
-        tunnelServerLbDeploymentSpec,
-        { provider: clusterProvider, dependsOn: [certManager] },
-    );
+    return new kubernetes.apps.v1.Deployment('tunnel-server-lb', specJson, {
+        provider: clusterProvider,
+        dependsOn: [certManagers],
+    });
 }
 
 function createNodePort() {
-    let tunnelServerNodePortSpecYaml = fs.readFileSync(
+    let specYaml = fs.readFileSync(
         '../kubernetes/tunnel-server/moosicbox-tunnel-server-nodeport.yaml'.substring(
             1,
         ),
         'utf8',
     );
-    tunnelServerNodePortSpecYaml = tunnelServerNodePortSpecYaml.replaceAll(
+    specYaml = specYaml.replaceAll(
         ' moosicbox-tunnel-server-ingress-controller',
         ` moosicbox-tunnel-server-ingress-controller-${$app.stage}`,
     );
-    tunnelServerNodePortSpecYaml = tunnelServerNodePortSpecYaml.replaceAll(
+    specYaml = specYaml.replaceAll(
         ' moosicbox-tunnel-server-ingress',
         ` moosicbox-tunnel-server-ingress-${$app.stage}`,
     );
-    tunnelServerNodePortSpecYaml = tunnelServerNodePortSpecYaml.replaceAll(
-        ' tunnel.moosicbox.com',
-        ` tunnel-${$app.stage}.moosicbox.com`,
-    );
+    specYaml = specYaml.replaceAll(' tunnel.moosicbox.com', ` ${domain}`);
 
     return kubernetes.yaml.parse(
-        { yaml: tunnelServerNodePortSpecYaml },
-        { provider: clusterProvider, dependsOn: [certManager] },
+        { yaml: specYaml },
+        { provider: clusterProvider, dependsOn: [certManagers] },
     )[0];
 }
 
