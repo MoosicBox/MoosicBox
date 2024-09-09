@@ -1,0 +1,31 @@
+{
+    "name": "moosicbox",
+    "version": "0.1.0",
+    "description": "A music server for cows",
+    "main": "index.js",
+    "scripts": {
+        "pretty": "prettier --check \"**/*.{js,cjs,mjs,jsx,ts,tsx}\"",
+        "pretty:write": "prettier --write \"**/*.{js,cjs,mjs,jsx,ts,tsx}\"",
+        "lint": "eslint --ext .ts,.tsx .",
+        "lint:write": "eslint --fix",
+        "typecheck": "tsc --noEmit",
+        "validate": "pnpm pretty && pnpm lint && pnpm typecheck"
+    },
+    "keywords": [],
+    "author": "Braden Steffaniak",
+    "license": "ISC",
+    "devDependencies": {
+        "@typescript-eslint/eslint-plugin": "^7.18.0",
+        "@typescript-eslint/parser": "^7.18.0",
+        "eslint": "^8.57.0",
+        "eslint-config-prettier": "^9.1.0",
+        "eslint-plugin-diff": "^2.0.3",
+        "eslint-plugin-import": "^2.30.0",
+        "eslint-plugin-jsx-a11y": "^6.10.0",
+        "eslint-plugin-node": "^11.1.0",
+        "prettier": "^3.3.3",
+        "sst": "^3.0.122",
+        "typescript": "^5.5.4",
+        "yaml": "^2.5.1"
+    }
+}
