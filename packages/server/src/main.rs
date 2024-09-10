@@ -6,6 +6,8 @@ mod api;
 mod auth;
 mod db;
 mod events;
+#[cfg(feature = "player")]
+mod players;
 mod tunnel;
 mod ws;
 
@@ -22,9 +24,6 @@ use std::{collections::HashMap, env, sync::Arc};
 use tokio::try_join;
 use tokio_util::sync::CancellationToken;
 use ws::server::WsServer;
-
-#[cfg(feature = "player")]
-use crate::events::playback_event::{service::Commander, PLAYBACK_EVENT_HANDLE};
 
 static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
 #[cfg(feature = "upnp")]
@@ -82,12 +81,16 @@ fn main() -> std::io::Result<()> {
         let db_profile_dir_path = moosicbox_config::make_db_profile_dir_path("master")
             .expect("Failed to get DB profile dir path");
         let db_profile_path = db_profile_dir_path.join("library.db");
-        let db_profile_path_str = db_profile_path
-            .to_str()
-            .expect("Failed to get DB profile path");
-        if let Err(e) = moosicbox_schema::migrate_library(db_profile_path_str) {
-            moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
-        };
+
+        #[cfg(any(feature = "postgres", feature = "sqlite"))]
+        {
+            let db_profile_path_str = db_profile_path
+                .to_str()
+                .expect("Failed to get DB profile path");
+            if let Err(e) = moosicbox_schema::migrate_library(db_profile_path_str) {
+                moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
+            };
+        }
 
         #[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
         #[allow(unused)]
@@ -217,7 +220,7 @@ fn main() -> std::io::Result<()> {
             .with_name("PlaybackEventService")
             .start();
         #[cfg(feature = "player")]
-        PLAYBACK_EVENT_HANDLE
+        events::playback_event::PLAYBACK_EVENT_HANDLE
             .set(playback_event_handle.clone())
             .unwrap_or_else(|_| panic!("Failed to set PLAYBACK_EVENT_HANDLE"));
 
@@ -263,72 +266,16 @@ fn main() -> std::io::Result<()> {
             .unwrap_or_else(|_| panic!("Failed to set UPNP_LISTENER_HANDLE"));
 
         #[cfg(feature = "player")]
-        moosicbox_task::spawn("server: scan outputs", {
-            let db = database.clone();
-            let tunnel_handle = tunnel_handle.clone();
-            async move {
-                moosicbox_audio_output::scan_outputs()
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                let handle = WS_SERVER_HANDLE
-                    .read()
-                    .await
-                    .clone()
-                    .ok_or(moosicbox_ws::WebsocketSendError::Unknown(
-                        "No ws server handle".into(),
-                    ))
-                    .map_err(|e| e.to_string())?;
-
-                for audio_output in moosicbox_audio_output::output_factories().await {
-                    if let Err(err) = register_server_player(
-                        &**db,
-                        handle.clone(),
-                        &tunnel_handle,
-                        audio_output.clone(),
-                    )
-                    .await
-                    {
-                        log::error!("Failed to register server player: {err:?}");
-                    } else {
-                        log::debug!("Registered server player audio_output={audio_output:?}");
-                    }
-                }
-
-                Ok::<_, String>(())
-            }
-        });
+        moosicbox_task::spawn(
+            "server: scan outputs",
+            players::local::init(database.clone(), tunnel_handle.clone()),
+        );
 
         #[cfg(feature = "upnp")]
-        {
-            moosicbox_task::spawn("server: register upnp players", {
-                let db = database.clone();
-                let tunnel_handle = tunnel_handle.clone();
-                async move {
-                    load_upnp_players().await.map_err(|e| e.to_string())?;
-
-                    let upnp_players = {
-                        let binding = UPNP_PLAYERS.read().await;
-                        binding.iter().cloned().collect::<Vec<_>>()
-                    };
-
-                    log::debug!("register_upnp_player: players={}", upnp_players.len());
-
-                    for (output, _player, _) in upnp_players {
-                        if let Err(err) =
-                            register_upnp_player(&**db, handle.clone(), &tunnel_handle, output)
-                                .await
-                        {
-                            log::error!("Failed to register server player: {err:?}");
-                        } else {
-                            log::debug!("Registered server player");
-                        }
-                    }
-
-                    Ok::<_, String>(())
-                }
-            });
-        }
+        moosicbox_task::spawn(
+            "server: register upnp players",
+            players::upnp::init(database.clone(), handle.clone(), tunnel_handle.clone()),
+        );
 
         #[cfg(feature = "openapi")]
         let openapi = api::openapi::init();
@@ -548,7 +495,11 @@ fn main() -> std::io::Result<()> {
                 #[cfg(feature = "player")]
                 {
                     log::debug!("Shutting down server players...");
-                    let players = SERVER_PLAYERS.write().await.drain().collect::<Vec<_>>();
+                    let players = players::local::SERVER_PLAYERS
+                        .write()
+                        .await
+                        .drain()
+                        .collect::<Vec<_>>();
                     for (id, (_, mut player)) in players {
                         log::debug!("Shutting down player id={}", id);
                         if let Err(err) = player
@@ -580,7 +531,7 @@ fn main() -> std::io::Result<()> {
                 {
                     log::debug!("Shutting down UPnP players...");
                     let players = {
-                        let mut binding = UPNP_PLAYERS.write().await;
+                        let mut binding = players::upnp::UPNP_PLAYERS.write().await;
                         binding.drain(..).collect::<Vec<_>>()
                     };
 
@@ -644,6 +595,8 @@ fn main() -> std::io::Result<()> {
 
                 #[cfg(feature = "player")]
                 {
+                    use crate::events::playback_event::service::Commander as _;
+
                     log::debug!("Shutting down PlaybackEventHandler...");
                     if let Err(e) = playback_event_handle.shutdown() {
                         log::error!("Failed to shut down PlaybackEventHandler: {e:?}");
@@ -718,475 +671,4 @@ fn main() -> std::io::Result<()> {
 
         Ok(())
     })
-}
-
-#[cfg(feature = "player")]
-static SERVER_PLAYERS: Lazy<
-    tokio::sync::RwLock<
-        HashMap<
-            u64,
-            (
-                moosicbox_player::local::LocalPlayer,
-                moosicbox_player::PlaybackHandler,
-            ),
-        >,
-    >,
-> = Lazy::new(|| tokio::sync::RwLock::new(HashMap::new()));
-
-#[cfg(feature = "player")]
-#[allow(clippy::too_many_lines)]
-fn handle_server_playback_update(
-    update: &moosicbox_session::models::UpdateSession,
-) -> std::pin::Pin<Box<dyn futures_util::Future<Output = ()> + Send>> {
-    use moosicbox_core::sqlite::models::Id;
-    use moosicbox_player::PlaybackHandler;
-    use moosicbox_session::get_session;
-
-    let update = update.clone();
-    let db = DB.read().unwrap().clone().unwrap().clone();
-
-    Box::pin(async move {
-        log::debug!("Handling server playback update");
-
-        let update = update;
-
-        let updated = {
-            {
-                let audio_zone =
-                    match moosicbox_session::get_session_audio_zone(&**db, update.session_id).await
-                    {
-                        Ok(players) => players,
-                        Err(e) => moosicbox_assert::die_or_panic!(
-                            "Failed to get session active players: {e:?}"
-                        ),
-                    };
-
-                let Some(audio_zone) = audio_zone else {
-                    return;
-                };
-
-                let existing = { SERVER_PLAYERS.read().await.get(&update.session_id).cloned() };
-                let existing = existing.filter(|(player, _)| {
-                    player.output.as_ref().is_some_and(|output| {
-                        !audio_zone
-                            .players
-                            .iter()
-                            .any(|p| p.audio_output_id != output.lock().unwrap().id)
-                    })
-                });
-
-                if let Some((_, player)) = existing {
-                    player
-                } else {
-                    let outputs = moosicbox_audio_output::output_factories().await;
-
-                    // TODO: handle more than one output
-                    let output = audio_zone
-                        .players
-                        .into_iter()
-                        .find_map(|x| outputs.iter().find(|output| output.id == x.audio_output_id))
-                        .cloned();
-
-                    let Some(output) = output else {
-                        moosicbox_assert::die_or_panic!("No output available");
-                    };
-
-                    let mut players = SERVER_PLAYERS.write().await;
-
-                    let db = { DB.read().unwrap().clone().expect("No database") };
-
-                    let local_player = match moosicbox_player::local::LocalPlayer::new(
-                        moosicbox_player::PlayerSource::Local,
-                        None,
-                    )
-                    .await
-                    {
-                        Ok(player) => player,
-                        Err(e) => {
-                            moosicbox_assert::die_or_panic!("Failed to create new player: {e:?}")
-                        }
-                    }
-                    .with_output(output);
-
-                    let playback = local_player.playback.clone();
-                    let output = local_player.output.clone();
-                    let receiver = local_player.receiver.clone();
-
-                    let mut player = PlaybackHandler::new(local_player.clone())
-                        .with_playback(playback)
-                        .with_output(output)
-                        .with_receiver(receiver);
-
-                    local_player
-                        .playback_handler
-                        .write()
-                        .unwrap()
-                        .replace(player.clone());
-
-                    if let Ok(Some(session)) = get_session(&**db, update.session_id).await {
-                        if let Err(e) = player.init_from_session(session, &update).await {
-                            moosicbox_assert::die_or_error!(
-                                "Failed to create new player from session: {e:?}"
-                            );
-                        }
-                    }
-
-                    players.insert(update.session_id, (local_player, player.clone()));
-
-                    player
-                }
-            }
-            .update_playback(
-                true,
-                update.play,
-                update.stop,
-                update.playing,
-                update.position,
-                update.seek,
-                update.volume,
-                if let Some(playlist) = update.playlist {
-                    let track_ids = playlist
-                        .tracks
-                        .iter()
-                        .filter_map(|x| x.id.parse::<u64>().ok())
-                        .map(std::convert::Into::into)
-                        .collect::<Vec<Id>>();
-
-                    let tracks = match moosicbox_library::db::get_tracks(&**db, Some(&track_ids))
-                        .await
-                    {
-                        Ok(tracks) => tracks,
-                        Err(e) => moosicbox_assert::die_or_panic!("Failed to get tracks: {e:?}"),
-                    };
-
-                    Some(
-                        playlist
-                            .tracks
-                            .iter()
-                            .map(|x| {
-                                let data = if x.r#type == ApiSource::Library {
-                                    tracks
-                                        .iter()
-                                        .find(|track| x.id == track.id.to_string())
-                                        .and_then(|x| serde_json::to_value(x).ok())
-                                } else {
-                                    x.data.clone().and_then(|x| serde_json::to_value(x).ok())
-                                };
-
-                                moosicbox_player::Track {
-                                    id: x.id.clone().into(),
-                                    source: x.r#type,
-                                    data,
-                                }
-                            })
-                            .collect::<Vec<_>>(),
-                    )
-                } else {
-                    None
-                },
-                None,
-                Some(update.session_id),
-                Some(update.playback_target),
-                false,
-                Some(moosicbox_player::DEFAULT_PLAYBACK_RETRY_OPTIONS),
-            )
-            .await
-        };
-
-        match updated {
-            Ok(status) => {
-                log::debug!("Updated server player playback: {status:?}");
-            }
-            Err(err) => {
-                log::error!("Failed to update server player playback: {err:?}");
-            }
-        }
-    })
-}
-
-#[cfg(feature = "player")]
-async fn register_server_player(
-    db: &dyn Database,
-    ws: ws::server::WsServerHandle,
-    tunnel_handle: &Option<moosicbox_tunnel_sender::sender::TunnelSenderHandle>,
-    audio_output: moosicbox_audio_output::AudioOutputFactory,
-) -> Result<(), moosicbox_ws::WebsocketSendError> {
-    let connection_id = "self";
-
-    let context = moosicbox_ws::WebsocketContext {
-        connection_id: connection_id.to_string(),
-        ..Default::default()
-    };
-    let payload = moosicbox_session::models::RegisterConnection {
-        connection_id: connection_id.to_string(),
-        name: "MoosicBox Server".to_string(),
-        players: vec![moosicbox_session::models::RegisterPlayer {
-            name: audio_output.name,
-            audio_output_id: audio_output.id.clone(),
-        }],
-    };
-
-    let handle =
-        WS_SERVER_HANDLE
-            .read()
-            .await
-            .clone()
-            .ok_or(moosicbox_ws::WebsocketSendError::Unknown(
-                "No ws server handle".into(),
-            ))?;
-
-    let connection = moosicbox_ws::register_connection(db, &handle, &context, &payload).await?;
-
-    let player = connection
-        .players
-        .iter()
-        .find(|x| x.audio_output_id == audio_output.id)
-        .ok_or(moosicbox_ws::WebsocketSendError::Unknown(
-            "No player on connection".into(),
-        ))?;
-
-    ws.add_player_action(player.id, handle_server_playback_update)
-        .await;
-
-    if let Some(handle) = tunnel_handle {
-        handle.add_player_action(player.id, handle_server_playback_update);
-    }
-
-    moosicbox_ws::get_sessions(db, &handle, &context, true).await
-}
-
-#[cfg(feature = "upnp")]
-static UPNP_PLAYERS: Lazy<
-    tokio::sync::RwLock<
-        Vec<(
-            moosicbox_audio_output::AudioOutputFactory,
-            moosicbox_upnp::player::UpnpPlayer,
-            moosicbox_player::PlaybackHandler,
-        )>,
-    >,
-> = Lazy::new(|| tokio::sync::RwLock::new(vec![]));
-
-#[cfg(feature = "upnp")]
-static SESSION_UPNP_PLAYERS: Lazy<
-    tokio::sync::RwLock<
-        HashMap<
-            u64,
-            (
-                moosicbox_audio_output::AudioOutputFactory,
-                moosicbox_player::PlaybackHandler,
-            ),
-        >,
-    >,
-> = Lazy::new(|| tokio::sync::RwLock::new(HashMap::new()));
-
-#[cfg(feature = "upnp")]
-async fn load_upnp_players() -> Result<(), moosicbox_upnp::UpnpDeviceScannerError> {
-    use moosicbox_audio_output::AudioOutputFactory;
-    use moosicbox_player::{PlaybackHandler, PlayerSource};
-
-    moosicbox_upnp::scan_devices().await?;
-
-    {
-        for device in moosicbox_upnp::devices().await {
-            let mut players = UPNP_PLAYERS.write().await;
-
-            if !players.iter().any(|(_, x, _)| x.device.udn() == device.udn) {
-                let service_id = "urn:upnp-org:serviceId:AVTransport";
-                if let Ok((device, service)) =
-                    moosicbox_upnp::get_device_and_service(&device.udn, service_id)
-                {
-                    let player = moosicbox_upnp::player::UpnpPlayer::new(
-                        Arc::new(Box::new(
-                            MUSIC_API_STATE.read().unwrap().clone().unwrap().apis,
-                        )),
-                        device,
-                        service,
-                        PlayerSource::Local,
-                        UPNP_LISTENER_HANDLE.get().unwrap().clone(),
-                    );
-
-                    let playback = player.playback.clone();
-                    let receiver = player.receiver.clone();
-
-                    let output: AudioOutputFactory = player
-                        .clone()
-                        .try_into()
-                        .expect("Failed to create audio output factory for UpnpPlayer");
-
-                    let handler = PlaybackHandler::new(player.clone())
-                        .with_playback(playback)
-                        .with_output(Some(Arc::new(std::sync::Mutex::new(output.clone()))))
-                        .with_receiver(receiver);
-
-                    player
-                        .playback_handler
-                        .write()
-                        .unwrap()
-                        .replace(handler.clone());
-
-                    players.push((output.clone(), player.clone(), handler));
-                }
-            }
-        }
-    }
-
-    Ok(())
-}
-
-#[cfg(feature = "upnp")]
-fn handle_upnp_playback_update(
-    update: &moosicbox_session::models::UpdateSession,
-) -> std::pin::Pin<Box<dyn futures_util::Future<Output = ()> + Send>> {
-    use moosicbox_player::{Track, DEFAULT_PLAYBACK_RETRY_OPTIONS};
-    use moosicbox_session::get_session;
-
-    let update = update.clone();
-    let db = DB.read().unwrap().clone().unwrap().clone();
-
-    Box::pin(async move {
-        log::debug!("Handling UPnP playback update={update:?}");
-        let updated = {
-            {
-                let existing = {
-                    SESSION_UPNP_PLAYERS
-                        .read()
-                        .await
-                        .get(&update.session_id)
-                        .cloned()
-                };
-                let audio_output_ids = match update.audio_output_ids(&**db).await {
-                    Ok(ids) => ids,
-                    Err(e) => {
-                        log::error!("Failed to get audio output IDs: {e:?}");
-                        return;
-                    }
-                };
-                let existing = existing
-                    .filter(|(output, _)| !audio_output_ids.iter().any(|p| p != &output.id));
-
-                if let Some((_, player)) = existing {
-                    log::debug!(
-                        "handle_upnp_playback_update: Using existing player for session_id={}",
-                        update.session_id
-                    );
-                    player
-                } else {
-                    log::debug!(
-                        "handle_upnp_playback_update: No existing player for session_id={}",
-                        update.session_id
-                    );
-                    if let Err(e) = load_upnp_players().await {
-                        log::error!("Failed to load upnp players: {e:?}");
-                        return;
-                    }
-
-                    let binding = UPNP_PLAYERS.read().await;
-                    let existing = binding
-                        .iter()
-                        .filter(|(output, _, _)| !audio_output_ids.iter().any(|p| p != &output.id));
-
-                    // TODO: This needs to handle multiple players
-                    if let Some((output, _upnp_player, player)) = existing.into_iter().next() {
-                        let mut player = player.clone();
-                        let output = output.clone();
-                        drop(binding);
-
-                        if let Ok(Some(session)) = get_session(&**db, update.session_id).await {
-                            if let Err(e) = player.init_from_session(session, &update).await {
-                                moosicbox_assert::die_or_error!(
-                                    "Failed to create new player from session: {e:?}"
-                                );
-                            }
-
-                            SESSION_UPNP_PLAYERS
-                                .write()
-                                .await
-                                .insert(update.session_id, (output, player.clone()));
-                        }
-
-                        player
-                    } else {
-                        moosicbox_assert::die_or_panic!("No UPNP player found");
-                    }
-                }
-            }
-            .update_playback(
-                true,
-                update.play,
-                update.stop,
-                update.playing,
-                update.position,
-                update.seek,
-                update.volume,
-                update.playlist.as_ref().map(|x| {
-                    x.tracks
-                        .iter()
-                        .map(|t| Track {
-                            id: t.id.clone().into(),
-                            source: t.r#type,
-                            data: t.data.clone().and_then(|x| serde_json::to_value(x).ok()),
-                        })
-                        .collect::<Vec<_>>()
-                }),
-                None,
-                Some(update.session_id),
-                Some(update.playback_target),
-                false,
-                Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
-            )
-            .await
-        };
-
-        match updated {
-            Ok(()) => {
-                log::debug!("Updated UPnP player playback");
-            }
-            Err(err) => {
-                log::error!("Failed to update UPnP player playback: {err:?}");
-            }
-        }
-    })
-}
-
-#[cfg(feature = "upnp")]
-#[allow(unused)]
-async fn register_upnp_player(
-    db: &dyn Database,
-    ws: ws::server::WsServerHandle,
-    tunnel_handle: &Option<moosicbox_tunnel_sender::sender::TunnelSenderHandle>,
-    audio_output: moosicbox_audio_output::AudioOutputFactory,
-) -> Result<(), moosicbox_ws::WebsocketSendError> {
-    log::debug!("register_upnp_player: Registering audio_output={audio_output:?}");
-    let connection_id = "self";
-
-    let context = moosicbox_ws::WebsocketContext {
-        connection_id: connection_id.to_string(),
-        ..Default::default()
-    };
-    let payload = vec![moosicbox_session::models::RegisterPlayer {
-        name: audio_output.name,
-        audio_output_id: audio_output.id,
-    }];
-
-    let handle =
-        WS_SERVER_HANDLE
-            .read()
-            .await
-            .clone()
-            .ok_or(moosicbox_ws::WebsocketSendError::Unknown(
-                "No ws server handle".into(),
-            ))?;
-
-    let players = moosicbox_ws::register_players(db, &handle, &context, &payload).await?;
-
-    for player in players {
-        ws.add_player_action(player.id, handle_upnp_playback_update)
-            .await;
-
-        if let Some(handle) = tunnel_handle {
-            handle.add_player_action(player.id, handle_server_playback_update);
-        }
-    }
-
-    moosicbox_ws::get_sessions(db, &handle, &context, true).await
 }
