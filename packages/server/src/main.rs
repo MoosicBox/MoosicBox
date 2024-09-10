@@ -8,7 +8,7 @@ mod db;
 #[cfg(feature = "downloader")]
 mod download_event;
 #[cfg(feature = "player")]
-mod playback_session;
+mod playback_event;
 #[cfg(feature = "scan")]
 mod scan_event;
 mod tunnel;
@@ -30,7 +30,7 @@ use tokio_util::sync::CancellationToken;
 use ws::server::WsServer;
 
 #[cfg(feature = "player")]
-use crate::playback_session::{service::Commander, PLAYBACK_EVENT_HANDLE};
+use crate::playback_event::{service::Commander, PLAYBACK_EVENT_HANDLE};
 
 static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
 #[cfg(feature = "upnp")]
@@ -210,7 +210,7 @@ fn main() -> std::io::Result<()> {
 
         #[cfg(feature = "player")]
         let playback_event_service =
-            playback_session::service::Service::new(playback_session::Context::new(handle.clone()));
+            playback_event::service::Service::new(playback_event::Context::new(handle.clone()));
         #[cfg(feature = "player")]
         let playback_event_handle = playback_event_service.handle();
         #[cfg(feature = "player")]
@@ -225,7 +225,7 @@ fn main() -> std::io::Result<()> {
         #[cfg(feature = "player")]
         {
             moosicbox_player::set_service_port(service_port);
-            moosicbox_player::on_playback_event(crate::playback_session::on_playback_event);
+            moosicbox_player::on_playback_event(crate::playback_event::on_event);
         }
 
         moosicbox_audio_zone::events::on_audio_zones_updated_event({

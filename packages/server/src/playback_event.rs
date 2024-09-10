@@ -12,7 +12,7 @@ use crate::{ws::server::WsServerHandle, DB};
 
 pub static PLAYBACK_EVENT_HANDLE: OnceLock<service::Handle> = OnceLock::new();
 
-pub fn on_playback_event(update: &UpdateSession, _current: &Playback) {
+pub fn on_event(update: &UpdateSession, _current: &Playback) {
     let update = update.clone();
 
     if let Err(err) = PLAYBACK_EVENT_HANDLE
