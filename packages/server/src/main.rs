@@ -2,6 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 mod api;
+mod audio_zone_event;
 #[cfg(feature = "static-token-auth")]
 mod auth;
 mod db;
@@ -199,7 +200,6 @@ fn main() -> std::io::Result<()> {
 
         #[cfg(feature = "downloader")]
         download_event::init().await;
-
         #[cfg(feature = "scan")]
         scan_event::init().await;
 
@@ -228,33 +228,6 @@ fn main() -> std::io::Result<()> {
             moosicbox_player::on_playback_event(crate::playback_event::on_event);
         }
 
-        moosicbox_audio_zone::events::on_audio_zones_updated_event({
-            let db = database.clone();
-            move || {
-                let db = db.clone();
-                async move {
-                    log::debug!("on_audio_zones_updated_event: Audio zones updated");
-                    let connection_id = "self";
-                    let context = moosicbox_ws::WebsocketContext {
-                        connection_id: connection_id.to_string(),
-                        ..Default::default()
-                    };
-                    let handle = WS_SERVER_HANDLE
-                        .read()
-                        .await
-                        .clone()
-                        .ok_or(moosicbox_ws::WebsocketSendError::Unknown(
-                            "No ws server handle".into(),
-                        ))
-                        .map_err(|e| Box::new(e) as BoxErrorSend)?;
-                    moosicbox_ws::broadcast_audio_zones(&**db, &handle, &context, true)
-                        .await
-                        .map_err(|e| Box::new(e) as BoxErrorSend)?;
-                    Ok(())
-                }
-            }
-        })
-        .await;
 
         moosicbox_session::events::on_players_updated_event({
             let db = database.clone();
@@ -286,6 +259,8 @@ fn main() -> std::io::Result<()> {
             }
         })
         .await;
+
+        audio_zone_event::init(database.clone()).await;
 
         #[cfg(feature = "postgres-raw")]
         let db_connection_handle = moosicbox_task::spawn("server: postgres", db_connection);
