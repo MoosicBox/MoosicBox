@@ -8,6 +8,9 @@ use actix_web::{route, HttpResponse};
 use log::info;
 use serde_json::{json, Value};
 
+#[cfg(feature = "openapi")]
+pub mod openapi;
+
 #[route("/health", method = "GET")]
 pub async fn health_endpoint() -> Result<Json<Value>> {
     info!("Healthy");
