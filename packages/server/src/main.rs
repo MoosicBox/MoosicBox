@@ -2,17 +2,10 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 mod api;
-mod audio_zone_event;
 #[cfg(feature = "static-token-auth")]
 mod auth;
 mod db;
-#[cfg(feature = "downloader")]
-mod download_event;
-#[cfg(feature = "player")]
-mod playback_event;
-#[cfg(feature = "scan")]
-mod scan_event;
-mod session_event;
+mod events;
 mod tunnel;
 mod ws;
 
@@ -31,7 +24,7 @@ use tokio_util::sync::CancellationToken;
 use ws::server::WsServer;
 
 #[cfg(feature = "player")]
-use crate::playback_event::{service::Commander, PLAYBACK_EVENT_HANDLE};
+use crate::events::playback_event::{service::Commander, PLAYBACK_EVENT_HANDLE};
 
 static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
 #[cfg(feature = "upnp")]
@@ -204,8 +197,24 @@ fn main() -> std::io::Result<()> {
         WS_SERVER_HANDLE.write().await.replace(server_tx);
 
         #[cfg(feature = "player")]
-        let playback_event_service =
-            playback_event::service::Service::new(playback_event::Context::new(handle.clone()));
+        {
+            moosicbox_player::set_service_port(service_port);
+            moosicbox_player::on_playback_event(crate::events::playback_event::on_event);
+        }
+
+        #[cfg(feature = "downloader")]
+        events::download_event::init().await;
+
+        #[cfg(feature = "scan")]
+        events::scan_event::init().await;
+
+        events::audio_zone_event::init(database.clone()).await;
+        events::session_event::init(database.clone()).await;
+
+        #[cfg(feature = "player")]
+        let playback_event_service = events::playback_event::service::Service::new(
+            events::playback_event::Context::new(handle.clone()),
+        );
         #[cfg(feature = "player")]
         let playback_event_handle = playback_event_service.handle();
         #[cfg(feature = "player")]
@@ -216,21 +225,6 @@ fn main() -> std::io::Result<()> {
         PLAYBACK_EVENT_HANDLE
             .set(playback_event_handle.clone())
             .unwrap_or_else(|_| panic!("Failed to set PLAYBACK_EVENT_HANDLE"));
-
-        #[cfg(feature = "player")]
-        {
-            moosicbox_player::set_service_port(service_port);
-            moosicbox_player::on_playback_event(crate::playback_event::on_event);
-        }
-
-        #[cfg(feature = "downloader")]
-        download_event::init().await;
-
-        #[cfg(feature = "scan")]
-        scan_event::init().await;
-
-        audio_zone_event::init(database.clone()).await;
-        session_event::init(database.clone()).await;
 
         #[cfg(feature = "postgres-raw")]
         let db_connection_handle = moosicbox_task::spawn("server: postgres", db_connection);
