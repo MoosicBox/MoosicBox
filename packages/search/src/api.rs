@@ -1,10 +1,11 @@
 use std::str::FromStr;
 
 use actix_web::{
+    dev::{ServiceFactory, ServiceRequest},
     error::ErrorInternalServerError,
     get,
     web::{self, Json},
-    Result,
+    Result, Scope,
 };
 use moosicbox_core::{
     sqlite::models::{ApiAlbumVersionQuality, TrackApiSource},
@@ -21,6 +22,16 @@ use crate::{
     },
     search_global_search_index,
 };
+
+pub fn bind_services<
+    T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
+>(
+    scope: Scope<T>,
+) -> Scope<T> {
+    scope
+        .service(search_global_search_endpoint)
+        .service(search_raw_global_search_endpoint)
+}
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]

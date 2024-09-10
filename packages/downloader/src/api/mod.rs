@@ -13,9 +13,12 @@ use crate::DownloadApiSource;
 use crate::GetCreateDownloadTasksError;
 use crate::GetDownloadPathError;
 use crate::MoosicboxDownloader;
+use actix_web::dev::ServiceFactory;
+use actix_web::dev::ServiceRequest;
 use actix_web::error::ErrorBadRequest;
 use actix_web::error::ErrorInternalServerError;
 use actix_web::error::ErrorNotFound;
+use actix_web::Scope;
 use actix_web::{
     route,
     web::{self, Json},
@@ -33,6 +36,17 @@ use serde_json::Value;
 use tokio::sync::RwLock;
 
 pub mod models;
+
+pub fn bind_services<
+    T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
+>(
+    scope: Scope<T>,
+) -> Scope<T> {
+    scope
+        .service(download_endpoint)
+        .service(retry_download_endpoint)
+        .service(download_tasks_endpoint)
+}
 
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]

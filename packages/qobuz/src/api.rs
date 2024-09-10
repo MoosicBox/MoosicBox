@@ -1,8 +1,9 @@
 use actix_web::{
+    dev::{ServiceFactory, ServiceRequest},
     error::ErrorInternalServerError,
     route,
     web::{self, Json},
-    HttpRequest, Result,
+    HttpRequest, Result, Scope,
 };
 use moosicbox_core::sqlite::models::ToApi;
 use moosicbox_paging::Page;
@@ -19,6 +20,25 @@ use crate::{
     QobuzFavoriteArtistsError, QobuzFavoriteTracksError, QobuzRelease, QobuzSearchError,
     QobuzTrack, QobuzTrackError, QobuzTrackFileUrlError, QobuzUserLoginError,
 };
+
+pub fn bind_services<
+    T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
+>(
+    scope: Scope<T>,
+) -> Scope<T> {
+    scope
+        .service(user_login_endpoint)
+        .service(track_file_url_endpoint)
+        .service(favorite_artists_endpoint)
+        .service(favorite_albums_endpoint)
+        .service(favorite_tracks_endpoint)
+        .service(artist_albums_endpoint)
+        .service(album_tracks_endpoint)
+        .service(album_endpoint)
+        .service(artist_endpoint)
+        .service(track_endpoint)
+        .service(search_endpoint)
+}
 
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]

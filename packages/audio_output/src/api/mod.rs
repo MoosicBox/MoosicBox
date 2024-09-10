@@ -1,7 +1,8 @@
 use actix_web::{
+    dev::{ServiceFactory, ServiceRequest},
     route,
     web::{self, Json},
-    Result,
+    Result, Scope,
 };
 use moosicbox_paging::Page;
 use serde::Deserialize;
@@ -9,6 +10,14 @@ use serde::Deserialize;
 use crate::api::models::ApiAudioOutput;
 
 pub mod models;
+
+pub fn bind_services<
+    T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
+>(
+    scope: Scope<T>,
+) -> Scope<T> {
+    scope.service(audio_outputs_endpoint)
+}
 
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]

@@ -1,8 +1,9 @@
 use actix_web::{
+    dev::{ServiceFactory, ServiceRequest},
     error::ErrorInternalServerError,
     route,
     web::{self, Json},
-    Result,
+    Result, Scope,
 };
 use moosicbox_audio_zone::models::{ApiAudioZone, ApiPlayer};
 use moosicbox_core::sqlite::models::ToApi as _;
@@ -12,6 +13,21 @@ use serde::Deserialize;
 use crate::models::{ApiSession, ApiSessionPlaylist, ApiSessionPlaylistTrack, RegisterPlayer};
 
 pub mod models;
+
+pub fn bind_services<
+    T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
+>(
+    scope: Scope<T>,
+) -> Scope<T> {
+    scope
+        .service(session_playlist_endpoint)
+        .service(session_playlist_tracks_endpoint)
+        .service(session_audio_zone_endpoint)
+        .service(session_playing_endpoint)
+        .service(session_endpoint)
+        .service(sessions_endpoint)
+        .service(register_players_endpoint)
+}
 
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]

@@ -1,10 +1,11 @@
 use std::{collections::HashMap, sync::Arc};
 
 use actix_web::{
+    dev::{ServiceFactory, ServiceRequest},
     error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     get, post,
     web::{self, Json},
-    Result,
+    Result, Scope,
 };
 use moosicbox_audio_output::default_output_factory;
 use moosicbox_core::{
@@ -22,6 +23,25 @@ use crate::{
     local::LocalPlayer, ApiPlaybackStatus, PlaybackHandler, PlaybackStatus, PlayerError,
     PlayerSource, Track, DEFAULT_PLAYBACK_RETRY_OPTIONS,
 };
+
+pub fn bind_services<
+    T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
+>(
+    scope: Scope<T>,
+) -> Scope<T> {
+    scope
+        .service(play_track_endpoint)
+        .service(play_tracks_endpoint)
+        .service(play_album_endpoint)
+        .service(pause_playback_endpoint)
+        .service(resume_playback_endpoint)
+        .service(update_playback_endpoint)
+        .service(next_track_endpoint)
+        .service(previous_track_endpoint)
+        .service(stop_track_endpoint)
+        .service(seek_track_endpoint)
+        .service(player_status_endpoint)
+}
 
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]

@@ -1,8 +1,9 @@
 use actix_web::{
+    dev::{ServiceFactory, ServiceRequest},
     error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     route,
     web::{self, Json},
-    HttpRequest, HttpResponse, Result,
+    HttpRequest, HttpResponse, Result, Scope,
 };
 use futures::StreamExt;
 use moosicbox_core::{
@@ -29,6 +30,24 @@ use crate::files::{
         TrackInfoError, TrackSourceError,
     },
 };
+
+pub fn bind_services<
+    T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
+>(
+    scope: Scope<T>,
+) -> Scope<T> {
+    scope
+        .service(get_silence_endpoint)
+        .service(track_endpoint)
+        .service(track_visualization_endpoint)
+        .service(track_info_endpoint)
+        .service(tracks_info_endpoint)
+        .service(track_urls_endpoint)
+        .service(artist_source_artwork_endpoint)
+        .service(artist_cover_endpoint)
+        .service(album_source_artwork_endpoint)
+        .service(album_artwork_endpoint)
+}
 
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]

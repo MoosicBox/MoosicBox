@@ -1,8 +1,9 @@
 use actix_web::{
+    dev::{ServiceFactory, ServiceRequest},
     error::{ErrorInternalServerError, ErrorNotFound, ErrorUnauthorized},
     route,
     web::{self, Json},
-    HttpRequest, Result,
+    HttpRequest, Result, Scope,
 };
 use moosicbox_core::sqlite::models::ToApi;
 use moosicbox_paging::Page;
@@ -26,6 +27,33 @@ use crate::{
     TidalSearchError, TidalTrack, TidalTrackError, TidalTrackFileUrlError, TidalTrackOrder,
     TidalTrackOrderDirection, TidalTrackPlaybackInfo, TidalTrackPlaybackInfoError,
 };
+
+pub fn bind_services<
+    T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
+>(
+    scope: Scope<T>,
+) -> Scope<T> {
+    scope
+        .service(device_authorization_endpoint)
+        .service(device_authorization_token_endpoint)
+        .service(track_file_url_endpoint)
+        .service(track_playback_info_endpoint)
+        .service(favorite_artists_endpoint)
+        .service(add_favorite_artist_endpoint)
+        .service(remove_favorite_artist_endpoint)
+        .service(favorite_albums_endpoint)
+        .service(add_favorite_album_endpoint)
+        .service(remove_favorite_album_endpoint)
+        .service(favorite_tracks_endpoint)
+        .service(add_favorite_track_endpoint)
+        .service(remove_favorite_track_endpoint)
+        .service(artist_albums_endpoint)
+        .service(album_tracks_endpoint)
+        .service(album_endpoint)
+        .service(artist_endpoint)
+        .service(track_endpoint)
+        .service(search_endpoint)
+}
 
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]

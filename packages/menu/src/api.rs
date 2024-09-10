@@ -2,10 +2,11 @@ use std::str::FromStr;
 
 use actix_web::{
     delete,
+    dev::{ServiceFactory, ServiceRequest},
     error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     get, post,
     web::{self, Json},
-    Result,
+    Result, Scope,
 };
 use moosicbox_core::{
     app::AppState,
@@ -31,6 +32,25 @@ use crate::library::{
     artists::{get_all_artists, ArtistFilters, ArtistsRequest},
     get_album, get_artist, get_artist_albums, GetArtistError,
 };
+
+pub fn bind_services<
+    T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
+>(
+    scope: Scope<T>,
+) -> Scope<T> {
+    scope
+        .service(get_artists_endpoint)
+        .service(get_artist_endpoint)
+        .service(get_album_endpoint)
+        .service(add_album_endpoint)
+        .service(remove_album_endpoint)
+        .service(refavorite_album_endpoint)
+        .service(get_albums_endpoint)
+        .service(get_tracks_endpoint)
+        .service(get_album_tracks_endpoint)
+        .service(get_album_versions_endpoint)
+        .service(get_artist_albums_endpoint)
+}
 
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]

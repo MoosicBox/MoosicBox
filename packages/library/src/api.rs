@@ -1,8 +1,9 @@
 use actix_web::{
+    dev::{ServiceFactory, ServiceRequest},
     error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     route,
     web::{self, Json},
-    Result,
+    Result, Scope,
 };
 use moosicbox_core::{
     integer_range::parse_integer_ranges_to_ids,
@@ -29,6 +30,31 @@ use crate::{
     LibraryTrackFileUrlError, LibraryTrackOrder, LibraryTrackOrderDirection, ReindexError,
     SearchType,
 };
+
+pub fn bind_services<
+    T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
+>(
+    scope: Scope<T>,
+) -> Scope<T> {
+    scope
+        .service(track_file_url_endpoint)
+        .service(favorite_artists_endpoint)
+        .service(add_favorite_artist_endpoint)
+        .service(remove_favorite_artist_endpoint)
+        .service(favorite_albums_endpoint)
+        .service(add_favorite_album_endpoint)
+        .service(remove_favorite_album_endpoint)
+        .service(favorite_tracks_endpoint)
+        .service(add_favorite_track_endpoint)
+        .service(remove_favorite_track_endpoint)
+        .service(artist_albums_endpoint)
+        .service(album_tracks_endpoint)
+        .service(album_endpoint)
+        .service(artist_endpoint)
+        .service(track_endpoint)
+        .service(search_endpoint)
+        .service(reindex_endpoint)
+}
 
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]

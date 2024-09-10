@@ -1,8 +1,9 @@
 use actix_web::{
+    dev::{ServiceFactory, ServiceRequest},
     error::{ErrorInternalServerError, ErrorNotFound},
     route,
     web::{self, Json},
-    Result,
+    Result, Scope,
 };
 use moosicbox_paging::Page;
 use serde::Deserialize;
@@ -10,6 +11,19 @@ use serde::Deserialize;
 use crate::models::{ApiAudioZone, ApiAudioZoneWithSession, CreateAudioZone, UpdateAudioZone};
 
 pub mod models;
+
+pub fn bind_services<
+    T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
+>(
+    scope: Scope<T>,
+) -> Scope<T> {
+    scope
+        .service(audio_zones_endpoint)
+        .service(audio_zone_with_sessions_endpoint)
+        .service(create_audio_zone_endpoint)
+        .service(update_audio_zone_endpoint)
+        .service(delete_audio_zone_endpoint)
+}
 
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]

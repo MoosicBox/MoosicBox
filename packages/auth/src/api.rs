@@ -1,8 +1,9 @@
 use actix_web::{
+    dev::{ServiceFactory, ServiceRequest},
     error::{ErrorInternalServerError, ErrorUnauthorized},
     route,
     web::{self, Json},
-    Result,
+    Result, Scope,
 };
 use moosicbox_core::app::AppState;
 use serde::Deserialize;
@@ -10,6 +11,16 @@ use serde_json::{json, Value};
 use url::form_urlencoded;
 
 use crate::{create_magic_token, get_credentials_from_magic_token, NonTunnelRequestAuthorized};
+
+pub fn bind_services<
+    T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
+>(
+    scope: Scope<T>,
+) -> Scope<T> {
+    scope
+        .service(get_magic_token_endpoint)
+        .service(create_magic_token_endpoint)
+}
 
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]

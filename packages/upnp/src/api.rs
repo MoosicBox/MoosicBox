@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
 use actix_web::{
+    dev::{ServiceFactory, ServiceRequest},
     error::{ErrorBadRequest, ErrorFailedDependency, ErrorInternalServerError},
     route,
     web::{self, Json},
-    Result,
+    Result, Scope,
 };
 use futures::TryStreamExt;
 use serde::Deserialize;
@@ -15,6 +16,24 @@ use crate::{
     scan_devices, seek, set_volume, subscribe_events, ActionError, MediaInfo, PositionInfo,
     ScanError, TransportInfo, UpnpDeviceScannerError,
 };
+
+pub fn bind_services<
+    T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
+>(
+    scope: Scope<T>,
+) -> Scope<T> {
+    scope
+        .service(scan_devices_endpoint)
+        .service(get_transport_info_endpoint)
+        .service(get_media_info_endpoint)
+        .service(get_position_info_endpoint)
+        .service(get_volume_endpoint)
+        .service(set_volume_endpoint)
+        .service(subscribe_endpoint)
+        .service(pause_endpoint)
+        .service(play_endpoint)
+        .service(seek_endpoint)
+}
 
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]

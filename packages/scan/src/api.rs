@@ -2,10 +2,11 @@ use std::str::FromStr;
 
 use actix_web::{
     delete,
+    dev::{ServiceFactory, ServiceRequest},
     error::{ErrorBadRequest, ErrorInternalServerError},
     post,
     web::{self, Json},
-    Result,
+    Result, Scope,
 };
 use moosicbox_auth::NonTunnelRequestAuthorized;
 use moosicbox_core::app::AppState;
@@ -14,6 +15,28 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::{disable_scan_origin, enable_scan_origin, run_scan, ScanError, ScanOrigin};
+
+pub fn bind_services<
+    T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
+>(
+    scope: Scope<T>,
+) -> Scope<T> {
+    let scope = scope
+        .service(run_scan_endpoint)
+        .service(start_scan_endpoint)
+        .service(enable_scan_origin_endpoint)
+        .service(disable_scan_origin_endpoint);
+
+    #[cfg(feature = "local")]
+    let scope = scope
+        .service(get_scan_origins_endpoint)
+        .service(run_scan_path_endpoint)
+        .service(get_scan_paths_endpoint)
+        .service(add_scan_path_endpoint)
+        .service(remove_scan_path_endpoint);
+
+    scope
+}
 
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
