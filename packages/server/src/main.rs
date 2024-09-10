@@ -24,7 +24,6 @@ use moosicbox_database::Database;
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 use moosicbox_files::files::track_pool::service::Commander as _;
 use moosicbox_music_api::{MusicApi, MusicApiState};
-use moosicbox_session::events::BoxErrorSend;
 use once_cell::sync::Lazy;
 use std::{collections::HashMap, env, sync::Arc};
 use tokio::try_join;
@@ -199,11 +198,6 @@ fn main() -> std::io::Result<()> {
             .unwrap()
             .replace(library_api_state.clone());
 
-        #[cfg(feature = "downloader")]
-        download_event::init().await;
-        #[cfg(feature = "scan")]
-        scan_event::init().await;
-
         let (mut ws_server, server_tx) = WsServer::new(database.clone());
         #[cfg(feature = "player")]
         let handle = server_tx.clone();
@@ -229,7 +223,11 @@ fn main() -> std::io::Result<()> {
             moosicbox_player::on_playback_event(crate::playback_event::on_event);
         }
 
+        #[cfg(feature = "downloader")]
+        download_event::init().await;
 
+        #[cfg(feature = "scan")]
+        scan_event::init().await;
 
         audio_zone_event::init(database.clone()).await;
         session_event::init(database.clone()).await;
