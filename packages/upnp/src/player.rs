@@ -348,7 +348,7 @@ impl UpnpPlayer {
             playback.abort,
         );
 
-        let (transport_uri, headers) = get_track_url(
+        let (transport_uri, _) = get_track_url(
             track_id,
             track_or_id.source,
             &self.source,
@@ -365,7 +365,16 @@ impl UpnpPlayer {
         log::debug!("update_av_transport: Set transport_uri={transport_uri}");
         let format = "flac";
 
-        let mut client = reqwest::Client::new().head(&transport_uri);
+        let (local_transport_uri, headers) = get_track_url(
+            track_id,
+            track_or_id.source,
+            &self.source,
+            playback.quality,
+            false,
+        )
+        .await?;
+
+        let mut client = reqwest::Client::new().head(&local_transport_uri);
 
         if let Some(headers) = headers {
             for (key, value) in headers {
