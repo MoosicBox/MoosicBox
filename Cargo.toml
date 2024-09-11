@@ -13,6 +13,7 @@ members = [
     "packages/config",
     "packages/core",
     "packages/database",
+    "packages/database_connection",
     "packages/downloader",
     "packages/env_utils",
     "packages/files",

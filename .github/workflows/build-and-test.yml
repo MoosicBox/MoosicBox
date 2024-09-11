@@ -2,9 +2,9 @@ name: Build and Test
 
 on:
     push:
-        branches: ["master"]
+        branches: ['master']
     pull_request:
-        branches: ["master"]
+        branches: ['master']
 
 env:
     CARGO_TERM_COLOR: always
@@ -208,6 +208,10 @@ jobs:
 
                     - name: database
                       path: packages/database
+                      os: ubuntu-latest
+
+                    - name: database_connection
+                      path: packages/database_connection
                       os: ubuntu-latest
 
                     - name: downloader

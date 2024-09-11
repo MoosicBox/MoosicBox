@@ -20,6 +20,7 @@ RUN cat Cargo.toml | \
     \"packages\/config\",\r\
     \"packages\/core\",\r\
     \"packages\/database\",\r\
+    \"packages\/database_connection\",\r\
     \"packages\/downloader\",\r\
     \"packages\/env_utils\",\r\
     \"packages\/files\",\r\
@@ -64,6 +65,7 @@ COPY packages/channel_utils/Cargo.toml packages/channel_utils/Cargo.toml
 COPY packages/config/Cargo.toml packages/config/Cargo.toml
 COPY packages/core/Cargo.toml packages/core/Cargo.toml
 COPY packages/database/Cargo.toml packages/database/Cargo.toml
+COPY packages/database_connection/Cargo.toml packages/database_connection/Cargo.toml
 COPY packages/downloader/Cargo.toml packages/downloader/Cargo.toml
 COPY packages/env_utils/Cargo.toml packages/env_utils/Cargo.toml
 COPY packages/files/Cargo.toml packages/files/Cargo.toml
@@ -111,6 +113,7 @@ packages/channel_utils|\
 packages/config|\
 packages/core|\
 packages/database|\
+packages/database_connection|\
 packages/downloader|\
 packages/env_utils|\
 packages/files|\

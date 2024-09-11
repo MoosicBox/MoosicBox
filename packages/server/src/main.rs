@@ -4,7 +4,6 @@
 mod api;
 #[cfg(feature = "static-token-auth")]
 mod auth;
-mod db;
 mod events;
 #[cfg(feature = "player")]
 mod players;
@@ -78,7 +77,18 @@ fn main() -> std::io::Result<()> {
             .unwrap()
     })
     .block_on(async move {
-        let db = db::init().await.expect("Failed to initialize database");
+        #[cfg(feature = "postgres")]
+        let creds = Some(
+            moosicbox_database_connection::creds::get_db_creds()
+                .await
+                .expect("Failed to get DB creds"),
+        );
+        #[cfg(not(feature = "postgres"))]
+        let creds = None;
+
+        let db = moosicbox_database_connection::init(creds)
+            .await
+            .expect("Failed to initialize database");
 
         SERVER_ID
             .set(

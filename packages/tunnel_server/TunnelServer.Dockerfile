@@ -12,6 +12,7 @@ RUN cat Cargo.toml | \
     \"packages\/async_service\",\r\
     \"packages\/config\",\r\
     \"packages\/database\",\r\
+    \"packages\/database_connection\",\r\
     \"packages\/env_utils\",\r\
     \"packages\/json_utils\",\r\
     \"packages\/logging\",\r\
@@ -27,6 +28,7 @@ COPY packages/assert/Cargo.toml packages/assert/Cargo.toml
 COPY packages/async_service/Cargo.toml packages/async_service/Cargo.toml
 COPY packages/config/Cargo.toml packages/config/Cargo.toml
 COPY packages/database/Cargo.toml packages/database/Cargo.toml
+COPY packages/database_connection/Cargo.toml packages/database_connection/Cargo.toml
 COPY packages/env_utils/Cargo.toml packages/env_utils/Cargo.toml
 COPY packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
 COPY packages/logging/Cargo.toml packages/logging/Cargo.toml
@@ -45,6 +47,7 @@ packages/assert|\
 packages/async_service|\
 packages/config|\
 packages/database|\
+packages/database_connection|\
 packages/env_utils|\
 packages/json_utils|\
 packages/logging|\

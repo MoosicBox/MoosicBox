@@ -3669,6 +3669,7 @@ dependencies = [
  "moosicbox_config",
  "moosicbox_core",
  "moosicbox_database",
+ "moosicbox_database_connection",
  "moosicbox_downloader",
  "moosicbox_env_utils",
  "moosicbox_files",
@@ -3960,6 +3961,33 @@ dependencies = [
  "tokio",
  "tokio-postgres",
  "tokio-util",
+]
+
+[[package]]
+name = "moosicbox_database_connection"
+version = "0.1.0"
+dependencies = [
+ "aws-config",
+ "aws-sdk-ssm",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_config",
+ "moosicbox_database",
+ "moosicbox_schema",
+ "moosicbox_task",
+ "native-tls",
+ "openssl",
+ "postgres-native-tls",
+ "postgres-openssl",
+ "postgres-protocol",
+ "regex",
+ "rusqlite",
+ "sqlx",
+ "sqlx-mysql",
+ "sqlx-postgres",
+ "thiserror",
+ "tokio",
+ "tokio-postgres",
 ]
 
 [[package]]
@@ -4486,6 +4514,7 @@ dependencies = [
  "moosicbox_config",
  "moosicbox_core",
  "moosicbox_database",
+ "moosicbox_database_connection",
  "moosicbox_downloader",
  "moosicbox_env_utils",
  "moosicbox_files",
@@ -4703,6 +4732,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_async_service",
  "moosicbox_database",
+ "moosicbox_database_connection",
  "moosicbox_env_utils",
  "moosicbox_json_utils",
  "moosicbox_logging",

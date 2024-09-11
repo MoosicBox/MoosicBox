@@ -1,0 +1,88 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["database"]
+description = "MoosicBox database connection package"
+edition     = "2021"
+keywords    = ["database", "mysql", "postgres", "sqlite"]
+license     = "MPL-2.0"
+name        = "moosicbox_database_connection"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_assert   = { path = "../assert", default-features = false }
+moosicbox_config   = { path = "../config", default-features = false }
+moosicbox_database = { path = "../database", default-features = false }
+moosicbox_schema   = { path = "../schema", default-features = false }
+moosicbox_task     = { path = "../task", default-features = false }
+
+# DB Dependencies
+rusqlite = { workspace = true, optional = true }
+
+# sqlx dependencies
+sqlx = { workspace = true, optional = true, features = [
+    "runtime-tokio",
+    "tls-rustls",
+] }
+sqlx-mysql = { workspace = true, optional = true }
+sqlx-postgres = { workspace = true, optional = true }
+
+# tokio-postgres dependencies
+postgres-protocol = { workspace = true, optional = true, features = [] }
+tokio-postgres    = { workspace = true, optional = true, features = [] }
+
+# Postgres dependencies
+native-tls          = { workspace = true, optional = true }
+openssl             = { workspace = true, optional = true }
+postgres-native-tls = { workspace = true, optional = true }
+postgres-openssl    = { workspace = true, optional = true }
+regex               = { workspace = true, optional = true }
+
+# Creds dependencies
+aws-config  = { workspace = true, optional = true }
+aws-sdk-ssm = { workspace = true, optional = true }
+
+log       = { workspace = true }
+thiserror = { workspace = true }
+tokio     = { workspace = true, features = ["macros", "rt", "tracing"] }
+
+[features]
+default = ["mysql", "postgres", "sqlite-sqlx"]
+
+fail-on-warnings = []
+
+creds = ["dep:aws-config", "dep:aws-sdk-ssm"]
+
+mysql = ["creds"]
+mysql-sqlx = [
+    "dep:sqlx",
+    "dep:sqlx-mysql",
+    "mysql",
+    "sqlx-mysql/chrono",
+    "sqlx/mysql",
+]
+postgres = ["creds", "moosicbox_database/postgres", "moosicbox_schema/postgres"]
+postgres-native-tls = ["dep:native-tls", "dep:postgres-native-tls"]
+postgres-openssl = ["dep:native-tls", "dep:openssl", "dep:postgres-openssl"]
+postgres-raw = [
+    "dep:tokio-postgres",
+    "moosicbox_database/postgres-raw",
+    "postgres",
+]
+postgres-sqlx = [
+    "dep:sqlx",
+    "dep:sqlx-postgres",
+    "moosicbox_database/postgres-sqlx",
+    "postgres",
+    "sqlx/postgres",
+    "sqlx/tls-rustls",
+]
+sqlite = ["moosicbox_schema/sqlite"]
+sqlite-rusqlite = ["dep:rusqlite", "moosicbox_database/rusqlite", "sqlite"]
+sqlite-sqlx = [
+    "dep:sqlx",
+    "moosicbox_database/sqlite-sqlx",
+    "sqlite",
+    "sqlx/sqlite",
+]

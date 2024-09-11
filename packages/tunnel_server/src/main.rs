@@ -48,14 +48,7 @@ fn main() -> Result<(), std::io::Error> {
             .unwrap()
     })
     .block_on(async move {
-        #[cfg(feature = "postgres-raw")]
-        db::init_postgres_raw()
-            .await
-            .expect("Failed to init postgres DB");
-        #[cfg(feature = "postgres-sqlx")]
-        db::init_postgres_sqlx()
-            .await
-            .expect("Failed to init postgres DB");
+        db::init().await.expect("Failed to init postgres DB");
 
         let ws_server = ws::server::WsServer::new();
         let ws_service = ws::server::service::Service::new(ws_server);

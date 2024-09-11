@@ -1,5 +1,29 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+
 use moosicbox_database::Database;
 use thiserror::Error;
+
+#[cfg(feature = "creds")]
+pub mod creds;
+
+#[allow(unused)]
+pub struct Credentials {
+    host: String,
+    name: String,
+    user: String,
+    password: Option<String>,
+}
+
+impl Credentials {
+    pub fn new(host: String, name: String, user: String, password: Option<String>) -> Self {
+        Self {
+            host,
+            name,
+            user,
+            password,
+        }
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum InitDbError {
@@ -19,9 +43,13 @@ pub enum InitDbError {
     ))]
     #[error(transparent)]
     InitSqliteSqlxDatabase(#[from] InitSqliteSqlxDatabaseError),
+    #[error("Credentials are required")]
+    CredentialsRequired,
 }
 
-pub async fn init() -> Result<Box<dyn Database>, InitDbError> {
+pub async fn init(
+    #[allow(unused)] creds: Option<Credentials>,
+) -> Result<Box<dyn Database>, InitDbError> {
     #[cfg(any(
         feature = "postgres",
         feature = "sqlite",
@@ -61,12 +89,12 @@ pub async fn init() -> Result<Box<dyn Database>, InitDbError> {
     #[cfg(all(
         not(feature = "postgres-native-tls"),
         not(feature = "postgres-openssl"),
+        not(feature = "postgres-sqlx"),
         feature = "postgres-raw"
     ))]
-    #[allow(unused)]
-    let db = init_postgres_raw_no_tls().await?;
+    let db = init_postgres_raw_no_tls(creds.ok_or(InitDbError::CredentialsRequired)?).await?;
     #[cfg(feature = "postgres-sqlx")]
-    let db = init_postgres_sqlx().await?;
+    let db = init_postgres_sqlx(creds.ok_or(InitDbError::CredentialsRequired)?).await?;
     #[cfg(feature = "sqlite-rusqlite")]
     #[allow(unused_variables)]
     let db = init_sqlite(&db_profile_path)?;
@@ -110,102 +138,6 @@ pub enum InitPostgresError {
     #[cfg(feature = "postgres-sqlx")]
     #[error(transparent)]
     PostgresSqlx(#[from] sqlx::Error),
-}
-
-#[cfg(feature = "postgres")]
-#[allow(unused)]
-async fn get_db_config() -> Result<(String, String, String, Option<String>), InitDatabaseError> {
-    let env_db_host = std::env::var("DB_HOST").ok();
-    let env_db_name = std::env::var("DB_NAME").ok();
-    let env_db_user = std::env::var("DB_USER").ok();
-    let env_db_password = std::env::var("DB_PASSWORD").ok();
-
-    Ok(
-        if env_db_host.is_some() || env_db_name.is_some() || env_db_user.is_some() {
-            (
-                env_db_host.ok_or(InitDatabaseError::InvalidConnectionOptions)?,
-                env_db_name.ok_or(InitDatabaseError::InvalidConnectionOptions)?,
-                env_db_user.ok_or(InitDatabaseError::InvalidConnectionOptions)?,
-                env_db_password,
-            )
-        } else {
-            use aws_config::{BehaviorVersion, Region};
-            use aws_sdk_ssm::Client;
-            use std::collections::HashMap;
-
-            let config = aws_config::defaults(BehaviorVersion::latest())
-                .region(Region::new("us-east-1"))
-                .load()
-                .await;
-
-            let client = Client::new(&config);
-
-            let ssm_db_name_param_name = std::env::var("SSM_DB_NAME_PARAM_NAME")
-                .unwrap_or_else(|_| "moosicbox_server_db_name".to_string());
-            let ssm_db_host_param_name = std::env::var("SSM_DB_HOST_PARAM_NAME")
-                .unwrap_or_else(|_| "moosicbox_server_db_hostname".to_string());
-            let ssm_db_user_param_name = std::env::var("SSM_DB_USER_PARAM_NAME")
-                .unwrap_or_else(|_| "moosicbox_server_db_user".to_string());
-            let ssm_db_password_param_name = std::env::var("SSM_DB_PASSWORD_PARAM_NAME")
-                .unwrap_or_else(|_| "moosicbox_server_db_password".to_string());
-
-            let ssm_db_name_param_name = ssm_db_name_param_name.as_str();
-            let ssm_db_host_param_name = ssm_db_host_param_name.as_str();
-            let ssm_db_user_param_name = ssm_db_user_param_name.as_str();
-            let ssm_db_password_param_name = ssm_db_password_param_name.as_str();
-
-            let params = match client
-                .get_parameters()
-                .set_with_decryption(Some(true))
-                .names(ssm_db_name_param_name)
-                .names(ssm_db_host_param_name)
-                .names(ssm_db_password_param_name)
-                .names(ssm_db_user_param_name)
-                .send()
-                .await
-            {
-                Ok(params) => params,
-                Err(err) => panic!("Failed to get parameters {err:?}"),
-            };
-            let params = params.parameters.expect("Failed to get params");
-            let params: HashMap<String, String> = params
-                .iter()
-                .map(|param| {
-                    (
-                        param.name().unwrap().to_string(),
-                        param.value().unwrap().to_string(),
-                    )
-                })
-                .collect();
-
-            let password = params
-                .get(ssm_db_password_param_name)
-                .cloned()
-                .expect("No db_password");
-
-            let password = if password.is_empty() {
-                None
-            } else {
-                Some(password)
-            };
-
-            (
-                params
-                    .get(ssm_db_host_param_name)
-                    .cloned()
-                    .expect("No hostname"),
-                params
-                    .get(ssm_db_name_param_name)
-                    .cloned()
-                    .expect("No db_name"),
-                params
-                    .get(ssm_db_user_param_name)
-                    .cloned()
-                    .expect("No db_user"),
-                password,
-            )
-        },
-    )
 }
 
 #[cfg(all(
@@ -267,21 +199,21 @@ pub enum InitDatabaseError {
 
 #[cfg(feature = "postgres-sqlx")]
 #[allow(unused)]
-pub async fn init_postgres_sqlx() -> Result<Box<dyn Database>, InitDatabaseError> {
+pub async fn init_postgres_sqlx(
+    creds: Credentials,
+) -> Result<Box<dyn Database>, InitDatabaseError> {
     use std::sync::Arc;
 
     use moosicbox_database::sqlx::postgres::PostgresSqlxDatabase;
     use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
-    let (db_host, db_name, db_user, db_password) = get_db_config().await?;
-
     let connect_options = PgConnectOptions::new();
     let mut connect_options = connect_options
-        .host(&db_host)
-        .database(&db_name)
-        .username(&db_user);
+        .host(&creds.host)
+        .database(&creds.name)
+        .username(&creds.user);
 
-    if let Some(ref db_password) = db_password {
+    if let Some(db_password) = &creds.password {
         connect_options = connect_options.password(db_password);
     }
 
@@ -297,22 +229,25 @@ pub async fn init_postgres_sqlx() -> Result<Box<dyn Database>, InitDatabaseError
 
 #[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
 #[allow(unused)]
-pub async fn init_postgres_raw_native_tls() -> Result<Box<dyn Database>, InitDatabaseError> {
+pub async fn init_postgres_raw_native_tls(
+    creds: Credentials,
+) -> Result<Box<dyn Database>, InitDatabaseError> {
     use moosicbox_database::postgres::postgres::PostgresDatabase;
     use postgres_native_tls::MakeTlsConnector;
 
-    let (db_host, db_name, db_user, db_password) = get_db_config().await?;
-
     let mut config = tokio_postgres::Config::new();
-    let mut config = config.host(&db_host).dbname(&db_name).user(&db_user);
+    let mut config = config
+        .host(&creds.host)
+        .dbname(&creds.name)
+        .user(&creds.user);
 
-    if let Some(ref db_password) = db_password {
+    if let Some(db_password) = &creds.password {
         config = config.password(db_password);
     }
 
     let mut builder = native_tls::TlsConnector::builder();
 
-    match db_host.to_lowercase().as_str() {
+    match creds.host.to_lowercase().as_str() {
         "localhost" | "127.0.0.1" | "0.0.0.0" => {
             builder.danger_accept_invalid_hostnames(true);
         }
@@ -328,23 +263,26 @@ pub async fn init_postgres_raw_native_tls() -> Result<Box<dyn Database>, InitDat
 
 #[cfg(all(feature = "postgres-openssl", feature = "postgres-raw"))]
 #[allow(unused)]
-pub async fn init_postgres_raw_openssl() -> Result<Box<dyn Database>, InitDatabaseError> {
+pub async fn init_postgres_raw_openssl(
+    creds: Credentials,
+) -> Result<Box<dyn Database>, InitDatabaseError> {
     use moosicbox_database::postgres::postgres::PostgresDatabase;
     use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
     use postgres_openssl::MakeTlsConnector;
 
-    let (db_host, db_name, db_user, db_password) = get_db_config().await?;
-
     let mut config = tokio_postgres::Config::new();
-    let mut config = config.host(&db_host).dbname(&db_name).user(&db_user);
+    let mut config = config
+        .host(&creds.host)
+        .dbname(&creds.name)
+        .user(&creds.user);
 
-    if let Some(ref db_password) = db_password {
+    if let Some(db_password) = &creds.password {
         config = config.password(db_password);
     }
 
     let mut builder = SslConnector::builder(SslMethod::tls())?;
 
-    match db_host.to_lowercase().as_str() {
+    match creds.host.to_lowercase().as_str() {
         "localhost" | "127.0.0.1" | "0.0.0.0" => {
             builder.set_verify(SslVerifyMode::NONE);
         }
@@ -360,15 +298,18 @@ pub async fn init_postgres_raw_openssl() -> Result<Box<dyn Database>, InitDataba
 
 #[cfg(feature = "postgres-raw")]
 #[allow(unused)]
-pub async fn init_postgres_raw_no_tls() -> Result<Box<dyn Database>, InitDatabaseError> {
+pub async fn init_postgres_raw_no_tls(
+    creds: Credentials,
+) -> Result<Box<dyn Database>, InitDatabaseError> {
     use moosicbox_database::postgres::postgres::PostgresDatabase;
 
-    let (db_host, db_name, db_user, db_password) = get_db_config().await?;
-
     let mut config = tokio_postgres::Config::new();
-    let mut config = config.host(&db_host).dbname(&db_name).user(&db_user);
+    let mut config = config
+        .host(&creds.host)
+        .dbname(&creds.name)
+        .user(&creds.user);
 
-    if let Some(ref db_password) = db_password {
+    if let Some(db_password) = &creds.password {
         config = config.password(db_password);
     }
 

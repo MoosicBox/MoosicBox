@@ -4,6 +4,7 @@
 !/packages/async_service
 !/packages/config
 !/packages/database
+!/packages/database_connection
 !/packages/env_utils
 !/packages/json_utils
 !/packages/logging

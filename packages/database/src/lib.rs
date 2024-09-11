@@ -213,6 +213,35 @@ pub enum DatabaseError {
     NoRow,
 }
 
+impl DatabaseError {
+    #[must_use]
+    pub fn is_connection_error(&self) -> bool {
+        match self {
+            #[cfg(feature = "postgres-sqlx")]
+            Self::PostgresSqlx(sqlx::postgres::SqlxDatabaseError::Sqlx(::sqlx::Error::Io(
+                ref _io_err,
+            ))) => true,
+            #[cfg(feature = "mysql-sqlx")]
+            Self::MysqlSqlx(sqlx::mysql::SqlxDatabaseError::Sqlx(::sqlx::Error::Io(
+                ref _io_err,
+            ))) => true,
+            #[cfg(feature = "sqlite-sqlx")]
+            Self::SqliteSqlx(sqlx::sqlite::SqlxDatabaseError::Sqlx(::sqlx::Error::Io(
+                ref _io_err,
+            ))) => true,
+            #[cfg(feature = "postgres-raw")]
+            Self::Postgres(postgres::postgres::PostgresDatabaseError::Postgres(ref pg_err)) => {
+                pg_err.to_string().as_str() == "connection closed"
+            }
+            #[cfg(feature = "rusqlite")]
+            Self::Rusqlite(rusqlite::RusqliteDatabaseError::Rusqlite(
+                ::rusqlite::Error::SqliteFailure(_, _),
+            )) => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Row {
     pub columns: Vec<(String, DatabaseValue)>,
