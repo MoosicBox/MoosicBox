@@ -39,6 +39,7 @@ pub enum InitDbError {
     #[cfg(any(
         feature = "sqlite-sqlx",
         all(
+            feature = "sqlx",
             not(feature = "postgres"),
             not(feature = "postgres-sqlx"),
             not(feature = "sqlite-rusqlite")
@@ -57,6 +58,7 @@ pub async fn init(
         feature = "postgres",
         feature = "sqlite",
         all(
+            feature = "sqlx",
             not(feature = "postgres"),
             not(feature = "postgres-sqlx"),
             not(feature = "sqlite-rusqlite")
@@ -79,40 +81,46 @@ pub async fn init(
         };
     }
 
-    #[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
-    #[allow(unused)]
-    let db = init_postgres_raw_native_tls(creds.ok_or(InitDbError::CredentialsRequired)?).await?;
-    #[cfg(all(
-        not(feature = "postgres-native-tls"),
-        feature = "postgres-openssl",
+    if cfg!(all(
+        feature = "postgres-native-tls",
         feature = "postgres-raw"
-    ))]
-    #[allow(unused)]
-    let db = init_postgres_raw_openssl(creds.ok_or(InitDbError::CredentialsRequired)?).await?;
-    #[cfg(all(
-        not(feature = "postgres-native-tls"),
-        not(feature = "postgres-openssl"),
-        not(feature = "postgres-sqlx"),
-        feature = "postgres-raw"
-    ))]
-    let db = init_postgres_raw_no_tls(creds.ok_or(InitDbError::CredentialsRequired)?).await?;
-    #[cfg(all(not(feature = "sqlite-sqlx"), feature = "postgres-sqlx"))]
-    let db = init_postgres_sqlx(creds.ok_or(InitDbError::CredentialsRequired)?).await?;
-    #[cfg(feature = "sqlite-rusqlite")]
-    #[allow(unused_variables)]
-    let db = init_sqlite(&db_profile_path)?;
-    #[cfg(any(
-        feature = "sqlite-sqlx",
-        all(
-            not(feature = "postgres"),
-            not(feature = "postgres-sqlx"),
-            not(feature = "sqlite-rusqlite")
-        )
-    ))]
-    #[allow(unused_variables)]
-    let db = init_sqlite_sqlx(&db_profile_path).await?;
-
-    Ok(db)
+    )) {
+        #[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
+        return Ok(
+            init_postgres_raw_native_tls(creds.ok_or(InitDbError::CredentialsRequired)?).await?,
+        );
+        #[cfg(not(all(feature = "postgres-native-tls", feature = "postgres-raw")))]
+        panic!("Invalid database features")
+    } else if cfg!(all(feature = "postgres-openssl", feature = "postgres-raw")) {
+        #[cfg(all(feature = "postgres-openssl", feature = "postgres-raw"))]
+        return Ok(
+            init_postgres_raw_openssl(creds.ok_or(InitDbError::CredentialsRequired)?).await?,
+        );
+        #[cfg(not(all(feature = "postgres-openssl", feature = "postgres-raw")))]
+        panic!("Invalid database features")
+    } else if cfg!(feature = "postgres-raw") {
+        #[cfg(feature = "postgres-raw")]
+        return Ok(init_postgres_raw_no_tls(creds.ok_or(InitDbError::CredentialsRequired)?).await?);
+        #[cfg(not(feature = "postgres-raw"))]
+        panic!("Invalid database features")
+    } else if cfg!(feature = "postgres-sqlx") {
+        #[cfg(feature = "postgres-sqlx")]
+        return Ok(init_postgres_sqlx(creds.ok_or(InitDbError::CredentialsRequired)?).await?);
+        #[cfg(not(feature = "postgres-sqlx"))]
+        panic!("Invalid database features")
+    } else if cfg!(feature = "sqlite-rusqlite") {
+        #[cfg(feature = "sqlite-rusqlite")]
+        return Ok(init_sqlite(&db_profile_path)?);
+        #[cfg(not(feature = "sqlite-rusqlite"))]
+        panic!("Invalid database features")
+    } else if cfg!(feature = "sqlite-sqlx",) {
+        #[cfg(feature = "sqlite-sqlx")]
+        return Ok(init_sqlite_sqlx(&db_profile_path).await?);
+        #[cfg(not(feature = "sqlite-sqlx"))]
+        panic!("Invalid database features")
+    } else {
+        panic!("Invalid database features")
+    }
 }
 
 #[cfg(feature = "sqlite-rusqlite")]
@@ -149,6 +157,7 @@ pub enum InitPostgresError {
 #[cfg(any(
     feature = "sqlite-sqlx",
     all(
+        feature = "sqlx",
         not(feature = "postgres"),
         not(feature = "postgres-sqlx"),
         not(feature = "sqlite-rusqlite")
@@ -163,6 +172,7 @@ pub enum InitSqliteSqlxDatabaseError {
 #[cfg(any(
     feature = "sqlite-sqlx",
     all(
+        feature = "sqlx",
         not(feature = "postgres"),
         not(feature = "postgres-sqlx"),
         not(feature = "sqlite-rusqlite")

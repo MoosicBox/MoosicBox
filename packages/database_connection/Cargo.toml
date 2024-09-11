@@ -54,11 +54,14 @@ fail-on-warnings = []
 
 creds = ["dep:aws-config", "dep:aws-sdk-ssm"]
 
+sqlx = []
+
 mysql = ["creds"]
 mysql-sqlx = [
     "dep:sqlx",
     "dep:sqlx-mysql",
     "mysql",
+    "sqlx",
     "sqlx-mysql/chrono",
     "sqlx/mysql",
 ]
@@ -75,14 +78,20 @@ postgres-sqlx = [
     "dep:sqlx-postgres",
     "moosicbox_database/postgres-sqlx",
     "postgres",
+    "sqlx",
     "sqlx/postgres",
     "sqlx/tls-rustls",
 ]
 sqlite = ["moosicbox_schema/sqlite"]
-sqlite-rusqlite = ["dep:rusqlite", "moosicbox_database/sqlite-rusqlite", "sqlite"]
+sqlite-rusqlite = [
+    "dep:rusqlite",
+    "moosicbox_database/sqlite-rusqlite",
+    "sqlite",
+]
 sqlite-sqlx = [
     "dep:sqlx",
     "moosicbox_database/sqlite-sqlx",
     "sqlite",
+    "sqlx",
     "sqlx/sqlite",
 ]
