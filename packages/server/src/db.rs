@@ -31,7 +31,7 @@ pub async fn init() -> Result<Box<dyn Database>, InitDbError> {
         )
     ))]
     let db_profile_path = {
-        let db_profile_dir_path = moosicbox_config::make_db_profile_dir_path("master")
+        let db_profile_dir_path = moosicbox_config::make_profile_db_dir_path("master")
             .expect("Failed to get DB profile dir path");
 
         db_profile_dir_path.join("library.db")
