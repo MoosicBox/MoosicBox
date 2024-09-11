@@ -78,59 +78,7 @@ fn main() -> std::io::Result<()> {
             .unwrap()
     })
     .block_on(async move {
-        let db_profile_dir_path = moosicbox_config::make_db_profile_dir_path("master")
-            .expect("Failed to get DB profile dir path");
-        let db_profile_path = db_profile_dir_path.join("library.db");
-
-        #[cfg(any(feature = "postgres", feature = "sqlite"))]
-        {
-            let db_profile_path_str = db_profile_path
-                .to_str()
-                .expect("Failed to get DB profile path");
-            if let Err(e) = moosicbox_schema::migrate_library(db_profile_path_str) {
-                moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
-            };
-        }
-
-        #[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
-        #[allow(unused)]
-        let (db, db_connection) = db::init_postgres_raw_native_tls()
-            .await
-            .expect("Failed to init postgres DB");
-        #[cfg(all(
-            not(feature = "postgres-native-tls"),
-            feature = "postgres-openssl",
-            feature = "postgres-raw"
-        ))]
-        #[allow(unused)]
-        let (db, db_connection) = db::init_postgres_raw_openssl()
-            .await
-            .expect("Failed to init postgres DB");
-        #[cfg(all(
-            not(feature = "postgres-native-tls"),
-            not(feature = "postgres-openssl"),
-            feature = "postgres-raw"
-        ))]
-        #[allow(unused)]
-        let (db, db_connection) = db::init_postgres_raw_no_tls()
-            .await
-            .expect("Failed to init postgres DB");
-        #[cfg(feature = "postgres-sqlx")]
-        let db = db::init_postgres_sqlx()
-            .await
-            .expect("Failed to init postgres DB");
-        #[cfg(feature = "sqlite-rusqlite")]
-        #[allow(unused_variables)]
-        let db = db::init_sqlite(&db_profile_path).expect("Failed to init sqlite DB");
-        #[cfg(all(
-            not(feature = "postgres"),
-            not(feature = "postgres-sqlx"),
-            not(feature = "sqlite-rusqlite")
-        ))]
-        #[allow(unused_variables)]
-        let db = db::init_sqlite_sqlx(&db_profile_path)
-            .await
-            .expect("Failed to init sqlite DB");
+        let db = db::init().await.expect("Failed to initialize database");
 
         SERVER_ID
             .set(

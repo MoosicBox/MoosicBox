@@ -1,6 +1,85 @@
 use moosicbox_database::Database;
 use thiserror::Error;
 
+#[derive(Debug, Error)]
+pub enum InitDbError {
+    #[cfg(feature = "sqlite-rusqlite")]
+    #[error(transparent)]
+    InitSqlite(#[from] InitSqliteError),
+    #[cfg(feature = "postgres")]
+    #[error(transparent)]
+    InitPostgres(#[from] InitPostgresError),
+    #[cfg(feature = "postgres")]
+    #[error(transparent)]
+    InitDatabase(#[from] InitDatabaseError),
+    #[cfg(all(
+        not(feature = "postgres"),
+        not(feature = "postgres-sqlx"),
+        not(feature = "sqlite-rusqlite")
+    ))]
+    #[error(transparent)]
+    InitSqliteSqlxDatabase(#[from] InitSqliteSqlxDatabaseError),
+}
+
+pub async fn init() -> Result<Box<dyn Database>, InitDbError> {
+    #[cfg(any(
+        feature = "sqlite",
+        all(
+            not(feature = "postgres"),
+            not(feature = "postgres-sqlx"),
+            not(feature = "sqlite-rusqlite")
+        )
+    ))]
+    let db_profile_path = {
+        let db_profile_dir_path = moosicbox_config::make_db_profile_dir_path("master")
+            .expect("Failed to get DB profile dir path");
+
+        db_profile_dir_path.join("library.db")
+    };
+
+    #[cfg(any(feature = "postgres", feature = "sqlite",))]
+    {
+        let db_profile_path_str = db_profile_path
+            .to_str()
+            .expect("Failed to get DB profile path");
+        if let Err(e) = moosicbox_schema::migrate_library(db_profile_path_str) {
+            moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
+        };
+    }
+
+    #[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
+    #[allow(unused)]
+    let (db, db_connection) = init_postgres_raw_native_tls().await?;
+    #[cfg(all(
+        not(feature = "postgres-native-tls"),
+        feature = "postgres-openssl",
+        feature = "postgres-raw"
+    ))]
+    #[allow(unused)]
+    let (db, db_connection) = init_postgres_raw_openssl().await?;
+    #[cfg(all(
+        not(feature = "postgres-native-tls"),
+        not(feature = "postgres-openssl"),
+        feature = "postgres-raw"
+    ))]
+    #[allow(unused)]
+    let (db, db_connection) = init_postgres_raw_no_tls().await?;
+    #[cfg(feature = "postgres-sqlx")]
+    let db = init_postgres_sqlx().await?;
+    #[cfg(feature = "sqlite-rusqlite")]
+    #[allow(unused_variables)]
+    let db = init_sqlite(&db_profile_path)?;
+    #[cfg(all(
+        not(feature = "postgres"),
+        not(feature = "postgres-sqlx"),
+        not(feature = "sqlite-rusqlite")
+    ))]
+    #[allow(unused_variables)]
+    let db = init_sqlite_sqlx(&db_profile_path).await?;
+
+    Ok(db)
+}
+
 #[cfg(feature = "sqlite-rusqlite")]
 #[derive(Debug, Error)]
 pub enum InitSqliteError {
@@ -134,7 +213,7 @@ async fn get_db_config() -> Result<(String, String, String, Option<String>), Ini
     not(feature = "sqlite-rusqlite")
 ))]
 #[derive(Debug, Error)]
-pub enum InitDatabaseError {
+pub enum InitSqliteSqlxDatabaseError {
     #[error(transparent)]
     SqliteSqlx(#[from] sqlx::Error),
 }
@@ -147,7 +226,7 @@ pub enum InitDatabaseError {
 #[allow(unused)]
 pub async fn init_sqlite_sqlx(
     db_location: &std::path::Path,
-) -> Result<Box<dyn Database>, InitDatabaseError> {
+) -> Result<Box<dyn Database>, InitSqliteSqlxDatabaseError> {
     use std::sync::Arc;
 
     use moosicbox_database::sqlx::sqlite::SqliteSqlxDatabase;
