@@ -2,7 +2,6 @@ use thiserror::Error;
 
 use crate::Credentials;
 
-#[cfg(feature = "postgres")]
 #[derive(Debug, Error)]
 pub enum GetDbCredsError {
     #[error("Invalid Connection Options")]

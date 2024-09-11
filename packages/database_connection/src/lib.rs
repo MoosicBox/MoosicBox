@@ -54,16 +54,7 @@ pub enum InitDbError {
 pub async fn init(
     #[allow(unused)] creds: Option<Credentials>,
 ) -> Result<Box<dyn Database>, InitDbError> {
-    #[cfg(any(
-        feature = "postgres",
-        feature = "sqlite",
-        all(
-            feature = "sqlx",
-            not(feature = "postgres"),
-            not(feature = "postgres-sqlx"),
-            not(feature = "sqlite-rusqlite")
-        )
-    ))]
+    #[cfg(feature = "sqlite")]
     let db_profile_path = {
         let db_profile_dir_path = moosicbox_config::make_profile_db_dir_path("master")
             .expect("Failed to get DB profile dir path");
@@ -71,7 +62,7 @@ pub async fn init(
         db_profile_dir_path.join("library.db")
     };
 
-    #[cfg(any(feature = "postgres", feature = "sqlite",))]
+    #[cfg(feature = "sqlite")]
     {
         let db_profile_path_str = db_profile_path
             .to_str()
@@ -169,15 +160,7 @@ pub enum InitSqliteSqlxDatabaseError {
     SqliteSqlx(#[from] sqlx::Error),
 }
 
-#[cfg(any(
-    feature = "sqlite-sqlx",
-    all(
-        feature = "sqlx",
-        not(feature = "postgres"),
-        not(feature = "postgres-sqlx"),
-        not(feature = "sqlite-rusqlite")
-    )
-))]
+#[cfg(feature = "sqlite-sqlx")]
 #[allow(unused)]
 pub async fn init_sqlite_sqlx(
     db_location: &std::path::Path,
