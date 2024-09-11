@@ -1052,7 +1052,7 @@ mod test {
                     total: 0,
                 },
                 fetch: Arc::new(Mutex::new(Box::new(move |_offset, _count| {
-                    Box::pin(async move { unimplemented!() })
+                    Box::pin(async move { unimplemented!("Fetch artists is not implemented") })
                 }))),
             })
         }
@@ -1078,7 +1078,7 @@ mod test {
                     total: 0,
                 },
                 fetch: Arc::new(Mutex::new(Box::new(move |_offset, _count| {
-                    Box::pin(async move { unimplemented!() })
+                    Box::pin(async move { unimplemented!("Fetching albums is not implemented") })
                 }))),
             })
         }
@@ -1105,7 +1105,9 @@ mod test {
                     total: 0,
                 },
                 fetch: Arc::new(Mutex::new(Box::new(move |_offset, _count| {
-                    Box::pin(async move { unimplemented!() })
+                    Box::pin(
+                        async move { unimplemented!("Fetching artist albums is not implemented") },
+                    )
                 }))),
             })
         }
@@ -1134,7 +1136,7 @@ mod test {
                     total: 0,
                 },
                 fetch: Arc::new(Mutex::new(Box::new(move |_offset, _count| {
-                    Box::pin(async move { unimplemented!() })
+                    Box::pin(async move { unimplemented!("Fetching tracks is not implemented") })
                 }))),
             })
         }
@@ -1159,7 +1161,9 @@ mod test {
                     total: 0,
                 },
                 fetch: Arc::new(Mutex::new(Box::new(move |_offset, _count| {
-                    Box::pin(async move { unimplemented!() })
+                    Box::pin(
+                        async move { unimplemented!("Fetching album tracks is not implemented") },
+                    )
                 }))),
             })
         }

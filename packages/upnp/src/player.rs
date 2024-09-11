@@ -587,11 +587,11 @@ impl UpnpPlayer {
 
 impl AudioWrite for UpnpPlayer {
     fn write(&mut self, _decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
-        unimplemented!()
+        unimplemented!("UpnpPlayer AudioWrite write is not implemented")
     }
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
-        unimplemented!()
+        unimplemented!("UpnpPlayer AudioWrite flush is not implemented")
     }
 }
 
@@ -622,11 +622,11 @@ pub struct UpnpAvTransportService {
 
 impl AudioWrite for UpnpAvTransportService {
     fn write(&mut self, _decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
-        unimplemented!()
+        unimplemented!("UpnpAvTransportService AudioWrite write is not implemented")
     }
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
-        unimplemented!()
+        unimplemented!("UpnpAvTransportService AudioWrite flush is not implemented")
     }
 }
 

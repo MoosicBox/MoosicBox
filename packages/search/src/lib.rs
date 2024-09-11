@@ -1038,7 +1038,7 @@ mod tests {
                             OwnedValue::Str(str) => str.to_string(),
                             OwnedValue::Bool(bool) => bool.to_string(),
                             OwnedValue::U64(num) => num.to_string(),
-                            _ => unimplemented!(),
+                            _ => unimplemented!("Unimplemented cache data type"),
                         })
                         .collect::<Vec<_>>()
                         .join(",")

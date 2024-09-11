@@ -137,12 +137,16 @@ pub async fn setup_tunnel(
                                     Ok::<_, String>(())
                                 });
                             }
-                            TunnelMessage::Binary(_) => unimplemented!(),
+                            TunnelMessage::Binary(_) => {
+                                unimplemented!("Binary TunnelMessage is not implemented")
+                            }
                             TunnelMessage::Ping(_) | TunnelMessage::Pong(_) => {}
                             TunnelMessage::Close => {
                                 log::info!("Tunnel connection was closed");
                             }
-                            TunnelMessage::Frame(_) => unimplemented!(),
+                            TunnelMessage::Frame(_) => {
+                                unimplemented!("Frame TunnelMessage is not implemented")
+                            }
                         }
                     }
                     log::debug!("Exiting tunnel message loop");

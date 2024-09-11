@@ -46,7 +46,7 @@ impl RemoteLibraryMusicApi {
 #[async_trait]
 impl MusicApi for RemoteLibraryMusicApi {
     fn source(&self) -> ApiSource {
-        unimplemented!()
+        unimplemented!("Dynamic MusicApi must be implemented by the struct")
     }
 
     async fn artists(
@@ -56,23 +56,23 @@ impl MusicApi for RemoteLibraryMusicApi {
         _order: Option<ArtistOrder>,
         _order_direction: Option<ArtistOrderDirection>,
     ) -> PagingResult<Artist, ArtistsError> {
-        unimplemented!()
+        unimplemented!("Fetching artists is not implemented")
     }
 
     async fn artist(&self, _artist_id: &Id) -> Result<Option<Artist>, ArtistError> {
-        unimplemented!()
+        unimplemented!("Fetching artist is not implemented")
     }
 
     async fn add_artist(&self, _artist_id: &Id) -> Result<(), AddArtistError> {
-        unimplemented!()
+        unimplemented!("Adding artist is not implemented")
     }
 
     async fn remove_artist(&self, _artist_id: &Id) -> Result<(), RemoveArtistError> {
-        unimplemented!()
+        unimplemented!("Removing artist is not implemented")
     }
 
     async fn album_artist(&self, _album_id: &Id) -> Result<Option<Artist>, ArtistError> {
-        unimplemented!()
+        unimplemented!("Fetching album artist is not implemented")
     }
 
     async fn artist_cover_source(
@@ -80,15 +80,15 @@ impl MusicApi for RemoteLibraryMusicApi {
         _artist: &Artist,
         _size: ImageCoverSize,
     ) -> Result<Option<ImageCoverSource>, ArtistError> {
-        unimplemented!()
+        unimplemented!("Fetching artist cover source is not implemented")
     }
 
     async fn albums(&self, _request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
-        unimplemented!()
+        unimplemented!("Fetching albums is not implemented")
     }
 
     async fn album(&self, _album_id: &Id) -> Result<Option<Album>, AlbumError> {
-        unimplemented!()
+        unimplemented!("Fetching album is not implemented")
     }
 
     async fn artist_albums(
@@ -100,15 +100,15 @@ impl MusicApi for RemoteLibraryMusicApi {
         _order: Option<AlbumOrder>,
         _order_direction: Option<AlbumOrderDirection>,
     ) -> PagingResult<Album, ArtistAlbumsError> {
-        unimplemented!()
+        unimplemented!("Fetching artist albums is not implemented")
     }
 
     async fn add_album(&self, _album_id: &Id) -> Result<(), AddAlbumError> {
-        unimplemented!()
+        unimplemented!("Adding album is not implemented")
     }
 
     async fn remove_album(&self, _album_id: &Id) -> Result<(), RemoveAlbumError> {
-        unimplemented!()
+        unimplemented!("Removing album is not implemented")
     }
 
     async fn album_cover_source(
@@ -116,7 +116,7 @@ impl MusicApi for RemoteLibraryMusicApi {
         _album: &Album,
         _size: ImageCoverSize,
     ) -> Result<Option<ImageCoverSource>, AlbumError> {
-        unimplemented!()
+        unimplemented!("Fetching album cover source is not implemented")
     }
 
     async fn tracks(
@@ -127,7 +127,7 @@ impl MusicApi for RemoteLibraryMusicApi {
         _order: Option<TrackOrder>,
         _order_direction: Option<TrackOrderDirection>,
     ) -> PagingResult<Track, TracksError> {
-        unimplemented!()
+        unimplemented!("Fetching tracks is not implemented")
     }
 
     async fn album_tracks(
@@ -138,7 +138,7 @@ impl MusicApi for RemoteLibraryMusicApi {
         _order: Option<TrackOrder>,
         _order_direction: Option<TrackOrderDirection>,
     ) -> PagingResult<Track, TracksError> {
-        unimplemented!()
+        unimplemented!("Fetching album tracks is not implemented")
     }
 
     async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError> {
@@ -174,11 +174,11 @@ impl MusicApi for RemoteLibraryMusicApi {
     }
 
     async fn add_track(&self, _track_id: &Id) -> Result<(), AddTrackError> {
-        unimplemented!()
+        unimplemented!("Adding track is not implemented")
     }
 
     async fn remove_track(&self, _track_id: &Id) -> Result<(), RemoveTrackError> {
-        unimplemented!()
+        unimplemented!("Removing track is not implemented")
     }
 
     async fn track_source(
@@ -186,7 +186,7 @@ impl MusicApi for RemoteLibraryMusicApi {
         _track: TrackOrId,
         _quality: TrackAudioQuality,
     ) -> Result<Option<TrackSource>, TrackError> {
-        unimplemented!()
+        unimplemented!("Fetching track source is not implemented")
     }
 
     async fn track_size(
@@ -195,6 +195,6 @@ impl MusicApi for RemoteLibraryMusicApi {
         _source: &TrackSource,
         _quality: PlaybackQuality,
     ) -> Result<Option<u64>, TrackError> {
-        unimplemented!()
+        unimplemented!("Fetching track size is not implemented")
     }
 }
