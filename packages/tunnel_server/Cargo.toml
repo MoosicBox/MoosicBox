@@ -61,7 +61,6 @@ uuid = { workspace = true }
 [features]
 default = [
     "base64",
-    "postgres",
     "postgres-native-tls",
     "postgres-openssl",
     "postgres-raw",
@@ -72,8 +71,8 @@ fail-on-warnings = []
 
 base64 = ["moosicbox_tunnel/base64"]
 
-postgres            = ["postgres-sqlx"]
-postgres-native-tls = ["moosicbox_database_connection/postgres-native-tls"]
-postgres-openssl    = ["moosicbox_database_connection/postgres-openssl"]
-postgres-raw        = ["moosicbox_database_connection/postgres-raw"]
-postgres-sqlx       = ["moosicbox_database_connection/postgres-sqlx"]
+postgres            = []
+postgres-native-tls = ["moosicbox_database_connection/postgres-native-tls", "postgres"]
+postgres-openssl    = ["moosicbox_database_connection/postgres-openssl", "postgres"]
+postgres-raw        = ["moosicbox_database_connection/postgres-raw", "postgres"]
+postgres-sqlx       = ["moosicbox_database_connection/postgres-sqlx", "postgres"]

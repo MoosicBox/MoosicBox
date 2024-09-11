@@ -262,7 +262,7 @@ impl PostgresDatabase {
 
 impl Drop for PostgresDatabase {
     fn drop(&mut self) {
-        if let Err(e) = tokio::runtime::Handle::current().block_on(self.close()) {
+        if let Err(e) = self.trigger_close() {
             log::error!("Failed to drop postgres database connection: {e:?}");
         }
     }
@@ -441,7 +441,7 @@ impl Database for PostgresDatabase {
         Ok(rows)
     }
 
-    async fn close(&self) -> Result<(), DatabaseError> {
+    fn trigger_close(&self) -> Result<(), DatabaseError> {
         self.handle.abort();
         Ok(())
     }

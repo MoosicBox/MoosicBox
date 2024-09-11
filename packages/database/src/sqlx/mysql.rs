@@ -373,10 +373,6 @@ impl Database for MySqlSqlxDatabase {
         };
         Ok(rows)
     }
-
-    async fn close(&self) -> Result<(), DatabaseError> {
-        Ok(())
-    }
 }
 
 fn column_value(value: &MySqlValueRef<'_>) -> Result<DatabaseValue, sqlx::Error> {

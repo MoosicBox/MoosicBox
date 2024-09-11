@@ -312,7 +312,16 @@ pub trait Database: Send + Sync + std::fmt::Debug {
         statement: &DeleteStatement<'_>,
     ) -> Result<Option<Row>, DatabaseError>;
 
-    async fn close(&self) -> Result<(), DatabaseError>;
+    /// # Errors
+    ///
+    /// Will return `Err` if the close failed to trigger.
+    fn trigger_close(&self) -> Result<(), DatabaseError> {
+        Ok(())
+    }
+
+    async fn close(&self) -> Result<(), DatabaseError> {
+        self.trigger_close()
+    }
 }
 
 #[async_trait]
