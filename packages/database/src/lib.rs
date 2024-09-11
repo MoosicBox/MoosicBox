@@ -3,7 +3,7 @@
 
 #[cfg(feature = "postgres-raw")]
 pub mod postgres;
-#[cfg(feature = "rusqlite")]
+#[cfg(feature = "sqlite-rusqlite")]
 pub mod rusqlite;
 #[cfg(feature = "sqlx")]
 pub mod sqlx;
@@ -194,7 +194,7 @@ impl TryFrom<DatabaseValue> for i32 {
 
 #[derive(Debug, Error)]
 pub enum DatabaseError {
-    #[cfg(feature = "rusqlite")]
+    #[cfg(feature = "sqlite-rusqlite")]
     #[error(transparent)]
     Rusqlite(rusqlite::RusqliteDatabaseError),
     #[cfg(feature = "mysql-sqlx")]
@@ -233,7 +233,7 @@ impl DatabaseError {
             Self::Postgres(postgres::postgres::PostgresDatabaseError::Postgres(ref pg_err)) => {
                 pg_err.to_string().as_str() == "connection closed"
             }
-            #[cfg(feature = "rusqlite")]
+            #[cfg(feature = "sqlite-rusqlite")]
             Self::Rusqlite(rusqlite::RusqliteDatabaseError::Rusqlite(
                 ::rusqlite::Error::SqliteFailure(_, _),
             )) => true,

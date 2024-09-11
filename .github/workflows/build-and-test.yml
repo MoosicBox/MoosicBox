@@ -210,9 +210,87 @@ jobs:
                       path: packages/database
                       os: ubuntu-latest
 
+                    - name: database-mysql-sqlx
+                      path: packages/database
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: mysql-sqlx
+
+                    - name: database-postgres-raw
+                      path: packages/database
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: postgres-raw
+
+                    - name: database-postgres-sqlx
+                      path: packages/database
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: postgres-sqlx
+
+                    - name: database-sqlite-rusqlite
+                      path: packages/database
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: sqlite-rusqlite
+
+                    - name: database-sqlite-sqlx
+                      path: packages/database
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: sqlite-sqlx
+
                     - name: database_connection
                       path: packages/database_connection
                       os: ubuntu-latest
+
+                    - name: database_connection-mysql-sqlx
+                      path: packages/database_connection
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: mysql-sqlx
+
+                    - name: database_connection-postgres-raw
+                      path: packages/database_connection
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: postgres-raw
+
+                    - name: database_connection-postgres-raw-native-tls
+                      path: packages/database_connection
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: postgres-raw,postgres-native-tls
+
+                    - name: database_connection-postgres-raw-openssl
+                      path: packages/database_connection
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: postgres-raw,postgres-openssl
+
+                    - name: database_connection-postgres-sqlx
+                      path: packages/database_connection
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: postgres-sqlx
+
+                    - name: database_connection-postgres-sqlx-native-tls
+                      path: packages/database_connection
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: postgres-sqlx,postgres-native-tls
+
+                    - name: database_connection-postgres-sqlx-openssl
+                      path: packages/database_connection
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: postgres-sqlx,postgres-openssl
+
+                    - name: database_connection-sqlite-rusqlite
+                      path: packages/database_connection
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: sqlite-rusqlite
 
                     - name: downloader
                       path: packages/downloader

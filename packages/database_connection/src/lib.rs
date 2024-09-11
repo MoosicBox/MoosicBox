@@ -36,10 +36,13 @@ pub enum InitDbError {
     #[cfg(feature = "postgres")]
     #[error(transparent)]
     InitDatabase(#[from] InitDatabaseError),
-    #[cfg(all(
-        not(feature = "postgres"),
-        not(feature = "postgres-sqlx"),
-        not(feature = "sqlite-rusqlite")
+    #[cfg(any(
+        feature = "sqlite-sqlx",
+        all(
+            not(feature = "postgres"),
+            not(feature = "postgres-sqlx"),
+            not(feature = "sqlite-rusqlite")
+        )
     ))]
     #[error(transparent)]
     InitSqliteSqlxDatabase(#[from] InitSqliteSqlxDatabaseError),
@@ -78,14 +81,14 @@ pub async fn init(
 
     #[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
     #[allow(unused)]
-    let db = init_postgres_raw_native_tls().await?;
+    let db = init_postgres_raw_native_tls(creds.ok_or(InitDbError::CredentialsRequired)?).await?;
     #[cfg(all(
         not(feature = "postgres-native-tls"),
         feature = "postgres-openssl",
         feature = "postgres-raw"
     ))]
     #[allow(unused)]
-    let db = init_postgres_raw_openssl().await?;
+    let db = init_postgres_raw_openssl(creds.ok_or(InitDbError::CredentialsRequired)?).await?;
     #[cfg(all(
         not(feature = "postgres-native-tls"),
         not(feature = "postgres-openssl"),
@@ -93,15 +96,18 @@ pub async fn init(
         feature = "postgres-raw"
     ))]
     let db = init_postgres_raw_no_tls(creds.ok_or(InitDbError::CredentialsRequired)?).await?;
-    #[cfg(feature = "postgres-sqlx")]
+    #[cfg(all(not(feature = "sqlite-sqlx"), feature = "postgres-sqlx"))]
     let db = init_postgres_sqlx(creds.ok_or(InitDbError::CredentialsRequired)?).await?;
     #[cfg(feature = "sqlite-rusqlite")]
     #[allow(unused_variables)]
     let db = init_sqlite(&db_profile_path)?;
-    #[cfg(all(
-        not(feature = "postgres"),
-        not(feature = "postgres-sqlx"),
-        not(feature = "sqlite-rusqlite")
+    #[cfg(any(
+        feature = "sqlite-sqlx",
+        all(
+            not(feature = "postgres"),
+            not(feature = "postgres-sqlx"),
+            not(feature = "sqlite-rusqlite")
+        )
     ))]
     #[allow(unused_variables)]
     let db = init_sqlite_sqlx(&db_profile_path).await?;
@@ -140,10 +146,13 @@ pub enum InitPostgresError {
     PostgresSqlx(#[from] sqlx::Error),
 }
 
-#[cfg(all(
-    not(feature = "postgres"),
-    not(feature = "postgres-sqlx"),
-    not(feature = "sqlite-rusqlite")
+#[cfg(any(
+    feature = "sqlite-sqlx",
+    all(
+        not(feature = "postgres"),
+        not(feature = "postgres-sqlx"),
+        not(feature = "sqlite-rusqlite")
+    )
 ))]
 #[derive(Debug, Error)]
 pub enum InitSqliteSqlxDatabaseError {
@@ -151,10 +160,13 @@ pub enum InitSqliteSqlxDatabaseError {
     SqliteSqlx(#[from] sqlx::Error),
 }
 
-#[cfg(all(
-    not(feature = "postgres"),
-    not(feature = "postgres-sqlx"),
-    not(feature = "sqlite-rusqlite")
+#[cfg(any(
+    feature = "sqlite-sqlx",
+    all(
+        not(feature = "postgres"),
+        not(feature = "postgres-sqlx"),
+        not(feature = "sqlite-rusqlite")
+    )
 ))]
 #[allow(unused)]
 pub async fn init_sqlite_sqlx(

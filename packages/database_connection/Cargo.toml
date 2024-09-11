@@ -48,7 +48,7 @@ thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["macros", "rt", "tracing"] }
 
 [features]
-default = ["mysql", "postgres", "sqlite-sqlx"]
+default = ["mysql-sqlx", "postgres-sqlx", "sqlite-sqlx"]
 
 fail-on-warnings = []
 
@@ -79,7 +79,7 @@ postgres-sqlx = [
     "sqlx/tls-rustls",
 ]
 sqlite = ["moosicbox_schema/sqlite"]
-sqlite-rusqlite = ["dep:rusqlite", "moosicbox_database/rusqlite", "sqlite"]
+sqlite-rusqlite = ["dep:rusqlite", "moosicbox_database/sqlite-rusqlite", "sqlite"]
 sqlite-sqlx = [
     "dep:sqlx",
     "moosicbox_database/sqlite-sqlx",
