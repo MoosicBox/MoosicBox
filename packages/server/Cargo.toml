@@ -245,7 +245,7 @@ postgres-sqlx = [
     "sqlx/tls-rustls",
 ]
 sqlite = ["moosicbox_schema/sqlite"]
-sqlite-rusqlite = ["dep:rusqlite", "moosicbox_database/rusqlite"]
+sqlite-rusqlite = ["dep:rusqlite", "moosicbox_database/rusqlite", "sqlite"]
 sqlite-sqlx = ["moosicbox_database/sqlite-sqlx", "sqlite"]
 
 admin-htmx = ["admin-htmx-api"]
