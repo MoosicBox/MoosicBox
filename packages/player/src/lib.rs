@@ -438,7 +438,7 @@ pub enum PlayerSource {
     },
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct PlaybackHandler {
     pub id: usize,
     pub playback: Arc<std::sync::RwLock<Option<Playback>>>,
@@ -1125,7 +1125,7 @@ impl PlaybackHandler {
 }
 
 #[async_trait]
-pub trait Player: Send {
+pub trait Player: std::fmt::Debug + Send {
     async fn before_play_playback(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
         Ok(())
     }

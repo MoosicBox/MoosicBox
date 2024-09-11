@@ -48,6 +48,26 @@ pub struct UpnpPlayer {
     expected_state: Arc<RwLock<Option<String>>>,
 }
 
+impl std::fmt::Debug for UpnpPlayer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UpnpPlayer")
+            .field("id", &self.id)
+            .field("source", &self.source)
+            .field("transport_uri", &self.transport_uri)
+            .field("playback", &self.playback)
+            .field("receiver", &self.receiver)
+            .field("device", &self.device)
+            .field("service", &self.service)
+            .field("instance_id", &self.instance_id)
+            .field(
+                "position_info_subscription_id",
+                &self.position_info_subscription_id,
+            )
+            .field("expected_state", &self.expected_state)
+            .finish()
+    }
+}
+
 #[async_trait]
 impl Player for UpnpPlayer {
     async fn before_play_playback(&self, seek: Option<f64>) -> Result<(), PlayerError> {

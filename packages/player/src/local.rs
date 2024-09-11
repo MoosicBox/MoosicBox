@@ -27,6 +27,19 @@ pub struct LocalPlayer {
     pub playback_handler: Arc<RwLock<Option<PlaybackHandler>>>,
 }
 
+impl std::fmt::Debug for LocalPlayer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LocalPlayer")
+            .field("id", &self.id)
+            .field("playback_type", &self.playback_type)
+            .field("source", &self.source)
+            .field("output", &self.output)
+            .field("receiver", &self.receiver)
+            .field("playback", &self.playback)
+            .finish()
+    }
+}
+
 #[async_trait]
 impl Player for LocalPlayer {
     async fn before_play_playback(&self, seek: Option<f64>) -> Result<(), PlayerError> {
