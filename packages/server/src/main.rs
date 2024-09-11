@@ -172,9 +172,6 @@ fn main() -> std::io::Result<()> {
             .set(playback_event_handle.clone())
             .unwrap_or_else(|_| panic!("Failed to set PLAYBACK_EVENT_HANDLE"));
 
-        #[cfg(feature = "postgres-raw")]
-        let db_connection_handle = moosicbox_task::spawn("server: postgres", db_connection);
-
         let (tunnel_host, tunnel_join_handle, tunnel_handle) =
             crate::tunnel::setup_tunnel(database.clone(), music_api_state.clone(), service_port)
                 .await
@@ -228,119 +225,122 @@ fn main() -> std::io::Result<()> {
         #[cfg(feature = "openapi")]
         let openapi = api::openapi::init();
 
-        let app = move || {
-            let app_data = AppState {
-                tunnel_host: tunnel_host.clone(),
-                service_port,
-                database: database.clone(),
-            };
+        let app = {
+            let database = database.clone();
+            move || {
+                let app_data = AppState {
+                    tunnel_host: tunnel_host.clone(),
+                    service_port,
+                    database: database.clone(),
+                };
 
-            let music_api_state = MUSIC_API_STATE.read().unwrap().as_ref().unwrap().clone();
+                let music_api_state = MUSIC_API_STATE.read().unwrap().as_ref().unwrap().clone();
 
-            #[cfg(feature = "library")]
-            let library_api_state = LIBRARY_API_STATE.read().unwrap().as_ref().unwrap().clone();
+                #[cfg(feature = "library")]
+                let library_api_state = LIBRARY_API_STATE.read().unwrap().as_ref().unwrap().clone();
 
-            let cors = Cors::default()
-                .allow_any_origin()
-                .allowed_methods(vec!["GET", "POST", "OPTIONS", "DELETE", "PUT", "PATCH"])
-                .allowed_headers(vec![
-                    http::header::AUTHORIZATION,
-                    http::header::ACCEPT,
-                    http::header::CONTENT_TYPE,
-                    http::header::HeaderName::from_static("hx-boosted"),
-                    http::header::HeaderName::from_static("hx-current-url"),
-                    http::header::HeaderName::from_static("hx-history-restore-request"),
-                    http::header::HeaderName::from_static("hx-prompt"),
-                    http::header::HeaderName::from_static("hx-request"),
-                    http::header::HeaderName::from_static("hx-target"),
-                    http::header::HeaderName::from_static("hx-trigger-name"),
-                    http::header::HeaderName::from_static("hx-trigger"),
-                ])
-                .supports_credentials()
-                .max_age(3600);
+                let cors = Cors::default()
+                    .allow_any_origin()
+                    .allowed_methods(vec!["GET", "POST", "OPTIONS", "DELETE", "PUT", "PATCH"])
+                    .allowed_headers(vec![
+                        http::header::AUTHORIZATION,
+                        http::header::ACCEPT,
+                        http::header::CONTENT_TYPE,
+                        http::header::HeaderName::from_static("hx-boosted"),
+                        http::header::HeaderName::from_static("hx-current-url"),
+                        http::header::HeaderName::from_static("hx-history-restore-request"),
+                        http::header::HeaderName::from_static("hx-prompt"),
+                        http::header::HeaderName::from_static("hx-request"),
+                        http::header::HeaderName::from_static("hx-target"),
+                        http::header::HeaderName::from_static("hx-trigger-name"),
+                        http::header::HeaderName::from_static("hx-trigger"),
+                    ])
+                    .supports_credentials()
+                    .max_age(3600);
 
-            let app = App::new().wrap(cors);
+                let app = App::new().wrap(cors);
 
-            #[cfg(feature = "static-token-auth")]
-            let app = app.wrap(crate::auth::StaticTokenAuth::new(
-                std::env!("STATIC_TOKEN").into(),
-            ));
+                #[cfg(feature = "static-token-auth")]
+                let app = app.wrap(crate::auth::StaticTokenAuth::new(
+                    std::env!("STATIC_TOKEN").into(),
+                ));
 
-            let app = app
-                .wrap(middleware::Compress::default())
-                .wrap(moosicbox_middleware::api_logger::ApiLogger::default())
-                .app_data(web::Data::new(app_data))
-                .app_data(web::Data::new(music_api_state))
-                .service(api::health_endpoint)
-                .service(api::websocket);
+                let app = app
+                    .wrap(middleware::Compress::default())
+                    .wrap(moosicbox_middleware::api_logger::ApiLogger::default())
+                    .app_data(web::Data::new(app_data))
+                    .app_data(web::Data::new(music_api_state))
+                    .service(api::health_endpoint)
+                    .service(api::websocket);
 
-            #[cfg(feature = "library")]
-            let app = app.app_data(web::Data::new(library_api_state));
+                #[cfg(feature = "library")]
+                let app = app.app_data(web::Data::new(library_api_state));
 
-            #[cfg(feature = "openapi")]
-            let app = app.service(api::openapi::bind_services(web::scope("/"), &openapi));
+                #[cfg(feature = "openapi")]
+                let app = app.service(api::openapi::bind_services(web::scope("/"), &openapi));
 
-            #[cfg(feature = "admin-htmx-api")]
-            let app = app.service(moosicbox_admin_htmx::api::bind_services(web::scope(
-                "/admin",
-            )));
+                #[cfg(feature = "admin-htmx-api")]
+                let app = app.service(moosicbox_admin_htmx::api::bind_services(web::scope(
+                    "/admin",
+                )));
 
-            #[cfg(feature = "audio-output-api")]
-            let app = app.service(moosicbox_audio_output::api::bind_services(web::scope(
-                "/audio-output",
-            )));
+                #[cfg(feature = "audio-output-api")]
+                let app = app.service(moosicbox_audio_output::api::bind_services(web::scope(
+                    "/audio-output",
+                )));
 
-            #[cfg(feature = "audio-zone-api")]
-            let app = app.service(moosicbox_audio_zone::api::bind_services(web::scope(
-                "/audio-zone",
-            )));
+                #[cfg(feature = "audio-zone-api")]
+                let app = app.service(moosicbox_audio_zone::api::bind_services(web::scope(
+                    "/audio-zone",
+                )));
 
-            #[cfg(feature = "auth-api")]
-            let app = app.service(moosicbox_auth::api::bind_services(web::scope("/auth")));
+                #[cfg(feature = "auth-api")]
+                let app = app.service(moosicbox_auth::api::bind_services(web::scope("/auth")));
 
-            #[cfg(feature = "downloader-api")]
-            let app = app.service(moosicbox_downloader::api::bind_services(web::scope(
-                "/downloader",
-            )));
+                #[cfg(feature = "downloader-api")]
+                let app = app.service(moosicbox_downloader::api::bind_services(web::scope(
+                    "/downloader",
+                )));
 
-            #[cfg(feature = "files-api")]
-            let app = app.service(moosicbox_files::api::bind_services(web::scope("/files")));
+                #[cfg(feature = "files-api")]
+                let app = app.service(moosicbox_files::api::bind_services(web::scope("/files")));
 
-            #[cfg(feature = "menu-api")]
-            let app = app.service(moosicbox_menu::api::bind_services(web::scope("/menu")));
+                #[cfg(feature = "menu-api")]
+                let app = app.service(moosicbox_menu::api::bind_services(web::scope("/menu")));
 
-            #[cfg(feature = "player-api")]
-            let app = app.service(moosicbox_player::api::bind_services(web::scope("/player")));
+                #[cfg(feature = "player-api")]
+                let app = app.service(moosicbox_player::api::bind_services(web::scope("/player")));
 
-            #[cfg(feature = "search-api")]
-            let app = app.service(moosicbox_search::api::bind_services(web::scope("/search")));
+                #[cfg(feature = "search-api")]
+                let app = app.service(moosicbox_search::api::bind_services(web::scope("/search")));
 
-            #[cfg(feature = "library-api")]
-            let app = app.service(moosicbox_library::api::bind_services(web::scope(
-                "/library",
-            )));
+                #[cfg(feature = "library-api")]
+                let app = app.service(moosicbox_library::api::bind_services(web::scope(
+                    "/library",
+                )));
 
-            #[cfg(feature = "tidal-api")]
-            let app = app.service(moosicbox_tidal::api::bind_services(web::scope("/tidal")));
+                #[cfg(feature = "tidal-api")]
+                let app = app.service(moosicbox_tidal::api::bind_services(web::scope("/tidal")));
 
-            #[cfg(feature = "qobuz-api")]
-            let app = app.service(moosicbox_qobuz::api::bind_services(web::scope("/qobuz")));
+                #[cfg(feature = "qobuz-api")]
+                let app = app.service(moosicbox_qobuz::api::bind_services(web::scope("/qobuz")));
 
-            #[cfg(feature = "session-api")]
-            let app = app.service(moosicbox_session::api::bind_services(web::scope(
-                "/session",
-            )));
+                #[cfg(feature = "session-api")]
+                let app = app.service(moosicbox_session::api::bind_services(web::scope(
+                    "/session",
+                )));
 
-            #[cfg(feature = "scan-api")]
-            let app = app.service(moosicbox_scan::api::bind_services(web::scope("/scan")));
+                #[cfg(feature = "scan-api")]
+                let app = app.service(moosicbox_scan::api::bind_services(web::scope("/scan")));
 
-            #[cfg(feature = "upnp-api")]
-            let app = app.service(moosicbox_upnp::api::bind_services(web::scope("/upnp")));
+                #[cfg(feature = "upnp-api")]
+                let app = app.service(moosicbox_upnp::api::bind_services(web::scope("/upnp")));
 
-            #[cfg(feature = "yt-api")]
-            let app = app.service(moosicbox_yt::api::bind_services(web::scope("/yt")));
+                #[cfg(feature = "yt-api")]
+                let app = app.service(moosicbox_yt::api::bind_services(web::scope("/yt")));
 
-            app
+                app
+            }
         };
 
         let mut http_server = actix_web::HttpServer::new(app);
@@ -435,6 +435,8 @@ fn main() -> std::io::Result<()> {
         ) {
             moosicbox_assert::die_or_error!("Failed to register mdns service: {e:?}");
         }
+
+        let db = database.clone();
 
         if let Err(err) = try_join!(
             async move {
@@ -535,10 +537,12 @@ fn main() -> std::io::Result<()> {
                 } else {
                     log::trace!("No tunnel handle connection to close");
                 }
-                #[cfg(feature = "postgres-raw")]
+
                 {
-                    log::debug!("Aborting database connection...");
-                    db_connection_handle.abort();
+                    log::debug!("Closing database connection...");
+                    if let Err(e) = db.close().await {
+                        log::error!("Failed to shut down database connection: {e:?}");
+                    }
                 }
 
                 #[cfg(feature = "player")]

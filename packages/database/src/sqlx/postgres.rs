@@ -447,6 +447,10 @@ impl Database for PostgresSqlxDatabase {
         };
         Ok(rows)
     }
+
+    async fn close(&self) -> Result<(), DatabaseError> {
+        Ok(())
+    }
 }
 
 fn column_value(value: &PgValueRef<'_>) -> Result<DatabaseValue, sqlx::Error> {

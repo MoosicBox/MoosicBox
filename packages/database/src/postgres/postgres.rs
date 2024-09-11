@@ -6,7 +6,11 @@ use futures::StreamExt;
 use once_cell::sync::Lazy;
 use postgres_protocol::types::{bool_from_sql, float8_from_sql, int8_from_sql, text_from_sql};
 use thiserror::Error;
-use tokio::pin;
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    pin,
+    task::JoinHandle,
+};
 use tokio_postgres::{types::IsNull, Client, Row, RowStream};
 
 use crate::{
@@ -239,15 +243,36 @@ impl<T: Expression + ?Sized> ToSql for T {
 }
 
 #[allow(clippy::module_name_repetitions)]
-#[derive(Debug)]
 pub struct PostgresDatabase {
-    connection: Client,
+    client: Client,
+    handle: JoinHandle<std::result::Result<(), tokio_postgres::Error>>,
 }
 
 impl PostgresDatabase {
     #[must_use]
-    pub const fn new(connection: Client) -> Self {
-        Self { connection }
+    pub fn new<T: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
+        client: Client,
+        connection: tokio_postgres::Connection<tokio_postgres::Socket, T>,
+    ) -> Self {
+        let handle = moosicbox_task::spawn("Postgres database connection", connection);
+
+        Self { client, handle }
+    }
+}
+
+impl Drop for PostgresDatabase {
+    fn drop(&mut self) {
+        if let Err(e) = tokio::runtime::Handle::current().block_on(self.close()) {
+            log::error!("Failed to drop postgres database connection: {e:?}");
+        }
+    }
+}
+
+impl std::fmt::Debug for PostgresDatabase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PostgresDatabase")
+            .field("client", &self.client)
+            .finish_non_exhaustive()
     }
 }
 
@@ -278,7 +303,7 @@ impl From<PostgresDatabaseError> for DatabaseError {
 impl Database for PostgresDatabase {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(select(
-            &self.connection,
+            &self.client,
             query.table_name,
             query.distinct,
             query.columns,
@@ -295,7 +320,7 @@ impl Database for PostgresDatabase {
         query: &SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
         Ok(find_row(
-            &self.connection,
+            &self.client,
             query.table_name,
             query.distinct,
             query.columns,
@@ -311,7 +336,7 @@ impl Database for PostgresDatabase {
         statement: &DeleteStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(delete(
-            &self.connection,
+            &self.client,
             statement.table_name,
             statement.filters.as_deref(),
             statement.limit,
@@ -324,7 +349,7 @@ impl Database for PostgresDatabase {
         statement: &DeleteStatement<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
         Ok(delete(
-            &self.connection,
+            &self.client,
             statement.table_name,
             statement.filters.as_deref(),
             Some(1),
@@ -338,7 +363,7 @@ impl Database for PostgresDatabase {
         &self,
         statement: &InsertStatement<'_>,
     ) -> Result<crate::Row, DatabaseError> {
-        Ok(insert_and_get_row(&self.connection, statement.table_name, &statement.values).await?)
+        Ok(insert_and_get_row(&self.client, statement.table_name, &statement.values).await?)
     }
 
     async fn exec_update(
@@ -346,7 +371,7 @@ impl Database for PostgresDatabase {
         statement: &UpdateStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(update_and_get_rows(
-            &self.connection,
+            &self.client,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -360,7 +385,7 @@ impl Database for PostgresDatabase {
         statement: &UpdateStatement<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
         Ok(update_and_get_row(
-            &self.connection,
+            &self.client,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -374,7 +399,7 @@ impl Database for PostgresDatabase {
         statement: &UpsertStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(upsert(
-            &self.connection,
+            &self.client,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -388,7 +413,7 @@ impl Database for PostgresDatabase {
         statement: &UpsertStatement<'_>,
     ) -> Result<crate::Row, DatabaseError> {
         Ok(upsert_and_get_row(
-            &self.connection,
+            &self.client,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -403,7 +428,7 @@ impl Database for PostgresDatabase {
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         let rows = {
             upsert_multi(
-                &self.connection,
+                &self.client,
                 statement.table_name,
                 statement
                     .unique
@@ -414,6 +439,11 @@ impl Database for PostgresDatabase {
             .await?
         };
         Ok(rows)
+    }
+
+    async fn close(&self) -> Result<(), DatabaseError> {
+        self.handle.abort();
+        Ok(())
     }
 }
 
@@ -443,7 +473,7 @@ fn from_row(column_names: &[String], row: &Row) -> Result<crate::Row, PostgresDa
 }
 
 async fn update_and_get_row(
-    connection: &Client,
+    client: &Client,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
@@ -506,7 +536,7 @@ async fn update_and_get_row(
         all_values
     );
 
-    let statement = connection.prepare(&query).await?;
+    let statement = client.prepare(&query).await?;
 
     let column_names = statement
         .columns()
@@ -514,7 +544,7 @@ async fn update_and_get_row(
         .map(|x| x.name().to_string())
         .collect::<Vec<_>>();
 
-    let stream = connection.query_raw(&statement, &all_values).await?;
+    let stream = client.query_raw(&statement, &all_values).await?;
 
     pin!(stream);
 
@@ -524,7 +554,7 @@ async fn update_and_get_row(
 }
 
 async fn update_and_get_rows(
-    connection: &Client,
+    client: &Client,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
@@ -587,7 +617,7 @@ async fn update_and_get_rows(
         all_values
     );
 
-    let statement = connection.prepare(&query).await?;
+    let statement = client.prepare(&query).await?;
 
     let column_names = statement
         .columns()
@@ -595,7 +625,7 @@ async fn update_and_get_rows(
         .map(|x| x.name().to_string())
         .collect::<Vec<_>>();
 
-    let rows = connection.query_raw(&statement, &all_values).await?;
+    let rows = client.query_raw(&statement, &all_values).await?;
 
     to_rows(&column_names, rows).await
 }
@@ -790,7 +820,7 @@ fn bexprs_to_params_opt(values: Option<&[Box<dyn BooleanExpression>]>) -> Vec<Pg
 
 #[allow(clippy::too_many_arguments)]
 async fn select(
-    connection: &Client,
+    client: &Client,
     table_name: &str,
     distinct: bool,
     columns: &[&str],
@@ -819,7 +849,7 @@ async fn select(
         filters.map(|f| f.iter().filter_map(|x| x.params()).collect::<Vec<_>>())
     );
 
-    let statement = connection.prepare(&query).await?;
+    let statement = client.prepare(&query).await?;
     let column_names = statement
         .columns()
         .iter()
@@ -827,13 +857,13 @@ async fn select(
         .collect::<Vec<_>>();
 
     let filters = bexprs_to_params_opt(filters);
-    let rows = connection.query_raw(&statement, filters).await?;
+    let rows = client.query_raw(&statement, filters).await?;
 
     to_rows(&column_names, rows).await
 }
 
 async fn delete(
-    connection: &Client,
+    client: &Client,
     table_name: &str,
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
@@ -850,7 +880,7 @@ async fn delete(
         filters.map(|f| f.iter().filter_map(|x| x.params()).collect::<Vec<_>>())
     );
 
-    let statement = connection.prepare(&query).await?;
+    let statement = client.prepare(&query).await?;
     let column_names = statement
         .columns()
         .iter()
@@ -858,13 +888,13 @@ async fn delete(
         .collect::<Vec<_>>();
 
     let filters = bexprs_to_params_opt(filters);
-    let rows = connection.query_raw(&statement, filters).await?;
+    let rows = client.query_raw(&statement, filters).await?;
 
     to_rows(&column_names, rows).await
 }
 
 async fn find_row(
-    connection: &Client,
+    client: &Client,
     table_name: &str,
     distinct: bool,
     columns: &[&str],
@@ -889,14 +919,14 @@ async fn find_row(
     let filters = bexprs_to_params_opt(filters);
     log::trace!("Running find_row query: {query} with params: {:?}", filters);
 
-    let statement = connection.prepare(&query).await?;
+    let statement = client.prepare(&query).await?;
     let column_names = statement
         .columns()
         .iter()
         .map(|x| x.name().to_string())
         .collect::<Vec<_>>();
 
-    let rows = connection.query_raw(&statement, filters).await?;
+    let rows = client.query_raw(&statement, filters).await?;
 
     pin!(rows);
 
@@ -908,7 +938,7 @@ async fn find_row(
 }
 
 async fn insert_and_get_row(
-    connection: &Client,
+    client: &Client,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
 ) -> Result<crate::Row, PostgresDatabaseError> {
@@ -935,14 +965,14 @@ async fn insert_and_get_row(
         values
     );
 
-    let statement = connection.prepare(&query).await?;
+    let statement = client.prepare(&query).await?;
     let column_names = statement
         .columns()
         .iter()
         .map(|x| x.name().to_string())
         .collect::<Vec<_>>();
 
-    let rows = connection.query_raw(&statement, &values).await?;
+    let rows = client.query_raw(&statement, &values).await?;
 
     pin!(rows);
 
@@ -957,7 +987,7 @@ async fn insert_and_get_row(
 ///
 /// Will return `Err` if the update multi execution failed.
 pub async fn update_multi(
-    connection: &Client,
+    client: &Client,
     table_name: &str,
     values: &[Vec<(&str, Box<dyn Expression>)>],
     filters: Option<Vec<Box<dyn BooleanExpression>>>,
@@ -977,8 +1007,7 @@ pub async fn update_multi(
         let count = value.len();
         if pos + count >= (i16::MAX - 1) as usize {
             results.append(
-                &mut update_chunk(connection, table_name, &values[last_i..i], &filters, limit)
-                    .await?,
+                &mut update_chunk(client, table_name, &values[last_i..i], &filters, limit).await?,
             );
             last_i = i;
             pos = 0;
@@ -997,7 +1026,7 @@ pub async fn update_multi(
 
     if i > last_i {
         results.append(
-            &mut update_chunk(connection, table_name, &values[last_i..], &filters, limit).await?,
+            &mut update_chunk(client, table_name, &values[last_i..], &filters, limit).await?,
         );
     }
 
@@ -1005,7 +1034,7 @@ pub async fn update_multi(
 }
 
 async fn update_chunk(
-    connection: &Client,
+    client: &Client,
     table_name: &str,
     values: &[Vec<(&str, Box<dyn Expression>)>],
     filters: &Option<Vec<Box<dyn BooleanExpression>>>,
@@ -1102,14 +1131,14 @@ async fn update_chunk(
         all_values
     );
 
-    let statement = connection.prepare(&query).await?;
+    let statement = client.prepare(&query).await?;
     let column_names = statement
         .columns()
         .iter()
         .map(|x| x.name().to_string())
         .collect::<Vec<_>>();
 
-    let rows = connection.query_raw(&statement, &all_values).await?;
+    let rows = client.query_raw(&statement, &all_values).await?;
 
     to_rows(&column_names, rows).await
 }
@@ -1118,7 +1147,7 @@ async fn update_chunk(
 ///
 /// Will return `Err` if the upsert multi execution failed.
 pub async fn upsert_multi(
-    connection: &Client,
+    client: &Client,
     table_name: &str,
     unique: &[Box<dyn Expression>],
     values: &[Vec<(&str, Box<dyn Expression>)>],
@@ -1136,9 +1165,8 @@ pub async fn upsert_multi(
     for value in values {
         let count = value.len();
         if pos + count >= (i16::MAX - 1) as usize {
-            results.append(
-                &mut upsert_chunk(connection, table_name, unique, &values[last_i..i]).await?,
-            );
+            results
+                .append(&mut upsert_chunk(client, table_name, unique, &values[last_i..i]).await?);
             last_i = i;
             pos = 0;
         }
@@ -1147,14 +1175,14 @@ pub async fn upsert_multi(
     }
 
     if i > last_i {
-        results.append(&mut upsert_chunk(connection, table_name, unique, &values[last_i..]).await?);
+        results.append(&mut upsert_chunk(client, table_name, unique, &values[last_i..]).await?);
     }
 
     Ok(results)
 }
 
 async fn upsert_chunk(
-    connection: &Client,
+    client: &Client,
     table_name: &str,
     unique: &[Box<dyn Expression>],
     values: &[Vec<(&str, Box<dyn Expression>)>],
@@ -1228,44 +1256,44 @@ async fn upsert_chunk(
         all_values
     );
 
-    let statement = connection.prepare(&query).await?;
+    let statement = client.prepare(&query).await?;
     let column_names = statement
         .columns()
         .iter()
         .map(|x| x.name().to_string())
         .collect::<Vec<_>>();
 
-    let rows = connection.query_raw(&statement, all_values).await?;
+    let rows = client.query_raw(&statement, all_values).await?;
 
     to_rows(&column_names, rows).await
 }
 
 async fn upsert(
-    connection: &Client,
+    client: &Client,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, PostgresDatabaseError> {
-    let rows = update_and_get_rows(connection, table_name, values, filters, limit).await?;
+    let rows = update_and_get_rows(client, table_name, values, filters, limit).await?;
 
     Ok(if rows.is_empty() {
-        vec![insert_and_get_row(connection, table_name, values).await?]
+        vec![insert_and_get_row(client, table_name, values).await?]
     } else {
         rows
     })
 }
 
 async fn upsert_and_get_row(
-    connection: &Client,
+    client: &Client,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
 ) -> Result<crate::Row, PostgresDatabaseError> {
-    match find_row(connection, table_name, false, &["*"], filters, None, None).await? {
+    match find_row(client, table_name, false, &["*"], filters, None, None).await? {
         Some(row) => {
-            let updated = update_and_get_row(connection, table_name, values, filters, limit)
+            let updated = update_and_get_row(client, table_name, values, filters, limit)
                 .await?
                 .unwrap();
 
@@ -1280,7 +1308,7 @@ async fn upsert_and_get_row(
 
             Ok(updated)
         }
-        None => Ok(insert_and_get_row(connection, table_name, values).await?),
+        None => Ok(insert_and_get_row(client, table_name, values).await?),
     }
 }
 

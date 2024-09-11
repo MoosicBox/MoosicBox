@@ -12,6 +12,7 @@ version     = "0.1.0"
 
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
+moosicbox_task   = { path = "../task", default-features = false }
 
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }

@@ -120,12 +120,6 @@ impl ToValueType<MagicToken> for &Row {
 
 pub(crate) static DB: Lazy<Mutex<Option<Box<dyn Database>>>> = Lazy::new(|| Mutex::new(None));
 
-#[allow(clippy::type_complexity)]
-#[cfg(feature = "postgres-raw")]
-pub(crate) static DB_CONNECTION: Lazy<
-    Mutex<Option<tokio::task::JoinHandle<Result<(), tokio_postgres::Error>>>>,
-> = Lazy::new(|| Mutex::new(None));
-
 #[cfg(feature = "postgres")]
 #[derive(Debug, Error)]
 pub enum InitDatabaseError {
@@ -319,20 +313,11 @@ pub async fn init_postgres_raw_native_tls() -> Result<(), InitDatabaseError> {
 
     let connector = MakeTlsConnector::new(builder.build()?);
 
-    {
-        DB_CONNECTION.lock().await.take();
-    }
-
     let (client, connection) = config.connect(connector).await?;
 
     DB.lock()
         .await
-        .replace(Box::new(PostgresDatabase::new(client)));
-
-    DB_CONNECTION
-        .lock()
-        .await
-        .replace(moosicbox_task::spawn("postgres", connection));
+        .replace(Box::new(PostgresDatabase::new(client, connection)));
 
     Ok(())
 }
@@ -364,20 +349,11 @@ pub async fn init_postgres_raw_openssl() -> Result<(), InitDatabaseError> {
 
     let connector = MakeTlsConnector::new(builder.build());
 
-    {
-        DB_CONNECTION.lock().await.take();
-    }
-
     let (client, connection) = config.connect(connector).await?;
 
     DB.lock()
         .await
-        .replace(Box::new(PostgresDatabase::new(client)));
-
-    DB_CONNECTION
-        .lock()
-        .await
-        .replace(moosicbox_task::spawn("postgres", connection));
+        .replace(Box::new(PostgresDatabase::new(client, connection)));
 
     Ok(())
 }
@@ -398,20 +374,11 @@ pub async fn init_postgres_raw_no_tls() -> Result<(), InitDatabaseError> {
 
     let connector = tokio_postgres::NoTls;
 
-    {
-        DB_CONNECTION.lock().await.take();
-    }
-
     let (client, connection) = config.connect(connector).await?;
 
     DB.lock()
         .await
-        .replace(Box::new(PostgresDatabase::new(client)));
-
-    DB_CONNECTION
-        .lock()
-        .await
-        .replace(moosicbox_task::spawn("postgres", connection));
+        .replace(Box::new(PostgresDatabase::new(client, connection)));
 
     Ok(())
 }

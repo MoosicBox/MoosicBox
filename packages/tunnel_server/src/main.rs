@@ -129,9 +129,11 @@ fn main() -> Result<(), std::io::Error> {
                 db::DB.lock().await.take();
 
                 #[cfg(feature = "postgres-raw")]
-                if let Some(db_connection_handle) = db::DB_CONNECTION.lock().await.as_mut() {
+                if let Some(db_connection_handle) = db::DB.lock().await.as_mut() {
                     log::debug!("Shutting down db connection...");
-                    db_connection_handle.abort();
+                    if let Err(e) = db_connection_handle.close().await {
+                        log::error!("Failed to close database connection: {e:?}");
+                    }
                     log::debug!("Database connection closed");
                 } else {
                     log::debug!("No database connection");

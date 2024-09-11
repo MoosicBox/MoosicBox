@@ -282,6 +282,8 @@ pub trait Database: Send + Sync + std::fmt::Debug {
         &self,
         statement: &DeleteStatement<'_>,
     ) -> Result<Option<Row>, DatabaseError>;
+
+    async fn close(&self) -> Result<(), DatabaseError>;
 }
 
 #[async_trait]

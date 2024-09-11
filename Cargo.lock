@@ -3944,6 +3944,7 @@ dependencies = [
  "futures",
  "log",
  "moosicbox_assert",
+ "moosicbox_task",
  "once_cell",
  "postgres-protocol",
  "regex",

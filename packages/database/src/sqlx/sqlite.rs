@@ -449,6 +449,10 @@ impl Database for SqliteSqlxDatabase {
         };
         Ok(rows)
     }
+
+    async fn close(&self) -> Result<(), DatabaseError> {
+        Ok(())
+    }
 }
 
 /// # Errors

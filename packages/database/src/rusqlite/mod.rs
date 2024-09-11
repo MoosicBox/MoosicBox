@@ -349,6 +349,10 @@ impl Database for RusqliteDatabase {
             &statement.values,
         )?)
     }
+
+    async fn close(&self) -> Result<(), DatabaseError> {
+        Ok(())
+    }
 }
 
 impl From<Value> for DatabaseValue {

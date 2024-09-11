@@ -23,6 +23,7 @@ pub enum InitDbError {
 
 pub async fn init() -> Result<Box<dyn Database>, InitDbError> {
     #[cfg(any(
+        feature = "postgres",
         feature = "sqlite",
         all(
             not(feature = "postgres"),
@@ -49,21 +50,21 @@ pub async fn init() -> Result<Box<dyn Database>, InitDbError> {
 
     #[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
     #[allow(unused)]
-    let (db, db_connection) = init_postgres_raw_native_tls().await?;
+    let db = init_postgres_raw_native_tls().await?;
     #[cfg(all(
         not(feature = "postgres-native-tls"),
         feature = "postgres-openssl",
         feature = "postgres-raw"
     ))]
     #[allow(unused)]
-    let (db, db_connection) = init_postgres_raw_openssl().await?;
+    let db = init_postgres_raw_openssl().await?;
     #[cfg(all(
         not(feature = "postgres-native-tls"),
         not(feature = "postgres-openssl"),
         feature = "postgres-raw"
     ))]
     #[allow(unused)]
-    let (db, db_connection) = init_postgres_raw_no_tls().await?;
+    let db = init_postgres_raw_no_tls().await?;
     #[cfg(feature = "postgres-sqlx")]
     let db = init_postgres_sqlx().await?;
     #[cfg(feature = "sqlite-rusqlite")]
@@ -296,16 +297,7 @@ pub async fn init_postgres_sqlx() -> Result<Box<dyn Database>, InitDatabaseError
 
 #[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
 #[allow(unused)]
-pub async fn init_postgres_raw_native_tls() -> Result<
-    (
-        Box<dyn Database>,
-        tokio_postgres::Connection<
-            tokio_postgres::Socket,
-            postgres_native_tls::TlsStream<tokio_postgres::Socket>,
-        >,
-    ),
-    InitDatabaseError,
-> {
+pub async fn init_postgres_raw_native_tls() -> Result<Box<dyn Database>, InitDatabaseError> {
     use moosicbox_database::postgres::postgres::PostgresDatabase;
     use postgres_native_tls::MakeTlsConnector;
 
@@ -331,21 +323,12 @@ pub async fn init_postgres_raw_native_tls() -> Result<
 
     let (client, connection) = config.connect(connector).await?;
 
-    Ok((Box::new(PostgresDatabase::new(client)), connection))
+    Ok(Box::new(PostgresDatabase::new(client, connection)))
 }
 
 #[cfg(all(feature = "postgres-openssl", feature = "postgres-raw"))]
 #[allow(unused)]
-pub async fn init_postgres_raw_openssl() -> Result<
-    (
-        Box<dyn Database>,
-        tokio_postgres::Connection<
-            tokio_postgres::Socket,
-            postgres_openssl::TlsStream<tokio_postgres::Socket>,
-        >,
-    ),
-    InitDatabaseError,
-> {
+pub async fn init_postgres_raw_openssl() -> Result<Box<dyn Database>, InitDatabaseError> {
     use moosicbox_database::postgres::postgres::PostgresDatabase;
     use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
     use postgres_openssl::MakeTlsConnector;
@@ -372,18 +355,12 @@ pub async fn init_postgres_raw_openssl() -> Result<
 
     let (client, connection) = config.connect(connector).await?;
 
-    Ok((Box::new(PostgresDatabase::new(client)), connection))
+    Ok(Box::new(PostgresDatabase::new(client, connection)))
 }
 
 #[cfg(feature = "postgres-raw")]
 #[allow(unused)]
-pub async fn init_postgres_raw_no_tls() -> Result<
-    (
-        Box<dyn Database>,
-        tokio_postgres::Connection<tokio_postgres::Socket, tokio_postgres::tls::NoTlsStream>,
-    ),
-    InitDatabaseError,
-> {
+pub async fn init_postgres_raw_no_tls() -> Result<Box<dyn Database>, InitDatabaseError> {
     use moosicbox_database::postgres::postgres::PostgresDatabase;
 
     let (db_host, db_name, db_user, db_password) = get_db_config().await?;
@@ -399,5 +376,5 @@ pub async fn init_postgres_raw_no_tls() -> Result<
 
     let (client, connection) = config.connect(connector).await?;
 
-    Ok((Box::new(PostgresDatabase::new(client)), connection))
+    Ok(Box::new(PostgresDatabase::new(client, connection)))
 }
