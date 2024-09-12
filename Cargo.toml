@@ -135,7 +135,7 @@ lofty = { git = "https://github.com/BSteffaniak/lofty-rs.git", branch = "master-
 log = { version = "0.4", features = ["release_max_level_trace"] }
 maud = "0.26.0"
 md5 = "0.7.0"
-mdns-sd = "0.11.3"
+mdns-sd = "0.11.4"
 mp3-duration = "0.1.10"
 mp3lame-encoder = "0.2.0"
 mysql = { version = "25.0.1", features = [
