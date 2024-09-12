@@ -3,14 +3,13 @@ name: Deploy LoadBalancer
 on:
     workflow_dispatch:
         inputs:
-            extra_clusters:
-                description: "Extra Clusters"
+            stage:
+                description: 'Stage'
                 required: false
-                default: ""
+                default: 'prod'
 
 env:
     CARGO_TERM_COLOR: always
-    AWS_REGION: us-east-1
 
 jobs:
     deploy:
@@ -21,18 +20,20 @@ jobs:
 
             - uses: dtolnay/rust-toolchain@stable
 
-            - name: Install doctl
-              uses: digitalocean/action-doctl@v2
+            - uses: pnpm/action-setup@v3
+              name: Install pnpm
               with:
-                  token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-
-            - name: Save DigitalOcean kubeconfig
-              run: doctl kubernetes cluster kubeconfig save moosicbox-prod
+                  version: 9
+                  run_install: false
 
             - name: Deploy
               shell: bash
               env:
-                  CLUSTERS: "tunnel.moosicbox.com:moosicbox-tunnel-service:8004;cloud.moosicbox.com:moosicbox-service:8010;${{ github.event.inputs.extra_clusters }}"
+                  DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  AWS_REGION: us-east-1
               run: |
-                  ./do-deploy.sh moosicbox-tunnel-server-lb kubernetes/tunnel-server
-                  kubectl apply -f kubernetes/cert-manager.yaml
+                  pnpm install
+                  pnpm sst install
+                  pnpm sst deploy --stage ${{ github.event.inputs.stage }}
