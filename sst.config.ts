@@ -6,7 +6,11 @@ export default $config({
             name: 'moosicbox',
             removal: input?.stage === 'prod' ? 'retain' : 'remove',
             home: 'aws',
-            providers: { digitalocean: '4.31.1', kubernetes: '4.17.1' },
+            providers: {
+                digitalocean: '4.31.1',
+                kubernetes: '4.17.1',
+                awsx: '2.14.0',
+            },
         };
     },
     async run() {

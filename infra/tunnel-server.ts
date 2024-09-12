@@ -1,54 +1,89 @@
-import { parse } from 'yaml';
 import fs from 'node:fs';
+import { parse } from 'yaml';
 import { clusterProvider } from './cluster';
 import { certManagers } from './cert-manager';
+import { Input, Resource } from '@pulumi/pulumi';
+import { loadBalancer } from './load-balancer';
 
-function createDeployment() {
-    let tunnelServerDeploymentSpecYaml = fs.readFileSync(
+function createEcrRepo() {
+    return new awsx.ecr.Repository('moosicbox-tunnel-server', {
+        forceDelete: true,
+    });
+}
+
+function createImage(repo: awsx.ecr.Repository) {
+    const context = `../..`;
+    return new awsx.ecr.Image('tunnel-server', {
+        repositoryUrl: repo.url,
+        context,
+        dockerfile: `${context}/packages/tunnel_server/TunnelServer.Dockerfile`,
+    });
+}
+
+function createDeployment(
+    image: awsx.ecr.Image,
+    dependsOn: Input<Input<Resource>[]>,
+) {
+    let specYaml = fs.readFileSync(
         '../kubernetes/tunnel-server/moosicbox-tunnel-server-deployment.yaml'.substring(
             1,
         ),
         'utf8',
     );
-    tunnelServerDeploymentSpecYaml = tunnelServerDeploymentSpecYaml.replaceAll(
+    specYaml = specYaml.replaceAll(
         ' moosicbox-tunnel-server',
         ` moosicbox-tunnel-server-${$app.stage}`,
     );
-    tunnelServerDeploymentSpecYaml = tunnelServerDeploymentSpecYaml.replaceAll(
+    specYaml = specYaml.replaceAll(
         ' moosicbox-tunnel-service',
         ` moosicbox-tunnel-service-${$app.stage}`,
     );
-    const tunnelServerDeploymentSpec = parse(tunnelServerDeploymentSpecYaml);
+    const specJson = parse(specYaml);
 
-    return new kubernetes.apps.v1.Deployment(
-        'tunnel-server',
-        tunnelServerDeploymentSpec,
-        { provider: clusterProvider, dependsOn: [certManagers] },
+    const containers = specJson.spec.template.spec.containers;
+
+    containers.forEach(
+        (container: {
+            env: Record<string, string>[] | undefined;
+            image: string | awsx.ecr.Image['imageUri'];
+        }) => {
+            container.image = image.imageUri;
+        },
     );
+
+    return new kubernetes.apps.v1.Deployment('tunnel-server', specJson, {
+        provider: clusterProvider,
+        dependsOn,
+    });
 }
 
-function createService() {
-    let tunnelServerServiceSpecYaml = fs.readFileSync(
+function createService(dependsOn: Input<Input<Resource>[]>) {
+    let specYaml = fs.readFileSync(
         '../kubernetes/tunnel-server/moosicbox-tunnel-server-service.yaml'.substring(
             1,
         ),
         'utf8',
     );
-    tunnelServerServiceSpecYaml = tunnelServerServiceSpecYaml.replaceAll(
+    specYaml = specYaml.replaceAll(
         ' moosicbox-tunnel-service',
         ` moosicbox-tunnel-service-${$app.stage}`,
     );
-    const tunnelServerServiceSpec = parse(tunnelServerServiceSpecYaml);
+    const specJson = parse(specYaml);
 
-    return new kubernetes.core.v1.Service(
-        'tunnel-server',
-        tunnelServerServiceSpec,
-        { provider: clusterProvider, dependsOn: [certManagers] },
-    );
+    return new kubernetes.core.v1.Service('tunnel-server', specJson, {
+        provider: clusterProvider,
+        dependsOn,
+    });
 }
 
-const tunnelServerDeployment = createDeployment();
-const tunnelServerService = createService();
+const repo = createEcrRepo();
+const image = createImage(repo);
+const tunnelServerDeployment = createDeployment(image, [
+    image,
+    certManagers,
+    loadBalancer,
+]);
+const tunnelServerService = createService([tunnelServerDeployment]);
 
 export const outputs = {
     serviceId: tunnelServerService.id,

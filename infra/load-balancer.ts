@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { parse } from 'yaml';
 import { clusterProvider } from './cluster';
 import { certManagers } from './cert-manager';
+import { Input, Resource } from '@pulumi/pulumi';
 
 export const domainName = 'moosicbox.com';
 export const domain =
@@ -9,7 +10,22 @@ export const domain =
         ? `tunnel.${domainName}`
         : `tunnel-${$app.stage}.${domainName}`;
 
-function createCertificate() {
+function createEcrRepo() {
+    return new awsx.ecr.Repository('moosicbox-load-balancer', {
+        forceDelete: true,
+    });
+}
+
+function createImage(repo: awsx.ecr.Repository) {
+    const context = `../..`;
+    return new awsx.ecr.Image('load-balancer', {
+        repositoryUrl: repo.url,
+        context,
+        dockerfile: `${context}/packages/load_balancer/LoadBalancer.Dockerfile`,
+    });
+}
+
+function createCertificate(dependsOn: Input<Input<Resource>[]>) {
     let specYaml = fs.readFileSync(
         '../kubernetes/tunnel-server/moosicbox-tunnel-server-certificate.yaml'.substring(
             1,
@@ -28,11 +44,11 @@ function createCertificate() {
 
     return kubernetes.yaml.parse(
         { yaml: specYaml },
-        { provider: clusterProvider, dependsOn: [certManagers] },
+        { provider: clusterProvider, dependsOn },
     )[0];
 }
 
-function createIngress() {
+function createIngress(dependsOn: Input<Input<Resource>[]>) {
     let specYaml = fs.readFileSync(
         '../kubernetes/tunnel-server/moosicbox-tunnel-server-ingress.yaml'.substring(
             1,
@@ -51,11 +67,11 @@ function createIngress() {
 
     return new kubernetes.networking.v1.Ingress('tunnel-server', specJson, {
         provider: clusterProvider,
-        dependsOn: [certManagers],
+        dependsOn,
     });
 }
 
-function createIssuer() {
+function createIssuer(dependsOn: Input<Input<Resource>[]>) {
     let specYaml = fs.readFileSync(
         '../kubernetes/tunnel-server/moosicbox-tunnel-server-issuer.yaml'.substring(
             1,
@@ -73,11 +89,11 @@ function createIssuer() {
 
     return kubernetes.yaml.parse(
         { yaml: specYaml },
-        { provider: clusterProvider, dependsOn: [certManagers] },
+        { provider: clusterProvider, dependsOn },
     )[0];
 }
 
-function createLb() {
+function createLb(image: awsx.ecr.Image, dependsOn: Input<Input<Resource>[]>) {
     let specYaml = fs.readFileSync(
         '../kubernetes/tunnel-server/moosicbox-tunnel-server-lb-deployment.yaml'.substring(
             1,
@@ -97,7 +113,12 @@ function createLb() {
     const containers = specJson.spec.template.spec.containers;
 
     containers.forEach(
-        (container: { env: Record<string, string>[] | undefined }) => {
+        (container: {
+            env: Record<string, string>[] | undefined;
+            image: string | awsx.ecr.Image['imageUri'];
+        }) => {
+            container.image = image.imageUri;
+
             const env = container.env ?? [];
 
             env.push({
@@ -111,11 +132,11 @@ function createLb() {
 
     return new kubernetes.apps.v1.Deployment('tunnel-server-lb', specJson, {
         provider: clusterProvider,
-        dependsOn: [certManagers],
+        dependsOn,
     });
 }
 
-function createNodePort() {
+function createNodePort(dependsOn: Input<Input<Resource>[]>) {
     let specYaml = fs.readFileSync(
         '../kubernetes/tunnel-server/moosicbox-tunnel-server-nodeport.yaml'.substring(
             1,
@@ -134,14 +155,16 @@ function createNodePort() {
 
     return kubernetes.yaml.parse(
         { yaml: specYaml },
-        { provider: clusterProvider, dependsOn: [certManagers] },
+        { provider: clusterProvider, dependsOn },
     )[0];
 }
 
-createCertificate();
-createIngress();
-createIssuer();
-createLb();
-createNodePort();
+export const repo = createEcrRepo();
+export const image = createImage(repo);
+export const certificate = createCertificate([certManagers]);
+export const ingress = createIngress([certificate, certManagers, image]);
+export const issuer = createIssuer([ingress]);
+export const loadBalancer = createLb(image, [issuer]);
+export const nodePort = createNodePort([loadBalancer]);
 
 export const outputs = {};
