@@ -21,11 +21,8 @@ moosicbox_task     = { path = "../task", default-features = false }
 rusqlite = { workspace = true, optional = true }
 
 # sqlx dependencies
-sqlx = { workspace = true, optional = true, features = [
-    "runtime-tokio",
-    "tls-rustls",
-] }
-sqlx-mysql = { workspace = true, optional = true }
+sqlx          = { workspace = true, optional = true, features = ["runtime-tokio"] }
+sqlx-mysql    = { workspace = true, optional = true }
 sqlx-postgres = { workspace = true, optional = true }
 
 # tokio-postgres dependencies
@@ -51,6 +48,8 @@ tokio     = { workspace = true, features = ["macros", "rt", "tracing"] }
 default = ["mysql-sqlx", "postgres-sqlx", "sqlite-sqlx"]
 
 fail-on-warnings = []
+
+tls = ["moosicbox_database/tls", "sqlx/tls-rustls"]
 
 creds = ["dep:aws-config", "dep:aws-sdk-ssm"]
 

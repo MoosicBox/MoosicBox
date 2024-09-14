@@ -71,8 +71,14 @@ fail-on-warnings = []
 
 base64 = ["moosicbox_tunnel/base64"]
 
-postgres            = []
-postgres-native-tls = ["moosicbox_database_connection/postgres-native-tls", "postgres"]
-postgres-openssl    = ["moosicbox_database_connection/postgres-openssl", "postgres"]
-postgres-raw        = ["moosicbox_database_connection/postgres-raw", "postgres"]
-postgres-sqlx       = ["moosicbox_database_connection/postgres-sqlx", "postgres"]
+postgres = ["moosicbox_database_connection/tls"]
+postgres-native-tls = [
+    "moosicbox_database_connection/postgres-native-tls",
+    "postgres",
+]
+postgres-openssl = [
+    "moosicbox_database_connection/postgres-openssl",
+    "postgres",
+]
+postgres-raw = ["moosicbox_database_connection/postgres-raw", "postgres"]
+postgres-sqlx = ["moosicbox_database_connection/postgres-sqlx", "postgres"]
