@@ -2264,7 +2264,7 @@ dependencies = [
 [[package]]
 name = "free_log_client"
 version = "0.3.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#992dc4828bdd05f223ce8bffede793ed01d973dd"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#f3f2db3e09a76b26ffc41226baaa787541117ebb"
 dependencies = [
  "free_log_models",
  "futures-util",
@@ -2284,7 +2284,7 @@ dependencies = [
 [[package]]
 name = "free_log_models"
 version = "0.2.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#992dc4828bdd05f223ce8bffede793ed01d973dd"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#f3f2db3e09a76b26ffc41226baaa787541117ebb"
 dependencies = [
  "log",
  "serde",
@@ -3570,9 +3570,9 @@ checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 
 [[package]]
 name = "memmap2"
-version = "0.9.4"
+version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe751422e4a8caa417e13c3ea66452215d7d63e19e604f4980461212f3ae1322"
+checksum = "fd3f7eed9d3848f8b98834af67102b720745c4ec028fcd0aa0239277e7de374f"
 dependencies = [
  "libc",
 ]
@@ -5265,9 +5265,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.19.0"
+version = "1.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
+checksum = "33ea5043e58958ee56f3e15a90aee535795cd7dfd319846288d93c5b57d85cbe"
 
 [[package]]
 name = "oneshot"
