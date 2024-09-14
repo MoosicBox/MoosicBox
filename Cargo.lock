@@ -787,28 +787,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aws-sdk-apigatewaymanagement"
-version = "1.42.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5cef3516062d7083c2b3ffde4fc690b72c300f7f2dcc6003f86dfb6413e82aa"
-dependencies = [
- "aws-credential-types",
- "aws-runtime",
- "aws-smithy-async",
- "aws-smithy-http",
- "aws-smithy-json",
- "aws-smithy-runtime",
- "aws-smithy-runtime-api",
- "aws-smithy-types",
- "aws-types",
- "bytes",
- "http 0.2.12",
- "once_cell",
- "regex-lite",
- "tracing",
-]
-
-[[package]]
 name = "aws-sdk-ssm"
 version = "1.47.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4827,8 +4805,6 @@ dependencies = [
  "async-once-cell",
  "async-trait",
  "awc",
- "aws-config",
- "aws-sdk-apigatewaymanagement",
  "env_logger 0.11.5",
  "log",
  "moosicbox_assert",
