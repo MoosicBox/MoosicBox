@@ -50,8 +50,6 @@ moosicbox_session = { path = "../session", default-features = false, features = 
     "events",
 ] }
 moosicbox_task = { path = "../task", default-features = false }
-moosicbox_tunnel = { path = "../tunnel", default-features = false }
-moosicbox_tunnel_sender = { path = "../tunnel_sender", default-features = false }
 moosicbox_ws = { path = "../ws", default-features = false, features = ["ws"] }
 
 # APIs
@@ -93,6 +91,10 @@ moosicbox_yt = { path = "../yt", default-features = false, features = [
     "api",
     "db",
 ], optional = true }
+
+# Tunnel dependencies
+moosicbox_tunnel        = { path = "../tunnel", optional = true, default-features = false }
+moosicbox_tunnel_sender = { path = "../tunnel_sender", optional = true, default-features = false }
 
 utoipa            = { workspace = true, optional = true }
 utoipa-rapidoc    = { workspace = true, optional = true }
@@ -161,6 +163,7 @@ default = [
     "pulseaudio",
     "sqlite-sqlx",
     "static-token-auth",
+    "tunnel",
 ]
 
 fail-on-warnings = []
@@ -168,6 +171,7 @@ fail-on-warnings = []
 tls = ["actix-web/openssl", "dep:openssl", "dep:rcgen"]
 
 base64 = ["moosicbox_tunnel/base64", "moosicbox_tunnel_sender/base64"]
+tunnel = ["dep:moosicbox_tunnel", "dep:moosicbox_tunnel_sender"]
 
 # Player audio outputs
 asio                = ["moosicbox_player/asio"]
@@ -251,8 +255,17 @@ postgres-sqlx = [
     "sqlx/tls-rustls",
 ]
 sqlite = ["moosicbox_schema/sqlite"]
-sqlite-rusqlite = ["dep:rusqlite", "moosicbox_database/sqlite-rusqlite", "moosicbox_database_connection/sqlite-rusqlite", "sqlite"]
-sqlite-sqlx = ["moosicbox_database/sqlite-sqlx", "moosicbox_database_connection/sqlite-sqlx", "sqlite"]
+sqlite-rusqlite = [
+    "dep:rusqlite",
+    "moosicbox_database/sqlite-rusqlite",
+    "moosicbox_database_connection/sqlite-rusqlite",
+    "sqlite",
+]
+sqlite-sqlx = [
+    "moosicbox_database/sqlite-sqlx",
+    "moosicbox_database_connection/sqlite-sqlx",
+    "sqlite",
+]
 
 admin-htmx = ["admin-htmx-api"]
 downloader = ["moosicbox_downloader/api"]

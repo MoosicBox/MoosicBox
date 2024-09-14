@@ -179,6 +179,7 @@ impl WsServer {
         self.player_actions.push((id, action));
     }
 
+    #[cfg(feature = "tunnel")]
     pub fn add_sender(&mut self, sender: Box<dyn WebsocketSender>) {
         self.senders.push(sender);
     }

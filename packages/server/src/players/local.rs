@@ -32,7 +32,9 @@ pub enum InitError {
 
 pub async fn init(
     db: Arc<Box<dyn Database>>,
-    tunnel_handle: Option<moosicbox_tunnel_sender::sender::TunnelSenderHandle>,
+    #[cfg(feature = "tunnel")] tunnel_handle: Option<
+        moosicbox_tunnel_sender::sender::TunnelSenderHandle,
+    >,
 ) -> Result<(), InitError> {
     moosicbox_audio_output::scan_outputs().await?;
 
@@ -46,9 +48,14 @@ pub async fn init(
             ))?;
 
     for audio_output in moosicbox_audio_output::output_factories().await {
-        if let Err(err) =
-            register_server_player(&**db, handle.clone(), &tunnel_handle, audio_output.clone())
-                .await
+        if let Err(err) = register_server_player(
+            &**db,
+            handle.clone(),
+            #[cfg(feature = "tunnel")]
+            &tunnel_handle,
+            audio_output.clone(),
+        )
+        .await
         {
             log::error!("Failed to register server player: {err:?}");
         } else {
@@ -232,7 +239,9 @@ fn handle_server_playback_update(
 pub async fn register_server_player(
     db: &dyn Database,
     ws: crate::ws::server::WsServerHandle,
-    tunnel_handle: &Option<moosicbox_tunnel_sender::sender::TunnelSenderHandle>,
+    #[cfg(feature = "tunnel")] tunnel_handle: &Option<
+        moosicbox_tunnel_sender::sender::TunnelSenderHandle,
+    >,
     audio_output: moosicbox_audio_output::AudioOutputFactory,
 ) -> Result<(), moosicbox_ws::WebsocketSendError> {
     use crate::WS_SERVER_HANDLE;
@@ -274,6 +283,7 @@ pub async fn register_server_player(
     ws.add_player_action(player.id, handle_server_playback_update)
         .await;
 
+    #[cfg(feature = "tunnel")]
     if let Some(handle) = tunnel_handle {
         handle.add_player_action(player.id, handle_server_playback_update);
     }

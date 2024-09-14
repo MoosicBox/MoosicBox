@@ -7,6 +7,7 @@ mod auth;
 mod events;
 #[cfg(feature = "player")]
 mod players;
+#[cfg(feature = "tunnel")]
 mod tunnel;
 mod ws;
 
@@ -21,7 +22,6 @@ use once_cell::sync::Lazy;
 use std::{collections::HashMap, sync::Arc};
 use tokio::try_join;
 use tokio_util::sync::CancellationToken;
-use ws::server::WsServer;
 
 static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
 #[cfg(feature = "upnp")]
@@ -123,7 +123,10 @@ pub async fn run(
         .unwrap()
         .replace(library_api_state.clone());
 
-    let (mut ws_server, server_tx) = WsServer::new(database.clone());
+    #[cfg(feature = "tunnel")]
+    let (mut ws_server, server_tx) = ws::server::WsServer::new(database.clone());
+    #[cfg(not(feature = "tunnel"))]
+    let (ws_server, server_tx) = ws::server::WsServer::new(database.clone());
     #[cfg(feature = "player")]
     let handle = server_tx.clone();
     WS_SERVER_HANDLE.write().await.replace(server_tx);
@@ -158,11 +161,13 @@ pub async fn run(
         .set(playback_event_handle.clone())
         .unwrap_or_else(|_| panic!("Failed to set PLAYBACK_EVENT_HANDLE"));
 
+    #[cfg(feature = "tunnel")]
     let (tunnel_host, tunnel_join_handle, tunnel_handle) =
         crate::tunnel::setup_tunnel(database.clone(), music_api_state.clone(), service_port)
             .await
             .expect("Failed to setup tunnel connection");
 
+    #[cfg(feature = "tunnel")]
     if let Some(ref tunnel_handle) = tunnel_handle {
         ws_server.add_sender(Box::new(tunnel_handle.clone()));
     }
@@ -199,13 +204,22 @@ pub async fn run(
     #[cfg(feature = "player")]
     moosicbox_task::spawn(
         "server: scan outputs",
-        players::local::init(database.clone(), tunnel_handle.clone()),
+        players::local::init(
+            database.clone(),
+            #[cfg(feature = "tunnel")]
+            tunnel_handle.clone(),
+        ),
     );
 
     #[cfg(feature = "upnp")]
     moosicbox_task::spawn(
         "server: register upnp players",
-        players::upnp::init(database.clone(), handle.clone(), tunnel_handle.clone()),
+        players::upnp::init(
+            database.clone(),
+            handle.clone(),
+            #[cfg(feature = "tunnel")]
+            tunnel_handle.clone(),
+        ),
     );
 
     #[cfg(feature = "openapi")]
@@ -215,7 +229,10 @@ pub async fn run(
         let database = database.clone();
         move || {
             let app_data = AppState {
+                #[cfg(feature = "tunnel")]
                 tunnel_host: tunnel_host.clone(),
+                #[cfg(not(feature = "tunnel"))]
+                tunnel_host: None,
                 service_port,
                 database: database.clone(),
             };
@@ -511,11 +528,13 @@ pub async fn run(
             moosicbox_scan::cancel();
             CANCELLATION_TOKEN.cancel();
 
+            #[cfg(feature = "tunnel")]
             if let Some(handle) = tunnel_handle {
                 log::debug!("Closing tunnel connection...");
                 let _ = handle.close().await;
             }
 
+            #[cfg(feature = "tunnel")]
             if let Some(handle) = tunnel_join_handle {
                 log::debug!("Closing tunnel join handle connection...");
                 handle.await.unwrap();

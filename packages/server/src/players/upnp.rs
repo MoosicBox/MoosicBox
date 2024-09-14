@@ -38,7 +38,9 @@ pub enum InitError {
 pub async fn init(
     db: Arc<Box<dyn Database>>,
     handle: crate::ws::server::WsServerHandle,
-    tunnel_handle: Option<moosicbox_tunnel_sender::sender::TunnelSenderHandle>,
+    #[cfg(feature = "tunnel")] tunnel_handle: Option<
+        moosicbox_tunnel_sender::sender::TunnelSenderHandle,
+    >,
 ) -> Result<(), InitError> {
     load_upnp_players().await?;
 
@@ -50,7 +52,14 @@ pub async fn init(
     log::debug!("register_upnp_player: players={}", upnp_players.len());
 
     for (output, _player, _) in upnp_players {
-        if let Err(err) = register_upnp_player(&**db, handle.clone(), &tunnel_handle, output).await
+        if let Err(err) = register_upnp_player(
+            &**db,
+            handle.clone(),
+            #[cfg(feature = "tunnel")]
+            &tunnel_handle,
+            output,
+        )
+        .await
         {
             log::error!("Failed to register server player: {err:?}");
         } else {
@@ -232,7 +241,9 @@ fn handle_upnp_playback_update(
 pub async fn register_upnp_player(
     db: &dyn Database,
     ws: crate::ws::server::WsServerHandle,
-    tunnel_handle: &Option<moosicbox_tunnel_sender::sender::TunnelSenderHandle>,
+    #[cfg(feature = "tunnel")] tunnel_handle: &Option<
+        moosicbox_tunnel_sender::sender::TunnelSenderHandle,
+    >,
     audio_output: moosicbox_audio_output::AudioOutputFactory,
 ) -> Result<(), moosicbox_ws::WebsocketSendError> {
     log::debug!("register_upnp_player: Registering audio_output={audio_output:?}");
@@ -262,6 +273,7 @@ pub async fn register_upnp_player(
         ws.add_player_action(player.id, handle_upnp_playback_update)
             .await;
 
+        #[cfg(feature = "tunnel")]
         if let Some(handle) = tunnel_handle {
             handle.add_player_action(player.id, handle_upnp_playback_update);
         }
