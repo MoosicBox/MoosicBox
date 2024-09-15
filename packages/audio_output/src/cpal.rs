@@ -74,13 +74,13 @@ impl TryFrom<Device> for AudioOutputFactory {
             .supported_output_configs()
             .map_err(|_e| AudioOutputError::NoOutputs)?
         {
-            log::debug!("\toutput: {output:?}",);
+            log::trace!("\toutput: {output:?}",);
         }
         for input in device
             .supported_input_configs()
             .map_err(|_e| AudioOutputError::NoOutputs)?
         {
-            log::debug!("\tinput: {input:?}",);
+            log::trace!("\tinput: {input:?}",);
         }
 
         let name = device.name().unwrap_or("(Unknown)".into());
@@ -242,10 +242,10 @@ fn list_devices(host: &Host) {
     for dv in host.output_devices().unwrap() {
         log::debug!("device: {}", dv.name().unwrap());
         for output in dv.supported_output_configs().unwrap() {
-            log::debug!("\toutput: {output:?}",);
+            log::trace!("\toutput: {output:?}",);
         }
         for input in dv.supported_input_configs().unwrap() {
-            log::debug!("\tinput: {input:?}",);
+            log::trace!("\tinput: {input:?}",);
         }
     }
 }
