@@ -4727,6 +4727,7 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "moosicbox_async_service",
+ "moosicbox_config",
  "moosicbox_database",
  "moosicbox_database_connection",
  "moosicbox_env_utils",

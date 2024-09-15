@@ -13,7 +13,7 @@ mod ws;
 
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App};
-use moosicbox_config::db::get_or_init_server_identity;
+use moosicbox_config::{db::get_or_init_server_identity, AppType};
 use moosicbox_core::{app::AppState, sqlite::models::ApiSource};
 use moosicbox_database::Database;
 use moosicbox_files::files::track_pool::service::Commander as _;
@@ -50,6 +50,7 @@ static SERVER_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 #[allow(clippy::missing_panics_doc)]
 #[allow(clippy::missing_errors_doc)]
 pub async fn run(
+    app_type: AppType,
     addr: &str,
     service_port: u16,
     actix_workers: Option<usize>,
@@ -66,7 +67,7 @@ pub async fn run(
     #[cfg(not(feature = "postgres"))]
     let creds = None;
 
-    let db = moosicbox_database_connection::init(creds)
+    let db = moosicbox_database_connection::init(app_type, creds)
         .await
         .expect("Failed to initialize database");
 

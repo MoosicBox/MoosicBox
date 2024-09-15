@@ -3,6 +3,7 @@ use std::pin::Pin;
 use actix_web::error::ErrorInternalServerError;
 use chrono::NaiveDateTime;
 use futures_util::Future;
+use moosicbox_config::AppType;
 use moosicbox_database::{
     boxed,
     query::{where_eq, where_gte, FilterableQuery},
@@ -49,7 +50,7 @@ pub async fn init() -> Result<(), DatabaseError> {
     #[cfg(not(feature = "postgres"))]
     let creds = None;
 
-    binding.replace(moosicbox_database_connection::init(creds).await?);
+    binding.replace(moosicbox_database_connection::init(AppType::TunnelServer, creds).await?);
 
     Ok(())
 }

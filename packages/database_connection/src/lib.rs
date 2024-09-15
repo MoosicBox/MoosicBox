@@ -1,5 +1,6 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
+use moosicbox_config::AppType;
 use moosicbox_database::Database;
 use thiserror::Error;
 
@@ -52,11 +53,12 @@ pub enum InitDbError {
 }
 
 pub async fn init(
+    #[allow(unused)] app_type: AppType,
     #[allow(unused)] creds: Option<Credentials>,
 ) -> Result<Box<dyn Database>, InitDbError> {
     #[cfg(feature = "sqlite")]
     let db_profile_path = {
-        let db_profile_dir_path = moosicbox_config::make_profile_db_dir_path("master")
+        let db_profile_dir_path = moosicbox_config::make_profile_db_dir_path(app_type, "master")
             .expect("Failed to get DB profile dir path");
 
         db_profile_dir_path.join("library.db")

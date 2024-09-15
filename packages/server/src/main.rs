@@ -1,6 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
+use moosicbox_config::AppType;
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 
 #[allow(clippy::too_many_lines)]
@@ -40,6 +41,7 @@ fn main() -> std::io::Result<()> {
             .unwrap()
     })
     .block_on(moosicbox_server::run(
+        AppType::Server,
         &addr,
         service_port,
         actix_workers,

@@ -5,20 +5,43 @@ use std::path::PathBuf;
 #[cfg(feature = "db")]
 pub mod db;
 
+#[derive(Copy, Clone, Debug)]
+pub enum AppType {
+    App,
+    Server,
+    TunnelServer,
+}
+
+impl From<AppType> for &str {
+    fn from(value: AppType) -> Self {
+        match value {
+            AppType::App => "app",
+            AppType::Server => "server",
+            AppType::TunnelServer => "tunnel_server",
+        }
+    }
+}
+
+impl std::fmt::Display for AppType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str((*self).into())
+    }
+}
+
 pub fn get_config_dir_path() -> Option<PathBuf> {
     home::home_dir().map(|home| home.join(".local").join("moosicbox"))
 }
 
-pub fn get_profiles_dir_path() -> Option<PathBuf> {
-    get_config_dir_path().map(|x| x.join("profiles"))
+pub fn get_profiles_dir_path(app_type: AppType) -> Option<PathBuf> {
+    get_config_dir_path().map(|x| x.join(app_type.to_string()).join("profiles"))
 }
 
-pub fn get_profile_dir_path(profile: &str) -> Option<PathBuf> {
-    get_profiles_dir_path().map(|x| x.join(profile))
+pub fn get_profile_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf> {
+    get_profiles_dir_path(app_type).map(|x| x.join(profile))
 }
 
-pub fn get_profile_db_dir_path(profile: &str) -> Option<PathBuf> {
-    get_profile_dir_path(profile).map(|x| x.join("db"))
+pub fn get_profile_db_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf> {
+    get_profile_dir_path(app_type, profile).map(|x| x.join("db"))
 }
 
 pub fn get_cache_dir_path() -> Option<PathBuf> {
@@ -35,8 +58,8 @@ pub fn make_config_dir_path() -> Option<PathBuf> {
     None
 }
 
-pub fn make_profile_dir_path(profile: &str) -> Option<PathBuf> {
-    if let Some(path) = get_profile_dir_path(profile) {
+pub fn make_profile_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf> {
+    if let Some(path) = get_profile_dir_path(app_type, profile) {
         if path.is_dir() || std::fs::create_dir_all(&path).is_ok() {
             return Some(path);
         }
@@ -45,8 +68,8 @@ pub fn make_profile_dir_path(profile: &str) -> Option<PathBuf> {
     None
 }
 
-pub fn make_profile_db_dir_path(profile: &str) -> Option<PathBuf> {
-    if let Some(path) = get_profile_db_dir_path(profile) {
+pub fn make_profile_db_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf> {
+    if let Some(path) = get_profile_db_dir_path(app_type, profile) {
         if path.is_dir() || std::fs::create_dir_all(&path).is_ok() {
             return Some(path);
         }
