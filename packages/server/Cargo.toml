@@ -280,7 +280,8 @@ upnp       = ["dep:moosicbox_upnp", "player"]
 yt         = ["moosicbox_yt/api"]
 
 # APIs
-all-apis = [
+all-apis = ["app-apis", "player-api", "upnp-api"]
+app-apis = [
     "admin-htmx-api",
     "audio-output-api",
     "audio-zone-api",
@@ -289,13 +290,11 @@ all-apis = [
     "files-api",
     "library-api",
     "menu-api",
-    "player-api",
     "qobuz-api",
     "scan-api",
     "search-api",
     "session-api",
     "tidal-api",
-    "upnp-api",
     "yt-api",
 ]
 

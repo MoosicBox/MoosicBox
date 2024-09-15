@@ -53,6 +53,9 @@ pub async fn run(
     addr: &str,
     service_port: u16,
     actix_workers: Option<usize>,
+    #[cfg(feature = "player")] local_players: bool,
+    #[cfg(feature = "upnp")] upnp_players: bool,
+    on_startup: impl FnOnce() + Send,
 ) -> std::io::Result<()> {
     #[cfg(feature = "postgres")]
     let creds = Some(
@@ -146,21 +149,6 @@ pub async fn run(
     events::audio_zone_event::init(database.clone()).await;
     events::session_event::init(database.clone()).await;
 
-    #[cfg(feature = "player")]
-    let playback_event_service = events::playback_event::service::Service::new(
-        events::playback_event::Context::new(handle.clone()),
-    );
-    #[cfg(feature = "player")]
-    let playback_event_handle = playback_event_service.handle();
-    #[cfg(feature = "player")]
-    let playback_join_handle = playback_event_service
-        .with_name("PlaybackEventService")
-        .start();
-    #[cfg(feature = "player")]
-    events::playback_event::PLAYBACK_EVENT_HANDLE
-        .set(playback_event_handle.clone())
-        .unwrap_or_else(|_| panic!("Failed to set PLAYBACK_EVENT_HANDLE"));
-
     #[cfg(feature = "tunnel")]
     let (tunnel_host, tunnel_join_handle, tunnel_handle) =
         crate::tunnel::setup_tunnel(database.clone(), music_api_state.clone(), service_port)
@@ -189,38 +177,58 @@ pub async fn run(
     };
 
     #[cfg(feature = "upnp")]
-    let upnp_service =
-        moosicbox_upnp::listener::Service::new(moosicbox_upnp::listener::UpnpContext::new());
+    let (upnp_service_handle, join_upnp_service) = if upnp_players {
+        let upnp_service =
+            moosicbox_upnp::listener::Service::new(moosicbox_upnp::listener::UpnpContext::new());
+        let upnp_service_handle = upnp_service.handle();
+        let join_upnp_service = upnp_service.start();
 
-    #[cfg(feature = "upnp")]
-    let upnp_service_handle = upnp_service.handle();
-    #[cfg(feature = "upnp")]
-    let join_upnp_service = upnp_service.start();
-    #[cfg(feature = "upnp")]
-    UPNP_LISTENER_HANDLE
-        .set(upnp_service_handle.clone())
-        .unwrap_or_else(|_| panic!("Failed to set UPNP_LISTENER_HANDLE"));
+        UPNP_LISTENER_HANDLE
+            .set(upnp_service_handle.clone())
+            .unwrap_or_else(|_| panic!("Failed to set UPNP_LISTENER_HANDLE"));
+
+        #[cfg(feature = "upnp")]
+        moosicbox_task::spawn(
+            "server: register upnp players",
+            players::upnp::init(
+                database.clone(),
+                handle.clone(),
+                #[cfg(feature = "tunnel")]
+                tunnel_handle.clone(),
+            ),
+        );
+
+        (Some(upnp_service_handle), Some(join_upnp_service))
+    } else {
+        (None, None)
+    };
 
     #[cfg(feature = "player")]
-    moosicbox_task::spawn(
-        "server: scan outputs",
-        players::local::init(
-            database.clone(),
-            #[cfg(feature = "tunnel")]
-            tunnel_handle.clone(),
-        ),
-    );
+    let (playback_event_handle, playback_join_handle) = if local_players {
+        let playback_event_service = events::playback_event::service::Service::new(
+            events::playback_event::Context::new(handle.clone()),
+        );
+        let playback_event_handle = playback_event_service.handle();
+        let playback_join_handle = playback_event_service
+            .with_name("PlaybackEventService")
+            .start();
+        events::playback_event::PLAYBACK_EVENT_HANDLE
+            .set(playback_event_handle.clone())
+            .unwrap_or_else(|_| panic!("Failed to set PLAYBACK_EVENT_HANDLE"));
 
-    #[cfg(feature = "upnp")]
-    moosicbox_task::spawn(
-        "server: register upnp players",
-        players::upnp::init(
-            database.clone(),
-            handle.clone(),
-            #[cfg(feature = "tunnel")]
-            tunnel_handle.clone(),
-        ),
-    );
+        moosicbox_task::spawn(
+            "server: scan outputs",
+            players::local::init(
+                database.clone(),
+                #[cfg(feature = "tunnel")]
+                tunnel_handle.clone(),
+            ),
+        );
+
+        (Some(playback_event_handle), Some(playback_join_handle))
+    } else {
+        (None, None)
+    };
 
     #[cfg(feature = "openapi")]
     let openapi = api::openapi::init();
@@ -438,6 +446,8 @@ pub async fn run(
         moosicbox_assert::die_or_error!("Failed to register mdns service: {e:?}");
     }
 
+    on_startup();
+
     let db = database.clone();
 
     if let Err(err) = try_join!(
@@ -550,7 +560,7 @@ pub async fn run(
             }
 
             #[cfg(feature = "player")]
-            {
+            if let Some(playback_event_handle) = playback_event_handle {
                 use crate::events::playback_event::service::Commander as _;
 
                 log::debug!("Shutting down PlaybackEventHandler...");
@@ -565,7 +575,7 @@ pub async fn run(
             }
 
             #[cfg(feature = "upnp")]
-            {
+            if let Some(upnp_service_handle) = upnp_service_handle {
                 use moosicbox_upnp::listener::Commander as _;
 
                 log::debug!("Shutting down UpnpListener...");
@@ -586,13 +596,15 @@ pub async fn run(
         },
         async move {
             #[cfg(feature = "player")]
-            {
+            if let Some(playback_join_handle) = playback_join_handle {
                 let resp = playback_join_handle
                     .await
                     .expect("Failed to shut down playback event handler")
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
                 log::debug!("PlaybackEventHandler connection closed");
                 resp
+            } else {
+                Ok(())
             }
             #[cfg(not(feature = "player"))]
             Ok(())
@@ -607,13 +619,15 @@ pub async fn run(
         },
         async move {
             #[cfg(feature = "upnp")]
-            {
+            if let Some(join_upnp_service) = join_upnp_service {
                 let resp = join_upnp_service
                     .await
                     .expect("Failed to shut down UPnP service")
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
                 log::debug!("UPnP service closed");
                 resp
+            } else {
+                Ok(())
             }
             #[cfg(not(feature = "upnp"))]
             Ok(())

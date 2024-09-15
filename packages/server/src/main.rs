@@ -39,5 +39,14 @@ fn main() -> std::io::Result<()> {
             .build()
             .unwrap()
     })
-    .block_on(moosicbox_server::run(&addr, service_port, actix_workers))
+    .block_on(moosicbox_server::run(
+        &addr,
+        service_port,
+        actix_workers,
+        #[cfg(feature = "player")]
+        true,
+        #[cfg(feature = "upnp")]
+        true,
+        || log::info!("Server started on {addr}:{service_port}"),
+    ))
 }
