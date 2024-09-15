@@ -206,7 +206,7 @@ throttle = "0.1.0"
 tokio = { version = "1.40.0", features = ["io-util", "sync", "tracing"] }
 tokio-postgres = { version = "0.7.11", features = ["with-chrono-0_4"] }
 tokio-stream = "0.1.16"
-tokio-tungstenite = { version = "0.23.1", features = ["native-tls-vendored"] }
+tokio-tungstenite = { version = "0.24.0", features = ["native-tls-vendored"] }
 tokio-util = "0.7.12"
 url = "2.5.2"
 urlencoding = "2.1.3"
