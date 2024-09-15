@@ -468,9 +468,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.88"
+version = "1.0.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e1496f8fb1fbf272686b8d37f523dab3e4a7443300055e74cdaa449f3114356"
+checksum = "86fdf8605db99b54d3cd748a44c6d04df638eb5dafb219b135d0149bd0db01f6"
 
 [[package]]
 name = "arbitrary"
@@ -2242,7 +2242,7 @@ dependencies = [
 [[package]]
 name = "free_log_client"
 version = "0.3.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#f3f2db3e09a76b26ffc41226baaa787541117ebb"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#9fec26eb674bc2bde584bf41b0ffb1214b25e9c1"
 dependencies = [
  "free_log_models",
  "futures-util",
@@ -2262,7 +2262,7 @@ dependencies = [
 [[package]]
 name = "free_log_models"
 version = "0.2.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#f3f2db3e09a76b26ffc41226baaa787541117ebb"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#9fec26eb674bc2bde584bf41b0ffb1214b25e9c1"
 dependencies = [
  "log",
  "serde",
@@ -8095,11 +8095,10 @@ dependencies = [
 
 [[package]]
 name = "tokio-openssl"
-version = "0.6.4"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ffab79df67727f6acf57f1ff743091873c24c579b1e2ce4d8f53e47ded4d63d"
+checksum = "59df6849caa43bb7567f9a36f863c447d95a11d5903c9cc334ba32576a27eadd"
 dependencies = [
- "futures-util",
  "openssl",
  "openssl-sys",
  "tokio",
