@@ -4451,6 +4451,7 @@ version = "0.1.0"
 dependencies = [
  "diesel",
  "diesel_migrations",
+ "log",
  "moosicbox_assert",
  "thiserror",
 ]

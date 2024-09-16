@@ -15,6 +15,7 @@ moosicbox_assert = { path = "../assert", default-features = false }
 
 diesel            = { workspace = true, default-features = false }
 diesel_migrations = { workspace = true, default-features = false }
+log               = { workspace = true }
 thiserror         = { workspace = true }
 
 [features]

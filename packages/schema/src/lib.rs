@@ -23,16 +23,20 @@ pub fn migrate_library(database_url: &str) -> Result<(), MigrateError> {
 
     #[cfg(feature = "postgres")]
     {
+        log::debug!("migrate_library: running postgres migrations");
         let mut conn = diesel::PgConnection::establish(database_url).unwrap();
         conn.run_pending_migrations(POSTGRES_LIBRARY_MIGRATIONS)
             .map_err(MigrateError::DieselMigration)?;
+        log::debug!("migrate_library: finished running postgres migrations");
     }
 
     #[cfg(feature = "sqlite")]
     {
+        log::debug!("migrate_library: running sqlite migrations");
         let mut conn = diesel::SqliteConnection::establish(database_url).unwrap();
         conn.run_pending_migrations(SQLITE_LIBRARY_MIGRATIONS)
             .map_err(MigrateError::DieselMigration)?;
+        log::debug!("migrate_library: finished running sqlite migrations");
     }
 
     Ok(())
