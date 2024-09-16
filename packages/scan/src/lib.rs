@@ -290,7 +290,7 @@ impl Scanner {
         let enabled_origins = get_enabled_scan_origins(db).await?;
         let enabled = enabled_origins
             .into_iter()
-            .any(|origin| origin == ScanOrigin::Tidal);
+            .any(|origin| origin == api.source().into());
 
         if !enabled {
             log::debug!(
