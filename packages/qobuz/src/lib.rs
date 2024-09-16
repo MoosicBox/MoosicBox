@@ -1163,6 +1163,7 @@ pub async fn album_tracks(
     let artist = value.to_nested_value(&["artist", "name"])?;
     let artist_id = value.to_nested_value(&["artist", "id"])?;
     let album = value.to_value("title")?;
+    let version = value.to_value("version")?;
     let image: Option<QobuzImage> = value.to_value("image")?;
     let items: Vec<QobuzTrack> = value
         .to_nested_value::<Vec<&Value>>(&["tracks", "items"])?
@@ -1174,6 +1175,7 @@ pub async fn album_tracks(
                 artist_id,
                 album,
                 &Into::<String>::into(album_id.clone()),
+                version,
                 image.clone(),
             )
         })

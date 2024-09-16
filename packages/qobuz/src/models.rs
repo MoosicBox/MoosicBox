@@ -471,6 +471,7 @@ impl QobuzTrack {
         artist_id: u64,
         album: &str,
         album_id: &str,
+        album_version: Option<&str>,
         image: Option<QobuzImage>,
     ) -> Result<QobuzTrack, ParseError> {
         Ok(QobuzTrack {
@@ -478,7 +479,7 @@ impl QobuzTrack {
             track_number: value.to_value("track_number")?,
             artist: artist.to_string(),
             artist_id,
-            album: album.to_string(),
+            album: format_title(album, album_version),
             album_id: album_id.to_string(),
             image,
             copyright: value.to_value("copyright")?,
