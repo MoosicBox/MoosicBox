@@ -394,7 +394,7 @@ pub struct QobuzAlbumQuery {
         path = "/albums",
         description = "Get Qobuz album by ID",
         params(
-            ("albumId" = u64, Query, description = "Qobuz album ID to fetch"),
+            ("albumId" = String, Query, description = "Qobuz album ID to fetch"),
         ),
         responses(
             (
