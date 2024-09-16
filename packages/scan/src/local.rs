@@ -5,7 +5,7 @@ use lofty::{AudioFile, ParseOptions};
 use moosicbox_core::{
     sqlite::{
         db::DbError,
-        models::{ApiSource, TrackApiSource},
+        models::{Album, ApiSource, Artist, Track, TrackApiSource},
     },
     types::AudioFormat,
 };
@@ -55,25 +55,57 @@ pub async fn scan(
     token: CancellationToken,
     scanner: Scanner,
 ) -> Result<(), ScanError> {
-    let total_start = std::time::SystemTime::now();
-    let start = std::time::SystemTime::now();
-    let output = Arc::new(RwLock::new(ScanOutput::new()));
-    let scan_items = scan_dir(
+    let items = scan_dir(
         Path::new(directory).to_path_buf(),
-        output.clone(),
-        token,
+        token.clone(),
         scanner.clone(),
     )
     .await?;
 
-    let handles = scan_items.into_iter().map({
+    scan_items(items, db, token, scanner).await
+}
+
+pub async fn scan_items(
+    items: Vec<ScanItem>,
+    db: Arc<Box<dyn Database>>,
+    _token: CancellationToken,
+    scanner: Scanner,
+) -> Result<(), ScanError> {
+    {
+        let track_count = items
+            .iter()
+            .filter(|x| matches!(x, ScanItem::Track { .. }))
+            .count();
+        let total = scanner.total.load(std::sync::atomic::Ordering::SeqCst);
+        if total < track_count {
+            scanner.increase_total(track_count - total).await;
+        }
+    }
+
+    let output = Arc::new(RwLock::new(ScanOutput::new()));
+
+    let handles = items.into_iter().map({
         let output = output.clone();
         let scanner = scanner.clone();
         move |item| {
             let output = output.clone();
             let scanner = scanner.clone();
             moosicbox_task::spawn("scan: scan item", async move {
-                scan_track(item.path, output, item.metadata, scanner).await
+                match item {
+                    ScanItem::Track { path, metadata, .. } => {
+                        scan_track(path, output, metadata, scanner).await
+                    }
+                    ScanItem::AlbumCover {
+                        path,
+                        metadata,
+                        album,
+                    } => scan_album_cover(album, path, output, metadata, scanner).await,
+                    ScanItem::ArtistCover {
+                        path,
+                        metadata,
+                        artist,
+                    } => scan_artist_cover(artist, path, output, metadata, scanner).await,
+                }
             })
         }
     });
@@ -82,11 +114,7 @@ pub async fn scan(
         resp??
     }
 
-    let end = std::time::SystemTime::now();
-    log::info!(
-        "Finished initial scan in {}ms",
-        end.duration_since(start).unwrap().as_millis()
-    );
+    log::info!("Finished initial scan");
 
     {
         let output = output.read().await;
@@ -94,11 +122,7 @@ pub async fn scan(
         output.reindex_global_search_index(&**db).await?;
     }
 
-    let end = std::time::SystemTime::now();
-    log::info!(
-        "Finished total scan in {}ms",
-        end.duration_since(total_start).unwrap().as_millis(),
-    );
+    log::info!("Finished total scan");
 
     Ok(())
 }
@@ -401,34 +425,115 @@ fn scan_track(
     })
 }
 
+fn scan_album_cover(
+    album: Option<Album>,
+    path: PathBuf,
+    output: Arc<RwLock<ScanOutput>>,
+    _metadata: Metadata,
+    _scanner: Scanner,
+) -> Pin<Box<dyn Future<Output = Result<(), ScanError>> + Send>> {
+    Box::pin(async move {
+        let mut output = output.write().await;
+
+        if let Some(album) = album {
+            if let Some(path_str) = path.to_str() {
+                let artist = output
+                    .add_artist(&album.artist, &None, ApiSource::Library)
+                    .await;
+
+                let output_album = artist
+                    .write()
+                    .await
+                    .add_album(
+                        &album.title,
+                        &album.date_released,
+                        path.parent().and_then(|x| x.to_str()),
+                        &None,
+                        ApiSource::Library,
+                    )
+                    .await;
+
+                output_album.write().await.cover = Some(path_str.to_string());
+
+                return Ok(());
+            }
+        }
+
+        unimplemented!("scan album cover without Album info");
+        // search in current directory for audio files
+        // search in db for the file path?
+        // if not then scan tag data
+        // use album/artist to determine artist/album and if should be created or not
+    })
+}
+
+fn scan_artist_cover(
+    artist: Option<Artist>,
+    path: PathBuf,
+    output: Arc<RwLock<ScanOutput>>,
+    _metadata: Metadata,
+    _scanner: Scanner,
+) -> Pin<Box<dyn Future<Output = Result<(), ScanError>> + Send>> {
+    Box::pin(async move {
+        let mut output = output.write().await;
+
+        if let Some(artist) = artist {
+            if let Some(path_str) = path.to_str() {
+                let output_artist = output
+                    .add_artist(&artist.title, &None, ApiSource::Library)
+                    .await;
+
+                output_artist.write().await.cover = Some(path_str.to_string());
+
+                return Ok(());
+            }
+        }
+
+        unimplemented!("scan artist cover without Artist info");
+    })
+}
+
 static MUSIC_FILE_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r".+\.(flac|m4a|mp3|opus)").unwrap());
 static MULTI_ARTIST_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\S,\S").unwrap());
 
-struct ScanItem {
-    path: PathBuf,
-    metadata: Metadata,
+pub enum ScanItem {
+    Track {
+        path: PathBuf,
+        metadata: Metadata,
+        track: Option<Track>,
+    },
+    AlbumCover {
+        path: PathBuf,
+        metadata: Metadata,
+        album: Option<Album>,
+    },
+    ArtistCover {
+        path: PathBuf,
+        metadata: Metadata,
+        artist: Option<Artist>,
+    },
 }
 
 #[allow(clippy::type_complexity)]
 #[async_recursion]
 async fn process_dir_entry(
     p: DirEntry,
-    output: Arc<RwLock<ScanOutput>>,
     token: CancellationToken,
     scanner: Scanner,
 ) -> Result<Vec<ScanItem>, ScanError> {
     let metadata = p.metadata().await?;
 
     if metadata.is_dir() {
-        Ok(scan_dir(p.path(), output.clone(), token.clone(), scanner.clone()).await?)
+        Ok(scan_dir(p.path(), token.clone(), scanner.clone()).await?)
     } else if metadata.is_file()
         && MUSIC_FILE_PATTERN.is_match(p.path().file_name().unwrap().to_str().unwrap())
     {
         scanner.increase_total(1).await;
-        Ok(vec![ScanItem {
+        Ok(vec![ScanItem::Track {
             path: p.path(),
             metadata,
+            track: None,
         }])
     } else {
         Ok(vec![])
@@ -438,7 +543,6 @@ async fn process_dir_entry(
 #[allow(clippy::type_complexity)]
 async fn scan_dir(
     path: PathBuf,
-    output: Arc<RwLock<ScanOutput>>,
     token: CancellationToken,
     scanner: Scanner,
 ) -> Result<Vec<ScanItem>, ScanError> {
@@ -456,9 +560,7 @@ async fn scan_dir(
     let mut handles = vec![];
 
     for entry in entries {
-        handles.extend(
-            process_dir_entry(entry, output.clone(), token.clone(), scanner.clone()).await?,
-        );
+        handles.extend(process_dir_entry(entry, token.clone(), scanner.clone()).await?);
     }
 
     Ok(handles)

@@ -24,7 +24,7 @@ use moosicbox_core::{
     integer_range::{parse_integer_ranges_to_ids, ParseIntegersError},
     sqlite::{
         db::DbError,
-        models::{Id, Track, TrackApiSource},
+        models::{Album, Artist, Id, Track, TrackApiSource},
     },
     types::AudioFormat,
 };
@@ -453,7 +453,7 @@ pub async fn download_track_id(
     on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
-) -> Result<(), DownloadTrackError> {
+) -> Result<Track, DownloadTrackError> {
     log::debug!("Starting download for track_id={track_id} quality={quality:?} source={source:?} path={path}");
 
     let track = api
@@ -472,7 +472,9 @@ pub async fn download_track_id(
         speed,
         timeout_duration,
     )
-    .await
+    .await?;
+
+    Ok(track)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -845,29 +847,29 @@ pub async fn download_album_cover(
     album_id: &Id,
     on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
-) -> Result<(), DownloadAlbumError> {
+) -> Result<Album, DownloadAlbumError> {
     log::debug!("Downloading album cover path={path}");
 
     speed.store(0.0, std::sync::atomic::Ordering::SeqCst);
 
     let cover_path = PathBuf::from_str(path).unwrap();
 
-    if Path::is_file(&cover_path) {
-        log::debug!("Album cover already downloaded");
-        return Ok(());
-    }
-
     let album = api
         .album(album_id)
         .await?
         .ok_or(DownloadAlbumError::NotFound)?;
+
+    if Path::is_file(&cover_path) {
+        log::debug!("Album cover already downloaded");
+        return Ok(album);
+    }
 
     let bytes = match get_album_cover_bytes(api, db, &album, ImageCoverSize::Max, true).await {
         Ok(bytes) => bytes,
         Err(err) => match err {
             AlbumCoverError::NotFound(_) => {
                 log::debug!("No album cover found");
-                return Ok(());
+                return Ok(album);
             }
             _ => {
                 return Err(DownloadAlbumError::AlbumCover(err));
@@ -905,7 +907,7 @@ pub async fn download_album_cover(
 
     log::debug!("Completed album cover download");
 
-    Ok(())
+    Ok(album)
 }
 
 pub async fn download_artist_cover(
@@ -915,27 +917,27 @@ pub async fn download_artist_cover(
     album_id: &Id,
     on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
-) -> Result<(), DownloadAlbumError> {
+) -> Result<Artist, DownloadAlbumError> {
     log::debug!("Downloading artist cover path={path}");
 
     let cover_path = PathBuf::from_str(path).unwrap();
-
-    if Path::is_file(&cover_path) {
-        log::debug!("Artist cover already downloaded");
-        return Ok(());
-    }
 
     let artist = api
         .album_artist(album_id)
         .await?
         .ok_or(DownloadAlbumError::NotFound)?;
 
+    if Path::is_file(&cover_path) {
+        log::debug!("Artist cover already downloaded");
+        return Ok(artist);
+    }
+
     let bytes = match get_artist_cover_bytes(api, db, &artist, ImageCoverSize::Max, true).await {
         Ok(bytes) => bytes,
         Err(err) => match err {
             ArtistCoverError::NotFound(..) => {
                 log::debug!("No artist cover found");
-                return Ok(());
+                return Ok(artist);
             }
             _ => {
                 return Err(DownloadAlbumError::ArtistCover(err));
@@ -973,7 +975,7 @@ pub async fn download_artist_cover(
 
     log::debug!("Completed artist cover download");
 
-    Ok(())
+    Ok(artist)
 }
 
 #[async_trait]
@@ -990,7 +992,7 @@ pub trait Downloader {
         source: DownloadApiSource,
         on_progress: ProgressListener,
         timeout_duration: Option<Duration>,
-    ) -> Result<(), DownloadTrackError>;
+    ) -> Result<Track, DownloadTrackError>;
 
     async fn download_album_cover(
         &self,
@@ -998,7 +1000,7 @@ pub trait Downloader {
         album_id: &Id,
         source: DownloadApiSource,
         on_progress: ProgressListener,
-    ) -> Result<(), DownloadAlbumError>;
+    ) -> Result<Album, DownloadAlbumError>;
 
     async fn download_artist_cover(
         &self,
@@ -1006,7 +1008,7 @@ pub trait Downloader {
         album_id: &Id,
         source: DownloadApiSource,
         on_progress: ProgressListener,
-    ) -> Result<(), DownloadAlbumError>;
+    ) -> Result<Artist, DownloadAlbumError>;
 }
 
 pub struct MoosicboxDownloader {
@@ -1039,7 +1041,7 @@ impl Downloader for MoosicboxDownloader {
         source: DownloadApiSource,
         on_progress: ProgressListener,
         timeout_duration: Option<Duration>,
-    ) -> Result<(), DownloadTrackError> {
+    ) -> Result<Track, DownloadTrackError> {
         download_track_id(
             &**self.api_state.apis.get(source.into())?,
             path,
@@ -1059,7 +1061,7 @@ impl Downloader for MoosicboxDownloader {
         album_id: &Id,
         source: DownloadApiSource,
         on_progress: ProgressListener,
-    ) -> Result<(), DownloadAlbumError> {
+    ) -> Result<Album, DownloadAlbumError> {
         download_album_cover(
             &**self.api_state.apis.get(source.into())?,
             &**self.db,
@@ -1077,7 +1079,7 @@ impl Downloader for MoosicboxDownloader {
         album_id: &Id,
         source: DownloadApiSource,
         on_progress: ProgressListener,
-    ) -> Result<(), DownloadAlbumError> {
+    ) -> Result<Artist, DownloadAlbumError> {
         download_artist_cover(
             &**self.api_state.apis.get(source.into())?,
             &**self.db,

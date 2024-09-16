@@ -1,14 +1,16 @@
-use std::{pin::Pin, sync::Arc, time::Duration};
+use std::{path::PathBuf, pin::Pin, str::FromStr as _, sync::Arc, time::Duration};
 
 use futures::Future;
 use lazy_static::lazy_static;
 use moosicbox_core::sqlite::db::DbError;
 use moosicbox_database::{query::*, Database, DatabaseError, DatabaseValue, Row};
+use moosicbox_scan::local::ScanItem;
 use thiserror::Error;
 use tokio::{
     sync::{Mutex, RwLock},
     task::{JoinError, JoinHandle},
 };
+use tokio_util::sync::CancellationToken;
 
 use crate::{
     db::models::{DownloadItem, DownloadTask, DownloadTaskState},
@@ -125,6 +127,7 @@ pub struct DownloadQueue {
     state: Arc<RwLock<DownloadQueueState>>,
     #[allow(clippy::type_complexity)]
     join_handle: Arc<Mutex<Option<JoinHandle<Result<(), ProcessDownloadQueueError>>>>>,
+    scan: bool,
 }
 
 impl DownloadQueue {
@@ -135,6 +138,7 @@ impl DownloadQueue {
             downloader: None,
             state: Arc::new(RwLock::new(DownloadQueueState::new())),
             join_handle: Arc::new(Mutex::new(None)),
+            scan: true,
         }
     }
 
@@ -142,23 +146,28 @@ impl DownloadQueue {
         self.database.is_some()
     }
 
-    pub fn with_database(&mut self, database: Arc<Box<dyn Database>>) -> Self {
+    pub fn with_database(mut self, database: Arc<Box<dyn Database>>) -> Self {
         self.database.replace(database);
-        self.clone()
+        self
     }
 
     pub fn has_downloader(&self) -> bool {
         self.downloader.is_some()
     }
 
-    pub fn with_downloader(&mut self, downloader: Box<dyn Downloader + Send + Sync>) -> Self {
+    pub fn with_downloader(mut self, downloader: Box<dyn Downloader + Send + Sync>) -> Self {
         self.downloader.replace(Arc::new(downloader));
-        self.clone()
+        self
     }
 
-    pub fn add_progress_listener(&mut self, listener: ProgressListenerRef) -> Self {
+    pub fn add_progress_listener(mut self, listener: ProgressListenerRef) -> Self {
         self.progress_listeners.push(Arc::new(listener));
-        self.clone()
+        self
+    }
+
+    pub fn with_scan(mut self, scan: bool) -> Self {
+        self.scan = scan;
+        self
     }
 
     pub fn speed(&self) -> Option<f64> {
@@ -299,64 +308,76 @@ impl DownloadQueue {
         let listeners = self.progress_listeners.clone();
         let send_task = task.clone();
 
-        let on_progress = Box::new(move |event: GenericProgressEvent| {
+        let on_progress = Box::new({
             let database = database.clone();
-            let send_task = send_task.clone();
-            let listeners = listeners.clone();
-            Box::pin(async move {
-                match event.clone() {
-                    GenericProgressEvent::Size { bytes, .. } => {
-                        log::debug!("Got size of task: {bytes:?}");
-                        if let Some(size) = bytes {
-                            task_size.replace(size);
-                            let database = database.clone();
-                            moosicbox_task::spawn(
-                                "downloader: queue - on_progress - size",
-                                async move {
-                                    if let Err(err) = database
-                                        .update("download_tasks")
-                                        .where_eq("id", task_id)
-                                        .value("total_bytes", size)
-                                        .execute_first(&**database)
-                                        .await
-                                    {
-                                        log::error!(
-                                            "Failed to set DownloadTask total_bytes: {err:?}"
-                                        );
-                                    }
-                                },
-                            );
+            move |event: GenericProgressEvent| {
+                let database = database.clone();
+                let send_task = send_task.clone();
+                let listeners = listeners.clone();
+                Box::pin(async move {
+                    match event.clone() {
+                        GenericProgressEvent::Size { bytes, .. } => {
+                            log::debug!("Got size of task: {bytes:?}");
+                            if let Some(size) = bytes {
+                                task_size.replace(size);
+                                let database = database.clone();
+                                moosicbox_task::spawn(
+                                    "downloader: queue - on_progress - size",
+                                    async move {
+                                        if let Err(err) = database
+                                            .update("download_tasks")
+                                            .where_eq("id", task_id)
+                                            .value("total_bytes", size)
+                                            .execute_first(&**database)
+                                            .await
+                                        {
+                                            log::error!(
+                                                "Failed to set DownloadTask total_bytes: {err:?}"
+                                            );
+                                        }
+                                    },
+                                );
+                            }
                         }
+                        GenericProgressEvent::Speed { .. } => {}
+                        GenericProgressEvent::BytesRead { .. } => {}
                     }
-                    GenericProgressEvent::Speed { .. } => {}
-                    GenericProgressEvent::BytesRead { .. } => {}
-                }
 
-                let event = match event {
-                    GenericProgressEvent::Size { bytes } => ProgressEvent::Size {
-                        task: send_task.clone(),
-                        bytes,
-                    },
-                    GenericProgressEvent::Speed { bytes_per_second } => ProgressEvent::Speed {
-                        task: send_task.clone(),
-                        bytes_per_second,
-                    },
-                    GenericProgressEvent::BytesRead { read, total } => ProgressEvent::BytesRead {
-                        task: send_task.clone(),
-                        read,
-                        total,
-                    },
-                };
-                for listener in listeners.iter() {
-                    listener(&event).await;
-                }
-            }) as ProgressListenerFut
+                    let event = match event {
+                        GenericProgressEvent::Size { bytes } => ProgressEvent::Size {
+                            task: send_task.clone(),
+                            bytes,
+                        },
+                        GenericProgressEvent::Speed { bytes_per_second } => ProgressEvent::Speed {
+                            task: send_task.clone(),
+                            bytes_per_second,
+                        },
+                        GenericProgressEvent::BytesRead { read, total } => {
+                            ProgressEvent::BytesRead {
+                                task: send_task.clone(),
+                                read,
+                                total,
+                            }
+                        }
+                    };
+                    for listener in listeners.iter() {
+                        listener(&event).await;
+                    }
+                }) as ProgressListenerFut
+            }
         });
 
         let downloader = self
             .downloader
             .clone()
             .ok_or(ProcessDownloadQueueError::NoDownloader)?;
+
+        let path = PathBuf::from_str(&task.file_path).unwrap();
+
+        let scanner = moosicbox_scan::Scanner::new(moosicbox_scan::event::ScanTask::Local {
+            paths: vec![path.parent().unwrap().to_str().unwrap().to_string()],
+        })
+        .await;
 
         match &task.item {
             DownloadItem::Track {
@@ -365,7 +386,7 @@ impl DownloadQueue {
                 source,
                 ..
             } => {
-                downloader
+                let track = downloader
                     .download_track_id(
                         &task.file_path,
                         track_id,
@@ -374,21 +395,93 @@ impl DownloadQueue {
                         on_progress,
                         *TIMEOUT_DURATION,
                     )
-                    .await?
+                    .await?;
+
+                if self.scan {
+                    let metadata = tokio::fs::File::open(&path)
+                        .await
+                        .unwrap()
+                        .metadata()
+                        .await
+                        .unwrap();
+
+                    moosicbox_scan::local::scan_items(
+                        vec![ScanItem::Track {
+                            path,
+                            metadata,
+                            track: Some(track),
+                        }],
+                        database,
+                        CancellationToken::new(),
+                        scanner.clone(),
+                    )
+                    .await
+                    .unwrap();
+
+                    scanner.on_scan_finished().await;
+                }
             }
             DownloadItem::AlbumCover {
                 album_id, source, ..
             } => {
-                downloader
+                let album = downloader
                     .download_album_cover(&task.file_path, album_id, *source, on_progress)
                     .await?;
+
+                if self.scan {
+                    let metadata = tokio::fs::File::open(&path)
+                        .await
+                        .unwrap()
+                        .metadata()
+                        .await
+                        .unwrap();
+
+                    moosicbox_scan::local::scan_items(
+                        vec![ScanItem::AlbumCover {
+                            path,
+                            metadata,
+                            album: Some(album),
+                        }],
+                        database,
+                        CancellationToken::new(),
+                        scanner.clone(),
+                    )
+                    .await
+                    .unwrap();
+
+                    scanner.on_scan_finished().await;
+                }
             }
             DownloadItem::ArtistCover {
                 album_id, source, ..
             } => {
-                downloader
+                let artist = downloader
                     .download_artist_cover(&task.file_path, album_id, *source, on_progress)
                     .await?;
+
+                if self.scan {
+                    let metadata = tokio::fs::File::open(&path)
+                        .await
+                        .unwrap()
+                        .metadata()
+                        .await
+                        .unwrap();
+
+                    moosicbox_scan::local::scan_items(
+                        vec![ScanItem::ArtistCover {
+                            path,
+                            metadata,
+                            artist: Some(artist),
+                        }],
+                        database,
+                        CancellationToken::new(),
+                        scanner.clone(),
+                    )
+                    .await
+                    .unwrap();
+
+                    scanner.on_scan_finished().await;
+                }
             }
         }
 
@@ -429,7 +522,7 @@ impl Drop for DownloadQueue {
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
-    use moosicbox_core::sqlite::models::Id;
+    use moosicbox_core::sqlite::models::{Album, Artist, Id, Track};
     use moosicbox_database::{query::*, Row};
     use moosicbox_music_api::TrackAudioQuality;
     use pretty_assertions::assert_eq;
@@ -445,23 +538,29 @@ mod tests {
         async fn download_track_id(
             &self,
             _path: &str,
-            _track_id: &Id,
+            track_id: &Id,
             _quality: TrackAudioQuality,
             _source: DownloadApiSource,
             _on_size: ProgressListener,
             _timeout_duration: Option<Duration>,
-        ) -> Result<(), DownloadTrackError> {
-            Ok(())
+        ) -> Result<Track, DownloadTrackError> {
+            Ok(Track {
+                id: track_id.to_owned(),
+                ..Default::default()
+            })
         }
 
         async fn download_album_cover(
             &self,
             _path: &str,
-            _album_id: &Id,
+            album_id: &Id,
             _source: DownloadApiSource,
             _on_size: ProgressListener,
-        ) -> Result<(), DownloadAlbumError> {
-            Ok(())
+        ) -> Result<Album, DownloadAlbumError> {
+            Ok(Album {
+                id: album_id.to_owned(),
+                ..Default::default()
+            })
         }
 
         async fn download_artist_cover(
@@ -470,8 +569,10 @@ mod tests {
             _album_id: &Id,
             _source: DownloadApiSource,
             _on_size: ProgressListener,
-        ) -> Result<(), DownloadAlbumError> {
-            Ok(())
+        ) -> Result<Artist, DownloadAlbumError> {
+            Ok(Artist {
+                ..Default::default()
+            })
         }
     }
 
@@ -550,6 +651,7 @@ mod tests {
 
     fn new_queue() -> DownloadQueue {
         DownloadQueue::new()
+            .with_scan(false)
             .with_database(Arc::new(Box::new(TestDatabase {})))
             .with_downloader(Box::new(TestDownloader {}))
     }
@@ -557,6 +659,13 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn test_can_process_single_track_download_task() {
         let mut queue = new_queue();
+        let file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("test")
+            .join("test.m4a")
+            .to_str()
+            .unwrap()
+            .to_string();
 
         queue
             .add_task_to_queue(DownloadTask {
@@ -573,7 +682,7 @@ mod tests {
                     title: "title".into(),
                     contains_cover: false,
                 },
-                file_path: "".into(),
+                file_path,
                 created: "".into(),
                 updated: "".into(),
                 total_bytes: None,
@@ -601,6 +710,13 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn test_can_process_multiple_track_download_tasks() {
         let mut queue = new_queue();
+        let file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("test")
+            .join("test.m4a")
+            .to_str()
+            .unwrap()
+            .to_string();
 
         queue
             .add_tasks_to_queue(vec![
@@ -618,7 +734,7 @@ mod tests {
                         title: "title".into(),
                         contains_cover: false,
                     },
-                    file_path: "".into(),
+                    file_path: file_path.clone(),
                     created: "".into(),
                     updated: "".into(),
                     total_bytes: None,
@@ -637,7 +753,7 @@ mod tests {
                         title: "title".into(),
                         contains_cover: false,
                     },
-                    file_path: "".into(),
+                    file_path,
                     created: "".into(),
                     updated: "".into(),
                     total_bytes: None,
@@ -669,6 +785,13 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn test_can_process_duplicate_track_download_tasks() {
         let mut queue = new_queue();
+        let file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("test")
+            .join("test.m4a")
+            .to_str()
+            .unwrap()
+            .to_string();
 
         queue
             .add_tasks_to_queue(vec![
@@ -686,7 +809,7 @@ mod tests {
                         title: "title".into(),
                         contains_cover: false,
                     },
-                    file_path: "".into(),
+                    file_path: file_path.clone(),
                     created: "".into(),
                     updated: "".into(),
                     total_bytes: None,
@@ -705,7 +828,7 @@ mod tests {
                         title: "title".into(),
                         contains_cover: false,
                     },
-                    file_path: "".into(),
+                    file_path,
                     created: "".into(),
                     updated: "".into(),
                     total_bytes: None,
@@ -734,6 +857,13 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn test_can_process_another_track_download_task_after_processing_has_already_started() {
         let mut queue = new_queue();
+        let file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("test")
+            .join("test.m4a")
+            .to_str()
+            .unwrap()
+            .to_string();
 
         queue
             .add_task_to_queue(DownloadTask {
@@ -750,7 +880,7 @@ mod tests {
                     title: "title".into(),
                     contains_cover: false,
                 },
-                file_path: "".into(),
+                file_path: file_path.clone(),
                 created: "".into(),
                 updated: "".into(),
                 total_bytes: None,
@@ -774,7 +904,7 @@ mod tests {
                     title: "title".into(),
                     contains_cover: false,
                 },
-                file_path: "".into(),
+                file_path,
                 created: "".into(),
                 updated: "".into(),
                 total_bytes: None,

@@ -26,6 +26,9 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
 moosicbox_library = { path = "../library", default-features = false }
 moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_paging = { path = "../paging", default-features = false }
+moosicbox_scan = { path = "../scan", default-features = false, features = [
+    "local",
+] }
 moosicbox_task = { path = "../task", default-features = false }
 
 # API Dependencies

@@ -149,7 +149,7 @@ pub struct Scanner {
 
 impl Scanner {
     #[allow(unused)]
-    async fn from_origin(db: &dyn Database, origin: ScanOrigin) -> Result<Self, DbError> {
+    pub async fn from_origin(db: &dyn Database, origin: ScanOrigin) -> Result<Self, DbError> {
         let task = match origin {
             #[cfg(feature = "local")]
             ScanOrigin::Local => {
@@ -175,7 +175,7 @@ impl Scanner {
         Ok(Self::new(task).await)
     }
 
-    async fn new(task: ScanTask) -> Self {
+    pub async fn new(task: ScanTask) -> Self {
         Self {
             scanned: Arc::new(AtomicUsize::new(0)),
             total: Arc::new(AtomicUsize::new(0)),
@@ -223,8 +223,7 @@ impl Scanner {
         }
     }
 
-    #[allow(unused)]
-    async fn on_scan_finished(&self) {
+    pub async fn on_scan_finished(&self) {
         let scanned = self.scanned.load(std::sync::atomic::Ordering::SeqCst);
         let total = self.total.load(std::sync::atomic::Ordering::SeqCst);
 

@@ -4010,6 +4010,7 @@ dependencies = [
  "moosicbox_library",
  "moosicbox_music_api",
  "moosicbox_paging",
+ "moosicbox_scan",
  "moosicbox_task",
  "mp3-duration",
  "once_cell",

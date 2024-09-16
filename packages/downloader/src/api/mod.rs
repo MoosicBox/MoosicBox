@@ -72,7 +72,8 @@ static DOWNLOAD_QUEUE: Lazy<Arc<RwLock<DownloadQueue>>> =
     Lazy::new(|| Arc::new(RwLock::new(DownloadQueue::new())));
 
 pub async fn add_progress_listener_to_download_queue(listener: ProgressListenerRef) {
-    DOWNLOAD_QUEUE.write().await.add_progress_listener(listener);
+    let mut queue = DOWNLOAD_QUEUE.write().await;
+    *queue = queue.clone().add_progress_listener(listener);
 }
 
 async fn get_default_download_queue(
@@ -83,13 +84,13 @@ async fn get_default_download_queue(
 
     if !queue.has_database() {
         let mut queue = DOWNLOAD_QUEUE.write().await;
-        let output = queue.with_database(db.clone());
-        *queue = output.clone();
+        *queue = queue.clone().with_database(db.clone());
     }
     if !queue.has_downloader() {
         let mut queue = DOWNLOAD_QUEUE.write().await;
-        let output = queue.with_downloader(Box::new(MoosicboxDownloader::new(db, api_state)));
-        *queue = output.clone();
+        *queue = queue
+            .clone()
+            .with_downloader(Box::new(MoosicboxDownloader::new(db, api_state)));
     }
 
     DOWNLOAD_QUEUE.clone()
@@ -235,12 +236,12 @@ pub async fn retry_download_endpoint(
         .find(|x| x.id == query.task_id)
         .ok_or_else(|| ErrorNotFound(format!("Task not found with ID {}", query.task_id)))?;
 
-    let mut download_queue = DownloadQueue::new();
-    download_queue.with_database(data.database.clone());
-    download_queue.with_downloader(Box::new(MoosicboxDownloader::new(
-        data.database.clone(),
-        api_state.as_ref().clone(),
-    )));
+    let mut download_queue = DownloadQueue::new()
+        .with_database(data.database.clone())
+        .with_downloader(Box::new(MoosicboxDownloader::new(
+            data.database.clone(),
+            api_state.as_ref().clone(),
+        )));
     download_queue.add_tasks_to_queue(vec![task]).await;
     download_queue.process();
 
