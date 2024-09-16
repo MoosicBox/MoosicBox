@@ -45,6 +45,10 @@ pub enum ProcessDownloadQueueError {
     DownloadTrack(#[from] DownloadTrackError),
     #[error(transparent)]
     DownloadAlbum(#[from] DownloadAlbumError),
+    #[error(transparent)]
+    LocalScan(#[from] moosicbox_scan::local::ScanError),
+    #[error(transparent)]
+    IO(#[from] std::io::Error),
     #[error("No database")]
     NoDatabase,
     #[error("No downloader")]
@@ -398,12 +402,7 @@ impl DownloadQueue {
                     .await?;
 
                 if self.scan {
-                    let metadata = tokio::fs::File::open(&path)
-                        .await
-                        .unwrap()
-                        .metadata()
-                        .await
-                        .unwrap();
+                    let metadata = tokio::fs::File::open(&path).await?.metadata().await?;
 
                     moosicbox_scan::local::scan_items(
                         vec![ScanItem::Track {
@@ -415,8 +414,7 @@ impl DownloadQueue {
                         CancellationToken::new(),
                         scanner.clone(),
                     )
-                    .await
-                    .unwrap();
+                    .await?;
 
                     scanner.on_scan_finished().await;
                 }
@@ -429,12 +427,7 @@ impl DownloadQueue {
                     .await?;
 
                 if self.scan {
-                    let metadata = tokio::fs::File::open(&path)
-                        .await
-                        .unwrap()
-                        .metadata()
-                        .await
-                        .unwrap();
+                    let metadata = tokio::fs::File::open(&path).await?.metadata().await?;
 
                     moosicbox_scan::local::scan_items(
                         vec![ScanItem::AlbumCover {
@@ -446,8 +439,7 @@ impl DownloadQueue {
                         CancellationToken::new(),
                         scanner.clone(),
                     )
-                    .await
-                    .unwrap();
+                    .await?;
 
                     scanner.on_scan_finished().await;
                 }
@@ -460,12 +452,7 @@ impl DownloadQueue {
                     .await?;
 
                 if self.scan {
-                    let metadata = tokio::fs::File::open(&path)
-                        .await
-                        .unwrap()
-                        .metadata()
-                        .await
-                        .unwrap();
+                    let metadata = tokio::fs::File::open(&path).await?.metadata().await?;
 
                     moosicbox_scan::local::scan_items(
                         vec![ScanItem::ArtistCover {
@@ -477,8 +464,7 @@ impl DownloadQueue {
                         CancellationToken::new(),
                         scanner.clone(),
                     )
-                    .await
-                    .unwrap();
+                    .await?;
 
                     scanner.on_scan_finished().await;
                 }
