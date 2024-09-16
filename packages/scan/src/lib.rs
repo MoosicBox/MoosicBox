@@ -293,6 +293,10 @@ impl Scanner {
             .any(|origin| origin == ScanOrigin::Tidal);
 
         if !enabled {
+            log::debug!(
+                "scan_music_api: scan origin is not enabled: {}",
+                api.source()
+            );
             return Ok(());
         }
 
@@ -336,7 +340,10 @@ pub async fn run_scan(
     db: Arc<Box<dyn Database>>,
     api_state: MusicApiState,
 ) -> Result<(), ScanError> {
+    log::debug!("run_scan: origins={origins:?}");
+
     let origins = get_origins_or_default(&**db, origins).await?;
+    log::debug!("run_scan: get_origins_or_default={origins:?}");
 
     for origin in origins {
         Scanner::from_origin(&**db, origin)
