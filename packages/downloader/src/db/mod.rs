@@ -1,6 +1,9 @@
+use std::sync::LazyLock;
+
 use moosicbox_core::sqlite::db::DbError;
 use moosicbox_database::{query::*, Database};
 use moosicbox_json_utils::ToValueType;
+use regex::{Captures, Regex};
 
 pub mod models;
 
@@ -10,10 +13,22 @@ pub async fn create_download_location(
     db: &dyn Database,
     path: &str,
 ) -> Result<DownloadLocation, DbError> {
+    static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
+
+    let path = if std::env::consts::OS == "windows" {
+        REGEX
+            .replace(path, |caps: &Captures| {
+                format!("{}:", caps[1].to_uppercase())
+            })
+            .replace('/', "\\")
+    } else {
+        path.to_owned()
+    };
+
     Ok(db
         .upsert("download_locations")
-        .where_eq("path", path)
-        .value("path", path)
+        .where_eq("path", &path)
+        .value("path", &path)
         .execute_first(db)
         .await?
         .to_value_type()?)
