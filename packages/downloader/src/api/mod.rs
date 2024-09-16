@@ -1,4 +1,7 @@
+use std::path::PathBuf;
+use std::str::FromStr as _;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
 use crate::api::models::ApiDownloadLocation;
 use crate::api::models::ApiDownloadTask;
@@ -27,13 +30,14 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
-use moosicbox_core::sqlite::models::Id;
 use moosicbox_database::Database;
 use moosicbox_music_api::MusicApiState;
 use moosicbox_music_api::SourceToMusicApi as _;
 use moosicbox_music_api::TrackAudioQuality;
 use moosicbox_paging::Page;
 use once_cell::sync::Lazy;
+use regex::Captures;
+use regex::Regex;
 use serde::Deserialize;
 use serde_json::Value;
 use tokio::sync::RwLock;
@@ -64,7 +68,11 @@ pub fn bind_services<
         get_download_locations_endpoint,
         add_download_location_endpoint
     ),
-    components(schemas(DownloadApiSource, Id, TrackAudioQuality))
+    components(schemas(
+        DownloadApiSource,
+        moosicbox_core::sqlite::models::Id,
+        TrackAudioQuality
+    ))
 )]
 pub struct Api;
 
@@ -398,7 +406,26 @@ pub async fn add_download_location_endpoint(
     query: web::Query<AddDownloadLocation>,
     data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Json<ApiDownloadLocation>> {
-    let location = create_download_location(&**data.database, &query.path).await?;
+    static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
+
+    let path = if std::env::consts::OS == "windows" {
+        REGEX
+            .replace(&query.path, |caps: &Captures| {
+                format!("{}:", caps[1].to_uppercase())
+            })
+            .replace('/', "\\")
+    } else {
+        query.path.to_owned()
+    };
+
+    let path = PathBuf::from_str(&path)?.canonicalize()?;
+
+    let location = create_download_location(
+        &**data.database,
+        path.to_str()
+            .ok_or_else(|| ErrorBadRequest(format!("Invalid path: {path:?}")))?,
+    )
+    .await?;
 
     Ok(Json(location.into()))
 }

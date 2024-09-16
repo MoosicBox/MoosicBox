@@ -378,10 +378,22 @@ impl DownloadQueue {
 
         let path = PathBuf::from_str(&task.file_path).unwrap();
 
-        let scanner = moosicbox_scan::Scanner::new(moosicbox_scan::event::ScanTask::Local {
-            paths: vec![path.parent().unwrap().to_str().unwrap().to_string()],
-        })
-        .await;
+        let scanner = if self.scan {
+            let scan_paths = moosicbox_scan::get_scan_paths(&**database).await?;
+
+            if scan_paths.iter().any(|x| path.starts_with(x)) {
+                Some(
+                    moosicbox_scan::Scanner::new(moosicbox_scan::event::ScanTask::Local {
+                        paths: vec![path.parent().unwrap().to_str().unwrap().to_string()],
+                    })
+                    .await,
+                )
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         match &task.item {
             DownloadItem::Track {
@@ -401,7 +413,7 @@ impl DownloadQueue {
                     )
                     .await?;
 
-                if self.scan {
+                if let Some(scanner) = scanner {
                     let metadata = tokio::fs::File::open(&path).await?.metadata().await?;
 
                     moosicbox_scan::local::scan_items(
@@ -426,7 +438,7 @@ impl DownloadQueue {
                     .download_album_cover(&task.file_path, album_id, *source, on_progress)
                     .await?;
 
-                if self.scan {
+                if let Some(scanner) = scanner {
                     let metadata = tokio::fs::File::open(&path).await?.metadata().await?;
 
                     moosicbox_scan::local::scan_items(
@@ -451,7 +463,7 @@ impl DownloadQueue {
                     .download_artist_cover(&task.file_path, album_id, *source, on_progress)
                     .await?;
 
-                if self.scan {
+                if let Some(scanner) = scanner {
                     let metadata = tokio::fs::File::open(&path).await?.metadata().await?;
 
                     moosicbox_scan::local::scan_items(
