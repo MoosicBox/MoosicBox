@@ -26,7 +26,7 @@ pub enum GetArtistError {
     #[error("Artist not found with ID {0}")]
     ArtistNotFound(u64),
     #[error("Artist not found with album ID {0}")]
-    AlbumArtistNotFound(u64),
+    AlbumArtistNotFound(String),
     #[error("Unknown source: {artist_source:?}")]
     UnknownSource { artist_source: String },
     #[error("Poison error")]
@@ -51,7 +51,7 @@ pub async fn get_artist(
     qobuz_artist_id: Option<u64>,
     album_id: Option<u64>,
     tidal_album_id: Option<u64>,
-    qobuz_album_id: Option<u64>,
+    qobuz_album_id: Option<String>,
     data: &AppState,
 ) -> Result<Arc<LibraryArtist>, GetArtistError> {
     let request = CacheRequest {
@@ -59,87 +59,92 @@ pub async fn get_artist(
         expiration: Duration::from_secs(5 * 60),
     };
 
-    Ok(get_or_set_to_cache(request, || async {
-        if let Some(artist_id) = artist_id {
-            match db::get_artist(&**data.database, "id", &artist_id.into()).await {
-                Ok(artist) => {
-                    if artist.is_none() {
-                        return Err(GetArtistError::ArtistNotFound(artist_id));
+    Ok(get_or_set_to_cache(request, move || {
+        let qobuz_album_id = qobuz_album_id.clone();
+        async move {
+            if let Some(artist_id) = artist_id {
+                match db::get_artist(&**data.database, "id", &artist_id.into()).await {
+                    Ok(artist) => {
+                        if artist.is_none() {
+                            return Err(GetArtistError::ArtistNotFound(artist_id));
+                        }
+
+                        let artist = artist.unwrap();
+
+                        Ok(CacheItemType::Artist(Arc::new(artist)))
                     }
-
-                    let artist = artist.unwrap();
-
-                    Ok(CacheItemType::Artist(Arc::new(artist)))
+                    Err(err) => Err(GetArtistError::DbError(err)),
                 }
-                Err(err) => Err(GetArtistError::DbError(err)),
-            }
-        } else if let Some(tidal_artist_id) = tidal_artist_id {
-            match db::get_artist(&**data.database, "tidal_id", &tidal_artist_id.into()).await {
-                Ok(artist) => {
-                    if artist.is_none() {
-                        return Err(GetArtistError::ArtistNotFound(tidal_artist_id));
+            } else if let Some(tidal_artist_id) = tidal_artist_id {
+                match db::get_artist(&**data.database, "tidal_id", &tidal_artist_id.into()).await {
+                    Ok(artist) => {
+                        if artist.is_none() {
+                            return Err(GetArtistError::ArtistNotFound(tidal_artist_id));
+                        }
+
+                        let artist = artist.unwrap();
+
+                        Ok(CacheItemType::Artist(Arc::new(artist)))
                     }
-
-                    let artist = artist.unwrap();
-
-                    Ok(CacheItemType::Artist(Arc::new(artist)))
+                    Err(err) => Err(GetArtistError::DbError(err)),
                 }
-                Err(err) => Err(GetArtistError::DbError(err)),
-            }
-        } else if let Some(qobuz_artist_id) = qobuz_artist_id {
-            match db::get_artist(&**data.database, "qobuz_id", &qobuz_artist_id.into()).await {
-                Ok(artist) => {
-                    if artist.is_none() {
-                        return Err(GetArtistError::ArtistNotFound(qobuz_artist_id));
+            } else if let Some(qobuz_artist_id) = qobuz_artist_id {
+                match db::get_artist(&**data.database, "qobuz_id", &qobuz_artist_id.into()).await {
+                    Ok(artist) => {
+                        if artist.is_none() {
+                            return Err(GetArtistError::ArtistNotFound(qobuz_artist_id));
+                        }
+
+                        let artist = artist.unwrap();
+
+                        Ok(CacheItemType::Artist(Arc::new(artist)))
                     }
-
-                    let artist = artist.unwrap();
-
-                    Ok(CacheItemType::Artist(Arc::new(artist)))
+                    Err(err) => Err(GetArtistError::DbError(err)),
                 }
-                Err(err) => Err(GetArtistError::DbError(err)),
-            }
-        } else if let Some(album_id) = album_id {
-            match db::get_album_artist(&**data.database, album_id).await {
-                Ok(artist) => {
-                    if artist.is_none() {
-                        return Err(GetArtistError::AlbumArtistNotFound(album_id));
+            } else if let Some(album_id) = album_id {
+                match db::get_album_artist(&**data.database, album_id).await {
+                    Ok(artist) => {
+                        if artist.is_none() {
+                            return Err(GetArtistError::AlbumArtistNotFound(album_id.to_string()));
+                        }
+
+                        let artist = artist.unwrap();
+
+                        Ok(CacheItemType::Artist(Arc::new(artist)))
                     }
-
-                    let artist = artist.unwrap();
-
-                    Ok(CacheItemType::Artist(Arc::new(artist)))
+                    Err(err) => Err(GetArtistError::DbError(err)),
                 }
-                Err(err) => Err(GetArtistError::DbError(err)),
-            }
-        } else if let Some(tidal_album_id) = tidal_album_id {
-            match db::get_tidal_album_artist(&**data.database, tidal_album_id).await {
-                Ok(artist) => {
-                    if artist.is_none() {
-                        return Err(GetArtistError::AlbumArtistNotFound(tidal_album_id));
+            } else if let Some(tidal_album_id) = tidal_album_id {
+                match db::get_tidal_album_artist(&**data.database, tidal_album_id).await {
+                    Ok(artist) => {
+                        if artist.is_none() {
+                            return Err(GetArtistError::AlbumArtistNotFound(
+                                tidal_album_id.to_string(),
+                            ));
+                        }
+
+                        let artist = artist.unwrap();
+
+                        Ok(CacheItemType::Artist(Arc::new(artist)))
                     }
-
-                    let artist = artist.unwrap();
-
-                    Ok(CacheItemType::Artist(Arc::new(artist)))
+                    Err(err) => Err(GetArtistError::DbError(err)),
                 }
-                Err(err) => Err(GetArtistError::DbError(err)),
-            }
-        } else if let Some(qobuz_album_id) = qobuz_album_id {
-            match db::get_qobuz_album_artist(&**data.database, qobuz_album_id).await {
-                Ok(artist) => {
-                    if artist.is_none() {
-                        return Err(GetArtistError::AlbumArtistNotFound(qobuz_album_id));
+            } else if let Some(qobuz_album_id) = qobuz_album_id {
+                match db::get_qobuz_album_artist(&**data.database, &qobuz_album_id).await {
+                    Ok(artist) => {
+                        if artist.is_none() {
+                            return Err(GetArtistError::AlbumArtistNotFound(qobuz_album_id));
+                        }
+
+                        let artist = artist.unwrap();
+
+                        Ok(CacheItemType::Artist(Arc::new(artist)))
                     }
-
-                    let artist = artist.unwrap();
-
-                    Ok(CacheItemType::Artist(Arc::new(artist)))
+                    Err(err) => Err(GetArtistError::DbError(err)),
                 }
-                Err(err) => Err(GetArtistError::DbError(err)),
+            } else {
+                Err(GetArtistError::InvalidRequest)
             }
-        } else {
-            Err(GetArtistError::InvalidRequest)
         }
     })
     .await?

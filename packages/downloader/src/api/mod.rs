@@ -128,9 +128,9 @@ impl From<ProcessDownloadQueueError> for actix_web::Error {
 #[serde(rename_all = "camelCase")]
 pub struct DownloadQuery {
     location_id: Option<u64>,
-    track_id: Option<Id>,
+    track_id: Option<String>,
     track_ids: Option<String>,
-    album_id: Option<Id>,
+    album_id: Option<String>,
     album_ids: Option<String>,
     download_album_cover: Option<bool>,
     download_artist_cover: Option<bool>,
@@ -146,9 +146,9 @@ pub struct DownloadQuery {
         description = "Queue the specified tracks or albums to be downloaded",
         params(
             ("locationId" = Option<u64>, Query, description = "The download location to save the files to"),
-            ("trackId" = Option<Id>, Query, description = "A trackId to download"),
+            ("trackId" = Option<String>, Query, description = "A trackId to download"),
             ("trackIds" = Option<String>, Query, description = "A comma-separated list of trackIds to download"),
-            ("albumId" = Option<Id>, Query, description = "A albumId to download"),
+            ("albumId" = Option<String>, Query, description = "A albumId to download"),
             ("albumIds" = Option<String>, Query, description = "A comma-separated list of albumIds to download"),
             ("downloadAlbumCover" = Option<bool>, Query, description = "Whether or not to download the album cover, if available"),
             ("downloadArtistCover" = Option<bool>, Query, description = "Whether or not to download the artist cover, if available"),

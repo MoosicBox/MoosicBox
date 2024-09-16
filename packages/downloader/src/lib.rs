@@ -21,10 +21,10 @@ use futures::StreamExt;
 use id3::Timestamp;
 use moosicbox_config::get_config_dir_path;
 use moosicbox_core::{
-    integer_range::{parse_integer_ranges_to_ids, ParseIntegersError},
+    integer_range::{parse_id_ranges, ParseIdsError, ParseIntegersError},
     sqlite::{
         db::DbError,
-        models::{Album, Artist, Id, Track, TrackApiSource},
+        models::{Album, Artist, Id, IdFromStrError, IdType, Track, TrackApiSource},
     },
     types::AudioFormat,
 };
@@ -93,6 +93,10 @@ pub enum GetCreateDownloadTasksError {
     #[error(transparent)]
     Tracks(#[from] TracksError),
     #[error(transparent)]
+    IdFromStr(#[from] IdFromStrError),
+    #[error(transparent)]
+    ParseIds(#[from] ParseIdsError),
+    #[error(transparent)]
     ParseIntegers(#[from] ParseIntegersError),
     #[error("Invalid source")]
     InvalidSource,
@@ -104,9 +108,9 @@ pub enum GetCreateDownloadTasksError {
 pub async fn get_create_download_tasks(
     api: &dyn MusicApi,
     download_path: &Path,
-    track_id: Option<Id>,
+    track_id: Option<String>,
     track_ids: Option<String>,
-    album_id: Option<Id>,
+    album_id: Option<String>,
     album_ids: Option<String>,
     download_album_cover: bool,
     download_artist_cover: bool,
@@ -115,39 +119,11 @@ pub async fn get_create_download_tasks(
 ) -> Result<Vec<CreateDownloadTask>, GetCreateDownloadTasksError> {
     let mut tasks = vec![];
 
-    if let Some(track_id) = track_id {
-        tasks.extend(
-            get_create_download_tasks_for_track_ids(
-                api,
-                &[track_id],
-                download_path,
-                source,
-                quality,
-            )
-            .await?,
-        );
-    }
-
-    if let Some(track_ids) = &track_ids {
-        let track_ids = parse_integer_ranges_to_ids(track_ids)?;
-
-        tasks.extend(
-            get_create_download_tasks_for_track_ids(
-                api,
-                &track_ids,
-                download_path,
-                source,
-                quality,
-            )
-            .await?,
-        );
-    }
-
     if let Some(album_id) = album_id {
         tasks.extend(
             get_create_download_tasks_for_album_ids(
                 api,
-                &[album_id],
+                &[Id::try_from_str(&album_id, api.source(), IdType::Album)?],
                 download_path,
                 source,
                 quality,
@@ -159,7 +135,7 @@ pub async fn get_create_download_tasks(
     }
 
     if let Some(album_ids) = &album_ids {
-        let album_ids = parse_integer_ranges_to_ids(album_ids)?;
+        let album_ids = parse_id_ranges(album_ids, api.source(), IdType::Album)?;
 
         tasks.extend(
             get_create_download_tasks_for_album_ids(
@@ -170,6 +146,34 @@ pub async fn get_create_download_tasks(
                 quality,
                 download_album_cover,
                 download_artist_cover,
+            )
+            .await?,
+        );
+    }
+
+    if let Some(track_id) = track_id {
+        tasks.extend(
+            get_create_download_tasks_for_track_ids(
+                api,
+                &[Id::try_from_str(&track_id, api.source(), IdType::Track)?],
+                download_path,
+                source,
+                quality,
+            )
+            .await?,
+        );
+    }
+
+    if let Some(track_ids) = &track_ids {
+        let track_ids = parse_id_ranges(track_ids, api.source(), IdType::Track)?;
+
+        tasks.extend(
+            get_create_download_tasks_for_track_ids(
+                api,
+                &track_ids,
+                download_path,
+                source,
+                quality,
             )
             .await?,
         );
@@ -272,48 +276,10 @@ pub async fn get_create_download_tasks_for_album_ids(
             .await?
             .ok_or(GetCreateDownloadTasksError::NotFound)?;
 
-        let tracks = api
-            .album_tracks(album_id, None, None, None, None)
-            .await?
-            .with_rest_of_items_in_batches()
-            .await?
-            .into_iter()
-            .filter(|track| {
-                if let Some(source) = source {
-                    let track_source = source.into();
-                    track.source == track_source
-                } else {
-                    track.source != TrackApiSource::Local
-                }
-            })
-            .collect::<Vec<_>>();
-
-        if tracks.is_empty() {
-            continue;
-        }
-
-        tasks.extend(
-            get_create_download_tasks_for_tracks(api, &tracks, download_path, source, quality)
-                .await?,
-        );
-
         if download_album_cover || download_artist_cover {
-            let album_path = if let Some(track) = tracks.first() {
-                download_path
-                    .join(sanitize_filename(&track.artist))
-                    .join(sanitize_filename(&track.album))
-            } else {
-                let album = api
-                    .album(album_id)
-                    .await?
-                    .ok_or(GetCreateDownloadTasksError::NotFound)?;
-
-                download_path
-                    .join(sanitize_filename(&album.artist))
-                    .join(sanitize_filename(&album.title))
-            };
-
-            let track = tracks.first().unwrap();
+            let album_path = download_path
+                .join(sanitize_filename(&album.artist))
+                .join(sanitize_filename(&album.title));
 
             let path = album_path.join("cover.jpg").to_str().unwrap().to_string();
 
@@ -329,22 +295,9 @@ pub async fn get_create_download_tasks_for_album_ids(
                 path
             };
 
-            if download_album_cover && track.artwork.is_some() {
-                tasks.push(CreateDownloadTask {
-                    file_path: path,
-                    item: DownloadItem::AlbumCover {
-                        album_id: album_id.to_owned(),
-                        source: api.source().into(),
-                        artist_id: album.artist_id,
-                        artist: album.artist,
-                        title: album.title,
-                        contains_cover: album.artwork.is_some(),
-                    },
-                });
-            }
             if download_artist_cover {
                 let artist = api
-                    .artist(&tracks.first().unwrap().artist_id)
+                    .artist(&album.artist_id)
                     .await?
                     .ok_or(GetCreateDownloadTasksError::NotFound)?;
 
@@ -382,7 +335,46 @@ pub async fn get_create_download_tasks_for_album_ids(
                     });
                 }
             }
+
+            if download_album_cover && album.artwork.is_some() {
+                tasks.push(CreateDownloadTask {
+                    file_path: path,
+                    item: DownloadItem::AlbumCover {
+                        album_id: album_id.to_owned(),
+                        source: api.source().into(),
+                        artist_id: album.artist_id,
+                        artist: album.artist,
+                        title: album.title,
+                        contains_cover: album.artwork.is_some(),
+                    },
+                });
+            }
         }
+
+        let tracks = api
+            .album_tracks(album_id, None, None, None, None)
+            .await?
+            .with_rest_of_items_in_batches()
+            .await?
+            .into_iter()
+            .filter(|track| {
+                if let Some(source) = source {
+                    let track_source = source.into();
+                    track.source == track_source
+                } else {
+                    track.source != TrackApiSource::Local
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if tracks.is_empty() {
+            continue;
+        }
+
+        tasks.extend(
+            get_create_download_tasks_for_tracks(api, &tracks, download_path, source, quality)
+                .await?,
+        );
     }
 
     Ok(tasks)

@@ -208,7 +208,7 @@ pub async fn get_tidal_album_artist(
 
 pub async fn get_qobuz_album_artist(
     db: &dyn Database,
-    qobuz_album_id: u64,
+    qobuz_album_id: &str,
 ) -> Result<Option<LibraryArtist>, DbError> {
     Ok(db
         .select("artists")

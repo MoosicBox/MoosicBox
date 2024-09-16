@@ -475,7 +475,7 @@ pub struct GetArtistQuery {
     qobuz_artist_id: Option<u64>,
     album_id: Option<u64>,
     tidal_album_id: Option<u64>,
-    qobuz_album_id: Option<u64>,
+    qobuz_album_id: Option<String>,
 }
 
 #[cfg_attr(
@@ -490,7 +490,7 @@ pub struct GetArtistQuery {
             ("qobuzArtistId" = Option<i32>, Query, description = "Qobuz artist ID to filter by"),
             ("albumId" = Option<i32>, Query, description = "Album ID to filter by"),
             ("tidalAlbumId" = Option<i32>, Query, description = "Tidal album ID to filter by"),
-            ("qobuzAlbumId" = Option<i32>, Query, description = "Qobuz album ID to filter by"),
+            ("qobuzAlbumId" = Option<String>, Query, description = "Qobuz album ID to filter by"),
         ),
         responses(
             (
@@ -513,7 +513,7 @@ pub async fn get_artist_endpoint(
             query.qobuz_artist_id,
             query.album_id,
             query.tidal_album_id,
-            query.qobuz_album_id,
+            query.qobuz_album_id.clone(),
             &data,
         )
         .await?
