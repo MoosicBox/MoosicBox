@@ -42,7 +42,7 @@ pub async fn scan(
     let mut offset = 0;
 
     loop {
-        log::debug!("Fetching Qobuz albums offset={offset} limit={limit}");
+        log::debug!("Fetching music api albums offset={offset} limit={limit}");
 
         let request = AlbumsRequest {
             sources: None,
@@ -60,7 +60,7 @@ pub async fn scan(
                         let page_count = page.len();
                         let count = page.total().unwrap();
 
-                        log::debug!("Fetched Qobuz albums offset={offset} limit={limit}: page_count={page_count}, total_count={count}");
+                        log::debug!("Fetched music api albums offset={offset} limit={limit}: page_count={page_count}, total_count={count}");
 
                         scan_albums(api, &page, count, output.clone(), Some(token.clone())).await?;
 
@@ -71,13 +71,13 @@ pub async fn scan(
                         offset += page_count as u32;
                     }
                     Err(err) =>  {
-                        log::warn!("Qobuz scan error: {err:?}");
+                        log::warn!("music api scan error: {err:?}");
                         return Err(err.into());
                     }
                 }
             },
             _ = token.cancelled() => {
-                log::debug!("Cancelling Qobuz scan");
+                log::debug!("Cancelling music api scan");
                 return Ok(());
             }
         };
@@ -111,7 +111,7 @@ pub async fn scan_albums(
     output: Arc<RwLock<ScanOutput>>,
     token: Option<CancellationToken>,
 ) -> Result<(), ScanError> {
-    log::debug!("Processing Qobuz albums count={}", albums.len());
+    log::debug!("Processing music api albums count={}", albums.len());
 
     let token = token.unwrap_or_default();
 
@@ -191,7 +191,7 @@ pub async fn scan_albums(
 
         loop {
             log::debug!(
-                "Fetching Qobuz tracks for album album_id={} offset={offset} limit={limit}",
+                "Fetching music api tracks for album album_id={} offset={offset} limit={limit}",
                 album.id
             );
 
@@ -205,7 +205,7 @@ pub async fn scan_albums(
                             let page_count = page.len();
                             let count = page.total().unwrap();
 
-                            log::debug!("Fetched Qobuz tracks offset={offset} limit={limit}: page_count={page_count}, total_count={count}");
+                            log::debug!("Fetched music api tracks offset={offset} limit={limit}: page_count={page_count}, total_count={count}");
 
                             scan_tracks(api, &page, scan_album.clone()).await?;
 
@@ -216,13 +216,13 @@ pub async fn scan_albums(
                             offset += page_count as u32;
                         }
                         Err(err) =>  {
-                            log::error!("Qobuz scan error: {err:?}");
+                            log::error!("music api scan error: {err:?}");
                             break;
                         }
                     }
                 },
                 _ = token.cancelled() => {
-                    log::debug!("Cancelling Qobuz scan");
+                    log::debug!("Cancelling music api scan");
                     return Ok(());
                 }
             };
@@ -237,7 +237,7 @@ async fn scan_tracks(
     tracks: &[Track],
     scan_album: Arc<RwLock<ScanAlbum>>,
 ) -> Result<(), ScanError> {
-    log::debug!("Processing Qobuz tracks count={}", tracks.len());
+    log::debug!("Processing music api tracks count={}", tracks.len());
 
     for track in tracks {
         let _ = scan_album
