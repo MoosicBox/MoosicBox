@@ -160,7 +160,7 @@ pingora-proxy = "0.3.0"
 postgres-native-tls = "0.5.0"
 postgres-openssl = "0.5.0"
 postgres-protocol = "0.6.7"
-pretty_assertions = "1.4.0"
+pretty_assertions = "1.4.1"
 pretty_env_logger = "0.5"
 qstring = "0.7.2"
 rand = "0.8"
@@ -204,7 +204,7 @@ test-log = "0.2.16"
 thiserror = "1.0.63"
 throttle = "0.1.0"
 tokio = { version = "1.40.0", features = ["io-util", "sync", "tracing"] }
-tokio-postgres = { version = "0.7.11", features = ["with-chrono-0_4"] }
+tokio-postgres = { version = "0.7.12", features = ["with-chrono-0_4"] }
 tokio-stream = "0.1.16"
 tokio-tungstenite = { version = "0.24.0", features = ["native-tls-vendored"] }
 tokio-util = "0.7.12"
