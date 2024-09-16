@@ -78,16 +78,16 @@ pub fn bind_services<
     use utoipa_scalar::Servable as _;
 
     scope
-        .service(utoipa_redoc::Redoc::with_url("/redoc", openapi.clone()))
+        .service(utoipa_redoc::Redoc::with_url("redoc", openapi.clone()))
         .service(
-            utoipa_swagger_ui::SwaggerUi::new("/swagger-ui/{_:.*}")
-                .url("/api-docs/openapi.json", openapi.clone()),
+            utoipa_swagger_ui::SwaggerUi::new("swagger-ui/{_:.*}")
+                .url("api-docs/openapi.json", openapi.clone()),
         )
         // There is no need to create RapiDoc::with_openapi because the OpenApi is served
         // via SwaggerUi. Instead we only make rapidoc to point to the existing doc.
         //
         // If we wanted to serve the schema, the following would work:
-        // .service(RapiDoc::with_openapi("/api-docs/openapi2.json", openapi.clone()).path("/rapidoc"))
-        .service(utoipa_rapidoc::RapiDoc::new("/api-docs/openapi.json").path("/rapidoc"))
-        .service(utoipa_scalar::Scalar::with_url("/scalar", openapi.clone()))
+        // .service(RapiDoc::with_openapi("api-docs/openapi2.json", openapi.clone()).path("rapidoc"))
+        .service(utoipa_rapidoc::RapiDoc::new("api-docs/openapi.json").path("rapidoc"))
+        .service(utoipa_scalar::Scalar::with_url("scalar", openapi.clone()))
 }

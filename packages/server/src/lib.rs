@@ -289,7 +289,10 @@ pub async fn run(
             let app = app.app_data(web::Data::new(library_api_state));
 
             #[cfg(feature = "openapi")]
-            let app = app.service(api::openapi::bind_services(web::scope("/"), &openapi));
+            let app = app.service(api::openapi::bind_services(
+                web::scope("/openapi"),
+                &openapi,
+            ));
 
             #[cfg(feature = "admin-htmx-api")]
             let app = app.service(moosicbox_admin_htmx::api::bind_services(web::scope(
