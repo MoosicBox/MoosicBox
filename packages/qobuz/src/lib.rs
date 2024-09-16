@@ -15,6 +15,7 @@ use moosicbox_database::{Database, DatabaseError};
 
 use moosicbox_files::get_content_length;
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
+use reqwest::StatusCode;
 use std::{collections::HashMap, str::Utf8Error, sync::Arc};
 
 use async_recursion::async_recursion;
@@ -538,6 +539,8 @@ pub enum QobuzUserLoginError {
     QobuzFetchAppSecrets(#[from] QobuzFetchAppSecretsError),
     #[error("Failed to fetch app id")]
     FailedToFetchAppId,
+    #[error("Unauthorized")]
+    Unauthorized,
 }
 
 pub async fn user_login(
@@ -607,13 +610,23 @@ pub async fn user_login(
         }
     };
 
-    let value: Value = CLIENT
+    let response = CLIENT
         .post(url)
         .header(APP_ID_HEADER_NAME, app_id)
+        .header(reqwest::header::CONTENT_LENGTH, 0)
         .send()
-        .await?
-        .json()
         .await?;
+
+    if response.status() == StatusCode::UNAUTHORIZED {
+        return Err(QobuzUserLoginError::Unauthorized);
+    } else if !response.status().is_success() {
+        log::error!(
+            "Received unsuccessful response: error {}",
+            response.status()
+        )
+    }
+
+    let value: Value = response.json().await?;
 
     let access_token: &str = value.to_value("user_auth_token")?;
     let user_id: u64 = value.to_nested_value(&["user", "id"])?;

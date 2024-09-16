@@ -1,6 +1,6 @@
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
-    error::ErrorInternalServerError,
+    error::{ErrorInternalServerError, ErrorUnauthorized},
     route,
     web::{self, Json},
     HttpRequest, Result, Scope,
@@ -91,7 +91,21 @@ impl ToApi<ApiAlbum> for QobuzAlbum {
 
 impl From<QobuzUserLoginError> for actix_web::Error {
     fn from(err: QobuzUserLoginError) -> Self {
-        ErrorInternalServerError(err.to_string())
+        match err {
+            QobuzUserLoginError::Unauthorized => ErrorUnauthorized(err.to_string()),
+            QobuzUserLoginError::Reqwest(_)
+            | QobuzUserLoginError::NoAccessTokenAvailable
+            | QobuzUserLoginError::NoAppIdAvailable
+            | QobuzUserLoginError::Parse(_)
+            | QobuzUserLoginError::QobuzFetchLoginSource(_)
+            | QobuzUserLoginError::QobuzFetchBundleSource(_)
+            | QobuzUserLoginError::QobuzFetchAppSecrets(_)
+            | QobuzUserLoginError::FailedToFetchAppId => ErrorInternalServerError(err.to_string()),
+            #[cfg(feature = "db")]
+            QobuzUserLoginError::Database(_) | QobuzUserLoginError::Db(_) => {
+                ErrorInternalServerError(err.to_string())
+            }
+        }
     }
 }
 
