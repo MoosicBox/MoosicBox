@@ -4,7 +4,7 @@ use std::{
     error::Error,
     path::{Path, PathBuf},
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, LazyLock},
     time::Duration,
 };
 
@@ -43,6 +43,7 @@ use moosicbox_music_api::{
     SourceToMusicApi as _, TrackAudioQuality, TrackError, TrackSource, TracksError,
 };
 use queue::ProgressListener;
+use regex::{Captures, Regex};
 use thiserror::Error;
 use tokio::select;
 
@@ -214,14 +215,28 @@ pub async fn get_create_download_tasks_for_tracks(
 
         let album = api.album(&track.album_id).await?;
 
+        let path = download_path
+            .join(sanitize_filename(&track.artist))
+            .join(sanitize_filename(&track.album))
+            .join(get_filename_for_track(track))
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
+
+        let path = if std::env::consts::OS == "windows" {
+            REGEX
+                .replace(&path, |caps: &Captures| {
+                    format!("{}:", caps[1].to_uppercase())
+                })
+                .replace('/', "\\")
+        } else {
+            path
+        };
+
         tasks.push(CreateDownloadTask {
-            file_path: download_path
-                .join(sanitize_filename(&track.artist))
-                .join(sanitize_filename(&track.album))
-                .join(get_filename_for_track(track))
-                .to_str()
-                .unwrap()
-                .to_string(),
+            file_path: path,
             item: DownloadItem::Track {
                 track_id: track.id.to_owned(),
                 source,
@@ -300,9 +315,23 @@ pub async fn get_create_download_tasks_for_album_ids(
 
             let track = tracks.first().unwrap();
 
+            let path = album_path.join("cover.jpg").to_str().unwrap().to_string();
+
+            static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
+
+            let path = if std::env::consts::OS == "windows" {
+                REGEX
+                    .replace(&path, |caps: &Captures| {
+                        format!("{}:", caps[1].to_uppercase())
+                    })
+                    .replace('/', "\\")
+            } else {
+                path
+            };
+
             if download_album_cover && track.artwork.is_some() {
                 tasks.push(CreateDownloadTask {
-                    file_path: album_path.join("cover.jpg").to_str().unwrap().to_string(),
+                    file_path: path,
                     item: DownloadItem::AlbumCover {
                         album_id: album_id.to_owned(),
                         source: api.source().into(),
@@ -319,15 +348,30 @@ pub async fn get_create_download_tasks_for_album_ids(
                     .await?
                     .ok_or(GetCreateDownloadTasksError::NotFound)?;
 
+                let path = album_path
+                    .parent()
+                    .unwrap()
+                    .join("artist.jpg")
+                    .to_str()
+                    .unwrap()
+                    .to_string();
+
+                static REGEX: LazyLock<Regex> =
+                    LazyLock::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
+
+                let path = if std::env::consts::OS == "windows" {
+                    REGEX
+                        .replace(&path, |caps: &Captures| {
+                            format!("{}:", caps[1].to_uppercase())
+                        })
+                        .replace('/', "\\")
+                } else {
+                    path
+                };
+
                 if artist.cover.is_some() {
                     tasks.push(CreateDownloadTask {
-                        file_path: album_path
-                            .parent()
-                            .unwrap()
-                            .join("artist.jpg")
-                            .to_str()
-                            .unwrap()
-                            .to_string(),
+                        file_path: path,
                         item: DownloadItem::ArtistCover {
                             album_id: album_id.to_owned(),
                             source: api.source().into(),

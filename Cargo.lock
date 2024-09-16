@@ -4014,6 +4014,7 @@ dependencies = [
  "mp3-duration",
  "once_cell",
  "pretty_assertions",
+ "regex",
  "reqwest 0.12.7",
  "rusqlite",
  "serde",
