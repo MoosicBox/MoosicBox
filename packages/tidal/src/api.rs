@@ -238,7 +238,7 @@ pub struct TidalDeviceAuthorizationQuery {
         path = "/auth/device-authorization",
         description = "Begin the authorization process for Tidal",
         params(
-            ("client_id" = String, Query, description = "Tidal client ID to use"),
+            ("clientId" = String, Query, description = "Tidal client ID to use"),
             ("open" = Option<bool>, Query, description = "Open the authorization page in a browser"),
         ),
         responses(
@@ -283,9 +283,9 @@ pub struct TidalDeviceAuthorizationTokenQuery {
         path = "/auth/device-authorization/token",
         description = "Finish the authorization process for Tidal",
         params(
-            ("client_id" = String, Query, description = "Tidal client ID to use"),
-            ("client_secret" = String, Query, description = "Tidal client secret to use"),
-            ("device_code" = String, Query, description = "Tidal device code to use"),
+            ("clientId" = String, Query, description = "Tidal client ID to use"),
+            ("clientSecret" = String, Query, description = "Tidal client secret to use"),
+            ("deviceCode" = String, Query, description = "Tidal device code to use"),
         ),
         responses(
             (

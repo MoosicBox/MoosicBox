@@ -192,7 +192,7 @@ pub async fn device_authorization(
 
     Ok(serde_json::json!({
         "url": url,
-        "device_code": device_code,
+        "deviceCode": device_code,
     }))
 }
 
