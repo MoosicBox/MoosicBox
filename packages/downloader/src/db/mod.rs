@@ -1,19 +1,22 @@
 use moosicbox_core::sqlite::db::DbError;
 use moosicbox_database::{query::*, Database};
-use moosicbox_json_utils::ToValueType as _;
+use moosicbox_json_utils::ToValueType;
 
 pub mod models;
 
 use self::models::{CreateDownloadTask, DownloadLocation, DownloadTask};
 
-pub async fn create_download_location(db: &dyn Database, path: &str) -> Result<(), DbError> {
-    db.upsert("download_locations")
+pub async fn create_download_location(
+    db: &dyn Database,
+    path: &str,
+) -> Result<DownloadLocation, DbError> {
+    Ok(db
+        .upsert("download_locations")
         .where_eq("path", path)
         .value("path", path)
-        .execute(db)
-        .await?;
-
-    Ok(())
+        .execute_first(db)
+        .await?
+        .to_value_type()?)
 }
 
 pub async fn get_download_location(

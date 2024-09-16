@@ -1,8 +1,11 @@
 use std::sync::Arc;
 
+use crate::api::models::ApiDownloadLocation;
 use crate::api::models::ApiDownloadTask;
 use crate::api::models::ApiDownloadTaskState;
 use crate::create_download_tasks;
+use crate::db::create_download_location;
+use crate::db::get_download_locations;
 use crate::db::get_download_tasks;
 use crate::db::models::DownloadTaskState;
 use crate::get_create_download_tasks;
@@ -46,13 +49,21 @@ pub fn bind_services<
         .service(download_endpoint)
         .service(retry_download_endpoint)
         .service(download_tasks_endpoint)
+        .service(get_download_locations_endpoint)
+        .service(add_download_location_endpoint)
 }
 
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
 #[openapi(
     tags((name = "Downloader")),
-    paths(download_endpoint, retry_download_endpoint, download_tasks_endpoint),
+    paths(
+        download_endpoint,
+        retry_download_endpoint,
+        download_tasks_endpoint,
+        get_download_locations_endpoint,
+        add_download_location_endpoint
+    ),
     components(schemas(DownloadApiSource, Id, TrackAudioQuality))
 )]
 pub struct Api;
@@ -305,4 +316,88 @@ pub async fn download_tasks_endpoint(
         limit,
         total,
     }))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetDownloadLocations {
+    offset: Option<u32>,
+    limit: Option<u32>,
+}
+
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Downloader"],
+        get,
+        path = "/download-locations",
+        description = "Get a list of the download locations",
+        params(
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "A paginated response of download locations",
+                body = Value,
+            )
+        )
+    )
+)]
+#[route("/download-locations", method = "GET")]
+pub async fn get_download_locations_endpoint(
+    query: web::Query<GetDownloadLocations>,
+    data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<Page<ApiDownloadLocation>>> {
+    let offset = query.offset.unwrap_or(0);
+    let limit = query.limit.unwrap_or(30);
+    let locations = get_download_locations(&**data.database).await?;
+    let total = locations.len() as u32;
+    let locations = locations
+        .into_iter()
+        .skip(offset as usize)
+        .take(limit as usize)
+        .map(|x| x.into())
+        .collect::<Vec<ApiDownloadLocation>>();
+
+    Ok(Json(Page::WithTotal {
+        offset,
+        items: locations,
+        limit,
+        total,
+    }))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddDownloadLocation {
+    path: String,
+}
+
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Downloader"],
+        post,
+        path = "/download-locations",
+        description = "Add a download location",
+        params(
+            ("path" = String, Query, description = "The download location path"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The successfully created download location",
+                body = Value,
+            )
+        )
+    )
+)]
+#[route("/download-locations", method = "POST")]
+pub async fn add_download_location_endpoint(
+    query: web::Query<AddDownloadLocation>,
+    data: web::Data<moosicbox_core::app::AppState>,
+) -> Result<Json<ApiDownloadLocation>> {
+    let location = create_download_location(&**data.database, &query.path).await?;
+
+    Ok(Json(location.into()))
 }

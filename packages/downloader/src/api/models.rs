@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
-    db::models::{DownloadApiSource, DownloadItem, DownloadTask, DownloadTaskState},
+    db::models::{
+        DownloadApiSource, DownloadItem, DownloadLocation, DownloadTask, DownloadTaskState,
+    },
     queue::ProgressEvent,
 };
 
@@ -78,6 +80,15 @@ impl ToValueType<ApiDownloadLocation> for &serde_json::Value {
             id: self.to_value("id")?,
             path: self.to_value("path")?,
         })
+    }
+}
+
+impl From<DownloadLocation> for ApiDownloadLocation {
+    fn from(value: DownloadLocation) -> Self {
+        Self {
+            id: value.id,
+            path: value.path,
+        }
     }
 }
 
