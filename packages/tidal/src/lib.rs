@@ -259,8 +259,8 @@ pub async fn device_authorization_token(
     }
 
     Ok(serde_json::json!({
-        "access_token": access_token,
-        "refresh_token": refresh_token,
+        "accessToken": access_token,
+        "refreshToken": refresh_token,
     }))
 }
 
