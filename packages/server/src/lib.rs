@@ -70,7 +70,7 @@ pub async fn run(
     #[cfg(not(feature = "postgres"))]
     let creds = None;
 
-    let db = moosicbox_database_connection::init(app_type, creds)
+    let db = moosicbox_database_connection::init("master", app_type, creds)
         .await
         .expect("Failed to initialize database");
 
@@ -83,6 +83,9 @@ pub async fn run(
         .expect("Failed to set SERVER_ID");
 
     let database: Arc<Box<dyn Database>> = Arc::new(db);
+
+    moosicbox_database::profiles::PROFILES.add("master".to_owned(), database.clone());
+
     DB.write().unwrap().replace(database.clone());
 
     #[cfg(feature = "library")]

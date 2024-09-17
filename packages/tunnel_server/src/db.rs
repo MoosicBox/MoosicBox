@@ -49,7 +49,9 @@ pub async fn init() -> Result<(), DatabaseError> {
     #[cfg(not(feature = "postgres"))]
     let creds = None;
 
-    binding.replace(moosicbox_database_connection::init(AppType::TunnelServer, creds).await?);
+    binding.replace(
+        moosicbox_database_connection::init("master", AppType::TunnelServer, creds).await?,
+    );
 
     Ok(())
 }

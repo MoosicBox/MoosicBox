@@ -29,6 +29,9 @@ tokio-postgres    = { workspace = true, optional = true, features = [] }
 # Postgres dependencies
 regex = { workspace = true, optional = true }
 
+# Api dependencies
+actix-web = { workspace = true, optional = true }
+
 async-recursion = { workspace = true }
 async-trait     = { workspace = true }
 chrono          = { workspace = true }
@@ -43,11 +46,13 @@ tokio           = { workspace = true, features = ["macros", "rt", "tracing"] }
 tokio-util      = { workspace = true }
 
 [features]
-default = ["mysql", "postgres-sqlx", "sqlite-sqlx"]
+default = ["api", "mysql", "postgres-sqlx", "sqlite-sqlx"]
 
 fail-on-warnings = []
 
 tls = ["sqlx/tls-rustls"]
+
+api = ["dep:actix-web"]
 
 mysql = ["mysql-sqlx", "sqlx"]
 mysql-sqlx = [

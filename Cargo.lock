@@ -3938,6 +3938,7 @@ dependencies = [
 name = "moosicbox_database"
 version = "0.1.0"
 dependencies = [
+ "actix-web",
  "async-recursion",
  "async-trait",
  "chrono",
