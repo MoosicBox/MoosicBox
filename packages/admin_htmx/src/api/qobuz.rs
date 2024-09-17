@@ -1,4 +1,4 @@
-use actix_htmx::Htmx;
+use actix_htmx::{Htmx, TriggerType};
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
     error::ErrorInternalServerError,
@@ -30,7 +30,7 @@ pub struct UserLoginForm {
 
 #[route("auth/user-login", method = "POST")]
 pub async fn user_login_endpoint(
-    _htmx: Htmx,
+    htmx: Htmx,
     form: web::Form<UserLoginForm>,
     data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Markup, actix_web::Error> {
@@ -43,13 +43,29 @@ pub async fn user_login_endpoint(
     )
     .await;
 
-    if response.is_ok_and(|x| x.get("accessToken").is_some()) {
-        Ok(settings_logged_in())
+    Ok(if response.is_ok_and(|x| x.get("accessToken").is_some()) {
+        htmx.trigger_event(
+            "qobuz-login-attempt".to_string(),
+            Some(
+                r#"{"level": "info", "message": "Successfully logged in to Qobuz", "success": true}"#
+                    .to_string(),
+            ),
+            Some(TriggerType::Standard),
+        );
+
+        settings_logged_in()
     } else {
-        Ok(settings_logged_out(Some(
-            html! { p { "Invalid username/password" } },
-        )))
-    }
+        htmx.trigger_event(
+            "qobuz-login-attempt".to_string(),
+            Some(
+                r#"{"level": "info", "message": "Failed to login to Qobuz", "success": false}"#
+                    .to_string(),
+            ),
+            Some(TriggerType::Standard),
+        );
+
+        settings_logged_out(Some(html! { p { "Invalid username/password" } }))
+    })
 }
 
 #[route("settings", method = "GET", method = "OPTIONS", method = "HEAD")]
@@ -72,8 +88,8 @@ pub fn settings_logged_out(message: Option<Markup>) -> Markup {
     html! {
         form hx-post="/admin/qobuz/auth/user-login" hx-swap="outerHTML" {
             (message.unwrap_or_default())
-            input type="text" name="username" placeholder="username..." {}
-            input type="password" name="password" placeholder="password..." {}
+            input type="text" name="username" placeholder="username..." autocomplete="username" {}
+            input type="password" name="password" placeholder="password..." autocomplete="current-password" {}
             button type="submit" { "Login" }
         }
     }
