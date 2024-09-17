@@ -1,6 +1,6 @@
 use std::{str::Utf8Error, sync::LazyLock};
 
-use actix_htmx::Htmx;
+use actix_htmx::{Htmx, TriggerType};
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
     error::ErrorInternalServerError,
@@ -58,7 +58,7 @@ static CLIENT_SECRET: LazyLock<String> = LazyLock::new(|| {
 
 #[route("auth/device-authorization", method = "POST")]
 pub async fn device_authorization_endpoint(
-    _htmx: Htmx,
+    htmx: Htmx,
     data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Markup, actix_web::Error> {
     let response = moosicbox_tidal::device_authorization(CLIENT_ID.clone(), false)
@@ -75,7 +75,7 @@ pub async fn device_authorization_endpoint(
         .as_str()
         .ok_or_else(|| ErrorInternalServerError("Invalid url"))?;
 
-    device_authorization_token(&**data.database, device_code, url)
+    device_authorization_token(&**data.database, htmx, device_code, url)
         .await
         .map_err(ErrorInternalServerError)
 }
@@ -89,17 +89,18 @@ pub struct DeviceAuthorizationTokenQuery {
 
 #[route("auth/device-authorization/token", method = "POST")]
 pub async fn device_authorization_token_endpoint(
-    _htmx: Htmx,
+    htmx: Htmx,
     query: web::Query<DeviceAuthorizationTokenQuery>,
     data: web::Data<moosicbox_core::app::AppState>,
 ) -> Result<Markup, actix_web::Error> {
-    device_authorization_token(&**data.database, &query.device_code, &query.url)
+    device_authorization_token(&**data.database, htmx, &query.device_code, &query.url)
         .await
         .map_err(ErrorInternalServerError)
 }
 
 async fn device_authorization_token(
     db: &dyn Database,
+    htmx: Htmx,
     device_code: &str,
     url: &str,
 ) -> Result<Markup, TidalDeviceAuthorizationTokenError> {
@@ -113,8 +114,26 @@ async fn device_authorization_token(
     .await;
 
     if response.is_ok_and(|x| x.get("accessToken").is_some()) {
+        htmx.trigger_event(
+            "tidal-login-attempt".to_string(),
+            Some(
+                r#"{"level": "info", "message": "Successfully logged in to Tidal", "success": true}"#
+                    .to_string(),
+            ),
+            Some(TriggerType::Standard),
+        );
+
         Ok(settings_logged_in())
     } else {
+        htmx.trigger_event(
+            "tidal-login-attempt".to_string(),
+            Some(
+                r#"{"level": "info", "message": "Failed to login to Tidal", "success": false}"#
+                    .to_string(),
+            ),
+            Some(TriggerType::Standard),
+        );
+
         Ok(html! {
             div
                 hx-post={"/admin/tidal/auth/device-authorization/token?deviceCode="(encode(device_code))"&url="(encode(url))}
