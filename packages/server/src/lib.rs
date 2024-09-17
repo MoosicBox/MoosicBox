@@ -270,6 +270,19 @@ pub async fn run(
                     http::header::HeaderName::from_static("hx-trigger-name"),
                     http::header::HeaderName::from_static("hx-trigger"),
                 ])
+                .expose_headers(vec![
+                    http::header::HeaderName::from_static("hx-location"),
+                    http::header::HeaderName::from_static("hx-push-url"),
+                    http::header::HeaderName::from_static("hx-redirect"),
+                    http::header::HeaderName::from_static("hx-refresh"),
+                    http::header::HeaderName::from_static("hx-replace-url"),
+                    http::header::HeaderName::from_static("hx-reswap"),
+                    http::header::HeaderName::from_static("hx-retarget"),
+                    http::header::HeaderName::from_static("hx-reselect"),
+                    http::header::HeaderName::from_static("hx-trigger"),
+                    http::header::HeaderName::from_static("hx-trigger-after-settle"),
+                    http::header::HeaderName::from_static("hx-trigger-after-swap"),
+                ])
                 .supports_credentials()
                 .max_age(3600);
 
