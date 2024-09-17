@@ -16,7 +16,9 @@ moosicbox_config = { path = "../config", default-features = false, features = [
     "db",
 ] }
 moosicbox_core = { path = "../core", default-features = false }
-moosicbox_database = { path = "../database", default-features = false }
+moosicbox_database = { path = "../database", default-features = false, features = [
+    "api",
+] }
 moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_scan = { path = "../scan", default-features = false, features = [
     "local",

@@ -1,3 +1,5 @@
+use std::ops::Deref as _;
+
 use actix_htmx::Htmx;
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
@@ -6,7 +8,7 @@ use actix_web::{
 };
 use maud::{html, Markup};
 use moosicbox_core::sqlite::db::DbError;
-use moosicbox_database::Database;
+use moosicbox_database::{profiles::api::CurrentLibrary, Database};
 use moosicbox_music_api::MusicApiState;
 use moosicbox_scan::ScanOrigin;
 use serde::Deserialize;
@@ -35,13 +37,13 @@ pub struct AddScanPathForm {
 pub async fn add_scan_paths_endpoint(
     _htmx: Htmx,
     form: web::Form<AddScanPathForm>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: CurrentLibrary,
 ) -> Result<Markup, actix_web::Error> {
-    moosicbox_scan::add_scan_path(&**data.database, &form.path)
+    moosicbox_scan::add_scan_path(db.deref(), &form.path)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to add scan path: {e:?}")))?;
 
-    scan_paths(&**data.database)
+    scan_paths(db.deref())
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to add scan path: {e:?}")))
 }
@@ -56,9 +58,9 @@ pub struct RemoveScanPathQuery {
 pub async fn delete_scan_paths_endpoint(
     _htmx: Htmx,
     form: web::Query<RemoveScanPathQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: CurrentLibrary,
 ) -> Result<Markup, actix_web::Error> {
-    moosicbox_scan::remove_scan_path(&**data.database, &form.path)
+    moosicbox_scan::remove_scan_path(db.deref(), &form.path)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to remove scan path: {e:?}")))?;
 
@@ -68,12 +70,12 @@ pub async fn delete_scan_paths_endpoint(
 #[route("run-scan", method = "POST")]
 pub async fn start_scan_endpoint(
     _htmx: Htmx,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: CurrentLibrary,
     api_state: web::Data<MusicApiState>,
 ) -> Result<Markup, actix_web::Error> {
     moosicbox_scan::run_scan(
         Some(vec![ScanOrigin::Local]),
-        data.database.clone(),
+        db.into(),
         api_state.as_ref().clone(),
     )
     .await
@@ -85,9 +87,9 @@ pub async fn start_scan_endpoint(
 #[route("scans", method = "GET", method = "OPTIONS", method = "HEAD")]
 pub async fn get_scans_endpoint(
     _htmx: Htmx,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: CurrentLibrary,
 ) -> Result<Markup, actix_web::Error> {
-    scan(&**data.database)
+    scan(db.deref())
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to run scan: {e:?}")))
 }

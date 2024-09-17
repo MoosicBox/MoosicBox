@@ -2,9 +2,10 @@ use actix_htmx::Htmx;
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
     error::ErrorInternalServerError,
-    route, web, HttpResponse, Responder, Scope,
+    route, HttpRequest, HttpResponse, Responder, Scope,
 };
-use maud::{html, DOCTYPE};
+use maud::{html, Markup, DOCTYPE};
+use moosicbox_database::{profiles::PROFILES, Database};
 
 mod info;
 #[cfg(feature = "qobuz")]
@@ -27,10 +28,18 @@ pub fn bind_services<
 #[route("", method = "GET")]
 pub async fn index_endpoint(
     _htmx: Htmx,
-    data: web::Data<moosicbox_core::app::AppState>,
+    req: HttpRequest,
 ) -> Result<impl Responder, actix_web::Error> {
     let mut response = HttpResponse::Ok();
     response.content_type("text/html");
+
+    let profiles = PROFILES.names();
+
+    let profile = req
+        .headers()
+        .get("moosicbox-profile")
+        .and_then(|x| x.to_str().ok())
+        .or_else(|| profiles.first().map(|x| x.as_str()));
 
     Ok(response.body(
         html! {
@@ -44,27 +53,47 @@ pub async fn index_endpoint(
                         crossorigin="anonymous"
                         {}
                 }
-                body {
+                body hx-headers={"{'moosicbox-profile': '"(profile.unwrap_or_default())"'}"} {
                     h1 { "MoosicBox Admin" }
                     hr {}
-                    h2 { "Server Info" }
-                    (info::info(&**data.database).await?)
-                    hr {}
-                    h2 { "Scan" }
-                    (scan::scan(&**data.database).await?)
-                    (if cfg!(feature = "tidal") { html! {
-                        hr {}
-                        h2 { "Tidal" }
-                        (tidal::settings(&**data.database).await.map_err(ErrorInternalServerError)?)
-                    } } else { html!{} })
-                    (if cfg!(feature = "qobuz") { html! {
-                        hr {}
-                        h2 { "Qobuz" }
-                        (qobuz::settings(&**data.database).await.map_err(ErrorInternalServerError)?)
-                    } } else { html!{} })
+                    select {
+                        @for profile in profiles.iter() {
+                            option { (profile) }
+                        }
+                    }
+                    ({
+                        if let Some(profile) = profile {
+                            let db = PROFILES.get(profile)
+                                .ok_or_else(|| ErrorInternalServerError("Missing profile"))?;
+
+                            profile_info(&**db).await?
+                        } else {
+                            html! {}
+                        }
+                    })
                 }
             }
         }
         .into_string(),
     ))
+}
+
+async fn profile_info(db: &dyn Database) -> Result<Markup, actix_web::Error> {
+    Ok(html! {
+        h2 { "Server Info" }
+        (info::info(db).await?)
+        hr {}
+        h2 { "Scan" }
+        (scan::scan(db).await?)
+        (if cfg!(feature = "tidal") { html! {
+            hr {}
+            h2 { "Tidal" }
+            (tidal::settings(db).await.map_err(ErrorInternalServerError)?)
+        } } else { html!{} })
+        (if cfg!(feature = "qobuz") { html! {
+            hr {}
+            h2 { "Qobuz" }
+            (qobuz::settings(db).await.map_err(ErrorInternalServerError)?)
+        } } else { html!{} })
+    })
 }

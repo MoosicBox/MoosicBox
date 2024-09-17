@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use actix_htmx::{Htmx, TriggerType};
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
@@ -6,7 +8,7 @@ use actix_web::{
 };
 use maud::{html, Markup};
 use moosicbox_core::sqlite::db::DbError;
-use moosicbox_database::Database;
+use moosicbox_database::{profiles::api::CurrentLibrary, Database};
 use serde::Deserialize;
 
 pub fn bind_services<
@@ -32,16 +34,11 @@ pub struct UserLoginForm {
 pub async fn user_login_endpoint(
     htmx: Htmx,
     form: web::Form<UserLoginForm>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: CurrentLibrary,
 ) -> Result<Markup, actix_web::Error> {
-    let response = moosicbox_qobuz::user_login(
-        data.database.clone(),
-        &form.username,
-        &form.password,
-        None,
-        Some(true),
-    )
-    .await;
+    let response =
+        moosicbox_qobuz::user_login(db.into(), &form.username, &form.password, None, Some(true))
+            .await;
 
     Ok(if response.is_ok_and(|x| x.get("accessToken").is_some()) {
         htmx.trigger_event(
@@ -71,9 +68,9 @@ pub async fn user_login_endpoint(
 #[route("settings", method = "GET", method = "OPTIONS", method = "HEAD")]
 pub async fn get_settings_endpoint(
     _htmx: Htmx,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: CurrentLibrary,
 ) -> Result<Markup, actix_web::Error> {
-    settings(&**data.database)
+    settings(db.deref())
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to get Qobuz settings: {e:?}")))
 }

@@ -1,4 +1,4 @@
-use std::{str::Utf8Error, sync::LazyLock};
+use std::{ops::Deref as _, str::Utf8Error, sync::LazyLock};
 
 use actix_htmx::{Htmx, TriggerType};
 use actix_web::{
@@ -8,7 +8,7 @@ use actix_web::{
 };
 use base64::{engine::general_purpose, DecodeError, Engine as _};
 use maud::{html, Markup};
-use moosicbox_database::Database;
+use moosicbox_database::{profiles::api::CurrentLibrary, Database};
 use moosicbox_tidal::{db::TidalConfigError, TidalDeviceAuthorizationTokenError};
 use serde::Deserialize;
 use thiserror::Error;
@@ -59,7 +59,7 @@ static CLIENT_SECRET: LazyLock<String> = LazyLock::new(|| {
 #[route("auth/device-authorization", method = "POST")]
 pub async fn device_authorization_endpoint(
     htmx: Htmx,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: CurrentLibrary,
 ) -> Result<Markup, actix_web::Error> {
     let response = moosicbox_tidal::device_authorization(CLIENT_ID.clone(), false)
         .await
@@ -75,7 +75,7 @@ pub async fn device_authorization_endpoint(
         .as_str()
         .ok_or_else(|| ErrorInternalServerError("Invalid url"))?;
 
-    device_authorization_token(&**data.database, htmx, device_code, url)
+    device_authorization_token(db.deref(), htmx, device_code, url)
         .await
         .map_err(ErrorInternalServerError)
 }
@@ -91,9 +91,9 @@ pub struct DeviceAuthorizationTokenQuery {
 pub async fn device_authorization_token_endpoint(
     htmx: Htmx,
     query: web::Query<DeviceAuthorizationTokenQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: CurrentLibrary,
 ) -> Result<Markup, actix_web::Error> {
-    device_authorization_token(&**data.database, htmx, &query.device_code, &query.url)
+    device_authorization_token(db.deref(), htmx, &query.device_code, &query.url)
         .await
         .map_err(ErrorInternalServerError)
 }
@@ -150,9 +150,9 @@ async fn device_authorization_token(
 #[route("settings", method = "GET", method = "OPTIONS", method = "HEAD")]
 pub async fn get_settings_endpoint(
     _htmx: Htmx,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: CurrentLibrary,
 ) -> Result<Markup, actix_web::Error> {
-    settings(&**data.database)
+    settings(db.deref())
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to get Tidal settings: {e:?}")))
 }
