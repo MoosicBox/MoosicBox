@@ -54,8 +54,6 @@ pub enum TidalConfigError {
     Database(#[from] DatabaseError),
     #[error(transparent)]
     Parse(#[from] moosicbox_json_utils::ParseError),
-    #[error("No configs available")]
-    NoConfigsAvailable,
 }
 
 pub async fn get_tidal_config(db: &dyn Database) -> Result<Option<TidalConfig>, TidalConfigError> {
@@ -64,10 +62,6 @@ pub async fn get_tidal_config(db: &dyn Database) -> Result<Option<TidalConfig>, 
         .execute(db)
         .await?
         .to_value_type()?;
-
-    if configs.is_empty() {
-        return Err(TidalConfigError::NoConfigsAvailable);
-    }
 
     configs.sort_by(|a: &TidalConfig, b: &TidalConfig| a.issued_at.cmp(&b.issued_at));
 
