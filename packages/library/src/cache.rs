@@ -1,10 +1,9 @@
 use enum_as_inner::EnumAsInner;
 use futures::Future;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, LazyLock, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::models::{LibraryAlbum, LibraryArtist, LibraryTrack};
@@ -38,8 +37,8 @@ pub struct CacheRequest<'a> {
     pub expiration: Duration,
 }
 
-static CACHE_MAP: Lazy<RwLock<HashMap<String, CacheItem>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
+static CACHE_MAP: LazyLock<RwLock<HashMap<String, CacheItem>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 pub fn clear_cache() {
     CACHE_MAP.write().unwrap().clear();

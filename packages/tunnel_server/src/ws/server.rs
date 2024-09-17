@@ -3,7 +3,7 @@ use std::{
     fmt,
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Arc,
+        Arc, LazyLock,
     },
 };
 
@@ -525,8 +525,8 @@ pub enum ConnectionIdError {
     Database(#[from] DatabaseError),
 }
 
-static CACHE_CONNECTIONS_MAP: once_cell::sync::Lazy<std::sync::RwLock<HashMap<String, usize>>> =
-    once_cell::sync::Lazy::new(|| std::sync::RwLock::new(HashMap::new()));
+static CACHE_CONNECTIONS_MAP: LazyLock<std::sync::RwLock<HashMap<String, usize>>> =
+    LazyLock::new(|| std::sync::RwLock::new(HashMap::new()));
 
 impl service::Handle {
     /// Register client message sender and obtain connection ID.

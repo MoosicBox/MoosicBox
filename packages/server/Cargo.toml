@@ -132,7 +132,6 @@ kanal              = { workspace = true }
 lazy_static        = { workspace = true }
 local-ip-address   = { workspace = true }
 log                = { workspace = true }
-once_cell          = { workspace = true }
 rand               = { workspace = true }
 regex              = { workspace = true }
 rusqlite           = { workspace = true, optional = true }

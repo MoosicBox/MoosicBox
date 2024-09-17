@@ -47,7 +47,6 @@ lazy_static      = { workspace = true }
 local-ip-address = { workspace = true }
 log              = { workspace = true }
 ogg              = { workspace = true }
-once_cell        = { workspace = true }
 rand             = { workspace = true }
 regex            = { workspace = true }
 reqwest          = { workspace = true, features = ["json"] }

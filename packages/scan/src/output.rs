@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
-    sync::{atomic::AtomicU32, Arc},
+    sync::{atomic::AtomicU32, Arc, LazyLock},
 };
 
 use futures::future::join_all;
@@ -25,13 +25,12 @@ use moosicbox_music_api::ImageCoverSize;
 use moosicbox_search::{
     data::AsDataValues as _, populate_global_search_index, PopulateIndexError, RecreateIndexError,
 };
-use once_cell::sync::Lazy;
 use thiserror::Error;
 use tokio::{sync::RwLock, task::JoinError};
 
 use crate::CACHE_DIR;
 
-static IMAGE_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
+static IMAGE_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
 async fn search_for_cover(
     client: &reqwest::Client,

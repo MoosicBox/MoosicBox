@@ -13,7 +13,6 @@ use async_recursion::async_recursion;
 use futures::prelude::*;
 use itertools::Itertools;
 use models::{UpnpDevice, UpnpService};
-use once_cell::sync::Lazy;
 pub use rupnp::{http::Uri, ssdp::SearchTarget, Device, DeviceSpec, Service};
 use serde::Serialize;
 use std::{
@@ -25,9 +24,11 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 
 mod cache {
-    use std::{collections::HashMap, sync::RwLock};
+    use std::{
+        collections::HashMap,
+        sync::{LazyLock, RwLock},
+    };
 
-    use once_cell::sync::Lazy;
     use rupnp::{Device, Service};
 
     use crate::ScanError;
@@ -38,11 +39,11 @@ mod cache {
         services: HashMap<String, Service>,
     }
 
-    static DEVICE_URL_MAPPINGS: Lazy<RwLock<HashMap<String, DeviceMapping>>> =
-        Lazy::new(|| RwLock::new(HashMap::new()));
+    static DEVICE_URL_MAPPINGS: LazyLock<RwLock<HashMap<String, DeviceMapping>>> =
+        LazyLock::new(|| RwLock::new(HashMap::new()));
 
-    static DEVICE_MAPPINGS: Lazy<RwLock<HashMap<String, DeviceMapping>>> =
-        Lazy::new(|| RwLock::new(HashMap::new()));
+    static DEVICE_MAPPINGS: LazyLock<RwLock<HashMap<String, DeviceMapping>>> =
+        LazyLock::new(|| RwLock::new(HashMap::new()));
 
     pub(crate) fn get_device_from_url(url: &str) -> Result<Device, ScanError> {
         Ok(DEVICE_MAPPINGS
@@ -310,10 +311,10 @@ pub async fn set_av_transport_uri(
         size = size.map_or("".to_string(), |x| format!(" size=\"{x}\"",)),
     );
 
-    static BRACKET_WHITESPACE: Lazy<regex::Regex> =
-        Lazy::new(|| regex::Regex::new(r">\s+<").expect("Invalid Regex"));
-    static BETWEEN_WHITESPACE: Lazy<regex::Regex> =
-        Lazy::new(|| regex::Regex::new(r"\s{2,}").expect("Invalid Regex"));
+    static BRACKET_WHITESPACE: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r">\s+<").expect("Invalid Regex"));
+    static BETWEEN_WHITESPACE: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"\s{2,}").expect("Invalid Regex"));
 
     // Remove extraneous whitespace
     fn compress_xml(xml: &str) -> String {

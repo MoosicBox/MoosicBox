@@ -30,7 +30,6 @@ utoipa    = { workspace = true, optional = true }
 
 itertools  = { workspace = true }
 log        = { workspace = true }
-once_cell  = { workspace = true }
 regex      = { workspace = true }
 serde      = { workspace = true }
 serde_json = { workspace = true }

@@ -18,31 +18,34 @@ use moosicbox_core::{app::AppState, sqlite::models::ApiSource};
 use moosicbox_database::Database;
 use moosicbox_files::files::track_pool::service::Commander as _;
 use moosicbox_music_api::{MusicApi, MusicApiState};
-use once_cell::sync::Lazy;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, LazyLock},
+};
 use tokio::try_join;
 use tokio_util::sync::CancellationToken;
 
-static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
+static CANCELLATION_TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
 #[cfg(feature = "upnp")]
 static UPNP_LISTENER_HANDLE: std::sync::OnceLock<moosicbox_upnp::listener::Handle> =
     std::sync::OnceLock::new();
 
-static WS_SERVER_HANDLE: Lazy<tokio::sync::RwLock<Option<ws::server::WsServerHandle>>> =
-    Lazy::new(|| tokio::sync::RwLock::new(None));
+static WS_SERVER_HANDLE: LazyLock<tokio::sync::RwLock<Option<ws::server::WsServerHandle>>> =
+    LazyLock::new(|| tokio::sync::RwLock::new(None));
 
 #[allow(clippy::type_complexity)]
-static DB: Lazy<std::sync::RwLock<Option<Arc<Box<dyn Database>>>>> =
-    Lazy::new(|| std::sync::RwLock::new(None));
+static DB: LazyLock<std::sync::RwLock<Option<Arc<Box<dyn Database>>>>> =
+    LazyLock::new(|| std::sync::RwLock::new(None));
 
 #[allow(clippy::type_complexity)]
-static MUSIC_API_STATE: Lazy<std::sync::RwLock<Option<MusicApiState>>> =
-    Lazy::new(|| std::sync::RwLock::new(None));
+static MUSIC_API_STATE: LazyLock<std::sync::RwLock<Option<MusicApiState>>> =
+    LazyLock::new(|| std::sync::RwLock::new(None));
 
 #[cfg(feature = "library")]
 #[allow(clippy::type_complexity)]
-static LIBRARY_API_STATE: Lazy<std::sync::RwLock<Option<moosicbox_library::LibraryMusicApiState>>> =
-    Lazy::new(|| std::sync::RwLock::new(None));
+static LIBRARY_API_STATE: LazyLock<
+    std::sync::RwLock<Option<moosicbox_library::LibraryMusicApiState>>,
+> = LazyLock::new(|| std::sync::RwLock::new(None));
 
 static SERVER_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 

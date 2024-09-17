@@ -39,7 +39,6 @@ use moosicbox_session::{
 use moosicbox_stream_utils::{
     remote_bytestream::RemoteByteStream, stalled_monitor::StalledReadMonitor,
 };
-use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng as _};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -76,7 +75,7 @@ pub const DEFAULT_PLAYBACK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOp
     retry_delay: std::time::Duration::from_millis(500),
 };
 
-pub static CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
+pub static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
 #[derive(Debug, Error)]
 pub enum PlayerError {
@@ -1172,7 +1171,7 @@ fn same_active_track(position: Option<u16>, tracks: Option<&[Track]>, playback: 
     }
 }
 
-pub static SERVICE_PORT: Lazy<RwLock<Option<u16>>> = Lazy::new(|| RwLock::new(None));
+pub static SERVICE_PORT: LazyLock<RwLock<Option<u16>>> = LazyLock::new(|| RwLock::new(None));
 
 pub fn set_service_port(service_port: u16) {
     SERVICE_PORT.write().unwrap().replace(service_port);
@@ -1180,8 +1179,8 @@ pub fn set_service_port(service_port: u16) {
 
 type PlaybackEventCallback = fn(&UpdateSession, &Playback);
 
-static PLAYBACK_EVENT_LISTENERS: Lazy<Arc<RwLock<Vec<PlaybackEventCallback>>>> =
-    Lazy::new(|| Arc::new(RwLock::new(Vec::new())));
+static PLAYBACK_EVENT_LISTENERS: LazyLock<Arc<RwLock<Vec<PlaybackEventCallback>>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(Vec::new())));
 
 pub fn on_playback_event(listener: PlaybackEventCallback) {
     PLAYBACK_EVENT_LISTENERS.write().unwrap().push(listener);

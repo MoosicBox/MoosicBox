@@ -11,14 +11,13 @@ use moosicbox_core::{
 };
 use moosicbox_database::Database;
 use moosicbox_files::{sanitize_filename, search_for_cover};
-use once_cell::sync::Lazy;
 use regex::Regex;
 use std::{
     fs::Metadata,
     num::ParseIntError,
     path::{Path, PathBuf},
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, LazyLock},
 };
 use thiserror::Error;
 use tokio::{
@@ -493,9 +492,9 @@ fn scan_artist_cover(
     })
 }
 
-static MUSIC_FILE_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r".+\.(flac|m4a|mp3|opus)").unwrap());
-static MULTI_ARTIST_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\S,\S").unwrap());
+static MUSIC_FILE_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r".+\.(flac|m4a|mp3|opus)").unwrap());
+static MULTI_ARTIST_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\S,\S").unwrap());
 
 pub enum ScanItem {
     Track {

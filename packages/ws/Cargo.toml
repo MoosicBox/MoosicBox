@@ -32,7 +32,6 @@ async-trait     = { workspace = true, optional = true }
 awc             = { workspace = true, optional = true }
 env_logger      = { workspace = true, optional = true }
 log             = { workspace = true, optional = true }
-once_cell       = { workspace = true, optional = true }
 regex           = { workspace = true, optional = true }
 thiserror       = { workspace = true, optional = true }
 
@@ -58,7 +57,6 @@ ws = [
     "dep:awc",
     "dep:env_logger",
     "dep:log",
-    "dep:once_cell",
     "dep:regex",
     "dep:thiserror",
 ]

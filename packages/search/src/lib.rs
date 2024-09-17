@@ -1,10 +1,9 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 use std::path::{Path, PathBuf};
-use std::sync::RwLock;
+use std::sync::{LazyLock, RwLock};
 
 use itertools::Itertools;
-use once_cell::sync::Lazy;
 use tantivy::collector::TopDocs;
 use tantivy::directory::MmapDirectory;
 use tantivy::query::{BooleanQuery, BoostQuery, DisjunctionMaxQuery, QueryParser, TermQuery};
@@ -22,9 +21,9 @@ pub mod data;
 pub mod models;
 
 #[cfg(test)]
-static TESTS_DIR_PATH: Lazy<PathBuf> = Lazy::new(moosicbox_config::get_tests_dir_path);
+static TESTS_DIR_PATH: LazyLock<PathBuf> = LazyLock::new(moosicbox_config::get_tests_dir_path);
 
-static GLOBAL_SEARCH_INDEX_PATH: Lazy<PathBuf> = Lazy::new(|| {
+static GLOBAL_SEARCH_INDEX_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
     #[cfg(test)]
     let base_path = TESTS_DIR_PATH.to_path_buf();
 
@@ -35,11 +34,11 @@ static GLOBAL_SEARCH_INDEX_PATH: Lazy<PathBuf> = Lazy::new(|| {
     base_path.join("search_indices").join("global_search_index")
 });
 
-static GLOBAL_SEARCH_INDEX_WRITER_MEMORY_BUDGET: Lazy<RwLock<usize>> =
-    Lazy::new(|| RwLock::new(50_000_000));
+static GLOBAL_SEARCH_INDEX_WRITER_MEMORY_BUDGET: LazyLock<RwLock<usize>> =
+    LazyLock::new(|| RwLock::new(50_000_000));
 
-static GLOBAL_SEARCH_INDEX_WRITER_NUM_THREADS: Lazy<RwLock<Option<usize>>> =
-    Lazy::new(|| RwLock::new(None));
+static GLOBAL_SEARCH_INDEX_WRITER_NUM_THREADS: LazyLock<RwLock<Option<usize>>> =
+    LazyLock::new(|| RwLock::new(None));
 
 #[derive(Debug, Error, Clone)]
 pub enum GetGlobalSearchIndexError {
@@ -49,8 +48,8 @@ pub enum GetGlobalSearchIndexError {
     FailedToGetIndex(String),
 }
 
-static GLOBAL_SEARCH_INDEX: Lazy<RwLock<Result<Index, GetGlobalSearchIndexError>>> =
-    Lazy::new(|| {
+static GLOBAL_SEARCH_INDEX: LazyLock<RwLock<Result<Index, GetGlobalSearchIndexError>>> =
+    LazyLock::new(|| {
         let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
         RwLock::new(
             create_global_search_index(path, false).map_err(|e| match e {
@@ -68,8 +67,8 @@ pub enum GetGlobalSearchReaderError {
     FailedToGetReader(String),
 }
 
-static GLOBAL_SEARCH_READER: Lazy<RwLock<Result<IndexReader, GetGlobalSearchReaderError>>> =
-    Lazy::new(|| {
+static GLOBAL_SEARCH_READER: LazyLock<RwLock<Result<IndexReader, GetGlobalSearchReaderError>>> =
+    LazyLock::new(|| {
         let binding = GLOBAL_SEARCH_INDEX.read().unwrap();
         let index = match binding.as_ref() {
             Ok(index) => index,
@@ -506,8 +505,8 @@ pub enum SearchIndexError {
     QueryParser(#[from] tantivy::query::QueryParserError),
 }
 
-static NON_ALPHA_NUMERIC_REGEX: Lazy<regex::Regex> =
-    Lazy::new(|| regex::Regex::new(r"[^A-Za-z0-9 ]").expect("Invalid Regex"));
+static NON_ALPHA_NUMERIC_REGEX: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"[^A-Za-z0-9 ]").expect("Invalid Regex"));
 
 fn sanitize_query(query: &str) -> String {
     NON_ALPHA_NUMERIC_REGEX
@@ -840,9 +839,13 @@ pub fn search_global_search_index(
 
 #[cfg(test)]
 mod tests {
-    use std::{cmp::Ordering, collections::BTreeMap, path::PathBuf, sync::RwLock};
+    use std::{
+        cmp::Ordering,
+        collections::BTreeMap,
+        path::PathBuf,
+        sync::{LazyLock, RwLock},
+    };
 
-    use once_cell::sync::Lazy;
     use pretty_assertions::assert_eq;
     use serial_test::serial;
     use static_init::dynamic;
@@ -850,7 +853,7 @@ mod tests {
 
     use crate::*;
 
-    static TEMP_DIRS: Lazy<RwLock<Vec<PathBuf>>> = Lazy::new(|| RwLock::new(vec![]));
+    static TEMP_DIRS: LazyLock<RwLock<Vec<PathBuf>>> = LazyLock::new(|| RwLock::new(vec![]));
 
     #[derive(Debug)]
     struct TestSetup;
@@ -896,13 +899,13 @@ mod tests {
     #[dynamic(drop)]
     static mut TEST_SETUP: TestSetup = TestSetup::new();
 
-    static ELDER_ARTIST: Lazy<Vec<(&'static str, DataValue)>> = Lazy::new(|| {
+    static ELDER_ARTIST: LazyLock<Vec<(&'static str, DataValue)>> = LazyLock::new(|| {
         vec![
             ("artist_title", DataValue::String("Elder".into())),
             ("artist_id", DataValue::Number(51)),
         ]
     });
-    static OMENS_ALBUM: Lazy<Vec<(&'static str, DataValue)>> = Lazy::new(|| {
+    static OMENS_ALBUM: LazyLock<Vec<(&'static str, DataValue)>> = LazyLock::new(|| {
         vec![
             ("artist_title", DataValue::String("Elder".into())),
             ("artist_id", DataValue::Number(51)),
@@ -910,7 +913,7 @@ mod tests {
             ("album_id", DataValue::Number(163)),
         ]
     });
-    static OMENS_TRACK_1: Lazy<Vec<(&'static str, DataValue)>> = Lazy::new(|| {
+    static OMENS_TRACK_1: LazyLock<Vec<(&'static str, DataValue)>> = LazyLock::new(|| {
         vec![
             ("artist_title", DataValue::String("Elder".into())),
             ("artist_id", DataValue::Number(51)),
@@ -920,7 +923,7 @@ mod tests {
             ("track_id", DataValue::Number(1654)),
         ]
     });
-    static OMENS_TRACK_2: Lazy<Vec<(&'static str, DataValue)>> = Lazy::new(|| {
+    static OMENS_TRACK_2: LazyLock<Vec<(&'static str, DataValue)>> = LazyLock::new(|| {
         vec![
             ("artist_title", DataValue::String("Elder".into())),
             ("artist_id", DataValue::Number(51)),
@@ -930,7 +933,7 @@ mod tests {
             ("track_id", DataValue::Number(1655)),
         ]
     });
-    static OMENS_TRACK_3: Lazy<Vec<(&'static str, DataValue)>> = Lazy::new(|| {
+    static OMENS_TRACK_3: LazyLock<Vec<(&'static str, DataValue)>> = LazyLock::new(|| {
         vec![
             ("artist_title", DataValue::String("Elder".into())),
             ("artist_id", DataValue::Number(51)),
@@ -940,7 +943,7 @@ mod tests {
             ("track_id", DataValue::Number(1659)),
         ]
     });
-    static OMENS_TRACK_4: Lazy<Vec<(&'static str, DataValue)>> = Lazy::new(|| {
+    static OMENS_TRACK_4: LazyLock<Vec<(&'static str, DataValue)>> = LazyLock::new(|| {
         vec![
             ("artist_title", DataValue::String("Elder".into())),
             ("artist_id", DataValue::Number(51)),
@@ -950,7 +953,7 @@ mod tests {
             ("track_id", DataValue::Number(1660)),
         ]
     });
-    static OMENS_TRACK_5: Lazy<Vec<(&'static str, DataValue)>> = Lazy::new(|| {
+    static OMENS_TRACK_5: LazyLock<Vec<(&'static str, DataValue)>> = LazyLock::new(|| {
         vec![
             ("artist_title", DataValue::String("Elder".into())),
             ("artist_id", DataValue::Number(51)),
@@ -960,7 +963,7 @@ mod tests {
             ("track_id", DataValue::Number(1656)),
         ]
     });
-    static OMENS_TRACK_6: Lazy<Vec<(&'static str, DataValue)>> = Lazy::new(|| {
+    static OMENS_TRACK_6: LazyLock<Vec<(&'static str, DataValue)>> = LazyLock::new(|| {
         vec![
             ("artist_title", DataValue::String("Elder".into())),
             ("artist_id", DataValue::Number(51)),
@@ -970,7 +973,7 @@ mod tests {
             ("track_id", DataValue::Number(1657)),
         ]
     });
-    static OMENS_TRACK_7: Lazy<Vec<(&'static str, DataValue)>> = Lazy::new(|| {
+    static OMENS_TRACK_7: LazyLock<Vec<(&'static str, DataValue)>> = LazyLock::new(|| {
         vec![
             ("artist_title", DataValue::String("Elder".into())),
             ("artist_id", DataValue::Number(51)),
@@ -983,7 +986,7 @@ mod tests {
             ("track_id", DataValue::Number(1658)),
         ]
     });
-    static TEST_DATA: Lazy<Vec<Vec<(&'static str, DataValue)>>> = Lazy::new(|| {
+    static TEST_DATA: LazyLock<Vec<Vec<(&'static str, DataValue)>>> = LazyLock::new(|| {
         vec![
             ELDER_ARTIST.clone(),
             OMENS_ALBUM.clone(),

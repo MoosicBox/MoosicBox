@@ -10,12 +10,11 @@ use actix_web::{http, middleware, App};
 use api::health_endpoint;
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 use moosicbox_tunnel_server::CANCELLATION_TOKEN;
-use std::env;
+use std::{env, sync::LazyLock};
 use tokio::try_join;
 
-static WS_SERVER_HANDLE: once_cell::sync::Lazy<
-    tokio::sync::RwLock<Option<ws::server::service::Handle>>,
-> = once_cell::sync::Lazy::new(|| tokio::sync::RwLock::new(None));
+static WS_SERVER_HANDLE: LazyLock<tokio::sync::RwLock<Option<ws::server::service::Handle>>> =
+    LazyLock::new(|| tokio::sync::RwLock::new(None));
 
 fn main() -> Result<(), std::io::Error> {
     if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {

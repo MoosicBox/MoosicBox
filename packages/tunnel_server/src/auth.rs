@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::pin::Pin;
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 
 use actix_web::dev::Payload;
 use actix_web::error::ErrorUnauthorized;
@@ -8,7 +8,6 @@ use actix_web::http::header::HeaderValue;
 use actix_web::{http, FromRequest, HttpRequest};
 use futures_util::future::{err, ok, Ready};
 use futures_util::Future;
-use once_cell::sync::Lazy;
 use qstring::QString;
 use sha2::{Digest, Sha256};
 
@@ -191,7 +190,8 @@ async fn is_signature_authorized(query_string: &str) -> Result<bool, DatabaseErr
     Ok(false)
 }
 
-static HASH_CACHE: Lazy<Mutex<HashMap<String, String>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub fn hash_token(token: &str) -> String {
     if let Some(existing) = HASH_CACHE

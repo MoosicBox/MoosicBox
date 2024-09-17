@@ -1,4 +1,4 @@
-use std::pin::Pin;
+use std::{pin::Pin, sync::LazyLock};
 
 use actix_web::error::ErrorInternalServerError;
 use chrono::NaiveDateTime;
@@ -11,7 +11,6 @@ use moosicbox_database::{
 };
 use moosicbox_database_connection::InitDbError;
 use moosicbox_json_utils::{database::ToValue, MissingValue, ParseError, ToValueType};
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Mutex;
@@ -141,7 +140,8 @@ impl ToValueType<MagicToken> for &Row {
     }
 }
 
-pub(crate) static DB: Lazy<Mutex<Option<Box<dyn Database>>>> = Lazy::new(|| Mutex::new(None));
+pub(crate) static DB: LazyLock<Mutex<Option<Box<dyn Database>>>> =
+    LazyLock::new(|| Mutex::new(None));
 
 async fn resilient_exec<T, F>(
     exec: Box<dyn Fn() -> Pin<Box<F>> + Send + Sync>,

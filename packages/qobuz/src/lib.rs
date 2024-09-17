@@ -16,7 +16,11 @@ use moosicbox_database::{Database, DatabaseError};
 use moosicbox_files::get_content_length;
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use reqwest::StatusCode;
-use std::{collections::HashMap, str::Utf8Error, sync::Arc};
+use std::{
+    collections::HashMap,
+    str::Utf8Error,
+    sync::{Arc, LazyLock},
+};
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
@@ -36,7 +40,6 @@ use moosicbox_music_api::{
     RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackAudioQuality, TrackError,
     TrackOrId, TrackOrder, TrackOrderDirection, TrackSource, TracksError,
 };
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
@@ -63,7 +66,8 @@ trait ToUrl {
 static QOBUZ_PLAY_API_BASE_URL: &str = "https://play.qobuz.com";
 static QOBUZ_API_BASE_URL: &str = "https://www.qobuz.com/api.json/0.2";
 
-static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| reqwest::Client::builder().build().unwrap());
+static CLIENT: LazyLock<reqwest::Client> =
+    LazyLock::new(|| reqwest::Client::builder().build().unwrap());
 
 pub fn format_title(title: &str, version: Option<&str>) -> String {
     if let Some(version) = &version {
@@ -1576,7 +1580,7 @@ async fn fetch_login_source() -> Result<String, QobuzFetchLoginSourceError> {
 
 #[allow(unused)]
 async fn search_bundle_version(login_source: &str) -> Option<String> {
-    static BUNDLE_ID_REGEX: Lazy<regex::Regex> = Lazy::new(|| {
+    static BUNDLE_ID_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
         regex::Regex::new(
             r#"<script src="/resources/(\d+\.\d+\.\d+-[a-z]\d{3})/bundle\.js"></script>"#,
         )
@@ -1647,8 +1651,8 @@ pub(crate) struct AppConfig {
 pub(crate) async fn search_app_config(
     bundle: &str,
 ) -> Result<AppConfig, QobuzFetchAppSecretsError> {
-    static APP_ID_REGEX: Lazy<regex::Regex> =
-        Lazy::new(|| regex::Regex::new(r#"production:\{api:\{appId:"([^"]+)""#).unwrap());
+    static APP_ID_REGEX: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r#"production:\{api:\{appId:"([^"]+)""#).unwrap());
 
     let app_id = if let Some(caps) = APP_ID_REGEX.captures(bundle) {
         if let Some(app_id) = caps.get(1) {
@@ -1664,7 +1668,7 @@ pub(crate) async fn search_app_config(
 
     let mut seed_timezones = vec![];
 
-    static SEED_AND_TIMEZONE_REGEX: Lazy<regex::Regex> = Lazy::new(|| {
+    static SEED_AND_TIMEZONE_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
         regex::Regex::new(r#"[a-z]\.initialSeed\("([\w=]+)",window\.utimezone\.(.+?)\)"#).unwrap()
     });
 
@@ -1693,7 +1697,7 @@ pub(crate) async fn search_app_config(
 
     let mut name_info_extras = vec![];
 
-    static INFO_AND_EXTRAS_REGEX: Lazy<regex::Regex> = Lazy::new(|| {
+    static INFO_AND_EXTRAS_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
         regex::Regex::new(r#"name:"\w+/([^"]+)",info:"([\w=]+)",extras:"([\w=]+)""#).unwrap()
     });
 

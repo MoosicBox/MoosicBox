@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Cursor;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, LazyLock, RwLock};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -31,7 +31,6 @@ use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;
 use moosicbox_stream_utils::ByteWriter;
 use moosicbox_tunnel::{Method, TunnelEncoding, TunnelWsResponse};
 use moosicbox_ws::{PlayerAction, WebsocketContext, WebsocketSendError, WebsocketSender};
-use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng as _};
 use regex::Regex;
 use serde_json::Value;
@@ -178,7 +177,7 @@ pub struct TunnelSender {
     player_actions: Arc<RwLock<Vec<(u64, PlayerAction)>>>,
 }
 
-static BINARY_REQUEST_BUFFER_OFFSET: Lazy<usize> = Lazy::new(|| {
+static BINARY_REQUEST_BUFFER_OFFSET: LazyLock<usize> = LazyLock::new(|| {
     std::mem::size_of::<usize>() + // request_id
     std::mem::size_of::<u32>() + // packet_id
     std::mem::size_of::<u8>() // last

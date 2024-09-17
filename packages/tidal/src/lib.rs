@@ -7,7 +7,10 @@ pub mod db;
 
 pub mod models;
 
-use std::{fmt::Display, sync::Arc};
+use std::{
+    fmt::Display,
+    sync::{Arc, LazyLock},
+};
 
 use models::{TidalAlbum, TidalArtist, TidalSearchResults, TidalTrack};
 #[cfg(feature = "db")]
@@ -29,7 +32,6 @@ use moosicbox_music_api::{
     TrackOrId, TrackOrder, TrackOrderDirection, TrackSource, TracksError,
 };
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
@@ -71,7 +73,8 @@ enum TidalApiEndpoint {
     Search,
 }
 
-static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| reqwest::Client::builder().build().unwrap());
+static CLIENT: LazyLock<reqwest::Client> =
+    LazyLock::new(|| reqwest::Client::builder().build().unwrap());
 
 static TIDAL_AUTH_API_BASE_URL: &str = "https://auth.tidal.com/v1";
 static TIDAL_API_BASE_URL: &str = "https://api.tidal.com/v1";

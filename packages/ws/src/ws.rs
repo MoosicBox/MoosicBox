@@ -4,7 +4,7 @@ use std::{
     future::Future,
     num::ParseIntError,
     pin::Pin,
-    sync::{Arc, RwLock},
+    sync::{Arc, LazyLock, RwLock},
 };
 
 use async_trait::async_trait;
@@ -20,7 +20,6 @@ use moosicbox_session::{
         PlaybackTarget, RegisterConnection, RegisterPlayer, UpdateSession,
     },
 };
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
@@ -84,8 +83,8 @@ impl core::fmt::Debug for dyn WebsocketSender {
     }
 }
 
-static CONNECTION_DATA: Lazy<Arc<RwLock<HashMap<String, Connection>>>> =
-    Lazy::new(|| Arc::new(RwLock::new(HashMap::new())));
+static CONNECTION_DATA: LazyLock<Arc<RwLock<HashMap<String, Connection>>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(HashMap::new())));
 
 #[derive(Debug, Error)]
 pub enum WebsocketConnectError {

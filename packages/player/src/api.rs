@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, LazyLock},
+};
 
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
@@ -16,7 +19,6 @@ use moosicbox_core::{
 };
 use moosicbox_music_api::{MusicApi, MusicApiState, SourceToMusicApi as _};
 use moosicbox_session::models::PlaybackTarget;
-use once_cell::sync::Lazy;
 use serde::Deserialize;
 
 use crate::{
@@ -118,8 +120,8 @@ impl From<PlayerError> for actix_web::Error {
     }
 }
 
-static PLAYER_CACHE: Lazy<Arc<tokio::sync::Mutex<HashMap<String, PlaybackHandler>>>> =
-    Lazy::new(|| Arc::new(tokio::sync::Mutex::new(HashMap::new())));
+static PLAYER_CACHE: LazyLock<Arc<tokio::sync::Mutex<HashMap<String, PlaybackHandler>>>> =
+    LazyLock::new(|| Arc::new(tokio::sync::Mutex::new(HashMap::new())));
 
 async fn get_player(host: Option<&str>) -> Result<PlaybackHandler, actix_web::Error> {
     Ok(PLAYER_CACHE

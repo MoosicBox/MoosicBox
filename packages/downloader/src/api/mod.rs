@@ -35,7 +35,6 @@ use moosicbox_music_api::MusicApiState;
 use moosicbox_music_api::SourceToMusicApi as _;
 use moosicbox_music_api::TrackAudioQuality;
 use moosicbox_paging::Page;
-use once_cell::sync::Lazy;
 use regex::Captures;
 use regex::Regex;
 use serde::Deserialize;
@@ -76,8 +75,8 @@ pub fn bind_services<
 )]
 pub struct Api;
 
-static DOWNLOAD_QUEUE: Lazy<Arc<RwLock<DownloadQueue>>> =
-    Lazy::new(|| Arc::new(RwLock::new(DownloadQueue::new())));
+static DOWNLOAD_QUEUE: LazyLock<Arc<RwLock<DownloadQueue>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(DownloadQueue::new())));
 
 pub async fn add_progress_listener_to_download_queue(listener: ProgressListenerRef) {
     let mut queue = DOWNLOAD_QUEUE.write().await;

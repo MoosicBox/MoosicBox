@@ -1,32 +1,36 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, LazyLock},
+};
 
 use async_trait::async_trait;
-use once_cell::sync::Lazy;
 use pingora_core::{upstreams::peer::HttpPeer, Result};
 use pingora_load_balancing::{selection::RoundRobin, LoadBalancer};
 use pingora_proxy::{ProxyHttp, Session};
 
-pub static PORT: Lazy<u16> = Lazy::new(|| {
+pub static PORT: LazyLock<u16> = LazyLock::new(|| {
     std::env::var("PORT")
         .unwrap_or("6188".to_string())
         .parse::<u16>()
         .expect("Invalid PORT")
 });
 
-pub static SSL_PORT: Lazy<u16> = Lazy::new(|| {
+pub static SSL_PORT: LazyLock<u16> = LazyLock::new(|| {
     std::env::var("SSL_PORT")
         .unwrap_or("6189".to_string())
         .parse::<u16>()
         .expect("Invalid SSL_PORT")
 });
 
-pub static SSL_CRT_PATH: Lazy<String> =
-    Lazy::new(|| std::env::var("SSL_CRT_PATH").unwrap_or("/etc/pingora/ssl/tls.crt".to_string()));
+pub static SSL_CRT_PATH: LazyLock<String> = LazyLock::new(|| {
+    std::env::var("SSL_CRT_PATH").unwrap_or("/etc/pingora/ssl/tls.crt".to_string())
+});
 
-pub static SSL_KEY_PATH: Lazy<String> =
-    Lazy::new(|| std::env::var("SSL_KEY_PATH").unwrap_or("/etc/pingora/ssl/tls.key".to_string()));
+pub static SSL_KEY_PATH: LazyLock<String> = LazyLock::new(|| {
+    std::env::var("SSL_KEY_PATH").unwrap_or("/etc/pingora/ssl/tls.key".to_string())
+});
 
-static SNI: Lazy<String> = Lazy::new(|| format!("127.0.0.1:{}", *SSL_PORT));
+static SNI: LazyLock<String> = LazyLock::new(|| format!("127.0.0.1:{}", *SSL_PORT));
 
 pub struct Router(HashMap<String, Arc<LoadBalancer<RoundRobin>>>);
 

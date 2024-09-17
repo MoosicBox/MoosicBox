@@ -44,7 +44,6 @@ futures         = { workspace = true }
 futures-core    = { workspace = true }
 lazy_static     = { workspace = true }
 log             = { workspace = true }
-once_cell       = { workspace = true }
 regex           = { workspace = true }
 reqwest         = { workspace = true }
 rusqlite        = { workspace = true }

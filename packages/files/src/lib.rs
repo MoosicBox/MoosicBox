@@ -4,7 +4,7 @@ use std::{
     io::{Seek, Write},
     path::{Path, PathBuf},
     pin::Pin,
-    sync::atomic::AtomicUsize,
+    sync::{atomic::AtomicUsize, LazyLock},
     time::Instant,
 };
 
@@ -15,7 +15,6 @@ use futures::{StreamExt, TryStreamExt};
 use futures_core::{Future, Stream};
 use moosicbox_async_service::Arc;
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
-use once_cell::sync::Lazy;
 use thiserror::Error;
 use tokio::{
     io::{AsyncSeekExt, AsyncWriteExt, BufWriter},
@@ -31,8 +30,8 @@ pub mod files;
 #[cfg(feature = "range")]
 pub mod range;
 
-static NON_ALPHA_NUMERIC_REGEX: Lazy<regex::Regex> =
-    Lazy::new(|| regex::Regex::new(r"[^A-Za-z0-9_]").expect("Invalid Regex"));
+static NON_ALPHA_NUMERIC_REGEX: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"[^A-Za-z0-9_]").expect("Invalid Regex"));
 
 pub fn sanitize_filename(string: &str) -> String {
     NON_ALPHA_NUMERIC_REGEX.replace_all(string, "_").to_string()
@@ -48,7 +47,8 @@ pub enum GetContentLengthError {
     ToStr(#[from] reqwest::header::ToStrError),
 }
 
-static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| reqwest::Client::builder().build().unwrap());
+static CLIENT: LazyLock<reqwest::Client> =
+    LazyLock::new(|| reqwest::Client::builder().build().unwrap());
 
 pub async fn get_content_length(
     url: &str,
@@ -290,7 +290,7 @@ async fn get_or_fetch_cover_bytes_from_remote_url(
 ) -> Result<CoverBytes, FetchCoverError> {
     use tokio_util::codec::{BytesCodec, FramedRead};
 
-    static IMAGE_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
+    static IMAGE_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
     if Path::exists(file_path) {
         let file = tokio::fs::File::open(file_path.to_path_buf()).await?;
@@ -328,7 +328,9 @@ async fn get_or_fetch_cover_from_remote_url(
     url: &str,
     file_path: &Path,
 ) -> Result<String, FetchCoverError> {
-    static IMAGE_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
+    use std::sync::LazyLock;
+
+    static IMAGE_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
     if Path::exists(file_path) {
         Ok(file_path.to_str().unwrap().to_string())

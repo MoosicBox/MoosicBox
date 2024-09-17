@@ -1,9 +1,11 @@
-use std::{ops::Deref, sync::atomic::AtomicU16};
+use std::{
+    ops::Deref,
+    sync::{atomic::AtomicU16, LazyLock},
+};
 
 use async_trait::async_trait;
 use chrono::{NaiveDateTime, Utc};
 use futures::StreamExt;
-use once_cell::sync::Lazy;
 use postgres_protocol::types::{bool_from_sql, float8_from_sql, int8_from_sql, text_from_sql};
 use thiserror::Error;
 use tokio::{
@@ -746,8 +748,8 @@ fn build_values_props(values: &[(&str, Box<dyn Expression>)], index: &AtomicU16)
 }
 
 fn format_identifier(identifier: &str) -> String {
-    static NON_ALPHA_NUMERIC_REGEX: Lazy<regex::Regex> =
-        Lazy::new(|| regex::Regex::new(r"[^A-Za-z0-9_]").expect("Invalid Regex"));
+    static NON_ALPHA_NUMERIC_REGEX: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"[^A-Za-z0-9_]").expect("Invalid Regex"));
 
     if NON_ALPHA_NUMERIC_REGEX.is_match(identifier) {
         identifier.to_string()

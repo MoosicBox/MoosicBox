@@ -1,12 +1,11 @@
 use std::{
     ops::Deref,
     pin::Pin,
-    sync::{atomic::AtomicU16, Arc},
+    sync::{atomic::AtomicU16, Arc, LazyLock},
 };
 
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
-use once_cell::sync::Lazy;
 use sqlx::{
     pool::PoolConnection,
     query::Query,
@@ -762,8 +761,8 @@ fn build_values_props(values: &[(&str, Box<dyn Expression>)], index: &AtomicU16)
 }
 
 fn format_identifier(identifier: &str) -> String {
-    static NON_ALPHA_NUMERIC_REGEX: Lazy<regex::Regex> =
-        Lazy::new(|| regex::Regex::new(r"[^A-Za-z0-9_]").expect("Invalid Regex"));
+    static NON_ALPHA_NUMERIC_REGEX: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"[^A-Za-z0-9_]").expect("Invalid Regex"));
 
     if NON_ALPHA_NUMERIC_REGEX.is_match(identifier) {
         identifier.to_string()

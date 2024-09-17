@@ -38,7 +38,6 @@ async-trait     = { workspace = true }
 enum-as-inner   = { workspace = true }
 futures         = { workspace = true }
 log             = { workspace = true }
-once_cell       = { workspace = true }
 open            = { workspace = true }
 regex           = { workspace = true }
 reqwest         = { workspace = true, features = ["json"] }

@@ -7,7 +7,12 @@ pub mod cache;
 pub mod db;
 pub mod models;
 
-use std::{cmp::Ordering, fs::File, ops::Deref, sync::Arc};
+use std::{
+    cmp::Ordering,
+    fs::File,
+    ops::Deref,
+    sync::{Arc, LazyLock},
+};
 
 use db::{get_artist_by_album_id, SetTrackSize};
 use models::{LibraryAlbum, LibraryArtist, LibraryTrack};
@@ -35,7 +40,6 @@ use moosicbox_search::{
     data::AsDataValues as _, models::ApiGlobalSearchResult, populate_global_search_index,
     PopulateIndexError, RecreateIndexError,
 };
-use once_cell::sync::Lazy;
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
@@ -1180,7 +1184,7 @@ impl MusicApi for LibraryMusicApi {
             return Ok(None);
         };
 
-        static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
+        static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
 
         if std::env::consts::OS == "windows" {
             path = REGEX

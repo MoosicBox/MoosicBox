@@ -1,9 +1,10 @@
+use std::sync::LazyLock;
+
 use bytes::Bytes;
 use libvips::{ops, VipsApp, VipsImage};
 use log::debug;
-use once_cell::sync::Lazy;
 
-static VIPS: Lazy<VipsApp> = Lazy::new(|| {
+static VIPS: LazyLock<VipsApp> = LazyLock::new(|| {
     debug!("Initializing libvips");
     let app = VipsApp::new("Moosicbox Libvips", false).expect("Cannot initialize libvips");
 

@@ -1,7 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::{path::PathBuf, sync::atomic::AtomicUsize};
 
 use db::get_enabled_scan_origins;
@@ -13,7 +13,6 @@ use moosicbox_core::sqlite::{
 };
 use moosicbox_database::Database;
 use moosicbox_music_api::{MusicApi, MusicApiState, MusicApisError, SourceToMusicApi as _};
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
@@ -29,10 +28,10 @@ pub mod event;
 pub mod music_api;
 pub mod output;
 
-static CACHE_DIR: Lazy<PathBuf> =
-    Lazy::new(|| get_cache_dir_path().expect("Could not get cache directory"));
+static CACHE_DIR: LazyLock<PathBuf> =
+    LazyLock::new(|| get_cache_dir_path().expect("Could not get cache directory"));
 
-static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
+static CANCELLATION_TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
 
 pub fn cancel() {
     CANCELLATION_TOKEN.cancel();

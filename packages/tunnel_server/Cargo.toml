@@ -42,7 +42,6 @@ futures-util = { workspace = true }
 hex = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
-once_cell = { workspace = true }
 qstring = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
