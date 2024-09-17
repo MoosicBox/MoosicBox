@@ -22,18 +22,26 @@ moosicbox_scan = { path = "../scan", default-features = false, features = [
     "local",
 ] }
 
+base64 = { workspace = true, optional = true }
+moosicbox_tidal = { path = "../tidal", optional = true, default-features = false, features = [
+    "db",
+] }
+
 actix-htmx  = { workspace = true }
 actix-web   = { workspace = true }
 log         = { workspace = true }
 maud        = { workspace = true, features = ["actix-web"] }
 serde       = { workspace = true }
 serde_json  = { workspace = true }
+thiserror   = { workspace = true }
 urlencoding = { workspace = true }
 
 [features]
-default = ["api"]
+default = ["api", "tidal"]
 
 fail-on-warnings = []
+
+tidal = ["dep:base64", "dep:moosicbox_tidal"]
 
 static-token-auth = []
 

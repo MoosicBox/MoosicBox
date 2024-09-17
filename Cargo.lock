@@ -3723,6 +3723,7 @@ version = "0.1.0"
 dependencies = [
  "actix-htmx",
  "actix-web",
+ "base64 0.22.1",
  "log",
  "maud",
  "moosicbox_assert",
@@ -3731,8 +3732,10 @@ dependencies = [
  "moosicbox_database",
  "moosicbox_music_api",
  "moosicbox_scan",
+ "moosicbox_tidal",
  "serde",
  "serde_json",
+ "thiserror",
  "urlencoding",
 ]
 

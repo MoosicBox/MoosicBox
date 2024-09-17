@@ -1,12 +1,15 @@
 use actix_htmx::Htmx;
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
+    error::ErrorInternalServerError,
     route, web, HttpResponse, Responder, Scope,
 };
 use maud::{html, DOCTYPE};
 
 mod info;
 mod scan;
+#[cfg(feature = "tidal")]
+mod tidal;
 pub(crate) mod util;
 
 pub fn bind_services<
@@ -14,7 +17,9 @@ pub fn bind_services<
 >(
     scope: Scope<T>,
 ) -> Scope<T> {
-    info::bind_services(scan::bind_services(scope.service(index_endpoint)))
+    info::bind_services(scan::bind_services(tidal::bind_services(
+        scope.service(index_endpoint),
+    )))
 }
 
 #[route("", method = "GET")]
@@ -45,6 +50,11 @@ pub async fn index_endpoint(
                     hr {}
                     h2 { "Scan" }
                     (scan::scan(&**data.database).await?)
+                    (if cfg!(feature = "tidal") { html! {
+                        hr {}
+                        h2 { "Tidal" }
+                        (tidal::settings(&**data.database).await.map_err(ErrorInternalServerError)?)
+                    } } else { html!{} })
                 }
             }
         }
