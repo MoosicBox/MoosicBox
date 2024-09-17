@@ -8,7 +8,7 @@ use actix_web::{
 };
 use base64::{engine::general_purpose, DecodeError, Engine as _};
 use maud::{html, Markup};
-use moosicbox_database::{profiles::api::CurrentLibrary, Database};
+use moosicbox_database::{profiles::api::LibraryDatabase, Database};
 use moosicbox_tidal::{db::TidalConfigError, TidalDeviceAuthorizationTokenError};
 use serde::Deserialize;
 use thiserror::Error;
@@ -59,7 +59,7 @@ static CLIENT_SECRET: LazyLock<String> = LazyLock::new(|| {
 #[route("auth/device-authorization", method = "POST")]
 pub async fn device_authorization_endpoint(
     htmx: Htmx,
-    db: CurrentLibrary,
+    db: LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
     let response = moosicbox_tidal::device_authorization(CLIENT_ID.clone(), false)
         .await
@@ -91,7 +91,7 @@ pub struct DeviceAuthorizationTokenQuery {
 pub async fn device_authorization_token_endpoint(
     htmx: Htmx,
     query: web::Query<DeviceAuthorizationTokenQuery>,
-    db: CurrentLibrary,
+    db: LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
     device_authorization_token(db.deref(), htmx, &query.device_code, &query.url)
         .await
@@ -150,7 +150,7 @@ async fn device_authorization_token(
 #[route("settings", method = "GET", method = "OPTIONS", method = "HEAD")]
 pub async fn get_settings_endpoint(
     _htmx: Htmx,
-    db: CurrentLibrary,
+    db: LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
     settings(db.deref())
         .await

@@ -8,7 +8,7 @@ use actix_web::{
 };
 use maud::{html, Markup};
 use moosicbox_core::sqlite::db::DbError;
-use moosicbox_database::{profiles::api::CurrentLibrary, Database};
+use moosicbox_database::{profiles::api::LibraryDatabase, Database};
 use moosicbox_music_api::MusicApiState;
 use moosicbox_scan::ScanOrigin;
 use serde::Deserialize;
@@ -37,7 +37,7 @@ pub struct AddScanPathForm {
 pub async fn add_scan_paths_endpoint(
     _htmx: Htmx,
     form: web::Form<AddScanPathForm>,
-    db: CurrentLibrary,
+    db: LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
     moosicbox_scan::add_scan_path(db.deref(), &form.path)
         .await
@@ -58,7 +58,7 @@ pub struct RemoveScanPathQuery {
 pub async fn delete_scan_paths_endpoint(
     _htmx: Htmx,
     form: web::Query<RemoveScanPathQuery>,
-    db: CurrentLibrary,
+    db: LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
     moosicbox_scan::remove_scan_path(db.deref(), &form.path)
         .await
@@ -70,7 +70,7 @@ pub async fn delete_scan_paths_endpoint(
 #[route("run-scan", method = "POST")]
 pub async fn start_scan_endpoint(
     _htmx: Htmx,
-    db: CurrentLibrary,
+    db: LibraryDatabase,
     api_state: web::Data<MusicApiState>,
 ) -> Result<Markup, actix_web::Error> {
     moosicbox_scan::run_scan(
@@ -87,7 +87,7 @@ pub async fn start_scan_endpoint(
 #[route("scans", method = "GET", method = "OPTIONS", method = "HEAD")]
 pub async fn get_scans_endpoint(
     _htmx: Htmx,
-    db: CurrentLibrary,
+    db: LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
     scan(db.deref())
         .await

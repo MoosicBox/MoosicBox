@@ -63,24 +63,24 @@ pub mod api {
 
     use super::PROFILES;
 
-    pub struct CurrentLibrary {
+    pub struct LibraryDatabase {
         pub profile: String,
         pub database: Arc<Box<dyn Database>>,
     }
 
-    impl From<&CurrentLibrary> for Arc<Box<dyn Database>> {
-        fn from(value: &CurrentLibrary) -> Self {
+    impl From<&LibraryDatabase> for Arc<Box<dyn Database>> {
+        fn from(value: &LibraryDatabase) -> Self {
             value.database.clone()
         }
     }
 
-    impl From<CurrentLibrary> for Arc<Box<dyn Database>> {
-        fn from(value: CurrentLibrary) -> Self {
+    impl From<LibraryDatabase> for Arc<Box<dyn Database>> {
+        fn from(value: LibraryDatabase) -> Self {
             value.database
         }
     }
 
-    impl Deref for CurrentLibrary {
+    impl Deref for LibraryDatabase {
         type Target = dyn Database;
 
         fn deref(&self) -> &Self::Target {
@@ -88,7 +88,7 @@ pub mod api {
         }
     }
 
-    impl FromRequest for CurrentLibrary {
+    impl FromRequest for LibraryDatabase {
         type Error = actix_web::Error;
         type Future = Ready<Result<Self, actix_web::Error>>;
 

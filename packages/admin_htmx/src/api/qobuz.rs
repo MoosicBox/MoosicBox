@@ -8,7 +8,7 @@ use actix_web::{
 };
 use maud::{html, Markup};
 use moosicbox_core::sqlite::db::DbError;
-use moosicbox_database::{profiles::api::CurrentLibrary, Database};
+use moosicbox_database::{profiles::api::LibraryDatabase, Database};
 use serde::Deserialize;
 
 pub fn bind_services<
@@ -34,7 +34,7 @@ pub struct UserLoginForm {
 pub async fn user_login_endpoint(
     htmx: Htmx,
     form: web::Form<UserLoginForm>,
-    db: CurrentLibrary,
+    db: LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
     let response =
         moosicbox_qobuz::user_login(db.into(), &form.username, &form.password, None, Some(true))
@@ -68,7 +68,7 @@ pub async fn user_login_endpoint(
 #[route("settings", method = "GET", method = "OPTIONS", method = "HEAD")]
 pub async fn get_settings_endpoint(
     _htmx: Htmx,
-    db: CurrentLibrary,
+    db: LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
     settings(db.deref())
         .await
