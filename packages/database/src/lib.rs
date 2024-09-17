@@ -1,6 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
+pub mod config;
 #[cfg(feature = "postgres-raw")]
 pub mod postgres;
 pub mod profiles;
