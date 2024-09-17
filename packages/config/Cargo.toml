@@ -14,7 +14,9 @@ version     = "0.1.0"
 moosicbox_assert = { path = "../assert", default-features = false }
 
 # DB dependencies
-moosicbox_database = { path = "../database", optional = true, default-features = false }
+moosicbox_database = { path = "../database", optional = true, default-features = false, features = [
+    "api",
+] }
 moosicbox_json_utils = { path = "../json_utils", optional = true, default-features = false, features = [
     "database",
 ] }
