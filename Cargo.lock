@@ -4481,6 +4481,7 @@ version = "0.1.0"
 dependencies = [
  "actix-cors",
  "actix-files",
+ "actix-htmx",
  "actix-web",
  "actix-ws",
  "awc",

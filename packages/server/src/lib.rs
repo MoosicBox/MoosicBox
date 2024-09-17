@@ -311,6 +311,9 @@ pub async fn run(
             ));
 
             #[cfg(feature = "admin-htmx-api")]
+            let app = app.wrap(actix_htmx::HtmxMiddleware {});
+
+            #[cfg(feature = "admin-htmx-api")]
             let app = app.service(moosicbox_admin_htmx::api::bind_services(web::scope(
                 "/admin",
             )));

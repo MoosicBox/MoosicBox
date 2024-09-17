@@ -122,6 +122,7 @@ rcgen = { workspace = true, optional = true }
 
 actix-cors         = { workspace = true }
 actix-files        = { workspace = true }
+actix-htmx         = { workspace = true, optional = true }
 actix-web          = { workspace = true }
 actix-ws           = { workspace = true }
 awc                = { workspace = true }
@@ -299,22 +300,26 @@ app-apis = [
     "yt-api",
 ]
 
-admin-htmx-api   = ["dep:moosicbox_admin_htmx", "moosicbox_admin_htmx/api"]
+admin-htmx-api = [
+    "dep:actix-htmx",
+    "dep:moosicbox_admin_htmx",
+    "moosicbox_admin_htmx/api",
+]
 audio-output-api = ["moosicbox_audio_output/api"]
-audio-zone-api   = ["moosicbox_audio_zone/api"]
-auth-api         = ["moosicbox_auth/api"]
-downloader-api   = ["dep:moosicbox_downloader", "downloader"]
-files-api        = ["moosicbox_files/api"]
-library-api      = ["dep:moosicbox_library", "library"]
-menu-api         = ["dep:moosicbox_menu", "menu"]
-player-api       = ["moosicbox_player/api", "player"]
-qobuz-api        = ["dep:moosicbox_qobuz", "qobuz"]
-scan-api         = ["dep:moosicbox_scan", "scan"]
-search-api       = ["dep:moosicbox_search", "search"]
-session-api      = ["moosicbox_session/api"]
-tidal-api        = ["dep:moosicbox_tidal", "tidal"]
-upnp-api         = ["dep:moosicbox_upnp", "upnp"]
-yt-api           = ["dep:moosicbox_yt", "yt"]
+audio-zone-api = ["moosicbox_audio_zone/api"]
+auth-api = ["moosicbox_auth/api"]
+downloader-api = ["dep:moosicbox_downloader", "downloader"]
+files-api = ["moosicbox_files/api"]
+library-api = ["dep:moosicbox_library", "library"]
+menu-api = ["dep:moosicbox_menu", "menu"]
+player-api = ["moosicbox_player/api", "player"]
+qobuz-api = ["dep:moosicbox_qobuz", "qobuz"]
+scan-api = ["dep:moosicbox_scan", "scan"]
+search-api = ["dep:moosicbox_search", "search"]
+session-api = ["moosicbox_session/api"]
+tidal-api = ["dep:moosicbox_tidal", "tidal"]
+upnp-api = ["dep:moosicbox_upnp", "upnp"]
+yt-api = ["dep:moosicbox_yt", "yt"]
 
 openapi = [
     "dep:utoipa",
