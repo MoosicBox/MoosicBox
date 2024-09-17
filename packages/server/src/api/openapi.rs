@@ -44,6 +44,8 @@ pub fn init() -> OpenApi {
         "/downloader",
         moosicbox_downloader::api::Api::openapi(),
     );
+    #[cfg(feature = "config-api")]
+    let api = nest_api(api, "/config", moosicbox_config::api::Api::openapi());
     #[cfg(feature = "files-api")]
     let api = nest_api(api, "/files", moosicbox_files::api::Api::openapi());
     #[cfg(feature = "library-api")]

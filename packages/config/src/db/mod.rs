@@ -1,6 +1,9 @@
 use moosicbox_database::{Database, DatabaseError};
+use moosicbox_json_utils::{database::DatabaseFetchError, ToValueType as _};
 use nanoid::nanoid;
 use thiserror::Error;
+
+pub mod models;
 
 #[derive(Debug, Error)]
 pub enum GetOrInitServerIdentityError {
@@ -37,4 +40,8 @@ pub async fn get_or_init_server_identity(
             .and_then(|x| x.as_str().map(std::string::ToString::to_string))
             .ok_or(GetOrInitServerIdentityError::Failed)
     }
+}
+
+pub async fn get_profiles(db: &dyn Database) -> Result<Vec<models::Profile>, DatabaseFetchError> {
+    Ok(db.select("profiles").execute(db).await?.to_value_type()?)
 }

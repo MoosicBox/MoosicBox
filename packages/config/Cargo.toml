@@ -15,7 +15,16 @@ moosicbox_assert = { path = "../assert", default-features = false }
 
 # DB dependencies
 moosicbox_database = { path = "../database", optional = true, default-features = false }
-nanoid             = { workspace = true, optional = true }
+moosicbox_json_utils = { path = "../json_utils", optional = true, default-features = false, features = [
+    "database",
+] }
+nanoid = { workspace = true, optional = true }
+
+# API dependencies
+actix-web  = { workspace = true, optional = true }
+serde      = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+utoipa     = { workspace = true, optional = true }
 
 # Test dependencies
 rand = { workspace = true, optional = true }
@@ -25,10 +34,13 @@ log       = { workspace = true }
 thiserror = { workspace = true }
 
 [features]
-default = ["db"]
+default = ["api", "db", "openapi"]
 
 fail-on-warnings = []
 
 test = ["dep:rand"]
 
-db = ["dep:moosicbox_database", "dep:nanoid"]
+db = ["dep:moosicbox_database", "dep:moosicbox_json_utils", "dep:nanoid"]
+
+api     = ["db", "dep:actix-web", "dep:serde", "dep:serde_json"]
+openapi = ["dep:utoipa"]

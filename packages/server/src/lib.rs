@@ -406,6 +406,9 @@ pub async fn run(
             #[cfg(feature = "auth-api")]
             let app = app.service(moosicbox_auth::api::bind_services(web::scope("/auth")));
 
+            #[cfg(feature = "config-api")]
+            let app = app.service(moosicbox_config::api::bind_services(web::scope("/config")));
+
             #[cfg(feature = "downloader-api")]
             let app = app.service(moosicbox_downloader::api::bind_services(web::scope(
                 "/downloader",

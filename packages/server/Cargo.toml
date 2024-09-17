@@ -25,6 +25,7 @@ moosicbox_audio_zone = { path = "../audio_zone", default-features = false, featu
 ] }
 moosicbox_auth = { path = "../auth", default-features = false }
 moosicbox_config = { path = "../config", default-features = false, features = [
+    "api",
     "db",
 ] }
 moosicbox_core = { path = "../core", default-features = false }
@@ -289,6 +290,7 @@ app-apis = [
     "audio-output-api",
     "audio-zone-api",
     "auth-api",
+    "config-api",
     "downloader-api",
     "files-api",
     "library-api",
@@ -309,6 +311,7 @@ admin-htmx-api = [
 audio-output-api = ["moosicbox_audio_output/api"]
 audio-zone-api = ["moosicbox_audio_zone/api"]
 auth-api = ["moosicbox_auth/api"]
+config-api = []
 downloader-api = ["dep:moosicbox_downloader", "downloader"]
 files-api = ["moosicbox_files/api"]
 library-api = ["dep:moosicbox_library", "library"]

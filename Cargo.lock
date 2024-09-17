@@ -3899,13 +3899,18 @@ dependencies = [
 name = "moosicbox_config"
 version = "0.1.0"
 dependencies = [
+ "actix-web",
  "home",
  "log",
  "moosicbox_assert",
  "moosicbox_database",
+ "moosicbox_json_utils",
  "nanoid",
  "rand",
+ "serde",
+ "serde_json",
  "thiserror",
+ "utoipa",
 ]
 
 [[package]]

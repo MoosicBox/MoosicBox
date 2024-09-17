@@ -2,6 +2,8 @@
 
 use std::path::PathBuf;
 
+#[cfg(feature = "api")]
+pub mod api;
 #[cfg(feature = "db")]
 pub mod db;
 
