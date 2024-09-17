@@ -3,7 +3,6 @@ use std::{pin::Pin, sync::LazyLock};
 use actix_web::error::ErrorInternalServerError;
 use chrono::NaiveDateTime;
 use futures_util::Future;
-use moosicbox_config::AppType;
 use moosicbox_database::{
     boxed,
     query::{where_eq, where_gte, FilterableQuery},
@@ -49,8 +48,25 @@ pub async fn init() -> Result<(), DatabaseError> {
     #[cfg(not(feature = "postgres"))]
     let creds = None;
 
+    #[cfg(feature = "sqlite")]
+    let db_path = {
+        let path = make_config_db_dir_path(app_type).expect("Failed to get DB config path");
+
+        let path_str = path.to_str().expect("Failed to get DB path_str");
+        if let Err(e) = moosicbox_schema::migrate_config(path_str) {
+            moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
+        };
+
+        path
+    };
+
     binding.replace(
-        moosicbox_database_connection::init("master", AppType::TunnelServer, creds).await?,
+        moosicbox_database_connection::init(
+            #[cfg(feature = "sqlite")]
+            &db_path,
+            creds,
+        )
+        .await?,
     );
 
     Ok(())

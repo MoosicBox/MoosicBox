@@ -9,7 +9,6 @@ pub mod db;
 pub enum AppType {
     App,
     Server,
-    TunnelServer,
 }
 
 impl From<AppType> for &str {
@@ -17,7 +16,6 @@ impl From<AppType> for &str {
         match value {
             AppType::App => "app",
             AppType::Server => "server",
-            AppType::TunnelServer => "tunnel_server",
         }
     }
 }
@@ -32,8 +30,12 @@ pub fn get_config_dir_path() -> Option<PathBuf> {
     home::home_dir().map(|home| home.join(".local").join("moosicbox"))
 }
 
+pub fn get_app_config_dir_path(app_type: AppType) -> Option<PathBuf> {
+    get_config_dir_path().map(|x| x.join(app_type.to_string()))
+}
+
 pub fn get_profiles_dir_path(app_type: AppType) -> Option<PathBuf> {
-    get_config_dir_path().map(|x| x.join(app_type.to_string()).join("profiles"))
+    get_app_config_dir_path(app_type).map(|x| x.join("profiles"))
 }
 
 pub fn get_profile_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf> {

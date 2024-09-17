@@ -1,8 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
-use std::path::PathBuf;
-
-use moosicbox_config::{get_profile_dir_path, AppType};
 use moosicbox_database::Database;
 use thiserror::Error;
 
@@ -26,20 +23,6 @@ impl Credentials {
             password,
         }
     }
-}
-
-pub fn get_profile_db_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf> {
-    get_profile_dir_path(app_type, profile).map(|x| x.join("db"))
-}
-
-pub fn make_profile_db_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf> {
-    if let Some(path) = get_profile_db_dir_path(app_type, profile) {
-        if path.is_dir() || std::fs::create_dir_all(&path).is_ok() {
-            return Some(path);
-        }
-    }
-
-    None
 }
 
 #[derive(Debug, Error)]
@@ -69,28 +52,9 @@ pub enum InitDbError {
 }
 
 pub async fn init(
-    #[allow(unused)] profile: &str,
-    #[allow(unused)] app_type: AppType,
+    #[cfg(all(not(feature = "postgres"), feature = "sqlite"))] path: &std::path::Path,
     #[allow(unused)] creds: Option<Credentials>,
 ) -> Result<Box<dyn Database>, InitDbError> {
-    #[cfg(feature = "sqlite")]
-    let db_profile_path = {
-        let db_profile_dir_path =
-            make_profile_db_dir_path(app_type, profile).expect("Failed to get DB profile dir path");
-
-        db_profile_dir_path.join("library.db")
-    };
-
-    #[cfg(feature = "sqlite")]
-    {
-        let db_profile_path_str = db_profile_path
-            .to_str()
-            .expect("Failed to get DB profile path");
-        if let Err(e) = moosicbox_schema::migrate_library(db_profile_path_str) {
-            moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
-        };
-    }
-
     if cfg!(all(
         feature = "postgres-native-tls",
         feature = "postgres-raw"
@@ -120,13 +84,13 @@ pub async fn init(
         panic!("Invalid database features")
     } else if cfg!(feature = "sqlite-rusqlite") {
         #[cfg(feature = "sqlite-rusqlite")]
-        return Ok(init_sqlite(&db_profile_path)?);
+        return Ok(init_sqlite(path)?);
         #[cfg(not(feature = "sqlite-rusqlite"))]
         panic!("Invalid database features")
-    } else if cfg!(feature = "sqlite-sqlx",) {
-        #[cfg(feature = "sqlite-sqlx")]
-        return Ok(init_sqlite_sqlx(&db_profile_path).await?);
-        #[cfg(not(feature = "sqlite-sqlx"))]
+    } else if cfg!(feature = "sqlite-sqlx") {
+        #[cfg(all(not(feature = "postgres"), feature = "sqlite", feature = "sqlite-sqlx"))]
+        return Ok(init_sqlite_sqlx(path).await?);
+        #[cfg(not(all(not(feature = "postgres"), feature = "sqlite", feature = "sqlite-sqlx")))]
         panic!("Invalid database features")
     } else {
         panic!("Invalid database features")

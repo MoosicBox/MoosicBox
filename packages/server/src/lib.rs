@@ -13,13 +13,16 @@ mod ws;
 
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App};
-use moosicbox_config::{db::get_or_init_server_identity, AppType};
+use moosicbox_config::{
+    db::get_or_init_server_identity, get_app_config_dir_path, get_profile_dir_path, AppType,
+};
 use moosicbox_core::{app::AppState, sqlite::models::ApiSource};
 use moosicbox_database::Database;
 use moosicbox_files::files::track_pool::service::Commander as _;
 use moosicbox_music_api::{MusicApi, MusicApiState};
 use std::{
     collections::HashMap,
+    path::PathBuf,
     sync::{Arc, LazyLock},
 };
 use tokio::try_join;
@@ -49,11 +52,43 @@ static LIBRARY_API_STATE: LazyLock<
 
 static SERVER_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
+#[must_use]
+pub fn get_config_db_dir_path(app_type: AppType) -> Option<PathBuf> {
+    get_app_config_dir_path(app_type).map(|x| x.join("db"))
+}
+
+#[must_use]
+pub fn make_config_db_dir_path(app_type: AppType) -> Option<PathBuf> {
+    if let Some(path) = get_config_db_dir_path(app_type) {
+        if path.is_dir() || std::fs::create_dir_all(&path).is_ok() {
+            return Some(path.join("config.db"));
+        }
+    }
+
+    None
+}
+
+#[must_use]
+pub fn get_profile_db_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf> {
+    get_profile_dir_path(app_type, profile).map(|x| x.join("db"))
+}
+
+#[must_use]
+pub fn make_profile_db_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf> {
+    if let Some(path) = get_profile_db_dir_path(app_type, profile) {
+        if path.is_dir() || std::fs::create_dir_all(&path).is_ok() {
+            return Some(path.join("library.db"));
+        }
+    }
+
+    None
+}
+
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::missing_panics_doc)]
 #[allow(clippy::missing_errors_doc)]
 pub async fn run(
-    app_type: AppType,
+    #[allow(unused)] app_type: AppType,
     addr: &str,
     service_port: u16,
     actix_workers: Option<usize>,
@@ -61,35 +96,68 @@ pub async fn run(
     #[cfg(feature = "upnp")] upnp_players: bool,
     on_startup: impl FnOnce() + Send,
 ) -> std::io::Result<()> {
-    #[cfg(feature = "postgres")]
-    let creds = Some(
-        moosicbox_database_connection::creds::get_db_creds()
-            .await
-            .expect("Failed to get DB creds"),
-    );
-    #[cfg(not(feature = "postgres"))]
-    let creds = None;
+    #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
+    let config_db_profile_path = {
+        let path = make_config_db_dir_path(app_type).expect("Failed to get DB config path");
 
-    let db = moosicbox_database_connection::init("master", app_type, creds)
-        .await
-        .expect("Failed to initialize database");
+        let path_str = path.to_str().expect("Failed to get DB path_str");
+        if let Err(e) = moosicbox_schema::migrate_config(path_str) {
+            moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
+        };
+
+        path
+    };
+
+    let config_db = moosicbox_database_connection::init(
+        #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
+        &config_db_profile_path,
+        None,
+    )
+    .await
+    .expect("Failed to initialize database");
+
+    #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
+    let library_db_profile_path = {
+        let profile = "master";
+        let path =
+            make_profile_db_dir_path(app_type, profile).expect("Failed to get DB profile path");
+
+        let path_str = path.to_str().expect("Failed to get DB path_str");
+        if let Err(e) = moosicbox_schema::migrate_library(path_str) {
+            moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
+        };
+
+        path
+    };
+
+    let library_db = moosicbox_database_connection::init(
+        #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
+        &library_db_profile_path,
+        None,
+    )
+    .await
+    .expect("Failed to initialize database");
 
     SERVER_ID
         .set(
-            get_or_init_server_identity(&*db)
+            get_or_init_server_identity(&*config_db)
                 .await
                 .expect("Failed to get or init server identity"),
         )
         .expect("Failed to set SERVER_ID");
 
-    let database: Arc<Box<dyn Database>> = Arc::new(db);
+    let config_database: Arc<Box<dyn Database>> = Arc::new(config_db);
 
-    moosicbox_database::profiles::PROFILES.add("master".to_owned(), database.clone());
+    moosicbox_database::config::init(config_database.clone()).unwrap();
 
-    DB.write().unwrap().replace(database.clone());
+    let library_database: Arc<Box<dyn Database>> = Arc::new(library_db);
+
+    moosicbox_database::profiles::PROFILES.add("master".to_owned(), library_database.clone());
+
+    DB.write().unwrap().replace(library_database.clone());
 
     #[cfg(feature = "library")]
-    let library_music_api = moosicbox_library::LibraryMusicApi::new(database.clone());
+    let library_music_api = moosicbox_library::LibraryMusicApi::new(library_database.clone());
     #[cfg(feature = "library")]
     let library_api_state = moosicbox_library::LibraryMusicApiState::new(library_music_api.clone());
 
@@ -104,21 +172,21 @@ pub async fn run(
     apis_map.insert(
         ApiSource::Tidal,
         Box::new(moosicbox_music_api::CachedMusicApi::new(
-            moosicbox_tidal::TidalMusicApi::new(database.clone()),
+            moosicbox_tidal::TidalMusicApi::new(library_database.clone()),
         )),
     );
     #[cfg(feature = "qobuz")]
     apis_map.insert(
         ApiSource::Qobuz,
         Box::new(moosicbox_music_api::CachedMusicApi::new(
-            moosicbox_qobuz::QobuzMusicApi::new(database.clone()),
+            moosicbox_qobuz::QobuzMusicApi::new(library_database.clone()),
         )),
     );
     #[cfg(feature = "yt")]
     apis_map.insert(
         ApiSource::Yt,
         Box::new(moosicbox_music_api::CachedMusicApi::new(
-            moosicbox_yt::YtMusicApi::new(database.clone()),
+            moosicbox_yt::YtMusicApi::new(library_database.clone()),
         )),
     );
     let music_api_state = MusicApiState::new(apis_map);
@@ -134,9 +202,9 @@ pub async fn run(
         .replace(library_api_state.clone());
 
     #[cfg(feature = "tunnel")]
-    let (mut ws_server, server_tx) = ws::server::WsServer::new(database.clone());
+    let (mut ws_server, server_tx) = ws::server::WsServer::new(library_database.clone());
     #[cfg(not(feature = "tunnel"))]
-    let (ws_server, server_tx) = ws::server::WsServer::new(database.clone());
+    let (ws_server, server_tx) = ws::server::WsServer::new(library_database.clone());
     #[cfg(feature = "player")]
     let handle = server_tx.clone();
     WS_SERVER_HANDLE.write().await.replace(server_tx);
@@ -153,14 +221,17 @@ pub async fn run(
     #[cfg(feature = "scan")]
     events::scan_event::init().await;
 
-    events::audio_zone_event::init(database.clone()).await;
-    events::session_event::init(database.clone()).await;
+    events::audio_zone_event::init(library_database.clone()).await;
+    events::session_event::init(library_database.clone()).await;
 
     #[cfg(feature = "tunnel")]
-    let (tunnel_host, tunnel_join_handle, tunnel_handle) =
-        crate::tunnel::setup_tunnel(database.clone(), music_api_state.clone(), service_port)
-            .await
-            .expect("Failed to setup tunnel connection");
+    let (tunnel_host, tunnel_join_handle, tunnel_handle) = crate::tunnel::setup_tunnel(
+        library_database.clone(),
+        music_api_state.clone(),
+        service_port,
+    )
+    .await
+    .expect("Failed to setup tunnel connection");
 
     #[cfg(feature = "tunnel")]
     if let Some(ref tunnel_handle) = tunnel_handle {
@@ -198,7 +269,7 @@ pub async fn run(
         moosicbox_task::spawn(
             "server: register upnp players",
             players::upnp::init(
-                database.clone(),
+                library_database.clone(),
                 handle.clone(),
                 #[cfg(feature = "tunnel")]
                 tunnel_handle.clone(),
@@ -226,7 +297,7 @@ pub async fn run(
         moosicbox_task::spawn(
             "server: scan outputs",
             players::local::init(
-                database.clone(),
+                library_database.clone(),
                 #[cfg(feature = "tunnel")]
                 tunnel_handle.clone(),
             ),
@@ -241,7 +312,7 @@ pub async fn run(
     let openapi = api::openapi::init();
 
     let app = {
-        let database = database.clone();
+        let database = library_database.clone();
         move || {
             let app_data = AppState {
                 #[cfg(feature = "tunnel")]
@@ -264,6 +335,7 @@ pub async fn run(
                     http::header::AUTHORIZATION,
                     http::header::ACCEPT,
                     http::header::CONTENT_TYPE,
+                    http::header::HeaderName::from_static("moosicbox-profile"),
                     http::header::HeaderName::from_static("hx-boosted"),
                     http::header::HeaderName::from_static("hx-current-url"),
                     http::header::HeaderName::from_static("hx-history-restore-request"),
@@ -474,7 +546,8 @@ pub async fn run(
 
     on_startup();
 
-    let db = database.clone();
+    let config_db = config_database.clone();
+    let library_db = library_database.clone();
 
     if let Err(err) = try_join!(
         async move {
@@ -579,8 +652,14 @@ pub async fn run(
             }
 
             {
-                log::debug!("Closing database connection...");
-                if let Err(e) = db.close().await {
+                log::debug!("Closing config database connection...");
+                if let Err(e) = config_db.close().await {
+                    log::error!("Failed to shut down database connection: {e:?}");
+                }
+            }
+            {
+                log::debug!("Closing library database connection...");
+                if let Err(e) = library_db.close().await {
                     log::error!("Failed to shut down database connection: {e:?}");
                 }
             }

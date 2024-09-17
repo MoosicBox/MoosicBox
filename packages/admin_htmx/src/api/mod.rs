@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use actix_htmx::Htmx;
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
@@ -5,7 +7,7 @@ use actix_web::{
     route, HttpRequest, HttpResponse, Responder, Scope,
 };
 use maud::{html, Markup, DOCTYPE};
-use moosicbox_database::{profiles::PROFILES, Database};
+use moosicbox_database::{config::ConfigDatabase, profiles::PROFILES, Database};
 
 mod info;
 #[cfg(feature = "qobuz")]
@@ -29,6 +31,7 @@ pub fn bind_services<
 pub async fn index_endpoint(
     _htmx: Htmx,
     req: HttpRequest,
+    config_db: ConfigDatabase,
 ) -> Result<impl Responder, actix_web::Error> {
     let mut response = HttpResponse::Ok();
     response.content_type("text/html");
@@ -63,10 +66,10 @@ pub async fn index_endpoint(
                     }
                     ({
                         if let Some(profile) = profile {
-                            let db = PROFILES.get(profile)
+                            let library_db = PROFILES.get(profile)
                                 .ok_or_else(|| ErrorInternalServerError("Missing profile"))?;
 
-                            profile_info(&**db).await?
+                            profile_info(config_db.deref(), &**library_db).await?
                         } else {
                             html! {}
                         }
@@ -78,22 +81,25 @@ pub async fn index_endpoint(
     ))
 }
 
-async fn profile_info(db: &dyn Database) -> Result<Markup, actix_web::Error> {
+async fn profile_info(
+    config_db: &dyn Database,
+    library_db: &dyn Database,
+) -> Result<Markup, actix_web::Error> {
     Ok(html! {
         h2 { "Server Info" }
-        (info::info(db).await?)
+        (info::info(config_db).await?)
         hr {}
         h2 { "Scan" }
-        (scan::scan(db).await?)
+        (scan::scan(library_db).await?)
         (if cfg!(feature = "tidal") { html! {
             hr {}
             h2 { "Tidal" }
-            (tidal::settings(db).await.map_err(ErrorInternalServerError)?)
+            (tidal::settings(library_db).await.map_err(ErrorInternalServerError)?)
         } } else { html!{} })
         (if cfg!(feature = "qobuz") { html! {
             hr {}
             h2 { "Qobuz" }
-            (qobuz::settings(db).await.map_err(ErrorInternalServerError)?)
+            (qobuz::settings(library_db).await.map_err(ErrorInternalServerError)?)
         } } else { html!{} })
     })
 }
