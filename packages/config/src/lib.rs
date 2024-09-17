@@ -40,10 +40,6 @@ pub fn get_profile_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf>
     get_profiles_dir_path(app_type).map(|x| x.join(profile))
 }
 
-pub fn get_profile_db_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf> {
-    get_profile_dir_path(app_type, profile).map(|x| x.join("db"))
-}
-
 pub fn get_cache_dir_path() -> Option<PathBuf> {
     get_config_dir_path().map(|config| config.join("cache"))
 }
@@ -60,16 +56,6 @@ pub fn make_config_dir_path() -> Option<PathBuf> {
 
 pub fn make_profile_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf> {
     if let Some(path) = get_profile_dir_path(app_type, profile) {
-        if path.is_dir() || std::fs::create_dir_all(&path).is_ok() {
-            return Some(path);
-        }
-    }
-
-    None
-}
-
-pub fn make_profile_db_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf> {
-    if let Some(path) = get_profile_db_dir_path(app_type, profile) {
         if path.is_dir() || std::fs::create_dir_all(&path).is_ok() {
             return Some(path);
         }
