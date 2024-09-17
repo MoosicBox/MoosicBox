@@ -54,6 +54,7 @@ moosicbox_ws = { path = "../ws", default-features = false, features = ["ws"] }
 
 # APIs
 moosicbox_admin_htmx = { path = "../admin_htmx", default-features = false, features = [
+    "qobuz",
     "tidal",
 ], optional = true }
 moosicbox_downloader = { path = "../downloader", default-features = false, features = [

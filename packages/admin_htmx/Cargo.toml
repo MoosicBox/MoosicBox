@@ -22,6 +22,10 @@ moosicbox_scan = { path = "../scan", default-features = false, features = [
     "local",
 ] }
 
+moosicbox_qobuz = { path = "../qobuz", optional = true, default-features = false, features = [
+    "db",
+] }
+
 base64 = { workspace = true, optional = true }
 moosicbox_tidal = { path = "../tidal", optional = true, default-features = false, features = [
     "db",
@@ -37,10 +41,11 @@ thiserror   = { workspace = true }
 urlencoding = { workspace = true }
 
 [features]
-default = ["api", "tidal"]
+default = ["api", "qobuz", "tidal"]
 
 fail-on-warnings = []
 
+qobuz = ["dep:moosicbox_qobuz"]
 tidal = ["dep:base64", "dep:moosicbox_tidal"]
 
 static-token-auth = []

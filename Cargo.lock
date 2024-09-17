@@ -3731,6 +3731,7 @@ dependencies = [
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_music_api",
+ "moosicbox_qobuz",
  "moosicbox_scan",
  "moosicbox_tidal",
  "serde",

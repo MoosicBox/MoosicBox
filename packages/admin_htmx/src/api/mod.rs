@@ -7,6 +7,8 @@ use actix_web::{
 use maud::{html, DOCTYPE};
 
 mod info;
+#[cfg(feature = "qobuz")]
+mod qobuz;
 mod scan;
 #[cfg(feature = "tidal")]
 mod tidal;
@@ -18,7 +20,7 @@ pub fn bind_services<
     scope: Scope<T>,
 ) -> Scope<T> {
     info::bind_services(scan::bind_services(tidal::bind_services(
-        scope.service(index_endpoint),
+        qobuz::bind_services(scope.service(index_endpoint)),
     )))
 }
 
@@ -54,6 +56,11 @@ pub async fn index_endpoint(
                         hr {}
                         h2 { "Tidal" }
                         (tidal::settings(&**data.database).await.map_err(ErrorInternalServerError)?)
+                    } } else { html!{} })
+                    (if cfg!(feature = "qobuz") { html! {
+                        hr {}
+                        h2 { "Qobuz" }
+                        (qobuz::settings(&**data.database).await.map_err(ErrorInternalServerError)?)
                     } } else { html!{} })
                 }
             }
