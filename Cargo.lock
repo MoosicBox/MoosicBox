@@ -788,9 +788,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ssm"
-version = "1.47.0"
+version = "1.48.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ede478cc179f938049252c3b5da0e5ae5e75201c10f6d9a02d0050d8015dd7b"
+checksum = "5a5484054ca918d2c849ca6f0d03f3252ca9bdec357f25545993bc7eb3543f7b"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -2242,7 +2242,7 @@ dependencies = [
 [[package]]
 name = "free_log_client"
 version = "0.3.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#cd04d0f49574c0d2b1c832db73842ce357a1a7b6"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#04876604876289f04d1b74c88265cd9fd25990f0"
 dependencies = [
  "free_log_models",
  "futures-util",
@@ -2261,7 +2261,7 @@ dependencies = [
 [[package]]
 name = "free_log_models"
 version = "0.2.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#cd04d0f49574c0d2b1c832db73842ce357a1a7b6"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#04876604876289f04d1b74c88265cd9fd25990f0"
 dependencies = [
  "log",
  "serde",
