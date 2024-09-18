@@ -3,7 +3,7 @@ use std::{path::PathBuf, pin::Pin, str::FromStr as _, sync::Arc, time::Duration}
 use futures::Future;
 use lazy_static::lazy_static;
 use moosicbox_core::sqlite::db::DbError;
-use moosicbox_database::{query::*, Database, DatabaseError, DatabaseValue, Row};
+use moosicbox_database::{profiles::LibraryDatabase, query::*, DatabaseError, DatabaseValue, Row};
 use moosicbox_scan::local::ScanItem;
 use thiserror::Error;
 use tokio::{
@@ -126,7 +126,7 @@ pub type ProgressListenerRef =
 #[derive(Clone)]
 pub struct DownloadQueue {
     progress_listeners: Vec<Arc<ProgressListenerRef>>,
-    database: Option<Arc<Box<dyn Database>>>,
+    database: Option<LibraryDatabase>,
     downloader: Option<Arc<Box<dyn Downloader + Send + Sync>>>,
     state: Arc<RwLock<DownloadQueueState>>,
     #[allow(clippy::type_complexity)]
@@ -150,7 +150,7 @@ impl DownloadQueue {
         self.database.is_some()
     }
 
-    pub fn with_database(mut self, database: Arc<Box<dyn Database>>) -> Self {
+    pub fn with_database(mut self, database: LibraryDatabase) -> Self {
         self.database.replace(database);
         self
     }
@@ -288,7 +288,7 @@ impl DownloadQueue {
         db.update("download_tasks")
             .where_eq("id", task_id)
             .values(values.to_vec())
-            .execute_first(&**db)
+            .execute_first(&db)
             .await?
             .ok_or(UpdateTaskError::NoRow)
     }
@@ -332,7 +332,7 @@ impl DownloadQueue {
                                             .update("download_tasks")
                                             .where_eq("id", task_id)
                                             .value("total_bytes", size)
-                                            .execute_first(&**database)
+                                            .execute_first(&database)
                                             .await
                                         {
                                             log::error!(
@@ -379,7 +379,7 @@ impl DownloadQueue {
         let path = PathBuf::from_str(&task.file_path).unwrap();
 
         let scanner = if self.scan {
-            let scan_paths = moosicbox_scan::get_scan_paths(&**database).await?;
+            let scan_paths = moosicbox_scan::get_scan_paths(&database.clone()).await?;
 
             if scan_paths.iter().any(|x| path.starts_with(x)) {
                 Some(
@@ -422,7 +422,7 @@ impl DownloadQueue {
                             metadata,
                             track: Some(track),
                         }],
-                        database,
+                        &database,
                         CancellationToken::new(),
                         scanner.clone(),
                     )
@@ -447,7 +447,7 @@ impl DownloadQueue {
                             metadata,
                             album: Some(album),
                         }],
-                        database,
+                        &database,
                         CancellationToken::new(),
                         scanner.clone(),
                     )
@@ -472,7 +472,7 @@ impl DownloadQueue {
                             metadata,
                             artist: Some(artist),
                         }],
-                        database,
+                        &database,
                         CancellationToken::new(),
                         scanner.clone(),
                     )
@@ -521,7 +521,7 @@ impl Drop for DownloadQueue {
 mod tests {
     use async_trait::async_trait;
     use moosicbox_core::sqlite::models::{Album, Artist, Id, Track};
-    use moosicbox_database::{query::*, Row};
+    use moosicbox_database::{query::*, Database, Row};
     use moosicbox_music_api::TrackAudioQuality;
     use pretty_assertions::assert_eq;
 
@@ -650,7 +650,9 @@ mod tests {
     fn new_queue() -> DownloadQueue {
         DownloadQueue::new()
             .with_scan(false)
-            .with_database(Arc::new(Box::new(TestDatabase {})))
+            .with_database(LibraryDatabase {
+                database: Arc::new(Box::new(TestDatabase {})),
+            })
             .with_downloader(Box::new(TestDownloader {}))
     }
 

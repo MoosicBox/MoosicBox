@@ -47,6 +47,7 @@ pub struct AuthMagicTokenRequest {
 
 #[route("/auth/magic-token", method = "GET")]
 pub async fn auth_get_magic_token_endpoint(
+    req: HttpRequest,
     query: web::Query<AuthMagicTokenRequest>,
 ) -> Result<HttpResponse> {
     let token = &query.magic_token;
@@ -60,6 +61,10 @@ pub async fn auth_get_magic_token_endpoint(
             json!({"magicToken": token}),
             None,
             None,
+            req.headers()
+                .get("moosicbox-profile")
+                .and_then(|x| x.to_str().ok())
+                .map(|x| x.to_string()),
         )
         .await
     } else {
@@ -223,7 +228,19 @@ async fn proxy_request(body: Option<Bytes>, req: HttpRequest) -> Result<HttpResp
 
     let headers = get_headers_for_request(&req);
 
-    handle_request(&client_id, &method, path, query, body, headers).await
+    handle_request(
+        &client_id,
+        &method,
+        path,
+        query,
+        body,
+        headers,
+        req.headers()
+            .get("moosicbox-profile")
+            .and_then(|x| x.to_str().ok())
+            .map(|x| x.to_string()),
+    )
+    .await
 }
 
 async fn handle_request(
@@ -233,6 +250,7 @@ async fn handle_request(
     query: Value,
     payload: Option<Value>,
     headers: Option<Value>,
+    profile: Option<String>,
 ) -> Result<HttpResponse> {
     let request_id = thread_rng().gen::<usize>();
     let abort_token = CancellationToken::new();
@@ -247,6 +265,7 @@ async fn handle_request(
         query,
         payload,
         headers,
+        profile,
         abort_token.clone(),
     )?;
 
@@ -320,6 +339,7 @@ fn request(
     query: Value,
     payload: Option<Value>,
     headers: Option<Value>,
+    profile: Option<String>,
     abort_token: CancellationToken,
 ) -> Result<(
     oneshot::Receiver<RequestHeaders>,
@@ -367,6 +387,7 @@ fn request(
                     payload,
                     headers,
                     encoding: TunnelEncoding::Binary,
+                    profile,
                 }))
                 .unwrap()
                 .to_string(),

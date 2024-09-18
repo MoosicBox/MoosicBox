@@ -5,7 +5,7 @@ pub mod api;
 
 use actix::fut::{err, ok, Ready};
 use actix_web::{dev::Payload, error::ErrorUnauthorized, http, FromRequest, HttpRequest};
-use moosicbox_database::Database;
+use moosicbox_database::config::ConfigDatabase;
 use moosicbox_json_utils::{serde_json::ToValue, ParseError};
 use serde_json::Value;
 use thiserror::Error;
@@ -15,7 +15,7 @@ use moosicbox_core::sqlite::db::{create_client_access_token, get_client_access_t
 
 #[cfg(feature = "api")]
 pub(crate) async fn get_credentials_from_magic_token(
-    db: &dyn Database,
+    db: &ConfigDatabase,
     magic_token: &str,
 ) -> Result<Option<(String, String)>, DbError> {
     if let Some((client_id, access_token)) =
@@ -53,7 +53,7 @@ async fn tunnel_magic_token(
 
 #[cfg(feature = "api")]
 pub(crate) async fn create_magic_token(
-    db: &dyn Database,
+    db: &ConfigDatabase,
     tunnel_host: Option<String>,
 ) -> Result<String, DbError> {
     let magic_token = Uuid::new_v4().to_string();
@@ -79,7 +79,7 @@ fn create_client_id() -> String {
 }
 
 pub async fn get_client_id_and_access_token(
-    db: &dyn Database,
+    db: &ConfigDatabase,
     host: &str,
 ) -> Result<(String, String), DbError> {
     if let Ok(Some((client_id, token))) = get_client_access_token(db).await {

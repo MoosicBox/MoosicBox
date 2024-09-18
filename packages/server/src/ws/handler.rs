@@ -20,6 +20,7 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 #[allow(clippy::future_not_send)]
 pub async fn handle_ws(
     ws_server: WsServerHandle,
+    profile: String,
     mut session: actix_ws::Session,
     mut msg_stream: actix_ws::MessageStream,
 ) {
@@ -31,7 +32,7 @@ pub async fn handle_ws(
 
     let (conn_tx, mut conn_rx) = mpsc::unbounded_channel();
 
-    let conn_id = ws_server.connect(conn_tx).await;
+    let conn_id = ws_server.connect(profile, conn_tx).await;
 
     let close_reason = loop {
         // most of the futures we process need to be stack-pinned to work with select()

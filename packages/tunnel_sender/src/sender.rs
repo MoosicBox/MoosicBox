@@ -17,7 +17,8 @@ use moosicbox_channel_utils::futures_channel::PrioritizedSender;
 use moosicbox_channel_utils::MoosicBoxSender as _;
 use moosicbox_core::sqlite::models::{ApiSource, Id};
 use moosicbox_core::types::AudioFormat;
-use moosicbox_database::Database;
+use moosicbox_database::config::ConfigDatabase;
+use moosicbox_database::profiles::PROFILES;
 use moosicbox_env_utils::default_env_usize;
 use moosicbox_files::api::AlbumCoverQuery;
 use moosicbox_files::files::album::{get_album_cover, AlbumCoverError};
@@ -175,6 +176,7 @@ pub struct TunnelSender {
     cancellation_token: CancellationToken,
     abort_request_tokens: Arc<RwLock<HashMap<usize, CancellationToken>>>,
     player_actions: Arc<RwLock<Vec<(u64, PlayerAction)>>>,
+    config_db: ConfigDatabase,
 }
 
 static BINARY_REQUEST_BUFFER_OFFSET: LazyLock<usize> = LazyLock::new(|| {
@@ -193,6 +195,7 @@ impl TunnelSender {
         url: String,
         client_id: String,
         access_token: String,
+        config_db: ConfigDatabase,
     ) -> (Self, TunnelSenderHandle) {
         let sender = Arc::new(RwLock::new(None));
         let cancellation_token = CancellationToken::new();
@@ -215,6 +218,7 @@ impl TunnelSender {
                 cancellation_token: cancellation_token.clone(),
                 abort_request_tokens: Arc::new(RwLock::new(HashMap::new())),
                 player_actions,
+                config_db,
             },
             handle,
         )
@@ -1146,7 +1150,6 @@ impl TunnelSender {
     #[allow(clippy::too_many_arguments)]
     pub async fn tunnel_request(
         &self,
-        database: Arc<Box<dyn Database>>,
         music_apis: MusicApis,
         service_port: u16,
         request_id: usize,
@@ -1155,6 +1158,7 @@ impl TunnelSender {
         query: Value,
         payload: Option<Value>,
         headers: Option<Value>,
+        profile: Option<String>,
         encoding: TunnelEncoding,
     ) -> Result<(), TunnelRequestError> {
         let abort_token = CancellationToken::new();
@@ -1165,6 +1169,8 @@ impl TunnelSender {
                 .unwrap()
                 .insert(request_id, abort_token.clone());
         }
+
+        let db = profile.and_then(|x| PROFILES.get(&x));
 
         match path.to_lowercase().as_str() {
             "files/track" => {
@@ -1485,7 +1491,7 @@ impl TunnelSender {
 
                             let path = get_album_cover(
                                 &**api,
-                                &**database,
+                                &db.ok_or(TunnelRequestError::MissingProfile)?,
                                 &album,
                                 (std::cmp::max(width, height) as u16).into(),
                             )
@@ -1574,14 +1580,15 @@ impl TunnelSender {
 
     pub async fn ws_request(
         &self,
-        db: &dyn Database,
         conn_id: usize,
         request_id: usize,
         value: Value,
+        profile: Option<String>,
         sender: impl WebsocketSender,
     ) -> Result<(), TunnelRequestError> {
         let context = WebsocketContext {
             connection_id: conn_id.to_string(),
+            profile: profile.clone(),
             player_actions: self.player_actions.read().unwrap().clone(),
         };
         let packet_id = 1_u32;
@@ -1593,8 +1600,9 @@ impl TunnelSender {
             request_id,
             root_sender: sender,
             tunnel_sender: self.sender.read().unwrap().clone().unwrap(),
+            profile,
         };
-        moosicbox_ws::process_message(db, value, context, &sender).await?;
+        moosicbox_ws::process_message(&self.config_db, value, context, &sender).await?;
         log::debug!("Processed tunnel ws request {request_id} {packet_id}");
         Ok(())
     }

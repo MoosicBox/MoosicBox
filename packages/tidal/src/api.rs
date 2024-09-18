@@ -6,6 +6,8 @@ use actix_web::{
     HttpRequest, Result, Scope,
 };
 use moosicbox_core::sqlite::models::ToApi;
+#[cfg(feature = "db")]
+use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_paging::Page;
 use moosicbox_search::models::ApiSearchResultsResponse;
 use serde::{Deserialize, Serialize};
@@ -299,12 +301,12 @@ pub struct TidalDeviceAuthorizationTokenQuery {
 #[route("/auth/device-authorization/token", method = "POST")]
 pub async fn device_authorization_token_endpoint(
     query: web::Query<TidalDeviceAuthorizationTokenQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Value>> {
     Ok(Json(
         device_authorization_token(
             #[cfg(feature = "db")]
-            &**data.database,
+            &db,
             query.client_id.clone(),
             query.client_secret.clone(),
             query.device_code.clone(),
@@ -354,12 +356,12 @@ pub struct TidalTrackFileUrlQuery {
 pub async fn track_file_url_endpoint(
     req: HttpRequest,
     query: web::Query<TidalTrackFileUrlQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Value>> {
     Ok(Json(serde_json::json!({
         "urls": track_file_url(
             #[cfg(feature = "db")]
-            &**data.database,
+            &db,
             query.audio_quality,
             &query.track_id.into(),
             req.headers()
@@ -407,12 +409,12 @@ pub struct TidalTrackPlaybackInfoQuery {
 pub async fn track_playback_info_endpoint(
     req: HttpRequest,
     query: web::Query<TidalTrackPlaybackInfoQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<TidalTrackPlaybackInfo>> {
     Ok(Json(
         track_playback_info(
             #[cfg(feature = "db")]
-            &**data.database,
+            &db,
             query.audio_quality,
             &query.track_id.into(),
             req.headers()
@@ -472,12 +474,12 @@ pub struct TidalFavoriteArtistsQuery {
 pub async fn favorite_artists_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteArtistsQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiArtist>>> {
     Ok(Json(
         favorite_artists(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &db,
             query.offset,
             query.limit,
             query.order,
@@ -539,11 +541,11 @@ pub struct TidalAddFavoriteArtistsQuery {
 pub async fn add_favorite_artist_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAddFavoriteArtistsQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Value>> {
     add_favorite_artist(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.artist_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -603,11 +605,11 @@ pub struct TidalRemoveFavoriteArtistsQuery {
 pub async fn remove_favorite_artist_endpoint(
     req: HttpRequest,
     query: web::Query<TidalRemoveFavoriteArtistsQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Value>> {
     remove_favorite_artist(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.artist_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -673,12 +675,12 @@ pub struct TidalFavoriteAlbumsQuery {
 pub async fn favorite_albums_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteAlbumsQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiAlbum>>> {
     Ok(Json(
         favorite_albums(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &db,
             query.offset,
             query.limit,
             query.order,
@@ -740,11 +742,11 @@ pub struct TidalAddFavoriteAlbumsQuery {
 pub async fn add_favorite_album_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAddFavoriteAlbumsQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Value>> {
     add_favorite_album(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.album_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -804,11 +806,11 @@ pub struct TidalRemoveFavoriteAlbumsQuery {
 pub async fn remove_favorite_album_endpoint(
     req: HttpRequest,
     query: web::Query<TidalRemoveFavoriteAlbumsQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Value>> {
     remove_favorite_album(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.album_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -868,11 +870,11 @@ pub struct TidalAddFavoriteTracksQuery {
 pub async fn add_favorite_track_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAddFavoriteTracksQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Value>> {
     add_favorite_track(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.track_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -932,11 +934,11 @@ pub struct TidalRemoveFavoriteTracksQuery {
 pub async fn remove_favorite_track_endpoint(
     req: HttpRequest,
     query: web::Query<TidalRemoveFavoriteTracksQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Value>> {
     remove_favorite_track(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.track_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -1002,12 +1004,12 @@ pub struct TidalFavoriteTracksQuery {
 pub async fn favorite_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteTracksQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiTrack>>> {
     Ok(Json(
         favorite_tracks(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &db,
             query.offset,
             query.limit,
             query.order,
@@ -1092,12 +1094,12 @@ impl From<AlbumType> for TidalAlbumType {
 pub async fn artist_albums_endpoint(
     req: HttpRequest,
     query: web::Query<TidalArtistAlbumsQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiAlbum>>> {
     Ok(Json(
         artist_albums(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &db,
             &query.artist_id.into(),
             query.offset,
             query.limit,
@@ -1160,12 +1162,12 @@ pub struct TidalAlbumTracksQuery {
 pub async fn album_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAlbumTracksQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiTrack>>> {
     Ok(Json(
         album_tracks(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &db,
             &query.album_id.into(),
             query.offset,
             query.limit,
@@ -1233,11 +1235,11 @@ pub struct TidalAlbumQuery {
 pub async fn album_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAlbumQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<ApiAlbum>> {
     let album = album(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.album_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -1292,11 +1294,11 @@ pub struct TidalArtistQuery {
 pub async fn artist_endpoint(
     req: HttpRequest,
     query: web::Query<TidalArtistQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<ApiArtist>> {
     let artist = artist(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.artist_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -1351,11 +1353,11 @@ pub struct TidalTrackQuery {
 pub async fn track_endpoint(
     req: HttpRequest,
     query: web::Query<TidalTrackQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<ApiTrack>> {
     let track = track(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.track_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -1423,11 +1425,11 @@ pub struct TidalSearchQuery {
 pub async fn search_endpoint(
     req: HttpRequest,
     query: web::Query<TidalSearchQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<ApiSearchResultsResponse>> {
     let results = search(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.query,
         query.offset,
         query.limit,

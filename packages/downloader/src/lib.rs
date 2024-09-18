@@ -28,7 +28,7 @@ use moosicbox_core::{
     },
     types::AudioFormat,
 };
-use moosicbox_database::Database;
+use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_files::{
     files::{
         album::{get_album_cover_bytes, AlbumCoverError},
@@ -64,7 +64,7 @@ pub enum GetDownloadPathError {
 }
 
 pub async fn get_download_path(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     location_id: Option<u64>,
 ) -> Result<PathBuf, GetDownloadPathError> {
     Ok(if let Some(location_id) = location_id {
@@ -387,7 +387,7 @@ pub enum CreateDownloadTasksError {
 }
 
 pub async fn create_download_tasks(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     tasks: Vec<CreateDownloadTask>,
 ) -> Result<Vec<DownloadTask>, CreateDownloadTasksError> {
     let mut results = vec![];
@@ -781,7 +781,7 @@ pub enum DownloadAlbumError {
 #[allow(clippy::too_many_arguments)]
 pub async fn download_album_id(
     api: &dyn MusicApi,
-    db: &dyn Database,
+    db: &LibraryDatabase,
     path: &str,
     album_id: &Id,
     try_download_album_cover: bool,
@@ -834,7 +834,7 @@ pub async fn download_album_id(
 
 pub async fn download_album_cover(
     api: &dyn MusicApi,
-    db: &dyn Database,
+    db: &LibraryDatabase,
     path: &str,
     album_id: &Id,
     on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
@@ -904,7 +904,7 @@ pub async fn download_album_cover(
 
 pub async fn download_artist_cover(
     api: &dyn MusicApi,
-    db: &dyn Database,
+    db: &LibraryDatabase,
     path: &str,
     album_id: &Id,
     on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
@@ -1005,12 +1005,12 @@ pub trait Downloader {
 
 pub struct MoosicboxDownloader {
     speed: Arc<AtomicF64>,
-    db: Arc<Box<dyn Database>>,
+    db: LibraryDatabase,
     api_state: MusicApiState,
 }
 
 impl MoosicboxDownloader {
-    pub fn new(db: Arc<Box<dyn Database>>, api_state: MusicApiState) -> Self {
+    pub fn new(db: LibraryDatabase, api_state: MusicApiState) -> Self {
         Self {
             speed: Arc::new(AtomicF64::new(0.0)),
             db,
@@ -1056,7 +1056,7 @@ impl Downloader for MoosicboxDownloader {
     ) -> Result<Album, DownloadAlbumError> {
         download_album_cover(
             &**self.api_state.apis.get(source.into())?,
-            &**self.db,
+            &self.db,
             path,
             album_id,
             Arc::new(tokio::sync::Mutex::new(on_progress)),
@@ -1074,7 +1074,7 @@ impl Downloader for MoosicboxDownloader {
     ) -> Result<Artist, DownloadAlbumError> {
         download_artist_cover(
             &**self.api_state.apis.get(source.into())?,
-            &**self.db,
+            &self.db,
             path,
             album_id,
             Arc::new(tokio::sync::Mutex::new(on_progress)),

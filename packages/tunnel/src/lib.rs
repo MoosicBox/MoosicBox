@@ -90,6 +90,7 @@ pub struct TunnelHttpRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub headers: Option<Value>,
     pub encoding: TunnelEncoding,
+    pub profile: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -99,6 +100,7 @@ pub struct TunnelWsRequest {
     pub body: Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub connection_id: Option<Value>,
+    pub profile: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

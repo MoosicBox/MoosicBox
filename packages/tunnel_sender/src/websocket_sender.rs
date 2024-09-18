@@ -17,6 +17,7 @@ where
     pub packet_id: u32,
     pub root_sender: T,
     pub tunnel_sender: PrioritizedSender<TunnelResponseMessage>,
+    pub profile: Option<String>,
 }
 
 impl<T> TunnelWebsocketSender<T>

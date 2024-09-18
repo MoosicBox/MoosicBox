@@ -37,11 +37,11 @@ tokio       = { workspace = true, features = ["rt-multi-thread", "tracing"] }
 tokio-util  = { workspace = true }
 
 [features]
-default = ["api", "openapi", "events"]
+default = ["api", "events", "openapi"]
 
 fail-on-warnings = []
 
-api     = ["dep:actix-web", "dep:moosicbox_paging"]
+api     = ["dep:actix-web", "dep:moosicbox_paging", "moosicbox_database/api"]
 openapi = ["dep:utoipa", "moosicbox_paging/openapi"]
 
 events = ["dep:moosicbox_task"]

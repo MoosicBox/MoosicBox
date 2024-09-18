@@ -62,6 +62,7 @@ pub enum Command {
         conn_id: ConnId,
         client_id: String,
         body: String,
+        profile: Option<String>,
     },
 
     WsMessage {
@@ -230,6 +231,7 @@ impl service::Processor for service::Service {
                 client_id,
                 request_id,
                 body,
+                profile,
             } => match get_connection_id(&client_id).await {
                 Ok(client_conn_id) => {
                     let value: Value = serde_json::from_str(&body).unwrap();
@@ -238,6 +240,7 @@ impl service::Processor for service::Service {
                         request_id,
                         body: value,
                         connection_id: None,
+                        profile,
                     });
                     let binding = ctx.read().await;
                     let response = binding
@@ -553,6 +556,7 @@ impl service::Handle {
         &self,
         conn_id: usize,
         client_id: &str,
+        profile: Option<String>,
         msg: impl Into<String>,
     ) -> Result<(), WsRequestError> {
         let request_id = thread_rng().gen::<usize>();
@@ -562,6 +566,7 @@ impl service::Handle {
             conn_id,
             client_id: client_id.to_string(),
             body: msg.into(),
+            profile,
         })
         .await
         .unwrap();

@@ -6,7 +6,7 @@ use moosicbox_core::sqlite::{
     db::DbError,
     models::{Album, Id},
 };
-use moosicbox_database::{query::*, Database, DatabaseError};
+use moosicbox_database::{profiles::LibraryDatabase, query::*, DatabaseError};
 use moosicbox_music_api::{AlbumError, ImageCoverSize, ImageCoverSource, MusicApi};
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use thiserror::Error;
@@ -59,7 +59,7 @@ pub enum AlbumCoverError {
 
 pub async fn get_local_album_cover(
     api: &dyn MusicApi,
-    db: &dyn Database,
+    db: &LibraryDatabase,
     album: &Album,
     size: ImageCoverSize,
 ) -> Result<String, AlbumCoverError> {
@@ -84,7 +84,7 @@ pub async fn get_local_album_cover(
 
 pub async fn get_local_album_cover_bytes(
     api: &dyn MusicApi,
-    db: &dyn Database,
+    db: &LibraryDatabase,
     album: &Album,
     size: ImageCoverSize,
     try_to_get_stream_size: bool,
@@ -122,7 +122,7 @@ pub enum FetchLocalAlbumCoverError {
 }
 
 async fn fetch_local_album_cover(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     album: &Album,
     source: ImageCoverSource,
     directory: Option<&String>,
@@ -162,7 +162,7 @@ async fn fetch_local_album_cover(
 }
 
 async fn fetch_local_album_cover_bytes(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     album: &Album,
     directory: Option<&String>,
 ) -> Result<CoverBytes, FetchLocalAlbumCoverError> {
@@ -231,7 +231,7 @@ async fn fetch_local_album_cover_bytes(
 }
 
 async fn copy_streaming_cover_to_local(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     album: &Album,
     cover: String,
 ) -> Result<String, AlbumCoverError> {
@@ -248,7 +248,7 @@ async fn copy_streaming_cover_to_local(
 
 pub async fn get_album_cover(
     api: &dyn MusicApi,
-    db: &dyn Database,
+    db: &LibraryDatabase,
     album: &Album,
     size: ImageCoverSize,
 ) -> Result<String, AlbumCoverError> {
@@ -257,7 +257,7 @@ pub async fn get_album_cover(
 
 pub async fn get_album_cover_bytes(
     api: &dyn MusicApi,
-    db: &dyn Database,
+    db: &LibraryDatabase,
     album: &Album,
     size: ImageCoverSize,
     try_to_get_stream_size: bool,

@@ -37,7 +37,7 @@ pub trait AsModelResultMappedMut<T, E> {
 
 #[async_trait]
 pub trait AsModelResultMappedQuery<T, E> {
-    async fn as_model_mapped_query(&self, db: &dyn Database) -> Result<Vec<T>, E>;
+    async fn as_model_mapped_query(&self, db: Arc<Box<dyn Database>>) -> Result<Vec<T>, E>;
 }
 
 pub trait AsModelResultMut<T, E> {
@@ -75,7 +75,7 @@ where
 
 #[async_trait]
 pub trait AsModelQuery<T> {
-    async fn as_model_query(&self, db: &dyn Database) -> Result<T, DbError>;
+    async fn as_model_query(&self, db: Arc<Box<dyn Database>>) -> Result<T, DbError>;
 }
 
 pub trait ToApi<T> {

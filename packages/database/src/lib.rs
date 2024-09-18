@@ -12,7 +12,7 @@ pub mod sqlx;
 
 pub mod query;
 
-use std::num::TryFromIntError;
+use std::{num::TryFromIntError, sync::Arc};
 
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
@@ -333,7 +333,7 @@ where
 {
     type Error;
 
-    async fn try_from_db(value: T, db: &dyn Database) -> Result<Self, Self::Error>;
+    async fn try_from_db(value: T, db: Arc<Box<dyn Database>>) -> Result<Self, Self::Error>;
 }
 
 #[async_trait]
@@ -343,11 +343,11 @@ where
 {
     type Error = T::Error;
 
-    async fn try_from_db(value: Vec<U>, db: &dyn Database) -> Result<Self, T::Error> {
+    async fn try_from_db(value: Vec<U>, db: Arc<Box<dyn Database>>) -> Result<Self, T::Error> {
         let mut converted = Self::with_capacity(value.len());
 
         for x in value {
-            converted.push(T::try_from_db(x, db).await?);
+            converted.push(T::try_from_db(x, db.clone()).await?);
         }
 
         Ok(converted)
@@ -361,7 +361,7 @@ where
 {
     type Error = T::Error;
 
-    async fn try_from_db(value: Option<U>, db: &dyn Database) -> Result<Self, T::Error> {
+    async fn try_from_db(value: Option<U>, db: Arc<Box<dyn Database>>) -> Result<Self, T::Error> {
         Ok(match value {
             Some(x) => Some(T::try_from_db(x, db).await?),
             None => None,
@@ -376,7 +376,7 @@ where
 {
     type Error;
 
-    async fn try_into_db(self, db: &dyn Database) -> Result<T, Self::Error>;
+    async fn try_into_db(self, db: Arc<Box<dyn Database>>) -> Result<T, Self::Error>;
 }
 
 #[async_trait]
@@ -386,7 +386,7 @@ where
 {
     type Error = U::Error;
 
-    async fn try_into_db(self, db: &dyn Database) -> Result<U, U::Error> {
+    async fn try_into_db(self, db: Arc<Box<dyn Database>>) -> Result<U, U::Error> {
         U::try_from_db(self, db).await
     }
 }

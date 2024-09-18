@@ -53,6 +53,6 @@ default = ["api", "db", "openapi"]
 
 fail-on-warnings = []
 
-api     = ["dep:actix-web"]
+api     = ["dep:actix-web", "moosicbox_database/api"]
 db      = ["dep:rusqlite", "moosicbox_music_api/db"]
 openapi = ["dep:utoipa"]

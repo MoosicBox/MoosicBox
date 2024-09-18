@@ -1,4 +1,4 @@
-use moosicbox_database::{boxed, query::*, Database, DatabaseValue};
+use moosicbox_database::{boxed, config::ConfigDatabase, query::*, DatabaseValue};
 use moosicbox_json_utils::{database::DatabaseFetchError, ToValueType};
 
 use crate::models::{CreateAudioZone, UpdateAudioZone};
@@ -8,7 +8,7 @@ use self::models::AudioZoneModel;
 pub mod models;
 
 pub async fn update_audio_zone(
-    db: &dyn Database,
+    db: &ConfigDatabase,
     zone: UpdateAudioZone,
 ) -> Result<models::AudioZoneModel, DatabaseFetchError> {
     let inserted: models::AudioZoneModel = db
@@ -60,7 +60,7 @@ pub async fn update_audio_zone(
 }
 
 pub async fn get_zones(
-    db: &dyn Database,
+    db: &ConfigDatabase,
 ) -> Result<Vec<models::AudioZoneModel>, DatabaseFetchError> {
     Ok(db
         .select("audio_zones")
@@ -70,7 +70,7 @@ pub async fn get_zones(
 }
 
 pub async fn get_zone_with_sessions(
-    db: &dyn Database,
+    db: &ConfigDatabase,
 ) -> Result<Vec<models::AudioZoneWithSessionModel>, DatabaseFetchError> {
     Ok(db
         .select("audio_zones")
@@ -82,7 +82,7 @@ pub async fn get_zone_with_sessions(
 }
 
 pub async fn create_audio_zone(
-    db: &dyn Database,
+    db: &ConfigDatabase,
     zone: &CreateAudioZone,
 ) -> Result<AudioZoneModel, DatabaseFetchError> {
     Ok(db
@@ -94,7 +94,7 @@ pub async fn create_audio_zone(
 }
 
 pub async fn delete_audio_zone(
-    db: &dyn Database,
+    db: &ConfigDatabase,
     id: u64,
 ) -> Result<Option<AudioZoneModel>, DatabaseFetchError> {
     Ok(db
@@ -107,7 +107,7 @@ pub async fn delete_audio_zone(
 }
 
 pub async fn get_zone(
-    db: &dyn Database,
+    db: &ConfigDatabase,
     id: u64,
 ) -> Result<Option<models::AudioZoneModel>, DatabaseFetchError> {
     Ok(db
@@ -120,7 +120,7 @@ pub async fn get_zone(
 }
 
 pub async fn get_players(
-    db: &dyn Database,
+    db: &ConfigDatabase,
     audio_zone_id: u64,
 ) -> Result<Vec<crate::models::Player>, DatabaseFetchError> {
     Ok(db

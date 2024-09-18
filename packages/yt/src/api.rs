@@ -6,6 +6,8 @@ use actix_web::{
     HttpRequest, Result, Scope,
 };
 use moosicbox_core::sqlite::models::ToApi;
+#[cfg(feature = "db")]
+use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_paging::Page;
 use moosicbox_search::models::ApiSearchResultsResponse;
 use serde::{Deserialize, Serialize};
@@ -298,12 +300,12 @@ pub struct YtDeviceAuthorizationTokenQuery {
 #[route("/auth/device-authorization/token", method = "POST")]
 pub async fn device_authorization_token_endpoint(
     query: web::Query<YtDeviceAuthorizationTokenQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Value>> {
     Ok(Json(
         device_authorization_token(
             #[cfg(feature = "db")]
-            &**data.database,
+            &db,
             query.client_id.clone(),
             query.client_secret.clone(),
             query.device_code.clone(),
@@ -353,12 +355,12 @@ pub struct YtTrackFileUrlQuery {
 pub async fn track_file_url_endpoint(
     req: HttpRequest,
     query: web::Query<YtTrackFileUrlQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Value>> {
     Ok(Json(serde_json::json!({
         "urls": track_file_url(
             #[cfg(feature = "db")]
-            &**data.database,
+            &db,
             query.audio_quality,
             &query.track_id.into(),
             req.headers()
@@ -406,12 +408,12 @@ pub struct YtTrackPlaybackInfoQuery {
 pub async fn track_playback_info_endpoint(
     req: HttpRequest,
     query: web::Query<YtTrackPlaybackInfoQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<YtTrackPlaybackInfo>> {
     Ok(Json(
         track_playback_info(
             #[cfg(feature = "db")]
-            &**data.database,
+            &db,
             query.audio_quality,
             &query.track_id.into(),
             req.headers()
@@ -471,12 +473,12 @@ pub struct YtFavoriteArtistsQuery {
 pub async fn favorite_artists_endpoint(
     req: HttpRequest,
     query: web::Query<YtFavoriteArtistsQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiArtist>>> {
     Ok(Json(
         favorite_artists(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &db,
             query.offset,
             query.limit,
             query.order,
@@ -538,11 +540,11 @@ pub struct YtAddFavoriteArtistsQuery {
 pub async fn add_favorite_artist_endpoint(
     req: HttpRequest,
     query: web::Query<YtAddFavoriteArtistsQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Value>> {
     add_favorite_artist(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.artist_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -602,11 +604,11 @@ pub struct YtRemoveFavoriteArtistsQuery {
 pub async fn remove_favorite_artist_endpoint(
     req: HttpRequest,
     query: web::Query<YtRemoveFavoriteArtistsQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Value>> {
     remove_favorite_artist(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.artist_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -672,12 +674,12 @@ pub struct YtFavoriteAlbumsQuery {
 pub async fn favorite_albums_endpoint(
     req: HttpRequest,
     query: web::Query<YtFavoriteAlbumsQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiAlbum>>> {
     Ok(Json(
         favorite_albums(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &db,
             query.offset,
             query.limit,
             query.order,
@@ -739,11 +741,11 @@ pub struct YtAddFavoriteAlbumsQuery {
 pub async fn add_favorite_album_endpoint(
     req: HttpRequest,
     query: web::Query<YtAddFavoriteAlbumsQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Value>> {
     add_favorite_album(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.album_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -803,11 +805,11 @@ pub struct YtRemoveFavoriteAlbumsQuery {
 pub async fn remove_favorite_album_endpoint(
     req: HttpRequest,
     query: web::Query<YtRemoveFavoriteAlbumsQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Value>> {
     remove_favorite_album(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.album_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -867,11 +869,11 @@ pub struct YtAddFavoriteTracksQuery {
 pub async fn add_favorite_track_endpoint(
     req: HttpRequest,
     query: web::Query<YtAddFavoriteTracksQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Value>> {
     add_favorite_track(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.track_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -931,11 +933,11 @@ pub struct YtRemoveFavoriteTracksQuery {
 pub async fn remove_favorite_track_endpoint(
     req: HttpRequest,
     query: web::Query<YtRemoveFavoriteTracksQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Value>> {
     remove_favorite_track(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.track_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -1001,12 +1003,12 @@ pub struct YtFavoriteTracksQuery {
 pub async fn favorite_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<YtFavoriteTracksQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiTrack>>> {
     Ok(Json(
         favorite_tracks(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &db,
             query.offset,
             query.limit,
             query.order,
@@ -1091,12 +1093,12 @@ impl From<AlbumType> for YtAlbumType {
 pub async fn artist_albums_endpoint(
     req: HttpRequest,
     query: web::Query<YtArtistAlbumsQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiAlbum>>> {
     Ok(Json(
         artist_albums(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &db,
             &query.artist_id.into(),
             query.offset,
             query.limit,
@@ -1159,12 +1161,12 @@ pub struct YtAlbumTracksQuery {
 pub async fn album_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<YtAlbumTracksQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiTrack>>> {
     Ok(Json(
         album_tracks(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &db,
             &query.album_id.into(),
             query.offset,
             query.limit,
@@ -1232,11 +1234,11 @@ pub struct YtAlbumQuery {
 pub async fn album_endpoint(
     req: HttpRequest,
     query: web::Query<YtAlbumQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<ApiAlbum>> {
     let album = album(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.album_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -1291,11 +1293,11 @@ pub struct YtArtistQuery {
 pub async fn artist_endpoint(
     req: HttpRequest,
     query: web::Query<YtArtistQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<ApiArtist>> {
     let artist = artist(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.artist_id.into(),
         query.country_code.clone(),
         query.locale.clone(),
@@ -1350,11 +1352,11 @@ pub struct YtTrackQuery {
 pub async fn track_endpoint(
     req: HttpRequest,
     query: web::Query<YtTrackQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<ApiTrack>> {
     let track = track(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.track_id.into(),
         query.country_code.clone(),
         query.locale.clone(),

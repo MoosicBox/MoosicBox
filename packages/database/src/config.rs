@@ -15,6 +15,7 @@ pub fn init(database: Arc<Box<dyn Database>>) -> Result<(), Arc<Box<dyn Database
 }
 
 #[allow(clippy::module_name_repetitions)]
+#[derive(Debug, Clone)]
 pub struct ConfigDatabase {
     pub database: Arc<Box<dyn Database>>,
 }
@@ -28,6 +29,18 @@ impl From<&ConfigDatabase> for Arc<Box<dyn Database>> {
 impl From<ConfigDatabase> for Arc<Box<dyn Database>> {
     fn from(value: ConfigDatabase) -> Self {
         value.database
+    }
+}
+
+impl From<Arc<Box<dyn Database>>> for ConfigDatabase {
+    fn from(value: Arc<Box<dyn Database>>) -> Self {
+        Self { database: value }
+    }
+}
+
+impl<'a> From<&'a ConfigDatabase> for &'a dyn Database {
+    fn from(value: &'a ConfigDatabase) -> Self {
+        &**value.database
     }
 }
 

@@ -1,5 +1,3 @@
-use std::ops::Deref as _;
-
 use actix_htmx::Htmx;
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
@@ -8,7 +6,7 @@ use actix_web::{
 };
 use maud::{html, Markup};
 use moosicbox_core::sqlite::db::DbError;
-use moosicbox_database::{profiles::api::LibraryDatabase, Database};
+use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_music_api::MusicApiState;
 use moosicbox_scan::ScanOrigin;
 use serde::Deserialize;
@@ -39,11 +37,11 @@ pub async fn add_scan_paths_endpoint(
     form: web::Form<AddScanPathForm>,
     db: LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
-    moosicbox_scan::add_scan_path(db.deref(), &form.path)
+    moosicbox_scan::add_scan_path(&db, &form.path)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to add scan path: {e:?}")))?;
 
-    scan_paths(db.deref())
+    scan_paths(&db)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to add scan path: {e:?}")))
 }
@@ -60,7 +58,7 @@ pub async fn delete_scan_paths_endpoint(
     form: web::Query<RemoveScanPathQuery>,
     db: LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
-    moosicbox_scan::remove_scan_path(db.deref(), &form.path)
+    moosicbox_scan::remove_scan_path(&db, &form.path)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to remove scan path: {e:?}")))?;
 
@@ -75,7 +73,7 @@ pub async fn start_scan_endpoint(
 ) -> Result<Markup, actix_web::Error> {
     moosicbox_scan::run_scan(
         Some(vec![ScanOrigin::Local]),
-        db.into(),
+        &db,
         api_state.as_ref().clone(),
     )
     .await
@@ -89,12 +87,12 @@ pub async fn get_scans_endpoint(
     _htmx: Htmx,
     db: LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
-    scan(db.deref())
+    scan(&db)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to run scan: {e:?}")))
 }
 
-pub async fn scan_paths(db: &dyn Database) -> Result<Markup, DbError> {
+pub async fn scan_paths(db: &LibraryDatabase) -> Result<Markup, DbError> {
     let paths = moosicbox_scan::get_scan_paths(db).await?;
 
     Ok(html! {
@@ -116,7 +114,7 @@ pub async fn scan_paths(db: &dyn Database) -> Result<Markup, DbError> {
     })
 }
 
-pub async fn scan(db: &dyn Database) -> Result<Markup, DbError> {
+pub async fn scan(db: &LibraryDatabase) -> Result<Markup, DbError> {
     Ok(html! {
         (scan_paths(db).await?)
         form

@@ -1,5 +1,8 @@
 use actix_web::error::ErrorInternalServerError;
-use moosicbox_database::{boxed, query::*, Database, DatabaseError, DatabaseValue};
+use moosicbox_database::{
+    boxed, config::ConfigDatabase, profiles::LibraryDatabase, query::*, DatabaseError,
+    DatabaseValue,
+};
 use moosicbox_json_utils::{database::DatabaseFetchError, ParseError, ToValueType as _};
 use std::{fmt::Debug, sync::PoisonError};
 use thiserror::Error;
@@ -41,7 +44,7 @@ impl From<DbError> for actix_web::Error {
     }
 }
 
-pub async fn get_client_id(db: &dyn Database) -> Result<Option<String>, DbError> {
+pub async fn get_client_id(db: &ConfigDatabase) -> Result<Option<String>, DbError> {
     Ok(db
         .select("client_access_tokens")
         .where_or(boxed![
@@ -57,7 +60,7 @@ pub async fn get_client_id(db: &dyn Database) -> Result<Option<String>, DbError>
 }
 
 pub async fn get_client_access_token(
-    db: &dyn Database,
+    db: &ConfigDatabase,
 ) -> Result<Option<(String, String)>, DbError> {
     Ok(db
         .select("client_access_tokens")
@@ -82,7 +85,7 @@ pub async fn get_client_access_token(
 }
 
 pub async fn create_client_access_token(
-    db: &dyn Database,
+    db: &ConfigDatabase,
     client_id: &str,
     token: &str,
 ) -> Result<(), DbError> {
@@ -97,7 +100,7 @@ pub async fn create_client_access_token(
     Ok(())
 }
 
-pub async fn delete_magic_token(db: &dyn Database, magic_token: &str) -> Result<(), DbError> {
+pub async fn delete_magic_token(db: &ConfigDatabase, magic_token: &str) -> Result<(), DbError> {
     db.delete("magic_tokens")
         .where_eq("magic_token", magic_token)
         .execute(db)
@@ -107,7 +110,7 @@ pub async fn delete_magic_token(db: &dyn Database, magic_token: &str) -> Result<
 }
 
 pub async fn get_credentials_from_magic_token(
-    db: &dyn Database,
+    db: &ConfigDatabase,
     magic_token: &str,
 ) -> Result<Option<(String, String)>, DbError> {
     if let Some((client_id, access_token)) = db
@@ -140,7 +143,7 @@ pub async fn get_credentials_from_magic_token(
 }
 
 pub async fn save_magic_token(
-    db: &dyn Database,
+    db: &ConfigDatabase,
     magic_token: &str,
     client_id: &str,
     access_token: &str,
@@ -160,7 +163,7 @@ pub async fn save_magic_token(
 }
 
 pub async fn get_all_album_version_qualities(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     album_ids: Vec<u64>,
 ) -> Result<Vec<AlbumVersionQuality>, DbError> {
     let mut versions: Vec<AlbumVersionQuality> = db
@@ -201,7 +204,7 @@ pub async fn get_all_album_version_qualities(
 }
 
 pub async fn get_album_version_qualities(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     album_id: u64,
 ) -> Result<Vec<AlbumVersionQuality>, DbError> {
     let mut versions: Vec<AlbumVersionQuality> = db

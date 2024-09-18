@@ -17,7 +17,7 @@ use moosicbox_config::{
     db::get_or_init_server_identity, get_app_config_dir_path, get_profile_dir_path, AppType,
 };
 use moosicbox_core::{app::AppState, sqlite::models::ApiSource};
-use moosicbox_database::Database;
+use moosicbox_database::{config::ConfigDatabase, profiles::LibraryDatabase, Database};
 use moosicbox_files::files::track_pool::service::Commander as _;
 use moosicbox_music_api::{MusicApi, MusicApiState};
 use std::{
@@ -37,7 +37,11 @@ static WS_SERVER_HANDLE: LazyLock<tokio::sync::RwLock<Option<ws::server::WsServe
     LazyLock::new(|| tokio::sync::RwLock::new(None));
 
 #[allow(clippy::type_complexity)]
-static DB: LazyLock<std::sync::RwLock<Option<Arc<Box<dyn Database>>>>> =
+static CONFIG_DB: LazyLock<std::sync::RwLock<Option<ConfigDatabase>>> =
+    LazyLock::new(|| std::sync::RwLock::new(None));
+
+#[allow(clippy::type_complexity)]
+static DB: LazyLock<std::sync::RwLock<Option<LibraryDatabase>>> =
     LazyLock::new(|| std::sync::RwLock::new(None));
 
 #[allow(clippy::type_complexity)]
@@ -138,21 +142,27 @@ pub async fn run(
     .await
     .expect("Failed to initialize database");
 
+    let config_database: Arc<Box<dyn Database>> = Arc::new(config_db);
+    let config_database = ConfigDatabase {
+        database: config_database,
+    };
+
+    CONFIG_DB.write().unwrap().replace(config_database.clone());
+
     SERVER_ID
         .set(
-            get_or_init_server_identity(&*config_db)
+            get_or_init_server_identity(&config_database)
                 .await
                 .expect("Failed to get or init server identity"),
         )
         .expect("Failed to set SERVER_ID");
 
-    let config_database: Arc<Box<dyn Database>> = Arc::new(config_db);
-
-    moosicbox_database::config::init(config_database.clone()).unwrap();
+    moosicbox_database::config::init(config_database.clone().into()).unwrap();
 
     let library_database: Arc<Box<dyn Database>> = Arc::new(library_db);
 
-    moosicbox_database::profiles::PROFILES.add("master".to_owned(), library_database.clone());
+    let library_database =
+        moosicbox_database::profiles::PROFILES.fetch_add("master", library_database.clone());
 
     DB.write().unwrap().replace(library_database.clone());
 
@@ -202,9 +212,9 @@ pub async fn run(
         .replace(library_api_state.clone());
 
     #[cfg(feature = "tunnel")]
-    let (mut ws_server, server_tx) = ws::server::WsServer::new(library_database.clone());
+    let (mut ws_server, server_tx) = ws::server::WsServer::new(config_database.clone());
     #[cfg(not(feature = "tunnel"))]
-    let (ws_server, server_tx) = ws::server::WsServer::new(library_database.clone());
+    let (ws_server, server_tx) = ws::server::WsServer::new(config_database.clone());
     #[cfg(feature = "player")]
     let handle = server_tx.clone();
     WS_SERVER_HANDLE.write().await.replace(server_tx);
@@ -221,12 +231,12 @@ pub async fn run(
     #[cfg(feature = "scan")]
     events::scan_event::init().await;
 
-    events::audio_zone_event::init(library_database.clone()).await;
-    events::session_event::init(library_database.clone()).await;
+    events::audio_zone_event::init(&config_database).await;
+    events::session_event::init().await;
 
     #[cfg(feature = "tunnel")]
     let (tunnel_host, tunnel_join_handle, tunnel_handle) = crate::tunnel::setup_tunnel(
-        library_database.clone(),
+        config_database.clone(),
         music_api_state.clone(),
         service_port,
     )
@@ -269,7 +279,6 @@ pub async fn run(
         moosicbox_task::spawn(
             "server: register upnp players",
             players::upnp::init(
-                library_database.clone(),
                 handle.clone(),
                 #[cfg(feature = "tunnel")]
                 tunnel_handle.clone(),
@@ -294,14 +303,20 @@ pub async fn run(
             .set(playback_event_handle.clone())
             .unwrap_or_else(|_| panic!("Failed to set PLAYBACK_EVENT_HANDLE"));
 
-        moosicbox_task::spawn(
-            "server: scan outputs",
+        let config_database = config_database.clone();
+        let library_database = library_database.clone();
+        #[cfg(feature = "tunnel")]
+        let tunnel_handle = tunnel_handle.clone();
+
+        moosicbox_task::spawn("server: scan outputs", async move {
             players::local::init(
-                library_database.clone(),
+                &config_database,
+                &library_database,
                 #[cfg(feature = "tunnel")]
-                tunnel_handle.clone(),
-            ),
-        );
+                tunnel_handle,
+            )
+            .await
+        });
 
         (Some(playback_event_handle), Some(playback_join_handle))
     } else {
@@ -312,7 +327,6 @@ pub async fn run(
     let openapi = api::openapi::init();
 
     let app = {
-        let database = library_database.clone();
         move || {
             let app_data = AppState {
                 #[cfg(feature = "tunnel")]
@@ -320,7 +334,6 @@ pub async fn run(
                 #[cfg(not(feature = "tunnel"))]
                 tunnel_host: None,
                 service_port,
-                database: database.clone(),
             };
 
             let music_api_state = MUSIC_API_STATE.read().unwrap().as_ref().unwrap().clone();

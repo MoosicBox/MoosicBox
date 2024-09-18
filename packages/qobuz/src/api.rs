@@ -6,6 +6,8 @@ use actix_web::{
     HttpRequest, Result, Scope,
 };
 use moosicbox_core::sqlite::models::ToApi;
+#[cfg(feature = "db")]
+use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_paging::Page;
 use moosicbox_search::models::ApiSearchResultsResponse;
 use serde::{Deserialize, Serialize};
@@ -141,12 +143,12 @@ pub struct QobuzUserLoginQuery {
 pub async fn user_login_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzUserLoginQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Value>> {
     Ok(Json(
         user_login(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &db,
             &query.username,
             &query.password,
             req.headers()
@@ -314,11 +316,11 @@ pub struct QobuzArtistQuery {
 pub async fn artist_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzArtistQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<ApiArtist>> {
     let artist = artist(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.artist_id.into(),
         req.headers()
             .get(QOBUZ_ACCESS_TOKEN_HEADER)
@@ -368,12 +370,12 @@ pub struct QobuzFavoriteArtistsQuery {
 pub async fn favorite_artists_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzFavoriteArtistsQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiArtist>>> {
     Ok(Json(
         favorite_artists(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &db,
             query.offset,
             query.limit,
             req.headers()
@@ -423,11 +425,11 @@ pub struct QobuzAlbumQuery {
 pub async fn album_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzAlbumQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<ApiAlbum>> {
     let album = album(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.album_id.clone().into(),
         req.headers()
             .get(QOBUZ_ACCESS_TOKEN_HEADER)
@@ -554,12 +556,12 @@ pub struct QobuzArtistAlbumsQuery {
 pub async fn artist_albums_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzArtistAlbumsQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiRelease>>> {
     Ok(Json(
         artist_albums(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &db,
             &query.artist_id.into(),
             query.offset,
             query.limit,
@@ -616,12 +618,12 @@ pub struct QobuzFavoriteAlbumsQuery {
 pub async fn favorite_albums_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzFavoriteAlbumsQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiAlbum>>> {
     Ok(Json(
         favorite_albums(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &db,
             query.offset,
             query.limit,
             req.headers()
@@ -675,12 +677,12 @@ pub struct QobuzAlbumTracksQuery {
 pub async fn album_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzAlbumTracksQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiTrack>>> {
     Ok(Json(
         album_tracks(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &db,
             &query.album_id.clone().into(),
             query.offset,
             query.limit,
@@ -731,11 +733,11 @@ pub struct QobuzTrackQuery {
 pub async fn track_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzTrackQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<ApiTrack>> {
     let track = track(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.track_id.into(),
         req.headers()
             .get(QOBUZ_ACCESS_TOKEN_HEADER)
@@ -785,12 +787,12 @@ pub struct QobuzFavoriteTracksQuery {
 pub async fn favorite_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzFavoriteTracksQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiTrack>>> {
     Ok(Json(
         favorite_tracks(
             #[cfg(feature = "db")]
-            data.database.clone(),
+            &db,
             query.offset,
             query.limit,
             req.headers()
@@ -842,12 +844,12 @@ pub struct QobuzTrackFileUrlQuery {
 pub async fn track_file_url_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzTrackFileUrlQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Value>> {
     Ok(Json(serde_json::json!({
         "url": track_file_url(
             #[cfg(feature = "db")]
-            &**data.database,
+            &db,
             &query.track_id.into(),
             query.audio_quality,
             req.headers()
@@ -902,11 +904,11 @@ pub struct QobuzSearchQuery {
 pub async fn search_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzSearchQuery>,
-    #[cfg(feature = "db")] data: web::Data<moosicbox_core::app::AppState>,
+    #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<ApiSearchResultsResponse>> {
     let results = search(
         #[cfg(feature = "db")]
-        &**data.database,
+        &db,
         &query.query,
         query.offset,
         query.limit,

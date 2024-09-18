@@ -5,6 +5,7 @@ use actix_web::{
     web::{self, Json},
     Result, Scope,
 };
+use moosicbox_database::config::ConfigDatabase;
 use moosicbox_paging::Page;
 use serde::Deserialize;
 
@@ -73,13 +74,11 @@ pub struct GetAudioZones {
 #[route("", method = "GET")]
 pub async fn audio_zones_endpoint(
     query: web::Query<GetAudioZones>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: ConfigDatabase,
 ) -> Result<Json<Page<ApiAudioZone>>> {
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(30);
-    let zones = crate::zones(&**data.database)
-        .await
-        .map_err(ErrorInternalServerError)?;
+    let zones = crate::zones(&db).await.map_err(ErrorInternalServerError)?;
     let total = zones.len() as u32;
     let zones = zones
         .into_iter()
@@ -125,11 +124,11 @@ pub struct GetAudioZoneWithSessions {
 #[route("/with-session", method = "GET")]
 pub async fn audio_zone_with_sessions_endpoint(
     query: web::Query<GetAudioZoneWithSessions>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: ConfigDatabase,
 ) -> Result<Json<Page<ApiAudioZoneWithSession>>> {
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(30);
-    let zones = crate::zones_with_sessions(&**data.database)
+    let zones = crate::zones_with_sessions(&db)
         .await
         .map_err(ErrorInternalServerError)?;
     let total = zones.len() as u32;
@@ -175,12 +174,12 @@ pub struct CreateAudioZoneQuery {
 #[route("", method = "POST")]
 pub async fn create_audio_zone_endpoint(
     query: web::Query<CreateAudioZoneQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: ConfigDatabase,
 ) -> Result<Json<ApiAudioZone>> {
     let create = CreateAudioZone {
         name: query.name.clone(),
     };
-    let zone = crate::create_audio_zone(&**data.database, &create)
+    let zone = crate::create_audio_zone(&db, &create)
         .await
         .map_err(ErrorInternalServerError)?
         .into();
@@ -215,9 +214,9 @@ pub struct DeleteAudioZoneQuery {
 #[route("", method = "DELETE")]
 pub async fn delete_audio_zone_endpoint(
     query: web::Query<DeleteAudioZoneQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: ConfigDatabase,
 ) -> Result<Json<ApiAudioZone>> {
-    let zone = crate::delete_audio_zone(&**data.database, query.id)
+    let zone = crate::delete_audio_zone(&db, query.id)
         .await
         .map_err(ErrorInternalServerError)?
         .ok_or(ErrorNotFound("Audio zone not found"))?
@@ -251,9 +250,9 @@ pub struct UpdateAudioZoneQuery {}
 pub async fn update_audio_zone_endpoint(
     update: Json<UpdateAudioZone>,
     _query: web::Query<UpdateAudioZoneQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: ConfigDatabase,
 ) -> Result<Json<ApiAudioZone>> {
-    let zone = crate::update_audio_zone(&**data.database, update.clone())
+    let zone = crate::update_audio_zone(&db, update.clone())
         .await
         .map_err(ErrorInternalServerError)?
         .into();

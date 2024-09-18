@@ -6,6 +6,7 @@ use actix_web::{
 };
 use actix_web::{route, HttpResponse};
 use log::info;
+use moosicbox_database::profiles::api::ProfileName;
 use serde_json::{json, Value};
 
 #[cfg(feature = "openapi")]
@@ -22,7 +23,9 @@ pub async fn health_endpoint() -> Result<Json<Value>> {
 pub async fn websocket(
     req: actix_web::HttpRequest,
     stream: web::Payload,
+    profile_name: ProfileName,
 ) -> Result<HttpResponse, actix_web::Error> {
+    let profile = profile_name.into();
     let (response, session, msg_stream) = actix_ws::handle(&req, stream)?;
 
     // spawn websocket handler (and don't await it) so that the response is returned immediately
@@ -35,6 +38,7 @@ pub async fn websocket(
                 .as_ref()
                 .expect("No WsServerHandle available")
                 .clone(),
+            profile,
             session,
             msg_stream,
         ),

@@ -31,6 +31,7 @@ regex = { workspace = true, optional = true }
 
 # Api dependencies
 actix-web = { workspace = true, optional = true }
+qstring   = { workspace = true, optional = true }
 
 async-recursion = { workspace = true }
 async-trait     = { workspace = true }
@@ -52,7 +53,7 @@ fail-on-warnings = []
 
 tls = ["sqlx/tls-rustls"]
 
-api = ["dep:actix-web"]
+api = ["dep:actix-web", "dep:qstring"]
 
 mysql = ["mysql-sqlx", "sqlx"]
 mysql-sqlx = [

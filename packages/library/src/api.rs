@@ -9,6 +9,7 @@ use moosicbox_core::{
     integer_range::parse_integer_ranges_to_ids,
     sqlite::models::{AlbumSort, ToApi},
 };
+use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_music_api::AlbumsRequest;
 use moosicbox_paging::{Page, PagingRequest};
 use moosicbox_search::models::ApiSearchResultsResponse;
@@ -246,11 +247,11 @@ pub struct LibraryTrackFileUrlQuery {
 #[route("/track/url", method = "GET")]
 pub async fn track_file_url_endpoint(
     query: web::Query<LibraryTrackFileUrlQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Value>> {
     Ok(Json(serde_json::json!({
         "urls": track_file_url(
-            &**data.database,
+            &db,
             query.audio_quality,
             &query.track_id.into(),
 
@@ -299,11 +300,11 @@ pub struct LibraryFavoriteAlbumsQuery {
 #[route("/favorites/albums", method = "GET")]
 pub async fn favorite_albums_endpoint(
     query: web::Query<LibraryFavoriteAlbumsQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Page<ApiAlbum>>> {
     Ok(Json(
         favorite_albums(
-            data.database.clone(),
+            &db,
             &AlbumsRequest {
                 sources: None,
                 sort: match (query.order, query.order_direction) {
@@ -381,11 +382,11 @@ pub struct LibraryFavoriteArtistsQuery {
 #[route("/favorites/artists", method = "GET")]
 pub async fn favorite_artists_endpoint(
     query: web::Query<LibraryFavoriteArtistsQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Page<ApiArtist>>> {
     Ok(Json(
         favorite_artists(
-            data.database.clone(),
+            &db,
             query.offset,
             query.limit,
             query.order,
@@ -431,9 +432,9 @@ pub struct LibraryAddFavoriteArtistsQuery {
 #[route("/favorites/artists", method = "POST")]
 pub async fn add_favorite_artist_endpoint(
     query: web::Query<LibraryAddFavoriteArtistsQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Value>> {
-    add_favorite_artist(&**data.database, &query.artist_id.into()).await?;
+    add_favorite_artist(&db, &query.artist_id.into()).await?;
 
     Ok(Json(serde_json::json!({
         "success": true
@@ -474,9 +475,9 @@ pub struct LibraryRemoveFavoriteArtistsQuery {
 #[route("/favorites/artists", method = "DELETE")]
 pub async fn remove_favorite_artist_endpoint(
     query: web::Query<LibraryRemoveFavoriteArtistsQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Value>> {
-    remove_favorite_artist(&**data.database, &query.artist_id.into()).await?;
+    remove_favorite_artist(&db, &query.artist_id.into()).await?;
 
     Ok(Json(serde_json::json!({
         "success": true
@@ -517,9 +518,9 @@ pub struct LibraryAddFavoriteAlbumsQuery {
 #[route("/favorites/albums", method = "POST")]
 pub async fn add_favorite_album_endpoint(
     query: web::Query<LibraryAddFavoriteAlbumsQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Value>> {
-    add_favorite_album(&**data.database, &query.album_id.into()).await?;
+    add_favorite_album(&db, &query.album_id.into()).await?;
 
     Ok(Json(serde_json::json!({
         "success": true
@@ -560,9 +561,9 @@ pub struct LibraryRemoveFavoriteAlbumsQuery {
 #[route("/favorites/albums", method = "DELETE")]
 pub async fn remove_favorite_album_endpoint(
     query: web::Query<LibraryRemoveFavoriteAlbumsQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Value>> {
-    remove_favorite_album(&**data.database, &query.album_id.into()).await?;
+    remove_favorite_album(&db, &query.album_id.into()).await?;
 
     Ok(Json(serde_json::json!({
         "success": true
@@ -603,9 +604,9 @@ pub struct LibraryAddFavoriteTracksQuery {
 #[route("/favorites/tracks", method = "POST")]
 pub async fn add_favorite_track_endpoint(
     query: web::Query<LibraryAddFavoriteTracksQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Value>> {
-    add_favorite_track(&**data.database, &query.track_id.into()).await?;
+    add_favorite_track(&db, &query.track_id.into()).await?;
 
     Ok(Json(serde_json::json!({
         "success": true
@@ -646,9 +647,9 @@ pub struct LibraryRemoveFavoriteTracksQuery {
 #[route("/favorites/tracks", method = "DELETE")]
 pub async fn remove_favorite_track_endpoint(
     query: web::Query<LibraryRemoveFavoriteTracksQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Value>> {
-    remove_favorite_track(&**data.database, &query.track_id.into()).await?;
+    remove_favorite_track(&db, &query.track_id.into()).await?;
 
     Ok(Json(serde_json::json!({
         "success": true
@@ -697,7 +698,7 @@ pub struct LibraryFavoriteTracksQuery {
 #[route("/favorites/tracks", method = "GET")]
 pub async fn favorite_tracks_endpoint(
     query: web::Query<LibraryFavoriteTracksQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Page<ApiTrack>>> {
     let track_ids = query
         .track_ids
@@ -708,7 +709,7 @@ pub async fn favorite_tracks_endpoint(
 
     Ok(Json(
         favorite_tracks(
-            data.database.clone(),
+            &db,
             track_ids.as_deref(),
             query.offset,
             query.limit,
@@ -781,11 +782,11 @@ impl From<AlbumType> for LibraryAlbumType {
 #[route("/artists/albums", method = "GET")]
 pub async fn artist_albums_endpoint(
     query: web::Query<LibraryArtistAlbumsQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Page<ApiAlbum>>> {
     Ok(Json(
         artist_albums(
-            data.database.clone(),
+            &db,
             &query.artist_id.into(),
             query.offset,
             query.limit,
@@ -835,18 +836,13 @@ pub struct LibraryAlbumTracksQuery {
 #[route("/albums/tracks", method = "GET")]
 pub async fn album_tracks_endpoint(
     query: web::Query<LibraryAlbumTracksQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Page<ApiTrack>>> {
     Ok(Json(
-        album_tracks(
-            data.database.clone(),
-            &query.album_id.into(),
-            query.offset,
-            query.limit,
-        )
-        .await?
-        .to_api()
-        .into(),
+        album_tracks(&db, &query.album_id.into(), query.offset, query.limit)
+            .await?
+            .to_api()
+            .into(),
     ))
 }
 
@@ -886,9 +882,9 @@ pub struct LibraryAlbumQuery {
 #[route("/albums", method = "GET")]
 pub async fn album_endpoint(
     query: web::Query<LibraryAlbumQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<ApiAlbum>> {
-    let album = album(&**data.database, &query.album_id.into())
+    let album = album(&db, &query.album_id.into())
         .await?
         .ok_or_else(|| ErrorNotFound("Album not found"))?;
 
@@ -929,9 +925,9 @@ pub struct LibraryArtistQuery {
 #[route("/artists", method = "GET")]
 pub async fn artist_endpoint(
     query: web::Query<LibraryArtistQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<ApiArtist>> {
-    let artist = artist(&**data.database, &query.artist_id.into()).await?;
+    let artist = artist(&db, &query.artist_id.into()).await?;
 
     Ok(Json(artist.to_api()))
 }
@@ -971,9 +967,9 @@ pub struct LibraryTrackQuery {
 #[route("/tracks", method = "GET")]
 pub async fn track_endpoint(
     query: web::Query<LibraryTrackQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<ApiTrack>> {
-    let track = track(&**data.database, &query.track_id.into())
+    let track = track(&db, &query.track_id.into())
         .await?
         .ok_or_else(|| ErrorNotFound("Track not found"))?;
 
@@ -1019,10 +1015,10 @@ pub struct LibrarySearchQuery {
 #[route("/search", method = "GET")]
 pub async fn search_endpoint(
     query: web::Query<LibrarySearchQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<ApiSearchResultsResponse>> {
     let results = search(
-        &**data.database,
+        &db,
         &query.query,
         query.offset,
         query.limit,
@@ -1070,9 +1066,9 @@ pub struct ReindexQuery {}
 #[route("/reindex", method = "POST")]
 pub async fn reindex_endpoint(
     _query: web::Query<ReindexQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Value>> {
-    reindex_global_search_index(&**data.database).await?;
+    reindex_global_search_index(&db).await?;
 
     Ok(Json(serde_json::json!({"success": true})))
 }

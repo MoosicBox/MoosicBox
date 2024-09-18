@@ -7,7 +7,7 @@ use moosicbox_core::{
     },
     types::AudioFormat,
 };
-use moosicbox_database::{query::*, Database, DatabaseError, DatabaseValue};
+use moosicbox_database::{profiles::LibraryDatabase, query::*, DatabaseError, DatabaseValue};
 use moosicbox_library::{
     db::{delete_track_sizes_by_track_id, delete_tracks},
     models::{track_source_to_u8, ApiTrack, LibraryAlbum, LibraryTrack},
@@ -188,7 +188,7 @@ pub enum AddAlbumError {
 pub async fn add_album(
     api: &dyn MusicApi,
     library_api: &LibraryMusicApi,
-    db: Arc<Box<dyn Database>>,
+    db: &LibraryDatabase,
     album_id: &Id,
 ) -> Result<LibraryAlbum, AddAlbumError> {
     log::debug!(
@@ -218,7 +218,7 @@ pub async fn add_album(
     moosicbox_scan::music_api::scan_albums(api, &[album], 1, output.clone(), None).await?;
 
     let output = output.read().await;
-    let results = output.update_database(&**db).await?;
+    let results = output.update_database(db).await?;
 
     moosicbox_library::cache::clear_cache();
 
@@ -237,7 +237,7 @@ pub async fn add_album(
 
     for album in &results.albums {
         if let Some(album) =
-            crate::library::get_album(&**db, &album.id.into(), ApiSource::Library).await?
+            crate::library::get_album(db, &album.id.into(), ApiSource::Library).await?
         {
             albums.push(album);
         }
@@ -314,7 +314,7 @@ pub enum RemoveAlbumError {
 pub async fn remove_album(
     api: &dyn MusicApi,
     library_api: &LibraryMusicApi,
-    db: &dyn Database,
+    db: &LibraryDatabase,
     album_id: &Id,
 ) -> Result<LibraryAlbum, RemoveAlbumError> {
     log::debug!(
@@ -462,7 +462,7 @@ pub enum ReFavoriteAlbumError {
 pub async fn refavorite_album(
     api: &dyn MusicApi,
     library_api: &LibraryMusicApi,
-    db: Arc<Box<dyn Database>>,
+    db: &LibraryDatabase,
     album_id: &Id,
 ) -> Result<LibraryAlbum, ReFavoriteAlbumError> {
     log::debug!(
@@ -525,7 +525,7 @@ pub async fn refavorite_album(
 
     log::debug!("Re-favoriting with ids album_id={album_id} new_album_id={new_album_id:?}");
 
-    remove_album(api, library_api, &**db, album_id).await?;
+    remove_album(api, library_api, db, album_id).await?;
     let album = add_album(api, library_api, db, &new_album_id).await?;
 
     Ok(album)

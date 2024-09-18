@@ -9,7 +9,7 @@ use actix_web::{
     Result, Scope,
 };
 use moosicbox_auth::NonTunnelRequestAuthorized;
-use moosicbox_core::app::AppState;
+use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_music_api::MusicApiState;
 use serde::Deserialize;
 use serde_json::Value;
@@ -86,7 +86,7 @@ pub struct ScanQuery {
 #[post("/run-scan")]
 pub async fn run_scan_endpoint(
     query: web::Query<ScanQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
     api_state: web::Data<MusicApiState>,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
@@ -105,7 +105,7 @@ pub async fn run_scan_endpoint(
         })
         .transpose()?;
 
-    run_scan(origins, data.database.clone(), api_state.as_ref().clone())
+    run_scan(origins, &db, api_state.as_ref().clone())
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
 
@@ -133,7 +133,7 @@ pub async fn run_scan_endpoint(
 #[post("/start-scan")]
 pub async fn start_scan_endpoint(
     query: web::Query<ScanQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
     api_state: web::Data<MusicApiState>,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
@@ -153,7 +153,7 @@ pub async fn start_scan_endpoint(
         .transpose()?;
 
     moosicbox_task::spawn("scan", async move {
-        run_scan(origins, data.database.clone(), api_state.as_ref().clone())
+        run_scan(origins, &db, api_state.as_ref().clone())
             .await
             .map_err(|e| {
                 moosicbox_assert::die_or_error!("Scan error: {e:?}");
@@ -195,7 +195,7 @@ pub struct ScanPathQuery {
 #[post("/run-scan-path")]
 pub async fn run_scan_path_endpoint(
     query: web::Query<ScanPathQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
     api_state: web::Data<MusicApiState>,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
@@ -205,18 +205,13 @@ pub async fn run_scan_path_endpoint(
     .await;
 
     scanner
-        .scan(api_state.as_ref().clone(), data.database.clone())
+        .scan(api_state.as_ref().clone(), &db)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
 
-    crate::local::scan(
-        &query.path,
-        data.database.clone(),
-        crate::CANCELLATION_TOKEN.clone(),
-        scanner,
-    )
-    .await
-    .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
+    crate::local::scan(&query.path, &db, crate::CANCELLATION_TOKEN.clone(), scanner)
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
 
     Ok(Json(serde_json::json!({"success": true})))
 }
@@ -245,10 +240,10 @@ pub struct GetScanOriginsQuery {}
 #[actix_web::get("/scan-origins")]
 pub async fn get_scan_origins_endpoint(
     _query: web::Query<GetScanOriginsQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    let origins = crate::get_scan_origins(&**data.database)
+    let origins = crate::get_scan_origins(&db)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to get scan origins: {e:?}")))?;
 
@@ -282,10 +277,10 @@ pub struct EnableScanOriginQuery {
 #[post("/scan-origins")]
 pub async fn enable_scan_origin_endpoint(
     query: web::Query<EnableScanOriginQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    enable_scan_origin(&**data.database, query.origin)
+    enable_scan_origin(&db, query.origin)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to enable scan origin: {e:?}")))?;
 
@@ -319,10 +314,10 @@ pub struct DisableScanOriginQuery {
 #[delete("/scan-origins")]
 pub async fn disable_scan_origin_endpoint(
     query: web::Query<DisableScanOriginQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    disable_scan_origin(&**data.database, query.origin)
+    disable_scan_origin(&db, query.origin)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to disable scan origin: {e:?}")))?;
 
@@ -354,10 +349,10 @@ pub struct GetScanPathsQuery {}
 #[actix_web::get("/scan-paths")]
 pub async fn get_scan_paths_endpoint(
     _query: web::Query<GetScanPathsQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    let paths = crate::get_scan_paths(&**data.database)
+    let paths = crate::get_scan_paths(&db)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to get scan paths: {e:?}")))?;
 
@@ -393,7 +388,7 @@ pub struct AddScanPathQuery {
 #[post("/scan-paths")]
 pub async fn add_scan_path_endpoint(
     query: web::Query<AddScanPathQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
     static REGEX: std::sync::LazyLock<regex::Regex> =
@@ -409,7 +404,7 @@ pub async fn add_scan_path_endpoint(
         query.path.clone()
     };
 
-    crate::add_scan_path(&**data.database, &path)
+    crate::add_scan_path(&db, &path)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to add scan path: {e:?}")))?;
 
@@ -445,10 +440,10 @@ pub struct RemoveScanPathQuery {
 #[delete("/scan-paths")]
 pub async fn remove_scan_path_endpoint(
     query: web::Query<RemoveScanPathQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    crate::remove_scan_path(&**data.database, &query.path)
+    crate::remove_scan_path(&db, &query.path)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to remove scan path: {e:?}")))?;
 

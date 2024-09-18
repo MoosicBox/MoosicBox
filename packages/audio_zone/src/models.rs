@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use moosicbox_core::sqlite::models::ToApi;
 use moosicbox_database::{AsId, Database, DatabaseValue, TryFromDb};
@@ -34,11 +36,14 @@ impl From<ApiAudioZone> for AudioZone {
 impl TryFromDb<AudioZoneModel> for AudioZone {
     type Error = DatabaseFetchError;
 
-    async fn try_from_db(value: AudioZoneModel, db: &dyn Database) -> Result<Self, Self::Error> {
+    async fn try_from_db(
+        value: AudioZoneModel,
+        db: Arc<Box<dyn Database>>,
+    ) -> Result<Self, Self::Error> {
         Ok(AudioZone {
             id: value.id,
             name: value.name,
-            players: crate::db::get_players(db, value.id).await?,
+            players: crate::db::get_players(&db.into(), value.id).await?,
         })
     }
 }
@@ -95,13 +100,13 @@ impl TryFromDb<AudioZoneWithSessionModel> for AudioZoneWithSession {
 
     async fn try_from_db(
         value: AudioZoneWithSessionModel,
-        db: &dyn Database,
+        db: Arc<Box<dyn Database>>,
     ) -> Result<Self, Self::Error> {
         Ok(AudioZoneWithSession {
             id: value.id,
             session_id: value.session_id,
             name: value.name,
-            players: crate::db::get_players(db, value.id).await?,
+            players: crate::db::get_players(&db.into(), value.id).await?,
         })
     }
 }

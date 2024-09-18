@@ -9,7 +9,7 @@ use moosicbox_core::{
     },
     types::AudioFormat,
 };
-use moosicbox_database::Database;
+use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_files::{sanitize_filename, search_for_cover};
 use regex::Regex;
 use std::{
@@ -50,7 +50,7 @@ pub enum ScanError {
 
 pub async fn scan(
     directory: &str,
-    db: Arc<Box<dyn Database>>,
+    db: &LibraryDatabase,
     token: CancellationToken,
     scanner: Scanner,
 ) -> Result<(), ScanError> {
@@ -66,7 +66,7 @@ pub async fn scan(
 
 pub async fn scan_items(
     items: Vec<ScanItem>,
-    db: Arc<Box<dyn Database>>,
+    db: &LibraryDatabase,
     _token: CancellationToken,
     scanner: Scanner,
 ) -> Result<(), ScanError> {
@@ -117,8 +117,8 @@ pub async fn scan_items(
 
     {
         let output = output.read().await;
-        output.update_database(&**db).await?;
-        output.reindex_global_search_index(&**db).await?;
+        output.update_database(db).await?;
+        output.reindex_global_search_index(db).await?;
     }
 
     log::info!("Finished total scan");

@@ -1,4 +1,4 @@
-use std::{ops::Deref as _, str::Utf8Error, sync::LazyLock};
+use std::{str::Utf8Error, sync::LazyLock};
 
 use actix_htmx::{Htmx, TriggerType};
 use actix_web::{
@@ -8,7 +8,7 @@ use actix_web::{
 };
 use base64::{engine::general_purpose, DecodeError, Engine as _};
 use maud::{html, Markup};
-use moosicbox_database::{profiles::api::LibraryDatabase, Database};
+use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_tidal::{db::TidalConfigError, TidalDeviceAuthorizationTokenError};
 use serde::Deserialize;
 use thiserror::Error;
@@ -75,7 +75,7 @@ pub async fn device_authorization_endpoint(
         .as_str()
         .ok_or_else(|| ErrorInternalServerError("Invalid url"))?;
 
-    device_authorization_token(db.deref(), htmx, device_code, url)
+    device_authorization_token(&db, htmx, device_code, url)
         .await
         .map_err(ErrorInternalServerError)
 }
@@ -93,13 +93,13 @@ pub async fn device_authorization_token_endpoint(
     query: web::Query<DeviceAuthorizationTokenQuery>,
     db: LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
-    device_authorization_token(db.deref(), htmx, &query.device_code, &query.url)
+    device_authorization_token(&db, htmx, &query.device_code, &query.url)
         .await
         .map_err(ErrorInternalServerError)
 }
 
 async fn device_authorization_token(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     htmx: Htmx,
     device_code: &str,
     url: &str,
@@ -152,7 +152,7 @@ pub async fn get_settings_endpoint(
     _htmx: Htmx,
     db: LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
-    settings(db.deref())
+    settings(&db)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to get Tidal settings: {e:?}")))
 }
@@ -171,7 +171,7 @@ pub fn settings_logged_out() -> Markup {
     }
 }
 
-pub async fn settings(db: &dyn Database) -> Result<Markup, TidalConfigError> {
+pub async fn settings(db: &LibraryDatabase) -> Result<Markup, TidalConfigError> {
     let logged_in = moosicbox_tidal::db::get_tidal_config(db).await?.is_some();
 
     Ok(if logged_in {

@@ -14,7 +14,9 @@ use std::{
 
 use models::{TidalAlbum, TidalArtist, TidalSearchResults, TidalTrack};
 #[cfg(feature = "db")]
-use moosicbox_database::{Database, DatabaseError};
+use moosicbox_database::profiles::LibraryDatabase;
+#[cfg(feature = "db")]
+use moosicbox_database::DatabaseError;
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
@@ -211,7 +213,7 @@ pub enum TidalDeviceAuthorizationTokenError {
 }
 
 pub async fn device_authorization_token(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     client_id: String,
     client_secret: String,
     device_code: String,
@@ -285,7 +287,7 @@ pub enum FetchCredentialsError {
 }
 
 async fn fetch_credentials(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     access_token: Option<String>,
 ) -> Result<TidalCredentials, FetchCredentialsError> {
     #[cfg(feature = "db")]
@@ -353,7 +355,7 @@ pub enum AuthenticatedRequestError {
 }
 
 async fn authenticated_request(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     url: &str,
     access_token: Option<String>,
 ) -> Result<Value, AuthenticatedRequestError> {
@@ -372,7 +374,7 @@ async fn authenticated_request(
 }
 
 async fn authenticated_post_request(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     url: &str,
     access_token: Option<String>,
     body: Option<Value>,
@@ -397,7 +399,7 @@ async fn authenticated_post_request(
 }
 
 async fn authenticated_delete_request(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     url: &str,
     access_token: Option<String>,
 ) -> Result<Option<Value>, AuthenticatedRequestError> {
@@ -430,7 +432,7 @@ impl Display for Method {
 
 #[async_recursion]
 async fn authenticated_request_inner(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     method: Method,
     url: &str,
     access_token: Option<String>,
@@ -537,7 +539,7 @@ pub enum RefetchAccessTokenError {
 }
 
 async fn refetch_access_token(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     client_id: &str,
     refresh_token: &str,
     #[cfg(feature = "db")] persist: bool,
@@ -615,7 +617,7 @@ pub enum TidalFavoriteArtistsError {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_artists(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     offset: Option<u32>,
     limit: Option<u32>,
     order: Option<TidalArtistOrder>,
@@ -633,7 +635,7 @@ pub async fn favorite_artists(
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
     } else {
-        match db::get_tidal_config(&**db).await {
+        match db::get_tidal_config(db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
@@ -665,7 +667,7 @@ pub async fn favorite_artists(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        &**db,
+        db,
         &url,
         access_token.clone(),
     )
@@ -703,7 +705,7 @@ pub async fn favorite_artists(
             Box::pin(async move {
                 favorite_artists(
                     #[cfg(feature = "db")]
-                    db,
+                    &db,
                     Some(offset),
                     Some(limit),
                     order,
@@ -734,7 +736,7 @@ pub enum TidalAddFavoriteArtistError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_artist(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     artist_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -796,7 +798,7 @@ pub enum TidalRemoveFavoriteArtistError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_artist(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     artist_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -892,7 +894,7 @@ pub enum TidalFavoriteAlbumsError {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_albums(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     offset: Option<u32>,
     limit: Option<u32>,
     order: Option<TidalAlbumOrder>,
@@ -910,7 +912,7 @@ pub async fn favorite_albums(
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
     } else {
-        match db::get_tidal_config(&**db).await {
+        match db::get_tidal_config(db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
@@ -942,7 +944,7 @@ pub async fn favorite_albums(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        &**db,
+        db,
         &url,
         access_token.clone(),
     )
@@ -980,7 +982,7 @@ pub async fn favorite_albums(
             Box::pin(async move {
                 favorite_albums(
                     #[cfg(feature = "db")]
-                    db,
+                    &db,
                     Some(offset),
                     Some(limit),
                     order,
@@ -999,7 +1001,7 @@ pub async fn favorite_albums(
 
 #[allow(clippy::too_many_arguments)]
 pub async fn all_favorite_albums(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     order: Option<TidalAlbumOrder>,
     order_direction: Option<TidalAlbumOrderDirection>,
     country_code: Option<String>,
@@ -1016,7 +1018,7 @@ pub async fn all_favorite_albums(
     loop {
         let albums = favorite_albums(
             #[cfg(feature = "db")]
-            db.clone(),
+            db,
             Some(offset),
             Some(limit),
             order,
@@ -1055,7 +1057,7 @@ pub enum TidalAddFavoriteAlbumError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_album(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     album_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1117,7 +1119,7 @@ pub enum TidalRemoveFavoriteAlbumError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_album(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     album_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1198,7 +1200,7 @@ pub enum TidalFavoriteTracksError {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_tracks(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     offset: Option<u32>,
     limit: Option<u32>,
     order: Option<TidalTrackOrder>,
@@ -1216,7 +1218,7 @@ pub async fn favorite_tracks(
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
     } else {
-        match db::get_tidal_config(&**db).await {
+        match db::get_tidal_config(db).await {
             Ok(Some(config)) => Some(config.user_id),
             _ => None,
         }
@@ -1248,7 +1250,7 @@ pub async fn favorite_tracks(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        &**db,
+        db,
         &url,
         access_token.clone(),
     )
@@ -1286,7 +1288,7 @@ pub async fn favorite_tracks(
             Box::pin(async move {
                 favorite_tracks(
                     #[cfg(feature = "db")]
-                    db,
+                    &db,
                     Some(offset),
                     Some(limit),
                     order,
@@ -1317,7 +1319,7 @@ pub enum TidalAddFavoriteTrackError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_track(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     track_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1379,7 +1381,7 @@ pub enum TidalRemoveFavoriteTrackError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_track(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     track_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1451,7 +1453,7 @@ pub enum TidalAlbumType {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn artist_albums(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     artist_id: &Id,
     offset: Option<u32>,
     limit: Option<u32>,
@@ -1498,7 +1500,7 @@ pub async fn artist_albums(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        &**db,
+        db,
         &url,
         access_token.clone(),
     )
@@ -1534,7 +1536,7 @@ pub async fn artist_albums(
             Box::pin(async move {
                 artist_albums(
                     #[cfg(feature = "db")]
-                    db,
+                    &db,
                     &artist_id,
                     Some(offset),
                     Some(limit),
@@ -1563,7 +1565,7 @@ pub enum TidalAlbumTracksError {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn album_tracks(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     album_id: &Id,
     offset: Option<u32>,
     limit: Option<u32>,
@@ -1592,7 +1594,7 @@ pub async fn album_tracks(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        &**db,
+        db,
         &url,
         access_token.clone(),
     )
@@ -1628,7 +1630,7 @@ pub async fn album_tracks(
             Box::pin(async move {
                 album_tracks(
                     #[cfg(feature = "db")]
-                    db,
+                    &db,
                     &album_id,
                     Some(offset),
                     Some(limit),
@@ -1655,7 +1657,7 @@ pub enum TidalAlbumError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn album(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     album_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1696,7 +1698,7 @@ pub enum TidalArtistError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn artist(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     artist_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1738,7 +1740,7 @@ pub enum TidalTrackError {
 }
 
 pub async fn track(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     track_id: &Id,
     country_code: Option<String>,
     locale: Option<String>,
@@ -1818,7 +1820,7 @@ pub enum TidalSearchError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn search(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     query: &str,
     offset: Option<usize>,
     limit: Option<usize>,
@@ -1922,7 +1924,7 @@ pub enum TidalTrackFileUrlError {
 }
 
 pub async fn track_file_url(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     audio_quality: TidalAudioQuality,
     track_id: &Id,
     access_token: Option<String>,
@@ -1980,7 +1982,7 @@ pub enum TidalTrackPlaybackInfoError {
 }
 
 pub async fn track_playback_info(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     audio_quality: TidalAudioQuality,
     track_id: &Id,
     access_token: Option<String>,
@@ -2183,7 +2185,7 @@ impl From<TidalRemoveFavoriteTrackError> for RemoveTrackError {
 
 pub struct TidalMusicApi {
     #[cfg(feature = "db")]
-    db: Arc<Box<dyn Database>>,
+    db: LibraryDatabase,
 }
 
 impl TidalMusicApi {
@@ -2193,7 +2195,7 @@ impl TidalMusicApi {
     }
 
     #[cfg(feature = "db")]
-    pub fn new(db: Arc<Box<dyn Database>>) -> Self {
+    pub fn new(db: LibraryDatabase) -> Self {
         Self { db }
     }
 }
@@ -2213,7 +2215,7 @@ impl MusicApi for TidalMusicApi {
     ) -> PagingResult<Artist, ArtistsError> {
         Ok(favorite_artists(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &self.db,
             offset,
             limit,
             order.map(|x| x.into()),
@@ -2232,7 +2234,7 @@ impl MusicApi for TidalMusicApi {
         Ok(Some(
             artist(
                 #[cfg(feature = "db")]
-                &**self.db,
+                &self.db,
                 artist_id,
                 None,
                 None,
@@ -2247,7 +2249,7 @@ impl MusicApi for TidalMusicApi {
     async fn add_artist(&self, artist_id: &Id) -> Result<(), AddArtistError> {
         Ok(add_favorite_artist(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             artist_id,
             None,
             None,
@@ -2261,7 +2263,7 @@ impl MusicApi for TidalMusicApi {
     async fn remove_artist(&self, artist_id: &Id) -> Result<(), RemoveArtistError> {
         Ok(remove_favorite_artist(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             artist_id,
             None,
             None,
@@ -2279,7 +2281,7 @@ impl MusicApi for TidalMusicApi {
     ) -> Result<Option<ImageCoverSource>, ArtistError> {
         let artist = crate::artist(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             &artist.id,
             None,
             None,
@@ -2296,7 +2298,7 @@ impl MusicApi for TidalMusicApi {
     async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
         Ok(favorite_albums(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &self.db,
             request.page.as_ref().map(|x| x.offset),
             request.page.as_ref().map(|x| x.limit),
             request.sort.as_ref().map(|x| (*x).into()),
@@ -2315,7 +2317,7 @@ impl MusicApi for TidalMusicApi {
         Ok(Some(
             album(
                 #[cfg(feature = "db")]
-                &**self.db,
+                &self.db,
                 album_id,
                 None,
                 None,
@@ -2350,7 +2352,7 @@ impl MusicApi for TidalMusicApi {
                 .map(|album_type| {
                     artist_albums(
                         #[cfg(feature = "db")]
-                        self.db.clone(),
+                        &self.db,
                         artist_id,
                         Some(offset),
                         Some(limit),
@@ -2369,7 +2371,7 @@ impl MusicApi for TidalMusicApi {
             let total = pages.iter().map(|page| page.total().unwrap()).sum();
 
             #[cfg(feature = "db")]
-            let db = self.db.clone();
+            let db = self.db.to_owned();
             let artist_id = artist_id.clone();
             let album_type = album_type.try_into()?;
 
@@ -2391,7 +2393,7 @@ impl MusicApi for TidalMusicApi {
                     Box::pin(async move {
                         artist_albums(
                             #[cfg(feature = "db")]
-                            db,
+                            &db,
                             &artist_id,
                             Some(offset),
                             Some(limit),
@@ -2410,7 +2412,7 @@ impl MusicApi for TidalMusicApi {
 
         Ok(artist_albums(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &self.db,
             artist_id,
             Some(offset),
             Some(limit),
@@ -2427,7 +2429,7 @@ impl MusicApi for TidalMusicApi {
     async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
         Ok(add_favorite_album(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             album_id,
             None,
             None,
@@ -2441,7 +2443,7 @@ impl MusicApi for TidalMusicApi {
     async fn remove_album(&self, album_id: &Id) -> Result<(), RemoveAlbumError> {
         Ok(remove_favorite_album(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             album_id,
             None,
             None,
@@ -2459,7 +2461,7 @@ impl MusicApi for TidalMusicApi {
     ) -> Result<Option<ImageCoverSource>, AlbumError> {
         let album = crate::album(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             &album.id,
             None,
             None,
@@ -2488,7 +2490,7 @@ impl MusicApi for TidalMusicApi {
 
         Ok(favorite_tracks(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &self.db,
             offset,
             limit,
             order.map(|x| x.into()),
@@ -2513,7 +2515,7 @@ impl MusicApi for TidalMusicApi {
     ) -> PagingResult<Track, TracksError> {
         Ok(album_tracks(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &self.db,
             album_id,
             offset,
             limit,
@@ -2530,7 +2532,7 @@ impl MusicApi for TidalMusicApi {
         Ok(Some(
             track(
                 #[cfg(feature = "db")]
-                &**self.db,
+                &self.db,
                 track_id,
                 None,
                 None,
@@ -2545,7 +2547,7 @@ impl MusicApi for TidalMusicApi {
     async fn add_track(&self, track_id: &Id) -> Result<(), AddTrackError> {
         Ok(add_favorite_track(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             track_id,
             None,
             None,
@@ -2559,7 +2561,7 @@ impl MusicApi for TidalMusicApi {
     async fn remove_track(&self, track_id: &Id) -> Result<(), RemoveTrackError> {
         Ok(remove_favorite_track(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             track_id,
             None,
             None,
@@ -2577,7 +2579,7 @@ impl MusicApi for TidalMusicApi {
     ) -> Result<Option<TrackSource>, TrackError> {
         let url = track_file_url(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             quality.into(),
             track.id(),
             None,
@@ -2609,7 +2611,7 @@ impl MusicApi for TidalMusicApi {
     ) -> Result<Option<u64>, TrackError> {
         let Some(url) = track_file_url(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             TidalAudioQuality::High,
             track.id(),
             None,

@@ -9,14 +9,14 @@ use actix_web::{
     Result, Scope,
 };
 use moosicbox_core::{
-    app::AppState,
-    integer_range::ParseIntegersError,
-    sqlite::models::{AlbumSort, AlbumSource, ArtistSort, ToApi},
-};
-use moosicbox_core::{
     integer_range::parse_integer_ranges_to_ids,
     sqlite::models::{ApiSource, Id},
 };
+use moosicbox_core::{
+    integer_range::ParseIntegersError,
+    sqlite::models::{AlbumSort, AlbumSource, ArtistSort, ToApi},
+};
+use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_library::{
     db::{get_album_tracks, get_tracks},
     models::{ApiAlbum, ApiArtist, ApiTrack},
@@ -138,7 +138,7 @@ pub struct GetArtistsQuery {
 #[get("/artists")]
 pub async fn get_artists_endpoint(
     query: web::Query<GetArtistsQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Vec<ApiArtist>>> {
     let request = ArtistsRequest {
         sources: query
@@ -170,7 +170,7 @@ pub async fn get_artists_endpoint(
     };
 
     Ok(Json(
-        get_all_artists(&data, &request)
+        get_all_artists(&db, &request)
             .await
             .map_err(|e| ErrorInternalServerError(format!("Failed to fetch artists: {e:?}")))?
             .into_iter()
@@ -304,7 +304,7 @@ pub struct GetTracksQuery {
 #[get("/tracks")]
 pub async fn get_tracks_endpoint(
     query: web::Query<GetTracksQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Vec<ApiTrack>>> {
     let ids = parse_integer_ranges_to_ids(&query.track_ids).map_err(|e| match e {
         ParseIntegersError::ParseId(id) => {
@@ -319,7 +319,7 @@ pub async fn get_tracks_endpoint(
     })?;
 
     Ok(Json(
-        get_tracks(&**data.database, Some(&ids))
+        get_tracks(&db, Some(&ids))
             .await
             .map_err(|_e| ErrorInternalServerError("Failed to fetch tracks"))?
             .into_iter()
@@ -355,10 +355,10 @@ pub struct GetAlbumTracksQuery {
 #[get("/album/tracks")]
 pub async fn get_album_tracks_endpoint(
     query: web::Query<GetAlbumTracksQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Vec<ApiTrack>>> {
     Ok(Json(
-        get_album_tracks(&**data.database, &query.album_id.into())
+        get_album_tracks(&db, &query.album_id.into())
             .await
             .map_err(|_e| ErrorInternalServerError("Failed to fetch tracks"))?
             .into_iter()
@@ -433,10 +433,10 @@ pub struct GetArtistAlbumsQuery {
 #[get("/artist/albums")]
 pub async fn get_artist_albums_endpoint(
     query: web::Query<GetArtistAlbumsQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Vec<ApiAlbum>>> {
     Ok(Json(
-        get_artist_albums(&query.artist_id.into(), &data)
+        get_artist_albums(&query.artist_id.into(), &db)
             .await
             .map_err(|_e| ErrorInternalServerError("Failed to fetch albums"))?
             .iter()
@@ -504,7 +504,7 @@ pub struct GetArtistQuery {
 #[get("/artist")]
 pub async fn get_artist_endpoint(
     query: web::Query<GetArtistQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<ApiArtist>> {
     Ok(Json(
         get_artist(
@@ -514,7 +514,7 @@ pub async fn get_artist_endpoint(
             query.album_id,
             query.tidal_album_id,
             query.qobuz_album_id.clone(),
-            &data,
+            &db,
         )
         .await?
         .to_api(),
@@ -552,7 +552,7 @@ pub struct GetAlbumQuery {
 #[get("/album")]
 pub async fn get_album_endpoint(
     query: web::Query<GetAlbumQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<ApiAlbum>> {
     let (id, source) = if let Some(id) = query.album_id {
         (id.into(), ApiSource::Library)
@@ -565,7 +565,7 @@ pub async fn get_album_endpoint(
     };
 
     Ok(Json(
-        get_album(&**data.database, &id, source)
+        get_album(&db, &id, source)
             .await?
             .ok_or(ErrorNotFound("Album not found"))?
             .to_api(),
@@ -601,7 +601,7 @@ pub struct AddAlbumQuery {
 #[post("/album")]
 pub async fn add_album_endpoint(
     query: web::Query<AddAlbumQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
     library_api: web::Data<LibraryMusicApiState>,
     api_state: web::Data<MusicApiState>,
 ) -> Result<Json<ApiAlbum>> {
@@ -612,7 +612,7 @@ pub async fn add_album_endpoint(
                 .get(query.source)
                 .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
             &library_api,
-            data.database.clone(),
+            &db,
             &album_id_for_source(&query.album_id, query.source)?,
         )
         .await
@@ -650,7 +650,7 @@ pub struct RemoveAlbumQuery {
 #[delete("/album")]
 pub async fn remove_album_endpoint(
     query: web::Query<RemoveAlbumQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
     library_api: web::Data<LibraryMusicApiState>,
     api_state: web::Data<MusicApiState>,
 ) -> Result<Json<ApiAlbum>> {
@@ -661,7 +661,7 @@ pub async fn remove_album_endpoint(
                 .get(query.source)
                 .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
             &library_api,
-            &**data.database,
+            &db,
             &album_id_for_source(&query.album_id, query.source)?,
         )
         .await
@@ -699,7 +699,7 @@ pub struct ReFavoriteAlbumQuery {
 #[post("/album/re-favorite")]
 pub async fn refavorite_album_endpoint(
     query: web::Query<ReFavoriteAlbumQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
     library_api: web::Data<LibraryMusicApiState>,
     api_state: web::Data<MusicApiState>,
 ) -> Result<Json<ApiAlbum>> {
@@ -710,7 +710,7 @@ pub async fn refavorite_album_endpoint(
                 .get(query.source)
                 .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
             &library_api,
-            data.database.clone(),
+            &db,
             &album_id_for_source(&query.album_id, query.source)?,
         )
         .await

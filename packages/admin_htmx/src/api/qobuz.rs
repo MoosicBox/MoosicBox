@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use actix_htmx::{Htmx, TriggerType};
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
@@ -8,7 +6,7 @@ use actix_web::{
 };
 use maud::{html, Markup};
 use moosicbox_core::sqlite::db::DbError;
-use moosicbox_database::{profiles::api::LibraryDatabase, Database};
+use moosicbox_database::profiles::LibraryDatabase;
 use serde::Deserialize;
 
 pub fn bind_services<
@@ -37,8 +35,7 @@ pub async fn user_login_endpoint(
     db: LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
     let response =
-        moosicbox_qobuz::user_login(db.into(), &form.username, &form.password, None, Some(true))
-            .await;
+        moosicbox_qobuz::user_login(&db, &form.username, &form.password, None, Some(true)).await;
 
     Ok(if response.is_ok_and(|x| x.get("accessToken").is_some()) {
         htmx.trigger_event(
@@ -70,7 +67,7 @@ pub async fn get_settings_endpoint(
     _htmx: Htmx,
     db: LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
-    settings(db.deref())
+    settings(&db)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to get Qobuz settings: {e:?}")))
 }
@@ -92,7 +89,7 @@ pub fn settings_logged_out(message: Option<Markup>) -> Markup {
     }
 }
 
-pub async fn settings(db: &dyn Database) -> Result<Markup, DbError> {
+pub async fn settings(db: &LibraryDatabase) -> Result<Markup, DbError> {
     let logged_in = moosicbox_qobuz::db::get_qobuz_config(db).await?.is_some();
 
     Ok(if logged_in {

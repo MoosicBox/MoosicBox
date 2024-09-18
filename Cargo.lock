@@ -3951,6 +3951,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_task",
  "postgres-protocol",
+ "qstring",
  "regex",
  "rusqlite",
  "serde",

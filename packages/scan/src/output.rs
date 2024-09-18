@@ -12,7 +12,7 @@ use moosicbox_core::{
     },
     types::{AudioFormat, PlaybackQuality},
 };
-use moosicbox_database::{Database, DatabaseError, DatabaseValue, TryFromError};
+use moosicbox_database::{profiles::LibraryDatabase, DatabaseError, DatabaseValue, TryFromError};
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
 use moosicbox_library::{
     db::{
@@ -511,7 +511,7 @@ impl ScanOutput {
     #[allow(unused)]
     pub async fn update_database(
         &self,
-        db: &dyn Database,
+        db: &LibraryDatabase,
     ) -> Result<UpdateDatabaseResults, UpdateDatabaseError> {
         let artists = join_all(
             self.artists
@@ -761,7 +761,7 @@ impl ScanOutput {
 
     pub async fn reindex_global_search_index(
         &self,
-        db: &dyn Database,
+        db: &LibraryDatabase,
     ) -> Result<(), UpdateDatabaseError> {
         let reindex_start = std::time::SystemTime::now();
 

@@ -1,4 +1,4 @@
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 use async_trait::async_trait;
 use moosicbox_audio_zone::models::{ApiPlayer, Player};
@@ -9,7 +9,7 @@ use moosicbox_core::{
     },
     types::PlaybackQuality,
 };
-use moosicbox_database::{AsId, Database, DatabaseValue};
+use moosicbox_database::{config::ConfigDatabase, AsId, Database, DatabaseValue};
 use moosicbox_json_utils::{
     database::{DatabaseFetchError, ToValue as _},
     ParseError, ToValueType,
@@ -141,7 +141,7 @@ impl UpdateSession {
 
     pub async fn audio_output_ids(
         &self,
-        db: &dyn Database,
+        db: &ConfigDatabase,
     ) -> Result<Vec<String>, DatabaseFetchError> {
         Ok(match &self.playback_target {
             PlaybackTarget::AudioZone { audio_zone_id } => {
@@ -414,13 +414,13 @@ impl ToValueType<Session> for &moosicbox_database::Row {
 
 #[async_trait]
 impl AsModelQuery<Session> for &moosicbox_database::Row {
-    async fn as_model_query(&self, db: &dyn Database) -> Result<Session, DbError> {
+    async fn as_model_query(&self, db: Arc<Box<dyn Database>>) -> Result<Session, DbError> {
         let id = self.to_value("id")?;
         let playback_target_type: Option<String> = self.to_value("playback_target")?;
         let playback_target_type =
             playback_target_type.and_then(|x| PlaybackTarget::default_from_str(&x));
 
-        match get_session_playlist(db, id).await? {
+        match get_session_playlist(&db.into(), id).await? {
             Some(playlist) => Ok(Session {
                 id,
                 name: self.to_value("name")?,
@@ -506,7 +506,10 @@ pub struct SessionPlaylistTracks(Vec<SessionPlaylistTrack>);
 
 #[async_trait]
 impl AsModelResultMappedQuery<ApiTrack, DbError> for SessionPlaylistTracks {
-    async fn as_model_mapped_query(&self, db: &dyn Database) -> Result<Vec<ApiTrack>, DbError> {
+    async fn as_model_mapped_query(
+        &self,
+        db: Arc<Box<dyn Database>>,
+    ) -> Result<Vec<ApiTrack>, DbError> {
         let tracks = self;
         log::trace!("Mapping tracks to ApiTracks: {tracks:?}");
 
@@ -519,7 +522,7 @@ impl AsModelResultMappedQuery<ApiTrack, DbError> for SessionPlaylistTracks {
             .collect::<Vec<_>>();
 
         log::trace!("Fetching tracks by ids: {library_track_ids:?}");
-        let library_tracks = get_tracks(db, Some(&library_track_ids)).await?;
+        let library_tracks = get_tracks(&db.into(), Some(&library_track_ids)).await?;
 
         Ok(tracks
             .0
@@ -542,11 +545,12 @@ impl AsModelResultMappedQuery<ApiTrack, DbError> for SessionPlaylistTracks {
 
 #[async_trait]
 impl AsModelQuery<SessionPlaylist> for &moosicbox_database::Row {
-    async fn as_model_query(&self, db: &dyn Database) -> Result<SessionPlaylist, DbError> {
+    async fn as_model_query(&self, db: Arc<Box<dyn Database>>) -> Result<SessionPlaylist, DbError> {
         let id = self.to_value("id")?;
-        let tracks = SessionPlaylistTracks(get_session_playlist_tracks(db, id).await?)
-            .as_model_mapped_query(db)
-            .await?;
+        let tracks =
+            SessionPlaylistTracks(get_session_playlist_tracks(&db.clone().into(), id).await?)
+                .as_model_mapped_query(db)
+                .await?;
         log::trace!("Got SessionPlaylistTracks for session_playlist {id}: {tracks:?}");
 
         Ok(SessionPlaylist { id, tracks })
@@ -748,9 +752,9 @@ pub struct Connection {
 
 #[async_trait]
 impl AsModelQuery<Connection> for &moosicbox_database::Row {
-    async fn as_model_query(&self, db: &dyn Database) -> Result<Connection, DbError> {
+    async fn as_model_query(&self, db: Arc<Box<dyn Database>>) -> Result<Connection, DbError> {
         let id = self.to_value::<String>("id")?;
-        let players = get_players(db, &id).await?;
+        let players = get_players(&db.clone().into(), &id).await?;
         Ok(Connection {
             id,
             name: self.to_value("name")?,

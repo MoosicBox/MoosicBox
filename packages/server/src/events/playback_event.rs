@@ -8,7 +8,7 @@ use service::Commander as _;
 use strum_macros::{AsRefStr, EnumString};
 use tokio::sync::RwLock;
 
-use crate::{ws::server::WsServerHandle, DB};
+use crate::{ws::server::WsServerHandle, CONFIG_DB, DB};
 
 pub static PLAYBACK_EVENT_HANDLE: OnceLock<service::Handle> = OnceLock::new();
 
@@ -54,6 +54,17 @@ impl service::Processor for service::Service {
             Command::UpdateSession { update } => {
                 log::debug!("Received UpdateSession command: {update:?}");
 
+                let config_db = if let Some(config_db) = CONFIG_DB.read().unwrap().as_ref() {
+                    config_db.clone()
+                } else {
+                    log::error!("No DB connection");
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "No CONFIG_DB connection",
+                    )
+                    .into());
+                };
+
                 let db = if let Some(db) = DB.read().unwrap().as_ref() {
                     db.clone()
                 } else {
@@ -65,7 +76,7 @@ impl service::Processor for service::Service {
 
                 let handle = { ctx.read().await.sender.clone() };
 
-                if let Err(err) = update_session(&**db, &handle, None, &update).await {
+                if let Err(err) = update_session(&config_db, &db, &handle, None, &update).await {
                     moosicbox_assert::die_or_error!("Failed to update_session: {err:?}");
                 }
             }

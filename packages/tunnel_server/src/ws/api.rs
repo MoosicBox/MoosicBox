@@ -1,6 +1,7 @@
 use crate::auth::SignatureAuthorized;
 use crate::ws::handler;
 use crate::WS_SERVER_HANDLE;
+use actix_web::error::ErrorBadGateway;
 use actix_web::HttpResponse;
 use actix_web::{
     get,
@@ -23,6 +24,13 @@ pub async fn websocket(
     query: web::Query<ConnectRequest>,
     _: SignatureAuthorized,
 ) -> Result<HttpResponse, actix_web::Error> {
+    let profile = req
+        .headers()
+        .get("moosicbox-profile")
+        .and_then(|x| x.to_str().ok())
+        .ok_or_else(|| ErrorBadGateway("Missing profile"))?
+        .to_string();
+
     let ws_server = WS_SERVER_HANDLE.read().await.as_ref().unwrap().clone();
     let (res, session, msg_stream) = actix_ws::handle(&req, stream)?;
 
@@ -35,6 +43,7 @@ pub async fn websocket(
             msg_stream,
             query.client_id.clone(),
             query.sender.unwrap_or(false),
+            profile,
         ),
     );
 

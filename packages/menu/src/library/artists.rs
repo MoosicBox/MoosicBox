@@ -1,10 +1,8 @@
-use moosicbox_core::{
-    app::AppState,
-    sqlite::{
-        db::DbError,
-        models::{AlbumSource, ArtistSort},
-    },
+use moosicbox_core::sqlite::{
+    db::DbError,
+    models::{AlbumSource, ArtistSort},
 };
+use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_library::{db::get_artists, models::LibraryArtist};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -71,10 +69,10 @@ pub enum GetArtistsError {
 }
 
 pub async fn get_all_artists(
-    data: &AppState,
+    db: &LibraryDatabase,
     request: &ArtistsRequest,
 ) -> Result<Vec<LibraryArtist>, GetArtistsError> {
-    let artists = get_artists(&**data.database).await?;
+    let artists = get_artists(db).await?;
 
     Ok(sort_artists(filter_artists(artists, request), request))
 }

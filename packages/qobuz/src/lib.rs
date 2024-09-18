@@ -11,7 +11,9 @@ use models::{QobuzAlbum, QobuzArtist, QobuzRelease, QobuzSearchResults, QobuzTra
 #[cfg(feature = "db")]
 use moosicbox_core::sqlite::db::DbError;
 #[cfg(feature = "db")]
-use moosicbox_database::{Database, DatabaseError};
+use moosicbox_database::profiles::LibraryDatabase;
+#[cfg(feature = "db")]
+use moosicbox_database::DatabaseError;
 
 use moosicbox_files::get_content_length;
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
@@ -99,7 +101,7 @@ pub enum FetchCredentialsError {
 }
 
 async fn fetch_credentials(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     app_id: Option<String>,
     access_token: Option<String>,
 ) -> Result<QobuzCredentials, FetchCredentialsError> {
@@ -182,7 +184,7 @@ pub enum AuthenticatedRequestError {
 }
 
 async fn authenticated_request(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     url: &str,
     app_id: Option<String>,
     access_token: Option<String>,
@@ -204,7 +206,7 @@ async fn authenticated_request(
 
 #[allow(unused)]
 async fn authenticated_post_request(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     url: &str,
     app_id: Option<String>,
     access_token: Option<String>,
@@ -232,7 +234,7 @@ async fn authenticated_post_request(
 
 #[allow(unused)]
 async fn authenticated_delete_request(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     url: &str,
     app_id: Option<String>,
     access_token: Option<String>,
@@ -261,7 +263,7 @@ enum Method {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 async fn authenticated_request_inner(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     method: Method,
     url: &str,
     app_id: Option<String>,
@@ -378,7 +380,7 @@ pub enum RefetchAccessTokenError {
 }
 
 async fn refetch_access_token(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     app_id: &str,
     username: &str,
     access_token: &str,
@@ -548,7 +550,7 @@ pub enum QobuzUserLoginError {
 }
 
 pub async fn user_login(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     username: &str,
     password: &str,
     app_id: Option<String>,
@@ -570,7 +572,7 @@ pub async fn user_login(
             if let Some(app_config) = {
                 #[cfg(feature = "db")]
                 {
-                    db::get_qobuz_app_config(&**db).await?
+                    db::get_qobuz_app_config(db).await?
                 }
 
                 #[cfg(not(feature = "db"))]
@@ -600,12 +602,11 @@ pub async fn user_login(
                         config.app_id
                     );
                     let app_config =
-                        db::create_qobuz_app_config(&**db, &bundle_version, &config.app_id).await?;
+                        db::create_qobuz_app_config(db, &bundle_version, &config.app_id).await?;
 
                     for (timezone, secret) in config.secrets {
                         log::debug!("Creating Qobuz app secret: timezone={bundle_version}");
-                        db::create_qobuz_app_secret(&**db, app_config.id, &timezone, &secret)
-                            .await?;
+                        db::create_qobuz_app_secret(db, app_config.id, &timezone, &secret).await?;
                     }
                 }
 
@@ -639,7 +640,7 @@ pub async fn user_login(
 
     #[cfg(feature = "db")]
     if persist.unwrap_or(false) {
-        db::create_qobuz_config(&**db, access_token, user_id, user_email, user_public_id).await?;
+        db::create_qobuz_config(db, access_token, user_id, user_email, user_public_id).await?;
     }
 
     Ok(serde_json::json!({
@@ -659,7 +660,7 @@ pub enum QobuzArtistError {
 }
 
 pub async fn artist(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     artist_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -695,7 +696,7 @@ pub enum QobuzFavoriteArtistsError {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_artists(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     offset: Option<u32>,
     limit: Option<u32>,
     access_token: Option<String>,
@@ -716,7 +717,7 @@ pub async fn favorite_artists(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        &**db,
+        db,
         &url,
         app_id.clone(),
         access_token.clone(),
@@ -747,7 +748,7 @@ pub async fn favorite_artists(
             Box::pin(async move {
                 favorite_artists(
                     #[cfg(feature = "db")]
-                    db,
+                    &db,
                     Some(offset),
                     Some(limit),
                     access_token,
@@ -766,7 +767,7 @@ pub enum QobuzAddFavoriteArtistError {
 }
 
 pub async fn add_favorite_artist(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     artist_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -798,7 +799,7 @@ pub enum QobuzRemoveFavoriteArtistError {
 }
 
 pub async fn remove_favorite_artist(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     artist_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -834,7 +835,7 @@ pub enum QobuzArtistAlbumsError {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn artist_albums(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     artist_id: &Id,
     offset: Option<u32>,
     limit: Option<u32>,
@@ -864,7 +865,7 @@ pub async fn artist_albums(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        &**db,
+        db,
         &url,
         app_id.clone(),
         access_token.clone(),
@@ -897,7 +898,7 @@ pub async fn artist_albums(
             Box::pin(async move {
                 artist_albums(
                     #[cfg(feature = "db")]
-                    db,
+                    &db,
                     &artist_id,
                     Some(offset),
                     Some(limit),
@@ -925,7 +926,7 @@ pub enum QobuzAlbumError {
 }
 
 pub async fn album(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     album_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -962,7 +963,7 @@ pub enum QobuzFavoriteAlbumsError {
 
 #[async_recursion]
 pub async fn favorite_albums(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     offset: Option<u32>,
     limit: Option<u32>,
     access_token: Option<String>,
@@ -985,7 +986,7 @@ pub async fn favorite_albums(
 
         match authenticated_request(
             #[cfg(feature = "db")]
-            &**db,
+            db,
             &url,
             app_id.clone(),
             access_token.clone(),
@@ -1030,7 +1031,7 @@ pub async fn favorite_albums(
             Box::pin(async move {
                 favorite_albums(
                     #[cfg(feature = "db")]
-                    db,
+                    &db,
                     Some(offset),
                     Some(limit),
                     access_token,
@@ -1043,7 +1044,7 @@ pub async fn favorite_albums(
 }
 
 pub async fn all_favorite_albums(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> Result<Vec<QobuzAlbum>, QobuzFavoriteAlbumsError> {
@@ -1055,7 +1056,7 @@ pub async fn all_favorite_albums(
     loop {
         let albums = favorite_albums(
             #[cfg(feature = "db")]
-            db.clone(),
+            db,
             Some(offset),
             Some(limit),
             access_token.clone(),
@@ -1082,7 +1083,7 @@ pub enum QobuzAddFavoriteAlbumError {
 }
 
 pub async fn add_favorite_album(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     album_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -1110,7 +1111,7 @@ pub enum QobuzRemoveFavoriteAlbumError {
 }
 
 pub async fn remove_favorite_album(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     album_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -1146,7 +1147,7 @@ pub enum QobuzAlbumTracksError {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn album_tracks(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     album_id: &Id,
     offset: Option<u32>,
     limit: Option<u32>,
@@ -1168,7 +1169,7 @@ pub async fn album_tracks(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        &**db,
+        db,
         &url,
         app_id.clone(),
         access_token.clone(),
@@ -1220,7 +1221,7 @@ pub async fn album_tracks(
             Box::pin(async move {
                 album_tracks(
                     #[cfg(feature = "db")]
-                    db,
+                    &db,
                     &album_id,
                     Some(offset),
                     Some(limit),
@@ -1243,7 +1244,7 @@ pub enum QobuzTrackError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn track(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     track_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -1277,7 +1278,7 @@ pub enum QobuzFavoriteTracksError {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_tracks(
-    #[cfg(feature = "db")] db: Arc<Box<dyn Database>>,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     offset: Option<u32>,
     limit: Option<u32>,
     access_token: Option<String>,
@@ -1298,7 +1299,7 @@ pub async fn favorite_tracks(
 
     let value = authenticated_request(
         #[cfg(feature = "db")]
-        &**db,
+        db,
         &url,
         app_id.clone(),
         access_token.clone(),
@@ -1327,7 +1328,7 @@ pub async fn favorite_tracks(
             Box::pin(async move {
                 favorite_tracks(
                     #[cfg(feature = "db")]
-                    db,
+                    &db,
                     Some(offset),
                     Some(limit),
                     access_token,
@@ -1346,7 +1347,7 @@ pub enum QobuzAddFavoriteTrackError {
 }
 
 pub async fn add_favorite_track(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     track_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -1374,7 +1375,7 @@ pub enum QobuzRemoveFavoriteTrackError {
 }
 
 pub async fn remove_favorite_track(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     track_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
@@ -1450,7 +1451,7 @@ pub enum QobuzTrackFileUrlError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn track_file_url(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     track_id: &Id,
     quality: QobuzAudioQuality,
     access_token: Option<String>,
@@ -1531,7 +1532,7 @@ pub enum QobuzSearchError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn search(
-    #[cfg(feature = "db")] db: &dyn Database,
+    #[cfg(feature = "db")] db: &LibraryDatabase,
     query: &str,
     offset: Option<usize>,
     limit: Option<usize>,
@@ -1859,7 +1860,7 @@ impl From<QobuzRemoveFavoriteTrackError> for RemoveTrackError {
 
 pub struct QobuzMusicApi {
     #[cfg(feature = "db")]
-    db: Arc<Box<dyn Database>>,
+    db: LibraryDatabase,
 }
 
 impl QobuzMusicApi {
@@ -1869,7 +1870,7 @@ impl QobuzMusicApi {
     }
 
     #[cfg(feature = "db")]
-    pub fn new(db: Arc<Box<dyn Database>>) -> Self {
+    pub fn new(db: LibraryDatabase) -> Self {
         Self { db }
     }
 }
@@ -1889,7 +1890,7 @@ impl MusicApi for QobuzMusicApi {
     ) -> PagingResult<Artist, ArtistsError> {
         Ok(favorite_artists(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &self.db,
             offset,
             limit,
             None,
@@ -1903,7 +1904,7 @@ impl MusicApi for QobuzMusicApi {
         Ok(Some(
             artist(
                 #[cfg(feature = "db")]
-                &**self.db,
+                &self.db,
                 artist_id,
                 None,
                 None,
@@ -1916,7 +1917,7 @@ impl MusicApi for QobuzMusicApi {
     async fn add_artist(&self, artist_id: &Id) -> Result<(), AddArtistError> {
         Ok(add_favorite_artist(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             artist_id,
             None,
             None,
@@ -1927,7 +1928,7 @@ impl MusicApi for QobuzMusicApi {
     async fn remove_artist(&self, artist_id: &Id) -> Result<(), RemoveArtistError> {
         Ok(remove_favorite_artist(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             artist_id,
             None,
             None,
@@ -1942,7 +1943,7 @@ impl MusicApi for QobuzMusicApi {
     ) -> Result<Option<ImageCoverSource>, ArtistError> {
         let artist = crate::artist(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             &artist.id,
             None,
             None,
@@ -1959,7 +1960,7 @@ impl MusicApi for QobuzMusicApi {
     async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
         Ok(favorite_albums(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &self.db,
             request.page.as_ref().map(|x| x.offset),
             request.page.as_ref().map(|x| x.limit),
             None,
@@ -1973,7 +1974,7 @@ impl MusicApi for QobuzMusicApi {
         Ok(Some(
             album(
                 #[cfg(feature = "db")]
-                &**self.db,
+                &self.db,
                 album_id,
                 None,
                 None,
@@ -1994,7 +1995,7 @@ impl MusicApi for QobuzMusicApi {
     ) -> PagingResult<Album, ArtistAlbumsError> {
         Ok(artist_albums(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &self.db,
             artist_id,
             offset,
             limit,
@@ -2015,7 +2016,7 @@ impl MusicApi for QobuzMusicApi {
     async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
         Ok(add_favorite_album(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             album_id,
             None,
             None,
@@ -2026,7 +2027,7 @@ impl MusicApi for QobuzMusicApi {
     async fn remove_album(&self, album_id: &Id) -> Result<(), RemoveAlbumError> {
         Ok(remove_favorite_album(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             album_id,
             None,
             None,
@@ -2041,7 +2042,7 @@ impl MusicApi for QobuzMusicApi {
     ) -> Result<Option<ImageCoverSource>, AlbumError> {
         let album = crate::album(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             &album.id,
             None,
             None,
@@ -2070,7 +2071,7 @@ impl MusicApi for QobuzMusicApi {
 
         Ok(favorite_tracks(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &self.db,
             offset,
             limit,
             None,
@@ -2090,7 +2091,7 @@ impl MusicApi for QobuzMusicApi {
     ) -> PagingResult<Track, TracksError> {
         Ok(album_tracks(
             #[cfg(feature = "db")]
-            self.db.clone(),
+            &self.db,
             album_id,
             offset,
             limit,
@@ -2105,7 +2106,7 @@ impl MusicApi for QobuzMusicApi {
         Ok(Some(
             track(
                 #[cfg(feature = "db")]
-                &**self.db,
+                &self.db,
                 track_id,
                 None,
                 None,
@@ -2118,7 +2119,7 @@ impl MusicApi for QobuzMusicApi {
     async fn add_track(&self, track_id: &Id) -> Result<(), AddTrackError> {
         Ok(add_favorite_track(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             track_id,
             None,
             None,
@@ -2129,7 +2130,7 @@ impl MusicApi for QobuzMusicApi {
     async fn remove_track(&self, track_id: &Id) -> Result<(), RemoveTrackError> {
         Ok(remove_favorite_track(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             track_id,
             None,
             None,
@@ -2144,7 +2145,7 @@ impl MusicApi for QobuzMusicApi {
     ) -> Result<Option<TrackSource>, TrackError> {
         let url = track_file_url(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             track.id(),
             quality.into(),
             None,
@@ -2172,7 +2173,7 @@ impl MusicApi for QobuzMusicApi {
     ) -> Result<Option<u64>, TrackError> {
         let url = track_file_url(
             #[cfg(feature = "db")]
-            &**self.db,
+            &self.db,
             track.id(),
             QobuzAudioQuality::Low,
             None,

@@ -11,7 +11,10 @@ use async_trait::async_trait;
 use log::{debug, info, trace};
 use moosicbox_audio_zone::models::CreateAudioZone;
 use moosicbox_core::sqlite::{db::DbError, models::ToApi as _};
-use moosicbox_database::Database;
+use moosicbox_database::{
+    config::ConfigDatabase,
+    profiles::{LibraryDatabase, PROFILES},
+};
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_session::{
     get_session_playlist,
@@ -42,6 +45,7 @@ pub type PlayerAction = fn(&UpdateSession) -> Pin<Box<dyn Future<Output = ()> + 
 #[derive(Clone, Default, Debug)]
 pub struct WebsocketContext {
     pub connection_id: String,
+    pub profile: Option<String>,
     pub player_actions: Vec<(u64, PlayerAction)>,
 }
 
@@ -93,7 +97,6 @@ pub enum WebsocketConnectError {
 }
 
 pub fn connect(
-    _db: &dyn Database,
     _sender: &impl WebsocketSender,
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketConnectError> {
@@ -107,12 +110,14 @@ pub fn connect(
 
 #[derive(Debug, Error)]
 pub enum WebsocketDisconnectError {
+    #[error(transparent)]
+    Db(#[from] DbError),
     #[error("Unknown")]
     Unknown,
 }
 
 pub async fn disconnect(
-    db: &dyn Database,
+    db: &ConfigDatabase,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketDisconnectError> {
@@ -123,6 +128,8 @@ pub async fn disconnect(
 
         &serde_json::to_string(&connection_data.values().collect::<Vec<_>>()).unwrap()
     };
+
+    moosicbox_session::delete_connection(db, &context.connection_id).await?;
 
     sender
         .send(&context.connection_id, connections)
@@ -147,7 +154,7 @@ pub async fn disconnect(
 }
 
 pub async fn process_message(
-    db: &dyn Database,
+    config_db: &ConfigDatabase,
     body: Value,
     context: WebsocketContext,
     sender: &impl WebsocketSender,
@@ -157,7 +164,7 @@ pub async fn process_message(
         WebsocketMessageError::InvalidMessageType
     })?;
 
-    message(db, sender, payload, &context).await
+    message(config_db, sender, payload, &context).await
 }
 
 #[derive(Debug, Error)]
@@ -170,6 +177,8 @@ pub enum WebsocketMessageError {
     InvalidPayload(String, String),
     #[error("Missing payload")]
     MissingPayload,
+    #[error("Missing profile")]
+    MissingProfile,
     #[error(transparent)]
     WebsocketSend(#[from] WebsocketSendError),
     #[error(transparent)]
@@ -185,7 +194,7 @@ pub enum WebsocketMessageError {
 }
 
 pub async fn message(
-    db: &dyn Database,
+    config_db: &ConfigDatabase,
     sender: &impl WebsocketSender,
     message: InboundPayload,
     context: &WebsocketContext,
@@ -195,56 +204,62 @@ pub async fn message(
         "Received message type {} from {}: {:?}",
         message_type, context.connection_id, message
     );
+    let db = context.profile.as_ref().and_then(|x| PROFILES.get(x));
     match message {
         InboundPayload::GetConnectionId(_) => {
             get_connection_id(sender, context).await?;
             Ok::<_, WebsocketMessageError>(())
         }
         InboundPayload::GetSessions(_) => {
-            get_sessions(db, sender, context, false).await?;
+            let db = db.ok_or(WebsocketMessageError::MissingProfile)?;
+            get_sessions(&db, sender, context, false).await?;
             Ok(())
         }
         InboundPayload::RegisterConnection(payload) => {
-            register_connection(db, sender, context, &payload.payload).await?;
+            register_connection(config_db, sender, context, &payload.payload).await?;
 
-            sender.send_all(&get_connections(db).await?).await?;
+            sender.send_all(&get_connections(config_db).await?).await?;
 
             Ok(())
         }
         InboundPayload::RegisterPlayers(payload) => {
-            register_players(db, sender, context, &payload.payload)
+            register_players(config_db, sender, context, &payload.payload)
                 .await
                 .map_err(|e| WebsocketMessageError::Unknown {
                     message: e.to_string(),
                 })?;
 
-            broadcast_connections(db, sender).await.map_err(|e| {
-                WebsocketMessageError::Unknown {
+            broadcast_connections(config_db, sender)
+                .await
+                .map_err(|e| WebsocketMessageError::Unknown {
                     message: e.to_string(),
-                }
-            })?;
+                })?;
 
             Ok(())
         }
         InboundPayload::CreateAudioZone(payload) => {
-            create_audio_zone(db, sender, context, &payload.payload).await?;
+            let db = db.ok_or(WebsocketMessageError::MissingProfile)?;
+            create_audio_zone(config_db, &db, sender, context, &payload.payload).await?;
 
             sender
-                .send_all_except(&context.connection_id, &get_connections(db).await?)
+                .send_all_except(&context.connection_id, &get_connections(config_db).await?)
                 .await?;
 
             Ok(())
         }
         InboundPayload::CreateSession(payload) => {
-            create_session(db, sender, context, &payload.payload).await?;
+            let db = db.ok_or(WebsocketMessageError::MissingProfile)?;
+            create_session(&db, sender, context, &payload.payload).await?;
             Ok(())
         }
         InboundPayload::UpdateSession(payload) => {
-            update_session(db, sender, Some(context), &payload.payload).await?;
+            let db = db.ok_or(WebsocketMessageError::MissingProfile)?;
+            update_session(config_db, &db, sender, Some(context), &payload.payload).await?;
             Ok(())
         }
         InboundPayload::DeleteSession(payload) => {
-            delete_session(db, sender, context, &payload.payload).await?;
+            let db = db.ok_or(WebsocketMessageError::MissingProfile)?;
+            delete_session(&db, sender, context, &payload.payload).await?;
             Ok(())
         }
         InboundPayload::Ping(_) => {
@@ -281,7 +296,7 @@ pub async fn message(
 }
 
 pub async fn broadcast_audio_zones(
-    db: &dyn Database,
+    db: &ConfigDatabase,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
     send_all: bool,
@@ -308,8 +323,9 @@ pub async fn broadcast_audio_zones(
     }
 }
 
+// TODO: rename to broadcast sessions
 pub async fn get_sessions(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
     send_all: bool,
@@ -335,7 +351,7 @@ pub async fn get_sessions(
 }
 
 async fn create_session(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &CreateSession,
@@ -345,7 +361,7 @@ async fn create_session(
     Ok(())
 }
 
-async fn get_connections(db: &dyn Database) -> Result<String, WebsocketSendError> {
+async fn get_connections(db: &ConfigDatabase) -> Result<String, WebsocketSendError> {
     let connection_data = CONNECTION_DATA.as_ref().read().unwrap().clone();
     let connections = {
         moosicbox_session::get_connections(db)
@@ -372,7 +388,7 @@ async fn get_connections(db: &dyn Database) -> Result<String, WebsocketSendError
 }
 
 pub async fn register_connection(
-    db: &dyn Database,
+    db: &ConfigDatabase,
     _sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &RegisterConnection,
@@ -387,7 +403,7 @@ pub async fn register_connection(
 }
 
 pub async fn register_players(
-    db: &dyn Database,
+    db: &ConfigDatabase,
     _sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &Vec<RegisterPlayer>,
@@ -401,7 +417,7 @@ pub async fn register_players(
 }
 
 pub async fn broadcast_connections(
-    db: &dyn Database,
+    db: &ConfigDatabase,
     sender: &impl WebsocketSender,
 ) -> Result<(), WebsocketSendError> {
     sender.send_all(&get_connections(db).await?).await?;
@@ -410,12 +426,13 @@ pub async fn broadcast_connections(
 }
 
 async fn create_audio_zone(
-    db: &dyn Database,
+    config_db: &ConfigDatabase,
+    db: &LibraryDatabase,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &CreateAudioZone,
 ) -> Result<(), WebsocketMessageError> {
-    moosicbox_audio_zone::create_audio_zone(db, payload).await?;
+    moosicbox_audio_zone::create_audio_zone(config_db, payload).await?;
     get_sessions(db, sender, context, true).await?;
     Ok(())
 }
@@ -478,7 +495,8 @@ pub enum UpdateSessionError {
 }
 
 pub async fn update_session(
-    db: &dyn Database,
+    config_db: &ConfigDatabase,
+    db: &LibraryDatabase,
     sender: &impl WebsocketSender,
     context: Option<&WebsocketContext>,
     payload: &UpdateSession,
@@ -498,7 +516,8 @@ pub async fn update_session(
                 let funcs = if let Some(PlaybackTarget::AudioZone { audio_zone_id }) =
                     session.playback_target
                 {
-                    let players = moosicbox_audio_zone::db::get_players(db, audio_zone_id).await?;
+                    let players =
+                        moosicbox_audio_zone::db::get_players(config_db, audio_zone_id).await?;
 
                     players
                         .iter()
@@ -584,7 +603,7 @@ pub async fn update_session(
 }
 
 async fn delete_session(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
     payload: &DeleteSession,

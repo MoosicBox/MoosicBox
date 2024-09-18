@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use moosicbox_async_service::Arc;
 use moosicbox_audio_output::AudioOutputScannerError;
 use moosicbox_core::sqlite::models::ApiSource;
-use moosicbox_database::Database;
+use moosicbox_database::config::ConfigDatabase;
+use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_ws::WebsocketSendError;
 use thiserror::Error;
 
@@ -31,7 +31,8 @@ pub enum InitError {
 }
 
 pub async fn init(
-    db: Arc<Box<dyn Database>>,
+    config_db: &ConfigDatabase,
+    db: &LibraryDatabase,
     #[cfg(feature = "tunnel")] tunnel_handle: Option<
         moosicbox_tunnel_sender::sender::TunnelSenderHandle,
     >,
@@ -49,7 +50,8 @@ pub async fn init(
 
     for audio_output in moosicbox_audio_output::output_factories().await {
         if let Err(err) = register_server_player(
-            &**db,
+            config_db,
+            db,
             handle.clone(),
             #[cfg(feature = "tunnel")]
             &tunnel_handle,
@@ -75,7 +77,7 @@ fn handle_server_playback_update(
     use moosicbox_session::get_session;
 
     let update = update.clone();
-    let db = DB.read().unwrap().clone().unwrap().clone();
+    let db = { DB.read().unwrap().clone().unwrap() };
 
     Box::pin(async move {
         log::debug!("Handling server playback update");
@@ -85,8 +87,7 @@ fn handle_server_playback_update(
         let updated = {
             {
                 let audio_zone =
-                    match moosicbox_session::get_session_audio_zone(&**db, update.session_id).await
-                    {
+                    match moosicbox_session::get_session_audio_zone(&db, update.session_id).await {
                         Ok(players) => players,
                         Err(e) => moosicbox_assert::die_or_panic!(
                             "Failed to get session active players: {e:?}"
@@ -155,7 +156,7 @@ fn handle_server_playback_update(
                         .unwrap()
                         .replace(player.clone());
 
-                    if let Ok(Some(session)) = get_session(&**db, update.session_id).await {
+                    if let Ok(Some(session)) = get_session(&db, update.session_id).await {
                         if let Err(e) = player.init_from_session(session, &update).await {
                             moosicbox_assert::die_or_error!(
                                 "Failed to create new player from session: {e:?}"
@@ -184,7 +185,7 @@ fn handle_server_playback_update(
                         .map(std::convert::Into::into)
                         .collect::<Vec<Id>>();
 
-                    let tracks = match moosicbox_library::db::get_tracks(&**db, Some(&track_ids))
+                    let tracks = match moosicbox_library::db::get_tracks(&db, Some(&track_ids))
                         .await
                     {
                         Ok(tracks) => tracks,
@@ -237,7 +238,8 @@ fn handle_server_playback_update(
 }
 
 pub async fn register_server_player(
-    db: &dyn Database,
+    config_db: &ConfigDatabase,
+    db: &LibraryDatabase,
     ws: crate::ws::server::WsServerHandle,
     #[cfg(feature = "tunnel")] tunnel_handle: &Option<
         moosicbox_tunnel_sender::sender::TunnelSenderHandle,
@@ -270,7 +272,8 @@ pub async fn register_server_player(
                 "No ws server handle".into(),
             ))?;
 
-    let connection = moosicbox_ws::register_connection(db, &handle, &context, &payload).await?;
+    let connection =
+        moosicbox_ws::register_connection(config_db, &handle, &context, &payload).await?;
 
     let player = connection
         .players

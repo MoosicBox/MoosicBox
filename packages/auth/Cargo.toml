@@ -39,5 +39,5 @@ default = ["api", "openapi"]
 
 fail-on-warnings = []
 
-api     = []
+api     = ["moosicbox_database/api"]
 openapi = ["dep:utoipa"]

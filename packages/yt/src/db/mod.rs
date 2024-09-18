@@ -1,4 +1,4 @@
-use moosicbox_database::{query::*, Database, DatabaseError};
+use moosicbox_database::{profiles::LibraryDatabase, query::*, DatabaseError};
 use moosicbox_json_utils::ToValueType;
 use thiserror::Error;
 
@@ -8,7 +8,7 @@ use crate::db::models::YtConfig;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn create_yt_config(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     client_id: &str,
     access_token: &str,
     refresh_token: &str,
@@ -36,7 +36,10 @@ pub async fn create_yt_config(
     Ok(())
 }
 
-pub async fn delete_yt_config(db: &dyn Database, refresh_token: &str) -> Result<(), DatabaseError> {
+pub async fn delete_yt_config(
+    db: &LibraryDatabase,
+    refresh_token: &str,
+) -> Result<(), DatabaseError> {
     db.delete("yt_config")
         .where_eq("refresh_token", refresh_token)
         .execute(db)
@@ -55,7 +58,7 @@ pub enum YtConfigError {
     NoConfigsAvailable,
 }
 
-pub async fn get_yt_config(db: &dyn Database) -> Result<Option<YtConfig>, YtConfigError> {
+pub async fn get_yt_config(db: &LibraryDatabase) -> Result<Option<YtConfig>, YtConfigError> {
     let mut configs = db.select("yt_config").execute(db).await?.to_value_type()?;
 
     if configs.is_empty() {
@@ -68,13 +71,13 @@ pub async fn get_yt_config(db: &dyn Database) -> Result<Option<YtConfig>, YtConf
 }
 
 pub async fn get_yt_access_tokens(
-    db: &dyn Database,
+    db: &LibraryDatabase,
 ) -> Result<Option<(String, String)>, YtConfigError> {
     Ok(get_yt_config(db)
         .await?
         .map(|c| (c.access_token.clone(), c.refresh_token.clone())))
 }
 
-pub async fn get_yt_access_token(db: &dyn Database) -> Result<Option<String>, YtConfigError> {
+pub async fn get_yt_access_token(db: &LibraryDatabase) -> Result<Option<String>, YtConfigError> {
     Ok(get_yt_access_tokens(db).await?.map(|c| c.0))
 }

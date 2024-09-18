@@ -9,7 +9,7 @@ use moosicbox_core::sqlite::{
     db::DbError,
     models::{Artist, Id},
 };
-use moosicbox_database::{query::*, Database, DatabaseError};
+use moosicbox_database::{profiles::LibraryDatabase, query::*, DatabaseError};
 use moosicbox_music_api::{ArtistError, ImageCoverSize, ImageCoverSource, MusicApi};
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use thiserror::Error;
@@ -63,7 +63,7 @@ pub enum ArtistCoverError {
 
 pub async fn get_local_artist_cover(
     api: &dyn MusicApi,
-    db: &dyn Database,
+    db: &LibraryDatabase,
     artist: &Artist,
     size: ImageCoverSize,
 ) -> Result<String, ArtistCoverError> {
@@ -97,7 +97,7 @@ pub async fn get_local_artist_cover(
 
 pub async fn get_local_artist_cover_bytes(
     api: &dyn MusicApi,
-    db: &dyn Database,
+    db: &LibraryDatabase,
     artist: &Artist,
     size: ImageCoverSize,
     try_to_get_stream_size: bool,
@@ -144,7 +144,7 @@ pub enum FetchLocalArtistCoverError {
 }
 
 async fn fetch_local_artist_cover(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     artist: &Artist,
     source: ImageCoverSource,
     directory: Option<&String>,
@@ -184,7 +184,7 @@ async fn fetch_local_artist_cover(
 }
 
 async fn fetch_local_artist_cover_bytes(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     artist: &Artist,
     directory: Option<&String>,
 ) -> Result<CoverBytes, FetchLocalArtistCoverError> {
@@ -253,7 +253,7 @@ async fn fetch_local_artist_cover_bytes(
 }
 
 async fn copy_streaming_cover_to_local(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     artist: &Artist,
     cover: String,
 ) -> Result<String, ArtistCoverError> {
@@ -270,7 +270,7 @@ async fn copy_streaming_cover_to_local(
 
 pub async fn get_artist_cover(
     api: &dyn MusicApi,
-    db: &dyn Database,
+    db: &LibraryDatabase,
     artist: &Artist,
     size: ImageCoverSize,
 ) -> Result<String, ArtistCoverError> {
@@ -279,7 +279,7 @@ pub async fn get_artist_cover(
 
 pub async fn get_artist_cover_bytes(
     api: &dyn MusicApi,
-    db: &dyn Database,
+    db: &LibraryDatabase,
     artist: &Artist,
     size: ImageCoverSize,
     try_to_get_stream_size: bool,

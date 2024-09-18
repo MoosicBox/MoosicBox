@@ -1,11 +1,10 @@
 use std::sync::LazyLock;
 use std::{collections::HashMap, sync::Arc};
 
-use moosicbox_database::Database;
 use moosicbox_upnp::UpnpDeviceScannerError;
 use thiserror::Error;
 
-use crate::{DB, MUSIC_API_STATE, UPNP_LISTENER_HANDLE, WS_SERVER_HANDLE};
+use crate::{CONFIG_DB, DB, MUSIC_API_STATE, UPNP_LISTENER_HANDLE, WS_SERVER_HANDLE};
 
 pub static UPNP_PLAYERS: LazyLock<
     tokio::sync::RwLock<
@@ -36,7 +35,6 @@ pub enum InitError {
 }
 
 pub async fn init(
-    db: Arc<Box<dyn Database>>,
     handle: crate::ws::server::WsServerHandle,
     #[cfg(feature = "tunnel")] tunnel_handle: Option<
         moosicbox_tunnel_sender::sender::TunnelSenderHandle,
@@ -53,7 +51,6 @@ pub async fn init(
 
     for (output, _player, _) in upnp_players {
         if let Err(err) = register_upnp_player(
-            &**db,
             handle.clone(),
             #[cfg(feature = "tunnel")]
             &tunnel_handle,
@@ -130,7 +127,8 @@ fn handle_upnp_playback_update(
     use moosicbox_session::get_session;
 
     let update = update.clone();
-    let db = DB.read().unwrap().clone().unwrap().clone();
+    let db = { DB.read().unwrap().clone().unwrap() };
+    let config_db = { CONFIG_DB.read().unwrap().clone().unwrap() };
 
     Box::pin(async move {
         log::debug!("Handling UPnP playback update={update:?}");
@@ -143,7 +141,7 @@ fn handle_upnp_playback_update(
                         .get(&update.session_id)
                         .cloned()
                 };
-                let audio_output_ids = match update.audio_output_ids(&**db).await {
+                let audio_output_ids = match update.audio_output_ids(&config_db).await {
                     Ok(ids) => ids,
                     Err(e) => {
                         log::error!("Failed to get audio output IDs: {e:?}");
@@ -180,7 +178,7 @@ fn handle_upnp_playback_update(
                         let output = output.clone();
                         drop(binding);
 
-                        if let Ok(Some(session)) = get_session(&**db, update.session_id).await {
+                        if let Ok(Some(session)) = get_session(&db, update.session_id).await {
                             if let Err(e) = player.init_from_session(session, &update).await {
                                 moosicbox_assert::die_or_error!(
                                     "Failed to create new player from session: {e:?}"
@@ -239,7 +237,6 @@ fn handle_upnp_playback_update(
 
 #[allow(unused)]
 pub async fn register_upnp_player(
-    db: &dyn Database,
     ws: crate::ws::server::WsServerHandle,
     #[cfg(feature = "tunnel")] tunnel_handle: &Option<
         moosicbox_tunnel_sender::sender::TunnelSenderHandle,
@@ -267,7 +264,8 @@ pub async fn register_upnp_player(
                 "No ws server handle".into(),
             ))?;
 
-    let players = moosicbox_ws::register_players(db, &handle, &context, &payload).await?;
+    let config_db = { CONFIG_DB.read().unwrap().clone().unwrap() };
+    let players = moosicbox_ws::register_players(&config_db, &handle, &context, &payload).await?;
 
     for player in players {
         ws.add_player_action(player.id, handle_upnp_playback_update)
@@ -279,5 +277,6 @@ pub async fn register_upnp_player(
         }
     }
 
-    moosicbox_ws::get_sessions(db, &handle, &context, true).await
+    let db = { DB.read().unwrap().clone().unwrap() };
+    moosicbox_ws::get_sessions(&db, &handle, &context, true).await
 }

@@ -26,7 +26,7 @@ use moosicbox_core::{
     },
     types::{AudioFormat, PlaybackQuality},
 };
-use moosicbox_database::Database;
+use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_files::get_content_length;
 use moosicbox_music_api::{
     AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumOrder, AlbumOrderDirection,
@@ -93,7 +93,7 @@ pub enum LibraryFavoriteArtistsError {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_artists(
-    db: Arc<Box<dyn Database>>,
+    db: &LibraryDatabase,
     offset: Option<u32>,
     limit: Option<u32>,
     _order: Option<LibraryArtistOrder>,
@@ -102,12 +102,12 @@ pub async fn favorite_artists(
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
-    let items = db::get_artists(&**db).await?;
+    let items = db::get_artists(db).await?;
     log::trace!("Received favorite artists response: {items:?}");
 
     let total = items.len() as u32;
 
-    let db = db.clone();
+    let db = db.to_owned();
 
     Ok(PagingResponse {
         page: Page::WithTotal {
@@ -120,7 +120,7 @@ pub async fn favorite_artists(
             let db = db.clone();
 
             Box::pin(async move {
-                favorite_artists(db, Some(offset), Some(limit), _order, _order_direction).await
+                favorite_artists(&db, Some(offset), Some(limit), _order, _order_direction).await
             })
         }))),
     })
@@ -138,7 +138,7 @@ pub enum LibraryAddFavoriteArtistError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_artist(
-    _db: &dyn Database,
+    _db: &LibraryDatabase,
     _artist_id: &Id,
 ) -> Result<(), LibraryAddFavoriteArtistError> {
     Ok(())
@@ -156,7 +156,7 @@ pub enum LibraryRemoveFavoriteArtistError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_artist(
-    _db: &dyn Database,
+    _db: &LibraryDatabase,
     _artist_id: &Id,
 ) -> Result<(), LibraryRemoveFavoriteArtistError> {
     Ok(())
@@ -301,10 +301,10 @@ pub enum LibraryFavoriteAlbumsError {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_albums(
-    db: Arc<Box<dyn Database>>,
+    db: &LibraryDatabase,
     request: &AlbumsRequest,
 ) -> PagingResult<LibraryAlbum, LibraryFavoriteAlbumsError> {
-    let albums = db::get_albums(&**db).await?;
+    let albums = db::get_albums(db).await?;
     let items = sort_albums(filter_albums(&albums, request).collect::<Vec<_>>(), request);
 
     let total = items.len() as u32;
@@ -324,7 +324,7 @@ pub async fn favorite_albums(
 
     log::trace!("Received favorite albums response: {items:?}");
 
-    let db = db.clone();
+    let db = db.to_owned();
     let request = request.clone();
 
     Ok(PagingResponse {
@@ -335,12 +335,12 @@ pub async fn favorite_albums(
             total,
         },
         fetch: Arc::new(Mutex::new(Box::new(move |offset, limit| {
-            let db = db.clone();
+            let db = db.to_owned();
             let mut request = request.clone();
 
             request.page = Some(PagingRequest { offset, limit });
 
-            Box::pin(async move { favorite_albums(db, &request).await })
+            Box::pin(async move { favorite_albums(&db, &request).await })
         }))),
     })
 }
@@ -357,7 +357,7 @@ pub enum LibraryAddFavoriteAlbumError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_album(
-    _db: &dyn Database,
+    _db: &LibraryDatabase,
     _album_id: &Id,
 ) -> Result<(), LibraryAddFavoriteAlbumError> {
     Ok(())
@@ -375,7 +375,7 @@ pub enum LibraryRemoveFavoriteAlbumError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_album(
-    _db: &dyn Database,
+    _db: &LibraryDatabase,
     _album_id: &Id,
 ) -> Result<(), LibraryRemoveFavoriteAlbumError> {
     Ok(())
@@ -411,7 +411,7 @@ pub enum LibraryFavoriteTracksError {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_tracks(
-    db: Arc<Box<dyn Database>>,
+    db: &LibraryDatabase,
     track_ids: Option<&[Id]>,
     offset: Option<u32>,
     limit: Option<u32>,
@@ -421,7 +421,7 @@ pub async fn favorite_tracks(
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
-    let items = db::get_tracks(&**db, track_ids).await?;
+    let items = db::get_tracks(db, track_ids).await?;
     log::trace!("Received favorite tracks response: {items:?}");
 
     let total = items.len() as u32;
@@ -434,7 +434,7 @@ pub async fn favorite_tracks(
             total,
         },
         fetch: Arc::new(Mutex::new(Box::new({
-            let db = db.clone();
+            let db = db.to_owned();
             let track_ids = track_ids.map(|x| x.to_vec());
 
             move |offset, limit| {
@@ -443,7 +443,7 @@ pub async fn favorite_tracks(
 
                 Box::pin(async move {
                     favorite_tracks(
-                        db,
+                        &db,
                         track_ids.as_deref(),
                         Some(offset),
                         Some(limit),
@@ -469,7 +469,7 @@ pub enum LibraryAddFavoriteTrackError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_track(
-    _db: &dyn Database,
+    _db: &LibraryDatabase,
     _track_id: &Id,
 ) -> Result<(), LibraryAddFavoriteTrackError> {
     Ok(())
@@ -487,7 +487,7 @@ pub enum LibraryRemoveFavoriteTrackError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_track(
-    _db: &dyn Database,
+    _db: &LibraryDatabase,
     _track_id: &Id,
 ) -> Result<(), LibraryRemoveFavoriteTrackError> {
     Ok(())
@@ -514,7 +514,7 @@ pub enum LibraryAlbumType {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn artist_albums(
-    db: Arc<Box<dyn Database>>,
+    db: &LibraryDatabase,
     artist_id: &Id,
     offset: Option<u32>,
     limit: Option<u32>,
@@ -523,12 +523,12 @@ pub async fn artist_albums(
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
-    let items = db::get_artist_albums(&**db, artist_id).await?;
+    let items = db::get_artist_albums(db, artist_id).await?;
     log::trace!("Received artist albums response: {items:?}");
 
     let total = items.len() as u32;
 
-    let db = db.clone();
+    let db = db.to_owned();
     let artist_id = artist_id.clone();
 
     Ok(PagingResponse {
@@ -543,7 +543,7 @@ pub async fn artist_albums(
             let artist_id = artist_id.clone();
 
             Box::pin(async move {
-                artist_albums(db, &artist_id, Some(offset), Some(limit), _album_type).await
+                artist_albums(&db, &artist_id, Some(offset), Some(limit), _album_type).await
             })
         }))),
     })
@@ -560,7 +560,7 @@ pub enum LibraryAlbumTracksError {
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn album_tracks(
-    db: Arc<Box<dyn Database>>,
+    db: &LibraryDatabase,
     album_id: &Id,
     offset: Option<u32>,
     limit: Option<u32>,
@@ -568,12 +568,12 @@ pub async fn album_tracks(
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
-    let items = db::get_album_tracks(&**db, album_id).await?;
+    let items = db::get_album_tracks(db, album_id).await?;
     log::trace!("Received album tracks response: {items:?}");
 
     let total = items.len() as u32;
 
-    let db = db.clone();
+    let db = db.to_owned();
     let album_id = album_id.clone();
 
     Ok(PagingResponse {
@@ -587,7 +587,7 @@ pub async fn album_tracks(
             let db = db.clone();
             let album_id = album_id.clone();
 
-            Box::pin(async move { album_tracks(db, &album_id, Some(offset), Some(limit)).await })
+            Box::pin(async move { album_tracks(&db, &album_id, Some(offset), Some(limit)).await })
         }))),
     })
 }
@@ -599,7 +599,7 @@ pub enum LibraryAlbumError {
 }
 
 pub async fn album_from_source(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     album_id: &Id,
     source: ApiSource,
 ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
@@ -612,7 +612,7 @@ pub async fn album_from_source(
 }
 
 pub async fn album(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     album_id: &Id,
 ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
     Ok(db::get_album(db, "id", album_id).await?)
@@ -628,7 +628,7 @@ pub enum LibraryArtistError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn artist(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     artist_id: &Id,
 ) -> Result<LibraryArtist, LibraryArtistError> {
     db::get_artist(db, "id", artist_id)
@@ -645,7 +645,7 @@ pub enum LibraryTrackError {
 }
 
 pub async fn track(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     track_id: &Id,
 ) -> Result<Option<LibraryTrack>, LibraryTrackError> {
     Ok(db::get_track(db, track_id).await?)
@@ -697,7 +697,7 @@ pub enum LibrarySearchError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn search(
-    _db: &dyn Database,
+    _db: &LibraryDatabase,
     _query: &str,
     _offset: Option<usize>,
     _limit: Option<usize>,
@@ -728,7 +728,7 @@ pub enum LibraryTrackFileUrlError {
 }
 
 pub async fn track_file_url(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     _audio_quality: LibraryAudioQuality,
     track_id: &Id,
 ) -> Result<String, LibraryTrackFileUrlError> {
@@ -911,11 +911,11 @@ pub enum TrackSizeError {
 
 #[derive(Clone)]
 pub struct LibraryMusicApi {
-    db: Arc<Box<dyn Database>>,
+    db: LibraryDatabase,
 }
 
 impl LibraryMusicApi {
-    pub fn new(db: Arc<Box<dyn Database>>) -> Self {
+    pub fn new(db: LibraryDatabase) -> Self {
         Self { db }
     }
 
@@ -923,14 +923,14 @@ impl LibraryMusicApi {
         &self,
         artist_id: &Id,
     ) -> Result<Option<LibraryArtist>, ArtistError> {
-        Ok(Some(artist(&**self.db, artist_id).await?))
+        Ok(Some(artist(&self.db, artist_id).await?))
     }
 
     pub async fn library_album_artist(
         &self,
         album_id: &Id,
     ) -> Result<Option<LibraryArtist>, ArtistError> {
-        get_artist_by_album_id(&**self.db, album_id.into())
+        get_artist_by_album_id(&self.db, album_id.into())
             .await
             .map_err(|e| ArtistError::Other(e.into()))
     }
@@ -940,22 +940,22 @@ impl LibraryMusicApi {
         album_id: &Id,
         source: ApiSource,
     ) -> Result<Option<LibraryAlbum>, AlbumError> {
-        Ok(album_from_source(&**self.db, album_id, source).await?)
+        Ok(album_from_source(&self.db, album_id, source).await?)
     }
 
     pub async fn library_album(&self, album_id: &Id) -> Result<Option<LibraryAlbum>, AlbumError> {
-        Ok(album(&**self.db, album_id).await?)
+        Ok(album(&self.db, album_id).await?)
     }
 
     pub async fn library_albums(
         &self,
         request: &AlbumsRequest,
     ) -> PagingResult<LibraryAlbum, LibraryFavoriteAlbumsError> {
-        favorite_albums(self.db.clone(), request).await
+        favorite_albums(&self.db, request).await
     }
 
     pub async fn library_track(&self, track_id: &Id) -> Result<Option<LibraryTrack>, TrackError> {
-        Ok(track(&**self.db, track_id).await?)
+        Ok(track(&self.db, track_id).await?)
     }
 
     pub async fn library_album_tracks(
@@ -966,7 +966,7 @@ impl LibraryMusicApi {
         _order: Option<TrackOrder>,
         _order_direction: Option<TrackOrderDirection>,
     ) -> PagingResult<LibraryTrack, LibraryAlbumTracksError> {
-        album_tracks(self.db.clone(), album_id, offset, limit).await
+        album_tracks(&self.db, album_id, offset, limit).await
     }
 }
 
@@ -984,7 +984,7 @@ impl MusicApi for LibraryMusicApi {
         order_direction: Option<ArtistOrderDirection>,
     ) -> PagingResult<Artist, ArtistsError> {
         Ok(favorite_artists(
-            self.db.clone(),
+            &self.db,
             offset,
             limit,
             order.map(|x| x.into()),
@@ -999,11 +999,11 @@ impl MusicApi for LibraryMusicApi {
     }
 
     async fn add_artist(&self, artist_id: &Id) -> Result<(), AddArtistError> {
-        Ok(add_favorite_artist(&**self.db, artist_id).await?)
+        Ok(add_favorite_artist(&self.db, artist_id).await?)
     }
 
     async fn remove_artist(&self, artist_id: &Id) -> Result<(), RemoveArtistError> {
-        Ok(remove_favorite_artist(&**self.db, artist_id).await?)
+        Ok(remove_favorite_artist(&self.db, artist_id).await?)
     }
 
     async fn album_artist(&self, album_id: &Id) -> Result<Option<Artist>, ArtistError> {
@@ -1052,7 +1052,7 @@ impl MusicApi for LibraryMusicApi {
                 .into_iter()
                 .map(|album_type| {
                     artist_albums(
-                        self.db.clone(),
+                        &self.db,
                         artist_id,
                         Some(offset),
                         Some(limit),
@@ -1066,7 +1066,7 @@ impl MusicApi for LibraryMusicApi {
 
             let total = pages.iter().map(|page| page.total().unwrap()).sum();
 
-            let db = self.db.clone();
+            let db = self.db.to_owned();
             let artist_id = artist_id.clone();
             let album_type = album_type.try_into()?;
 
@@ -1085,7 +1085,7 @@ impl MusicApi for LibraryMusicApi {
                     let artist_id = artist_id.clone();
 
                     Box::pin(async move {
-                        artist_albums(db, &artist_id, Some(offset), Some(limit), Some(album_type))
+                        artist_albums(&db, &artist_id, Some(offset), Some(limit), Some(album_type))
                             .await
                     })
                 }))),
@@ -1094,7 +1094,7 @@ impl MusicApi for LibraryMusicApi {
         }
 
         Ok(artist_albums(
-            self.db.clone(),
+            &self.db,
             artist_id,
             Some(offset),
             Some(limit),
@@ -1105,11 +1105,11 @@ impl MusicApi for LibraryMusicApi {
     }
 
     async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
-        Ok(add_favorite_album(&**self.db, album_id).await?)
+        Ok(add_favorite_album(&self.db, album_id).await?)
     }
 
     async fn remove_album(&self, album_id: &Id) -> Result<(), RemoveAlbumError> {
-        Ok(remove_favorite_album(&**self.db, album_id).await?)
+        Ok(remove_favorite_album(&self.db, album_id).await?)
     }
 
     async fn album_cover_source(
@@ -1133,7 +1133,7 @@ impl MusicApi for LibraryMusicApi {
         order_direction: Option<TrackOrderDirection>,
     ) -> PagingResult<Track, TracksError> {
         Ok(favorite_tracks(
-            self.db.clone(),
+            &self.db,
             track_ids,
             offset,
             limit,
@@ -1163,11 +1163,11 @@ impl MusicApi for LibraryMusicApi {
     }
 
     async fn add_track(&self, track_id: &Id) -> Result<(), AddTrackError> {
-        Ok(add_favorite_track(&**self.db, track_id).await?)
+        Ok(add_favorite_track(&self.db, track_id).await?)
     }
 
     async fn remove_track(&self, track_id: &Id) -> Result<(), RemoveTrackError> {
-        Ok(remove_favorite_track(&**self.db, track_id).await?)
+        Ok(remove_favorite_track(&self.db, track_id).await?)
     }
 
     async fn track_source(
@@ -1213,7 +1213,7 @@ impl MusicApi for LibraryMusicApi {
             track.id()
         );
 
-        if let Some(size) = db::get_track_size(&**self.db, track.id(), &quality)
+        if let Some(size) = db::get_track_size(&self.db, track.id(), &quality)
             .await
             .map_err(|e| TrackError::Other(Box::new(e)))?
         {
@@ -1280,7 +1280,7 @@ impl MusicApi for LibraryMusicApi {
         };
 
         db::set_track_size(
-            &**self.db,
+            &self.db,
             SetTrackSize {
                 track_id: track.id().into(),
                 quality,
@@ -1309,7 +1309,7 @@ pub enum ReindexError {
     PopulateIndex(#[from] PopulateIndexError),
 }
 
-pub async fn reindex_global_search_index(db: &dyn Database) -> Result<(), ReindexError> {
+pub async fn reindex_global_search_index(db: &LibraryDatabase) -> Result<(), ReindexError> {
     let reindex_start = std::time::SystemTime::now();
 
     moosicbox_search::data::recreate_global_search_index().await?;

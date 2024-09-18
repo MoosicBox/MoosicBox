@@ -40,6 +40,8 @@ pub enum TunnelRequestError {
     UnsupportedMethod,
     #[error("Unsupported Route")]
     UnsupportedRoute,
+    #[error("Missing profile")]
+    MissingProfile,
     #[error("Internal server error: {0:?}")]
     InternalServerError(Box<dyn std::error::Error + Send>),
     #[error("Websocket Message Error")]

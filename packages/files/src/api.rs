@@ -7,13 +7,13 @@ use actix_web::{
 };
 use futures::StreamExt;
 use moosicbox_core::{
-    app::AppState,
     integer_range::{
         parse_id_ranges, parse_integer_ranges_to_ids, ParseIdsError, ParseIntegersError,
     },
     sqlite::models::{ApiSource, Id, IdType},
     types::AudioFormat,
 };
+use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_music_api::{
     ImageCoverSize, MusicApiState, SourceToMusicApi as _, TrackAudioQuality, TrackSource,
 };
@@ -669,7 +669,7 @@ pub async fn artist_source_artwork_endpoint(
     req: HttpRequest,
     path: web::Path<String>,
     query: web::Query<ArtistCoverQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
     api_state: web::Data<MusicApiState>,
 ) -> Result<HttpResponse> {
     let paths = path.into_inner();
@@ -697,7 +697,7 @@ pub async fn artist_source_artwork_endpoint(
 
     log::debug!("artist_source_cover_endpoint: artist={artist:?}");
 
-    let path = get_artist_cover(&**api, &**data.database, &artist, size).await?;
+    let path = get_artist_cover(&**api, &db, &artist, size).await?;
     let path_buf = std::path::PathBuf::from(path);
     let file_path = path_buf.as_path();
 
@@ -732,7 +732,7 @@ pub async fn artist_source_artwork_endpoint(
 pub async fn artist_cover_endpoint(
     path: web::Path<(String, String)>,
     query: web::Query<ArtistCoverQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
     api_state: web::Data<MusicApiState>,
 ) -> Result<HttpResponse> {
     let paths = path.into_inner();
@@ -772,7 +772,7 @@ pub async fn artist_cover_endpoint(
 
     log::debug!("artist_cover_endpoint: artist={artist:?}");
 
-    let path = get_artist_cover(&**api, &**data.database, &artist, size).await?;
+    let path = get_artist_cover(&**api, &db, &artist, size).await?;
 
     resize_image_path(&path, width, height)
         .await
@@ -825,7 +825,7 @@ pub async fn album_source_artwork_endpoint(
     req: HttpRequest,
     path: web::Path<String>,
     query: web::Query<AlbumCoverQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
     api_state: web::Data<MusicApiState>,
 ) -> Result<HttpResponse> {
     let paths = path.into_inner();
@@ -853,7 +853,7 @@ pub async fn album_source_artwork_endpoint(
 
     log::debug!("album_source_cover_endpoint: album={album:?}");
 
-    let path = get_album_cover(&**api, &**data.database, &album, size).await?;
+    let path = get_album_cover(&**api, &db, &album, size).await?;
     let path_buf = std::path::PathBuf::from(path);
     let file_path = path_buf.as_path();
 
@@ -888,7 +888,7 @@ pub async fn album_source_artwork_endpoint(
 pub async fn album_artwork_endpoint(
     path: web::Path<(String, String)>,
     query: web::Query<AlbumCoverQuery>,
-    data: web::Data<AppState>,
+    db: LibraryDatabase,
     api_state: web::Data<MusicApiState>,
 ) -> Result<HttpResponse> {
     let paths = path.into_inner();
@@ -928,7 +928,7 @@ pub async fn album_artwork_endpoint(
 
     log::debug!("album_cover_endpoint: album={album:?}");
 
-    let path = get_album_cover(&**api, &**data.database, &album, size).await?;
+    let path = get_album_cover(&**api, &db, &album, size).await?;
 
     resize_image_path(&path, width, height)
         .await

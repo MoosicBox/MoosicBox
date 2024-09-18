@@ -1,5 +1,5 @@
 use moosicbox_core::sqlite::db::DbError;
-use moosicbox_database::{query::*, Database};
+use moosicbox_database::{profiles::LibraryDatabase, query::*};
 use moosicbox_json_utils::ToValueType;
 
 pub mod models;
@@ -7,7 +7,7 @@ pub mod models;
 use self::models::{CreateDownloadTask, DownloadLocation, DownloadTask};
 
 pub async fn create_download_location(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     path: &str,
 ) -> Result<DownloadLocation, DbError> {
     Ok(db
@@ -20,7 +20,7 @@ pub async fn create_download_location(
 }
 
 pub async fn get_download_location(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     id: u64,
 ) -> Result<Option<DownloadLocation>, DbError> {
     Ok(db
@@ -32,7 +32,9 @@ pub async fn get_download_location(
         .to_value_type()?)
 }
 
-pub async fn get_download_locations(db: &dyn Database) -> Result<Vec<DownloadLocation>, DbError> {
+pub async fn get_download_locations(
+    db: &LibraryDatabase,
+) -> Result<Vec<DownloadLocation>, DbError> {
     Ok(db
         .select("download_locations")
         .execute(db)
@@ -41,7 +43,7 @@ pub async fn get_download_locations(db: &dyn Database) -> Result<Vec<DownloadLoc
 }
 
 pub async fn create_download_task(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     task: &CreateDownloadTask,
 ) -> Result<DownloadTask, DbError> {
     let source = task.item.source().as_ref();
@@ -79,7 +81,7 @@ pub async fn create_download_task(
         .to_value_type()?)
 }
 
-pub async fn get_download_tasks(db: &dyn Database) -> Result<Vec<DownloadTask>, DbError> {
+pub async fn get_download_tasks(db: &LibraryDatabase) -> Result<Vec<DownloadTask>, DbError> {
     Ok(db
         .select("download_tasks")
         .sort("id", SortDirection::Desc)

@@ -1,4 +1,4 @@
-use std::{path::PathBuf, str::FromStr as _};
+use std::{path::PathBuf, str::FromStr as _, sync::Arc};
 
 use async_trait::async_trait;
 use moosicbox_core::{
@@ -373,7 +373,7 @@ impl AsModelResultMapped<LibraryAlbum, DbError> for Vec<moosicbox_database::Row>
 
 #[async_trait]
 impl AsModelQuery<LibraryAlbum> for &moosicbox_database::Row {
-    async fn as_model_query(&self, db: &dyn Database) -> Result<LibraryAlbum, DbError> {
+    async fn as_model_query(&self, db: Arc<Box<dyn Database>>) -> Result<LibraryAlbum, DbError> {
         let id = self.to_value("id")?;
 
         Ok(LibraryAlbum {
@@ -389,7 +389,7 @@ impl AsModelQuery<LibraryAlbum> for &moosicbox_database::Row {
             directory: self.to_value("directory")?,
             source: AlbumSource::Local,
             blur: self.to_value("blur")?,
-            versions: get_album_version_qualities(db, id).await?,
+            versions: get_album_version_qualities(&db.into(), id).await?,
             tidal_id: self.to_value("tidal_id")?,
             qobuz_id: self.to_value("qobuz_id")?,
             yt_id: self.to_value("yt_id")?,

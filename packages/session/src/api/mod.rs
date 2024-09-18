@@ -7,6 +7,7 @@ use actix_web::{
 };
 use moosicbox_audio_zone::models::{ApiAudioZone, ApiPlayer};
 use moosicbox_core::sqlite::models::ToApi as _;
+use moosicbox_database::{config::ConfigDatabase, profiles::LibraryDatabase};
 use moosicbox_paging::Page;
 use serde::Deserialize;
 
@@ -83,11 +84,11 @@ pub struct GetSessionPlaylistTracks {
 #[route("/session-playlist-tracks", method = "GET")]
 pub async fn session_playlist_tracks_endpoint(
     query: web::Query<GetSessionPlaylistTracks>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Page<ApiSessionPlaylistTrack>>> {
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(30);
-    let outputs = crate::get_session_playlist_tracks(&**data.database, query.session_playlist_id)
+    let outputs = crate::get_session_playlist_tracks(&db, query.session_playlist_id)
         .await
         .map_err(ErrorInternalServerError)?;
     let total = outputs.len() as u32;
@@ -133,9 +134,9 @@ pub struct GetSessionPlaylist {
 #[route("/session-playlist", method = "GET")]
 pub async fn session_playlist_endpoint(
     query: web::Query<GetSessionPlaylist>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Option<ApiSessionPlaylist>>> {
-    let playlist = crate::get_session_playlist(&**data.database, query.session_playlist_id)
+    let playlist = crate::get_session_playlist(&db, query.session_playlist_id)
         .await?
         .map(|x| x.to_api());
 
@@ -169,9 +170,9 @@ pub struct GetSessionActivePlayers {
 #[route("/session-audio-zone", method = "GET")]
 pub async fn session_audio_zone_endpoint(
     query: web::Query<GetSessionActivePlayers>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Option<ApiAudioZone>>> {
-    let zone = crate::get_session_audio_zone(&**data.database, query.session_id)
+    let zone = crate::get_session_audio_zone(&db, query.session_id)
         .await?
         .map(|x| x.into());
 
@@ -205,9 +206,9 @@ pub struct GetSessionPlaying {
 #[route("/session-playing", method = "GET")]
 pub async fn session_playing_endpoint(
     query: web::Query<GetSessionPlaying>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Option<bool>>> {
-    let playing = crate::get_session_playing(&**data.database, query.session_id).await?;
+    let playing = crate::get_session_playing(&db, query.session_id).await?;
 
     Ok(Json(playing))
 }
@@ -239,9 +240,9 @@ pub struct GetSession {
 #[route("/session", method = "GET")]
 pub async fn session_endpoint(
     query: web::Query<GetSession>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Option<ApiSession>>> {
-    let session = crate::get_session(&**data.database, query.session_id)
+    let session = crate::get_session(&db, query.session_id)
         .await?
         .map(|x| x.to_api());
 
@@ -277,11 +278,11 @@ pub struct GetSessions {
 #[route("/sessions", method = "GET")]
 pub async fn sessions_endpoint(
     query: web::Query<GetSessions>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Page<ApiSession>>> {
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(30);
-    let sessions = crate::get_sessions(&**data.database).await?;
+    let sessions = crate::get_sessions(&db).await?;
     let total = sessions.len() as u32;
     let sessions = sessions
         .into_iter()
@@ -327,9 +328,9 @@ pub struct RegisterPlayers {
 pub async fn register_players_endpoint(
     players: web::Json<Vec<RegisterPlayer>>,
     query: web::Query<RegisterPlayers>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: ConfigDatabase,
 ) -> Result<Json<Vec<ApiPlayer>>> {
-    let registered = crate::create_players(&**data.database, &query.connection_id, &players)
+    let registered = crate::create_players(&db, &query.connection_id, &players)
         .await?
         .into_iter()
         .map(|x| x.to_api())

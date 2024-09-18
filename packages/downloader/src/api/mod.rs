@@ -30,10 +30,8 @@ use actix_web::{
     web::{self, Json},
     Result,
 };
-use moosicbox_database::Database;
-use moosicbox_music_api::MusicApiState;
-use moosicbox_music_api::SourceToMusicApi as _;
-use moosicbox_music_api::TrackAudioQuality;
+use moosicbox_database::profiles::LibraryDatabase;
+use moosicbox_music_api::{MusicApiState, SourceToMusicApi as _, TrackAudioQuality};
 use moosicbox_paging::Page;
 use regex::Captures;
 use regex::Regex;
@@ -84,7 +82,7 @@ pub async fn add_progress_listener_to_download_queue(listener: ProgressListenerR
 }
 
 async fn get_default_download_queue(
-    db: Arc<Box<dyn Database>>,
+    db: LibraryDatabase,
     api_state: MusicApiState,
 ) -> Arc<RwLock<DownloadQueue>> {
     let queue = { DOWNLOAD_QUEUE.read().await.clone() };
@@ -174,10 +172,10 @@ pub struct DownloadQuery {
 #[route("/download", method = "POST")]
 pub async fn download_endpoint(
     query: web::Query<DownloadQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
     api_state: web::Data<MusicApiState>,
 ) -> Result<Json<Value>> {
-    let download_path = get_download_path(&**data.database, query.location_id).await?;
+    let download_path = get_download_path(&db, query.location_id).await?;
 
     let tasks = get_create_download_tasks(
         &**api_state
@@ -196,9 +194,9 @@ pub async fn download_endpoint(
     )
     .await?;
 
-    let tasks = create_download_tasks(&**data.database, tasks).await?;
+    let tasks = create_download_tasks(&db, tasks).await?;
 
-    let queue = get_default_download_queue(data.database.clone(), api_state.as_ref().clone()).await;
+    let queue = get_default_download_queue(db.clone(), api_state.as_ref().clone()).await;
     let mut download_queue = queue.write().await;
 
     download_queue.add_tasks_to_queue(tasks).await;
@@ -234,19 +232,19 @@ pub struct RetryDownloadQuery {
 #[route("/retry-download", method = "POST")]
 pub async fn retry_download_endpoint(
     query: web::Query<RetryDownloadQuery>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
     api_state: web::Data<MusicApiState>,
 ) -> Result<Json<Value>> {
-    let tasks = get_download_tasks(&**data.database).await?;
+    let tasks = get_download_tasks(&db).await?;
     let task = tasks
         .into_iter()
         .find(|x| x.id == query.task_id)
         .ok_or_else(|| ErrorNotFound(format!("Task not found with ID {}", query.task_id)))?;
 
     let mut download_queue = DownloadQueue::new()
-        .with_database(data.database.clone())
+        .with_database(db.clone())
         .with_downloader(Box::new(MoosicboxDownloader::new(
-            data.database.clone(),
+            db,
             api_state.as_ref().clone(),
         )));
     download_queue.add_tasks_to_queue(vec![task]).await;
@@ -284,11 +282,11 @@ pub struct GetDownloadTasks {
 #[route("/download-tasks", method = "GET")]
 pub async fn download_tasks_endpoint(
     query: web::Query<GetDownloadTasks>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Page<ApiDownloadTask>>> {
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(30);
-    let tasks = get_download_tasks(&**data.database).await?;
+    let tasks = get_download_tasks(&db).await?;
     let (mut current, mut history): (Vec<_>, Vec<_>) =
         tasks.into_iter().partition(|task| match task.state {
             DownloadTaskState::Pending | DownloadTaskState::Paused | DownloadTaskState::Started => {
@@ -355,11 +353,11 @@ pub struct GetDownloadLocations {
 #[route("/download-locations", method = "GET")]
 pub async fn get_download_locations_endpoint(
     query: web::Query<GetDownloadLocations>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<Page<ApiDownloadLocation>>> {
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(30);
-    let locations = get_download_locations(&**data.database).await?;
+    let locations = get_download_locations(&db).await?;
     let total = locations.len() as u32;
     let locations = locations
         .into_iter()
@@ -403,7 +401,7 @@ pub struct AddDownloadLocation {
 #[route("/download-locations", method = "POST")]
 pub async fn add_download_location_endpoint(
     query: web::Query<AddDownloadLocation>,
-    data: web::Data<moosicbox_core::app::AppState>,
+    db: LibraryDatabase,
 ) -> Result<Json<ApiDownloadLocation>> {
     static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
 
@@ -420,7 +418,7 @@ pub async fn add_download_location_endpoint(
     let path = PathBuf::from_str(&path)?.canonicalize()?;
 
     let location = create_download_location(
-        &**data.database,
+        &db,
         path.to_str()
             .ok_or_else(|| ErrorBadRequest(format!("Invalid path: {path:?}")))?,
     )

@@ -1,7 +1,7 @@
-use std::{env, sync::Arc};
+use std::env;
 
 use moosicbox_auth::get_client_id_and_access_token;
-use moosicbox_database::Database;
+use moosicbox_database::config::ConfigDatabase;
 use moosicbox_music_api::MusicApiState;
 use moosicbox_tunnel::TunnelRequest;
 use moosicbox_tunnel_sender::{
@@ -22,7 +22,7 @@ pub enum SetupTunnelError {
 
 #[allow(clippy::too_many_lines, clippy::module_name_repetitions)]
 pub async fn setup_tunnel(
-    database: Arc<Box<dyn Database>>,
+    config_db: ConfigDatabase,
     music_apis: MusicApiState,
     service_port: u16,
 ) -> Result<
@@ -56,7 +56,7 @@ pub async fn setup_tunnel(
             );
             // FIXME: Handle retry
             let (client_id, access_token) = {
-                get_client_id_and_access_token(&**database, &host)
+                get_client_id_and_access_token(&config_db, &host)
                     .await
                     .map_err(|e| {
                         std::io::Error::new(
@@ -65,12 +65,16 @@ pub async fn setup_tunnel(
                         )
                     })?
             };
-            let (mut tunnel, handle) =
-                TunnelSender::new(host.clone(), ws_url, client_id, access_token);
+            let (mut tunnel, handle) = TunnelSender::new(
+                host.clone(),
+                ws_url,
+                client_id,
+                access_token,
+                config_db.clone(),
+            );
 
             tunnel = tunnel.with_cancellation_token(CANCELLATION_TOKEN.clone());
 
-            let database_send = database.clone();
             let music_apis_send = music_apis.clone();
             Ok((
                 Some(host),
@@ -82,14 +86,12 @@ pub async fn setup_tunnel(
                             TunnelMessage::Text(m) => {
                                 log::debug!("Received text TunnelMessage {}", &m);
                                 let tunnel = tunnel.clone();
-                                let database_send = database_send.clone();
                                 let music_apis_send = music_apis_send.clone();
                                 moosicbox_task::spawn("server: tunnel message", async move {
                                     match serde_json::from_str(&m).unwrap() {
                                         TunnelRequest::Http(request) => {
                                             if let Err(err) = tunnel
                                                 .tunnel_request(
-                                                    database_send.clone(),
                                                     music_apis_send.apis,
                                                     service_port,
                                                     request.request_id,
@@ -98,6 +100,7 @@ pub async fn setup_tunnel(
                                                     request.query,
                                                     request.payload,
                                                     request.headers,
+                                                    request.profile,
                                                     request.encoding,
                                                 )
                                                 .await
@@ -114,10 +117,10 @@ pub async fn setup_tunnel(
                                                 .clone();
                                             if let Err(err) = tunnel
                                                 .ws_request(
-                                                    &**database_send,
                                                     request.conn_id,
                                                     request.request_id,
                                                     request.body.clone(),
+                                                    request.profile,
                                                     sender,
                                                 )
                                                 .await

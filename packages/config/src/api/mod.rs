@@ -1,5 +1,3 @@
-use std::ops::Deref as _;
-
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
     error::ErrorInternalServerError,
@@ -51,7 +49,7 @@ pub struct Api;
 #[route("/profiles", method = "GET")]
 pub async fn get_profiles_endpoint(db: ConfigDatabase) -> Result<Json<Vec<ApiProfile>>> {
     Ok(Json(
-        crate::db::get_profiles(db.deref())
+        crate::db::get_profiles(&db)
             .await
             .map_err(ErrorInternalServerError)?
             .into_iter()

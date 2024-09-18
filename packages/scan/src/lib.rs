@@ -11,7 +11,7 @@ use moosicbox_core::sqlite::{
     db::DbError,
     models::{ApiSource, TrackApiSource},
 };
-use moosicbox_database::Database;
+use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_music_api::{MusicApi, MusicApiState, MusicApisError, SourceToMusicApi as _};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
@@ -110,7 +110,7 @@ impl From<ScanOrigin> for TrackApiSource {
 
 #[allow(unused)]
 async fn get_origins_or_default(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     origins: Option<Vec<ScanOrigin>>,
 ) -> Result<Vec<ScanOrigin>, DbError> {
     let enabled_origins = get_enabled_scan_origins(db).await?;
@@ -148,7 +148,7 @@ pub struct Scanner {
 
 impl Scanner {
     #[allow(unused)]
-    pub async fn from_origin(db: &dyn Database, origin: ScanOrigin) -> Result<Self, DbError> {
+    pub async fn from_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Result<Self, DbError> {
         let task = match origin {
             #[cfg(feature = "local")]
             ScanOrigin::Local => {
@@ -240,16 +240,16 @@ impl Scanner {
     pub async fn scan(
         &self,
         api_state: MusicApiState,
-        db: Arc<Box<dyn Database>>,
+        db: &LibraryDatabase,
     ) -> Result<(), ScanError> {
         self.scanned.store(0, std::sync::atomic::Ordering::SeqCst);
         self.total.store(0, std::sync::atomic::Ordering::SeqCst);
 
         match self.task.deref() {
             #[cfg(feature = "local")]
-            ScanTask::Local { paths } => self.scan_local(db.clone(), paths).await?,
+            ScanTask::Local { paths } => self.scan_local(db, paths).await?,
             ScanTask::Api { origin } => {
-                self.scan_music_api(&**api_state.apis.get((*origin).into())?, &**db)
+                self.scan_music_api(&**api_state.apis.get((*origin).into())?, db)
                     .await?
             }
         }
@@ -262,7 +262,7 @@ impl Scanner {
     #[cfg(feature = "local")]
     pub async fn scan_local(
         &self,
-        db: Arc<Box<dyn Database>>,
+        db: &LibraryDatabase,
         paths: &[String],
     ) -> Result<(), local::ScanError> {
         let handles = paths.iter().cloned().map(|path| {
@@ -270,7 +270,7 @@ impl Scanner {
             let scanner = self.clone();
 
             moosicbox_task::spawn(&format!("scan_local: scan '{path}'"), async move {
-                local::scan(&path, db.clone(), CANCELLATION_TOKEN.clone(), scanner).await
+                local::scan(&path, &db, CANCELLATION_TOKEN.clone(), scanner).await
             })
         });
 
@@ -284,7 +284,7 @@ impl Scanner {
     pub async fn scan_music_api(
         &self,
         api: &dyn MusicApi,
-        db: &dyn Database,
+        db: &LibraryDatabase,
     ) -> Result<(), music_api::ScanError> {
         let enabled_origins = get_enabled_scan_origins(db).await?;
         let enabled = enabled_origins
@@ -305,11 +305,11 @@ impl Scanner {
     }
 }
 
-pub async fn get_scan_origins(db: &dyn Database) -> Result<Vec<ScanOrigin>, DbError> {
+pub async fn get_scan_origins(db: &LibraryDatabase) -> Result<Vec<ScanOrigin>, DbError> {
     get_enabled_scan_origins(db).await
 }
 
-pub async fn enable_scan_origin(db: &dyn Database, origin: ScanOrigin) -> Result<(), DbError> {
+pub async fn enable_scan_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Result<(), DbError> {
     #[cfg(feature = "local")]
     if origin == ScanOrigin::Local {
         return Ok(());
@@ -324,7 +324,7 @@ pub async fn enable_scan_origin(db: &dyn Database, origin: ScanOrigin) -> Result
     db::enable_scan_origin(db, origin).await
 }
 
-pub async fn disable_scan_origin(db: &dyn Database, origin: ScanOrigin) -> Result<(), DbError> {
+pub async fn disable_scan_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Result<(), DbError> {
     let locations = db::get_scan_locations(db).await?;
 
     if locations.iter().all(|location| location.origin != origin) {
@@ -336,18 +336,18 @@ pub async fn disable_scan_origin(db: &dyn Database, origin: ScanOrigin) -> Resul
 
 pub async fn run_scan(
     origins: Option<Vec<ScanOrigin>>,
-    db: Arc<Box<dyn Database>>,
+    db: &LibraryDatabase,
     api_state: MusicApiState,
 ) -> Result<(), ScanError> {
     log::debug!("run_scan: origins={origins:?}");
 
-    let origins = get_origins_or_default(&**db, origins).await?;
+    let origins = get_origins_or_default(db, origins).await?;
     log::debug!("run_scan: get_origins_or_default={origins:?}");
 
     for origin in origins {
-        Scanner::from_origin(&**db, origin)
+        Scanner::from_origin(db, origin)
             .await?
-            .scan(api_state.clone(), db.clone())
+            .scan(api_state.clone(), db)
             .await?;
     }
 
@@ -355,7 +355,7 @@ pub async fn run_scan(
 }
 
 #[cfg(feature = "local")]
-pub async fn get_scan_paths(db: &dyn Database) -> Result<Vec<String>, DbError> {
+pub async fn get_scan_paths(db: &LibraryDatabase) -> Result<Vec<String>, DbError> {
     let locations = db::get_scan_locations_for_origin(db, ScanOrigin::Local).await?;
 
     Ok(locations
@@ -371,7 +371,7 @@ pub async fn get_scan_paths(db: &dyn Database) -> Result<Vec<String>, DbError> {
 }
 
 #[cfg(feature = "local")]
-pub async fn add_scan_path(db: &dyn Database, path: &str) -> Result<(), DbError> {
+pub async fn add_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DbError> {
     let locations = db::get_scan_locations(db).await?;
 
     if locations
@@ -385,7 +385,7 @@ pub async fn add_scan_path(db: &dyn Database, path: &str) -> Result<(), DbError>
 }
 
 #[cfg(feature = "local")]
-pub async fn remove_scan_path(db: &dyn Database, path: &str) -> Result<(), DbError> {
+pub async fn remove_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DbError> {
     let locations = db::get_scan_locations(db).await?;
 
     if locations

@@ -9,7 +9,7 @@ use std::{
 
 use kanal::OneshotAsyncSender;
 use moosicbox_async_service::async_trait;
-use moosicbox_database::Database;
+use moosicbox_database::{config::ConfigDatabase, profiles::PROFILES};
 use moosicbox_ws::{
     PlayerAction, WebsocketConnectError, WebsocketContext, WebsocketDisconnectError,
     WebsocketMessageError, WebsocketSendError, WebsocketSender,
@@ -77,6 +77,7 @@ pub enum Command {
     },
 
     Connect {
+        profile: String,
         conn_tx: mpsc::UnboundedSender<Msg>,
         res_tx: OneshotAsyncSender<ConnId>,
     },
@@ -115,6 +116,12 @@ impl std::fmt::Display for Command {
     }
 }
 
+#[derive(Debug, Clone)]
+struct Connection {
+    profile: String,
+    sender: mpsc::UnboundedSender<Msg>,
+}
+
 /// A multi-room ws server.
 ///
 /// Contains the logic of how connections ws with each other plus room management.
@@ -124,12 +131,16 @@ impl std::fmt::Display for Command {
 #[derive(Debug)]
 pub struct WsServer {
     /// Map of connection IDs to their message receivers.
-    sessions: HashMap<ConnId, mpsc::UnboundedSender<Msg>>,
+    connections: HashMap<ConnId, Connection>,
+
+    config_db: ConfigDatabase,
 
     /// Map of room name to participant IDs in that room.
     rooms: HashMap<RoomId, HashSet<ConnId>>,
 
-    db: Arc<Box<dyn Database>>,
+    /// Map of profiles to participant IDs using that profile.
+    #[allow(unused)]
+    profiles: HashMap<String, HashSet<ConnId>>,
 
     /// Tracks total number of historical connections established.
     visitor_count: Arc<AtomicUsize>,
@@ -145,12 +156,18 @@ pub struct WsServer {
 }
 
 impl WsServer {
-    pub fn new(db: Arc<Box<dyn Database>>) -> (Self, WsServerHandle) {
+    pub fn new(config_db: ConfigDatabase) -> (Self, WsServerHandle) {
         // create empty server
         let mut rooms = HashMap::with_capacity(4);
 
         // create default room
         rooms.insert("main".to_owned(), HashSet::new());
+
+        let mut profiles = HashMap::with_capacity(4);
+
+        for profile in PROFILES.names() {
+            profiles.insert(profile, HashSet::new());
+        }
 
         let (cmd_tx, cmd_rx) = flume::unbounded();
         let token = CancellationToken::new();
@@ -161,9 +178,10 @@ impl WsServer {
 
         (
             Self {
-                sessions: HashMap::new(),
+                connections: HashMap::new(),
+                config_db,
                 rooms,
-                db,
+                profiles,
                 visitor_count: Arc::new(AtomicUsize::new(0)),
                 cmd_rx,
                 senders: vec![],
@@ -198,9 +216,9 @@ impl WsServer {
 
             for conn_id in sessions {
                 if *conn_id != skip {
-                    if let Some(tx) = self.sessions.get(conn_id) {
+                    if let Some(Connection { sender, .. }) = self.connections.get(conn_id) {
                         // errors if client disconnected abruptly and hasn't been timed-out yet
-                        let _ = tx.send(msg.clone());
+                        let _ = sender.send(msg.clone());
                     }
                 }
             }
@@ -209,9 +227,9 @@ impl WsServer {
 
     /// Send message directly to the user.
     fn send_message_to(&self, id: ConnId, msg: impl Into<String>) {
-        if let Some(session) = self.sessions.get(&id) {
+        if let Some(Connection { sender, .. }) = self.connections.get(&id) {
             // errors if client disconnected abruptly and hasn't been timed-out yet
-            let _ = session.send(msg.into());
+            let _ = sender.send(msg.into());
         }
     }
 
@@ -221,30 +239,42 @@ impl WsServer {
         msg: impl Into<String> + Send,
     ) -> Result<(), WebsocketMessageError> {
         let connection_id = id.to_string();
+        let profile = self.connections.get(&id).unwrap().profile.clone();
         log::trace!(
             "on_message connection_id={connection_id} player_actions.len={}",
             self.player_actions.len()
         );
         let context = WebsocketContext {
             connection_id,
+            profile: Some(profile),
             player_actions: self.player_actions.clone(),
         };
         let payload = msg.into();
         let body = serde_json::from_str::<Value>(&payload)
             .map_err(|e| WebsocketMessageError::InvalidPayload(payload, e.to_string()))?;
 
-        moosicbox_ws::process_message(&**self.db.clone(), body, context, self).await?;
+        moosicbox_ws::process_message(&self.config_db, body, context, self).await?;
 
         Ok(())
     }
 
     /// Register new session and assign unique ID to this session
-    fn connect(&mut self, tx: mpsc::UnboundedSender<Msg>) -> Result<ConnId, WebsocketConnectError> {
+    fn connect(
+        &mut self,
+        profile: String,
+        tx: mpsc::UnboundedSender<Msg>,
+    ) -> Result<ConnId, WebsocketConnectError> {
         log::info!("Someone joined");
 
         // register session with random connection ID
         let id = thread_rng().gen::<usize>();
-        self.sessions.insert(id, tx);
+        self.connections.insert(
+            id,
+            Connection {
+                profile: profile.clone(),
+                sender: tx,
+            },
+        );
 
         // auto join session to main room
         self.rooms.entry("main".to_owned()).or_default().insert(id);
@@ -255,10 +285,11 @@ impl WsServer {
         let connection_id = id.to_string();
         let context = WebsocketContext {
             connection_id,
+            profile: Some(profile),
             player_actions: self.player_actions.clone(),
         };
 
-        moosicbox_ws::connect(&**self.db.clone(), self, &context)?;
+        moosicbox_ws::connect(self, &context)?;
 
         // send id back
         Ok(id)
@@ -271,7 +302,7 @@ impl WsServer {
         log::debug!("Visitor count: {}", count - 1);
 
         // remove sender
-        if self.sessions.remove(&conn_id).is_some() {
+        if self.connections.remove(&conn_id).is_some() {
             // remove session from all rooms
             for sessions in self.rooms.values_mut() {
                 sessions.remove(&conn_id);
@@ -281,10 +312,11 @@ impl WsServer {
         let connection_id = conn_id.to_string();
         let context = WebsocketContext {
             connection_id,
+            profile: None,
             player_actions: self.player_actions.clone(),
         };
 
-        moosicbox_ws::disconnect(&**self.db.clone(), self, &context).await?;
+        moosicbox_ws::disconnect(&self.config_db, self, &context).await?;
 
         Ok(())
     }
@@ -305,8 +337,12 @@ impl WsServer {
                 log::debug!("Added a player action with id={id}");
             }
 
-            Command::Connect { conn_tx, res_tx } => {
-                let result = ctx.write().await.connect(conn_tx);
+            Command::Connect {
+                profile,
+                conn_tx,
+                res_tx,
+            } => {
+                let result = ctx.write().await.connect(profile, conn_tx);
                 match result {
                     Ok(conn_id) => res_tx.send(conn_id).await.map_err(|e| {
                         std::io::Error::new(
@@ -479,7 +515,7 @@ impl WsServerHandle {
     }
 
     /// Register client message sender and obtain connection ID.
-    pub async fn connect(&self, conn_tx: mpsc::UnboundedSender<String>) -> ConnId {
+    pub async fn connect(&self, profile: String, conn_tx: mpsc::UnboundedSender<String>) -> ConnId {
         log::trace!("Sending Connect command");
 
         let (res_tx, res_rx) = kanal::oneshot_async();
@@ -488,7 +524,11 @@ impl WsServerHandle {
             let cmd_tx = self.cmd_tx.clone();
             async move {
                 if let Err(e) = cmd_tx
-                    .send_async(Command::Connect { conn_tx, res_tx })
+                    .send_async(Command::Connect {
+                        profile,
+                        conn_tx,
+                        res_tx,
+                    })
                     .await
                 {
                     moosicbox_assert::die_or_error!("Failed to send command: {e:?}");

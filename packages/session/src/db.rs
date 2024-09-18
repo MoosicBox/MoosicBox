@@ -4,8 +4,10 @@ use moosicbox_core::sqlite::{
     models::{AsModelQuery as _, Id},
 };
 use moosicbox_database::{
+    config::ConfigDatabase,
+    profiles::LibraryDatabase,
     query::{select, where_in, FilterableQuery as _, SortDirection},
-    Database, DatabaseValue,
+    DatabaseValue,
 };
 use moosicbox_json_utils::ToValueType;
 use moosicbox_library::db::get_tracks;
@@ -16,7 +18,7 @@ use crate::models::{
 };
 
 pub async fn get_session_playlist_tracks(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     session_playlist_id: u64,
 ) -> Result<Vec<SessionPlaylistTrack>, DbError> {
     Ok(db
@@ -29,7 +31,7 @@ pub async fn get_session_playlist_tracks(
 }
 
 pub async fn get_session_playlist(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     session_id: u64,
 ) -> Result<Option<SessionPlaylist>, DbError> {
     if let Some(ref playlist) = db
@@ -38,14 +40,14 @@ pub async fn get_session_playlist(
         .execute_first(db)
         .await?
     {
-        Ok(Some(playlist.as_model_query(db).await?))
+        Ok(Some(playlist.as_model_query(db.into()).await?))
     } else {
         Ok(None)
     }
 }
 
 pub async fn get_session_audio_zone(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     session_id: u64,
 ) -> Result<Option<AudioZoneModel>, DbError> {
     Ok(db
@@ -62,7 +64,7 @@ pub async fn get_session_audio_zone(
         .transpose()?)
 }
 
-pub async fn get_session_playing(db: &dyn Database, id: u64) -> Result<Option<bool>, DbError> {
+pub async fn get_session_playing(db: &LibraryDatabase, id: u64) -> Result<Option<bool>, DbError> {
     Ok(db
         .select("sessions")
         .columns(&["playing"])
@@ -75,7 +77,7 @@ pub async fn get_session_playing(db: &dyn Database, id: u64) -> Result<Option<bo
         .flatten())
 }
 
-pub async fn get_session(db: &dyn Database, id: u64) -> Result<Option<Session>, DbError> {
+pub async fn get_session(db: &LibraryDatabase, id: u64) -> Result<Option<Session>, DbError> {
     Ok(
         if let Some(ref session) = db
             .select("sessions")
@@ -83,25 +85,25 @@ pub async fn get_session(db: &dyn Database, id: u64) -> Result<Option<Session>, 
             .execute_first(db)
             .await?
         {
-            Some(session.as_model_query(db).await?)
+            Some(session.as_model_query(db.into()).await?)
         } else {
             None
         },
     )
 }
 
-pub async fn get_sessions(db: &dyn Database) -> Result<Vec<Session>, DbError> {
+pub async fn get_sessions(db: &LibraryDatabase) -> Result<Vec<Session>, DbError> {
     let mut sessions = vec![];
 
     for ref session in db.select("sessions").execute(db).await? {
-        sessions.push(session.as_model_query(db).await?);
+        sessions.push(session.as_model_query(db.into()).await?);
     }
 
     Ok(sessions)
 }
 
 pub async fn create_session(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     session: &CreateSession,
 ) -> Result<Session, DbError> {
     let tracks = get_tracks(
@@ -162,7 +164,7 @@ pub async fn create_session(
     })
 }
 
-pub async fn update_session(db: &dyn Database, session: &UpdateSession) -> Result<(), DbError> {
+pub async fn update_session(db: &LibraryDatabase, session: &UpdateSession) -> Result<(), DbError> {
     if session.playlist.is_some() {
         log::trace!("update_session: Deleting existing session_playlist_tracks");
         db.delete("session_playlist_tracks")
@@ -262,7 +264,7 @@ pub async fn update_session(db: &dyn Database, session: &UpdateSession) -> Resul
     Ok(())
 }
 
-pub async fn delete_session(db: &dyn Database, session_id: u64) -> Result<(), DbError> {
+pub async fn delete_session(db: &LibraryDatabase, session_id: u64) -> Result<(), DbError> {
     log::debug!("Deleting session_playlist_tracks for session_id={session_id}");
     db.delete("session_playlist_tracks")
         .where_in(
@@ -312,18 +314,18 @@ pub async fn delete_session(db: &dyn Database, session_id: u64) -> Result<(), Db
     Ok(())
 }
 
-pub async fn get_connections(db: &dyn Database) -> Result<Vec<models::Connection>, DbError> {
+pub async fn get_connections(db: &ConfigDatabase) -> Result<Vec<models::Connection>, DbError> {
     let mut connections = vec![];
 
     for ref connection in db.select("connections").execute(db).await? {
-        connections.push(connection.as_model_query(db).await?);
+        connections.push(connection.as_model_query(db.into()).await?);
     }
 
     Ok(connections)
 }
 
 pub async fn register_connection(
-    db: &dyn Database,
+    db: &ConfigDatabase,
     connection: &models::RegisterConnection,
 ) -> Result<models::Connection, DbError> {
     let row: models::Connection = db
@@ -344,7 +346,7 @@ pub async fn register_connection(
     })
 }
 
-pub async fn delete_connection(db: &dyn Database, connection_id: &str) -> Result<(), DbError> {
+pub async fn delete_connection(db: &ConfigDatabase, connection_id: &str) -> Result<(), DbError> {
     db.delete("players")
         .where_in(
             "players.id",
@@ -364,7 +366,7 @@ pub async fn delete_connection(db: &dyn Database, connection_id: &str) -> Result
     Ok(())
 }
 
-pub async fn get_players(db: &dyn Database, connection_id: &str) -> Result<Vec<Player>, DbError> {
+pub async fn get_players(db: &ConfigDatabase, connection_id: &str) -> Result<Vec<Player>, DbError> {
     Ok(db
         .select("players")
         .where_eq("connection_id", connection_id)
@@ -374,7 +376,7 @@ pub async fn get_players(db: &dyn Database, connection_id: &str) -> Result<Vec<P
 }
 
 pub async fn create_player(
-    db: &dyn Database,
+    db: &ConfigDatabase,
     connection_id: &str,
     player: &models::RegisterPlayer,
 ) -> Result<Player, DbError> {
@@ -392,7 +394,7 @@ pub async fn create_player(
 }
 
 pub async fn set_session_audio_zone(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     set_session_audio_zone: &SetSessionAudioZone,
 ) -> Result<(), DbError> {
     db.delete("audio_zone_sessions")
@@ -409,7 +411,7 @@ pub async fn set_session_audio_zone(
     Ok(())
 }
 
-pub async fn delete_player(db: &dyn Database, player_id: u64) -> Result<(), DbError> {
+pub async fn delete_player(db: &ConfigDatabase, player_id: u64) -> Result<(), DbError> {
     db.delete("players")
         .where_eq("id", player_id)
         .execute(db)
@@ -419,7 +421,7 @@ pub async fn delete_player(db: &dyn Database, player_id: u64) -> Result<(), DbEr
 }
 
 pub async fn delete_session_playlist_track_by_track_id(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     id: u64,
 ) -> Result<Option<SessionPlaylistTrack>, DbError> {
     Ok(
@@ -431,7 +433,7 @@ pub async fn delete_session_playlist_track_by_track_id(
 }
 
 pub async fn delete_session_playlist_tracks_by_track_id(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     ids: Option<&Vec<u64>>,
 ) -> Result<Vec<SessionPlaylistTrack>, DbError> {
     if ids.is_some_and(|ids| ids.is_empty()) {

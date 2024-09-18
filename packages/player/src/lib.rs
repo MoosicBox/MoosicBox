@@ -26,7 +26,7 @@ use moosicbox_core::{
     },
     types::{AudioFormat, PlaybackQuality},
 };
-use moosicbox_database::Database;
+use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_json_utils::{serde_json::ToValue as _, ParseError};
 use moosicbox_music_api::MusicApi;
 use moosicbox_session::{
@@ -391,7 +391,7 @@ impl From<Track> for UpdateSessionPlaylistTrack {
 }
 
 pub async fn get_session_playlist_id_from_session_id(
-    db: &dyn Database,
+    db: &LibraryDatabase,
     session_id: Option<u64>,
 ) -> Result<Option<u64>, PlayerError> {
     Ok(if let Some(session_id) = session_id {

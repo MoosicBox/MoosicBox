@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use actix_htmx::Htmx;
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
@@ -7,7 +5,10 @@ use actix_web::{
     route, HttpRequest, HttpResponse, Responder, Scope,
 };
 use maud::{html, Markup, DOCTYPE};
-use moosicbox_database::{config::ConfigDatabase, profiles::PROFILES, Database};
+use moosicbox_database::{
+    config::ConfigDatabase,
+    profiles::{LibraryDatabase, PROFILES},
+};
 
 mod info;
 #[cfg(feature = "qobuz")]
@@ -69,7 +70,7 @@ pub async fn index_endpoint(
                             let library_db = PROFILES.get(profile)
                                 .ok_or_else(|| ErrorInternalServerError("Missing profile"))?;
 
-                            profile_info(config_db.deref(), &**library_db).await?
+                            profile_info(&config_db, &library_db).await?
                         } else {
                             html! {}
                         }
@@ -82,8 +83,8 @@ pub async fn index_endpoint(
 }
 
 async fn profile_info(
-    config_db: &dyn Database,
-    library_db: &dyn Database,
+    config_db: &ConfigDatabase,
+    library_db: &LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
     Ok(html! {
         h2 { "Server Info" }

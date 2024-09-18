@@ -1,4 +1,4 @@
-use moosicbox_database::{Database, DatabaseError};
+use moosicbox_database::{config::ConfigDatabase, DatabaseError};
 use moosicbox_json_utils::{database::DatabaseFetchError, ToValueType as _};
 use nanoid::nanoid;
 use thiserror::Error;
@@ -13,7 +13,7 @@ pub enum GetOrInitServerIdentityError {
     Failed,
 }
 
-pub async fn get_server_identity(db: &dyn Database) -> Result<Option<String>, DatabaseError> {
+pub async fn get_server_identity(db: &ConfigDatabase) -> Result<Option<String>, DatabaseError> {
     Ok(db
         .select("identity")
         .execute_first(db)
@@ -25,7 +25,7 @@ pub async fn get_server_identity(db: &dyn Database) -> Result<Option<String>, Da
 }
 
 pub async fn get_or_init_server_identity(
-    db: &dyn Database,
+    db: &ConfigDatabase,
 ) -> Result<String, GetOrInitServerIdentityError> {
     if let Some(identity) = get_server_identity(db).await? {
         Ok(identity)
@@ -42,6 +42,6 @@ pub async fn get_or_init_server_identity(
     }
 }
 
-pub async fn get_profiles(db: &dyn Database) -> Result<Vec<models::Profile>, DatabaseFetchError> {
+pub async fn get_profiles(db: &ConfigDatabase) -> Result<Vec<models::Profile>, DatabaseFetchError> {
     Ok(db.select("profiles").execute(db).await?.to_value_type()?)
 }

@@ -7,7 +7,7 @@ use moosicbox_core::{
     },
     types::AudioFormat,
 };
-use moosicbox_database::Database;
+use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
 use moosicbox_music_api::{AlbumsError, AlbumsRequest, MusicApi};
 use moosicbox_paging::PagingRequest;
@@ -31,7 +31,7 @@ pub enum ScanError {
 
 pub async fn scan(
     api: &dyn MusicApi,
-    db: &dyn Database,
+    db: &LibraryDatabase,
     token: CancellationToken,
 ) -> Result<(), ScanError> {
     let total_start = std::time::SystemTime::now();
