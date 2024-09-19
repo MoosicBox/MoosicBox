@@ -1,7 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 use models::{AudioZone, AudioZoneWithSession, CreateAudioZone, UpdateAudioZone};
-use moosicbox_database::{config::ConfigDatabase, TryIntoDb};
+use moosicbox_database::{config::ConfigDatabase, profiles::LibraryDatabase, TryIntoDb};
 use moosicbox_json_utils::database::DatabaseFetchError;
 
 #[cfg(feature = "api")]
@@ -18,11 +18,12 @@ pub async fn zones(db: &ConfigDatabase) -> Result<Vec<AudioZone>, DatabaseFetchE
 }
 
 pub async fn zones_with_sessions(
-    db: &ConfigDatabase,
+    config_db: &ConfigDatabase,
+    library_db: &LibraryDatabase,
 ) -> Result<Vec<AudioZoneWithSession>, DatabaseFetchError> {
-    crate::db::get_zone_with_sessions(db)
+    crate::db::get_zone_with_sessions(config_db, library_db)
         .await?
-        .try_into_db(db.into())
+        .try_into_db(config_db.into())
         .await
 }
 

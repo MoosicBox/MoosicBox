@@ -1,14 +1,14 @@
 use moosicbox_audio_zone::events::BoxErrorSend;
-use moosicbox_database::config::ConfigDatabase;
+use moosicbox_database::{config::ConfigDatabase, profiles::PROFILES};
 
 use crate::WS_SERVER_HANDLE;
 
-pub async fn init(db: &ConfigDatabase) {
-    let db = db.to_owned();
+pub async fn init(config_db: &ConfigDatabase) {
+    let config_db = config_db.to_owned();
     moosicbox_audio_zone::events::on_audio_zones_updated_event({
-        let db = db.clone();
+        let config_db = config_db.clone();
         move || {
-            let db = db.clone();
+            let config_db = config_db.clone();
             async move {
                 log::debug!("on_audio_zones_updated_event: Audio zones updated");
                 let connection_id = "self";
@@ -24,9 +24,21 @@ pub async fn init(db: &ConfigDatabase) {
                         "No ws server handle".into(),
                     ))
                     .map_err(|e| Box::new(e) as BoxErrorSend)?;
-                moosicbox_ws::broadcast_audio_zones(&db, &handle, &context, true)
-                    .await
-                    .map_err(|e| Box::new(e) as BoxErrorSend)?;
+                for profile in PROFILES.names() {
+                    if let Some(library_db) = PROFILES.get(&profile) {
+                        moosicbox_ws::broadcast_audio_zones(
+                            &config_db,
+                            &library_db,
+                            &handle,
+                            &context,
+                            true,
+                        )
+                        .await
+                        .map_err(|e| Box::new(e) as BoxErrorSend)?;
+                    } else {
+                        log::error!("Failed to get database for profile '{profile}'");
+                    }
+                }
                 Ok(())
             }
         }

@@ -1,4 +1,6 @@
-use moosicbox_database::{boxed, config::ConfigDatabase, query::*, DatabaseValue};
+use moosicbox_database::{
+    boxed, config::ConfigDatabase, profiles::LibraryDatabase, query::*, DatabaseValue,
+};
 use moosicbox_json_utils::{database::DatabaseFetchError, ToValueType};
 
 use crate::models::{CreateAudioZone, UpdateAudioZone};
@@ -70,15 +72,39 @@ pub async fn get_zones(
 }
 
 pub async fn get_zone_with_sessions(
-    db: &ConfigDatabase,
+    config_db: &ConfigDatabase,
+    library_db: &LibraryDatabase,
 ) -> Result<Vec<models::AudioZoneWithSessionModel>, DatabaseFetchError> {
-    Ok(db
+    let zones: Vec<models::AudioZoneModel> = config_db
         .select("audio_zones")
-        .columns(&["audio_zones.*", "sessions.id as session_id"])
-        .join("sessions", "sessions.audio_zone_id = audio_zones.id")
-        .execute(db)
+        .columns(&["audio_zones.*"])
+        .execute(config_db)
         .await?
-        .to_value_type()?)
+        .to_value_type()?;
+
+    let sessions: Vec<models::AudioZoneIdWithSessionIdModel> = library_db
+        .select("sessions")
+        .columns(&["id as session_id", "audio_zone_id"])
+        .where_in(
+            "audio_zone_id",
+            zones.iter().map(|x| x.id).collect::<Vec<_>>(),
+        )
+        .execute(library_db)
+        .await?
+        .to_value_type()?;
+
+    Ok(sessions
+        .into_iter()
+        .filter_map(|x| {
+            zones.iter().find(|z| z.id == x.audio_zone_id).map(|zone| {
+                models::AudioZoneWithSessionModel {
+                    id: zone.id,
+                    session_id: x.session_id,
+                    name: zone.name.clone(),
+                }
+            })
+        })
+        .collect())
 }
 
 pub async fn create_audio_zone(

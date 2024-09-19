@@ -296,13 +296,14 @@ pub async fn message(
 }
 
 pub async fn broadcast_audio_zones(
-    db: &ConfigDatabase,
+    config_db: &ConfigDatabase,
+    library_db: &LibraryDatabase,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
     send_all: bool,
 ) -> Result<(), WebsocketSendError> {
     let audio_zones = {
-        moosicbox_audio_zone::zones_with_sessions(db)
+        moosicbox_audio_zone::zones_with_sessions(config_db, library_db)
             .await?
             .into_iter()
             .map(|zone| zone.into())

@@ -5,7 +5,7 @@ use actix_web::{
     web::{self, Json},
     Result, Scope,
 };
-use moosicbox_database::config::ConfigDatabase;
+use moosicbox_database::{config::ConfigDatabase, profiles::LibraryDatabase};
 use moosicbox_paging::Page;
 use serde::Deserialize;
 
@@ -124,11 +124,12 @@ pub struct GetAudioZoneWithSessions {
 #[route("/with-session", method = "GET")]
 pub async fn audio_zone_with_sessions_endpoint(
     query: web::Query<GetAudioZoneWithSessions>,
-    db: ConfigDatabase,
+    config_db: ConfigDatabase,
+    library_db: LibraryDatabase,
 ) -> Result<Json<Page<ApiAudioZoneWithSession>>> {
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(30);
-    let zones = crate::zones_with_sessions(&db)
+    let zones = crate::zones_with_sessions(&config_db, &library_db)
         .await
         .map_err(ErrorInternalServerError)?;
     let total = zones.len() as u32;
