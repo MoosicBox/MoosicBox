@@ -1,6 +1,7 @@
 use std::{fmt::Display, sync::OnceLock};
 
 use moosicbox_async_service::Arc;
+use moosicbox_database::profiles::PROFILES;
 use moosicbox_player::Playback;
 use moosicbox_session::models::UpdateSession;
 use moosicbox_ws::{update_session, WebsocketSender};
@@ -8,7 +9,7 @@ use service::Commander as _;
 use strum_macros::{AsRefStr, EnumString};
 use tokio::sync::RwLock;
 
-use crate::{ws::server::WsServerHandle, CONFIG_DB, DB};
+use crate::{ws::server::WsServerHandle, CONFIG_DB};
 
 pub static PLAYBACK_EVENT_HANDLE: OnceLock<service::Handle> = OnceLock::new();
 
@@ -65,9 +66,7 @@ impl service::Processor for service::Service {
                     .into());
                 };
 
-                let db = if let Some(db) = DB.read().unwrap().as_ref() {
-                    db.clone()
-                } else {
+                let Some(db) = PROFILES.get(&update.profile) else {
                     log::error!("No DB connection");
                     return Err(
                         std::io::Error::new(std::io::ErrorKind::Other, "No DB connection").into(),

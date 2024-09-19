@@ -572,6 +572,7 @@ pub async fn update_session(
 
     let response = ApiUpdateSession {
         session_id: payload.session_id,
+        profile: payload.profile.clone(),
         play: payload.play,
         stop: payload.stop,
         name: payload.name.clone(),

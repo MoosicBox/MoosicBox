@@ -104,6 +104,7 @@ impl From<ApiPlaybackTarget> for PlaybackTarget {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSession {
     pub session_id: u64,
+    pub profile: String,
     pub playback_target: PlaybackTarget,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub play: Option<bool>,
@@ -164,6 +165,7 @@ impl From<ApiUpdateSession> for UpdateSession {
     fn from(value: ApiUpdateSession) -> Self {
         Self {
             session_id: value.session_id,
+            profile: value.profile,
             playback_target: value.playback_target.into(),
             play: value.play,
             stop: value.stop,
@@ -183,6 +185,7 @@ impl From<UpdateSession> for ApiUpdateSession {
     fn from(value: UpdateSession) -> Self {
         Self {
             session_id: value.session_id,
+            profile: value.profile,
             playback_target: value.playback_target.into(),
             play: value.play,
             stop: value.stop,
@@ -331,6 +334,7 @@ impl From<PlaybackTarget> for ApiPlaybackTarget {
 #[serde(rename_all = "camelCase")]
 pub struct ApiUpdateSession {
     pub session_id: u64,
+    pub profile: String,
     pub playback_target: ApiPlaybackTarget,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub play: Option<bool>,

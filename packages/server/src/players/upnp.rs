@@ -1,10 +1,11 @@
 use std::sync::LazyLock;
 use std::{collections::HashMap, sync::Arc};
 
+use moosicbox_database::profiles::PROFILES;
 use moosicbox_upnp::UpnpDeviceScannerError;
 use thiserror::Error;
 
-use crate::{CONFIG_DB, DB, MUSIC_API_STATE, UPNP_LISTENER_HANDLE, WS_SERVER_HANDLE};
+use crate::{CONFIG_DB, MUSIC_API_STATE, UPNP_LISTENER_HANDLE, WS_SERVER_HANDLE};
 
 pub static UPNP_PLAYERS: LazyLock<
     tokio::sync::RwLock<
@@ -120,6 +121,7 @@ pub async fn load_upnp_players() -> Result<(), moosicbox_upnp::UpnpDeviceScanner
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 fn handle_upnp_playback_update(
     update: &moosicbox_session::models::UpdateSession,
 ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = ()> + Send>> {
@@ -127,7 +129,6 @@ fn handle_upnp_playback_update(
     use moosicbox_session::get_session;
 
     let update = update.clone();
-    let db = { DB.read().unwrap().clone().unwrap() };
     let config_db = { CONFIG_DB.read().unwrap().clone().unwrap() };
 
     Box::pin(async move {
@@ -178,17 +179,22 @@ fn handle_upnp_playback_update(
                         let output = output.clone();
                         drop(binding);
 
-                        if let Ok(Some(session)) = get_session(&db, update.session_id).await {
-                            if let Err(e) = player.init_from_session(session, &update).await {
-                                moosicbox_assert::die_or_error!(
-                                    "Failed to create new player from session: {e:?}"
-                                );
-                            }
+                        if let Some(db) = PROFILES.get(&update.profile) {
+                            if let Ok(Some(session)) = get_session(&db, update.session_id).await {
+                                if let Err(e) = player
+                                    .init_from_session(update.profile.clone(), session, &update)
+                                    .await
+                                {
+                                    moosicbox_assert::die_or_error!(
+                                        "Failed to create new player from session: {e:?}"
+                                    );
+                                }
 
-                            SESSION_UPNP_PLAYERS
-                                .write()
-                                .await
-                                .insert(update.session_id, (output, player.clone()));
+                                SESSION_UPNP_PLAYERS
+                                    .write()
+                                    .await
+                                    .insert(update.session_id, (output, player.clone()));
+                            }
                         }
 
                         player
@@ -217,6 +223,7 @@ fn handle_upnp_playback_update(
                 }),
                 None,
                 Some(update.session_id),
+                Some(update.profile),
                 Some(update.playback_target),
                 false,
                 Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
@@ -277,6 +284,11 @@ pub async fn register_upnp_player(
         }
     }
 
-    let db = { DB.read().unwrap().clone().unwrap() };
-    moosicbox_ws::get_sessions(&db, &handle, &context, true).await
+    for profile in PROFILES.names() {
+        if let Some(db) = PROFILES.get(&profile) {
+            moosicbox_ws::get_sessions(&db, &handle, &context, true).await?;
+        }
+    }
+
+    Ok(())
 }

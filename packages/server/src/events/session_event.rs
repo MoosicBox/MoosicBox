@@ -1,6 +1,7 @@
+use moosicbox_database::profiles::PROFILES;
 use moosicbox_session::events::BoxErrorSend;
 
-use crate::{CONFIG_DB, DB, WS_SERVER_HANDLE};
+use crate::{CONFIG_DB, WS_SERVER_HANDLE};
 
 pub async fn init() {
     moosicbox_session::events::on_players_updated_event({
@@ -19,10 +20,15 @@ pub async fn init() {
                     "No ws server handle".into(),
                 ))
                 .map_err(|e| Box::new(e) as BoxErrorSend)?;
-            let db = { DB.read().unwrap().clone().unwrap() };
-            moosicbox_ws::get_sessions(&db, &handle, &context, true)
-                .await
-                .map_err(|e| Box::new(e) as BoxErrorSend)?;
+            for profile in PROFILES.names() {
+                if let Some(db) = PROFILES.get(&profile) {
+                    moosicbox_ws::get_sessions(&db, &handle, &context, true)
+                        .await
+                        .map_err(|e| Box::new(e) as BoxErrorSend)?;
+                } else {
+                    log::error!("Failed to get database for profile '{profile}'");
+                }
+            }
             let config_db = { CONFIG_DB.read().unwrap().clone().unwrap() };
             moosicbox_ws::broadcast_connections(&config_db, &handle)
                 .await

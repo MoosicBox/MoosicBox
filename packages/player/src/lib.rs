@@ -129,6 +129,10 @@ pub enum PlayerError {
     Cancelled,
     #[error("Invalid session with id {session_id}: {message}")]
     InvalidSession { session_id: u64, message: String },
+    #[error("Missing session ID")]
+    MissingSessionId,
+    #[error("Missing profile")]
+    MissingProfile,
 }
 
 impl std::fmt::Debug for PlayableTrack {
@@ -143,7 +147,8 @@ impl std::fmt::Debug for PlayableTrack {
 #[derive(Debug, Clone)]
 pub struct Playback {
     pub id: u64,
-    pub session_id: Option<u64>,
+    pub session_id: u64,
+    pub profile: String,
     pub tracks: Vec<Track>,
     pub playing: bool,
     pub position: u16,
@@ -160,12 +165,14 @@ impl Playback {
         position: Option<u16>,
         volume: AtomicF64,
         quality: PlaybackQuality,
-        session_id: Option<u64>,
+        session_id: u64,
+        profile: String,
         playback_target: Option<PlaybackTarget>,
     ) -> Playback {
         Playback {
             id: thread_rng().gen::<u64>(),
             session_id,
+            profile,
             tracks,
             playing: false,
             position: position.unwrap_or_default(),
@@ -488,7 +495,11 @@ impl PlaybackHandler {
 }
 
 impl PlaybackHandler {
-    pub async fn init_from_api_session(&mut self, session: ApiSession) -> Result<(), PlayerError> {
+    pub async fn init_from_api_session(
+        &mut self,
+        profile: String,
+        session: ApiSession,
+    ) -> Result<(), PlayerError> {
         let session_id = session.session_id;
         if let Err(err) = self
             .update_playback(
@@ -513,6 +524,7 @@ impl PlaybackHandler {
                 ),
                 None,
                 Some(session.session_id),
+                Some(profile),
                 session.playback_target,
                 true,
                 None,
@@ -530,6 +542,7 @@ impl PlaybackHandler {
 
     pub async fn init_from_session(
         &mut self,
+        profile: String,
         session: Session,
         init: &UpdateSession,
     ) -> Result<(), PlayerError> {
@@ -567,6 +580,7 @@ impl PlaybackHandler {
                 ),
                 None,
                 Some(session.id),
+                Some(profile),
                 session.playback_target,
                 true,
                 None,
@@ -586,7 +600,8 @@ impl PlaybackHandler {
     pub async fn play_album(
         &mut self,
         api: &dyn MusicApi,
-        session_id: Option<u64>,
+        session_id: u64,
+        profile: String,
         album_id: &Id,
         position: Option<u16>,
         seek: Option<f64>,
@@ -619,6 +634,7 @@ impl PlaybackHandler {
 
         self.play_tracks(
             session_id,
+            profile,
             tracks,
             position,
             seek,
@@ -633,7 +649,8 @@ impl PlaybackHandler {
     #[allow(clippy::too_many_arguments)]
     pub async fn play_track(
         &mut self,
-        session_id: Option<u64>,
+        session_id: u64,
+        profile: String,
         track: Track,
         seek: Option<f64>,
         volume: Option<f64>,
@@ -643,6 +660,7 @@ impl PlaybackHandler {
     ) -> Result<(), PlayerError> {
         self.play_tracks(
             session_id,
+            profile,
             vec![track],
             None,
             seek,
@@ -657,7 +675,8 @@ impl PlaybackHandler {
     #[allow(clippy::too_many_arguments)]
     pub async fn play_tracks(
         &mut self,
-        session_id: Option<u64>,
+        session_id: u64,
+        profile: String,
         tracks: Vec<Track>,
         position: Option<u16>,
         seek: Option<f64>,
@@ -680,6 +699,7 @@ impl PlaybackHandler {
                 AtomicF64::new(volume.unwrap_or(1.0)),
                 quality,
                 session_id,
+                profile,
                 playback_target,
             );
 
@@ -897,6 +917,7 @@ impl PlaybackHandler {
             None,
             None,
             None,
+            None,
             true,
             retry_options,
         )
@@ -933,6 +954,7 @@ impl PlaybackHandler {
             None,
             None,
             None,
+            None,
             true,
             retry_options,
         )
@@ -956,6 +978,7 @@ impl PlaybackHandler {
         tracks: Option<Vec<Track>>,
         quality: Option<PlaybackQuality>,
         session_id: Option<u64>,
+        profile: Option<String>,
         playback_target: Option<PlaybackTarget>,
         trigger_event: bool,
         retry_options: Option<PlaybackRetryOptions>,
@@ -973,6 +996,7 @@ impl PlaybackHandler {
             tracks={tracks:?}\n\t\
             quality={quality:?}\n\t\
             session_id={session_id:?}\n\t\
+            profile={profile:?}\n\t\
             playback_target={playback_target:?}\n\t\
             trigger_event={trigger_event}\
             "
@@ -982,9 +1006,18 @@ impl PlaybackHandler {
 
         let original = self.playback.read().unwrap().clone();
 
-        if let Some(original) = &original {
+        let (session_id, profile) = if let Some(original) = &original {
             log::trace!("update_playback: existing playback={original:?}");
-        }
+            (
+                session_id.unwrap_or(original.session_id),
+                profile.unwrap_or_else(|| original.profile.clone()),
+            )
+        } else {
+            (
+                session_id.ok_or(PlayerError::MissingSessionId)?,
+                profile.ok_or(PlayerError::MissingProfile)?,
+            )
+        };
 
         let original = original.unwrap_or(Playback::new(
             tracks.clone().unwrap_or_default(),
@@ -992,6 +1025,7 @@ impl PlaybackHandler {
             AtomicF64::new(volume.unwrap_or(1.0)),
             quality.unwrap_or_default(),
             session_id,
+            profile.clone(),
             playback_target.clone(),
         ));
 
@@ -1007,7 +1041,8 @@ impl PlaybackHandler {
 
         let playback = Playback {
             id: original.id,
-            session_id: session_id.or(original.session_id),
+            session_id,
+            profile,
             playback_target: playback_target.or_else(|| original.playback_target.clone()),
             tracks: tracks.clone().unwrap_or_else(|| original.tracks.clone()),
             playing: is_playing,
@@ -1187,9 +1222,6 @@ pub fn on_playback_event(listener: PlaybackEventCallback) {
 }
 
 pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
-    let Some(session_id) = current.session_id else {
-        return;
-    };
     let Some(playback_target) = current.playback_target.clone() else {
         return;
     };
@@ -1267,7 +1299,8 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
     );
 
     let update = UpdateSession {
-        session_id,
+        session_id: current.session_id,
+        profile: current.profile.clone(),
         playback_target,
         play: None,
         stop: None,

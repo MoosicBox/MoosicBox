@@ -550,12 +550,13 @@ impl UpnpPlayer {
                                 if !sent_playback_start_event
                                     .load(std::sync::atomic::Ordering::SeqCst)
                                 {
-                                    if let (Some(session_id), Some(playback_target)) = (playback.session_id, playback.playback_target.clone()) {
+                                    if let Some(playback_target) = playback.playback_target.clone() {
                                         sent_playback_start_event
                                             .store(true, std::sync::atomic::Ordering::SeqCst);
 
                                         let update = UpdateSession {
-                                            session_id,
+                                            session_id: playback.session_id,
+                                            profile: playback.profile.clone(),
                                             playback_target,
                                             play: None,
                                             stop: None,

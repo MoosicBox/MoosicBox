@@ -17,6 +17,7 @@ use moosicbox_core::{
     sqlite::models::{ApiSource, Id, IdType},
     types::{AudioFormat, PlaybackQuality},
 };
+use moosicbox_database::profiles::api::ProfileName;
 use moosicbox_music_api::{MusicApi, MusicApiState, SourceToMusicApi as _};
 use moosicbox_session::models::PlaybackTarget;
 use serde::Deserialize;
@@ -116,6 +117,8 @@ impl From<PlayerError> for actix_web::Error {
             PlayerError::RetryRequested => ErrorInternalServerError(err),
             PlayerError::InvalidState => ErrorInternalServerError(err),
             PlayerError::InvalidSource => ErrorInternalServerError(err),
+            PlayerError::MissingSessionId => ErrorInternalServerError(err),
+            PlayerError::MissingProfile => ErrorInternalServerError(err),
         }
     }
 }
@@ -240,7 +243,7 @@ pub async fn get_track_or_ids_from_track_id_ranges(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayAlbumQuery {
-    pub session_id: Option<u64>,
+    pub session_id: u64,
     pub album_id: String,
     pub position: Option<u16>,
     pub seek: Option<f64>,
@@ -258,7 +261,7 @@ pub struct PlayAlbumQuery {
         path = "/play/album",
         description = "Play the given album for the specified host or local player",
         params(
-            ("sessionId" = Option<u64>, Query, description = "Session ID to play the album on"),
+            ("sessionId" = u64, Query, description = "Session ID to play the album on"),
             ("albumId" = String, Query, description = "Album ID to play"),
             ("position" = Option<u16>, Query, description = "Position in the playlist to play from"),
             ("seek" = Option<f64>, Query, description = "Seek position to begin playback from"),
@@ -281,6 +284,7 @@ pub struct PlayAlbumQuery {
 pub async fn play_album_endpoint(
     query: web::Query<PlayAlbumQuery>,
     _data: web::Data<AppState>,
+    profile: ProfileName,
     api_state: web::Data<MusicApiState>,
 ) -> Result<Json<PlaybackStatus>> {
     let source = query.source.unwrap_or(ApiSource::Library);
@@ -295,6 +299,7 @@ pub async fn play_album_endpoint(
                 .get(source)
                 .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
             query.session_id,
+            profile.into(),
             &album_id,
             query.position,
             query.seek,
@@ -315,7 +320,7 @@ pub async fn play_album_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayTrackQuery {
-    pub session_id: Option<u64>,
+    pub session_id: u64,
     pub track_id: i32,
     pub seek: Option<f64>,
     pub volume: Option<f64>,
@@ -355,6 +360,7 @@ pub async fn play_track_endpoint(
     query: web::Query<PlayTrackQuery>,
     _data: web::Data<AppState>,
     api_state: web::Data<MusicApiState>,
+    profile: ProfileName,
 ) -> Result<Json<PlaybackStatus>> {
     let track_id = get_track_or_ids_from_track_id_ranges(
         &**api_state
@@ -376,6 +382,7 @@ pub async fn play_track_endpoint(
         .await?
         .play_track(
             query.session_id,
+            profile.into(),
             track_id,
             query.seek,
             query.volume,
@@ -395,7 +402,7 @@ pub async fn play_track_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayTracksQuery {
-    pub session_id: Option<u64>,
+    pub session_id: u64,
     pub track_ids: String,
     pub position: Option<u16>,
     pub seek: Option<f64>,
@@ -436,6 +443,7 @@ pub struct PlayTracksQuery {
 pub async fn play_tracks_endpoint(
     query: web::Query<PlayTracksQuery>,
     _data: web::Data<AppState>,
+    profile: ProfileName,
     api_state: web::Data<MusicApiState>,
 ) -> Result<Json<PlaybackStatus>> {
     let track_ids = get_track_or_ids_from_track_id_ranges(
@@ -452,6 +460,7 @@ pub async fn play_tracks_endpoint(
         .await?
         .play_tracks(
             query.session_id,
+            profile.into(),
             track_ids,
             query.position,
             query.seek,
@@ -594,6 +603,7 @@ pub struct UpdatePlaybackQuery {
 pub async fn update_playback_endpoint(
     query: web::Query<UpdatePlaybackQuery>,
     _data: web::Data<AppState>,
+    profile: ProfileName,
     api_state: web::Data<MusicApiState>,
 ) -> Result<Json<PlaybackStatus>> {
     let track_ids = if let Some(track_ids) = &query.track_ids {
@@ -625,6 +635,7 @@ pub async fn update_playback_endpoint(
             track_ids,
             query.format.map(|format| PlaybackQuality { format }),
             query.session_id,
+            Some(profile.into()),
             query
                 .audio_zone_id
                 .map(|audio_zone_id| PlaybackTarget::AudioZone { audio_zone_id }),

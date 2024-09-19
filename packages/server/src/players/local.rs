@@ -4,11 +4,11 @@ use std::sync::LazyLock;
 use moosicbox_audio_output::AudioOutputScannerError;
 use moosicbox_core::sqlite::models::ApiSource;
 use moosicbox_database::config::ConfigDatabase;
-use moosicbox_database::profiles::LibraryDatabase;
+use moosicbox_database::profiles::{LibraryDatabase, PROFILES};
 use moosicbox_ws::WebsocketSendError;
 use thiserror::Error;
 
-use crate::{DB, WS_SERVER_HANDLE};
+use crate::WS_SERVER_HANDLE;
 
 pub static SERVER_PLAYERS: LazyLock<
     tokio::sync::RwLock<
@@ -77,7 +77,9 @@ fn handle_server_playback_update(
     use moosicbox_session::get_session;
 
     let update = update.clone();
-    let db = { DB.read().unwrap().clone().unwrap() };
+    let Some(db) = PROFILES.get(&update.profile) else {
+        return Box::pin(async move {});
+    };
 
     Box::pin(async move {
         log::debug!("Handling server playback update");
@@ -126,8 +128,6 @@ fn handle_server_playback_update(
 
                     let mut players = SERVER_PLAYERS.write().await;
 
-                    let db = { DB.read().unwrap().clone().expect("No database") };
-
                     let local_player = match moosicbox_player::local::LocalPlayer::new(
                         moosicbox_player::PlayerSource::Local,
                         None,
@@ -157,7 +157,10 @@ fn handle_server_playback_update(
                         .replace(player.clone());
 
                     if let Ok(Some(session)) = get_session(&db, update.session_id).await {
-                        if let Err(e) = player.init_from_session(session, &update).await {
+                        if let Err(e) = player
+                            .init_from_session(update.profile.clone(), session, &update)
+                            .await
+                        {
                             moosicbox_assert::die_or_error!(
                                 "Failed to create new player from session: {e:?}"
                             );
@@ -219,6 +222,7 @@ fn handle_server_playback_update(
                 },
                 None,
                 Some(update.session_id),
+                Some(update.profile),
                 Some(update.playback_target),
                 false,
                 Some(moosicbox_player::DEFAULT_PLAYBACK_RETRY_OPTIONS),

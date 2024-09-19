@@ -17,7 +17,7 @@ use moosicbox_config::{
     db::get_or_init_server_identity, get_app_config_dir_path, get_profile_dir_path, AppType,
 };
 use moosicbox_core::{app::AppState, sqlite::models::ApiSource};
-use moosicbox_database::{config::ConfigDatabase, profiles::LibraryDatabase, Database};
+use moosicbox_database::{config::ConfigDatabase, Database};
 use moosicbox_files::files::track_pool::service::Commander as _;
 use moosicbox_music_api::{MusicApi, MusicApiState};
 use std::{
@@ -38,10 +38,6 @@ static WS_SERVER_HANDLE: LazyLock<tokio::sync::RwLock<Option<ws::server::WsServe
 
 #[allow(clippy::type_complexity)]
 static CONFIG_DB: LazyLock<std::sync::RwLock<Option<ConfigDatabase>>> =
-    LazyLock::new(|| std::sync::RwLock::new(None));
-
-#[allow(clippy::type_complexity)]
-static DB: LazyLock<std::sync::RwLock<Option<LibraryDatabase>>> =
     LazyLock::new(|| std::sync::RwLock::new(None));
 
 #[allow(clippy::type_complexity)]
@@ -163,8 +159,6 @@ pub async fn run(
 
     let library_database =
         moosicbox_database::profiles::PROFILES.fetch_add("master", library_database.clone());
-
-    DB.write().unwrap().replace(library_database.clone());
 
     #[cfg(feature = "library")]
     let library_music_api = moosicbox_library::LibraryMusicApi::new(library_database.clone());
@@ -592,6 +586,7 @@ pub async fn run(
                             None,
                             None,
                             None,
+                            None,
                             true,
                             None,
                         )
@@ -627,6 +622,7 @@ pub async fn run(
                             None,
                             None,
                             None,
+                            None,
                             true,
                             None,
                         )
@@ -644,9 +640,6 @@ pub async fn run(
             if let Some(x) = server {
                 x.shutdown();
             }
-
-            log::debug!("Shutting down db client...");
-            DB.write().unwrap().take();
 
             log::debug!("Cancelling scan...");
             #[cfg(feature = "scan")]
