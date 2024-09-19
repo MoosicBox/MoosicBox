@@ -212,7 +212,7 @@ pub async fn message(
         }
         InboundPayload::GetSessions(_) => {
             let db = db.ok_or(WebsocketMessageError::MissingProfile)?;
-            get_sessions(&db, sender, context, false).await?;
+            broadcast_sessions(&db, sender, context, false).await?;
             Ok(())
         }
         InboundPayload::RegisterConnection(payload) => {
@@ -323,8 +323,7 @@ pub async fn broadcast_audio_zones(
     }
 }
 
-// TODO: rename to broadcast sessions
-pub async fn get_sessions(
+pub async fn broadcast_sessions(
     db: &LibraryDatabase,
     sender: &impl WebsocketSender,
     context: &WebsocketContext,
@@ -357,7 +356,7 @@ async fn create_session(
     payload: &CreateSession,
 ) -> Result<(), WebsocketSendError> {
     moosicbox_session::create_session(db, payload).await?;
-    get_sessions(db, sender, context, true).await?;
+    broadcast_sessions(db, sender, context, true).await?;
     Ok(())
 }
 
@@ -433,7 +432,7 @@ async fn create_audio_zone(
     payload: &CreateAudioZone,
 ) -> Result<(), WebsocketMessageError> {
     moosicbox_audio_zone::create_audio_zone(config_db, payload).await?;
-    get_sessions(db, sender, context, true).await?;
+    broadcast_sessions(db, sender, context, true).await?;
     Ok(())
 }
 
@@ -611,7 +610,7 @@ async fn delete_session(
 ) -> Result<(), WebsocketSendError> {
     moosicbox_session::delete_session(db, payload.session_id).await?;
 
-    get_sessions(db, sender, context, true).await?;
+    broadcast_sessions(db, sender, context, true).await?;
 
     Ok(())
 }

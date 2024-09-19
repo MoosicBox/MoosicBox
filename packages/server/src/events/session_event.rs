@@ -22,7 +22,7 @@ pub async fn init() {
                 .map_err(|e| Box::new(e) as BoxErrorSend)?;
             for profile in PROFILES.names() {
                 if let Some(db) = PROFILES.get(&profile) {
-                    moosicbox_ws::get_sessions(&db, &handle, &context, true)
+                    moosicbox_ws::broadcast_sessions(&db, &handle, &context, true)
                         .await
                         .map_err(|e| Box::new(e) as BoxErrorSend)?;
                 } else {
