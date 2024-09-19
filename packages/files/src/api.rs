@@ -15,7 +15,7 @@ use moosicbox_core::{
 };
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_music_api::{
-    ImageCoverSize, MusicApiState, SourceToMusicApi as _, TrackAudioQuality, TrackSource,
+    ImageCoverSize, MusicApis, SourceToMusicApi as _, TrackAudioQuality, TrackSource,
 };
 use serde::Deserialize;
 
@@ -131,10 +131,10 @@ pub struct GetTrackVisualizationQuery {
 #[route("/track/visualization", method = "GET")]
 pub async fn track_visualization_endpoint(
     query: web::Query<GetTrackVisualizationQuery>,
-    api_state: web::Data<MusicApiState>,
+    music_apis: MusicApis,
 ) -> Result<Json<Vec<u8>>> {
     let source = get_track_id_source(
-        api_state.apis.clone(),
+        music_apis,
         &query.track_id.into(),
         query.source.unwrap_or(ApiSource::Library),
         Some(TrackAudioQuality::Low),
@@ -279,12 +279,12 @@ pub struct GetTrackQuery {
 pub async fn track_endpoint(
     req: HttpRequest,
     query: web::Query<GetTrackQuery>,
-    api_state: web::Data<MusicApiState>,
+    music_apis: MusicApis,
 ) -> Result<HttpResponse> {
     let method = req.method();
 
     let source = get_track_id_source(
-        api_state.apis.clone(),
+        music_apis.clone(),
         &query.track_id.into(),
         query.source.unwrap_or(ApiSource::Library),
         query.quality,
@@ -361,8 +361,7 @@ pub async fn track_endpoint(
     log::debug!("{method} /track Fetching track bytes with range range={range:?}");
 
     let bytes = get_track_bytes(
-        &**api_state
-            .apis
+        &**music_apis
             .get(query.source.unwrap_or(ApiSource::Library))
             .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
         &Id::Number(query.track_id),
@@ -471,12 +470,11 @@ pub struct GetTrackInfoQuery {
 #[route("/track/info", method = "GET")]
 pub async fn track_info_endpoint(
     query: web::Query<GetTrackInfoQuery>,
-    api_state: web::Data<MusicApiState>,
+    music_apis: MusicApis,
 ) -> Result<Json<TrackInfo>> {
     Ok(Json(
         get_track_info(
-            &**api_state
-                .apis
+            &**music_apis
                 .get(query.source.unwrap_or(ApiSource::Library))
                 .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
             &query.track_id,
@@ -515,7 +513,7 @@ pub struct GetTracksInfoQuery {
 #[route("/tracks/info", method = "GET")]
 pub async fn tracks_info_endpoint(
     query: web::Query<GetTracksInfoQuery>,
-    api_state: web::Data<MusicApiState>,
+    music_apis: MusicApis,
 ) -> Result<Json<Vec<TrackInfo>>> {
     let ids = parse_integer_ranges_to_ids(&query.track_ids).map_err(|e| match e {
         ParseIntegersError::ParseId(id) => {
@@ -531,8 +529,7 @@ pub async fn tracks_info_endpoint(
 
     Ok(Json(
         get_tracks_info(
-            &**api_state
-                .apis
+            &**music_apis
                 .get(query.source.unwrap_or(ApiSource::Library))
                 .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
             &ids,
@@ -575,7 +572,7 @@ pub struct GetTrackUrlQuery {
 #[route("/tracks/url", method = "GET")]
 pub async fn track_urls_endpoint(
     query: web::Query<GetTrackUrlQuery>,
-    api_state: web::Data<MusicApiState>,
+    music_apis: MusicApis,
 ) -> Result<Json<Vec<String>>> {
     let source = query.source.unwrap_or(ApiSource::Library);
     let mut ids = vec![];
@@ -600,8 +597,7 @@ pub async fn track_urls_endpoint(
 
     let ids = ids;
 
-    let api = api_state
-        .apis
+    let api = music_apis
         .get(source)
         .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?;
 
@@ -670,7 +666,7 @@ pub async fn artist_source_artwork_endpoint(
     path: web::Path<String>,
     query: web::Query<ArtistCoverQuery>,
     db: LibraryDatabase,
-    api_state: web::Data<MusicApiState>,
+    music_apis: MusicApis,
 ) -> Result<HttpResponse> {
     let paths = path.into_inner();
 
@@ -685,8 +681,7 @@ pub async fn artist_source_artwork_endpoint(
     .map_err(|_e| ErrorBadRequest("Invalid artist_id"))?;
 
     let size = ImageCoverSize::Max;
-    let api = api_state
-        .apis
+    let api = music_apis
         .get(source)
         .map_err(|e| ErrorInternalServerError(format!("Failed to get music_api: {e:?}")))?;
     let artist = api
@@ -733,7 +728,7 @@ pub async fn artist_cover_endpoint(
     path: web::Path<(String, String)>,
     query: web::Query<ArtistCoverQuery>,
     db: LibraryDatabase,
-    api_state: web::Data<MusicApiState>,
+    music_apis: MusicApis,
 ) -> Result<HttpResponse> {
     let paths = path.into_inner();
 
@@ -760,8 +755,7 @@ pub async fn artist_cover_endpoint(
     let (width, height) = (dimensions[0], dimensions[1]);
 
     let size = (std::cmp::max(width, height) as u16).into();
-    let api = api_state
-        .apis
+    let api = music_apis
         .get(source)
         .map_err(|e| ErrorInternalServerError(format!("Failed to get music_api: {e:?}")))?;
     let artist = api
@@ -826,7 +820,7 @@ pub async fn album_source_artwork_endpoint(
     path: web::Path<String>,
     query: web::Query<AlbumCoverQuery>,
     db: LibraryDatabase,
-    api_state: web::Data<MusicApiState>,
+    music_apis: MusicApis,
 ) -> Result<HttpResponse> {
     let paths = path.into_inner();
 
@@ -841,8 +835,7 @@ pub async fn album_source_artwork_endpoint(
     .map_err(|_e| ErrorBadRequest("Invalid album_id"))?;
 
     let size = ImageCoverSize::Max;
-    let api = api_state
-        .apis
+    let api = music_apis
         .get(source)
         .map_err(|e| ErrorInternalServerError(format!("Failed to get music_api: {e:?}")))?;
     let album = api
@@ -889,7 +882,7 @@ pub async fn album_artwork_endpoint(
     path: web::Path<(String, String)>,
     query: web::Query<AlbumCoverQuery>,
     db: LibraryDatabase,
-    api_state: web::Data<MusicApiState>,
+    music_apis: MusicApis,
 ) -> Result<HttpResponse> {
     let paths = path.into_inner();
 
@@ -916,8 +909,7 @@ pub async fn album_artwork_endpoint(
     let (width, height) = (dimensions[0], dimensions[1]);
 
     let size = (std::cmp::max(width, height) as u16).into();
-    let api = api_state
-        .apis
+    let api = music_apis
         .get(source)
         .map_err(|e| ErrorInternalServerError(format!("Failed to get music_api: {e:?}")))?;
     let album = api

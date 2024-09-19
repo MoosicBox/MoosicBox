@@ -10,7 +10,7 @@ use actix_web::{
 };
 use moosicbox_auth::NonTunnelRequestAuthorized;
 use moosicbox_database::profiles::LibraryDatabase;
-use moosicbox_music_api::MusicApiState;
+use moosicbox_music_api::MusicApis;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -87,7 +87,7 @@ pub struct ScanQuery {
 pub async fn run_scan_endpoint(
     query: web::Query<ScanQuery>,
     db: LibraryDatabase,
-    api_state: web::Data<MusicApiState>,
+    music_apis: MusicApis,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
     let origins = query
@@ -105,7 +105,7 @@ pub async fn run_scan_endpoint(
         })
         .transpose()?;
 
-    run_scan(origins, &db, api_state.as_ref().clone())
+    run_scan(origins, &db, music_apis)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
 
@@ -134,7 +134,7 @@ pub async fn run_scan_endpoint(
 pub async fn start_scan_endpoint(
     query: web::Query<ScanQuery>,
     db: LibraryDatabase,
-    api_state: web::Data<MusicApiState>,
+    music_apis: MusicApis,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
     let origins = query
@@ -153,12 +153,10 @@ pub async fn start_scan_endpoint(
         .transpose()?;
 
     moosicbox_task::spawn("scan", async move {
-        run_scan(origins, &db, api_state.as_ref().clone())
-            .await
-            .map_err(|e| {
-                moosicbox_assert::die_or_error!("Scan error: {e:?}");
-                e
-            })?;
+        run_scan(origins, &db, music_apis).await.map_err(|e| {
+            moosicbox_assert::die_or_error!("Scan error: {e:?}");
+            e
+        })?;
 
         Ok::<_, ScanError>(())
     });
@@ -196,7 +194,7 @@ pub struct ScanPathQuery {
 pub async fn run_scan_path_endpoint(
     query: web::Query<ScanPathQuery>,
     db: LibraryDatabase,
-    api_state: web::Data<MusicApiState>,
+    music_apis: MusicApis,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
     let scanner = crate::Scanner::new(crate::event::ScanTask::Local {
@@ -205,7 +203,7 @@ pub async fn run_scan_path_endpoint(
     .await;
 
     scanner
-        .scan(api_state.as_ref().clone(), &db)
+        .scan(music_apis, &db)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
 

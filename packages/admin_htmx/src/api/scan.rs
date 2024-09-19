@@ -7,7 +7,7 @@ use actix_web::{
 use maud::{html, Markup};
 use moosicbox_core::sqlite::db::DbError;
 use moosicbox_database::profiles::LibraryDatabase;
-use moosicbox_music_api::MusicApiState;
+use moosicbox_music_api::MusicApis;
 use moosicbox_scan::ScanOrigin;
 use serde::Deserialize;
 
@@ -69,15 +69,11 @@ pub async fn delete_scan_paths_endpoint(
 pub async fn start_scan_endpoint(
     _htmx: Htmx,
     db: LibraryDatabase,
-    api_state: web::Data<MusicApiState>,
+    music_apis: MusicApis,
 ) -> Result<Markup, actix_web::Error> {
-    moosicbox_scan::run_scan(
-        Some(vec![ScanOrigin::Local]),
-        &db,
-        api_state.as_ref().clone(),
-    )
-    .await
-    .map_err(|e| ErrorInternalServerError(format!("Failed to run scan: {e:?}")))?;
+    moosicbox_scan::run_scan(Some(vec![ScanOrigin::Local]), &db, music_apis)
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to run scan: {e:?}")))?;
 
     Ok(html! {})
 }

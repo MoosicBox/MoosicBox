@@ -142,7 +142,10 @@ pub mod api {
     }
 
     impl ProfileName {
-        fn from_request_inner(req: &HttpRequest) -> Result<Self, actix_web::Error> {
+        /// # Errors
+        ///
+        /// Will error if request is missing profile header and query param
+        pub fn from_request_inner(req: &HttpRequest) -> Result<Self, actix_web::Error> {
             let profile =
                 from_query(req).or_else(|_| from_header(req).map(std::borrow::ToOwned::to_owned));
 

@@ -31,7 +31,8 @@ use actix_web::{
     Result,
 };
 use moosicbox_database::profiles::LibraryDatabase;
-use moosicbox_music_api::{MusicApiState, SourceToMusicApi as _, TrackAudioQuality};
+use moosicbox_music_api::MusicApis;
+use moosicbox_music_api::{SourceToMusicApi as _, TrackAudioQuality};
 use moosicbox_paging::Page;
 use regex::Captures;
 use regex::Regex;
@@ -83,7 +84,7 @@ pub async fn add_progress_listener_to_download_queue(listener: ProgressListenerR
 
 async fn get_default_download_queue(
     db: LibraryDatabase,
-    api_state: MusicApiState,
+    music_apis: MusicApis,
 ) -> Arc<RwLock<DownloadQueue>> {
     let queue = { DOWNLOAD_QUEUE.read().await.clone() };
 
@@ -95,7 +96,7 @@ async fn get_default_download_queue(
         let mut queue = DOWNLOAD_QUEUE.write().await;
         *queue = queue
             .clone()
-            .with_downloader(Box::new(MoosicboxDownloader::new(db, api_state)));
+            .with_downloader(Box::new(MoosicboxDownloader::new(db, music_apis)));
     }
 
     DOWNLOAD_QUEUE.clone()
@@ -173,13 +174,12 @@ pub struct DownloadQuery {
 pub async fn download_endpoint(
     query: web::Query<DownloadQuery>,
     db: LibraryDatabase,
-    api_state: web::Data<MusicApiState>,
+    music_apis: MusicApis,
 ) -> Result<Json<Value>> {
     let download_path = get_download_path(&db, query.location_id).await?;
 
     let tasks = get_create_download_tasks(
-        &**api_state
-            .apis
+        &**music_apis
             .get(query.source.into())
             .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
         &download_path,
@@ -196,7 +196,7 @@ pub async fn download_endpoint(
 
     let tasks = create_download_tasks(&db, tasks).await?;
 
-    let queue = get_default_download_queue(db.clone(), api_state.as_ref().clone()).await;
+    let queue = get_default_download_queue(db.clone(), music_apis).await;
     let mut download_queue = queue.write().await;
 
     download_queue.add_tasks_to_queue(tasks).await;
@@ -233,7 +233,7 @@ pub struct RetryDownloadQuery {
 pub async fn retry_download_endpoint(
     query: web::Query<RetryDownloadQuery>,
     db: LibraryDatabase,
-    api_state: web::Data<MusicApiState>,
+    music_apis: MusicApis,
 ) -> Result<Json<Value>> {
     let tasks = get_download_tasks(&db).await?;
     let task = tasks
@@ -243,10 +243,7 @@ pub async fn retry_download_endpoint(
 
     let mut download_queue = DownloadQueue::new()
         .with_database(db.clone())
-        .with_downloader(Box::new(MoosicboxDownloader::new(
-            db,
-            api_state.as_ref().clone(),
-        )));
+        .with_downloader(Box::new(MoosicboxDownloader::new(db, music_apis)));
     download_queue.add_tasks_to_queue(vec![task]).await;
     download_queue.process();
 

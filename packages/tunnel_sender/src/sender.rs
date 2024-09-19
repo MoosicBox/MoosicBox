@@ -26,7 +26,7 @@ use moosicbox_files::files::track::{
     audio_format_to_content_type, get_track_id_source, get_track_info,
 };
 use moosicbox_files::range::{parse_ranges, Range};
-use moosicbox_music_api::{MusicApis, SourceToMusicApi as _, TrackSource};
+use moosicbox_music_api::{SourceToMusicApi as _, TrackSource};
 use moosicbox_player::symphonia::play_media_source_async;
 use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;
 use moosicbox_stream_utils::ByteWriter;
@@ -1150,7 +1150,6 @@ impl TunnelSender {
     #[allow(clippy::too_many_arguments)]
     pub async fn tunnel_request(
         &self,
-        music_apis: MusicApis,
         service_port: u16,
         request_id: usize,
         method: Method,
@@ -1170,7 +1169,10 @@ impl TunnelSender {
                 .insert(request_id, abort_token.clone());
         }
 
-        let db = profile.and_then(|x| PROFILES.get(&x));
+        let db = profile.as_ref().and_then(|x| PROFILES.get(x));
+        let music_apis = profile
+            .as_ref()
+            .and_then(|x| moosicbox_music_api::profiles::PROFILES.get(x));
 
         match path.to_lowercase().as_str() {
             "files/track" => {
@@ -1208,7 +1210,7 @@ impl TunnelSender {
                         response_headers.insert("accept-ranges".to_string(), "bytes".to_string());
 
                         match get_track_id_source(
-                            music_apis.clone(),
+                            music_apis.ok_or(TunnelRequestError::MissingProfile)?,
                             &query.track_id.into(),
                             query.source.unwrap_or(ApiSource::Library),
                             query.quality,
@@ -1421,6 +1423,7 @@ impl TunnelSender {
                     let mut headers = HashMap::new();
                     headers.insert("content-type".to_string(), "application/json".to_string());
 
+                    let music_apis = music_apis.ok_or(TunnelRequestError::MissingProfile)?;
                     let api = music_apis.get(query.source.unwrap_or(ApiSource::Library))?;
 
                     if let Ok(track_info) = get_track_info(&**api, &query.track_id.into()).await {
@@ -1472,6 +1475,8 @@ impl TunnelSender {
                                 .parse::<u32>()
                                 .map_err(|_| TunnelRequestError::BadRequest("Bad height".into()))?;
 
+                            let music_apis =
+                                music_apis.ok_or(TunnelRequestError::MissingProfile)?;
                             let api = music_apis.get(query.source.unwrap_or(ApiSource::Library))?;
 
                             let album = api

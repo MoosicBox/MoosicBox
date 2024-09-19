@@ -12,7 +12,7 @@ use moosicbox_core::sqlite::{
     models::{ApiSource, TrackApiSource},
 };
 use moosicbox_database::profiles::LibraryDatabase;
-use moosicbox_music_api::{MusicApi, MusicApiState, MusicApisError, SourceToMusicApi as _};
+use moosicbox_music_api::{MusicApi, MusicApis, MusicApisError, SourceToMusicApi as _};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
@@ -237,11 +237,7 @@ impl Scanner {
         }
     }
 
-    pub async fn scan(
-        &self,
-        api_state: MusicApiState,
-        db: &LibraryDatabase,
-    ) -> Result<(), ScanError> {
+    pub async fn scan(&self, music_apis: MusicApis, db: &LibraryDatabase) -> Result<(), ScanError> {
         self.scanned.store(0, std::sync::atomic::Ordering::SeqCst);
         self.total.store(0, std::sync::atomic::Ordering::SeqCst);
 
@@ -249,7 +245,7 @@ impl Scanner {
             #[cfg(feature = "local")]
             ScanTask::Local { paths } => self.scan_local(db, paths).await?,
             ScanTask::Api { origin } => {
-                self.scan_music_api(&**api_state.apis.get((*origin).into())?, db)
+                self.scan_music_api(&**music_apis.get((*origin).into())?, db)
                     .await?
             }
         }
@@ -337,7 +333,7 @@ pub async fn disable_scan_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Re
 pub async fn run_scan(
     origins: Option<Vec<ScanOrigin>>,
     db: &LibraryDatabase,
-    api_state: MusicApiState,
+    music_apis: MusicApis,
 ) -> Result<(), ScanError> {
     log::debug!("run_scan: origins={origins:?}");
 
@@ -347,7 +343,7 @@ pub async fn run_scan(
     for origin in origins {
         Scanner::from_origin(db, origin)
             .await?
-            .scan(api_state.clone(), db)
+            .scan(music_apis.clone(), db)
             .await?;
     }
 

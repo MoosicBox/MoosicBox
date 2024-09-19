@@ -39,7 +39,7 @@ use moosicbox_files::{
     GetContentLengthError, SaveBytesStreamToFileError,
 };
 use moosicbox_music_api::{
-    AlbumError, ArtistError, ImageCoverSize, MusicApi, MusicApiState, MusicApisError,
+    AlbumError, ArtistError, ImageCoverSize, MusicApi, MusicApis, MusicApisError,
     SourceToMusicApi as _, TrackAudioQuality, TrackError, TrackSource, TracksError,
 };
 use queue::ProgressListener;
@@ -1006,15 +1006,15 @@ pub trait Downloader {
 pub struct MoosicboxDownloader {
     speed: Arc<AtomicF64>,
     db: LibraryDatabase,
-    api_state: MusicApiState,
+    music_apis: MusicApis,
 }
 
 impl MoosicboxDownloader {
-    pub fn new(db: LibraryDatabase, api_state: MusicApiState) -> Self {
+    pub fn new(db: LibraryDatabase, music_apis: MusicApis) -> Self {
         Self {
             speed: Arc::new(AtomicF64::new(0.0)),
             db,
-            api_state,
+            music_apis,
         }
     }
 }
@@ -1035,7 +1035,7 @@ impl Downloader for MoosicboxDownloader {
         timeout_duration: Option<Duration>,
     ) -> Result<Track, DownloadTrackError> {
         download_track_id(
-            &**self.api_state.apis.get(source.into())?,
+            &**self.music_apis.get(source.into())?,
             path,
             track_id,
             quality,
@@ -1055,7 +1055,7 @@ impl Downloader for MoosicboxDownloader {
         on_progress: ProgressListener,
     ) -> Result<Album, DownloadAlbumError> {
         download_album_cover(
-            &**self.api_state.apis.get(source.into())?,
+            &**self.music_apis.get(source.into())?,
             &self.db,
             path,
             album_id,
@@ -1073,7 +1073,7 @@ impl Downloader for MoosicboxDownloader {
         on_progress: ProgressListener,
     ) -> Result<Artist, DownloadAlbumError> {
         download_artist_cover(
-            &**self.api_state.apis.get(source.into())?,
+            &**self.music_apis.get(source.into())?,
             &self.db,
             path,
             album_id,

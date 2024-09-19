@@ -5,7 +5,7 @@ use moosicbox_database::profiles::PROFILES;
 use moosicbox_upnp::UpnpDeviceScannerError;
 use thiserror::Error;
 
-use crate::{CONFIG_DB, MUSIC_API_STATE, UPNP_LISTENER_HANDLE, WS_SERVER_HANDLE};
+use crate::{CONFIG_DB, UPNP_LISTENER_HANDLE, WS_SERVER_HANDLE};
 
 pub static UPNP_PLAYERS: LazyLock<
     tokio::sync::RwLock<
@@ -83,36 +83,40 @@ pub async fn load_upnp_players() -> Result<(), moosicbox_upnp::UpnpDeviceScanner
                 if let Ok((device, service)) =
                     moosicbox_upnp::get_device_and_service(&device.udn, service_id)
                 {
-                    let player = moosicbox_upnp::player::UpnpPlayer::new(
-                        Arc::new(Box::new(
-                            MUSIC_API_STATE.read().unwrap().clone().unwrap().apis,
-                        )),
-                        device,
-                        service,
-                        PlayerSource::Local,
-                        UPNP_LISTENER_HANDLE.get().unwrap().clone(),
-                    );
+                    for profile in moosicbox_music_api::profiles::PROFILES.names() {
+                        if let Some(music_apis) =
+                            moosicbox_music_api::profiles::PROFILES.get(&profile)
+                        {
+                            let player = moosicbox_upnp::player::UpnpPlayer::new(
+                                Arc::new(Box::new(music_apis)),
+                                device.clone(),
+                                service.clone(),
+                                PlayerSource::Local,
+                                UPNP_LISTENER_HANDLE.get().unwrap().clone(),
+                            );
 
-                    let playback = player.playback.clone();
-                    let receiver = player.receiver.clone();
+                            let playback = player.playback.clone();
+                            let receiver = player.receiver.clone();
 
-                    let output: AudioOutputFactory = player
-                        .clone()
-                        .try_into()
-                        .expect("Failed to create audio output factory for UpnpPlayer");
+                            let output: AudioOutputFactory = player
+                                .clone()
+                                .try_into()
+                                .expect("Failed to create audio output factory for UpnpPlayer");
 
-                    let handler = PlaybackHandler::new(player.clone())
-                        .with_playback(playback)
-                        .with_output(Some(Arc::new(std::sync::Mutex::new(output.clone()))))
-                        .with_receiver(receiver);
+                            let handler = PlaybackHandler::new(player.clone())
+                                .with_playback(playback)
+                                .with_output(Some(Arc::new(std::sync::Mutex::new(output.clone()))))
+                                .with_receiver(receiver);
 
-                    player
-                        .playback_handler
-                        .write()
-                        .unwrap()
-                        .replace(handler.clone());
+                            player
+                                .playback_handler
+                                .write()
+                                .unwrap()
+                                .replace(handler.clone());
 
-                    players.push((output.clone(), player.clone(), handler));
+                            players.push((output.clone(), player.clone(), handler));
+                        }
+                    }
                 }
             }
         }

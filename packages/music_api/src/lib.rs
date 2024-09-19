@@ -15,8 +15,28 @@ use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 
+pub mod profiles;
+
 #[derive(Clone)]
 pub struct MusicApis(Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>>>);
+
+impl From<&MusicApis> for Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>>> {
+    fn from(value: &MusicApis) -> Self {
+        value.0.clone()
+    }
+}
+
+impl From<MusicApis> for Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>>> {
+    fn from(value: MusicApis) -> Self {
+        value.0
+    }
+}
+
+impl From<Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>>>> for MusicApis {
+    fn from(value: Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>>>) -> Self {
+        Self(value)
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum MusicApisError {
@@ -32,23 +52,6 @@ impl SourceToMusicApi for MusicApis {
             .ok_or(MusicApisError::NotFound(source))?;
 
         Ok(api.clone())
-    }
-}
-
-#[derive(Clone)]
-pub struct MusicApiState {
-    pub apis: MusicApis,
-}
-
-impl MusicApiState {
-    pub fn new(apis: HashMap<ApiSource, Box<dyn MusicApi>>) -> Self {
-        Self {
-            apis: MusicApis(Arc::new(
-                apis.into_iter()
-                    .map(|(source, api)| (source, Arc::new(api)))
-                    .collect(),
-            )),
-        }
     }
 }
 

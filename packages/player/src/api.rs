@@ -18,7 +18,7 @@ use moosicbox_core::{
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_database::profiles::api::ProfileName;
-use moosicbox_music_api::{MusicApi, MusicApiState, SourceToMusicApi as _};
+use moosicbox_music_api::{MusicApi, MusicApis, SourceToMusicApi as _};
 use moosicbox_session::models::PlaybackTarget;
 use serde::Deserialize;
 
@@ -285,7 +285,7 @@ pub async fn play_album_endpoint(
     query: web::Query<PlayAlbumQuery>,
     _data: web::Data<AppState>,
     profile: ProfileName,
-    api_state: web::Data<MusicApiState>,
+    music_apis: MusicApis,
 ) -> Result<Json<PlaybackStatus>> {
     let source = query.source.unwrap_or(ApiSource::Library);
     let album_id = Id::try_from_str(query.album_id.as_str(), source, IdType::Album)
@@ -294,8 +294,7 @@ pub async fn play_album_endpoint(
     get_player(query.host.as_deref())
         .await?
         .play_album(
-            &**api_state
-                .apis
+            &**music_apis
                 .get(source)
                 .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
             query.session_id,
@@ -359,12 +358,11 @@ pub struct PlayTrackQuery {
 pub async fn play_track_endpoint(
     query: web::Query<PlayTrackQuery>,
     _data: web::Data<AppState>,
-    api_state: web::Data<MusicApiState>,
+    music_apis: MusicApis,
     profile: ProfileName,
 ) -> Result<Json<PlaybackStatus>> {
     let track_id = get_track_or_ids_from_track_id_ranges(
-        &**api_state
-            .apis
+        &**music_apis
             .get(query.source.unwrap_or(ApiSource::Library))
             .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
         query.track_id.to_string().as_str(),
@@ -444,11 +442,10 @@ pub async fn play_tracks_endpoint(
     query: web::Query<PlayTracksQuery>,
     _data: web::Data<AppState>,
     profile: ProfileName,
-    api_state: web::Data<MusicApiState>,
+    music_apis: MusicApis,
 ) -> Result<Json<PlaybackStatus>> {
     let track_ids = get_track_or_ids_from_track_id_ranges(
-        &**api_state
-            .apis
+        &**music_apis
             .get(query.source.unwrap_or(ApiSource::Library))
             .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
         &query.track_ids,
@@ -604,13 +601,12 @@ pub async fn update_playback_endpoint(
     query: web::Query<UpdatePlaybackQuery>,
     _data: web::Data<AppState>,
     profile: ProfileName,
-    api_state: web::Data<MusicApiState>,
+    music_apis: MusicApis,
 ) -> Result<Json<PlaybackStatus>> {
     let track_ids = if let Some(track_ids) = &query.track_ids {
         Some(
             get_track_or_ids_from_track_id_ranges(
-                &**api_state
-                    .apis
+                &**music_apis
                     .get(query.source.unwrap_or(ApiSource::Library))
                     .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
                 track_ids,

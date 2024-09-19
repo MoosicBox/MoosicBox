@@ -6,11 +6,11 @@ pub mod api;
 pub mod cache;
 pub mod db;
 pub mod models;
+pub mod profiles;
 
 use std::{
     cmp::Ordering,
     fs::File,
-    ops::Deref,
     sync::{Arc, LazyLock},
 };
 
@@ -45,23 +45,6 @@ use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
 use tokio::sync::Mutex;
-
-#[derive(Clone)]
-pub struct LibraryMusicApiState(LibraryMusicApi);
-
-impl LibraryMusicApiState {
-    pub fn new(api: LibraryMusicApi) -> Self {
-        Self(api)
-    }
-}
-
-impl Deref for LibraryMusicApiState {
-    type Target = LibraryMusicApi;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -912,6 +895,24 @@ pub enum TrackSizeError {
 #[derive(Clone)]
 pub struct LibraryMusicApi {
     db: LibraryDatabase,
+}
+
+impl From<&LibraryMusicApi> for LibraryDatabase {
+    fn from(value: &LibraryMusicApi) -> Self {
+        value.db.clone()
+    }
+}
+
+impl From<LibraryMusicApi> for LibraryDatabase {
+    fn from(value: LibraryMusicApi) -> Self {
+        value.db
+    }
+}
+
+impl From<LibraryDatabase> for LibraryMusicApi {
+    fn from(value: LibraryDatabase) -> Self {
+        Self { db: value }
+    }
 }
 
 impl LibraryMusicApi {

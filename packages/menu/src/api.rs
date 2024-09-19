@@ -20,9 +20,9 @@ use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_library::{
     db::{get_album_tracks, get_tracks},
     models::{ApiAlbum, ApiArtist, ApiTrack},
-    LibraryMusicApiState,
+    LibraryMusicApi,
 };
-use moosicbox_music_api::{AlbumFilters, AlbumsRequest, MusicApiState, SourceToMusicApi as _};
+use moosicbox_music_api::{AlbumFilters, AlbumsRequest, MusicApis, SourceToMusicApi as _};
 use moosicbox_paging::{Page, PagingRequest};
 use serde::Deserialize;
 use thiserror::Error;
@@ -224,7 +224,7 @@ pub struct GetAlbumsQuery {
 #[get("/albums")]
 pub async fn get_albums_endpoint(
     query: web::Query<GetAlbumsQuery>,
-    library_api: web::Data<LibraryMusicApiState>,
+    library_api: LibraryMusicApi,
 ) -> Result<Json<Page<ApiAlbum>>> {
     let request = AlbumsRequest {
         page: if query.offset.is_some() || query.limit.is_some() {
@@ -394,7 +394,7 @@ pub struct GetAlbumVersionsQuery {
 #[get("/album/versions")]
 pub async fn get_album_versions_endpoint(
     query: web::Query<GetAlbumVersionsQuery>,
-    library_api: web::Data<LibraryMusicApiState>,
+    library_api: LibraryMusicApi,
 ) -> Result<Json<Vec<ApiAlbumVersion>>> {
     Ok(Json(
         get_album_versions(&library_api, &query.album_id.into())
@@ -602,13 +602,12 @@ pub struct AddAlbumQuery {
 pub async fn add_album_endpoint(
     query: web::Query<AddAlbumQuery>,
     db: LibraryDatabase,
-    library_api: web::Data<LibraryMusicApiState>,
-    api_state: web::Data<MusicApiState>,
+    library_api: LibraryMusicApi,
+    music_apis: MusicApis,
 ) -> Result<Json<ApiAlbum>> {
     Ok(Json(
         add_album(
-            &**api_state
-                .apis
+            &**music_apis
                 .get(query.source)
                 .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
             &library_api,
@@ -651,13 +650,12 @@ pub struct RemoveAlbumQuery {
 pub async fn remove_album_endpoint(
     query: web::Query<RemoveAlbumQuery>,
     db: LibraryDatabase,
-    library_api: web::Data<LibraryMusicApiState>,
-    api_state: web::Data<MusicApiState>,
+    library_api: LibraryMusicApi,
+    music_apis: MusicApis,
 ) -> Result<Json<ApiAlbum>> {
     Ok(Json(
         remove_album(
-            &**api_state
-                .apis
+            &**music_apis
                 .get(query.source)
                 .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
             &library_api,
@@ -700,13 +698,12 @@ pub struct ReFavoriteAlbumQuery {
 pub async fn refavorite_album_endpoint(
     query: web::Query<ReFavoriteAlbumQuery>,
     db: LibraryDatabase,
-    library_api: web::Data<LibraryMusicApiState>,
-    api_state: web::Data<MusicApiState>,
+    library_api: LibraryMusicApi,
+    music_apis: MusicApis,
 ) -> Result<Json<ApiAlbum>> {
     Ok(Json(
         refavorite_album(
-            &**api_state
-                .apis
+            &**music_apis
                 .get(query.source)
                 .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
             &library_api,

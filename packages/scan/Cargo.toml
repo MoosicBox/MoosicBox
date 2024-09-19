@@ -56,7 +56,7 @@ default = ["aac", "api", "flac", "local", "mp3", "openapi", "opus"]
 
 fail-on-warnings = []
 
-api = ["dep:actix-web", "dep:moosicbox_auth"]
+api = ["dep:actix-web", "dep:moosicbox_auth", "moosicbox_music_api/api"]
 local = [
     "dep:async-recursion",
     "dep:audiotags",

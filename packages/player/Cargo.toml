@@ -74,7 +74,7 @@ default = [
 
 fail-on-warnings = []
 
-api     = []
+api     = ["moosicbox_music_api/api"]
 openapi = ["dep:utoipa"]
 
 # Player audio outputs

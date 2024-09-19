@@ -46,5 +46,5 @@ fail-on-warnings = []
 
 local = ["moosicbox_scan/local"]
 
-api     = []
+api     = ["moosicbox_library/api", "moosicbox_music_api/api"]
 openapi = ["dep:utoipa", "moosicbox_core/openapi", "moosicbox_library/openapi"]

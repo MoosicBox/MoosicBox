@@ -2,7 +2,6 @@ use std::env;
 
 use moosicbox_auth::get_client_id_and_access_token;
 use moosicbox_database::config::ConfigDatabase;
-use moosicbox_music_api::MusicApiState;
 use moosicbox_tunnel::TunnelRequest;
 use moosicbox_tunnel_sender::{
     sender::{TunnelSender, TunnelSenderHandle},
@@ -23,7 +22,6 @@ pub enum SetupTunnelError {
 #[allow(clippy::too_many_lines, clippy::module_name_repetitions)]
 pub async fn setup_tunnel(
     config_db: ConfigDatabase,
-    music_apis: MusicApiState,
     service_port: u16,
 ) -> Result<
     (
@@ -75,7 +73,6 @@ pub async fn setup_tunnel(
 
             tunnel = tunnel.with_cancellation_token(CANCELLATION_TOKEN.clone());
 
-            let music_apis_send = music_apis.clone();
             Ok((
                 Some(host),
                 Some(moosicbox_task::spawn("server: tunnel", async move {
@@ -86,13 +83,11 @@ pub async fn setup_tunnel(
                             TunnelMessage::Text(m) => {
                                 log::debug!("Received text TunnelMessage {}", &m);
                                 let tunnel = tunnel.clone();
-                                let music_apis_send = music_apis_send.clone();
                                 moosicbox_task::spawn("server: tunnel message", async move {
                                     match serde_json::from_str(&m).unwrap() {
                                         TunnelRequest::Http(request) => {
                                             if let Err(err) = tunnel
                                                 .tunnel_request(
-                                                    music_apis_send.apis,
                                                     service_port,
                                                     request.request_id,
                                                     request.method,

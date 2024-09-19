@@ -69,7 +69,7 @@ default = ["aac", "api", "flac", "mp3", "openapi", "opus"]
 
 fail-on-warnings = []
 
-api = ["dep:actix-web", "moosicbox_database/api"]
+api = ["dep:actix-web", "moosicbox_database/api", "moosicbox_music_api/api"]
 openapi = [
     "dep:utoipa",
     "moosicbox_core/openapi",

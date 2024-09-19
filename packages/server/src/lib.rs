@@ -13,15 +13,15 @@ mod ws;
 
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App};
+use moosicbox_async_service::HashMap;
 use moosicbox_config::{
     db::get_or_init_server_identity, get_app_config_dir_path, get_profile_dir_path, AppType,
 };
 use moosicbox_core::{app::AppState, sqlite::models::ApiSource};
 use moosicbox_database::{config::ConfigDatabase, Database};
 use moosicbox_files::files::track_pool::service::Commander as _;
-use moosicbox_music_api::{MusicApi, MusicApiState};
+use moosicbox_music_api::MusicApi;
 use std::{
-    collections::HashMap,
     path::PathBuf,
     sync::{Arc, LazyLock},
 };
@@ -39,16 +39,6 @@ static WS_SERVER_HANDLE: LazyLock<tokio::sync::RwLock<Option<ws::server::WsServe
 #[allow(clippy::type_complexity)]
 static CONFIG_DB: LazyLock<std::sync::RwLock<Option<ConfigDatabase>>> =
     LazyLock::new(|| std::sync::RwLock::new(None));
-
-#[allow(clippy::type_complexity)]
-static MUSIC_API_STATE: LazyLock<std::sync::RwLock<Option<MusicApiState>>> =
-    LazyLock::new(|| std::sync::RwLock::new(None));
-
-#[cfg(feature = "library")]
-#[allow(clippy::type_complexity)]
-static LIBRARY_API_STATE: LazyLock<
-    std::sync::RwLock<Option<moosicbox_library::LibraryMusicApiState>>,
-> = LazyLock::new(|| std::sync::RwLock::new(None));
 
 static SERVER_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
@@ -162,48 +152,41 @@ pub async fn run(
 
     #[cfg(feature = "library")]
     let library_music_api = moosicbox_library::LibraryMusicApi::new(library_database.clone());
-    #[cfg(feature = "library")]
-    let library_api_state = moosicbox_library::LibraryMusicApiState::new(library_music_api.clone());
 
     #[allow(unused_mut)]
-    let mut apis_map: HashMap<ApiSource, Box<dyn MusicApi>> = HashMap::new();
+    let mut apis_map: HashMap<ApiSource, Arc<Box<dyn MusicApi>>> = HashMap::new();
     #[cfg(feature = "library")]
     apis_map.insert(
         ApiSource::Library,
-        Box::new(moosicbox_music_api::CachedMusicApi::new(library_music_api)),
+        Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
+            library_music_api,
+        ))),
     );
     #[cfg(feature = "tidal")]
     apis_map.insert(
         ApiSource::Tidal,
-        Box::new(moosicbox_music_api::CachedMusicApi::new(
+        Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
             moosicbox_tidal::TidalMusicApi::new(library_database.clone()),
-        )),
+        ))),
     );
     #[cfg(feature = "qobuz")]
     apis_map.insert(
         ApiSource::Qobuz,
-        Box::new(moosicbox_music_api::CachedMusicApi::new(
+        Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
             moosicbox_qobuz::QobuzMusicApi::new(library_database.clone()),
-        )),
+        ))),
     );
     #[cfg(feature = "yt")]
     apis_map.insert(
         ApiSource::Yt,
-        Box::new(moosicbox_music_api::CachedMusicApi::new(
+        Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
             moosicbox_yt::YtMusicApi::new(library_database.clone()),
-        )),
+        ))),
     );
-    let music_api_state = MusicApiState::new(apis_map);
-    MUSIC_API_STATE
-        .write()
-        .unwrap()
-        .replace(music_api_state.clone());
+    moosicbox_music_api::profiles::PROFILES.add("master".to_string(), Arc::new(apis_map));
 
     #[cfg(feature = "library")]
-    LIBRARY_API_STATE
-        .write()
-        .unwrap()
-        .replace(library_api_state.clone());
+    moosicbox_library::profiles::PROFILES.add("master".to_string(), library_database.clone());
 
     #[cfg(feature = "tunnel")]
     let (mut ws_server, server_tx) = ws::server::WsServer::new(config_database.clone());
@@ -229,13 +212,10 @@ pub async fn run(
     events::session_event::init().await;
 
     #[cfg(feature = "tunnel")]
-    let (tunnel_host, tunnel_join_handle, tunnel_handle) = crate::tunnel::setup_tunnel(
-        config_database.clone(),
-        music_api_state.clone(),
-        service_port,
-    )
-    .await
-    .expect("Failed to setup tunnel connection");
+    let (tunnel_host, tunnel_join_handle, tunnel_handle) =
+        crate::tunnel::setup_tunnel(config_database.clone(), service_port)
+            .await
+            .expect("Failed to setup tunnel connection");
 
     #[cfg(feature = "tunnel")]
     if let Some(ref tunnel_handle) = tunnel_handle {
@@ -328,11 +308,6 @@ pub async fn run(
                 service_port,
             };
 
-            let music_api_state = MUSIC_API_STATE.read().unwrap().as_ref().unwrap().clone();
-
-            #[cfg(feature = "library")]
-            let library_api_state = LIBRARY_API_STATE.read().unwrap().as_ref().unwrap().clone();
-
             let cors = Cors::default()
                 .allow_any_origin()
                 .allowed_methods(vec!["GET", "POST", "OPTIONS", "DELETE", "PUT", "PATCH"])
@@ -377,12 +352,8 @@ pub async fn run(
                 .wrap(middleware::Compress::default())
                 .wrap(moosicbox_middleware::api_logger::ApiLogger::default())
                 .app_data(web::Data::new(app_data))
-                .app_data(web::Data::new(music_api_state))
                 .service(api::health_endpoint)
                 .service(api::websocket);
-
-            #[cfg(feature = "library")]
-            let app = app.app_data(web::Data::new(library_api_state));
 
             #[cfg(feature = "openapi")]
             let app = app.service(api::openapi::bind_services(
