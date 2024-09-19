@@ -86,6 +86,8 @@ pub async fn run(
     #[cfg(feature = "upnp")] upnp_players: bool,
     on_startup: impl FnOnce() + Send,
 ) -> std::io::Result<()> {
+    let profile = "master";
+
     #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
     let config_db_profile_path = {
         let path = make_config_db_dir_path(app_type).expect("Failed to get DB config path");
@@ -108,7 +110,6 @@ pub async fn run(
 
     #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
     let library_db_profile_path = {
-        let profile = "master";
         let path =
             make_profile_db_dir_path(app_type, profile).expect("Failed to get DB profile path");
 
@@ -145,10 +146,14 @@ pub async fn run(
 
     moosicbox_database::config::init(config_database.clone().into()).unwrap();
 
+    moosicbox_config::db::upsert_profile(&config_database, profile)
+        .await
+        .expect("Failed to create default 'master' profile");
+
     let library_database: Arc<Box<dyn Database>> = Arc::new(library_db);
 
     let library_database =
-        moosicbox_database::profiles::PROFILES.fetch_add("master", library_database.clone());
+        moosicbox_database::profiles::PROFILES.fetch_add(profile, library_database.clone());
 
     #[cfg(feature = "library")]
     let library_music_api = moosicbox_library::LibraryMusicApi::new(library_database.clone());
@@ -183,10 +188,10 @@ pub async fn run(
             moosicbox_yt::YtMusicApi::new(library_database.clone()),
         ))),
     );
-    moosicbox_music_api::profiles::PROFILES.add("master".to_string(), Arc::new(apis_map));
+    moosicbox_music_api::profiles::PROFILES.add(profile.to_string(), Arc::new(apis_map));
 
     #[cfg(feature = "library")]
-    moosicbox_library::profiles::PROFILES.add("master".to_string(), library_database.clone());
+    moosicbox_library::profiles::PROFILES.add(profile.to_string(), library_database.clone());
 
     #[cfg(feature = "tunnel")]
     let (mut ws_server, server_tx) = ws::server::WsServer::new(config_database.clone());

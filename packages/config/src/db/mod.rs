@@ -1,4 +1,4 @@
-use moosicbox_database::{config::ConfigDatabase, DatabaseError};
+use moosicbox_database::{config::ConfigDatabase, query::FilterableQuery as _, DatabaseError};
 use moosicbox_json_utils::{database::DatabaseFetchError, ToValueType as _};
 use nanoid::nanoid;
 use thiserror::Error;
@@ -40,6 +40,31 @@ pub async fn get_or_init_server_identity(
             .and_then(|x| x.as_str().map(std::string::ToString::to_string))
             .ok_or(GetOrInitServerIdentityError::Failed)
     }
+}
+
+pub async fn upsert_profile(
+    db: &ConfigDatabase,
+    name: &str,
+) -> Result<models::Profile, DatabaseFetchError> {
+    Ok(db
+        .upsert("profiles")
+        .where_eq("name", name)
+        .value("name", name)
+        .execute_first(db)
+        .await?
+        .to_value_type()?)
+}
+
+pub async fn create_profile(
+    db: &ConfigDatabase,
+    name: &str,
+) -> Result<models::Profile, DatabaseFetchError> {
+    Ok(db
+        .insert("profiles")
+        .value("name", name)
+        .execute(db)
+        .await?
+        .to_value_type()?)
 }
 
 pub async fn get_profiles(db: &ConfigDatabase) -> Result<Vec<models::Profile>, DatabaseFetchError> {
