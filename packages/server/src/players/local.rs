@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 use moosicbox_audio_output::AudioOutputScannerError;
 use moosicbox_core::sqlite::models::ApiSource;
 use moosicbox_database::config::ConfigDatabase;
-use moosicbox_database::profiles::{LibraryDatabase, PROFILES};
+use moosicbox_database::profiles::PROFILES;
 use moosicbox_ws::WebsocketSendError;
 use thiserror::Error;
 
@@ -32,7 +32,6 @@ pub enum InitError {
 
 pub async fn init(
     config_db: &ConfigDatabase,
-    db: &LibraryDatabase,
     #[cfg(feature = "tunnel")] tunnel_handle: Option<
         moosicbox_tunnel_sender::sender::TunnelSenderHandle,
     >,
@@ -51,7 +50,6 @@ pub async fn init(
     for audio_output in moosicbox_audio_output::output_factories().await {
         if let Err(err) = register_server_player(
             config_db,
-            db,
             handle.clone(),
             #[cfg(feature = "tunnel")]
             &tunnel_handle,
@@ -243,7 +241,6 @@ fn handle_server_playback_update(
 
 pub async fn register_server_player(
     config_db: &ConfigDatabase,
-    db: &LibraryDatabase,
     ws: crate::ws::server::WsServerHandle,
     #[cfg(feature = "tunnel")] tunnel_handle: &Option<
         moosicbox_tunnel_sender::sender::TunnelSenderHandle,
@@ -295,5 +292,11 @@ pub async fn register_server_player(
         handle.add_player_action(player.id, handle_server_playback_update);
     }
 
-    moosicbox_ws::get_sessions(db, &handle, &context, true).await
+    for profile in PROFILES.names() {
+        if let Some(db) = PROFILES.get(&profile) {
+            moosicbox_ws::get_sessions(&db, &handle, &context, true).await?;
+        }
+    }
+
+    Ok(())
 }

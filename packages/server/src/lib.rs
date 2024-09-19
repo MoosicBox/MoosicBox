@@ -298,14 +298,12 @@ pub async fn run(
             .unwrap_or_else(|_| panic!("Failed to set PLAYBACK_EVENT_HANDLE"));
 
         let config_database = config_database.clone();
-        let library_database = library_database.clone();
         #[cfg(feature = "tunnel")]
         let tunnel_handle = tunnel_handle.clone();
 
         moosicbox_task::spawn("server: scan outputs", async move {
             players::local::init(
                 &config_database,
-                &library_database,
                 #[cfg(feature = "tunnel")]
                 tunnel_handle,
             )
