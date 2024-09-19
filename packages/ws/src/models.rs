@@ -148,6 +148,7 @@ pub struct SetSeekPayload {
 #[serde(rename_all = "camelCase")]
 pub struct SetSeek {
     pub session_id: u64,
+    pub profile: String,
     pub playback_target: ApiPlaybackTarget,
     pub seek: u64,
 }
