@@ -316,6 +316,13 @@ pub async fn get_track_url(
         serializer.append_pair("trackId", &track_id.to_string());
         serializer.append_pair("source", api_source.as_ref());
 
+        if let Some(profile) = headers
+            .as_ref()
+            .and_then(|x| x.get("moosicbox-profile").cloned())
+        {
+            serializer.append_pair("moosicboxProfile", &profile);
+        }
+
         match api_source {
             ApiSource::Library => {
                 if quality.format != AudioFormat::Source {
