@@ -1,4 +1,4 @@
-use std::{str::Utf8Error, sync::LazyLock};
+use std::sync::LazyLock;
 
 use actix_htmx::{Htmx, TriggerType};
 use actix_web::{
@@ -6,12 +6,11 @@ use actix_web::{
     error::ErrorInternalServerError,
     route, web, Scope,
 };
-use base64::{engine::general_purpose, DecodeError, Engine as _};
+use base64::{engine::general_purpose, Engine as _};
 use maud::{html, Markup};
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_tidal::{db::TidalConfigError, TidalDeviceAuthorizationTokenError};
 use serde::Deserialize;
-use thiserror::Error;
 use urlencoding::encode;
 
 static C1: &str = "elU0WEhWVms=";
@@ -30,14 +29,6 @@ pub fn bind_services<
             .service(device_authorization_endpoint)
             .service(device_authorization_token_endpoint),
     )
-}
-
-#[derive(Debug, Error)]
-enum Base64DecodeError {
-    #[error(transparent)]
-    Decode(#[from] DecodeError),
-    #[error(transparent)]
-    Utf8(#[from] Utf8Error),
 }
 
 static CLIENT_ID: LazyLock<String> = LazyLock::new(|| {
