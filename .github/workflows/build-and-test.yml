@@ -898,7 +898,7 @@ jobs:
               shell: bash
               working-directory: MoosicBoxServer
               run: |
-                  cd ${{ matrix.package.path }}
+                  (cd ${{ matrix.package.path }};
                   ${{ matrix.package.env }} cargo +nightly udeps \
                       ${{ matrix.package.features && format('--features {0}', matrix.package.features) || '' }} \
-                      ${{ matrix.package.cargo }}
+                      ${{ matrix.package.cargo }})
