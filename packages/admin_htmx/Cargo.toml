@@ -52,4 +52,4 @@ tidal = ["dep:base64", "dep:moosicbox_tidal"]
 
 static-token-auth = []
 
-api = []
+api = ["moosicbox_music_api/api"]
