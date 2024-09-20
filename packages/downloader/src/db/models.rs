@@ -6,7 +6,6 @@ use moosicbox_json_utils::{
     database::ToValue as _, serde_json::ToValue, MissingValue, ParseError, ToValueType,
 };
 use moosicbox_music_api::TrackAudioQuality;
-use rusqlite::types::Value;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 
@@ -60,6 +59,7 @@ pub enum DownloadTaskState {
     Error,
 }
 
+impl MissingValue<DownloadTaskState> for &moosicbox_database::Row {}
 impl ToValueType<DownloadTaskState> for DatabaseValue {
     fn to_value_type(self) -> Result<DownloadTaskState, ParseError> {
         DownloadTaskState::from_str(
@@ -77,18 +77,6 @@ impl ToValueType<DownloadTaskState> for &serde_json::Value {
                 .ok_or_else(|| ParseError::ConvertType("DownloadTaskState".into()))?,
         )
         .map_err(|_| ParseError::ConvertType("DownloadTaskState".into()))
-    }
-}
-
-impl MissingValue<DownloadTaskState> for Value {}
-impl MissingValue<DownloadTaskState> for &moosicbox_database::Row {}
-impl ToValueType<DownloadTaskState> for Value {
-    fn to_value_type(self) -> Result<DownloadTaskState, ParseError> {
-        match self {
-            Value::Text(str) => Ok(DownloadTaskState::from_str(&str)
-                .map_err(|_| ParseError::ConvertType("DownloadTaskState".into()))?),
-            _ => Err(ParseError::ConvertType("DownloadTaskState".into())),
-        }
     }
 }
 
@@ -144,6 +132,7 @@ impl From<TrackApiSource> for DownloadApiSource {
     }
 }
 
+impl MissingValue<DownloadApiSource> for &moosicbox_database::Row {}
 impl ToValueType<DownloadApiSource> for DatabaseValue {
     fn to_value_type(self) -> Result<DownloadApiSource, ParseError> {
         DownloadApiSource::from_str(
@@ -161,18 +150,6 @@ impl ToValueType<DownloadApiSource> for &serde_json::Value {
                 .ok_or_else(|| ParseError::ConvertType("DownloadApiSource".into()))?,
         )
         .map_err(|_| ParseError::ConvertType("DownloadApiSource".into()))
-    }
-}
-
-impl MissingValue<DownloadApiSource> for &moosicbox_database::Row {}
-impl MissingValue<DownloadApiSource> for Value {}
-impl ToValueType<DownloadApiSource> for Value {
-    fn to_value_type(self) -> Result<DownloadApiSource, ParseError> {
-        match self {
-            Value::Text(str) => Ok(DownloadApiSource::from_str(&str)
-                .map_err(|_| ParseError::ConvertType("DownloadApiSource".into()))?),
-            _ => Err(ParseError::ConvertType("DownloadApiSource".into())),
-        }
     }
 }
 

@@ -47,7 +47,6 @@ id3             = { workspace = true }
 lazy_static     = { workspace = true }
 log             = { workspace = true }
 regex           = { workspace = true }
-rusqlite        = { workspace = true }
 serde           = { workspace = true, features = ["derive"] }
 serde_json      = { workspace = true }
 strum           = { workspace = true }

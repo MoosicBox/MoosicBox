@@ -3895,7 +3895,6 @@ dependencies = [
  "moosicbox_task",
  "pretty_assertions",
  "regex",
- "rusqlite",
  "serde",
  "serde_json",
  "strum",
