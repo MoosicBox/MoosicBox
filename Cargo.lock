@@ -2242,7 +2242,7 @@ dependencies = [
 [[package]]
 name = "free_log_client"
 version = "0.3.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#8c8f49ea5ccfa22578bc384ba450e3be0f018be8"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#28e21e989e135efc8947ef6026d2dae82ca9dc53"
 dependencies = [
  "free_log_models",
  "futures-util",
@@ -2261,7 +2261,7 @@ dependencies = [
 [[package]]
 name = "free_log_models"
 version = "0.2.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#8c8f49ea5ccfa22578bc384ba450e3be0f018be8"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#28e21e989e135efc8947ef6026d2dae82ca9dc53"
 dependencies = [
  "log",
  "serde",
