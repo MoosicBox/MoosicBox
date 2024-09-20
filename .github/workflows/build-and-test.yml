@@ -873,3 +873,15 @@ jobs:
                         --manifest-path=${{ matrix.package.path }}/Cargo.toml \
                         --verbose \
                         --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }} ${{ matrix.package.cargo }}
+
+            - uses: dtolnay/rust-toolchain@nightly
+
+            - name: Validate ${{ matrix.package.name }} dependencies
+              shell: bash
+              working-directory: MoosicBoxServer
+              run: |
+                  cargo install --git https://github.com/est31/cargo-udeps --locked
+                  cd ${{ matrix.package.path }}
+                  ${{ matrix.package.env }} cargo +nightly udeps \
+                      ${{ matrix.package.features && format('--features {0}', matrix.package.features) || '' }} \
+                      ${{ matrix.package.cargo }}
