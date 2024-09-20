@@ -3813,7 +3813,6 @@ dependencies = [
 name = "moosicbox_core"
 version = "0.1.0"
 dependencies = [
- "actix-web",
  "async-trait",
  "log",
  "moosicbox_database",

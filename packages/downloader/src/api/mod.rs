@@ -235,7 +235,9 @@ pub async fn retry_download_endpoint(
     db: LibraryDatabase,
     music_apis: MusicApis,
 ) -> Result<Json<Value>> {
-    let tasks = get_download_tasks(&db).await?;
+    let tasks = get_download_tasks(&db)
+        .await
+        .map_err(ErrorInternalServerError)?;
     let task = tasks
         .into_iter()
         .find(|x| x.id == query.task_id)
@@ -283,7 +285,9 @@ pub async fn download_tasks_endpoint(
 ) -> Result<Json<Page<ApiDownloadTask>>> {
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(30);
-    let tasks = get_download_tasks(&db).await?;
+    let tasks = get_download_tasks(&db)
+        .await
+        .map_err(ErrorInternalServerError)?;
     let (mut current, mut history): (Vec<_>, Vec<_>) =
         tasks.into_iter().partition(|task| match task.state {
             DownloadTaskState::Pending | DownloadTaskState::Paused | DownloadTaskState::Started => {
@@ -354,7 +358,9 @@ pub async fn get_download_locations_endpoint(
 ) -> Result<Json<Page<ApiDownloadLocation>>> {
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(30);
-    let locations = get_download_locations(&db).await?;
+    let locations = get_download_locations(&db)
+        .await
+        .map_err(ErrorInternalServerError)?;
     let total = locations.len() as u32;
     let locations = locations
         .into_iter()
@@ -419,7 +425,8 @@ pub async fn add_download_location_endpoint(
         path.to_str()
             .ok_or_else(|| ErrorBadRequest(format!("Invalid path: {path:?}")))?,
     )
-    .await?;
+    .await
+    .map_err(ErrorInternalServerError)?;
 
     Ok(Json(location.into()))
 }

@@ -22,7 +22,6 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
     "serde_json",
 ] }
 
-actix-web    = { workspace = true }
 async-trait  = { workspace = true }
 log          = { workspace = true }
 serde        = { workspace = true, features = ["derive", "rc"] }

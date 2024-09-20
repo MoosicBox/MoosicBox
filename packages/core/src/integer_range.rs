@@ -1,4 +1,3 @@
-use actix_web::error::ErrorBadRequest;
 use thiserror::Error;
 
 use crate::sqlite::models::{ApiSource, Id, IdType};
@@ -11,22 +10,6 @@ pub enum ParseIntegersError {
     UnmatchedRange(String),
     #[error("Range too large: {0}")]
     RangeTooLarge(String),
-}
-
-impl From<ParseIntegersError> for actix_web::Error {
-    fn from(err: ParseIntegersError) -> Self {
-        match err {
-            ParseIntegersError::ParseId(id) => {
-                ErrorBadRequest(format!("Could not parse integers '{id}'"))
-            }
-            ParseIntegersError::UnmatchedRange(range) => {
-                ErrorBadRequest(format!("Unmatched range '{range}'"))
-            }
-            ParseIntegersError::RangeTooLarge(range) => {
-                ErrorBadRequest(format!("Range too large '{range}'"))
-            }
-        }
-    }
 }
 
 pub fn parse_integer_sequences(
@@ -113,20 +96,6 @@ pub fn parse_id_sequences(
             Id::try_from_str(id, source, id_type).map_err(|_| ParseIdsError::ParseId(id.into()))
         })
         .collect::<std::result::Result<Vec<_>, _>>()
-}
-
-impl From<ParseIdsError> for actix_web::Error {
-    fn from(err: ParseIdsError) -> Self {
-        match err {
-            ParseIdsError::ParseId(id) => ErrorBadRequest(format!("Could not parse ids '{id}'")),
-            ParseIdsError::UnmatchedRange(range) => {
-                ErrorBadRequest(format!("Unmatched range '{range}'"))
-            }
-            ParseIdsError::RangeTooLarge(range) => {
-                ErrorBadRequest(format!("Range too large '{range}'"))
-            }
-        }
-    }
 }
 
 pub fn parse_id_ranges(

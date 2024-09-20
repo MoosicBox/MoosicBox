@@ -1,4 +1,3 @@
-use actix_web::error::ErrorInternalServerError;
 use moosicbox_database::{
     boxed, config::ConfigDatabase, profiles::LibraryDatabase, query::*, DatabaseError,
     DatabaseValue,
@@ -33,13 +32,6 @@ pub enum DbError {
     Database(#[from] DatabaseError),
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
-}
-
-impl From<DbError> for actix_web::Error {
-    fn from(err: DbError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError("Database error".to_string())
-    }
 }
 
 pub async fn get_client_id(db: &ConfigDatabase) -> Result<Option<String>, DbError> {

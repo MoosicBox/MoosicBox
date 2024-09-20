@@ -137,7 +137,8 @@ pub async fn session_playlist_endpoint(
     db: LibraryDatabase,
 ) -> Result<Json<Option<ApiSessionPlaylist>>> {
     let playlist = crate::get_session_playlist(&db, query.session_playlist_id)
-        .await?
+        .await
+        .map_err(ErrorInternalServerError)?
         .map(|x| x.to_api());
 
     Ok(Json(playlist))
@@ -173,7 +174,8 @@ pub async fn session_audio_zone_endpoint(
     db: LibraryDatabase,
 ) -> Result<Json<Option<ApiAudioZone>>> {
     let zone = crate::get_session_audio_zone(&db, query.session_id)
-        .await?
+        .await
+        .map_err(ErrorInternalServerError)?
         .map(|x| x.into());
 
     Ok(Json(zone))
@@ -208,7 +210,9 @@ pub async fn session_playing_endpoint(
     query: web::Query<GetSessionPlaying>,
     db: LibraryDatabase,
 ) -> Result<Json<Option<bool>>> {
-    let playing = crate::get_session_playing(&db, query.session_id).await?;
+    let playing = crate::get_session_playing(&db, query.session_id)
+        .await
+        .map_err(ErrorInternalServerError)?;
 
     Ok(Json(playing))
 }
@@ -243,7 +247,8 @@ pub async fn session_endpoint(
     db: LibraryDatabase,
 ) -> Result<Json<Option<ApiSession>>> {
     let session = crate::get_session(&db, query.session_id)
-        .await?
+        .await
+        .map_err(ErrorInternalServerError)?
         .map(|x| x.to_api());
 
     Ok(Json(session))
@@ -282,7 +287,9 @@ pub async fn sessions_endpoint(
 ) -> Result<Json<Page<ApiSession>>> {
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(30);
-    let sessions = crate::get_sessions(&db).await?;
+    let sessions = crate::get_sessions(&db)
+        .await
+        .map_err(ErrorInternalServerError)?;
     let total = sessions.len() as u32;
     let sessions = sessions
         .into_iter()
@@ -331,7 +338,8 @@ pub async fn register_players_endpoint(
     db: ConfigDatabase,
 ) -> Result<Json<Vec<ApiPlayer>>> {
     let registered = crate::create_players(&db, &query.connection_id, &players)
-        .await?
+        .await
+        .map_err(ErrorInternalServerError)?
         .into_iter()
         .map(|x| x.to_api())
         .collect::<Vec<_>>();

@@ -88,10 +88,10 @@ async fn profile_info(
 ) -> Result<Markup, actix_web::Error> {
     Ok(html! {
         h2 { "Server Info" }
-        (info::info(config_db).await?)
+        (info::info(config_db).await.map_err(ErrorInternalServerError)?)
         hr {}
         h2 { "Scan" }
-        (scan::scan(library_db).await?)
+        (scan::scan(library_db).await.map_err(ErrorInternalServerError)?)
         (if cfg!(feature = "tidal") { html! {
             hr {}
             h2 { "Tidal" }
