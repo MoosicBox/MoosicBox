@@ -496,13 +496,6 @@ jobs:
                       cargo: --no-default-features
                       features: cpal,aac,flac,mp3,opus,postgres-sqlx
 
-                    - name: server-all
-                      path: packages/server
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
-                      cargo: --no-default-features
-                      features: cpal
-
                     - name: server-no-default-features
                       path: packages/server
                       os: ubuntu-latest
