@@ -544,12 +544,6 @@ jobs:
                       cargo: --no-default-features
                       features: library
 
-                    - name: server-menu
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: menu
-
                     - name: server-player
                       path: packages/server
                       os: ubuntu-latest
