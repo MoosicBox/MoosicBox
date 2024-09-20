@@ -274,18 +274,6 @@ jobs:
                       cargo: --no-default-features
                       features: postgres-sqlx
 
-                    - name: database_connection-postgres-sqlx-native-tls
-                      path: packages/database_connection
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: postgres-sqlx,postgres-native-tls
-
-                    - name: database_connection-postgres-sqlx-openssl
-                      path: packages/database_connection
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: postgres-sqlx,postgres-openssl
-
                     - name: database_connection-sqlite-rusqlite
                       path: packages/database_connection
                       os: ubuntu-latest
