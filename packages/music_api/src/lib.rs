@@ -202,19 +202,6 @@ impl ToValueType<TrackAudioQuality> for &serde_json::Value {
     }
 }
 
-#[cfg(feature = "db")]
-impl MissingValue<TrackAudioQuality> for &rusqlite::Row<'_> {}
-#[cfg(feature = "db")]
-impl ToValueType<TrackAudioQuality> for rusqlite::types::Value {
-    fn to_value_type(self) -> Result<TrackAudioQuality, ParseError> {
-        match self {
-            rusqlite::types::Value::Text(str) => Ok(TrackAudioQuality::from_str(&str)
-                .map_err(|_| ParseError::ConvertType("TrackAudioQuality".into()))?),
-            _ => Err(ParseError::ConvertType("TrackAudioQuality".into())),
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum ImageCoverSource {
     LocalFilePath(String),
