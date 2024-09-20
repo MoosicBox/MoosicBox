@@ -28,7 +28,6 @@ utoipa = { workspace = true, optional = true }
 
 actix-web = { workspace = true }
 log       = { workspace = true }
-rusqlite  = { workspace = true }
 serde     = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tokio     = { workspace = true }

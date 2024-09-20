@@ -456,7 +456,6 @@ impl From<GetArtistError> for actix_web::Error {
             }
             GetArtistError::UnknownSource { .. }
             | GetArtistError::PoisonError
-            | GetArtistError::SqliteError(_)
             | GetArtistError::DbError(_) => {
                 ErrorInternalServerError(format!("Failed to fetch artist: {e:?}"))
             }

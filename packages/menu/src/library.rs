@@ -29,8 +29,6 @@ pub enum GetArtistError {
     #[error("Poison error")]
     PoisonError,
     #[error(transparent)]
-    SqliteError(#[from] rusqlite::Error),
-    #[error(transparent)]
     DbError(#[from] DbError),
     #[error("Invalid request")]
     InvalidRequest,
@@ -160,8 +158,6 @@ pub enum GetAlbumError {
     #[error(transparent)]
     GetAlbums(#[from] GetAlbumsError),
     #[error(transparent)]
-    SqliteError(#[from] rusqlite::Error),
-    #[error(transparent)]
     DbError(#[from] DbError),
     #[error("Invalid request")]
     InvalidRequest,
@@ -267,8 +263,6 @@ pub async fn get_albums(db: &LibraryDatabase) -> Result<Arc<Vec<LibraryAlbum>>, 
 pub enum GetArtistAlbumsError {
     #[error("Poison error")]
     Poison,
-    #[error(transparent)]
-    Sqlite(#[from] rusqlite::Error),
     #[error(transparent)]
     Db(#[from] DbError),
 }

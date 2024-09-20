@@ -4068,7 +4068,6 @@ dependencies = [
  "moosicbox_scan",
  "moosicbox_search",
  "moosicbox_session",
- "rusqlite",
  "serde",
  "thiserror",
  "tokio",
