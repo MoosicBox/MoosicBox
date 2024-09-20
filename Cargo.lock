@@ -3819,7 +3819,6 @@ dependencies = [
  "moosicbox_database",
  "moosicbox_json_utils",
  "pretty_assertions",
- "rusqlite",
  "serde",
  "serde_json",
  "strum",

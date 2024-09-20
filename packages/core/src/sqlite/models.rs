@@ -204,17 +204,6 @@ impl ToValueType<TrackApiSource> for &serde_json::Value {
     }
 }
 
-impl MissingValue<TrackApiSource> for &moosicbox_database::Row {}
-impl ToValueType<TrackApiSource> for rusqlite::types::Value {
-    fn to_value_type(self) -> Result<TrackApiSource, ParseError> {
-        match self {
-            rusqlite::types::Value::Text(str) => Ok(TrackApiSource::from_str(&str)
-                .map_err(|_| ParseError::ConvertType("TrackApiSource".into()))?),
-            _ => Err(ParseError::ConvertType("TrackApiSource".into())),
-        }
-    }
-}
-
 #[derive(Default, Debug, Serialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Track {

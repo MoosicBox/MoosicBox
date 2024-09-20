@@ -25,8 +25,6 @@ pub enum DbError {
     InvalidRequest,
     #[error("Poison Error")]
     PoisonError,
-    #[error(transparent)]
-    SqliteError(#[from] rusqlite::Error),
     #[error("Unknown DbError")]
     Unknown,
     #[error(transparent)]
