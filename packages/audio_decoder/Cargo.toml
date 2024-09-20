@@ -17,18 +17,16 @@ moosicbox_stream_utils = { path = "../stream_utils", default-features = false, f
 ] }
 moosicbox_task = { path = "../task", default-features = false }
 
-arrayvec    = { workspace = true }
-bytes       = { workspace = true }
-flume       = { workspace = true }
-futures     = { workspace = true }
-lazy_static = { workspace = true }
-log         = { workspace = true }
-rangemap    = { workspace = true }
-reqwest     = { workspace = true }
-symphonia   = { workspace = true }
-thiserror   = { workspace = true }
-tokio       = { workspace = true, features = ["rt-multi-thread", "tracing"] }
-tokio-util  = { workspace = true }
+bytes      = { workspace = true }
+flume      = { workspace = true }
+futures    = { workspace = true }
+log        = { workspace = true }
+rangemap   = { workspace = true }
+reqwest    = { workspace = true }
+symphonia  = { workspace = true }
+thiserror  = { workspace = true }
+tokio      = { workspace = true, features = ["rt-multi-thread", "tracing"] }
+tokio-util = { workspace = true }
 
 [features]
 default = []

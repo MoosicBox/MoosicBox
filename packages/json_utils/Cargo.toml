@@ -23,7 +23,6 @@ rusqlite = { workspace = true, optional = true }
 tantivy = { workspace = true, optional = true }
 
 # serde_json dependencies
-serde      = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 
 chrono    = { workspace = true }
@@ -37,5 +36,5 @@ fail-on-warnings = []
 
 database   = ["dep:moosicbox_database"]
 rusqlite   = ["dep:rusqlite"]
-serde_json = ["dep:serde", "dep:serde_json"]
+serde_json = ["dep:serde_json"]
 tantivy    = ["dep:tantivy"]

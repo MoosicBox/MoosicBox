@@ -10,6 +10,9 @@ readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
+[package.metadata.cargo-machete]
+ignored = ["strum"]
+
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
 

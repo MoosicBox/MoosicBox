@@ -38,8 +38,6 @@ actix-web   = { workspace = true }
 log         = { workspace = true }
 maud        = { workspace = true, features = ["actix-web"] }
 serde       = { workspace = true }
-serde_json  = { workspace = true }
-thiserror   = { workspace = true }
 urlencoding = { workspace = true }
 
 [features]

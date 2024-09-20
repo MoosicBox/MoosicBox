@@ -10,6 +10,9 @@ readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
+[package.metadata.cargo-machete]
+ignored = ["strum"]
+
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
 moosicbox_async_service = { path = "../async_service", default-features = false }
@@ -21,9 +24,6 @@ moosicbox_database = { path = "../database", default-features = false, features 
     "sqlite-sqlx",
 ] }
 moosicbox_image = { path = "../image", default-features = false }
-moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
-    "serde_json",
-] }
 moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
 moosicbox_task = { path = "../task", default-features = false }
@@ -43,9 +43,7 @@ lazy_static  = { workspace = true }
 log          = { workspace = true }
 regex        = { workspace = true }
 reqwest      = { workspace = true }
-rusqlite     = { workspace = true }
 serde        = { workspace = true, features = ["derive"] }
-serde_json   = { workspace = true }
 strum        = { workspace = true }
 strum_macros = { workspace = true }
 symphonia    = { workspace = true }

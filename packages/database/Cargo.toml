@@ -18,7 +18,6 @@ rusqlite = { workspace = true, optional = true }
 
 # sqlx dependencies
 sqlx          = { workspace = true, optional = true, features = ["runtime-tokio"] }
-sqlx-mysql    = { workspace = true, optional = true }
 sqlx-postgres = { workspace = true, optional = true }
 
 # tokio-postgres dependencies
@@ -36,7 +35,6 @@ async-trait = { workspace = true }
 chrono      = { workspace = true }
 futures     = { workspace = true, optional = true }
 log         = { workspace = true }
-serde       = { workspace = true, features = ["derive"] }
 thiserror   = { workspace = true }
 tokio       = { workspace = true, features = ["macros", "rt", "tracing"] }
 tokio-util  = { workspace = true, optional = true }
@@ -54,9 +52,7 @@ mysql = ["mysql-sqlx", "sqlx"]
 mysql-sqlx = [
     "dep:futures",
     "dep:sqlx",
-    "dep:sqlx-mysql",
     "sqlx",
-    "sqlx-mysql/chrono",
     "sqlx/mysql",
 ]
 postgres = [

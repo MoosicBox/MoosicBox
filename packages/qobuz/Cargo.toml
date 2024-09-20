@@ -10,6 +10,9 @@ readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
+[package.metadata.cargo-machete]
+ignored = ["strum"]
+
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
 moosicbox_core = { path = "../core", default-features = false }
@@ -29,9 +32,6 @@ moosicbox_search = { path = "../search", default-features = false }
 actix-web = { workspace = true, optional = true }
 utoipa    = { workspace = true, optional = true }
 
-# DB Dependencies
-rusqlite = { workspace = true, optional = true }
-
 async-recursion = { workspace = true }
 async-trait     = { workspace = true }
 base64          = { workspace = true }
@@ -45,7 +45,6 @@ strum           = { workspace = true }
 strum_macros    = { workspace = true }
 thiserror       = { workspace = true }
 tokio           = { workspace = true, features = ["macros", "tracing"] }
-tokio-util      = { workspace = true }
 url             = { workspace = true }
 
 [dev-dependencies]
@@ -57,5 +56,5 @@ default = ["api", "db", "openapi"]
 fail-on-warnings = []
 
 api     = ["dep:actix-web", "moosicbox_database/api"]
-db      = ["dep:rusqlite", "moosicbox_music_api/db"]
+db      = ["moosicbox_music_api/db"]
 openapi = ["dep:utoipa"]

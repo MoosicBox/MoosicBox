@@ -21,10 +21,9 @@ moosicbox_json_utils = { path = "../json_utils", optional = true, default-featur
 nanoid = { workspace = true, optional = true }
 
 # API dependencies
-actix-web  = { workspace = true, optional = true }
-serde      = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
-utoipa     = { workspace = true, optional = true }
+actix-web = { workspace = true, optional = true }
+serde     = { workspace = true, optional = true }
+utoipa    = { workspace = true, optional = true }
 
 # Test dependencies
 rand = { workspace = true, optional = true }
@@ -42,5 +41,5 @@ test = ["dep:rand"]
 
 db = ["dep:moosicbox_database", "dep:moosicbox_json_utils", "dep:nanoid"]
 
-api     = ["db", "dep:actix-web", "dep:serde", "dep:serde_json"]
+api     = ["db", "dep:actix-web", "dep:serde"]
 openapi = ["dep:utoipa"]

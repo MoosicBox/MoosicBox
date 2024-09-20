@@ -22,7 +22,6 @@ moosicbox_task          = { path = "../task", default-features = false }
 actix-web        = { workspace = true, optional = true }
 moosicbox_paging = { path = "../paging", optional = true }
 serde            = { workspace = true, optional = true }
-serde_json       = { workspace = true, optional = true }
 utoipa           = { workspace = true, optional = true }
 
 # CPAL
@@ -40,12 +39,11 @@ mp3lame-encoder         = { workspace = true, optional = true }
 ogg                     = { workspace = true, optional = true }
 opus                    = { workspace = true, optional = true }
 
-bytes      = { workspace = true }
-log        = { workspace = true }
-symphonia  = { workspace = true }
-thiserror  = { workspace = true }
-tokio      = { workspace = true, features = ["rt-multi-thread", "tracing"] }
-tokio-util = { workspace = true }
+bytes     = { workspace = true }
+log       = { workspace = true }
+symphonia = { workspace = true }
+thiserror = { workspace = true }
+tokio     = { workspace = true, features = ["rt-multi-thread", "tracing"] }
 
 [features]
 default = ["api", "default-windows", "openapi", "pulseaudio"]
@@ -54,7 +52,7 @@ default-windows = ["aac", "cpal", "flac", "mp3", "oboe-shared-stdcxx", "opus"]
 
 fail-on-warnings = []
 
-api     = ["dep:actix-web", "dep:moosicbox_paging", "dep:serde", "dep:serde_json"]
+api     = ["dep:actix-web", "dep:moosicbox_paging", "dep:serde"]
 openapi = ["dep:utoipa", "moosicbox_paging/openapi"]
 
 asio                = ["cpal/asio"]

@@ -12,26 +12,21 @@ version     = "0.1.0"
 
 [dependencies]
 moosicbox_database = { path = "../database", default-features = false }
-moosicbox_task     = { path = "../task", optional = true, default-features = false }
 
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }
 
 # sqlx dependencies
-sqlx          = { workspace = true, optional = true, features = ["runtime-tokio"] }
-sqlx-mysql    = { workspace = true, optional = true }
-sqlx-postgres = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true, features = ["runtime-tokio"] }
 
 # tokio-postgres dependencies
-postgres-protocol = { workspace = true, optional = true, features = [] }
-tokio-postgres    = { workspace = true, optional = true, features = [] }
+tokio-postgres = { workspace = true, optional = true, features = [] }
 
 # Postgres dependencies
 native-tls          = { workspace = true, optional = true }
 openssl             = { workspace = true, optional = true }
 postgres-native-tls = { workspace = true, optional = true }
 postgres-openssl    = { workspace = true, optional = true }
-regex               = { workspace = true, optional = true }
 
 # Creds dependencies
 aws-config  = { workspace = true, optional = true }
@@ -57,20 +52,8 @@ creds = ["dep:aws-config", "dep:aws-sdk-ssm"]
 sqlx = ["dep:sqlx", "moosicbox_database/sqlx"]
 
 mysql = ["creds", "dep:tokio"]
-mysql-sqlx = [
-    "dep:sqlx-mysql",
-    "moosicbox_database/mysql-sqlx",
-    "mysql",
-    "sqlx",
-    "sqlx-mysql/chrono",
-    "sqlx/mysql",
-]
-postgres = [
-    "creds",
-    "dep:moosicbox_task",
-    "dep:tokio",
-    "moosicbox_database/postgres",
-]
+mysql-sqlx = ["moosicbox_database/mysql-sqlx", "mysql", "sqlx", "sqlx/mysql"]
+postgres = ["creds", "dep:tokio", "moosicbox_database/postgres"]
 postgres-native-tls = ["dep:native-tls", "dep:postgres-native-tls"]
 postgres-openssl = ["dep:openssl", "dep:postgres-openssl"]
 postgres-raw = [
@@ -79,7 +62,6 @@ postgres-raw = [
     "postgres",
 ]
 postgres-sqlx = [
-    "dep:sqlx-postgres",
     "moosicbox_database/postgres-sqlx",
     "postgres",
     "sqlx",

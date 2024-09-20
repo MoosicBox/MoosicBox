@@ -12,18 +12,14 @@ version     = "0.1.0"
 
 [dependencies]
 moosicbox_core = { path = "../core", default-features = false }
-moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
-    "serde_json",
-] }
 
 # API Dependencies
 utoipa = { workspace = true, optional = true }
 
-futures   = { workspace = true }
-log       = { workspace = true }
-serde     = { workspace = true, features = ["derive"] }
-thiserror = { workspace = true }
-tokio     = { workspace = true, features = ["macros"] }
+futures = { workspace = true }
+log     = { workspace = true }
+serde   = { workspace = true, features = ["derive"] }
+tokio   = { workspace = true, features = ["macros"] }
 
 [features]
 default = ["openapi"]

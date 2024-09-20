@@ -10,6 +10,9 @@ readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
+[package.metadata.cargo-machete]
+ignored = ["strum"]
+
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
 moosicbox_audio_zone = { path = "../audio_zone", default-features = false }
@@ -23,11 +26,8 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
 moosicbox_logging = { path = "../logging", default-features = false }
 moosicbox_session = { path = "../session", default-features = false }
 
-actix-rt    = { workspace = true, optional = true }
-actix-web   = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 log         = { workspace = true, optional = true }
-regex       = { workspace = true, optional = true }
 thiserror   = { workspace = true, optional = true }
 
 serde        = { workspace = true, features = ["derive"] }
@@ -35,19 +35,14 @@ serde_json   = { workspace = true }
 strum        = { workspace = true }
 strum_macros = { workspace = true }
 
-rusqlite = { workspace = true }
-
 [features]
 default = ["aac", "flac", "mp3", "opus", "ws"]
 
 fail-on-warnings = []
 
 ws = [
-    "dep:actix-rt",
-    "dep:actix-web",
     "dep:async-trait",
     "dep:log",
-    "dep:regex",
     "dep:thiserror",
 ]
 

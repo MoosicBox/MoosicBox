@@ -14,7 +14,6 @@ version     = "0.1.0"
 moosicbox_assert = { path = "../assert", default-features = false }
 moosicbox_audio_decoder = { path = "../audio_decoder", default-features = false }
 moosicbox_audio_output = { path = "../audio_output", default-features = false }
-moosicbox_audio_zone = { path = "../audio_zone", default-features = false }
 moosicbox_core = { path = "../core", default-features = false }
 moosicbox_database = { path = "../database", default-features = false, features = [
     "sqlite-sqlx",
@@ -22,7 +21,6 @@ moosicbox_database = { path = "../database", default-features = false, features 
 moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
     "serde_json",
 ] }
-moosicbox_library = { path = "../library", default-features = false }
 moosicbox_logging = { path = "../logging", default-features = false }
 moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_resampler = { path = "../resampler", default-features = false }
@@ -39,7 +37,6 @@ atomic_float     = { workspace = true }
 bytes            = { workspace = true }
 flume            = { workspace = true }
 futures          = { workspace = true }
-lazy_static      = { workspace = true }
 local-ip-address = { workspace = true }
 log              = { workspace = true }
 rand             = { workspace = true }

@@ -15,6 +15,9 @@ name              = "moosicbox_server"
 path              = "src/main.rs"
 required-features = []
 
+[package.metadata.cargo-machete]
+ignored = ["strum"]
+
 [package.metadata.cargo-udeps.ignore]
 normal = ["moosicbox_schema"]
 
@@ -118,19 +121,13 @@ actix-htmx         = { workspace = true, optional = true }
 actix-web          = { workspace = true }
 actix-ws           = { workspace = true }
 console-subscriber = { workspace = true }
-enum-as-inner      = { workspace = true }
 flume              = { workspace = true }
-futures            = { workspace = true }
 futures-util       = { workspace = true }
 kanal              = { workspace = true }
-lazy_static        = { workspace = true }
 local-ip-address   = { workspace = true }
 log                = { workspace = true }
 openssl            = { workspace = true, optional = true }
 rand               = { workspace = true }
-regex              = { workspace = true }
-rusqlite           = { workspace = true, optional = true }
-serde              = { workspace = true, features = ["derive"] }
 serde_json         = { workspace = true }
 strum              = { workspace = true }
 strum_macros       = { workspace = true }
@@ -251,7 +248,6 @@ postgres-sqlx = [
 ]
 sqlite = ["dep:moosicbox_schema", "moosicbox_schema?/sqlite"]
 sqlite-rusqlite = [
-    "dep:rusqlite",
     "moosicbox_database/sqlite-rusqlite",
     "moosicbox_database_connection/sqlite-rusqlite",
     "sqlite",

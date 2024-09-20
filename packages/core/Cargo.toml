@@ -10,6 +10,9 @@ readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
+[package.metadata.cargo-machete]
+ignored = ["strum"]
+
 [dependencies]
 moosicbox_database = { path = "../database", default-features = false, features = [
     "sqlite-sqlx",
@@ -21,7 +24,6 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
 
 actix-web    = { workspace = true }
 async-trait  = { workspace = true }
-futures      = { workspace = true }
 log          = { workspace = true }
 rusqlite     = { workspace = true }
 serde        = { workspace = true, features = ["derive", "rc"] }

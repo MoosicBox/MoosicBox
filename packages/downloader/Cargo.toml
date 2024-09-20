@@ -10,6 +10,9 @@ readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
+[package.metadata.cargo-machete]
+ignored = ["strum"]
+
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
 moosicbox_config = { path = "../config", default-features = false }
@@ -23,7 +26,6 @@ moosicbox_files = { path = "../files", default-features = false, features = [
 moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
     "serde_json",
 ] }
-moosicbox_library = { path = "../library", default-features = false }
 moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_paging = { path = "../paging", default-features = false }
 moosicbox_scan = { path = "../scan", default-features = false, features = [
@@ -43,11 +45,8 @@ futures         = { workspace = true }
 hyper           = { version = "1.4.1" }
 id3             = { workspace = true }
 lazy_static     = { workspace = true }
-lofty           = { workspace = true }
 log             = { workspace = true }
-mp3-duration    = { workspace = true }
 regex           = { workspace = true }
-reqwest         = { workspace = true, features = ["json"] }
 rusqlite        = { workspace = true }
 serde           = { workspace = true, features = ["derive"] }
 serde_json      = { workspace = true }
@@ -59,8 +58,6 @@ tokio-util      = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
-serial_test       = { workspace = true }
-static_init       = { workspace = true }
 test-log          = { workspace = true }
 tokio             = { workspace = true, features = ["macros", "rt", "tracing"] }
 
@@ -77,7 +74,7 @@ openapi = [
     "moosicbox_paging/openapi",
 ]
 
-aac  = ["moosicbox_core/aac", "moosicbox_files/aac", "moosicbox_library/aac"]
-flac = ["moosicbox_core/flac", "moosicbox_files/flac", "moosicbox_library/flac"]
-mp3  = ["moosicbox_core/mp3", "moosicbox_files/mp3", "moosicbox_library/mp3"]
-opus = ["moosicbox_core/opus", "moosicbox_files/opus", "moosicbox_library/opus"]
+aac  = ["moosicbox_core/aac", "moosicbox_files/aac"]
+flac = ["moosicbox_core/flac", "moosicbox_files/flac"]
+mp3  = ["moosicbox_core/mp3", "moosicbox_files/mp3"]
+opus = ["moosicbox_core/opus", "moosicbox_files/opus"]

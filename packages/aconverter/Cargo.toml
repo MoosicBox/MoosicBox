@@ -17,15 +17,12 @@ required-features = []
 
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
-moosicbox_audio_encoder = { path = "../audio_encoder", default-features = false }
 moosicbox_core = { path = "../core", default-features = false }
 moosicbox_files = { path = "../files", default-features = false, features = [
     "files",
 ] }
 moosicbox_logging = { path = "../logging", default-features = false }
 moosicbox_music_api = { path = "../music_api", default-features = false }
-
-opus = { workspace = true }
 
 audiotags = { workspace = true }
 clap = { workspace = true }
