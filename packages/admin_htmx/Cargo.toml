@@ -48,7 +48,9 @@ default = ["api", "qobuz", "tidal"]
 fail-on-warnings = []
 
 qobuz = ["dep:moosicbox_qobuz"]
-tidal = ["dep:base64", "dep:moosicbox_tidal"]
+tidal = ["base64", "dep:moosicbox_tidal"]
+
+base64 = ["dep:base64"]
 
 static-token-auth = []
 

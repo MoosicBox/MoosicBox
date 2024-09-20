@@ -11,29 +11,32 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { path = "../assert", default-features = false }
-moosicbox_task   = { path = "../task", default-features = false }
+moosicbox_task = { path = "../task", optional = true, default-features = false }
 
 bytes = { workspace = true }
-flume = { workspace = true }
+flume = { workspace = true, optional = true }
 futures = { workspace = true }
-lazy_static = { workspace = true }
 log = { workspace = true }
 pin-project = { workspace = true }
-reqwest = { workspace = true }
-thiserror = { workspace = true }
+reqwest = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, features = [
     "macros",
     "rt-multi-thread",
     "time",
     "tracing",
 ] }
-tokio-util = { workspace = true }
+tokio-util = { workspace = true, optional = true }
 
 [features]
 default = ["remote-bytestream", "stalled-monitor"]
 
 fail-on-warnings = []
 
-remote-bytestream = []
-stalled-monitor   = []
+remote-bytestream = [
+    "dep:flume",
+    "dep:moosicbox_task",
+    "dep:reqwest",
+    "dep:tokio-util",
+]
+stalled-monitor = ["dep:thiserror"]

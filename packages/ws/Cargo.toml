@@ -23,17 +23,12 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
 moosicbox_logging = { path = "../logging", default-features = false }
 moosicbox_session = { path = "../session", default-features = false }
 
-actix-cors      = { workspace = true, optional = true }
-actix-files     = { workspace = true, optional = true }
-actix-rt        = { workspace = true, optional = true }
-actix-web       = { workspace = true, optional = true }
-async-once-cell = { workspace = true, optional = true }
-async-trait     = { workspace = true, optional = true }
-awc             = { workspace = true, optional = true }
-env_logger      = { workspace = true, optional = true }
-log             = { workspace = true, optional = true }
-regex           = { workspace = true, optional = true }
-thiserror       = { workspace = true, optional = true }
+actix-rt    = { workspace = true, optional = true }
+actix-web   = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+log         = { workspace = true, optional = true }
+regex       = { workspace = true, optional = true }
+thiserror   = { workspace = true, optional = true }
 
 serde        = { workspace = true, features = ["derive"] }
 serde_json   = { workspace = true }
@@ -48,14 +43,9 @@ default = ["aac", "flac", "mp3", "opus", "ws"]
 fail-on-warnings = []
 
 ws = [
-    "dep:actix-cors",
-    "dep:actix-files",
     "dep:actix-rt",
     "dep:actix-web",
-    "dep:async-once-cell",
     "dep:async-trait",
-    "dep:awc",
-    "dep:env_logger",
     "dep:log",
     "dep:regex",
     "dep:thiserror",

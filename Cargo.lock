@@ -209,8 +209,6 @@ dependencies = [
  "actix-service",
  "actix-utils",
  "futures-core",
- "http 0.2.12",
- "http 1.1.0",
  "impl-more",
  "openssl",
  "pin-project-lite",
@@ -519,12 +517,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-once-cell"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9338790e78aa95a416786ec8389546c4b6a1dfc3dc36071ed9518a9413a542eb"
-
-[[package]]
 name = "async-recursion"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -684,39 +676,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "876c75a42f6364451a033496a14c44bffe41f5f4a8236f697391f11024e596d2"
 dependencies = [
  "arrayvec",
-]
-
-[[package]]
-name = "awc"
-version = "3.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79049b2461279b886e46f1107efc347ebecc7b88d74d023dda010551a124967b"
-dependencies = [
- "actix-codec",
- "actix-http",
- "actix-rt",
- "actix-service",
- "actix-tls",
- "actix-utils",
- "base64 0.22.1",
- "bytes",
- "cfg-if",
- "cookie",
- "derive_more",
- "futures-core",
- "futures-util",
- "h2 0.3.26",
- "http 0.2.12",
- "itoa",
- "log",
- "mime",
- "percent-encoding",
- "pin-project-lite",
- "rand",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "tokio",
 ]
 
 [[package]]
@@ -2022,20 +1981,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f2c92ceda6ceec50f43169f9ee8424fe2db276791afde7b2cd8bc084cb376ab"
 dependencies = [
  "log",
- "regex",
-]
-
-[[package]]
-name = "env_logger"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4cd405aab171cb85d6735e5c8d9db038c17d3ca007a4d2c25f337935c3d90580"
-dependencies = [
- "humantime",
- "is-terminal",
- "log",
- "regex",
- "termcolor",
 ]
 
 [[package]]
@@ -2047,7 +1992,6 @@ dependencies = [
  "anstream",
  "anstyle",
  "env_filter",
- "humantime",
  "log",
 ]
 
@@ -2604,12 +2548,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
 
 [[package]]
-name = "hermit-abi"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbf6a919d6cf397374f7dfeeea91d974c7c0a7221d0d0f4f20d859d329e53fcc"
-
-[[package]]
 name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3024,17 +2962,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "928bae27f42bc99b60d9ac7334e3a21d10ad8f1835a4e12ec3ec0464765ed1b3"
 dependencies = [
  "once_cell",
-]
-
-[[package]]
-name = "is-terminal"
-version = "0.4.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "261f68e344040fbd0edea105bef17c66edf46f984ddb1115b775ce31be948f4b"
-dependencies = [
- "hermit-abi 0.4.0",
- "libc",
- "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3702,7 +3629,6 @@ version = "0.1.0"
 dependencies = [
  "audiotags",
  "clap 4.5.17",
- "env_logger 0.11.5",
  "futures",
  "log",
  "moosicbox_assert",
@@ -3755,7 +3681,6 @@ dependencies = [
  "flume",
  "futures",
  "log",
- "moosicbox_assert",
  "moosicbox_task",
  "pretty_assertions",
  "test-log",
@@ -3769,26 +3694,18 @@ name = "moosicbox_audio_decoder"
 version = "0.1.0"
 dependencies = [
  "arrayvec",
- "atomic_float",
  "bytes",
- "clap 4.5.17",
  "flume",
  "futures",
  "lazy_static",
  "log",
- "moosicbox_assert",
- "moosicbox_audio_encoder",
- "moosicbox_env_utils",
- "moosicbox_resampler",
  "moosicbox_stream_utils",
  "moosicbox_task",
- "pretty_env_logger",
  "rangemap",
  "reqwest 0.12.7",
  "symphonia",
  "thiserror",
  "tokio",
- "tokio-stream",
  "tokio-util",
 ]
 
@@ -3800,8 +3717,6 @@ dependencies = [
  "fdk-aac",
  "flacenc",
  "log",
- "moosicbox_assert",
- "moosicbox_stream_utils",
  "mp3lame-encoder",
  "ogg",
  "opus",
@@ -3849,7 +3764,6 @@ dependencies = [
  "bytes",
  "log",
  "moosicbox_assert",
- "moosicbox_audio_output",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",
@@ -3870,7 +3784,6 @@ dependencies = [
  "actix",
  "actix-web",
  "log",
- "moosicbox_assert",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",
@@ -3901,7 +3814,6 @@ dependencies = [
  "actix-web",
  "home",
  "log",
- "moosicbox_assert",
  "moosicbox_database",
  "moosicbox_json_utils",
  "nanoid",
@@ -3916,14 +3828,10 @@ dependencies = [
 name = "moosicbox_core"
 version = "0.1.0"
 dependencies = [
- "actix-cors",
  "actix-web",
  "async-trait",
- "awc",
- "enum-as-inner",
  "futures",
  "log",
- "moosicbox_assert",
  "moosicbox_database",
  "moosicbox_json_utils",
  "pretty_assertions",
@@ -3943,24 +3851,19 @@ name = "moosicbox_database"
 version = "0.1.0"
 dependencies = [
  "actix-web",
- "async-recursion",
  "async-trait",
  "chrono",
  "futures",
  "log",
- "moosicbox_assert",
  "moosicbox_task",
  "postgres-protocol",
  "qstring",
  "regex",
  "rusqlite",
  "serde",
- "serde_json",
  "sqlx",
  "sqlx-mysql",
  "sqlx-postgres",
- "strum",
- "strum_macros",
  "thiserror",
  "tokio",
  "tokio-postgres",
@@ -3974,10 +3877,7 @@ dependencies = [
  "aws-config",
  "aws-sdk-ssm",
  "log",
- "moosicbox_assert",
- "moosicbox_config",
  "moosicbox_database",
- "moosicbox_schema",
  "moosicbox_task",
  "native-tls",
  "openssl",
@@ -4049,13 +3949,10 @@ dependencies = [
 name = "moosicbox_files"
 version = "0.1.0"
 dependencies = [
- "actix-cors",
  "actix-files",
  "actix-web",
- "async-recursion",
  "atomic_float",
  "audiotags",
- "awc",
  "bytes",
  "flume",
  "futures",
@@ -4098,7 +3995,6 @@ dependencies = [
  "image",
  "libvips",
  "log",
- "moosicbox_assert",
  "moosicbox_task",
  "strum",
  "strum_macros",
@@ -4113,7 +4009,6 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "log",
- "moosicbox_assert",
  "moosicbox_database",
  "rusqlite",
  "serde",
@@ -4142,7 +4037,6 @@ dependencies = [
  "moosicbox_paging",
  "moosicbox_search",
  "moosicbox_stream_utils",
- "open",
  "regex",
  "reqwest 0.12.7",
  "rusqlite",
@@ -4163,7 +4057,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "log",
- "moosicbox_assert",
  "moosicbox_config",
  "moosicbox_env_utils",
  "moosicbox_logging",
@@ -4180,7 +4073,6 @@ version = "0.1.0"
 dependencies = [
  "free_log_client",
  "log",
- "moosicbox_assert",
  "moosicbox_config",
  "moosicbox_env_utils",
  "thiserror",
@@ -4197,7 +4089,6 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_async_service",
  "moosicbox_task",
- "strum",
  "strum_macros",
  "thiserror",
 ]
@@ -4206,11 +4097,8 @@ dependencies = [
 name = "moosicbox_menu"
 version = "0.1.0"
 dependencies = [
- "actix-cors",
- "actix-files",
  "actix-web",
  "async-recursion",
- "awc",
  "futures",
  "log",
  "moosicbox_assert",
@@ -4245,18 +4133,14 @@ name = "moosicbox_music_api"
 version = "0.1.0"
 dependencies = [
  "actix-web",
- "async-recursion",
  "async-trait",
  "futures",
  "log",
- "moosicbox_assert",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",
  "moosicbox_paging",
- "open",
  "pretty_assertions",
- "reqwest 0.12.7",
  "rusqlite",
  "serde",
  "serde_json",
@@ -4276,7 +4160,6 @@ version = "0.1.0"
 dependencies = [
  "futures",
  "log",
- "moosicbox_assert",
  "moosicbox_core",
  "moosicbox_json_utils",
  "serde",
@@ -4289,12 +4172,9 @@ dependencies = [
 name = "moosicbox_player"
 version = "0.1.0"
 dependencies = [
- "actix-cors",
- "actix-files",
  "actix-web",
  "async-trait",
  "atomic_float",
- "awc",
  "bytes",
  "flume",
  "futures",
@@ -4303,7 +4183,6 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "moosicbox_audio_decoder",
- "moosicbox_audio_encoder",
  "moosicbox_audio_output",
  "moosicbox_audio_zone",
  "moosicbox_core",
@@ -4316,7 +4195,6 @@ dependencies = [
  "moosicbox_session",
  "moosicbox_stream_utils",
  "moosicbox_task",
- "ogg",
  "rand",
  "regex",
  "reqwest 0.12.7",
@@ -4345,11 +4223,9 @@ dependencies = [
  "moosicbox_database",
  "moosicbox_files",
  "moosicbox_json_utils",
- "moosicbox_menu",
  "moosicbox_music_api",
  "moosicbox_paging",
  "moosicbox_search",
- "open",
  "regex",
  "reqwest 0.12.7",
  "rusqlite",
@@ -4368,22 +4244,14 @@ dependencies = [
 name = "moosicbox_remote_library"
 version = "0.1.0"
 dependencies = [
- "async-recursion",
  "async-trait",
- "enum-as-inner",
  "futures",
  "log",
- "moosicbox_assert",
- "moosicbox_audio_output",
  "moosicbox_core",
  "moosicbox_database",
- "moosicbox_files",
  "moosicbox_json_utils",
  "moosicbox_music_api",
  "moosicbox_paging",
- "moosicbox_search",
- "moosicbox_stream_utils",
- "open",
  "regex",
  "reqwest 0.12.7",
  "rusqlite",
@@ -4403,10 +4271,8 @@ version = "0.1.0"
 dependencies = [
  "arrayvec",
  "log",
- "moosicbox_env_utils",
  "rubato",
  "symphonia",
- "thiserror",
 ]
 
 [[package]]
@@ -4452,7 +4318,6 @@ dependencies = [
  "diesel",
  "diesel_migrations",
  "log",
- "moosicbox_assert",
  "thiserror",
 ]
 
@@ -4463,7 +4328,6 @@ dependencies = [
  "actix-web",
  "itertools 0.13.0",
  "log",
- "moosicbox_assert",
  "moosicbox_config",
  "moosicbox_core",
  "moosicbox_database",
@@ -4487,13 +4351,9 @@ name = "moosicbox_server"
 version = "0.1.0"
 dependencies = [
  "actix-cors",
- "actix-files",
  "actix-htmx",
  "actix-web",
  "actix-ws",
- "awc",
- "aws-config",
- "aws-sdk-ssm",
  "console-subscriber",
  "enum-as-inner",
  "flume",
@@ -4535,10 +4395,7 @@ dependencies = [
  "moosicbox_upnp",
  "moosicbox_ws",
  "moosicbox_yt",
- "native-tls",
  "openssl",
- "postgres-native-tls",
- "postgres-openssl",
  "qstring",
  "rand",
  "rcgen",
@@ -4546,13 +4403,11 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
- "sqlx",
  "strum",
  "strum_macros",
  "thiserror",
  "throttle",
  "tokio",
- "tokio-postgres",
  "tokio-util",
  "url",
  "utoipa",
@@ -4592,9 +4447,7 @@ dependencies = [
  "bytes",
  "flume",
  "futures",
- "lazy_static",
  "log",
- "moosicbox_assert",
  "moosicbox_task",
  "pin-project",
  "reqwest 0.12.7",
@@ -4626,7 +4479,6 @@ dependencies = [
  "moosicbox_database",
  "moosicbox_files",
  "moosicbox_json_utils",
- "moosicbox_menu",
  "moosicbox_music_api",
  "moosicbox_paging",
  "moosicbox_search",
@@ -4653,8 +4505,6 @@ dependencies = [
  "futures-util",
  "log",
  "moosicbox_assert",
- "rand",
- "regex",
  "serde",
  "serde_json",
  "strum",
@@ -4713,12 +4563,9 @@ dependencies = [
  "actix-cors",
  "actix-web",
  "actix-ws",
- "aws-config",
- "aws-sdk-ssm",
  "bytes",
  "chrono",
  "console-subscriber",
- "env_logger 0.11.5",
  "flume",
  "futures-util",
  "hex",
@@ -4796,14 +4643,9 @@ dependencies = [
 name = "moosicbox_ws"
 version = "0.1.0"
 dependencies = [
- "actix-cors",
- "actix-files",
  "actix-rt",
  "actix-web",
- "async-once-cell",
  "async-trait",
- "awc",
- "env_logger 0.11.5",
  "log",
  "moosicbox_assert",
  "moosicbox_audio_zone",
@@ -4836,7 +4678,6 @@ dependencies = [
  "moosicbox_database",
  "moosicbox_files",
  "moosicbox_json_utils",
- "moosicbox_menu",
  "moosicbox_music_api",
  "moosicbox_paging",
  "moosicbox_search",
@@ -5893,16 +5734,6 @@ checksum = "3ae130e2f271fbc2ac3a40fb1d07180839cdbbe443c7a27e1e3c13c5cac0116d"
 dependencies = [
  "diff",
  "yansi",
-]
-
-[[package]]
-name = "pretty_env_logger"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "865724d4dbe39d9f3dd3b52b88d859d66bcb2d6a0acfd5ea68a65fb66d4bdc1c"
-dependencies = [
- "env_logger 0.10.2",
- "log",
 ]
 
 [[package]]
@@ -7924,7 +7755,7 @@ version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3dffced63c2b5c7be278154d76b479f9f9920ed34e7574201407f0b14e2bbb93"
 dependencies = [
- "env_logger 0.11.5",
+ "env_logger",
  "test-log-macros",
  "tracing-subscriber",
 ]

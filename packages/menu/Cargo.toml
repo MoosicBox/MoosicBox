@@ -26,11 +26,8 @@ moosicbox_session = { path = "../session", default-features = false }
 # API Dependencies
 utoipa = { workspace = true, optional = true }
 
-actix-cors      = { workspace = true }
-actix-files     = { workspace = true }
 actix-web       = { workspace = true }
 async-recursion = { workspace = true }
-awc             = { workspace = true }
 futures         = { workspace = true }
 log             = { workspace = true }
 rusqlite        = { workspace = true }

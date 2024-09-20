@@ -11,8 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { path = "../assert", default-features = false }
-moosicbox_task   = { path = "../task", default-features = false }
+moosicbox_task = { path = "../task", default-features = false }
 
 async-trait = { workspace = true }
 flume       = { workspace = true }

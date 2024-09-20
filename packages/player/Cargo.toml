@@ -13,7 +13,6 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
 moosicbox_audio_decoder = { path = "../audio_decoder", default-features = false }
-moosicbox_audio_encoder = { path = "../audio_encoder", default-features = false }
 moosicbox_audio_output = { path = "../audio_output", default-features = false }
 moosicbox_audio_zone = { path = "../audio_zone", default-features = false }
 moosicbox_core = { path = "../core", default-features = false }
@@ -34,19 +33,15 @@ moosicbox_task = { path = "../task", default-features = false }
 #API Dependencies
 utoipa = { workspace = true, optional = true }
 
-actix-cors       = { workspace = true }
-actix-files      = { workspace = true }
 actix-web        = { workspace = true }
 async-trait      = { workspace = true }
 atomic_float     = { workspace = true }
-awc              = { workspace = true }
 bytes            = { workspace = true }
 flume            = { workspace = true }
 futures          = { workspace = true }
 lazy_static      = { workspace = true }
 local-ip-address = { workspace = true }
 log              = { workspace = true }
-ogg              = { workspace = true }
 rand             = { workspace = true }
 regex            = { workspace = true }
 reqwest          = { workspace = true, features = ["json"] }
@@ -87,25 +82,21 @@ pulseaudio-simple   = ["moosicbox_audio_output/pulseaudio-simple"]
 pulseaudio-standard = ["moosicbox_audio_output/pulseaudio-standard"]
 
 aac = [
-    "moosicbox_audio_encoder/aac",
     "moosicbox_audio_output/aac",
     "moosicbox_core/aac",
     "moosicbox_session/aac",
 ]
 flac = [
-    "moosicbox_audio_encoder/flac",
     "moosicbox_audio_output/flac",
     "moosicbox_core/flac",
     "moosicbox_session/flac",
 ]
 mp3 = [
-    "moosicbox_audio_encoder/mp3",
     "moosicbox_audio_output/mp3",
     "moosicbox_core/mp3",
     "moosicbox_session/mp3",
 ]
 opus = [
-    "moosicbox_audio_encoder/opus",
     "moosicbox_audio_output/opus",
     "moosicbox_core/opus",
     "moosicbox_session/opus",

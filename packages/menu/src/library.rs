@@ -226,8 +226,6 @@ pub enum GetAlbumsError {
     #[error("Poison error")]
     Poison,
     #[error(transparent)]
-    Json(#[from] awc::error::JsonPayloadError),
-    #[error(transparent)]
     Db(#[from] DbError),
 }
 
@@ -269,8 +267,6 @@ pub async fn get_albums(db: &LibraryDatabase) -> Result<Arc<Vec<LibraryAlbum>>, 
 pub enum GetArtistAlbumsError {
     #[error("Poison error")]
     Poison,
-    #[error(transparent)]
-    Json(#[from] awc::error::JsonPayloadError),
     #[error(transparent)]
     Sqlite(#[from] rusqlite::Error),
     #[error(transparent)]

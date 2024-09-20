@@ -31,12 +31,9 @@ moosicbox_tunnel              = { path = "../tunnel", default-features = false }
 actix-cors = { workspace = true }
 actix-web = { workspace = true }
 actix-ws = { workspace = true }
-aws-config = { workspace = true }
-aws-sdk-ssm = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 console-subscriber = { workspace = true }
-env_logger = { workspace = true }
 flume = { workspace = true }
 futures-util = { workspace = true }
 hex = { workspace = true }

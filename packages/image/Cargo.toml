@@ -16,11 +16,10 @@ path              = "src/main.rs"
 required-features = ["build-binary"]
 
 [dependencies]
-moosicbox_assert = { path = "../assert", default-features = false }
-moosicbox_task   = { path = "../task", default-features = false }
+moosicbox_task = { path = "../task", default-features = false }
 
 bytes = { workspace = true }
-clap = { workspace = true }
+clap = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
 libvips = { workspace = true, optional = true }
 log = { workspace = true }
@@ -38,6 +37,6 @@ default = ["image", "libvips"]
 
 fail-on-warnings = []
 
-build-binary = ["dep:tokio", "image"]
+build-binary = ["dep:clap", "dep:tokio", "image"]
 image        = ["dep:image", "dep:tokio", "dep:webp"]
 libvips      = ["dep:libvips"]

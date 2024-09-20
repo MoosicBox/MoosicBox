@@ -11,8 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { path = "../assert", default-features = false }
-moosicbox_task   = { path = "../task", default-features = false }
+moosicbox_task = { path = "../task", optional = true, default-features = false }
 
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }
@@ -33,18 +32,14 @@ regex = { workspace = true, optional = true }
 actix-web = { workspace = true, optional = true }
 qstring   = { workspace = true, optional = true }
 
-async-recursion = { workspace = true }
-async-trait     = { workspace = true }
-chrono          = { workspace = true }
-futures         = { workspace = true }
-log             = { workspace = true }
-serde           = { workspace = true, features = ["derive"] }
-serde_json      = { workspace = true }
-strum           = { workspace = true }
-strum_macros    = { workspace = true }
-thiserror       = { workspace = true }
-tokio           = { workspace = true, features = ["macros", "rt", "tracing"] }
-tokio-util      = { workspace = true }
+async-trait = { workspace = true }
+chrono      = { workspace = true }
+futures     = { workspace = true, optional = true }
+log         = { workspace = true }
+serde       = { workspace = true, features = ["derive"] }
+thiserror   = { workspace = true }
+tokio       = { workspace = true, features = ["macros", "rt", "tracing"] }
+tokio-util  = { workspace = true, optional = true }
 
 [features]
 default = ["api", "mysql", "postgres-sqlx", "sqlite-sqlx"]
@@ -57,13 +52,20 @@ api = ["dep:actix-web", "dep:qstring"]
 
 mysql = ["mysql-sqlx", "sqlx"]
 mysql-sqlx = [
+    "dep:futures",
     "dep:sqlx",
     "dep:sqlx-mysql",
     "sqlx",
     "sqlx-mysql/chrono",
     "sqlx/mysql",
 ]
-postgres = ["dep:regex", "postgres-raw"]
+postgres = [
+    "dep:futures",
+    "dep:moosicbox_task",
+    "dep:regex",
+    "dep:tokio-util",
+    "postgres-raw",
+]
 postgres-raw = ["dep:postgres-protocol", "dep:tokio-postgres", "postgres"]
 postgres-sqlx = [
     "dep:sqlx",
@@ -75,5 +77,5 @@ postgres-sqlx = [
 ]
 sqlite = ["sqlite-sqlx"]
 sqlite-rusqlite = ["dep:rusqlite"]
-sqlite-sqlx = ["dep:regex", "dep:sqlx", "sqlx", "sqlx/sqlite"]
+sqlite-sqlx = ["dep:futures", "dep:regex", "dep:sqlx", "sqlx", "sqlx/sqlite"]
 sqlx = []

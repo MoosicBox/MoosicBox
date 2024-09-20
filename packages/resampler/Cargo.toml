@@ -11,13 +11,10 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_env_utils = { path = "../env_utils", default-features = false }
-
 arrayvec  = { workspace = true }
 log       = { workspace = true }
 rubato    = { workspace = true }
 symphonia = { workspace = true }
-thiserror = { workspace = true }
 
 [features]
 default = []

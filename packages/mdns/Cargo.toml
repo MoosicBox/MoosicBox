@@ -17,7 +17,6 @@ moosicbox_task   = { path = "../task", default-features = false }
 # Scanner dependencies
 kanal                   = { workspace = true, optional = true }
 moosicbox_async_service = { path = "../async_service", optional = true, default-features = false }
-strum                   = { workspace = true, optional = true }
 strum_macros            = { workspace = true, optional = true }
 
 hostname  = { workspace = true }
@@ -30,9 +29,4 @@ default = ["scanner"]
 
 fail-on-warnings = []
 
-scanner = [
-    "dep:kanal",
-    "dep:moosicbox_async_service",
-    "dep:strum",
-    "dep:strum_macros",
-]
+scanner = ["dep:kanal", "dep:moosicbox_async_service", "dep:strum_macros"]

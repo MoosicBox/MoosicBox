@@ -11,7 +11,6 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { path = "../assert", default-features = false }
 moosicbox_database = { path = "../database", default-features = false, features = [
     "sqlite-sqlx",
 ] }
@@ -20,21 +19,18 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
     "serde_json",
 ] }
 
-actix-cors    = { workspace = true }
-actix-web     = { workspace = true }
-async-trait   = { workspace = true }
-awc           = { workspace = true }
-enum-as-inner = { workspace = true }
-futures       = { workspace = true }
-log           = { workspace = true }
-rusqlite      = { workspace = true }
-serde         = { workspace = true, features = ["derive", "rc"] }
-serde_json    = { workspace = true }
-strum         = { workspace = true }
-strum_macros  = { workspace = true }
-tantivy       = { workspace = true, optional = true }
-thiserror     = { workspace = true }
-utoipa        = { workspace = true, optional = true }
+actix-web    = { workspace = true }
+async-trait  = { workspace = true }
+futures      = { workspace = true }
+log          = { workspace = true }
+rusqlite     = { workspace = true }
+serde        = { workspace = true, features = ["derive", "rc"] }
+serde_json   = { workspace = true }
+strum        = { workspace = true }
+strum_macros = { workspace = true }
+tantivy      = { workspace = true, optional = true }
+thiserror    = { workspace = true }
+utoipa       = { workspace = true, optional = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

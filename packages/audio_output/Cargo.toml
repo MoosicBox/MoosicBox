@@ -63,7 +63,7 @@ jack                = ["cpal/jack"]
 oboe-shared-stdcxx  = ["cpal/oboe-shared-stdcxx"]
 pulseaudio          = ["pulseaudio-simple", "pulseaudio-standard"]
 pulseaudio-simple   = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
-pulseaudio-standard = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
+pulseaudio-standard = ["dep:libpulse-binding"]
 
 aac = [
     "dep:fdk-aac",

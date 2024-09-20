@@ -39,8 +39,6 @@ pub enum GetAlbumTracksError {
     #[error("Poison error")]
     Poison,
     #[error(transparent)]
-    Json(#[from] awc::error::JsonPayloadError),
-    #[error(transparent)]
     Db(#[from] DbError),
 }
 

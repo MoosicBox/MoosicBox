@@ -11,11 +11,8 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert   = { path = "../assert", default-features = false }
-moosicbox_config   = { path = "../config", default-features = false }
 moosicbox_database = { path = "../database", default-features = false }
-moosicbox_schema   = { path = "../schema", default-features = false }
-moosicbox_task     = { path = "../task", default-features = false }
+moosicbox_task     = { path = "../task", optional = true, default-features = false }
 
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }
@@ -40,9 +37,13 @@ regex               = { workspace = true, optional = true }
 aws-config  = { workspace = true, optional = true }
 aws-sdk-ssm = { workspace = true, optional = true }
 
-log       = { workspace = true }
+log = { workspace = true }
 thiserror = { workspace = true }
-tokio     = { workspace = true, features = ["macros", "rt", "tracing"] }
+tokio = { workspace = true, optional = true, features = [
+    "macros",
+    "rt",
+    "tracing",
+] }
 
 [features]
 default = ["mysql-sqlx", "postgres-sqlx", "sqlite-sqlx"]
@@ -55,7 +56,7 @@ creds = ["dep:aws-config", "dep:aws-sdk-ssm"]
 
 sqlx = ["dep:sqlx", "moosicbox_database/sqlx"]
 
-mysql = ["creds"]
+mysql = ["creds", "dep:tokio"]
 mysql-sqlx = [
     "dep:sqlx-mysql",
     "moosicbox_database/mysql-sqlx",
@@ -64,9 +65,14 @@ mysql-sqlx = [
     "sqlx-mysql/chrono",
     "sqlx/mysql",
 ]
-postgres = ["creds", "moosicbox_database/postgres", "moosicbox_schema/postgres"]
+postgres = [
+    "creds",
+    "dep:moosicbox_task",
+    "dep:tokio",
+    "moosicbox_database/postgres",
+]
 postgres-native-tls = ["dep:native-tls", "dep:postgres-native-tls"]
-postgres-openssl = ["dep:native-tls", "dep:openssl", "dep:postgres-openssl"]
+postgres-openssl = ["dep:openssl", "dep:postgres-openssl"]
 postgres-raw = [
     "dep:tokio-postgres",
     "moosicbox_database/postgres-raw",
@@ -80,7 +86,7 @@ postgres-sqlx = [
     "sqlx/postgres",
     "sqlx/tls-rustls",
 ]
-sqlite = ["moosicbox_schema/sqlite"]
+sqlite = ["dep:tokio"]
 sqlite-rusqlite = [
     "dep:rusqlite",
     "moosicbox_database/sqlite-rusqlite",

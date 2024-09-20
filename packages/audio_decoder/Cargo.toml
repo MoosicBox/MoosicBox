@@ -11,32 +11,24 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { path = "../assert", default-features = false }
-moosicbox_audio_encoder = { path = "../audio_encoder", default-features = false }
-moosicbox_env_utils = { path = "../env_utils", default-features = false }
-moosicbox_resampler = { path = "../resampler", default-features = false }
 moosicbox_stream_utils = { path = "../stream_utils", default-features = false, features = [
     "remote-bytestream",
     "stalled-monitor",
 ] }
 moosicbox_task = { path = "../task", default-features = false }
 
-arrayvec          = { workspace = true }
-atomic_float      = { workspace = true }
-bytes             = { workspace = true }
-clap              = { workspace = true }
-flume             = { workspace = true }
-futures           = { workspace = true }
-lazy_static       = { workspace = true }
-log               = { workspace = true }
-pretty_env_logger = { workspace = true }
-rangemap          = { workspace = true }
-reqwest           = { workspace = true }
-symphonia         = { workspace = true }
-thiserror         = { workspace = true }
-tokio             = { workspace = true, features = ["rt-multi-thread", "tracing"] }
-tokio-stream      = { workspace = true }
-tokio-util        = { workspace = true }
+arrayvec    = { workspace = true }
+bytes       = { workspace = true }
+flume       = { workspace = true }
+futures     = { workspace = true }
+lazy_static = { workspace = true }
+log         = { workspace = true }
+rangemap    = { workspace = true }
+reqwest     = { workspace = true }
+symphonia   = { workspace = true }
+thiserror   = { workspace = true }
+tokio       = { workspace = true, features = ["rt-multi-thread", "tracing"] }
+tokio-util  = { workspace = true }
 
 [features]
 default = []

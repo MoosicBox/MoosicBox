@@ -16,7 +16,6 @@ path              = "src/main.rs"
 required-features = []
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
-moosicbox_assert    = { path = "../assert", default-features = false }
 moosicbox_config    = { path = "../config", default-features = false }
 moosicbox_env_utils = { path = "../env_utils", default-features = false }
 moosicbox_logging   = { path = "../logging", default-features = false }
