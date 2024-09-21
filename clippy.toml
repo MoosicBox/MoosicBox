@@ -32,6 +32,7 @@ allowed-duplicate-crates = [
     "sync_wrapper",
     "tokio-rustls",
     "toml_edit",
+    "tower",
     "webpki-roots",
     "winapi",
     "windows",
