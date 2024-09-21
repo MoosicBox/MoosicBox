@@ -50,14 +50,7 @@ pub async fn init() -> Result<(), DatabaseError> {
 
     #[cfg(feature = "sqlite")]
     let db_path = {
-        let path = make_config_db_dir_path(app_type).expect("Failed to get DB config path");
-
-        let path_str = path.to_str().expect("Failed to get DB path_str");
-        if let Err(e) = moosicbox_schema::migrate_config(path_str) {
-            moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
-        };
-
-        path
+        unimplemented!("sqlite database is not implemented");
     };
 
     binding.replace(
