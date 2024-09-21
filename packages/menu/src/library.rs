@@ -1,7 +1,6 @@
 pub mod albums;
 pub mod artists;
 
-use actix_web::error::ErrorInternalServerError;
 use moosicbox_core::sqlite::{
     db::DbError,
     models::{ApiSource, Id},
@@ -169,13 +168,6 @@ impl<T> From<PoisonError<T>> for GetAlbumError {
     }
 }
 
-impl From<GetAlbumError> for actix_web::Error {
-    fn from(err: GetAlbumError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 pub async fn get_album(
     db: &LibraryDatabase,
     album_id: &Id,
@@ -228,13 +220,6 @@ pub enum GetAlbumsError {
 impl<T> From<PoisonError<T>> for GetAlbumsError {
     fn from(_err: PoisonError<T>) -> Self {
         Self::Poison
-    }
-}
-
-impl From<GetAlbumsError> for actix_web::Error {
-    fn from(err: GetAlbumsError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
     }
 }
 

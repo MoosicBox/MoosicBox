@@ -8,7 +8,6 @@ use std::{
 };
 
 use ::symphonia::core::{io::MediaSource, probe::Hint};
-use actix_web::Result;
 use async_trait::async_trait;
 use atomic_float::AtomicF64;
 use flume::{bounded, Receiver, SendError};
@@ -1498,10 +1497,7 @@ async fn track_id_to_playable_stream(
 
     let mut hint = Hint::new();
 
-    if let Some(Ok(content_type)) = headers
-        .get(actix_web::http::header::CONTENT_TYPE.to_string())
-        .map(|x| x.to_str())
-    {
+    if let Some(Ok(content_type)) = headers.get("content-type").map(|x| x.to_str()) {
         if let Some(audio_type) = content_type.strip_prefix("audio/") {
             log::debug!("Setting hint extension to {audio_type}");
             hint.with_extension(audio_type);

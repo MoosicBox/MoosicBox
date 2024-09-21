@@ -48,4 +48,4 @@ openapi = ["dep:utoipa"]
 
 db = ["moosicbox_database/api"]
 
-api = ["dep:actix-web"]
+api = ["dep:actix-web", "moosicbox_database/api"]

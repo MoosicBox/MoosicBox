@@ -565,7 +565,8 @@ pub async fn get_album_endpoint(
 
     Ok(Json(
         get_album(&db, &id, source)
-            .await?
+            .await
+            .map_err(ErrorInternalServerError)?
             .ok_or(ErrorNotFound("Album not found"))?
             .to_api(),
     ))

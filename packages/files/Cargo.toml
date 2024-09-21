@@ -14,43 +14,41 @@ version     = "0.1.0"
 ignored = ["strum"]
 
 [dependencies]
-moosicbox_assert = { path = "../assert", default-features = false }
-moosicbox_async_service = { path = "../async_service", default-features = false }
-moosicbox_audio_decoder = { path = "../audio_decoder", default-features = false }
-moosicbox_audio_output = { path = "../audio_output", default-features = false }
-moosicbox_config = { path = "../config", default-features = false }
-moosicbox_core = { path = "../core", default-features = false }
-moosicbox_database = { path = "../database", default-features = false, features = [
-    "sqlite-sqlx",
-] }
-moosicbox_image = { path = "../image", default-features = false }
-moosicbox_music_api = { path = "../music_api", default-features = false }
-moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
-moosicbox_task = { path = "../task", default-features = false }
+moosicbox_assert        = { path = "../assert", default-features = false }
+moosicbox_async_service = { path = "../async_service", optional = true, default-features = false }
+moosicbox_audio_decoder = { path = "../audio_decoder", optional = true, default-features = false }
+moosicbox_audio_output  = { path = "../audio_output", optional = true, default-features = false }
+moosicbox_config        = { path = "../config", default-features = false }
+moosicbox_core          = { path = "../core", optional = true, default-features = false }
+moosicbox_database      = { path = "../database", optional = true, default-features = false }
+moosicbox_image         = { path = "../image", optional = true, default-features = false }
+moosicbox_music_api     = { path = "../music_api", optional = true, default-features = false }
+moosicbox_stream_utils  = { path = "../stream_utils", default-features = false }
+moosicbox_task          = { path = "../task", optional = true, default-features = false }
 
 # API Dependencies
 utoipa = { workspace = true, optional = true }
 
-actix-files  = { workspace = true }
-actix-web    = { workspace = true }
+actix-files  = { workspace = true, optional = true }
+actix-web    = { workspace = true, optional = true }
 atomic_float = { workspace = true }
 audiotags    = { workspace = true }
 bytes        = { workspace = true }
-flume        = { workspace = true }
+flume        = { workspace = true, optional = true }
 futures      = { workspace = true }
 futures-core = { workspace = true }
-lazy_static  = { workspace = true }
+lazy_static  = { workspace = true, optional = true }
 log          = { workspace = true }
 regex        = { workspace = true }
 reqwest      = { workspace = true }
 serde        = { workspace = true, features = ["derive"] }
-strum        = { workspace = true }
-strum_macros = { workspace = true }
-symphonia    = { workspace = true }
+strum        = { workspace = true, optional = true }
+strum_macros = { workspace = true, optional = true }
+symphonia    = { workspace = true, optional = true }
 thiserror    = { workspace = true }
 tokio        = { workspace = true }
-tokio-stream = { workspace = true }
-tokio-util   = { workspace = true }
+tokio-stream = { workspace = true, optional = true }
+tokio-util   = { workspace = true, optional = true }
 
 [features]
 default = [
@@ -70,13 +68,38 @@ fail-on-warnings = []
 image   = ["moosicbox_image/image"]
 libvips = ["moosicbox_image/libvips"]
 
-api         = ["files", "moosicbox_database/api", "moosicbox_music_api/api", "range"]
-files       = []
-openapi     = ["dep:utoipa", "moosicbox_core/openapi"]
-range       = []
-track-range = []
+api = [
+    "dep:actix-files",
+    "dep:actix-web",
+    "dep:moosicbox_async_service",
+    "dep:moosicbox_audio_decoder",
+    "dep:moosicbox_task",
+    "files",
+    "moosicbox_database/api",
+    "moosicbox_music_api/api",
+    "range",
+]
+files = [
+    "dep:flume",
+    "dep:lazy_static",
+    "dep:moosicbox_async_service",
+    "dep:moosicbox_audio_decoder",
+    "dep:moosicbox_audio_output",
+    "dep:moosicbox_core",
+    "dep:moosicbox_database",
+    "dep:moosicbox_music_api",
+    "dep:moosicbox_task",
+    "dep:strum",
+    "dep:strum_macros",
+    "dep:symphonia",
+    "dep:tokio-stream",
+    "dep:tokio-util",
+]
+openapi = ["dep:utoipa", "moosicbox_core?/openapi"]
+range = ["dep:moosicbox_audio_output"]
+track-range = ["dep:moosicbox_audio_output"]
 
-aac  = ["moosicbox_audio_output/aac", "moosicbox_core/aac"]
-flac = ["moosicbox_audio_output/flac", "moosicbox_core/flac"]
-mp3  = ["moosicbox_audio_output/mp3", "moosicbox_core/mp3"]
-opus = ["moosicbox_audio_output/opus", "moosicbox_core/opus"]
+aac  = ["moosicbox_audio_output?/aac", "moosicbox_core?/aac"]
+flac = ["moosicbox_audio_output?/flac", "moosicbox_core?/flac"]
+mp3  = ["moosicbox_audio_output?/mp3", "moosicbox_core?/mp3"]
+opus = ["moosicbox_audio_output?/opus", "moosicbox_core?/opus"]

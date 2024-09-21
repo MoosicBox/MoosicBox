@@ -582,10 +582,7 @@ async fn request_track_bytes_from_url(
         log::debug!("request_track_bytes_from_url: Sending head request to url={url}");
         let head = head_request.send().await?;
 
-        if let Some(header) = head
-            .headers()
-            .get(actix_web::http::header::CONTENT_LENGTH.to_string())
-        {
+        if let Some(header) = head.headers().get("content-length") {
             let size = header.to_str()?.parse::<u64>()?;
             log::debug!("Got size from Content-Length header: size={size}");
             Some(size)

@@ -4,7 +4,7 @@ use std::{
     io::{Seek, Write},
     path::{Path, PathBuf},
     pin::Pin,
-    sync::{atomic::AtomicUsize, LazyLock},
+    sync::{atomic::AtomicUsize, Arc, LazyLock},
     time::Instant,
 };
 
@@ -13,8 +13,6 @@ use audiotags::AudioTag;
 use bytes::Bytes;
 use futures::{StreamExt, TryStreamExt};
 use futures_core::{Future, Stream};
-use moosicbox_async_service::Arc;
-use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use thiserror::Error;
 use tokio::{
     io::{AsyncSeekExt, AsyncWriteExt, BufWriter},
@@ -61,24 +59,16 @@ pub async fn get_content_length(
         let start = start.map(|x| x.to_string()).unwrap_or("".into());
         let end = end.map(|x| x.to_string()).unwrap_or("".into());
 
-        client = client.header(
-            actix_web::http::header::RANGE.to_string(),
-            format!("bytes={start}-{end}"),
-        );
+        client = client.header("range", format!("bytes={start}-{end}"));
     }
 
     let res = client.send().await.unwrap();
 
-    Ok(
-        if let Some(header) = res
-            .headers()
-            .get(actix_web::http::header::CONTENT_LENGTH.to_string())
-        {
-            Some(header.to_str()?.parse::<u64>()?)
-        } else {
-            None
-        },
-    )
+    Ok(if let Some(header) = res.headers().get("content-length") {
+        Some(header.to_str()?.parse::<u64>()?)
+    } else {
+        None
+    })
 }
 
 pub fn save_bytes_to_file(
@@ -277,8 +267,12 @@ pub enum FetchCoverError {
 
 pub(crate) type BytesStream = Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>;
 
+#[cfg(feature = "files")]
 pub struct CoverBytes {
-    pub stream: StalledReadMonitor<Result<Bytes, std::io::Error>, BytesStream>,
+    pub stream: moosicbox_stream_utils::stalled_monitor::StalledReadMonitor<
+        Result<Bytes, std::io::Error>,
+        BytesStream,
+    >,
     pub size: Option<u64>,
 }
 
@@ -302,7 +296,7 @@ async fn get_or_fetch_cover_bytes_from_remote_url(
         };
 
         return Ok(CoverBytes {
-            stream: StalledReadMonitor::new(
+            stream: moosicbox_stream_utils::stalled_monitor::StalledReadMonitor::new(
                 FramedRead::new(file, BytesCodec::new())
                     .map_ok(bytes::BytesMut::freeze)
                     .boxed(),
@@ -317,7 +311,9 @@ async fn get_or_fetch_cover_bytes_from_remote_url(
         };
 
         Ok(CoverBytes {
-            stream: StalledReadMonitor::new(fetch_bytes_from_remote_url(&IMAGE_CLIENT, url).await?),
+            stream: moosicbox_stream_utils::stalled_monitor::StalledReadMonitor::new(
+                fetch_bytes_from_remote_url(&IMAGE_CLIENT, url).await?,
+            ),
             size,
         })
     }

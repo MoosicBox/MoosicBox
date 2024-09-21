@@ -11,7 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_config = { path = "../config" }
+moosicbox_config = { path = "../config", default-features = false }
 moosicbox_core = { path = "../core", default-features = false, features = [
     "tantivy",
 ] }
@@ -33,7 +33,7 @@ thiserror = { workspace = true }
 tokio     = { workspace = true }
 
 [dev-dependencies]
-moosicbox_config = { path = "../config", features = ["test"] }
+moosicbox_config = { path = "../config", default-features = false, features = ["test"] }
 
 pretty_assertions = { workspace = true }
 serial_test       = { workspace = true }

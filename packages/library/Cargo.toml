@@ -17,9 +17,7 @@ ignored = ["strum"]
 moosicbox_assert = { path = "../assert", default-features = false }
 moosicbox_audio_output = { path = "../audio_output", optional = true, default-features = false }
 moosicbox_core = { path = "../core", default-features = false }
-moosicbox_database = { path = "../database", default-features = false, features = [
-    "sqlite-sqlx",
-] }
+moosicbox_database = { path = "../database", default-features = false }
 moosicbox_files = { path = "../files", default-features = false }
 moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
     "database",
@@ -30,7 +28,7 @@ moosicbox_paging = { path = "../paging", default-features = false }
 moosicbox_search = { path = "../search", default-features = false, features = [
     "db",
 ] }
-moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
+moosicbox_stream_utils = { path = "../stream_utils", optional = true, default-features = false }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -54,26 +52,30 @@ default = ["aac", "api", "flac", "mp3", "openapi", "opus"]
 
 fail-on-warnings = []
 
-api     = ["dep:actix-web"]
+api     = ["dep:actix-web", "moosicbox_database/api"]
 openapi = ["dep:utoipa", "moosicbox_search/openapi"]
 
 aac = [
     "dep:moosicbox_audio_output",
+    "dep:moosicbox_stream_utils",
     "moosicbox_audio_output/aac",
     "moosicbox_core/aac",
 ]
 flac = [
     "dep:moosicbox_audio_output",
+    "dep:moosicbox_stream_utils",
     "moosicbox_audio_output/flac",
     "moosicbox_core/flac",
 ]
 mp3 = [
     "dep:moosicbox_audio_output",
+    "dep:moosicbox_stream_utils",
     "moosicbox_audio_output/mp3",
     "moosicbox_core/mp3",
 ]
 opus = [
     "dep:moosicbox_audio_output",
+    "dep:moosicbox_stream_utils",
     "moosicbox_audio_output/opus",
     "moosicbox_core/opus",
 ]

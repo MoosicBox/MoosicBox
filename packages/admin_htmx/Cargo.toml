@@ -34,7 +34,7 @@ moosicbox_tidal = { path = "../tidal", optional = true, default-features = false
 ] }
 
 actix-htmx  = { workspace = true }
-actix-web   = { workspace = true }
+actix-web   = { workspace = true, optional = true }
 log         = { workspace = true }
 maud        = { workspace = true, features = ["actix-web"] }
 serde       = { workspace = true }
@@ -50,6 +50,4 @@ tidal = ["base64", "dep:moosicbox_tidal"]
 
 base64 = ["dep:base64"]
 
-static-token-auth = []
-
-api = ["moosicbox_music_api/api"]
+api = ["dep:actix-web", "moosicbox_music_api/api"]

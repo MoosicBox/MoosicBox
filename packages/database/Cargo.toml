@@ -46,7 +46,7 @@ fail-on-warnings = []
 
 tls = ["sqlx/tls-rustls"]
 
-api = ["dep:actix-web", "dep:qstring"]
+api = ["dep:actix-web", "dep:qstring", "dep:futures"]
 
 mysql = ["mysql-sqlx", "sqlx"]
 mysql-sqlx = [

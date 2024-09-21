@@ -19,16 +19,18 @@ name = "moosicbox_tunnel_server"
 path = "src/main.rs"
 
 [dependencies]
-moosicbox_assert              = { path = "../assert", default-features = false }
-moosicbox_async_service       = { path = "../async_service", default-features = false }
-moosicbox_database            = { path = "../database", default-features = false }
+moosicbox_assert = { path = "../assert", default-features = false }
+moosicbox_async_service = { path = "../async_service", default-features = false }
+moosicbox_database = { path = "../database", default-features = false }
 moosicbox_database_connection = { path = "../database_connection", default-features = false }
-moosicbox_env_utils           = { path = "../env_utils" }
-moosicbox_json_utils          = { path = "../json_utils", default-features = false }
-moosicbox_logging             = { path = "../logging" }
-moosicbox_middleware          = { path = "../middleware", default-features = false }
-moosicbox_task                = { path = "../task", default-features = false }
-moosicbox_tunnel              = { path = "../tunnel", default-features = false }
+moosicbox_env_utils = { path = "../env_utils" }
+moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
+    "database",
+] }
+moosicbox_logging = { path = "../logging" }
+moosicbox_middleware = { path = "../middleware", default-features = false }
+moosicbox_task = { path = "../task", default-features = false }
+moosicbox_tunnel = { path = "../tunnel", default-features = false }
 
 actix-cors = { workspace = true }
 actix-web = { workspace = true }

@@ -16,9 +16,7 @@ ignored = ["strum"]
 [dependencies]
 moosicbox_assert = { path = "../assert", default-features = false }
 moosicbox_core = { path = "../core", default-features = false }
-moosicbox_database = { path = "../database", default-features = false, features = [
-    "sqlite-sqlx",
-] }
+moosicbox_database = { path = "../database", default-features = false }
 moosicbox_files = { path = "../files", default-features = false }
 moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
     "database",

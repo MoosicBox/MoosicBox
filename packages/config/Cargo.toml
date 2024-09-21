@@ -12,9 +12,7 @@ version     = "0.1.0"
 
 [dependencies]
 # DB dependencies
-moosicbox_database = { path = "../database", optional = true, default-features = false, features = [
-    "api",
-] }
+moosicbox_database = { path = "../database", optional = true, default-features = false }
 moosicbox_json_utils = { path = "../json_utils", optional = true, default-features = false, features = [
     "database",
 ] }
@@ -41,5 +39,5 @@ test = ["dep:rand"]
 
 db = ["dep:moosicbox_database", "dep:moosicbox_json_utils", "dep:nanoid"]
 
-api     = ["db", "dep:actix-web", "dep:serde"]
+api     = ["db", "dep:actix-web", "dep:serde", "moosicbox_database?/api"]
 openapi = ["dep:utoipa"]
