@@ -13,20 +13,15 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_task = { path = "../task", optional = true, default-features = false }
 
-bytes = { workspace = true }
-flume = { workspace = true, optional = true }
-futures = { workspace = true }
-log = { workspace = true }
+bytes       = { workspace = true }
+flume       = { workspace = true, optional = true }
+futures     = { workspace = true }
+log         = { workspace = true }
 pin-project = { workspace = true }
-reqwest = { workspace = true, optional = true }
-thiserror = { workspace = true, optional = true }
-tokio = { workspace = true, features = [
-    "macros",
-    "rt-multi-thread",
-    "time",
-    "tracing",
-] }
-tokio-util = { workspace = true, optional = true }
+reqwest     = { workspace = true, optional = true }
+thiserror   = { workspace = true, optional = true }
+tokio       = { workspace = true }
+tokio-util  = { workspace = true, optional = true }
 
 [features]
 default = ["remote-bytestream", "stalled-monitor"]
@@ -38,5 +33,8 @@ remote-bytestream = [
     "dep:moosicbox_task",
     "dep:reqwest",
     "dep:tokio-util",
+    "tokio/macros",
+    "tokio/sync",
+    "tokio/time",
 ]
-stalled-monitor = ["dep:thiserror"]
+stalled-monitor = ["dep:thiserror", "tokio/sync", "tokio/time"]

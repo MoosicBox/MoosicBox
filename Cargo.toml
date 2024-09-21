@@ -209,7 +209,7 @@ tantivy = "0.22.0"
 test-log = "0.2.16"
 thiserror = "1.0.63"
 throttle = "0.1.0"
-tokio = { version = "1.40.0", features = ["io-util", "sync", "tracing"] }
+tokio = { version = "1.40.0" }
 tokio-postgres = { version = "0.7.12", features = ["with-chrono-0_4"] }
 tokio-stream = "0.1.16"
 tokio-tungstenite = { version = "0.24.0", features = ["native-tls-vendored"] }

@@ -36,7 +36,7 @@ chrono      = { workspace = true }
 futures     = { workspace = true, optional = true }
 log         = { workspace = true }
 thiserror   = { workspace = true }
-tokio       = { workspace = true, features = ["macros", "rt", "tracing"] }
+tokio       = { workspace = true, features = ["sync"] }
 tokio-util  = { workspace = true, optional = true }
 
 [features]
@@ -46,15 +46,10 @@ fail-on-warnings = []
 
 tls = ["sqlx/tls-rustls"]
 
-api = ["dep:actix-web", "dep:qstring", "dep:futures"]
+api = ["dep:actix-web", "dep:futures", "dep:qstring"]
 
 mysql = ["mysql-sqlx", "sqlx"]
-mysql-sqlx = [
-    "dep:futures",
-    "dep:sqlx",
-    "sqlx",
-    "sqlx/mysql",
-]
+mysql-sqlx = ["dep:futures", "dep:sqlx", "sqlx", "sqlx/mysql"]
 postgres = [
     "dep:futures",
     "dep:moosicbox_task",

@@ -19,7 +19,7 @@ utoipa = { workspace = true, optional = true }
 futures = { workspace = true }
 log     = { workspace = true }
 serde   = { workspace = true, features = ["derive"] }
-tokio   = { workspace = true, features = ["macros"] }
+tokio   = { workspace = true, features = ["macros", "sync"] }
 
 [features]
 default = ["openapi"]

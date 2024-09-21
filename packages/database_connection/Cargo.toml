@@ -32,13 +32,9 @@ postgres-openssl    = { workspace = true, optional = true }
 aws-config  = { workspace = true, optional = true }
 aws-sdk-ssm = { workspace = true, optional = true }
 
-log = { workspace = true }
+log       = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, optional = true, features = [
-    "macros",
-    "rt",
-    "tracing",
-] }
+tokio     = { workspace = true, optional = true, features = ["sync"] }
 
 [features]
 default = ["mysql-sqlx", "postgres-sqlx", "sqlite-sqlx"]
