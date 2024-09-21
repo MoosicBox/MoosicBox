@@ -892,4 +892,4 @@ jobs:
               shell: bash
               working-directory: MoosicBoxServer
               run: |
-                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo machete --with-metadata)
+                  ${{ matrix.package.env }} cargo machete --with-metadata ${{ matrix.package.path }}
