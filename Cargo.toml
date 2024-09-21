@@ -29,6 +29,7 @@ members = [
     "packages/music_api",
     "packages/paging",
     "packages/player",
+    "packages/profiles",
     "packages/qobuz",
     "packages/remote_library",
     "packages/resampler",

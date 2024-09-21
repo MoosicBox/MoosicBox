@@ -374,6 +374,10 @@ jobs:
                       cargo: --no-default-features
                       features: cpal
 
+                    - name: profiles
+                      path: packages/profiles
+                      os: ubuntu-latest
+
                     - name: qobuz
                       path: packages/qobuz
                       os: ubuntu-latest

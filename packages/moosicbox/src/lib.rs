@@ -27,6 +27,7 @@ pub use moosicbox_middleware as middleware;
 pub use moosicbox_music_api as music_api;
 pub use moosicbox_paging as paging;
 pub use moosicbox_player as player;
+pub use moosicbox_profiles as profiles;
 pub use moosicbox_qobuz as qobuz;
 pub use moosicbox_remote_library as remote_library;
 pub use moosicbox_resampler as resampler;

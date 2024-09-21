@@ -34,6 +34,7 @@ RUN cat Cargo.toml | \
     \"packages\/music_api\",\r\
     \"packages\/paging\",\r\
     \"packages\/player\",\r\
+    \"packages\/profiles\",\r\
     \"packages\/qobuz\",\r\
     \"packages\/resampler\",\r\
     \"packages\/scan\",\r\
@@ -79,6 +80,7 @@ COPY packages/middleware/Cargo.toml packages/middleware/Cargo.toml
 COPY packages/music_api/Cargo.toml packages/music_api/Cargo.toml
 COPY packages/paging/Cargo.toml packages/paging/Cargo.toml
 COPY packages/player/Cargo.toml packages/player/Cargo.toml
+COPY packages/profiles/Cargo.toml packages/profiles/Cargo.toml
 COPY packages/qobuz/Cargo.toml packages/qobuz/Cargo.toml
 COPY packages/resampler/Cargo.toml packages/resampler/Cargo.toml
 COPY packages/scan/Cargo.toml packages/scan/Cargo.toml
@@ -127,6 +129,7 @@ packages/middleware|\
 packages/music_api|\
 packages/paging|\
 packages/player|\
+packages/profiles|\
 packages/qobuz|\
 packages/resampler|\
 packages/scan|\

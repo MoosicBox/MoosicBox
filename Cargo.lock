@@ -3569,6 +3569,7 @@ dependencies = [
  "moosicbox_music_api",
  "moosicbox_paging",
  "moosicbox_player",
+ "moosicbox_profiles",
  "moosicbox_qobuz",
  "moosicbox_remote_library",
  "moosicbox_resampler",
@@ -4117,6 +4118,13 @@ dependencies = [
  "tokio-util",
  "url",
  "utoipa",
+]
+
+[[package]]
+name = "moosicbox_profiles"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_assert",
 ]
 
 [[package]]

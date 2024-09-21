@@ -26,6 +26,7 @@
 !/packages/music_api
 !/packages/paging
 !/packages/player
+!/packages/profiles
 !/packages/qobuz
 !/packages/resampler
 !/packages/scan
