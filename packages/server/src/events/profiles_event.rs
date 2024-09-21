@@ -130,6 +130,10 @@ pub async fn init(
     })
     .await;
 
+    moosicbox_config::db::upsert_profile(&config_db, "master")
+        .await
+        .map_err(|e| vec![Box::new(e) as BoxErrorSend])?;
+
     let profiles = moosicbox_config::db::get_profiles(&config_db)
         .await
         .map_err(|e| vec![Box::new(e) as BoxErrorSend])?;
