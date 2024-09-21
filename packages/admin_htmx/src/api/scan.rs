@@ -55,10 +55,10 @@ pub struct RemoveScanPathQuery {
 #[route("scan-paths", method = "DELETE")]
 pub async fn delete_scan_paths_endpoint(
     _htmx: Htmx,
-    form: web::Query<RemoveScanPathQuery>,
+    query: web::Query<RemoveScanPathQuery>,
     db: LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
-    moosicbox_scan::remove_scan_path(&db, &form.path)
+    moosicbox_scan::remove_scan_path(&db, &query.path)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to remove scan path: {e:?}")))?;
 

@@ -38,7 +38,9 @@ actix-web   = { workspace = true, optional = true }
 log         = { workspace = true }
 maud        = { workspace = true, features = ["actix-web"] }
 serde       = { workspace = true }
+serde_json  = { workspace = true }
 urlencoding = { workspace = true }
+whoami      = { workspace = true }
 
 [features]
 default = ["api", "qobuz", "tidal"]

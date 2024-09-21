@@ -3622,7 +3622,9 @@ dependencies = [
  "moosicbox_scan",
  "moosicbox_tidal",
  "serde",
+ "serde_json",
  "urlencoding",
+ "whoami",
 ]
 
 [[package]]

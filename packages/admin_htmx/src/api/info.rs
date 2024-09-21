@@ -15,7 +15,7 @@ pub fn bind_services<
 }
 
 pub async fn info(db: &ConfigDatabase) -> Result<Markup, DbError> {
-    let id = moosicbox_config::db::get_server_identity(db).await?;
+    let id = moosicbox_config::get_server_identity(db).await?;
     let id = id.unwrap_or("(not set)".to_string());
 
     Ok(html! {
