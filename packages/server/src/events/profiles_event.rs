@@ -11,11 +11,8 @@ use moosicbox_profiles::events::{
 
 async fn add_profile(
     #[allow(unused)] app_type: AppType,
-    config_db: &ConfigDatabase,
     profile: &str,
 ) -> Result<(), DatabaseFetchError> {
-    moosicbox_config::db::upsert_profile(config_db, profile).await?;
-
     #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
     let library_db_profile_path = {
         let path = crate::db::make_profile_library_db_path(app_type, profile)
@@ -84,59 +81,51 @@ async fn add_profile(
     Ok(())
 }
 
-async fn remove_profile(
-    #[allow(unused)] app_type: AppType,
-    config_db: &ConfigDatabase,
-    profile: &str,
-) -> Result<(), DatabaseFetchError> {
-    moosicbox_config::db::delete_profile(config_db, profile).await?;
-
+fn remove_profile(#[allow(unused)] app_type: AppType, profile: &str) {
     moosicbox_database::profiles::PROFILES.remove(profile);
     moosicbox_music_api::profiles::PROFILES.remove(profile);
     #[cfg(feature = "library")]
     moosicbox_library::profiles::PROFILES.remove(profile);
-
-    Ok(())
 }
 
 pub async fn init(
     #[allow(unused)] app_type: AppType,
     config_db: ConfigDatabase,
 ) -> Result<(), Vec<Box<dyn std::error::Error + Send>>> {
-    on_profiles_updated_event({
-        let config_db = config_db.clone();
+    on_profiles_updated_event(move |added, removed| {
+        let added = added.to_vec();
+        let removed = removed.to_vec();
 
-        move |added, removed| {
-            let config_db = config_db.clone();
-            let added = added.to_vec();
-            let removed = removed.to_vec();
+        Box::pin(async move {
+            for profile in &removed {
+                remove_profile(app_type, profile);
+            }
 
-            Box::pin(async move {
-                for profile in &removed {
-                    remove_profile(app_type, &config_db, profile)
-                        .await
-                        .map_err(|e| Box::new(e) as BoxErrorSend)?;
-                }
+            for profile in &added {
+                add_profile(app_type, profile)
+                    .await
+                    .map_err(|e| Box::new(e) as BoxErrorSend)?;
+            }
 
-                for profile in &added {
-                    add_profile(app_type, &config_db, profile)
-                        .await
-                        .map_err(|e| Box::new(e) as BoxErrorSend)?;
-                }
-
-                Ok(())
-            })
-        }
+            Ok(())
+        })
     })
     .await;
 
-    moosicbox_config::db::upsert_profile(&config_db, "master")
+    let profiles = moosicbox_config::get_profiles(&config_db)
         .await
         .map_err(|e| vec![Box::new(e) as BoxErrorSend])?;
 
-    let profiles = moosicbox_config::db::get_profiles(&config_db)
-        .await
-        .map_err(|e| vec![Box::new(e) as BoxErrorSend])?;
+    #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
+    for profile in &profiles {
+        if !crate::db::get_profile_library_db_path(app_type, &profile.name)
+            .is_some_and(|x| x.is_file())
+        {
+            moosicbox_config::delete_profile(&config_db, &profile.name)
+                .await
+                .map_err(|e| vec![Box::new(e) as BoxErrorSend])?;
+        }
+    }
 
     trigger_profiles_updated_event(
         profiles.iter().map(|x| x.name.clone()).collect::<Vec<_>>(),

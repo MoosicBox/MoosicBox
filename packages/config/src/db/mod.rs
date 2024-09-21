@@ -13,7 +13,9 @@ pub enum GetOrInitServerIdentityError {
     Failed,
 }
 
-pub async fn get_server_identity(db: &ConfigDatabase) -> Result<Option<String>, DatabaseError> {
+pub(crate) async fn get_server_identity(
+    db: &ConfigDatabase,
+) -> Result<Option<String>, DatabaseError> {
     Ok(db
         .select("identity")
         .execute_first(db)
@@ -24,7 +26,7 @@ pub async fn get_server_identity(db: &ConfigDatabase) -> Result<Option<String>, 
         }))
 }
 
-pub async fn get_or_init_server_identity(
+pub(crate) async fn get_or_init_server_identity(
     db: &ConfigDatabase,
 ) -> Result<String, GetOrInitServerIdentityError> {
     if let Some(identity) = get_server_identity(db).await? {
@@ -42,7 +44,8 @@ pub async fn get_or_init_server_identity(
     }
 }
 
-pub async fn upsert_profile(
+#[allow(unused)]
+pub(crate) async fn upsert_profile(
     db: &ConfigDatabase,
     name: &str,
 ) -> Result<models::Profile, DatabaseFetchError> {
@@ -55,7 +58,7 @@ pub async fn upsert_profile(
         .to_value_type()?)
 }
 
-pub async fn delete_profile(
+pub(crate) async fn delete_profile(
     db: &ConfigDatabase,
     name: &str,
 ) -> Result<Vec<models::Profile>, DatabaseFetchError> {
@@ -67,7 +70,7 @@ pub async fn delete_profile(
         .to_value_type()?)
 }
 
-pub async fn create_profile(
+pub(crate) async fn create_profile(
     db: &ConfigDatabase,
     name: &str,
 ) -> Result<models::Profile, DatabaseFetchError> {
@@ -79,6 +82,8 @@ pub async fn create_profile(
         .to_value_type()?)
 }
 
-pub async fn get_profiles(db: &ConfigDatabase) -> Result<Vec<models::Profile>, DatabaseFetchError> {
+pub(crate) async fn get_profiles(
+    db: &ConfigDatabase,
+) -> Result<Vec<models::Profile>, DatabaseFetchError> {
     Ok(db.select("profiles").execute(db).await?.to_value_type()?)
 }

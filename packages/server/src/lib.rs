@@ -15,7 +15,7 @@ mod ws;
 
 use actix_cors::Cors;
 use actix_web::{http, middleware, web, App};
-use moosicbox_config::{db::get_or_init_server_identity, AppType};
+use moosicbox_config::{get_or_init_server_identity, AppType};
 use moosicbox_core::app::AppState;
 use moosicbox_database::{config::ConfigDatabase, profiles::PROFILES, Database};
 use moosicbox_files::files::track_pool::service::Commander as _;

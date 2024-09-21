@@ -85,3 +85,83 @@ pub fn get_tests_dir_path() -> PathBuf {
         rand::Rng::gen::<usize>(&mut rand::thread_rng())
     ))
 }
+
+#[cfg(feature = "db")]
+pub use db_impl::*;
+
+#[cfg(feature = "db")]
+mod db_impl {
+    use moosicbox_database::{config::ConfigDatabase, DatabaseError};
+    use moosicbox_json_utils::database::DatabaseFetchError;
+
+    use crate::db::{models, GetOrInitServerIdentityError};
+
+    pub async fn get_server_identity(db: &ConfigDatabase) -> Result<Option<String>, DatabaseError> {
+        crate::db::get_server_identity(db).await
+    }
+
+    pub async fn get_or_init_server_identity(
+        db: &ConfigDatabase,
+    ) -> Result<String, GetOrInitServerIdentityError> {
+        crate::db::get_or_init_server_identity(db).await
+    }
+
+    pub async fn upsert_profile(
+        db: &ConfigDatabase,
+        name: &str,
+    ) -> Result<models::Profile, DatabaseFetchError> {
+        let profiles = crate::db::get_profiles(db).await?;
+
+        if let Some(profile) = profiles.into_iter().find(|x| x.name == name) {
+            return Ok(profile);
+        }
+
+        create_profile(db, name).await
+    }
+
+    pub async fn delete_profile(
+        db: &ConfigDatabase,
+        name: &str,
+    ) -> Result<Vec<models::Profile>, DatabaseFetchError> {
+        let profiles = crate::db::delete_profile(db, name).await?;
+
+        if profiles.is_empty() {
+            return Ok(profiles);
+        }
+
+        if let Err(e) = moosicbox_profiles::events::trigger_profiles_updated_event(
+            vec![],
+            vec![name.to_owned()],
+        )
+        .await
+        {
+            moosicbox_assert::die_or_error!("Failed to trigger profiles updated event: {e:?}");
+        }
+
+        Ok(profiles)
+    }
+
+    pub async fn create_profile(
+        db: &ConfigDatabase,
+        name: &str,
+    ) -> Result<models::Profile, DatabaseFetchError> {
+        let profile = crate::db::create_profile(db, name).await?;
+
+        if let Err(e) = moosicbox_profiles::events::trigger_profiles_updated_event(
+            vec![profile.name.clone()],
+            vec![],
+        )
+        .await
+        {
+            moosicbox_assert::die_or_error!("Failed to trigger profiles updated event: {e:?}");
+        }
+
+        Ok(profile)
+    }
+
+    pub async fn get_profiles(
+        db: &ConfigDatabase,
+    ) -> Result<Vec<models::Profile>, DatabaseFetchError> {
+        crate::db::get_profiles(db).await
+    }
+}
