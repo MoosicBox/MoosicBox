@@ -4125,6 +4125,7 @@ name = "moosicbox_profiles"
 version = "0.1.0"
 dependencies = [
  "moosicbox_assert",
+ "tokio",
 ]
 
 [[package]]
@@ -4275,6 +4276,7 @@ dependencies = [
  "moosicbox_downloader",
  "moosicbox_env_utils",
  "moosicbox_files",
+ "moosicbox_json_utils",
  "moosicbox_library",
  "moosicbox_logging",
  "moosicbox_mdns",
@@ -4282,6 +4284,7 @@ dependencies = [
  "moosicbox_middleware",
  "moosicbox_music_api",
  "moosicbox_player",
+ "moosicbox_profiles",
  "moosicbox_qobuz",
  "moosicbox_scan",
  "moosicbox_schema",

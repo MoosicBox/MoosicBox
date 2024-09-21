@@ -47,10 +47,16 @@ moosicbox_files = { path = "../files", default-features = false, features = [
     "range",
     "track-range",
 ] }
+moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
+    "database",
+] }
 moosicbox_logging = { path = "../logging", default-features = false }
 moosicbox_mdns = { path = "../mdns", default-features = false }
 moosicbox_middleware = { path = "../middleware", default-features = false }
 moosicbox_music_api = { path = "../music_api", default-features = false }
+moosicbox_profiles = { path = "../profiles", default-features = false, features = [
+    "events",
+] }
 moosicbox_schema = { path = "../schema", optional = true, default-features = false }
 moosicbox_session = { path = "../session", default-features = false, features = [
     "events",
@@ -320,6 +326,7 @@ openapi = [
     "moosicbox_audio_output/openapi",
     "moosicbox_audio_zone/openapi",
     "moosicbox_auth?/openapi",
+    "moosicbox_config/openapi",
     "moosicbox_core/openapi",
     "moosicbox_downloader?/openapi",
     "moosicbox_files/openapi",

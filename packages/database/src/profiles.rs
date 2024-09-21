@@ -26,6 +26,13 @@ impl DatabaseProfiles {
 
     /// # Panics
     ///
+    /// Will panic if `RwLock` is poisoned
+    pub fn remove(&self, profile: &str) {
+        self.profiles.write().unwrap().retain(|(p, _)| p != profile);
+    }
+
+    /// # Panics
+    ///
     /// Will panic if `RwLock` is poisoned or the profile somehow wasn't added to the list of
     /// profiles
     #[must_use]

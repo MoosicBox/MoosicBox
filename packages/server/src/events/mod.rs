@@ -3,6 +3,7 @@ pub mod audio_zone_event;
 pub mod download_event;
 #[cfg(feature = "player")]
 pub mod playback_event;
+pub mod profiles_event;
 #[cfg(feature = "scan")]
 pub mod scan_event;
 pub mod session_event;

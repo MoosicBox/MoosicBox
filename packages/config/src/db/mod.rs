@@ -55,6 +55,18 @@ pub async fn upsert_profile(
         .to_value_type()?)
 }
 
+pub async fn delete_profile(
+    db: &ConfigDatabase,
+    name: &str,
+) -> Result<Vec<models::Profile>, DatabaseFetchError> {
+    Ok(db
+        .delete("profiles")
+        .where_eq("name", name)
+        .execute(db)
+        .await?
+        .to_value_type()?)
+}
+
 pub async fn create_profile(
     db: &ConfigDatabase,
     name: &str,
