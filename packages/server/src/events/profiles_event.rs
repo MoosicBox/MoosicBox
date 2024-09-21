@@ -18,7 +18,7 @@ async fn add_profile(
 
     #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
     let library_db_profile_path = {
-        let path = crate::db::make_profile_db_dir_path(app_type, profile)
+        let path = crate::db::make_profile_library_db_path(app_type, profile)
             .expect("Failed to get DB profile path");
 
         let path_str = path.to_str().expect("Failed to get DB path_str");

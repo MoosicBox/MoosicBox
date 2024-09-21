@@ -51,7 +51,7 @@ pub async fn run(
 ) -> std::io::Result<()> {
     #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
     let config_db_path = {
-        let path = db::make_config_db_dir_path(app_type).expect("Failed to get DB config path");
+        let path = db::make_config_db_path(app_type).expect("Failed to get DB config path");
 
         let path_str = path.to_str().expect("Failed to get DB path_str");
         if let Err(e) = moosicbox_schema::migrate_config(path_str) {

@@ -6,10 +6,19 @@ pub fn get_config_db_dir_path(app_type: AppType) -> Option<std::path::PathBuf> {
 }
 
 #[must_use]
-pub fn make_config_db_dir_path(app_type: AppType) -> Option<std::path::PathBuf> {
-    if let Some(path) = get_config_db_dir_path(app_type) {
-        if path.is_dir() || std::fs::create_dir_all(&path).is_ok() {
-            return Some(path.join("config.db"));
+pub fn get_config_db_path(app_type: AppType) -> Option<std::path::PathBuf> {
+    get_config_db_dir_path(app_type).map(|x| x.join("config.db"))
+}
+
+#[must_use]
+pub fn make_config_db_path(app_type: AppType) -> Option<std::path::PathBuf> {
+    if let Some(path) = get_config_db_path(app_type) {
+        if path.is_file()
+            || path
+                .parent()
+                .is_some_and(|x| x.is_dir() || std::fs::create_dir_all(x).is_ok())
+        {
+            return Some(path);
         }
     }
 
@@ -22,10 +31,22 @@ pub fn get_profile_db_dir_path(app_type: AppType, profile: &str) -> Option<std::
 }
 
 #[must_use]
-pub fn make_profile_db_dir_path(app_type: AppType, profile: &str) -> Option<std::path::PathBuf> {
-    if let Some(path) = get_profile_db_dir_path(app_type, profile) {
-        if path.is_dir() || std::fs::create_dir_all(&path).is_ok() {
-            return Some(path.join("library.db"));
+pub fn get_profile_library_db_path(app_type: AppType, profile: &str) -> Option<std::path::PathBuf> {
+    get_profile_db_dir_path(app_type, profile).map(|x| x.join("library.db"))
+}
+
+#[must_use]
+pub fn make_profile_library_db_path(
+    app_type: AppType,
+    profile: &str,
+) -> Option<std::path::PathBuf> {
+    if let Some(path) = get_profile_library_db_path(app_type, profile) {
+        if path.is_file()
+            || path
+                .parent()
+                .is_some_and(|x| x.is_dir() || std::fs::create_dir_all(x).is_ok())
+        {
+            return Some(path);
         }
     }
 
