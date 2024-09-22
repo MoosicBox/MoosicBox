@@ -213,7 +213,7 @@ pub async fn add_album(
 
     api.add_album(album_id).await?;
 
-    moosicbox_scan::music_api::scan_albums(api, &[album], 1, output.clone(), None).await?;
+    moosicbox_scan::music_api::scan_albums(api, &[album], 1, output.clone(), None, None).await?;
 
     let output = output.read().await;
     let results = output.update_database(db).await?;

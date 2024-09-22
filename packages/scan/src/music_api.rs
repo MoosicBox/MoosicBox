@@ -15,7 +15,10 @@ use thiserror::Error;
 use tokio::{select, sync::RwLock};
 use tokio_util::sync::CancellationToken;
 
-use crate::output::{ScanAlbum, ScanOutput, UpdateDatabaseError};
+use crate::{
+    output::{ScanAlbum, ScanOutput, UpdateDatabaseError},
+    Scanner,
+};
 
 #[derive(Debug, Error)]
 pub enum ScanError {
@@ -33,6 +36,7 @@ pub async fn scan(
     api: &dyn MusicApi,
     db: &LibraryDatabase,
     token: CancellationToken,
+    scanner: Option<Scanner>,
 ) -> Result<(), ScanError> {
     let total_start = std::time::SystemTime::now();
     let start = std::time::SystemTime::now();
@@ -62,7 +66,7 @@ pub async fn scan(
 
                         log::debug!("Fetched music api albums offset={offset} limit={limit}: page_count={page_count}, total_count={count}");
 
-                        scan_albums(api, &page, count, output.clone(), Some(token.clone())).await?;
+                        scan_albums(api, &page, count, output.clone(), Some(token.clone()), scanner.clone()).await?;
 
                         if page_count < (limit as usize) {
                             break;
@@ -110,6 +114,7 @@ pub async fn scan_albums(
     total: u32,
     output: Arc<RwLock<ScanOutput>>,
     token: Option<CancellationToken>,
+    scanner: Option<Scanner>,
 ) -> Result<(), ScanError> {
     log::debug!("Processing music api albums count={}", albums.len());
 
@@ -204,10 +209,13 @@ pub async fn scan_albums(
                         Ok(page) => {
                             let page_count = page.len();
                             let count = page.total().unwrap();
+                            if let Some(scanner) = &scanner {
+                                scanner.increase_total(count as usize).await;
+                            }
 
                             log::debug!("Fetched music api tracks offset={offset} limit={limit}: page_count={page_count}, total_count={count}");
 
-                            scan_tracks(api, &page, scan_album.clone()).await?;
+                            scan_tracks(api, &page, scan_album.clone(), scanner.clone()).await?;
 
                             if page_count < (limit as usize) {
                                 break;
@@ -236,6 +244,7 @@ async fn scan_tracks(
     api: &dyn MusicApi,
     tracks: &[Track],
     scan_album: Arc<RwLock<ScanAlbum>>,
+    scanner: Option<Scanner>,
 ) -> Result<(), ScanError> {
     log::debug!("Processing music api tracks count={}", tracks.len());
 
@@ -265,6 +274,9 @@ async fn scan_tracks(
                 api.source(),
             )
             .await;
+        if let Some(scanner) = &scanner {
+            scanner.on_scanned_track().await;
+        }
     }
 
     Ok(())

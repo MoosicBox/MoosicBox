@@ -286,6 +286,7 @@ impl Scanner {
         let enabled = enabled_origins
             .into_iter()
             .any(|origin| origin == api.source().into());
+        let scanner = self.clone();
 
         if !enabled {
             log::debug!(
@@ -295,7 +296,7 @@ impl Scanner {
             return Ok(());
         }
 
-        music_api::scan(api, db, CANCELLATION_TOKEN.clone()).await?;
+        music_api::scan(api, db, CANCELLATION_TOKEN.clone(), Some(scanner)).await?;
 
         Ok(())
     }
