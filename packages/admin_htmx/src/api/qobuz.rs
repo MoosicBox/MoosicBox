@@ -7,6 +7,8 @@ use actix_web::{
 use maud::{html, Markup};
 use moosicbox_core::sqlite::db::DbError;
 use moosicbox_database::profiles::LibraryDatabase;
+use moosicbox_music_api::MusicApis;
+use moosicbox_scan::ScanOrigin;
 use serde::Deserialize;
 
 pub fn bind_services<
@@ -17,7 +19,8 @@ pub fn bind_services<
     scope.service(
         web::scope("/qobuz")
             .service(get_settings_endpoint)
-            .service(user_login_endpoint),
+            .service(user_login_endpoint)
+            .service(run_scan_endpoint),
     )
 }
 
@@ -47,7 +50,7 @@ pub async fn user_login_endpoint(
             Some(TriggerType::Standard),
         );
 
-        settings_logged_in()
+        settings_logged_in(false)
     } else {
         htmx.trigger_event(
             "qobuz-login-attempt".to_string(),
@@ -62,19 +65,52 @@ pub async fn user_login_endpoint(
     })
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetSettingsQuery {
+    show_scan: Option<bool>,
+}
+
 #[route("settings", method = "GET", method = "OPTIONS", method = "HEAD")]
 pub async fn get_settings_endpoint(
     _htmx: Htmx,
+    query: web::Query<GetSettingsQuery>,
     db: LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
-    settings(&db)
+    settings(&db, query.show_scan.unwrap_or_default())
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to get Qobuz settings: {e:?}")))
 }
 
-pub fn settings_logged_in() -> Markup {
+#[route("run-scan", method = "POST")]
+pub async fn run_scan_endpoint(
+    _htmx: Htmx,
+    db: LibraryDatabase,
+    music_apis: MusicApis,
+) -> Result<Markup, actix_web::Error> {
+    moosicbox_scan::run_scan(Some(vec![ScanOrigin::Qobuz]), &db, music_apis)
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Failed to run scan: {e:?}")))?;
+
+    Ok(html! {})
+}
+
+pub fn settings_logged_in(show_scan: bool) -> Markup {
     html! {
         p { "Logged in!" }
+        (if show_scan {
+            html! {
+                form
+                    hx-post="/admin/qobuz/run-scan"
+                    hx-target="#run-scan-button"
+                    hx-disabled-elt="#run-scan-button"
+                    hx-swap="none" {
+                    button id="run-scan-button" type="submit" { "Run Scan" }
+                }
+            }
+        } else {
+            html! {}
+        })
     }
 }
 
@@ -89,11 +125,11 @@ pub fn settings_logged_out(message: Option<Markup>) -> Markup {
     }
 }
 
-pub async fn settings(db: &LibraryDatabase) -> Result<Markup, DbError> {
+pub async fn settings(db: &LibraryDatabase, show_scan: bool) -> Result<Markup, DbError> {
     let logged_in = moosicbox_qobuz::db::get_qobuz_config(db).await?.is_some();
 
     Ok(if logged_in {
-        settings_logged_in()
+        settings_logged_in(show_scan)
     } else {
         settings_logged_out(None)
     })

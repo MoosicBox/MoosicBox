@@ -50,9 +50,16 @@ pub async fn select_profile_endpoint(
     Ok(html! {})
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IndexQuery {
+    show_scan: Option<bool>,
+}
+
 #[route("", method = "GET")]
 pub async fn index_endpoint(
     _htmx: Htmx,
+    query: web::Query<IndexQuery>,
     profile: Option<ProfileName>,
     config_db: ConfigDatabase,
 ) -> Result<impl Responder, actix_web::Error> {
@@ -89,7 +96,7 @@ pub async fn index_endpoint(
                             let library_db = PROFILES.get(&profile)
                                 .ok_or_else(|| ErrorInternalServerError("Missing profile"))?;
 
-                            profile_info(&config_db, &library_db).await?
+                            profile_info(&config_db, &library_db, query.show_scan.unwrap_or_default()).await?
                         } else {
                             html! {}
                         }
@@ -104,6 +111,7 @@ pub async fn index_endpoint(
 async fn profile_info(
     config_db: &ConfigDatabase,
     library_db: &LibraryDatabase,
+    show_scan: bool,
 ) -> Result<Markup, actix_web::Error> {
     Ok(html! {
         h2 { "Server Info" }
@@ -120,12 +128,12 @@ async fn profile_info(
         (if cfg!(feature = "tidal") { html! {
             hr {}
             h2 { "Tidal" }
-            (tidal::settings(library_db).await.map_err(ErrorInternalServerError)?)
+            (tidal::settings(library_db, show_scan).await.map_err(ErrorInternalServerError)?)
         } } else { html!{} })
         (if cfg!(feature = "qobuz") { html! {
             hr {}
             h2 { "Qobuz" }
-            (qobuz::settings(library_db).await.map_err(ErrorInternalServerError)?)
+            (qobuz::settings(library_db, show_scan).await.map_err(ErrorInternalServerError)?)
         } } else { html!{} })
     })
 }
