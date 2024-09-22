@@ -68,14 +68,24 @@ pub async fn create_new_profile_endpoint(
             htmx.trigger_event(
                 "create-moosicbox-profile".to_string(),
                 Some(
-                    r#"{"level": "info", "message": "Successfully created profile", "success": true}"#
-                        .to_string(),
+                    serde_json::json!({
+                        "level": "info",
+                        "message": "Successfully created profile",
+                        "success": true,
+                        "profile": &form.profile,
+                    })
+                    .to_string(),
                 ),
                 Some(TriggerType::Standard),
             );
             htmx.trigger_event(
                 "create-moosicbox-profile-success".to_string(),
-                None,
+                Some(
+                    serde_json::json!({
+                        "profile": &form.profile,
+                    })
+                    .to_string(),
+                ),
                 Some(TriggerType::Standard),
             );
 
@@ -88,14 +98,24 @@ pub async fn create_new_profile_endpoint(
             htmx.trigger_event(
                 "create-moosicbox-profile".to_string(),
                 Some(
-                    r#"{"level": "info", "message": "Failed to create profile", "success": false}"#
-                        .to_string(),
+                    serde_json::json!({
+                        "level": "info",
+                        "message": "Failed to create profile",
+                        "success": false,
+                        "profile": &form.profile,
+                    })
+                    .to_string(),
                 ),
                 Some(TriggerType::Standard),
             );
             htmx.trigger_event(
                 "create-moosicbox-profile-failure".to_string(),
-                None,
+                Some(
+                    serde_json::json!({
+                        "profile": &form.profile,
+                    })
+                    .to_string(),
+                ),
                 Some(TriggerType::Standard),
             );
 
