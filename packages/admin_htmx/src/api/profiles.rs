@@ -233,19 +233,26 @@ pub async fn select_endpoint(
 ) -> Result<Markup, actix_web::Error> {
     let profiles = PROFILES.names();
     let profile = profile.map(|x| x.0).or_else(|| profiles.first().cloned());
-    Ok(select(
+    Ok(select_form(
         &profiles.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
         profile.as_deref(),
+        None,
     ))
+}
+
+pub fn select_form(profiles: &[&str], selected: Option<&str>, trigger: Option<&str>) -> Markup {
+    html! {
+        form hx-post="/admin/profiles/select" hx-trigger={"change"(trigger.map(|x| format!(", {x}")).unwrap_or_default())} {
+            (select(profiles, selected))
+        }
+    }
 }
 
 pub fn select(profiles: &[&str], selected: Option<&str>) -> Markup {
     html! {
-        form hx-post="/admin/profiles/select" hx-trigger="change" {
-            select name="profile" {
-                @for p in profiles.iter() {
-                    option value=(p) selected[selected.is_some_and(|x| &x == p)] { (p) }
-                }
+        select name="profile" {
+            @for p in profiles.iter() {
+                option value=(p) selected[selected.is_some_and(|x| &x == p)] { (p) }
             }
         }
     }

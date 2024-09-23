@@ -66,17 +66,11 @@ pub async fn index_endpoint(
         {
             h1 { "MoosicBox Admin" }
             hr;
-            div
-                hx-get="/admin/profiles/select"
-                hx-trigger="delete-moosicbox-profile-success from:body, create-moosicbox-profile-success from:body"
-                hx-swap="outerHTML"
-            {
-
-                (profiles::select(
-                    &profiles.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
-                    profile.as_deref(),
-                ))
-            }
+            (profiles::select_form(
+                &profiles.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+                profile.as_deref(),
+                Some("delete-moosicbox-profile-success from:body, create-moosicbox-profile-success from:body")
+            ))
             ({
                 if let Some(profile) = profile {
                     let library_db = PROFILES.get(&profile)
