@@ -13,6 +13,8 @@ async fn add_profile(
     #[allow(unused)] app_type: AppType,
     profile: &str,
 ) -> Result<(), DatabaseFetchError> {
+    log::debug!("add_profile: app_type={app_type} profile={profile}");
+
     #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
     let library_db_profile_path = {
         let path = crate::db::make_profile_library_db_path(app_type, profile)
@@ -81,11 +83,24 @@ async fn add_profile(
     Ok(())
 }
 
-fn remove_profile(#[allow(unused)] app_type: AppType, profile: &str) {
+#[allow(clippy::unused_async)]
+async fn remove_profile(
+    #[allow(unused)] app_type: AppType,
+    profile: &str,
+) -> Result<(), std::io::Error> {
+    log::debug!("remove_profile: app_type={app_type} profile={profile}");
+
     moosicbox_database::profiles::PROFILES.remove(profile);
     moosicbox_music_api::profiles::PROFILES.remove(profile);
     #[cfg(feature = "library")]
     moosicbox_library::profiles::PROFILES.remove(profile);
+
+    #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
+    if let Some(path) = moosicbox_config::get_profile_dir_path(app_type, profile) {
+        tokio::fs::remove_dir_all(path).await?;
+    }
+
+    Ok(())
 }
 
 pub async fn init(
@@ -98,7 +113,9 @@ pub async fn init(
 
         Box::pin(async move {
             for profile in &removed {
-                remove_profile(app_type, profile);
+                remove_profile(app_type, profile)
+                    .await
+                    .map_err(|e| Box::new(e) as BoxErrorSend)?;
             }
 
             for profile in &added {
