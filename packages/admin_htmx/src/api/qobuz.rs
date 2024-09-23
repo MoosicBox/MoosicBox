@@ -118,8 +118,8 @@ pub fn settings_logged_out(message: Option<Markup>) -> Markup {
     html! {
         form hx-post="/admin/qobuz/auth/user-login" hx-swap="outerHTML" {
             (message.unwrap_or_default())
-            input type="text" name="username" placeholder="username..." autocomplete="username" {}
-            input type="password" name="password" placeholder="password..." autocomplete="current-password" {}
+            input type="text" name="username" placeholder="username..." autocomplete="username";
+            input type="password" name="password" placeholder="password..." autocomplete="current-password";
             button type="submit" { "Login" }
         }
     }

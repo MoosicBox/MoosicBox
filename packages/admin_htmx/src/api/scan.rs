@@ -99,7 +99,7 @@ pub async fn scan_paths(db: &LibraryDatabase) -> Result<Markup, DbError> {
                         td { (path) }
                         td {
                             form hx-delete="/admin/scan-paths" hx-target="closest tr" {
-                                input type="hidden" name="path" value=(path) {}
+                                input type="hidden" name="path" value=(path);
                                 button type="submit" { "Remove" }
                             }
                         }
@@ -118,7 +118,7 @@ pub async fn scan(db: &LibraryDatabase) -> Result<Markup, DbError> {
             hx-target="#scan-paths"
             hx-on--after-request=(clear_input("#new-scan-path"))
             {
-                input id="new-scan-path" type="text" name="path" {}
+                input id="new-scan-path" type="text" name="path";
                 button type="submit" { "Add new scan source" }
             }
         form

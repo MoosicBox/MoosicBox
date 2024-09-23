@@ -116,22 +116,22 @@ async fn profile_info(
     Ok(html! {
         h2 { "Server Info" }
         (info::info(config_db).await.map_err(ErrorInternalServerError)?)
-        hr {}
+        hr;
         h2 { "Profiles" }
         div hx-get="/admin/profiles" hx-trigger="create-moosicbox-profile-success from:body" {
             (profiles::profiles(config_db).await.map_err(ErrorInternalServerError)?)
         }
         (profiles::new_profile_form(None, None, false))
-        hr {}
+        hr;
         h2 { "Scan" }
         (scan::scan(library_db).await.map_err(ErrorInternalServerError)?)
         (if cfg!(feature = "tidal") { html! {
-            hr {}
+            hr;
             h2 { "Tidal" }
             (tidal::settings(library_db, show_scan).await.map_err(ErrorInternalServerError)?)
         } } else { html!{} })
         (if cfg!(feature = "qobuz") { html! {
-            hr {}
+            hr;
             h2 { "Qobuz" }
             (qobuz::settings(library_db, show_scan).await.map_err(ErrorInternalServerError)?)
         } } else { html!{} })
