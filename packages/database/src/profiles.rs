@@ -157,7 +157,14 @@ pub mod api {
                 from_query(req).or_else(|_| from_header(req).map(std::borrow::ToOwned::to_owned));
 
             let profile = match profile {
-                Ok(profile) => profile,
+                Ok(profile) => {
+                    if !PROFILES.names().iter().any(|x| x == &profile) {
+                        return Err(ErrorBadRequest(format!(
+                            "Profile '{profile}' does not exist"
+                        )));
+                    }
+                    profile
+                }
                 Err(e) => {
                     return Err(e);
                 }

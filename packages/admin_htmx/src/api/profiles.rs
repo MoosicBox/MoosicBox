@@ -94,10 +94,7 @@ pub async fn create_new_profile_endpoint(
                 Some(TriggerType::Standard),
             );
 
-            html! {
-
-                ("success!")
-            }
+            new_profile_form(None, None, query.bundled.unwrap_or_default())
         }
         Err(e) => {
             htmx.trigger_event(
@@ -158,6 +155,7 @@ pub struct DeleteProfileQuery {
 pub async fn delete_profile_endpoint(
     htmx: Htmx,
     query: web::Query<DeleteProfileQuery>,
+    current_profile: Option<ProfileName>,
     db: ConfigDatabase,
 ) -> Result<Markup, actix_web::Error> {
     let result = moosicbox_config::delete_profile(&db, &query.profile).await;
@@ -169,6 +167,13 @@ pub async fn delete_profile_endpoint(
                 None,
                 Some(TriggerType::Standard),
             );
+            if current_profile.is_some_and(|x| x.0 == query.profile) {
+                htmx.trigger_event(
+                    "delete-current-moosicbox-profile-success".to_string(),
+                    None,
+                    Some(TriggerType::Standard),
+                );
+            }
 
             html! {}
         }

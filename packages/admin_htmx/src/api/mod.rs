@@ -50,23 +50,33 @@ pub async fn index_endpoint(
         .or_else(|| profiles.first())
         .cloned();
 
-    let body = html! {
-        body
+    if htmx.is_htmx {
+        if let Some(profile) = &profile {
+            htmx.push_url(format!("/admin?moosicboxProfile={profile}"));
+        }
+    }
+
+    let main = html! {
+        main
             hx-ext="path-vars"
             hx-get="/admin?moosicboxProfile={event.profile}"
             hx-headers={"{\"moosicbox-profile\": \""(profile.as_deref().unwrap_or_default())"\"}"}
             hx-swap="outerHTML"
-            hx-push-url="true"
-            hx-trigger="select-moosicbox-profile from:body"
+            hx-trigger="select-moosicbox-profile from:body, delete-current-moosicbox-profile-success from:body"
         {
             h1 { "MoosicBox Admin" }
             hr;
-            (
-                profiles::select(
+            div
+                hx-get="/admin/profiles/select"
+                hx-trigger="delete-moosicbox-profile-success from:body, create-moosicbox-profile-success from:body"
+                hx-swap="outerHTML"
+            {
+
+                (profiles::select(
                     &profiles.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
                     profile.as_deref(),
-                )
-            )
+                ))
+            }
             ({
                 if let Some(profile) = profile {
                     let library_db = PROFILES.get(&profile)
@@ -81,11 +91,11 @@ pub async fn index_endpoint(
     };
 
     Ok(if htmx.is_htmx {
-        body
+        main
     } else {
         html! {
             (DOCTYPE)
-            html {
+            html lang="en-US" {
                 head {
                     title { "MoosicBox Admin" }
                     script
@@ -110,7 +120,9 @@ pub async fn index_endpoint(
                         "#))
                     }
                 }
-                (body)
+                body {
+                    (main)
+                }
             }
         }
     })
@@ -126,7 +138,11 @@ async fn profile_info(
         (info::info(config_db).await.map_err(ErrorInternalServerError)?)
         hr;
         h2 { "Profiles" }
-        div hx-get="/admin/profiles" hx-trigger="create-moosicbox-profile-success from:body" {
+        div
+            hx-get="/admin/profiles"
+            hx-trigger="create-moosicbox-profile-success from:body"
+            hx-swap="innerHTML"
+        {
             (profiles::profiles(config_db).await.map_err(ErrorInternalServerError)?)
         }
         (profiles::new_profile_form(None, None, false))
