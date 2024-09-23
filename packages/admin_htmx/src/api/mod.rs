@@ -2,9 +2,9 @@ use actix_htmx::Htmx;
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
     error::ErrorInternalServerError,
-    route, web, HttpResponse, Responder, Scope,
+    route, web, Scope,
 };
-use maud::{html, Markup, DOCTYPE};
+use maud::{html, Markup, PreEscaped, DOCTYPE};
 use moosicbox_database::{
     config::ConfigDatabase,
     profiles::{api::ProfileName, LibraryDatabase, PROFILES},
@@ -26,28 +26,8 @@ pub fn bind_services<
     scope: Scope<T>,
 ) -> Scope<T> {
     info::bind_services(scan::bind_services(tidal::bind_services(
-        qobuz::bind_services(profiles::bind_services(
-            scope
-                .service(index_endpoint)
-                .service(select_profile_endpoint),
-        )),
+        qobuz::bind_services(profiles::bind_services(scope.service(index_endpoint))),
     )))
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SelectProfileForm {
-    profile: String,
-}
-
-#[route("select-profile", method = "POST")]
-pub async fn select_profile_endpoint(
-    htmx: Htmx,
-    form: web::Form<SelectProfileForm>,
-) -> Result<Markup, actix_web::Error> {
-    htmx.redirect(format!("/admin?moosicboxProfile={}", form.profile));
-
-    Ok(html! {})
 }
 
 #[derive(Deserialize)]
@@ -58,18 +38,56 @@ pub struct IndexQuery {
 
 #[route("", method = "GET")]
 pub async fn index_endpoint(
-    _htmx: Htmx,
+    htmx: Htmx,
     query: web::Query<IndexQuery>,
     profile: Option<ProfileName>,
     config_db: ConfigDatabase,
-) -> Result<impl Responder, actix_web::Error> {
-    let mut response = HttpResponse::Ok();
-    response.content_type("text/html");
-
+) -> Result<Markup, actix_web::Error> {
     let profiles = PROFILES.names();
-    let profile = profile.map(|x| x.0).or_else(|| profiles.first().cloned());
+    let profile = profile
+        .as_ref()
+        .map(|x| &x.0)
+        .or_else(|| profiles.first())
+        .cloned();
 
-    Ok(response.body(
+    if htmx.is_htmx {
+        if let Some(profile) = &profile {
+            htmx.push_url(format!("/admin?moosicboxProfile={profile}"));
+        }
+    }
+
+    let body = html! {
+        body
+            hx-ext="path-vars"
+            hx-get="/admin?moosicboxProfile={event.profile}"
+            hx-headers={"{\"moosicbox-profile\": \""(profile.as_deref().unwrap_or_default())"\"}"}
+            hx-swap="outerHTML"
+            hx-trigger="select-moosicbox-profile from:body"
+        {
+            h1 { "MoosicBox Admin" }
+            hr;
+            (
+                profiles::select(
+                    &profiles.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+                    profile.as_deref(),
+                )
+            )
+            ({
+                if let Some(profile) = profile {
+                    let library_db = PROFILES.get(&profile)
+                        .ok_or_else(|| ErrorInternalServerError("Missing profile"))?;
+
+                    profile_info(&config_db, &library_db, query.show_scan.unwrap_or_default()).await?
+                } else {
+                    html! {}
+                }
+            })
+        }
+    };
+
+    Ok(if htmx.is_htmx {
+        body
+    } else {
         html! {
             (DOCTYPE)
             html {
@@ -80,32 +98,27 @@ pub async fn index_endpoint(
                         integrity="sha384-Y7hw+L/jvKeWIRRkqWYfPcvVxHzVzn5REgzbawhxAuQGwX1XWe70vji+VSeHOThJ"
                         crossorigin="anonymous"
                         {}
-                }
-                body hx-headers={"{'moosicbox-profile': '"(profile.as_deref().unwrap_or_default())"'}"} {
-                    h1 { "MoosicBox Admin" }
-                    hr {}
-                    form hx-post="/admin/select-profile" hx-trigger="change" {
-                        select name="profile" {
-                            @for p in profiles.iter() {
-                                option value=(p) selected[profile.as_ref().is_some_and(|x| x == p)] { (p) }
-                            }
-                        }
+                    script {
+                        (PreEscaped(r#"
+                            htmx.defineExtension('path-vars', {
+                                onEvent: function (name, evt) {
+                                    if (name === "htmx:configRequest") {
+                                        let sourceEventData = evt.detail ? (evt.detail.triggeringEvent ? evt.detail.triggeringEvent.detail : null) : null;
+                                        if (sourceEventData) {
+                                            evt.detail.path = evt.detail.path.replace(/{event\.(\w+)}/g, function (_, k) {
+                                                return sourceEventData[k];
+                                            });
+                                        }
+                                    }
+                                }
+                            });
+                        "#))
                     }
-                    ({
-                        if let Some(profile) = profile {
-                            let library_db = PROFILES.get(&profile)
-                                .ok_or_else(|| ErrorInternalServerError("Missing profile"))?;
-
-                            profile_info(&config_db, &library_db, query.show_scan.unwrap_or_default()).await?
-                        } else {
-                            html! {}
-                        }
-                    })
                 }
+                (body)
             }
         }
-        .into_string(),
-    ))
+    })
 }
 
 async fn profile_info(

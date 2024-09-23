@@ -6,7 +6,10 @@ use actix_web::{
 };
 use maud::{html, Markup};
 use moosicbox_core::sqlite::db::DbError;
-use moosicbox_database::config::ConfigDatabase;
+use moosicbox_database::{
+    config::ConfigDatabase,
+    profiles::{api::ProfileName, PROFILES},
+};
 use serde::Deserialize;
 
 pub fn bind_services<
@@ -19,7 +22,9 @@ pub fn bind_services<
             .service(new_profile_endpoint)
             .service(create_new_profile_endpoint)
             .service(delete_profile_endpoint)
-            .service(list_profile_endpoint),
+            .service(list_profile_endpoint)
+            .service(post_select_endpoint)
+            .service(select_endpoint),
     )
 }
 
@@ -137,7 +142,7 @@ pub fn new_profile_form(message: Option<String>, value: Option<String>, bundled:
                 name="profile"
                 placeholder="profile..."
                 value={ (value.unwrap_or_else(|| if bundled { whoami::realname() } else { "".to_string() })) }
-                {}
+            ;
             button type="submit" { "Create" }
         }
     }
@@ -185,6 +190,60 @@ pub async fn list_profile_endpoint(
     db: ConfigDatabase,
 ) -> Result<Markup, actix_web::Error> {
     profiles(&db).await.map_err(ErrorInternalServerError)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectProfileForm {
+    profile: String,
+}
+
+#[route("select", method = "POST")]
+pub async fn post_select_endpoint(
+    htmx: Htmx,
+    form: web::Form<SelectProfileForm>,
+) -> Result<Markup, actix_web::Error> {
+    htmx.trigger_event(
+        "select-moosicbox-profile".to_string(),
+        Some(
+            serde_json::json!({
+                "profile": &form.profile,
+            })
+            .to_string(),
+        ),
+        Some(TriggerType::Standard),
+    );
+
+    let profiles = PROFILES.names();
+    Ok(select(
+        &profiles.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+        Some(form.profile.as_str()),
+    ))
+}
+
+#[route("select", method = "GET")]
+pub async fn select_endpoint(
+    _htmx: Htmx,
+    profile: Option<ProfileName>,
+) -> Result<Markup, actix_web::Error> {
+    let profiles = PROFILES.names();
+    let profile = profile.map(|x| x.0).or_else(|| profiles.first().cloned());
+    Ok(select(
+        &profiles.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+        profile.as_deref(),
+    ))
+}
+
+pub fn select(profiles: &[&str], selected: Option<&str>) -> Markup {
+    html! {
+        form hx-post="/admin/profiles/select" hx-trigger="change" {
+            select name="profile" {
+                @for p in profiles.iter() {
+                    option value=(p) selected[selected.is_some_and(|x| &x == p)] { (p) }
+                }
+            }
+        }
+    }
 }
 
 pub fn profile(profile: &str) -> Markup {
