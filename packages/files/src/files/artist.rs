@@ -67,10 +67,15 @@ pub async fn get_local_artist_cover(
     artist: &Artist,
     size: ImageCoverSize,
 ) -> Result<String, ArtistCoverError> {
+    log::debug!(
+        "get_local_artist_cover: api_source={} artist={artist:?} size={size}",
+        api.source()
+    );
     let source = api
         .artist_cover_source(artist, size)
         .await?
         .ok_or_else(|| {
+            log::debug!("get_local_artist_cover: artist cover source not found");
             ArtistCoverError::NotFound(
                 artist.id.to_owned(),
                 "Artist cover source not found".to_owned(),
