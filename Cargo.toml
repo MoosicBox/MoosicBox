@@ -208,7 +208,7 @@ symphonia = { git = "https://github.com/pdeljanov/Symphonia", branch = "master",
 ] }
 tantivy = "0.22.0"
 test-log = "0.2.16"
-thiserror = "1.0.63"
+thiserror = "1.0.64"
 throttle = "0.1.0"
 tokio = { version = "1.40.0" }
 tokio-postgres = { version = "0.7.12", features = ["with-chrono-0_4"] }
