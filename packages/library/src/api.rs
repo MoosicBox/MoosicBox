@@ -1050,7 +1050,7 @@ pub struct ReindexQuery {}
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Library"],
-        get,
+        post,
         path = "/reindex",
         description = "Reindex the search database with the complete library",
         params(),
