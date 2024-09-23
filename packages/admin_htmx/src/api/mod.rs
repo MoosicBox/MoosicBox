@@ -50,18 +50,13 @@ pub async fn index_endpoint(
         .or_else(|| profiles.first())
         .cloned();
 
-    if htmx.is_htmx {
-        if let Some(profile) = &profile {
-            htmx.push_url(format!("/admin?moosicboxProfile={profile}"));
-        }
-    }
-
     let body = html! {
         body
             hx-ext="path-vars"
             hx-get="/admin?moosicboxProfile={event.profile}"
             hx-headers={"{\"moosicbox-profile\": \""(profile.as_deref().unwrap_or_default())"\"}"}
             hx-swap="outerHTML"
+            hx-push-url="true"
             hx-trigger="select-moosicbox-profile from:body"
         {
             h1 { "MoosicBox Admin" }
