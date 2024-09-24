@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import { parse } from 'yaml';
 import { clusterProvider } from './cluster';
-import { certManagers } from './cert-manager';
 import { Input, Resource } from '@pulumi/pulumi';
 import { loadBalancer } from './load-balancer';
 
@@ -80,7 +79,6 @@ const repo = createEcrRepo();
 const image = createImage(repo);
 const tunnelServerDeployment = createDeployment(image, [
     image,
-    certManagers,
     loadBalancer,
 ]);
 const tunnelServerService = createService([tunnelServerDeployment]);

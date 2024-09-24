@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import { parse } from 'yaml';
 import { clusterProvider } from './cluster';
-import { certManagers } from './cert-manager';
 import { Input, Resource } from '@pulumi/pulumi';
 
 export const domainName = 'moosicbox.com';
@@ -161,8 +160,8 @@ function createNodePort(dependsOn: Input<Input<Resource>[]>) {
 
 export const repo = createEcrRepo();
 export const image = createImage(repo);
-export const certificate = createCertificate([certManagers]);
-export const ingress = createIngress([certificate, certManagers, image]);
+export const certificate = createCertificate([]);
+export const ingress = createIngress([certificate, image]);
 export const issuer = createIssuer([ingress]);
 export const loadBalancer = createLb(image, [issuer]);
 export const nodePort = createNodePort([loadBalancer]);
