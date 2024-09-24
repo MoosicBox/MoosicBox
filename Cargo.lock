@@ -2149,7 +2149,7 @@ dependencies = [
 [[package]]
 name = "free_log_client"
 version = "0.3.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#813db45ba8a620628f1f48a8af913c5f62f00aaf"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#5263ac33be68912a5030ecdb2b6b77ce3584868e"
 dependencies = [
  "free_log_models",
  "futures-util",
@@ -2168,7 +2168,7 @@ dependencies = [
 [[package]]
 name = "free_log_models"
 version = "0.2.0"
-source = "git+https://github.com/BSteffaniak/FreeLog.git#813db45ba8a620628f1f48a8af913c5f62f00aaf"
+source = "git+https://github.com/BSteffaniak/FreeLog.git#5263ac33be68912a5030ecdb2b6b77ce3584868e"
 dependencies = [
  "log",
  "serde",
@@ -5495,9 +5495,9 @@ dependencies = [
 
 [[package]]
 name = "pkg-config"
-version = "0.3.30"
+version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d231b230927b5e4ad203db57bbcbee2802f6bce620b1e4a9024a07d94e2907ec"
+checksum = "953ec861398dccce10c670dfeaf3ec4911ca479e9c02154b3a215178c5f566f2"
 
 [[package]]
 name = "png"
