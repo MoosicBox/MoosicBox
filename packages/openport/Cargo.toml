@@ -8,14 +8,18 @@ license     = "MPL-2.0"
 name        = "openport"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBoxServer"
-version     = "0.1.0"
+version     = "0.1.1"
 
 [dependencies]
 rand = { workspace = true, optional = true }
+
+### FEATURES #################################################################
 
 [features]
 default = []
 
 fail-on-warnings = []
 
+# Add `pick_random_unused_port` pub fn that allows finding a random port
+# within the range 15000..25000
 rand = ["dep:rand"]

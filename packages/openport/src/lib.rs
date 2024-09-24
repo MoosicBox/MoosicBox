@@ -2,6 +2,26 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![forbid(unsafe_code)]
 
+//! # openport
+//!
+//! Find a free unused port
+//!
+//! # Features
+//!
+//! *   `rand`: Add `pick_random_unused_port` pub fn that allows finding a random port within
+//!     the range `15000..25000`
+//!
+//! # Usage
+//!
+//! The following steps describe a basic usage of openport:
+//!
+//! 1.  Call `openport::pick_unused_port` and pass a range of ports you want to find a free port in
+//! 2.  Enable the `rand` feature and call `openport::pick_random_unused_port` to find a random open
+//!     port within the range `15000..16000`
+//! 3.  Call `openport::is_free` to check if a specific port is open on both TCP and UDP
+//! 4.  Call `openport::is_free_tcp` to check if a specific port is open on TCP
+//! 5.  Call `openport::is_free_udp` to check if a specific port is open on UDP
+
 use std::{
     net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6, TcpListener, ToSocketAddrs, UdpSocket},
     ops::Range,
