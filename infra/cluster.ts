@@ -23,10 +23,19 @@ function newCluster() {
     );
 }
 
-export const cluster =
-    $app.stage === 'prod'
-        ? newCluster()
-        : await digitalocean.getKubernetesCluster({ name: 'moosicbox-prod' });
+let existing:
+    | Awaited<ReturnType<typeof digitalocean.getKubernetesCluster>>
+    | undefined;
+
+try {
+    existing = await digitalocean.getKubernetesCluster({
+        name: 'moosicbox-prod',
+    });
+} catch {
+    console.log('No existing cluster');
+}
+
+export const cluster = existing ?? newCluster();
 
 export const kubeconfig = cluster.kubeConfigs[0].rawConfig;
 
