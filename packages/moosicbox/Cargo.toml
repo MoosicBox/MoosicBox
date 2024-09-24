@@ -54,6 +54,7 @@ moosicbox_tunnel_sender       = { version = "0.1.0", path = "../tunnel_sender", 
 moosicbox_upnp                = { version = "0.1.0", path = "../upnp", default-features = false }
 moosicbox_ws                  = { version = "0.1.0", path = "../ws", default-features = false }
 moosicbox_yt                  = { version = "0.1.0", path = "../yt", default-features = false }
+openport                      = { version = "0.1.0", path = "../openport", default-features = false }
 
 [features]
 fail-on-warnings = []

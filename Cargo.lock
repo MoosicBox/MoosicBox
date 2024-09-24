@@ -3585,6 +3585,7 @@ dependencies = [
  "moosicbox_upnp",
  "moosicbox_ws",
  "moosicbox_yt",
+ "openport",
 ]
 
 [[package]]
@@ -4979,6 +4980,13 @@ dependencies = [
  "is-wsl",
  "libc",
  "pathdiff",
+]
+
+[[package]]
+name = "openport"
+version = "0.1.0"
+dependencies = [
+ "rand",
 ]
 
 [[package]]

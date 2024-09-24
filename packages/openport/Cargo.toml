@@ -1,0 +1,21 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["network-programming"]
+description = "Find a free unused port"
+edition     = "2021"
+keywords    = ["network", "port", "tcp", "udp"]
+license     = "MPL-2.0"
+name        = "openport"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
+
+[dependencies]
+rand = { workspace = true, optional = true }
+
+[features]
+default = []
+
+fail-on-warnings = []
+
+rand = ["dep:rand"]

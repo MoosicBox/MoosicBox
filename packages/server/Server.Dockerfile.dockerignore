@@ -24,6 +24,7 @@
 !/packages/menu
 !/packages/middleware
 !/packages/music_api
+!/packages/openport
 !/packages/paging
 !/packages/player
 !/packages/profiles

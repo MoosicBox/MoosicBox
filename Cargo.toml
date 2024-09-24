@@ -27,6 +27,7 @@ members = [
     "packages/middleware",
     "packages/moosicbox",
     "packages/music_api",
+    "packages/openport",
     "packages/paging",
     "packages/player",
     "packages/profiles",
@@ -84,9 +85,9 @@ actix = "0.13.5"
 actix-cors = "0.7.0"
 actix-files = "0.6.6"
 actix-htmx = "0.3.0"
+actix-http = "3.9.0"
 actix-rt = "2.10.0"
 actix-web = "4.9.0"
-actix-http = "3.9.0"
 actix-ws = "0.3.0"
 arrayvec = "0.7.6"
 async-once-cell = "0.5.3"

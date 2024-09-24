@@ -363,6 +363,16 @@ jobs:
                       path: packages/music_api
                       os: ubuntu-latest
 
+                    - name: openport
+                      path: packages/openport
+                      os: ubuntu-latest
+
+                    - name: openport-rand
+                      path: packages/openport
+                      os: ubuntu-latest
+                      cargo: --no-default-features
+                      features: rand
+
                     - name: paging
                       path: packages/paging
                       os: ubuntu-latest
