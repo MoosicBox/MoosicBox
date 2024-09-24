@@ -109,25 +109,32 @@ function createLb(image: awsx.ecr.Image, dependsOn: Input<Input<Resource>[]>) {
     );
     const specJson = parse(specYaml);
 
-    const containers = specJson.spec.template.spec.containers;
+    type Container = {
+        ports: { hostPort: number }[];
+        volumeMounts: unknown[] | undefined;
+        env: Record<string, string>[] | undefined;
+        image: string | awsx.ecr.Image['imageUri'];
+    };
 
-    containers.forEach(
-        (container: {
-            env: Record<string, string>[] | undefined;
-            image: string | awsx.ecr.Image['imageUri'];
-        }) => {
-            container.image = image.imageUri;
+    specJson.spec.template.spec.volumes = [];
 
-            const env = container.env ?? [];
+    const containers: Container[] = specJson.spec.template.spec.containers;
 
-            env.push({
-                name: 'CLUSTERS',
-                value: `${domain}:moosicbox-tunnel-service-${$app.stage}:8004`,
-            });
+    containers.forEach((container) => {
+        container.image = image.imageUri;
+        container.volumeMounts = [];
 
-            container.env = env;
-        },
-    );
+        const env = container.env ?? [];
+
+        env.push({
+            name: 'CLUSTERS',
+            value: `${domain}:moosicbox-tunnel-service-${$app.stage}:8004`,
+        });
+
+        container.env = env;
+
+        container.ports = container.ports.filter((x) => x.hostPort === 80);
+    });
 
     return new kubernetes.apps.v1.Deployment('tunnel-server-lb', specJson, {
         provider: clusterProvider,
@@ -160,9 +167,9 @@ function createNodePort(dependsOn: Input<Input<Resource>[]>) {
 
 export const repo = createEcrRepo();
 export const image = createImage(repo);
-export const certificate = createCertificate([]);
+// export const certificate = createCertificate([]);
 export const ingress = createIngress([]);
-export const issuer = createIssuer([]);
+// export const issuer = createIssuer([]);
 export const loadBalancer = createLb(image, []);
 export const nodePort = createNodePort([]);
 
