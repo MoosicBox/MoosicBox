@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import { parse } from 'yaml';
 import { clusterProvider } from './cluster';
 import { Input, Resource } from '@pulumi/pulumi';
-import { loadBalancer } from './load-balancer';
 
 function createEcrRepo() {
     return new awsx.ecr.Repository('moosicbox-tunnel-server', {
@@ -77,11 +76,8 @@ function createService(dependsOn: Input<Input<Resource>[]>) {
 
 const repo = createEcrRepo();
 const image = createImage(repo);
-const tunnelServerDeployment = createDeployment(image, [
-    image,
-    loadBalancer,
-]);
-const tunnelServerService = createService([tunnelServerDeployment]);
+const tunnelServerDeployment = createDeployment(image, []);
+const tunnelServerService = createService([]);
 
 export const outputs = {
     serviceId: tunnelServerService.id,

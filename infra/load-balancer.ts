@@ -161,9 +161,9 @@ function createNodePort(dependsOn: Input<Input<Resource>[]>) {
 export const repo = createEcrRepo();
 export const image = createImage(repo);
 export const certificate = createCertificate([]);
-export const ingress = createIngress([certificate, image]);
-export const issuer = createIssuer([ingress]);
-export const loadBalancer = createLb(image, [issuer]);
-export const nodePort = createNodePort([loadBalancer]);
+export const ingress = createIngress([]);
+export const issuer = createIssuer([]);
+export const loadBalancer = createLb(image, []);
+export const nodePort = createNodePort([]);
 
 export const outputs = {};
