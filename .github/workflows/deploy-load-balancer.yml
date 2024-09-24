@@ -41,4 +41,4 @@ jobs:
               run: |
                   pnpm install
                   pnpm sst install
-                  pnpm sst deploy --stage ${{ github.event.inputs.stage }}
+                  pnpm sst deploy --stage ${{ github.event.inputs.stage }} --verbose
