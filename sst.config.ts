@@ -10,6 +10,7 @@ export default $config({
                 digitalocean: '4.31.1',
                 kubernetes: '4.17.1',
                 awsx: '2.14.0',
+                docker: '4.5.5',
             },
         };
     },

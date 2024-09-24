@@ -11,15 +11,26 @@ function createEcrRepo() {
 
 function createImage(repo: awsx.ecr.Repository) {
     const context = `../..`;
-    return new awsx.ecr.Image('tunnel-server', {
-        repositoryUrl: repo.url,
-        context,
-        dockerfile: `${context}/packages/tunnel_server/TunnelServer.Dockerfile`,
+    const authToken = aws.ecr.getAuthorizationTokenOutput({
+        registryId: repo.repository.registryId,
+    });
+    return new docker.Image('tunnel-server', {
+        imageName: 'tunnel-server',
+        build: {
+            platform: 'linux/amd64',
+            context: context,
+            dockerfile: `${context}/packages/tunnel_server/TunnelServer.Dockerfile`,
+        },
+        registry: {
+            server: repo.repository.repositoryUrl,
+            password: authToken.password,
+            username: authToken.userName,
+        },
     });
 }
 
 function createDeployment(
-    image: awsx.ecr.Image,
+    image: docker.Image,
     dependsOn: Input<Input<Resource>[]>,
 ) {
     let specYaml = fs.readFileSync(
@@ -45,7 +56,7 @@ function createDeployment(
             env: Record<string, string>[] | undefined;
             image: string | awsx.ecr.Image['imageUri'];
         }) => {
-            container.image = image.imageUri;
+            container.image = $interpolate`${image.imageName}`;
         },
     );
 
