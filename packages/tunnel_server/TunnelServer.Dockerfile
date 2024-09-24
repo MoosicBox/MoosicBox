@@ -17,6 +17,7 @@ RUN cat Cargo.toml | \
     \"packages\/json_utils\",\r\
     \"packages\/logging\",\r\
     \"packages\/middleware\",\r\
+    \"packages\/profiles\",\r\
     \"packages\/task\",\r\
     \"packages\/tunnel\",\r\
     \"packages\/tunnel_server\",\r\
@@ -33,6 +34,7 @@ COPY packages/env_utils/Cargo.toml packages/env_utils/Cargo.toml
 COPY packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
 COPY packages/logging/Cargo.toml packages/logging/Cargo.toml
 COPY packages/middleware/Cargo.toml packages/middleware/Cargo.toml
+COPY packages/profiles/Cargo.toml packages/profiles/Cargo.toml
 COPY packages/task/Cargo.toml packages/task/Cargo.toml
 COPY packages/tunnel/Cargo.toml packages/tunnel/Cargo.toml
 COPY packages/tunnel_server/Cargo.toml packages/tunnel_server/Cargo.toml
@@ -52,6 +54,7 @@ packages/env_utils|\
 packages/json_utils|\
 packages/logging|\
 packages/middleware|\
+packages/profiles|\
 packages/task|\
 packages/tunnel|\
 packages/tunnel_server|\
