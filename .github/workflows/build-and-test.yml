@@ -3,6 +3,11 @@ name: Build and Test
 on:
     push:
         branches: ['master']
+        paths:
+            - packages/**
+            - '*.toml'
+            - Cargo.lock
+            - .github/workflows/build-and-test.yml
     pull_request:
         branches: ['master']
 
