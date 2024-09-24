@@ -42,3 +42,12 @@ jobs:
                   pnpm install
                   pnpm sst install
                   pnpm sst deploy --stage ${{ github.event.inputs.stage }} --verbose
+
+            - name: Upload log
+              uses: actions/upload-artifact@v3
+              if: always()
+              with:
+                  name: log
+                  path: .sst/log
+                  if-no-files-found: error
+                  retention-days: 90
