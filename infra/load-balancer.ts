@@ -151,11 +151,15 @@ function createNodePort(dependsOn: Input<Input<Resource>[]>) {
     );
     specYaml = specYaml.replaceAll(
         ' moosicbox-tunnel-server-ingress-controller',
-        ` moosicbox-tunnel-server-ingress-controller-${$app.stage}`,
+        ` moosicbox-tunnel-server-temp-ingress-controller-${$app.stage}`,
     );
     specYaml = specYaml.replaceAll(
         ' moosicbox-tunnel-server-ingress',
         ` moosicbox-tunnel-server-ingress-${$app.stage}`,
+    );
+    specYaml = specYaml.replaceAll(
+        ' moosicbox-tunnel-server-temp-',
+        ` moosicbox-tunnel-server-`,
     );
     specYaml = specYaml.replaceAll(' tunnel.moosicbox.com', ` ${domain}`);
 
