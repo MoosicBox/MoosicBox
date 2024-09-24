@@ -1,5 +1,5 @@
 # Builder
-FROM rust:1.79-bookworm as builder
+FROM rust:1-bookworm as builder
 WORKDIR /app
 
 COPY Cargo.toml Cargo.toml
