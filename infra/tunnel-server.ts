@@ -77,9 +77,9 @@ function createService(dependsOn: Input<Input<Resource>[]>) {
 const repo = createEcrRepo();
 const image = createImage(repo);
 const tunnelServerDeployment = createDeployment(image, []);
-const tunnelServerService = createService([]);
+// const tunnelServerService = createService([]);
 
 export const outputs = {
-    serviceId: tunnelServerService.id,
+    // serviceId: tunnelServerService.id,
     availableReplicas: tunnelServerDeployment.status.availableReplicas,
 };
