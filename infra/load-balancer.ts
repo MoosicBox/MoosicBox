@@ -63,8 +63,16 @@ function createIngress(dependsOn: Input<Input<Resource>[]>) {
         'utf8',
     );
     specYaml = specYaml.replaceAll(
+        ' moosicbox-tunnel-server-ingress-controller',
+        ` moosicbox-tunnel-server-temp-ingress-controller-${$app.stage}`,
+    );
+    specYaml = specYaml.replaceAll(
         ' moosicbox-tunnel-server-ingress',
         ` moosicbox-tunnel-server-ingress-${$app.stage}`,
+    );
+    specYaml = specYaml.replaceAll(
+        ' moosicbox-tunnel-server-temp-',
+        ` moosicbox-tunnel-server-`,
     );
     specYaml = specYaml.replaceAll(
         ' moosicbox-tunnel-server-issuer',
