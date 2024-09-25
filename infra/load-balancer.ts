@@ -5,6 +5,8 @@ import { Input, Output, Resource } from '@pulumi/pulumi';
 import { registryAuth, repo } from './registry';
 import { certManagers } from './cert-manager';
 
+const useSsl = process.env['LOAD_BALANCER_USE_SSL'] === 'true';
+
 export const domainName = 'moosicbox.com';
 export const domain =
     $app.stage === 'prod'
@@ -81,7 +83,10 @@ function createIngress(dependsOn: Input<Input<Resource>[]>) {
     );
     const specJson = parse(specYaml);
 
-    delete specJson.metadata.annotations['cert-manager.io/issuer'];
+    if (!useSsl) {
+        delete specJson.metadata.annotations['cert-manager.io/issuer'];
+    }
+
     specJson.metadata.annotations['pulumi.com/skipAwait'] = 'true';
 
     return new kubernetes.networking.v1.Ingress('load-balancer', specJson, {
@@ -136,13 +141,14 @@ function createLb(image: docker.Image, dependsOn: Input<Input<Resource>[]>) {
         image: string | Output<string>;
     };
 
-    specJson.spec.template.spec.volumes = [];
+    if (!useSsl) {
+        specJson.spec.template.spec.volumes = [];
+    }
 
     const containers: Container[] = specJson.spec.template.spec.containers;
 
     containers.forEach((container) => {
         container.image = $interpolate`${image.imageName}`;
-        container.volumeMounts = [];
 
         const extraClusters = process.env['EXTRA_CLUSTERS'];
 
@@ -152,7 +158,10 @@ function createLb(image: docker.Image, dependsOn: Input<Input<Resource>[]>) {
             value: `${domain}:moosicbox-tunnel-service-${$app.stage}:8004${extraClusters ? `;${extraClusters}` : ''}`,
         });
 
-        container.ports = container.ports.filter((x) => x.hostPort === 80);
+        if (!useSsl) {
+            container.volumeMounts = [];
+            container.ports = container.ports.filter((x) => x.hostPort === 80);
+        }
     });
 
     return new kubernetes.apps.v1.Deployment('tunnel-server-lb', specJson, {
@@ -184,9 +193,11 @@ function createNodePort(dependsOn: Input<Input<Resource>[]>) {
 
     const specJson = parse(specYaml);
 
-    specJson.spec.ports = specJson.spec.ports.filter(
-        (x: { port: number }) => x.port === 80,
-    );
+    if (!useSsl) {
+        specJson.spec.ports = specJson.spec.ports.filter(
+            (x: { port: number }) => x.port === 80,
+        );
+    }
 
     return kubernetes.yaml.parse(
         { objs: [specJson] },
