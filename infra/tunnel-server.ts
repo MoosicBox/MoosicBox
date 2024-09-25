@@ -11,6 +11,10 @@ function createImage() {
     return new docker.Image('tunnel-server', {
         imageName,
         build: {
+            builderVersion: 'BuilderBuildKit',
+            args: {
+                BUILDKIT_INLINE_CACHE: '1',
+            },
             platform: 'linux/amd64',
             context: context,
             dockerfile: `${context}/packages/tunnel_server/TunnelServer.Dockerfile`,

@@ -17,6 +17,10 @@ function createImage() {
     return new docker.Image('load-balancer', {
         imageName,
         build: {
+            builderVersion: 'BuilderBuildKit',
+            args: {
+                BUILDKIT_INLINE_CACHE: '1',
+            },
             platform: 'linux/amd64',
             context: context,
             dockerfile: `${context}/packages/load_balancer/LoadBalancer.Dockerfile`,
