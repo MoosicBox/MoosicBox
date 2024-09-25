@@ -170,8 +170,14 @@ function createNodePort(dependsOn: Input<Input<Resource>[]>) {
     );
     specYaml = specYaml.replaceAll(' tunnel.moosicbox.com', ` ${domain}`);
 
+    const specJson = parse(specYaml);
+
+    specJson.spec.ports = specJson.spec.ports.filter(
+        (x: { port: number }) => x.port === 80,
+    );
+
     return kubernetes.yaml.parse(
-        { yaml: specYaml },
+        { objs: [specJson] },
         { provider: clusterProvider, dependsOn },
     )[0];
 }
@@ -181,6 +187,6 @@ export const loadBalancer = createLb(image, []);
 // export const certificate = createCertificate([]);
 // export const issuer = createIssuer([]);
 // export const ingress = createIngress([loadBalancer]);
-// export const nodePort = createNodePort([loadBalancer]);
+export const nodePort = createNodePort([loadBalancer]);
 
 export const outputs = {};
