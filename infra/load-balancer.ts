@@ -89,10 +89,10 @@ function createIngress(dependsOn: Input<Input<Resource>[]>) {
 
     specJson.metadata.annotations['pulumi.com/skipAwait'] = 'true';
 
-    return new kubernetes.networking.v1.Ingress('load-balancer', specJson, {
-        provider: clusterProvider,
-        dependsOn,
-    });
+    return kubernetes.yaml.parse(
+        { objs: [specJson] },
+        { provider: clusterProvider, dependsOn },
+    )[0];
 }
 
 function createIssuer(dependsOn: Input<Input<Resource>[]>) {
