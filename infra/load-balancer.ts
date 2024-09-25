@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import { parse } from 'yaml';
 import { clusterProvider } from './cluster';
-import { Input, Resource } from '@pulumi/pulumi';
+import { Input, Output, Resource } from '@pulumi/pulumi';
+import { registryAuth, repo } from './registry';
 
 export const domainName = 'moosicbox.com';
 export const domain =
@@ -9,18 +10,18 @@ export const domain =
         ? `tunnel.${domainName}`
         : `tunnel-${$app.stage}.${domainName}`;
 
-function createEcrRepo() {
-    return new awsx.ecr.Repository('moosicbox-load-balancer', {
-        forceDelete: true,
-    });
-}
+export const imageName = $interpolate`${repo.endpoint}/load-balancer`;
 
-function createImage(repo: awsx.ecr.Repository) {
+function createImage() {
     const context = `../..`;
-    return new awsx.ecr.Image('load-balancer', {
-        repositoryUrl: repo.url,
-        context,
-        dockerfile: `${context}/packages/load_balancer/LoadBalancer.Dockerfile`,
+    return new docker.Image('load-balancer', {
+        imageName,
+        build: {
+            platform: 'linux/amd64',
+            context: context,
+            dockerfile: `${context}/packages/load_balancer/LoadBalancer.Dockerfile`,
+        },
+        registry: registryAuth,
     });
 }
 
@@ -94,7 +95,7 @@ function createIssuer(dependsOn: Input<Input<Resource>[]>) {
     )[0];
 }
 
-function createLb(image: awsx.ecr.Image, dependsOn: Input<Input<Resource>[]>) {
+function createLb(image: docker.Image, dependsOn: Input<Input<Resource>[]>) {
     let specYaml = fs.readFileSync(
         '../kubernetes/tunnel-server/moosicbox-tunnel-server-lb-deployment.yaml'.substring(
             1,
@@ -115,7 +116,7 @@ function createLb(image: awsx.ecr.Image, dependsOn: Input<Input<Resource>[]>) {
         ports: { hostPort: number }[];
         volumeMounts: unknown[] | undefined;
         env: Record<string, string>[] | undefined;
-        image: string | awsx.ecr.Image['imageUri'];
+        image: string | Output<string>;
     };
 
     specJson.spec.template.spec.volumes = [];
@@ -123,17 +124,14 @@ function createLb(image: awsx.ecr.Image, dependsOn: Input<Input<Resource>[]>) {
     const containers: Container[] = specJson.spec.template.spec.containers;
 
     containers.forEach((container) => {
-        container.image = image.imageUri;
+        container.image = $interpolate`${image.imageName}`;
         container.volumeMounts = [];
 
-        const env = container.env ?? [];
-
-        env.push({
+        container.env = container.env ?? [];
+        container.env.push({
             name: 'CLUSTERS',
             value: `${domain}:moosicbox-tunnel-service-${$app.stage}:8004`,
         });
-
-        container.env = env;
 
         container.ports = container.ports.filter((x) => x.hostPort === 80);
     });
@@ -171,12 +169,11 @@ function createNodePort(dependsOn: Input<Input<Resource>[]>) {
     )[0];
 }
 
-export const repo = createEcrRepo();
-export const image = createImage(repo);
+export const image = createImage();
+export const loadBalancer = createLb(image, []);
 // export const certificate = createCertificate([]);
 // export const issuer = createIssuer([]);
-export const ingress = createIngress([]);
-export const loadBalancer = createLb(image, []);
-export const nodePort = createNodePort([]);
+export const ingress = createIngress([loadBalancer]);
+export const nodePort = createNodePort([loadBalancer]);
 
 export const outputs = {};
