@@ -3,6 +3,7 @@ import { parse } from 'yaml';
 import { clusterProvider } from './cluster';
 import { Input, Output, Resource } from '@pulumi/pulumi';
 import { registryAuth, repo } from './registry';
+import { certManagers } from './cert-manager';
 
 export const domainName = 'moosicbox.com';
 export const domain =
@@ -193,8 +194,8 @@ function createNodePort(dependsOn: Input<Input<Resource>[]>) {
 
 export const image = createImage();
 export const loadBalancer = createLb(image, []);
-// export const certificate = createCertificate([]);
-// export const issuer = createIssuer([]);
+export const issuer = createIssuer([certManagers]);
+export const certificate = createCertificate([issuer]);
 export const nodePort = createNodePort([loadBalancer]);
 export const ingress = createIngress([nodePort]);
 
