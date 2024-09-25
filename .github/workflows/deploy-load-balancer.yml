@@ -44,7 +44,7 @@ jobs:
                   pnpm sst deploy --stage ${{ github.event.inputs.stage }} --verbose
 
             - name: Upload log
-              uses: actions/upload-artifact@v3
+              uses: actions/upload-artifact@v4
               if: always()
               with:
                   name: log
