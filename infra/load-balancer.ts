@@ -64,6 +64,8 @@ function createIngress(dependsOn: Input<Input<Resource>[]>) {
     );
     const specJson = parse(specYaml);
 
+    delete specJson.metadata.annotations['cert-manager.io/issuer'];
+
     return new kubernetes.networking.v1.Ingress('tunnel-server', specJson, {
         provider: clusterProvider,
         dependsOn,
@@ -172,8 +174,8 @@ function createNodePort(dependsOn: Input<Input<Resource>[]>) {
 export const repo = createEcrRepo();
 export const image = createImage(repo);
 // export const certificate = createCertificate([]);
-export const ingress = createIngress([]);
 // export const issuer = createIssuer([]);
+export const ingress = createIngress([]);
 export const loadBalancer = createLb(image, []);
 export const nodePort = createNodePort([]);
 
