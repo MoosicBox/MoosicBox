@@ -12,8 +12,11 @@ RUN cat Cargo.toml | \
     \"packages\/config\",\r\
     \"packages\/database\",\r\
     \"packages\/env_utils\",\r\
+    \"packages\/json_utils\",\r\
     \"packages\/load_balancer\",\r\
     \"packages\/logging\",\r\
+    \"packages\/profiles\",\r\
+    \"packages\/task\",\r\
 ]/" | tr '\r' '\n' \
     > Cargo2.toml && \
     mv Cargo2.toml Cargo.toml
@@ -22,8 +25,11 @@ COPY packages/assert/Cargo.toml packages/assert/Cargo.toml
 COPY packages/config/Cargo.toml packages/config/Cargo.toml
 COPY packages/database/Cargo.toml packages/database/Cargo.toml
 COPY packages/env_utils/Cargo.toml packages/env_utils/Cargo.toml
+COPY packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
 COPY packages/load_balancer/Cargo.toml packages/load_balancer/Cargo.toml
 COPY packages/logging/Cargo.toml packages/logging/Cargo.toml
+COPY packages/profiles/Cargo.toml packages/profiles/Cargo.toml
+COPY packages/task/Cargo.toml packages/task/Cargo.toml
 
 RUN touch temp_lib.rs
 
@@ -35,8 +41,11 @@ packages/assert|\
 packages/config|\
 packages/database|\
 packages/env_utils|\
+packages/json_utils|\
 packages/load_balancer|\
 packages/logging|\
+packages/profiles|\
+packages/task|\
 )/Cargo.toml$"); \
     do printf "\n\n[lib]\npath=\"../../temp_lib.rs\"" >> "$file"; \
   done
