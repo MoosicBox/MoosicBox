@@ -81,6 +81,7 @@ function createIngress(dependsOn: Input<Input<Resource>[]>) {
     const specJson = parse(specYaml);
 
     delete specJson.metadata.annotations['cert-manager.io/issuer'];
+    specJson.metadata.annotations['pulumi.com/skipAwait'] = 'true';
 
     return kubernetes.yaml.parse(
         { objs: [specJson] },
