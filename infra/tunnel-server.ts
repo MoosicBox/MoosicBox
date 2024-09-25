@@ -1,36 +1,36 @@
 import fs from 'node:fs';
 import { parse } from 'yaml';
 import { clusterProvider } from './cluster';
-import { Input, Resource } from '@pulumi/pulumi';
+import { Input, Output, Resource } from '@pulumi/pulumi';
 
 function createEcrRepo() {
-    return new awsx.ecr.Repository('moosicbox-tunnel-server', {
+    return new aws.ecr.Repository('moosicbox-tunnel-server', {
         forceDelete: true,
     });
 }
 
-function createImage(repo: awsx.ecr.Repository) {
+type AuthToken = { userName: Output<string>; password: Output<string> };
+
+function createImage(repo: aws.ecr.Repository, authToken: AuthToken) {
     const context = `../..`;
-    const authToken = aws.ecr.getAuthorizationTokenOutput({
-        registryId: repo.repository.registryId,
-    });
     return new docker.Image('tunnel-server', {
-        imageName: 'tunnel-server',
+        imageName: $interpolate`${repo.repositoryUrl}`,
         build: {
             platform: 'linux/amd64',
             context: context,
             dockerfile: `${context}/packages/tunnel_server/TunnelServer.Dockerfile`,
         },
         registry: {
-            server: repo.repository.repositoryUrl,
-            password: authToken.password,
+            server: repo.repositoryUrl,
             username: authToken.userName,
+            password: authToken.password,
         },
     });
 }
 
 function createDeployment(
     image: docker.Image,
+    authToken: AuthToken,
     dependsOn: Input<Input<Resource>[]>,
 ) {
     let specYaml = fs.readFileSync(
@@ -54,9 +54,20 @@ function createDeployment(
     containers.forEach(
         (container: {
             env: Record<string, string>[] | undefined;
-            image: string | awsx.ecr.Image['imageUri'];
+            image:
+            | string
+            | awsx.ecr.Image['imageUri']
+            | {
+                username: Output<string>;
+                password: Output<string>;
+                name: Output<string>;
+            };
         }) => {
-            container.image = $interpolate`${image.imageName}`;
+            container.image = {
+                name: $interpolate`${image.imageName}`,
+                username: $interpolate`${authToken.userName}`,
+                password: $interpolate`${authToken.password}`,
+            };
         },
     );
 
@@ -86,8 +97,11 @@ function createService(dependsOn: Input<Input<Resource>[]>) {
 }
 
 const repo = createEcrRepo();
-const image = createImage(repo);
-const tunnelServerDeployment = createDeployment(image, []);
+const authToken = aws.ecr.getAuthorizationTokenOutput({
+    registryId: repo.registryId,
+});
+const image = createImage(repo, authToken);
+const tunnelServerDeployment = createDeployment(image, authToken, []);
 // const tunnelServerService = createService([]);
 
 export const outputs = {
