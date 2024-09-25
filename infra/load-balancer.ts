@@ -144,10 +144,12 @@ function createLb(image: docker.Image, dependsOn: Input<Input<Resource>[]>) {
         container.image = $interpolate`${image.imageName}`;
         container.volumeMounts = [];
 
+        const extraClusters = process.env['EXTRA_CLUSTERS'];
+
         container.env = container.env ?? [];
         container.env.push({
             name: 'CLUSTERS',
-            value: `${domain}:moosicbox-tunnel-service-${$app.stage}:8004`,
+            value: `${domain}:moosicbox-tunnel-service-${$app.stage}:8004${extraClusters ? `;${extraClusters}` : ''}`,
         });
 
         container.ports = container.ports.filter((x) => x.hostPort === 80);
