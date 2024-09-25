@@ -16,14 +16,12 @@ export default $config({
     },
     async run() {
         const outputs = {};
-        const result = await import(`./infra/tunnel-server.ts`);
-        Object.assign(outputs, result.outputs);
-        // for (const value of readdirSync('./infra/')) {
-        //     const result = await import(`./infra/${value}`);
-        //     if (result.outputs) {
-        //         Object.assign(outputs, result.outputs);
-        //     }
-        // }
+        for (const value of readdirSync('./infra/')) {
+            const result = await import(`./infra/${value}`);
+            if (result.outputs) {
+                Object.assign(outputs, result.outputs);
+            }
+        }
         return outputs;
     },
 });
