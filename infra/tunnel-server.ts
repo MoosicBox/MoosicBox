@@ -70,7 +70,7 @@ function createDeployment(
 
     containers.forEach(
         (container: {
-            env: Record<string, string>[] | undefined;
+            env: { [key: string]: string | undefined } | undefined;
             image:
             | string
             | awsx.ecr.Image['imageUri']
@@ -81,6 +81,11 @@ function createDeployment(
             };
         }) => {
             container.image = $interpolate`${image.imageName}`;
+
+            container.env = container.env ?? {};
+            container.env['AWS_ACCESS_KEY_ID'] = process.env.AWS_ACCESS_KEY_ID;
+            container.env['AWS_SECRET_ACCESS_KEY'] =
+                process.env.AWS_SECRET_ACCESS_KEY;
         },
     );
 
