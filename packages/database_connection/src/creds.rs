@@ -9,6 +9,8 @@ pub enum GetDbCredsError {
 }
 
 pub async fn get_db_creds() -> Result<Credentials, GetDbCredsError> {
+    log::trace!("get_db_creds");
+
     let env_db_host = std::env::var("DB_HOST").ok();
     let env_db_name = std::env::var("DB_NAME").ok();
     let env_db_user = std::env::var("DB_USER").ok();
@@ -16,6 +18,7 @@ pub async fn get_db_creds() -> Result<Credentials, GetDbCredsError> {
 
     Ok(
         if env_db_host.is_some() || env_db_name.is_some() || env_db_user.is_some() {
+            log::debug!("get_db_creds: Using env var values host={env_db_host:?}");
             Credentials::new(
                 env_db_host.ok_or(GetDbCredsError::InvalidConnectionOptions)?,
                 env_db_name.ok_or(GetDbCredsError::InvalidConnectionOptions)?,
@@ -26,6 +29,8 @@ pub async fn get_db_creds() -> Result<Credentials, GetDbCredsError> {
             use aws_config::{BehaviorVersion, Region};
             use aws_sdk_ssm::Client;
             use std::collections::HashMap;
+
+            log::debug!("get_db_creds: Fetching creds from aws ssm");
 
             let config = aws_config::defaults(BehaviorVersion::latest())
                 .region(Region::new("us-east-1"))
@@ -72,6 +77,18 @@ pub async fn get_db_creds() -> Result<Credentials, GetDbCredsError> {
                 })
                 .collect();
 
+            let host = params
+                .get(ssm_db_host_param_name)
+                .cloned()
+                .expect("No hostname");
+            let name = params
+                .get(ssm_db_name_param_name)
+                .cloned()
+                .expect("No db_name");
+            let user = params
+                .get(ssm_db_user_param_name)
+                .cloned()
+                .expect("No db_user");
             let password = params
                 .get(ssm_db_password_param_name)
                 .cloned()
@@ -83,21 +100,9 @@ pub async fn get_db_creds() -> Result<Credentials, GetDbCredsError> {
                 Some(password)
             };
 
-            Credentials::new(
-                params
-                    .get(ssm_db_host_param_name)
-                    .cloned()
-                    .expect("No hostname"),
-                params
-                    .get(ssm_db_name_param_name)
-                    .cloned()
-                    .expect("No db_name"),
-                params
-                    .get(ssm_db_user_param_name)
-                    .cloned()
-                    .expect("No db_user"),
-                password,
-            )
+            log::debug!("get_db_creds: Fetching creds from aws ssm host={host}");
+
+            Credentials::new(host, name, user, password)
         },
     )
 }
