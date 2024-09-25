@@ -92,7 +92,7 @@ actix-ws = "0.3.0"
 arrayvec = "0.7.6"
 async-once-cell = "0.5.3"
 async-recursion = "1.1.1"
-async-trait = "0.1.82"
+async-trait = "0.1.83"
 atomic_float = "1.1.0"
 audiopus = "0.2.0"
 audiotags = { git = "https://github.com/BSteffaniak/audiotags.git", branch = "master-shallow" }
