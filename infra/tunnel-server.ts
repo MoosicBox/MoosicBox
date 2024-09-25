@@ -3,34 +3,51 @@ import { parse } from 'yaml';
 import { clusterProvider } from './cluster';
 import { Input, Output, Resource } from '@pulumi/pulumi';
 
-function createEcrRepo() {
-    return new aws.ecr.Repository('moosicbox-tunnel-server', {
-        forceDelete: true,
-    });
+async function createRepo() {
+    return await digitalocean.getContainerRegistry({ name: 'moosicbox' });
 }
+const repo = await createRepo();
 
-type AuthToken = { userName: Output<string>; password: Output<string> };
+const imageName = $interpolate`${repo.endpoint}/tunnel-server`;
+const creds = new digitalocean.ContainerRegistryDockerCredentials(
+    'moosicbox-creds',
+    {
+        registryName: repo.name,
+        write: true,
+    },
+);
 
-function createImage(repo: aws.ecr.Repository, authToken: AuthToken) {
+const registryInfo = creds.dockerCredentials.apply((authJson) => {
+    // We are given a Docker creds file; parse it to find the temp username/password.
+    const auths = JSON.parse(authJson);
+    const authToken = auths['auths'][repo.serverUrl]['auth'];
+    const decoded = Buffer.from(authToken, 'base64').toString();
+    const [username, password] = decoded.split(':');
+    if (!password || !username) {
+        throw new Error('Invalid credentials');
+    }
+    return {
+        server: repo.serverUrl,
+        username: username,
+        password: password,
+    };
+});
+
+function createImage() {
     const context = `../..`;
     return new docker.Image('tunnel-server', {
-        imageName: $interpolate`${repo.repositoryUrl}`,
+        imageName,
         build: {
             platform: 'linux/amd64',
             context: context,
             dockerfile: `${context}/packages/tunnel_server/TunnelServer.Dockerfile`,
         },
-        registry: {
-            server: repo.repositoryUrl,
-            username: authToken.userName,
-            password: authToken.password,
-        },
+        registry: registryInfo,
     });
 }
 
 function createDeployment(
     image: docker.Image,
-    authToken: AuthToken,
     dependsOn: Input<Input<Resource>[]>,
 ) {
     let specYaml = fs.readFileSync(
@@ -63,11 +80,7 @@ function createDeployment(
                 name: Output<string>;
             };
         }) => {
-            container.image = {
-                name: $interpolate`${image.imageName}`,
-                username: $interpolate`${authToken.userName}`,
-                password: $interpolate`${authToken.password}`,
-            };
+            container.image = $interpolate`${image.imageName}`;
         },
     );
 
@@ -96,12 +109,8 @@ function createService(dependsOn: Input<Input<Resource>[]>) {
     });
 }
 
-const repo = createEcrRepo();
-const authToken = aws.ecr.getAuthorizationTokenOutput({
-    registryId: repo.registryId,
-});
-const image = createImage(repo, authToken);
-const tunnelServerDeployment = createDeployment(image, authToken, []);
+const image = createImage();
+const tunnelServerDeployment = createDeployment(image, []);
 // const tunnelServerService = createService([]);
 
 export const outputs = {
