@@ -74,10 +74,10 @@ function createIngress(dependsOn: Input<Input<Resource>[]>) {
 
     delete specJson.metadata.annotations['cert-manager.io/issuer'];
 
-    return new kubernetes.networking.v1.Ingress('tunnel-server', specJson, {
-        provider: clusterProvider,
-        dependsOn,
-    });
+    return kubernetes.yaml.parse(
+        { objs: [specJson] },
+        { provider: clusterProvider, dependsOn },
+    )[0];
 }
 
 function createIssuer(dependsOn: Input<Input<Resource>[]>) {
