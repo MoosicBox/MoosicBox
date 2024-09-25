@@ -111,9 +111,9 @@ function createService(dependsOn: Input<Input<Resource>[]>) {
 
 const image = createImage();
 const tunnelServerDeployment = createDeployment(image, []);
-// const tunnelServerService = createService([]);
+const tunnelServerService = createService([]);
 
 export const outputs = {
-    // serviceId: tunnelServerService.id,
+    serviceId: tunnelServerService.id,
     availableReplicas: tunnelServerDeployment.status.availableReplicas,
 };
