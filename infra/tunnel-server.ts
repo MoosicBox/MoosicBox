@@ -2,36 +2,9 @@ import fs from 'node:fs';
 import { parse } from 'yaml';
 import { clusterProvider } from './cluster';
 import { Input, Output, Resource } from '@pulumi/pulumi';
-
-async function createRepo() {
-    return await digitalocean.getContainerRegistry({ name: 'moosicbox' });
-}
-const repo = await createRepo();
+import { registryAuth, repo } from './registry';
 
 const imageName = $interpolate`${repo.endpoint}/tunnel-server`;
-const creds = new digitalocean.ContainerRegistryDockerCredentials(
-    'moosicbox-creds',
-    {
-        registryName: repo.name,
-        write: true,
-    },
-);
-
-const registryInfo = creds.dockerCredentials.apply((authJson) => {
-    // We are given a Docker creds file; parse it to find the temp username/password.
-    const auths = JSON.parse(authJson);
-    const authToken = auths['auths'][repo.serverUrl]['auth'];
-    const decoded = Buffer.from(authToken, 'base64').toString();
-    const [username, password] = decoded.split(':');
-    if (!password || !username) {
-        throw new Error('Invalid credentials');
-    }
-    return {
-        server: repo.serverUrl,
-        username: username,
-        password: password,
-    };
-});
 
 function createImage() {
     const context = `../..`;
@@ -42,7 +15,7 @@ function createImage() {
             context: context,
             dockerfile: `${context}/packages/tunnel_server/TunnelServer.Dockerfile`,
         },
-        registry: registryInfo,
+        registry: registryAuth,
     });
 }
 
@@ -66,38 +39,33 @@ function createDeployment(
     );
     const specJson = parse(specYaml);
 
-    const containers = specJson.spec.template.spec.containers;
+    type Container = {
+        ports: { hostPort: number }[];
+        volumeMounts: unknown[] | undefined;
+        env: Record<string, string>[] | undefined;
+        image: string | Output<string>;
+    };
 
-    containers.forEach(
-        (container: {
-            env: { name: string; value: string }[] | undefined;
-            image:
-            | string
-            | awsx.ecr.Image['imageUri']
-            | {
-                username: Output<string>;
-                password: Output<string>;
-                name: Output<string>;
-            };
-        }) => {
-            container.image = $interpolate`${image.imageName}`;
+    const containers: Container[] = specJson.spec.template.spec.containers;
 
-            if (
-                process.env.AWS_ACCESS_KEY_ID &&
-                process.env.AWS_SECRET_ACCESS_KEY
-            ) {
-                container.env = container.env ?? [];
-                container.env.push({
-                    name: 'AWS_ACCESS_KEY_ID',
-                    value: process.env.AWS_ACCESS_KEY_ID,
-                });
-                container.env.push({
-                    name: 'AWS_SECRET_ACCESS_KEY',
-                    value: process.env.AWS_SECRET_ACCESS_KEY,
-                });
-            }
-        },
-    );
+    containers.forEach((container) => {
+        container.image = $interpolate`${image.imageName}`;
+
+        if (
+            process.env.AWS_ACCESS_KEY_ID &&
+            process.env.AWS_SECRET_ACCESS_KEY
+        ) {
+            container.env = container.env ?? [];
+            container.env.push({
+                name: 'AWS_ACCESS_KEY_ID',
+                value: process.env.AWS_ACCESS_KEY_ID,
+            });
+            container.env.push({
+                name: 'AWS_SECRET_ACCESS_KEY',
+                value: process.env.AWS_SECRET_ACCESS_KEY,
+            });
+        }
+    });
 
     return new kubernetes.apps.v1.Deployment('tunnel-server', specJson, {
         provider: clusterProvider,
