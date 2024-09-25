@@ -177,7 +177,7 @@ export const image = createImage();
 export const loadBalancer = createLb(image, []);
 // export const certificate = createCertificate([]);
 // export const issuer = createIssuer([]);
-export const ingress = createIngress([loadBalancer]);
-export const nodePort = createNodePort([loadBalancer]);
+// export const ingress = createIngress([loadBalancer]);
+// export const nodePort = createNodePort([loadBalancer]);
 
 export const outputs = {};
