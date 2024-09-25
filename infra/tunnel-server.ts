@@ -15,6 +15,9 @@ function createImage() {
             args: {
                 BUILDKIT_INLINE_CACHE: '1',
             },
+            cacheFrom: {
+                images: [$interpolate`${imageName}:cache-base`],
+            },
             platform: 'linux/amd64',
             context: context,
             dockerfile: `${context}/packages/tunnel_server/TunnelServer.Dockerfile`,
