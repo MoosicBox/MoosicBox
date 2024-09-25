@@ -83,10 +83,10 @@ function createIngress(dependsOn: Input<Input<Resource>[]>) {
     delete specJson.metadata.annotations['cert-manager.io/issuer'];
     specJson.metadata.annotations['pulumi.com/skipAwait'] = 'true';
 
-    return kubernetes.yaml.parse(
-        { objs: [specJson] },
-        { provider: clusterProvider, dependsOn },
-    )[0];
+    return new kubernetes.networking.v1.Ingress('load-balancer', specJson, {
+        provider: clusterProvider,
+        dependsOn,
+    });
 }
 
 function createIssuer(dependsOn: Input<Input<Resource>[]>) {
