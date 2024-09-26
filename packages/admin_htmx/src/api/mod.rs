@@ -11,23 +11,33 @@ use moosicbox_database::{
 };
 use serde::Deserialize;
 
-mod info;
-mod profiles;
+pub mod info;
+pub mod profiles;
 #[cfg(feature = "qobuz")]
-mod qobuz;
-mod scan;
+pub mod qobuz;
+#[cfg(feature = "scan")]
+pub mod scan;
 #[cfg(feature = "tidal")]
-mod tidal;
+pub mod tidal;
 pub(crate) mod util;
 
+#[allow(clippy::let_and_return)]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
     scope: Scope<T>,
 ) -> Scope<T> {
-    info::bind_services(scan::bind_services(tidal::bind_services(
-        qobuz::bind_services(profiles::bind_services(scope.service(index_endpoint))),
-    )))
+    let scope = scope.service(index_endpoint);
+    let scope = info::bind_services(scope);
+    let scope = profiles::bind_services(scope);
+    #[cfg(feature = "scan")]
+    let scope = scan::bind_services(scope);
+    #[cfg(feature = "tidal")]
+    let scope = tidal::bind_services(scope);
+    #[cfg(feature = "qobuz")]
+    let scope = qobuz::bind_services(scope);
+
+    scope
 }
 
 #[derive(Deserialize)]
@@ -122,11 +132,38 @@ pub async fn index_endpoint(
     })
 }
 
-async fn profile_info(
-    config_db: &ConfigDatabase,
-    library_db: &LibraryDatabase,
-    show_scan: bool,
+pub async fn profile_info(
+    #[allow(unused)] config_db: &ConfigDatabase,
+    #[allow(unused)] library_db: &LibraryDatabase,
+    #[allow(unused)] show_scan: bool,
 ) -> Result<Markup, actix_web::Error> {
+    #[cfg(feature = "scan")]
+    let scan = html! {
+        hr;
+        h2 { "Scan" }
+        (scan::scan(library_db).await.map_err(ErrorInternalServerError)?)
+    };
+    #[cfg(not(feature = "scan"))]
+    let scan = html! {};
+
+    #[cfg(feature = "qobuz")]
+    let qobuz = html! {
+        hr;
+        h2 { "Qobuz" }
+        (qobuz::settings(library_db, show_scan).await.map_err(ErrorInternalServerError)?)
+    };
+    #[cfg(not(feature = "qobuz"))]
+    let qobuz = html! {};
+
+    #[cfg(feature = "tidal")]
+    let tidal = html! {
+        hr;
+        h2 { "Tidal" }
+        (tidal::settings(library_db, show_scan).await.map_err(ErrorInternalServerError)?)
+    };
+    #[cfg(not(feature = "tidal"))]
+    let tidal = html! {};
+
     Ok(html! {
         h2 { "Server Info" }
         (info::info(config_db).await.map_err(ErrorInternalServerError)?)
@@ -140,18 +177,8 @@ async fn profile_info(
             (profiles::profiles(config_db).await.map_err(ErrorInternalServerError)?)
         }
         (profiles::new_profile_form(None, None, false))
-        hr;
-        h2 { "Scan" }
-        (scan::scan(library_db).await.map_err(ErrorInternalServerError)?)
-        (if cfg!(feature = "tidal") { html! {
-            hr;
-            h2 { "Tidal" }
-            (tidal::settings(library_db, show_scan).await.map_err(ErrorInternalServerError)?)
-        } } else { html!{} })
-        (if cfg!(feature = "qobuz") { html! {
-            hr;
-            h2 { "Qobuz" }
-            (qobuz::settings(library_db, show_scan).await.map_err(ErrorInternalServerError)?)
-        } } else { html!{} })
+        (scan)
+        (tidal)
+        (qobuz)
     })
 }
