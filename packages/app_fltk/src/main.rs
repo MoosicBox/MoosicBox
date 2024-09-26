@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use fltk::{
     app, enums,
     frame::{self, Frame},
@@ -131,10 +133,30 @@ fn draw_element(element: &Element, mut context: Context) -> Result<(), FltkError
             if let Some(source) = source {
                 let mut frame = Frame::default_fill();
 
-                let mut image = SharedImage::load(format!("../MoosicBoxUI/public{source}"))?;
-                image.scale(36, 36, true, true);
+                if let Ok(manifest_path) = std::env::var("CARGO_MANIFEST_DIR") {
+                    if let Ok(path) = std::path::PathBuf::from_str(&manifest_path) {
+                        let source = source
+                            .chars()
+                            .skip_while(|x| *x == '/' || *x == '\\')
+                            .collect::<String>();
 
-                frame.set_image(Some(image));
+                        if let Some(path) = path
+                            .parent()
+                            .and_then(|x| x.parent())
+                            .and_then(|x| x.parent())
+                            .map(|x| x.join("MoosicBoxUI").join("public").join(source))
+                        {
+                            if let Ok(path) = path.canonicalize() {
+                                if path.is_file() {
+                                    let mut image = SharedImage::load(path)?;
+                                    image.scale(36, 36, true, true);
+
+                                    frame.set_image(Some(image));
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
         Element::Anchor { element } => {
