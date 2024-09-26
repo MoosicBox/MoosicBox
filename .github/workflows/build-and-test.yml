@@ -31,6 +31,19 @@ jobs:
                       path: packages/admin_htmx
                       os: ubuntu-latest
 
+                    - name: app_fltk-ubuntu
+                      path: packages/app_fltk
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get update && sudo apt-get install libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libpango1.0-dev libgl1-mesa-dev libglu1-mesa-dev
+
+                    - name: app_fltk-macos
+                      path: packages/app_fltk
+                      os: macos-latest
+
+                    - name: app_fltk-windows
+                      path: packages/app_fltk
+                      os: windows-latest
+
                     - name: assert
                       path: packages/assert
                       os: ubuntu-latest

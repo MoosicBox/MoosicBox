@@ -1,0 +1,24 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["gui"]
+description = "MoosicBox App fltk package"
+edition     = "2021"
+keywords    = ["app", "desktop", "gui", "linux", "macos", "windows"]
+license     = "MPL-2.0"
+name        = "moosicbox_app_fltk"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
+
+[[bin]]
+name              = "moosicbox_app_fltk"
+path              = "src/main.rs"
+required-features = []
+
+[dependencies]
+moosicbox_env_utils = { path = "../env_utils", default-features = false }
+
+fltk = { workspace = true }
+
+[features]
+fail-on-warnings = []
