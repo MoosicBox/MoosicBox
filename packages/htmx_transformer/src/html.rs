@@ -86,6 +86,12 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
             "main" => crate::Element::Main {
                 elements: parse_top_children(node.children(), parser),
             },
+            "header" => crate::Element::Header {
+                elements: parse_top_children(node.children(), parser),
+            },
+            "footer" => crate::Element::Footer {
+                elements: parse_top_children(node.children(), parser),
+            },
             "aside" => crate::Element::Aside {
                 elements: parse_top_children(node.children(), parser),
             },
@@ -107,28 +113,28 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
             "a" => crate::Element::Anchor {
                 elements: parse_top_children(node.children(), parser),
             },
-            "h1" => crate::Element::Header {
-                size: 1,
+            "h1" => crate::Element::Heading {
+                size: crate::HeaderSize::H1,
                 elements: parse_top_children(node.children(), parser),
             },
-            "h2" => crate::Element::Header {
-                size: 2,
+            "h2" => crate::Element::Heading {
+                size: crate::HeaderSize::H2,
                 elements: parse_top_children(node.children(), parser),
             },
-            "h3" => crate::Element::Header {
-                size: 3,
+            "h3" => crate::Element::Heading {
+                size: crate::HeaderSize::H3,
                 elements: parse_top_children(node.children(), parser),
             },
-            "h4" => crate::Element::Header {
-                size: 4,
+            "h4" => crate::Element::Heading {
+                size: crate::HeaderSize::H4,
                 elements: parse_top_children(node.children(), parser),
             },
-            "h5" => crate::Element::Header {
-                size: 5,
+            "h5" => crate::Element::Heading {
+                size: crate::HeaderSize::H5,
                 elements: parse_top_children(node.children(), parser),
             },
-            "h6" => crate::Element::Header {
-                size: 6,
+            "h6" => crate::Element::Heading {
+                size: crate::HeaderSize::H6,
                 elements: parse_top_children(node.children(), parser),
             },
             _ => {
