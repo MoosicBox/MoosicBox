@@ -44,6 +44,10 @@ jobs:
                       path: packages/app_fltk
                       os: windows-latest
 
+                    - name: app_fltk_ui
+                      path: packages/app_fltk/ui
+                      os: ubuntu-latest
+
                     - name: assert
                       path: packages/assert
                       os: ubuntu-latest

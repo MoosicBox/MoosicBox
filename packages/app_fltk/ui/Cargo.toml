@@ -1,0 +1,19 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["gui", "web-programming"]
+description = "MoosicBox App UI package"
+edition     = "2021"
+keywords    = ["dom", "gui", "html", "htmx", "transformer", "web"]
+license     = "MPL-2.0"
+name        = "moosicbox_app_fltk_ui"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
+
+[dependencies]
+maud = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = []

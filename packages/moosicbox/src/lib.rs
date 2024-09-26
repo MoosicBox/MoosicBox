@@ -1,6 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 pub use moosicbox_admin_htmx as admin_htmx;
+pub use moosicbox_app_fltk_ui as app_fltk_ui;
 pub use moosicbox_assert as assert;
 pub use moosicbox_async_service as async_service;
 pub use moosicbox_audio_decoder as audio_decoder;

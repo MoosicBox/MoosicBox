@@ -3,6 +3,7 @@ members = [
     "packages/aconverter",
     "packages/admin_htmx",
     "packages/app_fltk",
+    "packages/app_fltk/ui",
     "packages/assert",
     "packages/async_service",
     "packages/audio_decoder",

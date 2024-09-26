@@ -3565,6 +3565,7 @@ name = "moosicbox"
 version = "0.1.0"
 dependencies = [
  "moosicbox_admin_htmx",
+ "moosicbox_app_fltk_ui",
  "moosicbox_assert",
  "moosicbox_async_service",
  "moosicbox_audio_decoder",
@@ -3657,6 +3658,13 @@ version = "0.1.0"
 dependencies = [
  "fltk",
  "moosicbox_env_utils",
+]
+
+[[package]]
+name = "moosicbox_app_fltk_ui"
+version = "0.1.0"
+dependencies = [
+ "maud",
 ]
 
 [[package]]
