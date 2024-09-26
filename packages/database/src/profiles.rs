@@ -140,6 +140,37 @@ pub mod api {
         Ok(profile)
     }
 
+    pub struct ProfileNameUnverified(pub String);
+
+    impl From<ProfileNameUnverified> for String {
+        fn from(value: ProfileNameUnverified) -> Self {
+            value.0
+        }
+    }
+
+    impl ProfileNameUnverified {
+        /// # Errors
+        ///
+        /// Will error if request is missing profile header and query param
+        pub fn from_request_inner(req: &HttpRequest) -> Result<Self, actix_web::Error> {
+            from_query(req)
+                .or_else(|_| from_header(req).map(std::borrow::ToOwned::to_owned))
+                .map(Self)
+        }
+    }
+
+    impl FromRequest for ProfileNameUnverified {
+        type Error = actix_web::Error;
+        type Future = Ready<Result<Self, actix_web::Error>>;
+
+        fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
+            match Self::from_request_inner(req) {
+                Ok(x) => ok(x),
+                Err(x) => err(x),
+            }
+        }
+    }
+
     pub struct ProfileName(pub String);
 
     impl From<ProfileName> for String {
@@ -151,13 +182,12 @@ pub mod api {
     impl ProfileName {
         /// # Errors
         ///
-        /// Will error if request is missing profile header and query param
+        /// Will error if request is missing profile header and query param or if the
+        /// profile doesn't exist
         pub fn from_request_inner(req: &HttpRequest) -> Result<Self, actix_web::Error> {
-            let profile =
-                from_query(req).or_else(|_| from_header(req).map(std::borrow::ToOwned::to_owned));
-
-            let profile = match profile {
+            let profile = match ProfileNameUnverified::from_request_inner(req) {
                 Ok(profile) => {
+                    let profile = profile.0;
                     if !PROFILES.names().iter().any(|x| x == &profile) {
                         return Err(ErrorBadRequest(format!(
                             "Profile '{profile}' does not exist"
