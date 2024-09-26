@@ -24,7 +24,7 @@ pub async fn handle_ws(
     mut msg_stream: actix_ws::MessageStream,
     client_id: String,
     sender: bool,
-    profile: String,
+    profile: Option<String>,
 ) -> Result<(), CommanderError> {
     log::info!("Connected");
 
@@ -99,7 +99,7 @@ pub async fn handle_ws(
                                 log::error!("Invalid TunnelWsResponse: {text}");
                             }
                         } else if let Err(err) = ws_server
-                            .ws_request(conn_id, &client_id, Some(profile.clone()), text)
+                            .ws_request(conn_id, &client_id, profile.clone(), text)
                             .await
                         {
                             log::error!(

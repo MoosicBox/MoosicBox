@@ -8,6 +8,7 @@ use actix_web::{HttpRequest, Result};
 use bytes::Bytes;
 use futures_util::StreamExt;
 use log::{debug, info};
+use moosicbox_database::profiles::api::ProfileNameUnverified;
 use moosicbox_tunnel::{
     Method, TunnelEncoding, TunnelHttpRequest, TunnelRequest, TunnelResponse, TunnelStream,
 };
@@ -47,8 +48,8 @@ pub struct AuthMagicTokenRequest {
 
 #[route("/auth/magic-token", method = "GET")]
 pub async fn auth_get_magic_token_endpoint(
-    req: HttpRequest,
     query: web::Query<AuthMagicTokenRequest>,
+    profile: Option<ProfileNameUnverified>,
 ) -> Result<HttpResponse> {
     let token = &query.magic_token;
     let token_hash = &hash_token(token);
@@ -61,10 +62,7 @@ pub async fn auth_get_magic_token_endpoint(
             json!({"magicToken": token}),
             None,
             None,
-            req.headers()
-                .get("moosicbox-profile")
-                .and_then(|x| x.to_str().ok())
-                .map(|x| x.to_string()),
+            profile.map(|x| x.0),
         )
         .await
     } else {
@@ -140,27 +138,30 @@ pub async fn auth_validate_signature_token_endpoint(_: SignatureAuthorized) -> R
 pub async fn track_endpoint(
     body: Option<Bytes>,
     req: HttpRequest,
+    profile: Option<ProfileNameUnverified>,
     _: SignatureAuthorized,
 ) -> Result<HttpResponse> {
-    proxy_request(body, req).await
+    proxy_request(body, req, profile.map(|x| x.0)).await
 }
 
 #[route("/files/artists/{artist_id}/{size}", method = "GET", method = "HEAD")]
 pub async fn artist_cover_endpoint(
     body: Option<Bytes>,
     req: HttpRequest,
+    profile: Option<ProfileNameUnverified>,
     _: SignatureAuthorized,
 ) -> Result<HttpResponse> {
-    proxy_request(body, req).await
+    proxy_request(body, req, profile.map(|x| x.0)).await
 }
 
 #[route("/files/albums/{album_id}/{size}", method = "GET", method = "HEAD")]
 pub async fn album_cover_endpoint(
     body: Option<Bytes>,
     req: HttpRequest,
+    profile: Option<ProfileNameUnverified>,
     _: SignatureAuthorized,
 ) -> Result<HttpResponse> {
-    proxy_request(body, req).await
+    proxy_request(body, req, profile.map(|x| x.0)).await
 }
 
 #[route(
@@ -175,9 +176,10 @@ pub async fn album_cover_endpoint(
 pub async fn tunnel_endpoint(
     body: Option<Bytes>,
     req: HttpRequest,
+    profile: Option<ProfileNameUnverified>,
     _: ClientHeaderAuthorized,
 ) -> Result<HttpResponse> {
-    proxy_request(body, req).await
+    proxy_request(body, req, profile.map(|x| x.0)).await
 }
 
 #[allow(dead_code)]
@@ -205,7 +207,11 @@ fn get_headers_for_request(req: &HttpRequest) -> Option<Value> {
     }
 }
 
-async fn proxy_request(body: Option<Bytes>, req: HttpRequest) -> Result<HttpResponse> {
+async fn proxy_request(
+    body: Option<Bytes>,
+    req: HttpRequest,
+    profile: Option<String>,
+) -> Result<HttpResponse> {
     let method = Method::from_str(&req.method().to_string().to_uppercase()).map_err(|e| {
         ErrorBadRequest(format!(
             "Failed to parse method: '{:?}': {e:?}",
@@ -228,19 +234,7 @@ async fn proxy_request(body: Option<Bytes>, req: HttpRequest) -> Result<HttpResp
 
     let headers = get_headers_for_request(&req);
 
-    handle_request(
-        &client_id,
-        &method,
-        path,
-        query,
-        body,
-        headers,
-        req.headers()
-            .get("moosicbox-profile")
-            .and_then(|x| x.to_str().ok())
-            .map(|x| x.to_string()),
-    )
-    .await
+    handle_request(&client_id, &method, path, query, body, headers, profile).await
 }
 
 async fn handle_request(
@@ -255,7 +249,7 @@ async fn handle_request(
     let request_id = thread_rng().gen::<usize>();
     let abort_token = CancellationToken::new();
 
-    debug!("Starting ws request for {request_id} method={method} path={path} query={query:?} headers={headers:?} (id {request_id})");
+    debug!("Starting ws request for {request_id} method={method} path={path} query={query:?} headers={headers:?} profile={profile:?} (id {request_id})");
 
     let (headers_rx, rx) = request(
         client_id,

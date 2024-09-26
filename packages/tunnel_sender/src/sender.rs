@@ -1060,6 +1060,8 @@ impl TunnelSender {
         path: String,
         query: Value,
         payload: Option<Value>,
+        headers: Option<Value>,
+        profile: Option<String>,
         encoding: TunnelEncoding,
     ) -> Result<(), TunnelRequestError> {
         let host = format!("http://127.0.0.1:{service_port}");
@@ -1086,19 +1088,26 @@ impl TunnelSender {
 
         let url = format!("{host}/{path}{query_string}");
 
-        self.proxy_request(&url, request_id, method, payload, encoding)
-            .await
+        self.proxy_request(
+            &url, request_id, method, payload, headers, profile, encoding,
+        )
+        .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn proxy_request(
         &self,
         url: &str,
         request_id: usize,
         method: Method,
         payload: Option<Value>,
+        headers: Option<Value>,
+        profile: Option<String>,
         encoding: TunnelEncoding,
     ) -> Result<(), TunnelRequestError> {
-        let response = self.http_request(url, method, payload, true).await?;
+        let response = self
+            .http_request(url, method, payload, headers, profile, true)
+            .await?;
 
         let headers = response
             .headers()
@@ -1122,6 +1131,8 @@ impl TunnelSender {
         url: &str,
         method: Method,
         payload: Option<Value>,
+        headers: Option<Value>,
+        profile: Option<String>,
         user_agent_header: bool,
     ) -> Result<reqwest::Response, reqwest::Error> {
         let client = reqwest::Client::new();
@@ -1135,6 +1146,16 @@ impl TunnelSender {
             Method::Delete => client.delete(url),
             Method::Options => client.request(reqwest::Method::OPTIONS, url),
         };
+
+        if let Some(headers) = headers {
+            for (key, value) in headers.as_object().unwrap().iter() {
+                builder = builder.header(key, value.as_str().unwrap());
+            }
+        }
+
+        if let Some(profile) = profile {
+            builder = builder.header("moosicbox-profile", profile);
+        }
 
         if user_agent_header {
             builder = builder.header("user-agent", "MOOSICBOX_TUNNEL");
@@ -1408,6 +1429,8 @@ impl TunnelSender {
                             path,
                             query,
                             payload,
+                            headers,
+                            profile,
                             encoding,
                         )
                         .await
@@ -1573,6 +1596,8 @@ impl TunnelSender {
                         path,
                         query,
                         payload,
+                        headers,
+                        profile,
                         encoding,
                     )
                     .await?;

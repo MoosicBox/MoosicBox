@@ -67,6 +67,7 @@ fn main() -> Result<(), std::io::Error> {
                     http::header::AUTHORIZATION,
                     http::header::ACCEPT,
                     http::header::CONTENT_TYPE,
+                    http::header::HeaderName::from_static("moosicbox-profile"),
                     http::header::HeaderName::from_static("hx-boosted"),
                     http::header::HeaderName::from_static("hx-current-url"),
                     http::header::HeaderName::from_static("hx-history-restore-request"),
@@ -75,6 +76,19 @@ fn main() -> Result<(), std::io::Error> {
                     http::header::HeaderName::from_static("hx-target"),
                     http::header::HeaderName::from_static("hx-trigger-name"),
                     http::header::HeaderName::from_static("hx-trigger"),
+                ])
+                .expose_headers(vec![
+                    http::header::HeaderName::from_static("hx-location"),
+                    http::header::HeaderName::from_static("hx-push-url"),
+                    http::header::HeaderName::from_static("hx-redirect"),
+                    http::header::HeaderName::from_static("hx-refresh"),
+                    http::header::HeaderName::from_static("hx-replace-url"),
+                    http::header::HeaderName::from_static("hx-reswap"),
+                    http::header::HeaderName::from_static("hx-retarget"),
+                    http::header::HeaderName::from_static("hx-reselect"),
+                    http::header::HeaderName::from_static("hx-trigger"),
+                    http::header::HeaderName::from_static("hx-trigger-after-settle"),
+                    http::header::HeaderName::from_static("hx-trigger-after-swap"),
                 ])
                 .supports_credentials()
                 .max_age(3600);
