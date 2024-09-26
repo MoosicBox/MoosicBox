@@ -45,7 +45,11 @@ fn draw_elements(elements: &[Element], context: Context) -> Result<(), FltkError
         LayoutDirection::Column => flex.column(),
     };
 
-    for element in elements {
+    for (i, element) in elements.iter().enumerate() {
+        if i == elements.len() - 1 {
+            draw_element(element, context)?;
+            break;
+        }
         draw_element(element, context.clone())?;
     }
 
