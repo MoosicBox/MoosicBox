@@ -316,6 +316,10 @@ jobs:
                       path: packages/files
                       os: ubuntu-latest
 
+                    - name: htmx_transformer
+                      path: packages/htmx_transformer
+                      os: ubuntu-latest
+
                     - name: image-bin
                       path: packages/image
                       os: ubuntu-latest

@@ -18,6 +18,7 @@ members = [
     "packages/downloader",
     "packages/env_utils",
     "packages/files",
+    "packages/htmx_transformer",
     "packages/image",
     "packages/json_utils",
     "packages/library",
@@ -213,6 +214,7 @@ tantivy = "0.22.0"
 test-log = "0.2.16"
 thiserror = "1.0.64"
 throttle = "0.1.0"
+tl = "0.7.8"
 tokio = { version = "1.40.0" }
 tokio-postgres = { version = "0.7.12", features = ["with-chrono-0_4"] }
 tokio-stream = "0.1.16"
