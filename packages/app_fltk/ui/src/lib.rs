@@ -25,15 +25,41 @@ pub fn sidebar_navigation() -> Markup {
 }
 
 #[must_use]
+pub fn player() -> Markup {
+    html! {
+        div {
+            ("player")
+        }
+    }
+}
+
+#[must_use]
+pub fn footer() -> Markup {
+    html! {
+        footer {
+            (player())
+        }
+    }
+}
+
+#[must_use]
+pub fn main() -> Markup {
+    html! {
+        main class="main-content" {
+            ("main")
+        }
+    }
+}
+
+#[must_use]
 pub fn home() -> Markup {
     html! {
         div id="root" class="dark" {
             section class="navigation-bar-and-main-content" {
                 (sidebar_navigation())
-                main class="main-content" {
-                    ("main")
-                }
+                (main())
             }
+            (footer())
         }
     }
 }

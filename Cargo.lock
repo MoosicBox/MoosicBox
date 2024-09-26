@@ -3657,7 +3657,11 @@ name = "moosicbox_app_fltk"
 version = "0.1.0"
 dependencies = [
  "fltk",
+ "log",
+ "moosicbox_app_fltk_ui",
  "moosicbox_env_utils",
+ "moosicbox_htmx_transformer",
+ "moosicbox_logging",
 ]
 
 [[package]]
