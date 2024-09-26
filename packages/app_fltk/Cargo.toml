@@ -21,4 +21,8 @@ moosicbox_env_utils = { path = "../env_utils", default-features = false }
 fltk = { workspace = true }
 
 [features]
+default = ["unsafe"]
+
 fail-on-warnings = []
+
+unsafe = []

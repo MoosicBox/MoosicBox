@@ -24,14 +24,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut framebuf: Vec<u8> = vec![0; (WIDTH * HEIGHT * 4) as usize];
     let mut world = World::new();
 
+    #[cfg(feature = "unsafe")]
     unsafe {
         draw::draw_rgba_nocopy(&mut frame, &framebuf);
     }
+    #[cfg(not(feature = "unsafe"))]
+    draw::draw_rgba(&mut frame, &framebuf)?;
 
     app::add_idle3(move |_| {
         world.update();
         world.draw(&mut framebuf);
-        // draw::draw_rgba(&mut frame, &framebuf).unwrap(); // A safe variant of draw_rgba_nocopy
+        #[cfg(not(feature = "unsafe"))]
+        draw::draw_rgba(&mut frame, &framebuf).unwrap();
         win.redraw();
         // sleeps are necessary when calling redraw in the event loop
         app::sleep(0.016);
