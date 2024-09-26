@@ -21,46 +21,52 @@ impl std::ops::Deref for ElementList {
 }
 
 #[derive(Clone, Debug)]
+pub struct ContainerElement {
+    pub elements: Vec<Element>,
+    pub direction: LayoutDirection,
+}
+
+#[derive(Clone, Debug)]
 pub enum Element {
     Raw {
         value: String,
     },
     Div {
-        elements: Vec<Element>,
+        element: ContainerElement,
     },
     Aside {
-        elements: Vec<Element>,
+        element: ContainerElement,
     },
     Main {
-        elements: Vec<Element>,
+        element: ContainerElement,
     },
     Header {
-        elements: Vec<Element>,
+        element: ContainerElement,
     },
     Footer {
-        elements: Vec<Element>,
+        element: ContainerElement,
     },
     Section {
-        elements: Vec<Element>,
+        element: ContainerElement,
     },
     Form {
-        elements: Vec<Element>,
+        element: ContainerElement,
     },
     Span {
-        elements: Vec<Element>,
+        element: ContainerElement,
     },
     Input(Input),
     Button {
-        elements: Vec<Element>,
+        element: ContainerElement,
     },
     Image {
         source: Option<String>,
     },
     Anchor {
-        elements: Vec<Element>,
+        element: ContainerElement,
     },
     Heading {
-        elements: Vec<Element>,
+        element: ContainerElement,
         size: HeaderSize,
     },
 }

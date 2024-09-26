@@ -6,7 +6,9 @@ use fltk::{
     prelude::*,
     window::Window,
 };
-use moosicbox_htmx_transformer::{Element, ElementList, HeaderSize};
+use moosicbox_htmx_transformer::{
+    ContainerElement, Element, ElementList, HeaderSize, LayoutDirection,
+};
 
 const WIDTH: i32 = 600;
 const HEIGHT: i32 = 400;
@@ -37,13 +39,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn draw_elements(elements: &[Element], context: Context) -> Result<(), FltkError> {
     log::debug!("draw_elements: elements={elements:?}");
 
-    let col = group::Flex::default_fill().row();
+    let flex = group::Flex::default_fill();
+    let flex = match context.direction {
+        LayoutDirection::Row => flex.row(),
+        LayoutDirection::Column => flex.column(),
+    };
 
     for element in elements {
         draw_element(element, context.clone())?;
     }
 
-    col.end();
+    flex.end();
 
     Ok(())
 }
@@ -51,11 +57,22 @@ fn draw_elements(elements: &[Element], context: Context) -> Result<(), FltkError
 #[derive(Clone)]
 struct Context {
     size: u16,
+    direction: LayoutDirection,
+}
+
+impl Context {
+    fn with_container(mut self, container: &ContainerElement) -> Context {
+        self.direction = container.direction;
+        self
+    }
 }
 
 impl Default for Context {
     fn default() -> Self {
-        Self { size: 12 }
+        Self {
+            size: 12,
+            direction: LayoutDirection::Column,
+        }
     }
 }
 
@@ -69,16 +86,43 @@ fn draw_element(element: &Element, mut context: Context) -> Result<(), FltkError
                 .with_label(value)
                 .with_align(enums::Align::Inside | enums::Align::Left);
         }
-        Element::Div { elements } => draw_elements(elements, context)?,
-        Element::Aside { elements } => draw_elements(elements, context)?,
-        Element::Header { elements } => draw_elements(elements, context)?,
-        Element::Footer { elements } => draw_elements(elements, context)?,
-        Element::Main { elements } => draw_elements(elements, context)?,
-        Element::Section { elements } => draw_elements(elements, context)?,
-        Element::Form { elements } => draw_elements(elements, context)?,
-        Element::Span { elements } => draw_elements(elements, context)?,
+        Element::Div { element } => {
+            context = context.with_container(element);
+            draw_elements(&element.elements, context)?;
+        }
+        Element::Aside { element } => {
+            context = context.with_container(element);
+            draw_elements(&element.elements, context)?;
+        }
+        Element::Header { element } => {
+            context = context.with_container(element);
+            draw_elements(&element.elements, context)?;
+        }
+        Element::Footer { element } => {
+            context = context.with_container(element);
+            draw_elements(&element.elements, context)?;
+        }
+        Element::Main { element } => {
+            context = context.with_container(element);
+            draw_elements(&element.elements, context)?;
+        }
+        Element::Section { element } => {
+            context = context.with_container(element);
+            draw_elements(&element.elements, context)?;
+        }
+        Element::Form { element } => {
+            context = context.with_container(element);
+            draw_elements(&element.elements, context)?;
+        }
+        Element::Span { element } => {
+            context = context.with_container(element);
+            draw_elements(&element.elements, context)?;
+        }
         Element::Input(_) => {}
-        Element::Button { elements } => draw_elements(elements, context)?,
+        Element::Button { element } => {
+            context = context.with_container(element);
+            draw_elements(&element.elements, context)?;
+        }
         Element::Image { source } => {
             if let Some(source) = source {
                 let mut frame = Frame::default_fill();
@@ -89,8 +133,12 @@ fn draw_element(element: &Element, mut context: Context) -> Result<(), FltkError
                 frame.set_image(Some(image));
             }
         }
-        Element::Anchor { elements } => draw_elements(elements, context)?,
-        Element::Heading { elements, size } => {
+        Element::Anchor { element } => {
+            context = context.with_container(element);
+            draw_elements(&element.elements, context)?;
+        }
+        Element::Heading { element, size } => {
+            context = context.with_container(element);
             context.size = match size {
                 HeaderSize::H1 => 36,
                 HeaderSize::H2 => 30,
@@ -99,7 +147,7 @@ fn draw_element(element: &Element, mut context: Context) -> Result<(), FltkError
                 HeaderSize::H5 => 16,
                 HeaderSize::H6 => 12,
             };
-            draw_elements(elements, context)?
+            draw_elements(&element.elements, context)?;
         }
     };
 

@@ -2,6 +2,8 @@ use std::borrow::Cow;
 
 use tl::{Children, HTMLTag, Node, NodeHandle, ParseError, Parser, ParserOptions};
 
+use crate::LayoutDirection;
+
 impl TryFrom<String> for crate::ElementList {
     type Error = ParseError;
 
@@ -64,6 +66,14 @@ fn get_tag_attr_value_lower(tag: &HTMLTag, name: &str) -> Option<String> {
     get_tag_attr_value(tag, name).map(|x| x.to_lowercase())
 }
 
+fn get_direction(tag: &HTMLTag) -> LayoutDirection {
+    if let Some("row") = get_tag_attr_value_lower(tag, "sx-dir").as_deref() {
+        LayoutDirection::Row
+    } else {
+        LayoutDirection::Column
+    }
+}
+
 fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
     Some(match node {
         Node::Tag(tag) => match tag.name().as_utf8_str().to_lowercase().as_str() {
@@ -84,58 +94,103 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 }
             },
             "main" => crate::Element::Main {
-                elements: parse_top_children(node.children(), parser),
+                element: crate::ContainerElement {
+                    direction: get_direction(tag),
+                    elements: parse_top_children(node.children(), parser),
+                },
             },
             "header" => crate::Element::Header {
-                elements: parse_top_children(node.children(), parser),
+                element: crate::ContainerElement {
+                    direction: get_direction(tag),
+                    elements: parse_top_children(node.children(), parser),
+                },
             },
             "footer" => crate::Element::Footer {
-                elements: parse_top_children(node.children(), parser),
+                element: crate::ContainerElement {
+                    direction: get_direction(tag),
+                    elements: parse_top_children(node.children(), parser),
+                },
             },
             "aside" => crate::Element::Aside {
-                elements: parse_top_children(node.children(), parser),
+                element: crate::ContainerElement {
+                    direction: get_direction(tag),
+                    elements: parse_top_children(node.children(), parser),
+                },
             },
             "div" => crate::Element::Div {
-                elements: parse_top_children(node.children(), parser),
+                element: crate::ContainerElement {
+                    direction: get_direction(tag),
+                    elements: parse_top_children(node.children(), parser),
+                },
             },
             "section" => crate::Element::Section {
-                elements: parse_top_children(node.children(), parser),
+                element: crate::ContainerElement {
+                    direction: get_direction(tag),
+                    elements: parse_top_children(node.children(), parser),
+                },
             },
             "form" => crate::Element::Form {
-                elements: parse_top_children(node.children(), parser),
+                element: crate::ContainerElement {
+                    direction: get_direction(tag),
+                    elements: parse_top_children(node.children(), parser),
+                },
             },
             "button" => crate::Element::Button {
-                elements: parse_top_children(node.children(), parser),
+                element: crate::ContainerElement {
+                    direction: get_direction(tag),
+                    elements: parse_top_children(node.children(), parser),
+                },
             },
             "img" => crate::Element::Image {
                 source: get_tag_attr_value_owned(tag, "src"),
             },
             "a" => crate::Element::Anchor {
-                elements: parse_top_children(node.children(), parser),
+                element: crate::ContainerElement {
+                    direction: get_direction(tag),
+                    elements: parse_top_children(node.children(), parser),
+                },
             },
             "h1" => crate::Element::Heading {
                 size: crate::HeaderSize::H1,
-                elements: parse_top_children(node.children(), parser),
+                element: crate::ContainerElement {
+                    direction: get_direction(tag),
+                    elements: parse_top_children(node.children(), parser),
+                },
             },
             "h2" => crate::Element::Heading {
                 size: crate::HeaderSize::H2,
-                elements: parse_top_children(node.children(), parser),
+                element: crate::ContainerElement {
+                    direction: get_direction(tag),
+                    elements: parse_top_children(node.children(), parser),
+                },
             },
             "h3" => crate::Element::Heading {
                 size: crate::HeaderSize::H3,
-                elements: parse_top_children(node.children(), parser),
+                element: crate::ContainerElement {
+                    direction: get_direction(tag),
+                    elements: parse_top_children(node.children(), parser),
+                },
             },
             "h4" => crate::Element::Heading {
                 size: crate::HeaderSize::H4,
-                elements: parse_top_children(node.children(), parser),
+                element: crate::ContainerElement {
+                    direction: get_direction(tag),
+                    elements: parse_top_children(node.children(), parser),
+                },
             },
             "h5" => crate::Element::Heading {
                 size: crate::HeaderSize::H5,
-                elements: parse_top_children(node.children(), parser),
+                element: crate::ContainerElement {
+                    direction: get_direction(tag),
+                    elements: parse_top_children(node.children(), parser),
+                },
             },
             "h6" => crate::Element::Heading {
                 size: crate::HeaderSize::H6,
-                elements: parse_top_children(node.children(), parser),
+                element: crate::ContainerElement {
+                    direction: get_direction(tag),
+                    elements: parse_top_children(node.children(), parser),
+                },
             },
             _ => {
                 return None;

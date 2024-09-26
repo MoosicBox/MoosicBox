@@ -9,7 +9,7 @@ pub fn sidebar_navigation() -> Markup {
         aside {
             div class="navigation-bar" {
                 div class="navigation-bar-header" {
-                    a href="/" {
+                    a href="/" sx-dir="row" {
                         img
                             class="navigation-bar-header-home-link-logo-icon"
                             src="/img/icon128.png";
@@ -55,7 +55,7 @@ pub fn main() -> Markup {
 pub fn home() -> Markup {
     html! {
         div id="root" class="dark" {
-            section class="navigation-bar-and-main-content" {
+            section class="navigation-bar-and-main-content" sx-dir="row" {
                 (sidebar_navigation())
                 (main())
             }
