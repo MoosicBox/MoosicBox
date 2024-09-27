@@ -18,11 +18,14 @@ use moosicbox_htmx_transformer::{
     ContainerElement, Element, ElementList, HeaderSize, LayoutDirection, Number,
 };
 
+type RouteFunc = Arc<Box<dyn Fn() -> ElementList>>;
+
 #[derive(Clone)]
 pub struct Renderer {
     app: App,
     window: DoubleWindow,
     elements: Arc<Mutex<ElementList>>,
+    routes: Vec<(String, RouteFunc)>,
 }
 
 impl Renderer {
@@ -32,10 +35,13 @@ impl Renderer {
             .with_size(width as i32, height as i32)
             .with_label("MoosicBox");
 
+        app::set_background_color(24, 26, 27);
+
         let renderer = Self {
             app,
             window: window.clone(),
             elements: Arc::new(Mutex::new(ElementList::default())),
+            routes: vec![],
         };
 
         window.handle({
@@ -61,6 +67,25 @@ impl Renderer {
         window.show();
 
         Ok(renderer)
+    }
+
+    pub fn with_route(mut self, route: &str, handler: impl Fn() -> ElementList + 'static) -> Self {
+        self.routes
+            .push((route.to_string(), Arc::new(Box::new(handler))));
+        self
+    }
+
+    pub fn navigate(&mut self, path: &str) -> Result<(), FltkError> {
+        if let Some(handler) = self
+            .routes
+            .iter()
+            .find(|(route, _)| route == path)
+            .map(|(_, handler)| handler)
+        {
+            self.render(handler())?;
+        }
+
+        Ok(())
     }
 
     fn perform_render(&mut self) -> Result<(), FltkError> {
