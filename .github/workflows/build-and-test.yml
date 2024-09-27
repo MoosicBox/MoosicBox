@@ -64,161 +64,30 @@ jobs:
                       path: packages/audio_encoder
                       os: ubuntu-latest
 
-                    - name: audio_encoder-aac
-                      path: packages/audio_encoder
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: aac
-
-                    - name: audio_encoder-flac
-                      path: packages/audio_encoder
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: flac
-
-                    - name: audio_encoder-mp3
-                      path: packages/audio_encoder
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: mp3
-
-                    - name: audio_encoder-opus
-                      path: packages/audio_encoder
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: opus
-
                     - name: audio_output
                       path: packages/audio_output
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev
 
-                    - name: audio_output-no-default-features-api
-                      path: packages/audio_output
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev
-                      cargo: --no-default-features
-                      features: api
-
-                    - name: audio_output-cpal-api
-                      path: packages/audio_output
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
-                      cargo: --no-default-features
-                      features: api,cpal
-
-                    - name: audio_output-aac
-                      path: packages/audio_output
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: aac
-
-                    - name: audio_output-flac
-                      path: packages/audio_output
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: flac
-
-                    - name: audio_output-mp3
-                      path: packages/audio_output
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: mp3
-
-                    - name: audio_output-opus
-                      path: packages/audio_output
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: opus
-
-                    - name: audio_output-cpal-windows
+                    - name: audio_output-windows
                       path: packages/audio_output
                       os: windows-latest
-                      cargo: --no-default-features
-                      features: cpal
 
-                    - name: audio_output-all-windows
-                      path: packages/audio_output
-                      os: windows-latest
-                      cargo: --no-default-features
-                      features: default-windows
-
-                    - name: audio_output-cpal-ubuntu
-                      path: packages/audio_output
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
-                      cargo: --no-default-features
-                      features: cpal
-
-                    - name: audio_output-pulseaudio-standard-ubuntu
-                      path: packages/audio_output
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio
-                      cargo: --no-default-features
-                      features: pulseaudio-standard
-
-                    - name: audio_output-pulseaudio-simple-ubuntu
-                      path: packages/audio_output
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio
-                      cargo: --no-default-features
-                      features: pulseaudio-simple
-
-                    - name: audio_output-all-ubuntu
-                      path: packages/audio_output
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev
-
-                    - name: audio_output-cpal-macos
+                    - name: audio_output-macos
                       path: packages/audio_output
                       os: macos-latest
-                      cargo: --no-default-features
-                      features: cpal
-
-                    - name: audio_output-pulseaudio-standard-macos
-                      path: packages/audio_output
-                      os: macos-latest
-                      dependencies: brew install pulseaudio
-                      cargo: --no-default-features
-                      features: pulseaudio-standard
-
-                    - name: audio_output-pulseaudio-simple-macos
-                      path: packages/audio_output
-                      os: macos-latest
-                      dependencies: brew install pulseaudio
-                      cargo: --no-default-features
-                      features: pulseaudio-simple
-
-                    - name: audio_output-all-macos
-                      path: packages/audio_output
-                      os: macos-latest
-                      dependencies: brew install pulseaudio
 
                     - name: audio_zone
                       path: packages/audio_zone
                       os: ubuntu-latest
 
-                    - name: audio_zone-no-default-features-api
-                      path: packages/audio_zone
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: api
-
-                    - name: auth-api
+                    - name: auth
                       path: packages/auth
                       os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: api
 
-                    - name: channel_utils-default
+                    - name: channel_utils
                       path: packages/channel_utils
                       os: ubuntu-latest
-
-                    - name: channel_utils-futures-channel
-                      path: packages/channel_utils
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: futures-channel
 
                     - name: clippier
                       path: packages/clippier
@@ -236,85 +105,13 @@ jobs:
                       path: packages/database
                       os: ubuntu-latest
 
-                    - name: database-mysql-sqlx
-                      path: packages/database
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: mysql-sqlx
-
-                    - name: database-postgres-raw
-                      path: packages/database
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: postgres-raw
-
-                    - name: database-postgres-sqlx
-                      path: packages/database
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: postgres-sqlx
-
-                    - name: database-sqlite-rusqlite
-                      path: packages/database
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: sqlite-rusqlite
-
-                    - name: database-sqlite-sqlx
-                      path: packages/database
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: sqlite-sqlx
-
                     - name: database_connection
                       path: packages/database_connection
                       os: ubuntu-latest
 
-                    - name: database_connection-mysql-sqlx
-                      path: packages/database_connection
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: mysql-sqlx
-
-                    - name: database_connection-postgres-raw
-                      path: packages/database_connection
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: postgres-raw
-
-                    - name: database_connection-postgres-raw-native-tls
-                      path: packages/database_connection
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: postgres-raw,postgres-native-tls
-
-                    - name: database_connection-postgres-raw-openssl
-                      path: packages/database_connection
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: postgres-raw,postgres-openssl
-
-                    - name: database_connection-postgres-sqlx
-                      path: packages/database_connection
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: postgres-sqlx
-
-                    - name: database_connection-sqlite-rusqlite
-                      path: packages/database_connection
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: sqlite-rusqlite
-
                     - name: downloader
                       path: packages/downloader
                       os: ubuntu-latest
-
-                    - name: downloader-api
-                      path: packages/downloader
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: api
 
                     - name: env_utils
                       path: packages/env_utils
@@ -331,25 +128,17 @@ jobs:
                     - name: image-bin
                       path: packages/image
                       os: ubuntu-latest
-                      cargo: --no-default-features --bin image_helper
+                      cargo: --bin image_helper
                       features: build-binary
 
                     - name: image
                       path: packages/image
                       os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: image
-
-                    - name: image-libvips
-                      path: packages/image
                       dependencies: sudo apt-get update && sudo apt-get install libvips-dev
-                      os: ubuntu-latest
 
                     - name: image-windows
                       path: packages/image
                       os: windows-latest
-                      cargo: --no-default-features
-                      features: image
 
                     - name: json_utils
                       path: packages/json_utils
@@ -358,12 +147,6 @@ jobs:
                     - name: library
                       path: packages/library
                       os: ubuntu-latest
-
-                    - name: library-api
-                      path: packages/library
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: api
 
                     - name: load_balancer
                       path: packages/load_balancer
@@ -398,12 +181,6 @@ jobs:
                       path: packages/openport
                       os: ubuntu-latest
 
-                    - name: openport-rand
-                      path: packages/openport
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: rand
-
                     - name: paging
                       path: packages/paging
                       os: ubuntu-latest
@@ -412,8 +189,6 @@ jobs:
                       path: packages/player
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
-                      cargo: --no-default-features
-                      features: cpal
 
                     - name: profiles
                       path: packages/profiles
@@ -422,18 +197,6 @@ jobs:
                     - name: qobuz
                       path: packages/qobuz
                       os: ubuntu-latest
-
-                    - name: qobuz-api
-                      path: packages/qobuz
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: api
-
-                    - name: qobuz-db
-                      path: packages/qobuz
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: db
 
                     - name: remote_library
                       path: packages/remote_library
@@ -452,286 +215,27 @@ jobs:
                       path: packages/scan
                       os: ubuntu-latest
 
-                    - name: scan-local
-                      path: packages/scan
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: local
-
-                    - name: scan-api
-                      path: packages/scan
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: api
-
                     - name: schema
                       path: packages/schema
                       os: ubuntu-latest
-
-                    - name: schema
-                      path: packages/schema
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: sqlite
-
-                    - name: schema
-                      path: packages/schema
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: postgres
 
                     - name: search
                       path: packages/search
                       os: ubuntu-latest
 
-                    - name: search-api
-                      path: packages/search
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: api
-
-                    - name: search-db
-                      path: packages/search
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: db
-
-                    - name: server-static-token-auth
+                    - name: server
                       path: packages/server
                       os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
-                      cargo: --no-default-features
-                      features: static-token-auth,cpal
+                      dependencies: sudo apt-get update && sudo apt-get install libasound2-dev pulseaudio
                       env: STATIC_TOKEN=123
-
-                    - name: server-tls
-                      path: packages/server
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
-                      cargo: --no-default-features
-                      features: tls
-
-                    - name: server-cpal
-                      path: packages/server
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
-                      cargo: --no-default-features
-                      features: cpal
-
-                    - name: server-pulseaudio-standard
-                      path: packages/server
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio
-                      cargo: --no-default-features
-                      features: pulseaudio-standard
-
-                    - name: server-pulseaudio-simple
-                      path: packages/server
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio
-                      cargo: --no-default-features
-                      features: pulseaudio-simple
-
-                    - name: server-postgres-raw
-                      path: packages/server
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
-                      cargo: --no-default-features
-                      features: cpal,aac,flac,mp3,opus,postgres-raw
-
-                    - name: server-postgres-sqlx
-                      path: packages/server
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install libasound2-dev
-                      cargo: --no-default-features
-                      features: cpal,aac,flac,mp3,opus,postgres-sqlx
-
-                    - name: server-no-default-features
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-
-                    - name: server-aac
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: aac
-
-                    - name: server-flac
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: flac
-
-                    - name: server-mp3
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: mp3
-
-                    - name: server-opus
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: opus
-
-                    - name: server-downloader
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: downloader
-
-                    - name: server-library
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: library
-
-                    - name: server-player
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: player
-
-                    - name: server-qobuz
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: qobuz
-
-                    - name: server-scan
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: scan
-
-                    - name: server-scan-api
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: scan-api
-
-                    - name: server-search
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: search
-
-                    - name: server-tidal
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: tidal
-
-                    - name: server-upnp
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: upnp
-
-                    - name: server-yt
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: yt
-
-                    - name: server-auth-api
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: auth-api
-
-                    - name: server-downloader-api
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: downloader-api
-
-                    - name: server-files-api
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: files-api
-
-                    - name: server-library-api
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: library-api
-
-                    - name: server-menu-api
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: menu-api
-
-                    - name: server-player-api
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: player-api
-
-                    - name: server-qobuz-api
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: qobuz-api
-
-                    - name: server-search-api
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: search-api
-
-                    - name: server-session-api
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: session-api
-
-                    - name: server-tidal-api
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: tidal-api
-
-                    - name: server-upnp-api
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: upnp-api
-
-                    - name: server-yt-api
-                      path: packages/server
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: yt-api
 
                     - name: session
                       path: packages/session
                       os: ubuntu-latest
 
-                    - name: session-api
-                      path: packages/session
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: api
-
                     - name: stream_utils
                       path: packages/stream_utils
                       os: ubuntu-latest
-
-                    - name: stream_utils-remote-bytestream
-                      path: packages/stream_utils
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: remote-bytestream
-
-                    - name: stream_utils-stalled-monitor
-                      path: packages/stream_utils
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: stalled-monitor
 
                     - name: task
                       path: packages/task
@@ -741,97 +245,23 @@ jobs:
                       path: packages/tidal
                       os: ubuntu-latest
 
-                    - name: tidal-api
-                      path: packages/tidal
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: api
-
-                    - name: tidal-db
-                      path: packages/tidal
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: db
-
                     - name: tunnel
                       path: packages/tunnel
                       os: ubuntu-latest
 
-                    - name: tunnel-base64
-                      path: packages/tunnel
-                      os: ubuntu-latest
-                      features: base64
-
                     - name: tunnel_sender
                       path: packages/tunnel_sender
                       os: ubuntu-latest
-
-                    - name: tunnel_sender-base64
-                      path: packages/tunnel_sender
-                      os: ubuntu-latest
-                      features: base64
-
-                    - name: tunnel_server-no-default-features
-                      path: packages/tunnel_server
-                      os: ubuntu-latest
-                      env: TUNNEL_ACCESS_TOKEN=123
-                      cargo: --no-default-features
 
                     - name: tunnel_server
                       path: packages/tunnel_server
                       os: ubuntu-latest
                       env: TUNNEL_ACCESS_TOKEN=123
 
-                    - name: tunnel_server-base64
-                      path: packages/tunnel_server
-                      os: ubuntu-latest
-                      env: TUNNEL_ACCESS_TOKEN=123
-                      features: base64
-
-                    - name: tunnel_server-base
-                      path: packages/tunnel_server
-                      os: ubuntu-latest
-                      env: TUNNEL_ACCESS_TOKEN=123
-                      cargo: --no-default-features
-
-                    - name: tunnel_server-postgres-raw
-                      path: packages/tunnel_server
-                      os: ubuntu-latest
-                      env: TUNNEL_ACCESS_TOKEN=123
-                      features: postgres-raw
-                      cargo: --no-default-features
-
-                    - name: tunnel_server-postgres-raw-openssl
-                      path: packages/tunnel_server
-                      os: ubuntu-latest
-                      env: TUNNEL_ACCESS_TOKEN=123
-                      features: postgres-raw,postgres-openssl
-                      cargo: --no-default-features
-
-                    - name: tunnel_server-postgres-raw-native-tls
-                      path: packages/tunnel_server
-                      os: ubuntu-latest
-                      env: TUNNEL_ACCESS_TOKEN=123
-                      features: postgres-raw,postgres-native-tls
-                      cargo: --no-default-features
-
-                    - name: tunnel_server-postgres-sqlx
-                      path: packages/tunnel_server
-                      os: ubuntu-latest
-                      env: TUNNEL_ACCESS_TOKEN=123
-                      features: postgres-sqlx
-                      cargo: --no-default-features
-
                     - name: upnp
                       path: packages/upnp
                       os: ubuntu-latest
                       dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev
-
-                    - name: upnp-api
-                      path: packages/upnp
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: api
 
                     - name: ws
                       path: packages/ws
@@ -840,18 +270,6 @@ jobs:
                     - name: yt
                       path: packages/yt
                       os: ubuntu-latest
-
-                    - name: yt-api
-                      path: packages/yt
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: api
-
-                    - name: yt-db
-                      path: packages/yt
-                      os: ubuntu-latest
-                      cargo: --no-default-features
-                      features: db
 
         steps:
             - uses: actions/checkout@v4
@@ -873,31 +291,50 @@ jobs:
               if: ${{ matrix.package.dependencies }}
               run: ${{ matrix.package.dependencies }}
 
+            - name: Install clippier
+              shell: bash
+              working-directory: MoosicBoxServer/packages/clippier
+              run: |
+                  cargo install --debug --path .
+
+            - name: Clippy ${{ matrix.package.name }}
+              shell: bash
+              working-directory: MoosicBoxServer
+              run: |
+                  source packages/clippier/utils.sh
+                  (cd ${{ matrix.package.path }}; \
+                      ${{ matrix.package.env }} cargo_each_feature clippy \
+                        --verbose \
+                        --no-default-features \
+                        --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }} ${{ matrix.package.cargo }})
+
             - name: Build ${{ matrix.package.name }}
               shell: bash
               working-directory: MoosicBoxServer
               run: |
-                  ${{ matrix.package.env }} cargo build \
-                        --manifest-path=${{ matrix.package.path }}/Cargo.toml \
+                  source packages/clippier/utils.sh
+                  (cd ${{ matrix.package.path }}; \
+                      ${{ matrix.package.env }} cargo_each_feature build \
                         --verbose \
-                        --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }} ${{ matrix.package.cargo }}
+                        --no-default-features \
+                        --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }} ${{ matrix.package.cargo }})
 
             - name: Format ${{ matrix.package.name }}
               shell: bash
               working-directory: MoosicBoxServer
               run: |
-                  ${{ matrix.package.env }} cargo fmt \
-                        --manifest-path=${{ matrix.package.path }}/Cargo.toml \
-                        --verbose
+                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo fmt --verbose)
 
             - name: Run ${{ matrix.package.name }} tests
               shell: bash
               working-directory: MoosicBoxServer
               run: |
-                  ${{ matrix.package.env }} cargo test \
-                        --manifest-path=${{ matrix.package.path }}/Cargo.toml \
+                  source packages/clippier/utils.sh
+                  (cd ${{ matrix.package.path }}; \
+                      ${{ matrix.package.env }} cargo_each_feature test \
                         --verbose \
-                        --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }} ${{ matrix.package.cargo }}
+                        --no-default-features \
+                        --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }} ${{ matrix.package.cargo }})
 
             - name: Install cargo-machete
               shell: bash
