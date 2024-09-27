@@ -4,6 +4,20 @@
 pub mod html;
 
 #[derive(Copy, Clone, Debug)]
+pub enum Number {
+    Real(f32),
+    Integer(u64),
+    RealPercent(f32),
+    IntegerPercent(u64),
+}
+
+impl Default for Number {
+    fn default() -> Self {
+        Number::Integer(0)
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
 pub enum LayoutDirection {
     Row,
     Column,
@@ -24,6 +38,8 @@ impl std::ops::Deref for ElementList {
 pub struct ContainerElement {
     pub elements: Vec<Element>,
     pub direction: LayoutDirection,
+    pub width: Option<Number>,
+    pub height: Option<Number>,
 }
 
 #[derive(Clone, Debug)]
@@ -61,6 +77,8 @@ pub enum Element {
     },
     Image {
         source: Option<String>,
+        width: Option<Number>,
+        height: Option<Number>,
     },
     Anchor {
         element: ContainerElement,

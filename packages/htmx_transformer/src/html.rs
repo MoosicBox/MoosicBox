@@ -1,8 +1,9 @@
 use std::borrow::Cow;
 
+use thiserror::Error;
 use tl::{Children, HTMLTag, Node, NodeHandle, ParseError, Parser, ParserOptions};
 
-use crate::LayoutDirection;
+use crate::{LayoutDirection, Number};
 
 impl TryFrom<String> for crate::ElementList {
     type Error = ParseError;
@@ -74,6 +75,46 @@ fn get_direction(tag: &HTMLTag) -> LayoutDirection {
     }
 }
 
+#[derive(Debug, Error)]
+pub enum GetNumberError {
+    #[error("Failed to parse number '{0}'")]
+    Parse(String),
+}
+
+fn get_number(tag: &HTMLTag, name: &str) -> Result<Number, GetNumberError> {
+    Ok(if let Some(number) = get_tag_attr_value(tag, name) {
+        if let Some((number, _)) = number.split_once('%') {
+            if number.contains('.') {
+                Number::RealPercent(
+                    number
+                        .parse::<f32>()
+                        .map_err(|_| GetNumberError::Parse(number.to_string()))?,
+                )
+            } else {
+                Number::IntegerPercent(
+                    number
+                        .parse::<u64>()
+                        .map_err(|_| GetNumberError::Parse(number.to_string()))?,
+                )
+            }
+        } else if number.contains('.') {
+            Number::Real(
+                number
+                    .parse::<f32>()
+                    .map_err(|_| GetNumberError::Parse(number.to_string()))?,
+            )
+        } else {
+            Number::Integer(
+                number
+                    .parse::<u64>()
+                    .map_err(|_| GetNumberError::Parse(number.to_string()))?,
+            )
+        }
+    } else {
+        return Err(GetNumberError::Parse("".to_string()));
+    })
+}
+
 fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
     Some(match node {
         Node::Tag(tag) => match tag.name().as_utf8_str().to_lowercase().as_str() {
@@ -97,57 +138,77 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
+                    width: get_number(tag, "sx-width").ok(),
+                    height: get_number(tag, "sx-height").ok(),
                 },
             },
             "header" => crate::Element::Header {
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
+                    width: get_number(tag, "sx-width").ok(),
+                    height: get_number(tag, "sx-height").ok(),
                 },
             },
             "footer" => crate::Element::Footer {
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
+                    width: get_number(tag, "sx-width").ok(),
+                    height: get_number(tag, "sx-height").ok(),
                 },
             },
             "aside" => crate::Element::Aside {
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
+                    width: get_number(tag, "sx-width").ok(),
+                    height: get_number(tag, "sx-height").ok(),
                 },
             },
             "div" => crate::Element::Div {
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
+                    width: get_number(tag, "sx-width").ok(),
+                    height: get_number(tag, "sx-height").ok(),
                 },
             },
             "section" => crate::Element::Section {
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
+                    width: get_number(tag, "sx-width").ok(),
+                    height: get_number(tag, "sx-height").ok(),
                 },
             },
             "form" => crate::Element::Form {
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
+                    width: get_number(tag, "sx-width").ok(),
+                    height: get_number(tag, "sx-height").ok(),
                 },
             },
             "button" => crate::Element::Button {
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
+                    width: get_number(tag, "sx-width").ok(),
+                    height: get_number(tag, "sx-height").ok(),
                 },
             },
             "img" => crate::Element::Image {
                 source: get_tag_attr_value_owned(tag, "src"),
+                width: get_number(tag, "sx-width").ok(),
+                height: get_number(tag, "sx-height").ok(),
             },
             "a" => crate::Element::Anchor {
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
+                    width: get_number(tag, "sx-width").ok(),
+                    height: get_number(tag, "sx-height").ok(),
                 },
             },
             "h1" => crate::Element::Heading {
@@ -155,6 +216,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
+                    width: get_number(tag, "sx-width").ok(),
+                    height: get_number(tag, "sx-height").ok(),
                 },
             },
             "h2" => crate::Element::Heading {
@@ -162,6 +225,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
+                    width: get_number(tag, "sx-width").ok(),
+                    height: get_number(tag, "sx-height").ok(),
                 },
             },
             "h3" => crate::Element::Heading {
@@ -169,6 +234,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
+                    width: get_number(tag, "sx-width").ok(),
+                    height: get_number(tag, "sx-height").ok(),
                 },
             },
             "h4" => crate::Element::Heading {
@@ -176,6 +243,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
+                    width: get_number(tag, "sx-width").ok(),
+                    height: get_number(tag, "sx-height").ok(),
                 },
             },
             "h5" => crate::Element::Heading {
@@ -183,6 +252,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
+                    width: get_number(tag, "sx-width").ok(),
+                    height: get_number(tag, "sx-height").ok(),
                 },
             },
             "h6" => crate::Element::Heading {
@@ -190,6 +261,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
+                    width: get_number(tag, "sx-width").ok(),
+                    height: get_number(tag, "sx-height").ok(),
                 },
             },
             _ => {
