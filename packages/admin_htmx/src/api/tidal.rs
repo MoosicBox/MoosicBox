@@ -10,6 +10,7 @@ use base64::{engine::general_purpose, Engine as _};
 use maud::{html, Markup};
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_music_api::MusicApis;
+#[cfg(feature = "scan")]
 use moosicbox_scan::ScanOrigin;
 use moosicbox_tidal::{db::TidalConfigError, TidalDeviceAuthorizationTokenError};
 use serde::Deserialize;
@@ -25,13 +26,15 @@ pub fn bind_services<
 >(
     scope: Scope<T>,
 ) -> Scope<T> {
-    scope.service(
-        web::scope("/tidal")
-            .service(get_settings_endpoint)
-            .service(device_authorization_endpoint)
-            .service(device_authorization_token_endpoint)
-            .service(run_scan_endpoint),
-    )
+    let nested = web::scope("/tidal")
+        .service(get_settings_endpoint)
+        .service(device_authorization_endpoint)
+        .service(device_authorization_token_endpoint);
+
+    #[cfg(feature = "scan")]
+    let nested = nested.service(run_scan_endpoint);
+
+    scope.service(nested)
 }
 
 static CLIENT_ID: LazyLock<String> = LazyLock::new(|| {
@@ -117,7 +120,10 @@ async fn device_authorization_token(
             Some(TriggerType::Standard),
         );
 
-        Ok(settings_logged_in(false))
+        Ok(settings_logged_in(
+            #[cfg(feature = "scan")]
+            false,
+        ))
     } else {
         htmx.trigger_event(
             "tidal-login-attempt".to_string(),
@@ -144,6 +150,7 @@ async fn device_authorization_token(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetSettingsQuery {
+    #[cfg(feature = "scan")]
     show_scan: Option<bool>,
 }
 
@@ -153,11 +160,16 @@ pub async fn get_settings_endpoint(
     query: web::Query<GetSettingsQuery>,
     db: LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
-    settings(&db, query.show_scan.unwrap_or_default())
-        .await
-        .map_err(|e| ErrorInternalServerError(format!("Failed to get Tidal settings: {e:?}")))
+    settings(
+        &db,
+        #[cfg(feature = "scan")]
+        query.show_scan.unwrap_or_default(),
+    )
+    .await
+    .map_err(|e| ErrorInternalServerError(format!("Failed to get Tidal settings: {e:?}")))
 }
 
+#[cfg(feature = "scan")]
 #[route("run-scan", method = "POST")]
 pub async fn run_scan_endpoint(
     _htmx: Htmx,
@@ -171,22 +183,27 @@ pub async fn run_scan_endpoint(
     Ok(html! {})
 }
 
-pub fn settings_logged_in(show_scan: bool) -> Markup {
+pub fn settings_logged_in(#[cfg(feature = "scan")] show_scan: bool) -> Markup {
+    #[cfg(feature = "scan")]
+    let scan = if show_scan {
+        html! {
+            form
+                hx-post="/admin/tidal/run-scan"
+                hx-target="#run-scan-button"
+                hx-disabled-elt="#run-scan-button"
+                hx-swap="none" {
+                button id="run-scan-button" type="submit" { "Run Scan" }
+            }
+        }
+    } else {
+        html! {}
+    };
+    #[cfg(not(feature = "scan"))]
+    let scan = html! {};
+
     html! {
         p { "Logged in!" }
-        (if show_scan {
-            html!{
-                form
-                    hx-post="/admin/tidal/run-scan"
-                    hx-target="#run-scan-button"
-                    hx-disabled-elt="#run-scan-button"
-                    hx-swap="none" {
-                    button id="run-scan-button" type="submit" { "Run Scan" }
-                }
-            }
-        } else {
-            html! {}
-        })
+        (scan)
     }
 }
 
@@ -198,11 +215,17 @@ pub fn settings_logged_out() -> Markup {
     }
 }
 
-pub async fn settings(db: &LibraryDatabase, show_scan: bool) -> Result<Markup, TidalConfigError> {
+pub async fn settings(
+    db: &LibraryDatabase,
+    #[cfg(feature = "scan")] show_scan: bool,
+) -> Result<Markup, TidalConfigError> {
     let logged_in = moosicbox_tidal::db::get_tidal_config(db).await?.is_some();
 
     Ok(if logged_in {
-        settings_logged_in(show_scan)
+        settings_logged_in(
+            #[cfg(feature = "scan")]
+            show_scan,
+        )
     } else {
         settings_logged_out()
     })

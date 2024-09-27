@@ -43,6 +43,7 @@ pub fn bind_services<
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IndexQuery {
+    #[cfg(feature = "scan")]
     show_scan: Option<bool>,
 }
 
@@ -86,7 +87,7 @@ pub async fn index_endpoint(
                     let library_db = PROFILES.get(&profile)
                         .ok_or_else(|| ErrorInternalServerError("Missing profile"))?;
 
-                    profile_info(&config_db, &library_db, query.show_scan.unwrap_or_default()).await?
+                    profile_info(&config_db, &library_db, #[cfg(feature = "scan")] query.show_scan.unwrap_or_default()).await?
                 } else {
                     html! {}
                 }
@@ -135,7 +136,9 @@ pub async fn index_endpoint(
 pub async fn profile_info(
     #[allow(unused)] config_db: &ConfigDatabase,
     #[allow(unused)] library_db: &LibraryDatabase,
-    #[allow(unused)] show_scan: bool,
+    #[allow(unused)]
+    #[cfg(feature = "scan")]
+    show_scan: bool,
 ) -> Result<Markup, actix_web::Error> {
     #[cfg(feature = "scan")]
     let scan = html! {
@@ -150,7 +153,7 @@ pub async fn profile_info(
     let qobuz = html! {
         hr;
         h2 { "Qobuz" }
-        (qobuz::settings(library_db, show_scan).await.map_err(ErrorInternalServerError)?)
+        (qobuz::settings(library_db, #[cfg(feature = "scan")] show_scan).await.map_err(ErrorInternalServerError)?)
     };
     #[cfg(not(feature = "qobuz"))]
     let qobuz = html! {};
@@ -159,7 +162,7 @@ pub async fn profile_info(
     let tidal = html! {
         hr;
         h2 { "Tidal" }
-        (tidal::settings(library_db, show_scan).await.map_err(ErrorInternalServerError)?)
+        (tidal::settings(library_db, #[cfg(feature = "scan")] show_scan).await.map_err(ErrorInternalServerError)?)
     };
     #[cfg(not(feature = "tidal"))]
     let tidal = html! {};
