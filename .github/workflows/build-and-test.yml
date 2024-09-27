@@ -220,6 +220,10 @@ jobs:
                       cargo: --no-default-features
                       features: futures-channel
 
+                    - name: clippier
+                      path: packages/clippier
+                      os: ubuntu-latest
+
                     - name: config
                       path: packages/config
                       os: ubuntu-latest
