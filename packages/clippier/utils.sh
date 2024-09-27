@@ -20,6 +20,8 @@ function cargo_each_feature() {
 }
 
 function cargo_each_feature_permutation() {
+    local ignore=("fail-on-warnings")
+
     function cargo_each_feature_permutation_inner() {
         local count=$1
         local end=$((count))
@@ -37,6 +39,11 @@ function cargo_each_feature_permutation() {
             local contains=0
 
             for x in "${features[@]}"; do
+                if [[ "$x" == "$feature" ]]; then
+                    contains=1
+                fi
+            done
+            for x in "${ignore[@]}"; do
                 if [[ "$x" == "$feature" ]]; then
                     contains=1
                 fi
@@ -98,6 +105,7 @@ function cargo_each_feature_permutation() {
         fi
 
         local features=("$feature")
+        ignore+=("$feature")
         cargo_each_feature_permutation_inner 1 "${features[@]}" "${@}"
     done <<<"$(moosicbox_clippier Cargo.toml)"
 
