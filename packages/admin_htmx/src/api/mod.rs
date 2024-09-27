@@ -50,7 +50,7 @@ pub struct IndexQuery {
 #[route("", method = "GET")]
 pub async fn index_endpoint(
     htmx: Htmx,
-    query: web::Query<IndexQuery>,
+    #[allow(unused)] query: web::Query<IndexQuery>,
     profile: Option<ProfileName>,
     config_db: ConfigDatabase,
 ) -> Result<Markup, actix_web::Error> {
