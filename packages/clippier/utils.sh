@@ -19,9 +19,8 @@ function cargo_each_feature() {
     echo "done"
 }
 
-function cargo_each_feature_permutation() {
+function each_feature_permutation() {
     local ignore=("fail-on-warnings")
-    local args=("$@")
     local all_features=()
 
     while read -r feature; do
@@ -32,7 +31,7 @@ function cargo_each_feature_permutation() {
         all_features+=("$feature")
     done <<<"$(moosicbox_clippier Cargo.toml)"
 
-    function cargo_each_feature_permutation_inner() {
+    function each_feature_permutation_inner() {
         local feature_count=$1
         local features=("${@:2:$feature_count}")
         local feature_offset=$((feature_count + 2))
@@ -49,18 +48,7 @@ function cargo_each_feature_permutation() {
             features_string="${features_string}${x}"
         done
 
-        local command="cargo ${args[*]} --features \"$features_string\""
-
-        echo "RUNNING \`$command\`"
-
-        if [[ -z "$CLIPPIER_DRY_RUN" ]]; then
-            if cargo "${args[@]}" --features "$features_string"; then
-                echo "FINISHED \`$command\`"
-            else
-                >&2 echo "FAILED \`$command\`"
-                return 1
-            fi
-        fi
+        echo "$features_string"
 
         for feature in "${all_features[@]}"; do
             local contains=0
@@ -91,40 +79,46 @@ function cargo_each_feature_permutation() {
             ignore_feature+=("$feature")
             ignore_count=$((ignore_count + 1))
 
-            cargo_each_feature_permutation_inner "$feature_count2" "${local_features[@]}" "$ignore_count" "${ignore_feature[@]}"
+            each_feature_permutation_inner "$feature_count2" "${local_features[@]}" "$ignore_count" "${ignore_feature[@]}"
         done
     }
 
-    local command="cargo ${args[*]}"
-
-    echo "RUNNING \`$command\`"
-
-    if [[ -z "$CLIPPIER_DRY_RUN" ]]; then
-        if cargo "${args[@]}"; then
-            echo "FINISHED \`$command\`"
-        else
-            >&2 echo "FAILED \`$command\`"
-            return 1
-        fi
-    fi
-
-    local command="cargo ${args[*]} --features default"
-
-    echo "RUNNING \`$command\`"
-
-    if [[ -z "$CLIPPIER_DRY_RUN" ]]; then
-        if cargo "${args[@]}" --features default; then
-            echo "FINISHED \`$command\`"
-        else
-            >&2 echo "FAILED \`$command\`"
-            return 1
-        fi
-    fi
+    echo "default"
 
     for feature in "${all_features[@]}"; do
         ignore+=("$feature")
-        cargo_each_feature_permutation_inner 1 "$feature" 0
+        each_feature_permutation_inner 1 "$feature" 0
     done
+}
+
+function cargo_each_feature_permutation() {
+    local command="cargo $*"
+
+    echo "RUNNING \`$command\`"
+
+    if [[ -z "$CLIPPIER_DRY_RUN" ]]; then
+        if cargo "$@"; then
+            echo "FINISHED \`$command\`"
+        else
+            >&2 echo "FAILED \`$command\`"
+            return 1
+        fi
+    fi
+
+    while read -r features; do
+        local command="cargo $* --features \"$features\""
+
+        echo "RUNNING \`$command\`"
+
+        if [[ -z "$CLIPPIER_DRY_RUN" ]]; then
+            if cargo "$@" --features "$features"; then
+                echo "FINISHED \`$command\`"
+            else
+                >&2 echo "FAILED \`$command\`"
+                return 1
+            fi
+        fi
+    done <<<"$(each_feature_permutation)"
 
     echo "done"
 }
