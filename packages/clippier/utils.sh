@@ -20,7 +20,7 @@ function cargo_each_feature() {
 }
 
 function each_feature_permutation() {
-    local ignore=("fail-on-warnings")
+    local ignore=()
     local all_features=()
 
     while read -r feature; do
