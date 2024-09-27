@@ -83,6 +83,7 @@ function each_feature_permutation() {
         done
     }
 
+    echo ""
     echo "default"
 
     for feature in "${all_features[@]}"; do
@@ -92,30 +93,32 @@ function each_feature_permutation() {
 }
 
 function cargo_each_feature_permutation() {
-    local command="cargo $*"
-
-    echo "RUNNING \`$command\`"
-
-    if [[ -z "$CLIPPIER_DRY_RUN" ]]; then
-        if cargo "$@"; then
-            echo "FINISHED \`$command\`"
-        else
-            >&2 echo "FAILED \`$command\`"
-            return 1
-        fi
-    fi
-
     while read -r features; do
-        local command="cargo $* --features \"$features\""
+        if [[ -n "$features" ]]; then
+            local command="cargo $* --features \"$features\""
 
-        echo "RUNNING \`$command\`"
+            echo "RUNNING \`$command\`"
 
-        if [[ -z "$CLIPPIER_DRY_RUN" ]]; then
-            if cargo "$@" --features "$features"; then
-                echo "FINISHED \`$command\`"
-            else
-                >&2 echo "FAILED \`$command\`"
-                return 1
+            if [[ -z "$CLIPPIER_DRY_RUN" ]]; then
+                if cargo "$@" --features "$features"; then
+                    echo "FINISHED \`$command\`"
+                else
+                    >&2 echo "FAILED \`$command\`"
+                    return 1
+                fi
+            fi
+        else
+            local command="cargo $*"
+
+            echo "RUNNING \`$command\`"
+
+            if [[ -z "$CLIPPIER_DRY_RUN" ]]; then
+                if cargo "$@"; then
+                    echo "FINISHED \`$command\`"
+                else
+                    >&2 echo "FAILED \`$command\`"
+                    return 1
+                fi
             fi
         fi
     done <<<"$(each_feature_permutation)"
