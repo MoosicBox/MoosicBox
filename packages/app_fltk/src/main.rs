@@ -1,7 +1,8 @@
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 
 use fltk::{
-    app, enums,
+    app,
+    enums::{self, Event},
     frame::{self, Frame},
     group,
     image::SharedImage,
@@ -23,11 +24,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_size(WIDTH, HEIGHT)
         .with_label("MoosicBox");
 
+    let elements: ElementList = moosicbox_app_fltk_ui::home().into_string().try_into()?;
+    let elements = Arc::new(elements);
+
+    win.handle({
+        let elements = elements.clone();
+        move |win, ev| match ev {
+            Event::Resize => {
+                log::debug!(
+                    "event resize: width={} height={}",
+                    win.width(),
+                    win.height()
+                );
+                win.clear();
+                win.begin();
+                let elements: &[Element] = &elements;
+                if let Err(e) = draw_elements(
+                    elements,
+                    Context::new(win.width() as f32, win.height() as f32),
+                ) {
+                    log::error!("Failed to draw elements: {e:?}");
+                }
+                win.end();
+                win.flush();
+                true
+            }
+            _ => false,
+        }
+    });
+
     win.end();
     win.make_resizable(true);
     win.show();
 
-    let elements: ElementList = moosicbox_app_fltk_ui::home().into_string().try_into()?;
     let elements: &[Element] = &elements;
 
     win.begin();
