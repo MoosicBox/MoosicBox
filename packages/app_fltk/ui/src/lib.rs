@@ -6,7 +6,7 @@ use maud::{html, Markup};
 #[must_use]
 pub fn sidebar_navigation() -> Markup {
     html! {
-        aside {
+        aside sx-width="20%" {
             div class="navigation-bar" {
                 div class="navigation-bar-header" {
                     a href="/" sx-dir="row" {
