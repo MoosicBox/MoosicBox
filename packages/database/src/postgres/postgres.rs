@@ -16,9 +16,9 @@ use tokio::{
 use tokio_postgres::{types::IsNull, Client, Row, RowStream};
 
 use crate::{
-    BooleanExpression, Database, DatabaseError, DatabaseValue, DeleteStatement, Expression,
-    ExpressionType, InsertStatement, Join, SelectQuery, Sort, SortDirection, UpdateStatement,
-    UpsertMultiStatement, UpsertStatement,
+    query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
+    Database, DatabaseError, DatabaseValue, DeleteStatement, InsertStatement, SelectQuery,
+    UpdateStatement, UpsertMultiStatement, UpsertStatement,
 };
 
 trait ToSql {
@@ -1340,7 +1340,7 @@ impl Expression for PgDatabaseValue {
         self.0.is_null()
     }
 
-    fn expression_type(&self) -> crate::ExpressionType {
+    fn expression_type(&self) -> ExpressionType {
         ExpressionType::DatabaseValue(self)
     }
 }

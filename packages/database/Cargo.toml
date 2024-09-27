@@ -40,7 +40,7 @@ tokio       = { workspace = true, features = ["sync"] }
 tokio-util  = { workspace = true, optional = true }
 
 [features]
-default = ["api", "mysql", "postgres-sqlx", "sqlite-sqlx"]
+default = ["api", "mysql", "postgres-sqlx", "sqlite-rusqlite", "sqlite-sqlx"]
 
 fail-on-warnings = []
 

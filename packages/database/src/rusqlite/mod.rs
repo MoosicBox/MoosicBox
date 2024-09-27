@@ -6,9 +6,9 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 
 use crate::{
-    BooleanExpression, Database, DatabaseError, DatabaseValue, DeleteStatement, Expression,
-    ExpressionType, InsertStatement, Join, SelectQuery, Sort, SortDirection, UpdateStatement,
-    UpsertMultiStatement, UpsertStatement,
+    query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
+    Database, DatabaseError, DatabaseValue, DeleteStatement, InsertStatement, SelectQuery,
+    UpdateStatement, UpsertMultiStatement, UpsertStatement,
 };
 
 #[allow(clippy::module_name_repetitions)]
@@ -1305,7 +1305,7 @@ impl Expression for RusqliteDatabaseValue {
         )
     }
 
-    fn expression_type(&self) -> crate::ExpressionType {
+    fn expression_type(&self) -> ExpressionType {
         ExpressionType::DatabaseValue(self)
     }
 }

@@ -220,7 +220,7 @@ impl Expression for And {
 
 #[derive(Debug)]
 pub struct Or {
-    pub(crate) conditions: Vec<Box<dyn BooleanExpression>>,
+    pub conditions: Vec<Box<dyn BooleanExpression>>,
 }
 
 impl BooleanExpression for Or {}
@@ -247,8 +247,8 @@ impl Expression for Or {
 
 #[derive(Debug)]
 pub struct NotEq {
-    pub(crate) left: Identifier,
-    pub(crate) right: Box<dyn Expression>,
+    pub left: Identifier,
+    pub right: Box<dyn Expression>,
 }
 
 impl BooleanExpression for NotEq {}
@@ -264,8 +264,8 @@ impl Expression for NotEq {
 
 #[derive(Debug)]
 pub struct Eq {
-    pub(crate) left: Identifier,
-    pub(crate) right: Box<dyn Expression>,
+    pub left: Identifier,
+    pub right: Box<dyn Expression>,
 }
 
 impl BooleanExpression for Eq {}
@@ -281,8 +281,8 @@ impl Expression for Eq {
 
 #[derive(Debug)]
 pub struct Gt {
-    pub(crate) left: Identifier,
-    pub(crate) right: Box<dyn Expression>,
+    pub left: Identifier,
+    pub right: Box<dyn Expression>,
 }
 
 impl BooleanExpression for Gt {}
@@ -298,8 +298,8 @@ impl Expression for Gt {
 
 #[derive(Debug)]
 pub struct Gte {
-    pub(crate) left: Identifier,
-    pub(crate) right: Box<dyn Expression>,
+    pub left: Identifier,
+    pub right: Box<dyn Expression>,
 }
 
 impl BooleanExpression for Gte {}
@@ -315,8 +315,8 @@ impl Expression for Gte {
 
 #[derive(Debug)]
 pub struct Lt {
-    pub(crate) left: Identifier,
-    pub(crate) right: Box<dyn Expression>,
+    pub left: Identifier,
+    pub right: Box<dyn Expression>,
 }
 
 impl BooleanExpression for Lt {}
@@ -332,8 +332,8 @@ impl Expression for Lt {
 
 #[derive(Debug)]
 pub struct Lte {
-    pub(crate) left: Identifier,
-    pub(crate) right: Box<dyn Expression>,
+    pub left: Identifier,
+    pub right: Box<dyn Expression>,
 }
 
 impl BooleanExpression for Lte {}
@@ -349,8 +349,8 @@ impl Expression for Lte {
 
 #[derive(Debug)]
 pub struct In<'a> {
-    pub(crate) left: Identifier,
-    pub(crate) values: Box<dyn List + 'a>,
+    pub left: Identifier,
+    pub values: Box<dyn List + 'a>,
 }
 
 impl BooleanExpression for In<'_> {}
@@ -376,8 +376,8 @@ impl Expression for In<'_> {
 
 #[derive(Debug)]
 pub struct NotIn<'a> {
-    pub(crate) left: Identifier,
-    pub(crate) values: Box<dyn List + 'a>,
+    pub left: Identifier,
+    pub values: Box<dyn List + 'a>,
 }
 
 impl BooleanExpression for NotIn<'_> {}

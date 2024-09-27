@@ -17,8 +17,8 @@ use std::{num::TryFromIntError, sync::Arc};
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use query::{
-    BooleanExpression, DeleteStatement, Expression, ExpressionType, InsertStatement, Join,
-    SelectQuery, Sort, SortDirection, UpdateStatement, UpsertMultiStatement, UpsertStatement,
+    DeleteStatement, InsertStatement, SelectQuery, UpdateStatement, UpsertMultiStatement,
+    UpsertStatement,
 };
 use thiserror::Error;
 
@@ -217,6 +217,7 @@ pub enum DatabaseError {
 
 impl DatabaseError {
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn is_connection_error(&self) -> bool {
         match self {
             #[cfg(feature = "postgres-sqlx")]
