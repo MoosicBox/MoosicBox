@@ -265,6 +265,7 @@ pub enum FetchCoverError {
     FetchAndSaveBytesFromRemoteUrl(#[from] FetchAndSaveBytesFromRemoteUrlError),
 }
 
+#[cfg(feature = "files")]
 pub(crate) type BytesStream = Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>;
 
 #[cfg(feature = "files")]
