@@ -3659,7 +3659,6 @@ version = "0.1.0"
 dependencies = [
  "log",
  "moosicbox_app_fltk_ui",
- "moosicbox_htmx_transformer",
  "moosicbox_logging",
  "moosicbox_renderer_fltk",
 ]
@@ -3803,6 +3802,10 @@ dependencies = [
  "log",
  "moosicbox_assert",
 ]
+
+[[package]]
+name = "moosicbox_clippier"
+version = "0.1.0"
 
 [[package]]
 name = "moosicbox_config"
