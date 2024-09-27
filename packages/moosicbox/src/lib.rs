@@ -32,6 +32,7 @@ pub use moosicbox_player as player;
 pub use moosicbox_profiles as profiles;
 pub use moosicbox_qobuz as qobuz;
 pub use moosicbox_remote_library as remote_library;
+pub use moosicbox_renderer_fltk as renderer_fltk;
 pub use moosicbox_resampler as resampler;
 pub use moosicbox_scan as scan;
 pub use moosicbox_schema as schema;

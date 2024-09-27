@@ -384,6 +384,7 @@ jobs:
                     - name: moosicbox
                       path: packages/moosicbox
                       os: ubuntu-latest
+                      dependencies: sudo apt-get update && sudo apt-get install libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libpango1.0-dev libgl1-mesa-dev libglu1-mesa-dev
 
                     - name: music_api
                       path: packages/music_api
@@ -433,6 +434,11 @@ jobs:
                     - name: remote_library
                       path: packages/remote_library
                       os: ubuntu-latest
+
+                    - name: renderer_fltk
+                      path: packages/renderer_fltk
+                      os: ubuntu-latest
+                      dependencies: sudo apt-get update && sudo apt-get install libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libpango1.0-dev libgl1-mesa-dev libglu1-mesa-dev
 
                     - name: resampler
                       path: packages/resampler

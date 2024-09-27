@@ -43,6 +43,7 @@ moosicbox_player              = { version = "0.1.0", path = "../player", default
 moosicbox_profiles            = { version = "0.1.0", path = "../profiles", default-features = false }
 moosicbox_qobuz               = { version = "0.1.0", path = "../qobuz", default-features = false }
 moosicbox_remote_library      = { version = "0.1.0", path = "../remote_library", default-features = false }
+moosicbox_renderer_fltk       = { version = "0.1.0", path = "../renderer_fltk", default-features = false }
 moosicbox_resampler           = { version = "0.1.0", path = "../resampler", default-features = false }
 moosicbox_scan                = { version = "0.1.0", path = "../scan", default-features = false }
 moosicbox_schema              = { version = "0.1.0", path = "../schema", default-features = false }

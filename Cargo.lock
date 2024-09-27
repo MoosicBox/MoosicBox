@@ -3596,6 +3596,7 @@ dependencies = [
  "moosicbox_profiles",
  "moosicbox_qobuz",
  "moosicbox_remote_library",
+ "moosicbox_renderer_fltk",
  "moosicbox_resampler",
  "moosicbox_scan",
  "moosicbox_schema",
@@ -3656,12 +3657,11 @@ dependencies = [
 name = "moosicbox_app_fltk"
 version = "0.1.0"
 dependencies = [
- "fltk",
  "log",
  "moosicbox_app_fltk_ui",
- "moosicbox_env_utils",
  "moosicbox_htmx_transformer",
  "moosicbox_logging",
+ "moosicbox_renderer_fltk",
 ]
 
 [[package]]
@@ -4225,6 +4225,15 @@ dependencies = [
  "moosicbox_paging",
  "reqwest 0.12.7",
  "thiserror",
+]
+
+[[package]]
+name = "moosicbox_renderer_fltk"
+version = "0.1.0"
+dependencies = [
+ "fltk",
+ "log",
+ "moosicbox_htmx_transformer",
 ]
 
 [[package]]

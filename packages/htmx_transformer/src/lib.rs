@@ -23,7 +23,7 @@ pub enum LayoutDirection {
     Column,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ElementList(Vec<Element>);
 
 impl std::ops::Deref for ElementList {

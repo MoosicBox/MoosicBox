@@ -17,13 +17,12 @@ required-features = []
 
 [dependencies]
 moosicbox_app_fltk_ui = { path = "../app_fltk/ui", default-features = false }
-moosicbox_env_utils = { path = "../env_utils", default-features = false }
 moosicbox_htmx_transformer = { path = "../htmx_transformer", default-features = false, features = [
     "html",
 ] }
 moosicbox_logging = { path = "../logging", default-features = false }
+moosicbox_renderer_fltk = { path = "../renderer_fltk", default-features = false }
 
-fltk = { workspace = true }
 log  = { workspace = true }
 
 [features]

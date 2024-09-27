@@ -36,6 +36,7 @@ members = [
     "packages/profiles",
     "packages/qobuz",
     "packages/remote_library",
+    "packages/renderer_fltk",
     "packages/resampler",
     "packages/scan",
     "packages/schema",
