@@ -46,7 +46,20 @@ jobs:
               if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
               shell: bash
               run: |
-                  sudo apt-get update && sudo apt-get install libasound2-dev pulseaudio libvips-dev
+                  sudo apt-get update && sudo apt-get install \
+                      libasound2-dev \
+                      pulseaudio \
+                      libvips-dev \
+                      libx11-dev \
+                      libxext-dev \
+                      libxft-dev \
+                      libxinerama-dev \
+                      libxcursor-dev \
+                      libxrender-dev \
+                      libxfixes-dev \
+                      libpango1.0-dev \
+                      libgl1-mesa-dev \
+                      libglu1-mesa-dev
                   STATIC_TOKEN=123 TUNNEL_ACCESS_TOKEN=123 cargo build
 
             - name: Test
