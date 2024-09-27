@@ -52,7 +52,9 @@ pub enum InitDbError {
 }
 
 pub async fn init(
-    #[cfg(all(not(feature = "postgres"), feature = "sqlite"))] path: &std::path::Path,
+    #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
+    #[allow(unused)]
+    path: &std::path::Path,
     #[allow(unused)] creds: Option<Credentials>,
 ) -> Result<Box<dyn Database>, InitDbError> {
     if cfg!(all(
