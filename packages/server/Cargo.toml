@@ -252,7 +252,11 @@ postgres-sqlx = [
     "moosicbox_database_connection/postgres-sqlx",
     "postgres",
 ]
-sqlite = ["dep:moosicbox_schema", "moosicbox_schema?/sqlite"]
+sqlite = [
+    "dep:moosicbox_schema",
+    "moosicbox_database_connection/sqlite",
+    "moosicbox_schema?/sqlite",
+]
 sqlite-rusqlite = [
     "moosicbox_database/sqlite-rusqlite",
     "moosicbox_database_connection/sqlite-rusqlite",
