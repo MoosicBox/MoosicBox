@@ -11,6 +11,8 @@ pub fn sidebar_navigation() -> Markup {
                 div class="navigation-bar-header" {
                     a href="/" sx-dir="row" {
                         img
+                            sx-width="36"
+                            sx-height="36"
                             class="navigation-bar-header-home-link-logo-icon"
                             src="/img/icon128.png";
 
