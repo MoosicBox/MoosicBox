@@ -6,11 +6,13 @@ function cargo_each_feature() {
 
         echo "RUNNING \`$command\`"
 
-        if cargo "$@" --features "$feature"; then
-            echo "FINISHED \`$command\`"
-        else
-            >&2 echo "FAILED \`$command\`"
-            return 1
+        if [[ -z "$CLIPPIER_DRY_RUN" ]]; then
+            if cargo "$@" --features "$feature"; then
+                echo "FINISHED \`$command\`"
+            else
+                >&2 echo "FAILED \`$command\`"
+                return 1
+            fi
         fi
     done <<<"$(moosicbox_clippier Cargo.toml)"
 
@@ -27,11 +29,13 @@ function cargo_each_package_each_feature() {
 
             echo "IN \`$dir\` RUNNING \`$command\`"
 
-            if cargo_each_feature "$@"; then
-                echo "IN \`$dir\` FINISHED \`$command\`"
-            else
-                >&2 echo "IN \`$dir\` FAILED \`$command\`"
-                return 1
+            if [[ -z "$CLIPPIER_DRY_RUN" ]]; then
+                if cargo_each_feature "$@"; then
+                    echo "IN \`$dir\` FINISHED \`$command\`"
+                else
+                    >&2 echo "IN \`$dir\` FAILED \`$command\`"
+                    return 1
+                fi
             fi
         ); then
             return 1
