@@ -1,0 +1,159 @@
+.media-button.play-button {
+    width: 100px;
+    height: 50px;
+}
+
+.media-button.play-button img {
+    width: 20px;
+    height: 20px;
+}
+
+.album {
+    text-align: center;
+}
+
+.album-controls {
+    cursor: pointer;
+    transition: opacity 0.04s;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    opacity: 0;
+}
+
+.album-controls:hover {
+    opacity: 1;
+}
+
+.album-controls .button {
+    border-radius: 100%;
+    border: none;
+    cursor: pointer;
+}
+
+.album-controls .media-button.play-button {
+    transition: transform 0.1s;
+    background-color: white;
+    padding: 0px;
+    margin: 0px;
+    width: 40px;
+    height: 40px;
+    position: absolute;
+    left: 5%;
+    top: calc(95% - 40px);
+}
+
+.album-controls .media-button.play-button:hover {
+    transform: scale(1.08);
+}
+
+.album-controls .media-button.play-button img {
+    width: 16px;
+    position: relative;
+    left: 1px;
+    top: 2px;
+}
+
+.album-controls .media-button.options-button {
+    transition: transform 0.1s;
+    background-color: white;
+    padding: 0px;
+    margin: 0px;
+    width: 40px;
+    height: 40px;
+    position: absolute;
+    right: 5%;
+    top: calc(95% - 40px);
+}
+
+.album-controls .media-button.options-button:hover {
+    transform: scale(1.08);
+}
+
+.album-controls .media-button.options-button img {
+    width: 22px;
+    position: relative;
+    right: 0.5px;
+    top: 2px;
+}
+
+.album-icon {
+    display: block;
+}
+
+.album-icon-container {
+    position: relative;
+    overflow: hidden;
+}
+
+.album-icon-container:hover ~ .album-details .album-title,
+.album-title:hover {
+    text-decoration: underline;
+}
+
+.album-details-explicit-wordwrap {
+    white-space: nowrap;
+}
+
+.album-details-explicit {
+    width: 14px;
+    height: 14px;
+    position: relative;
+    top: 1.5px;
+    padding-left: 4px;
+}
+
+.album-title {
+    margin-top: 3px;
+    font-size: 16px;
+}
+
+.album-title-text {
+    cursor: pointer;
+    text-decoration: none;
+    width: 100%;
+    text-overflow: ellipsis;
+    display: inline-block;
+    overflow: hidden;
+}
+
+.album-artist {
+    margin-top: 3px;
+    font-size: 14px;
+    color: #444;
+}
+
+.dark .album-artist-text {
+    text-decoration: none;
+    color: #808080;
+}
+
+.album-artist-text {
+    cursor: pointer;
+}
+
+.album-artist-text:hover {
+    text-decoration: underline;
+}
+
+.album-year {
+    margin-top: 3px;
+    font-size: 12px;
+    color: #444;
+}
+
+.dark .album-year {
+    color: #808080;
+}
+
+.album-version-qualities {
+    margin-top: 3px;
+    font-size: 12px;
+    color: #444;
+}
+
+.dark .album-version-qualities {
+    color: #808080;
+}

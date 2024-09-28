@@ -1,0 +1,25 @@
+.moosicbox-tabs-headers {
+    display: flex;
+}
+
+.moosicbox-tabs-headers-header {
+    /* Remove default button styles */
+    background: none;
+    color: inherit;
+    border: none;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+    outline: inherit;
+
+    background-color: #111;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    cursor: pointer;
+    padding: 10px;
+    margin-right: 5px;
+}
+
+.moosicbox-tabs-content {
+    background-color: #111;
+}

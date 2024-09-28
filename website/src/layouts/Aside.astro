@@ -1,0 +1,151 @@
+---
+const search = Object.fromEntries(new URLSearchParams(Astro.url.searchParams));
+---
+
+<navigation-sidebar data-turbo-permanent id="navigation-sidebar">
+    <aside
+        class={`navigation-bar-container${
+            search.navToggled === 'true' ? ' toggled' : ' default'
+        }`}
+    >
+        <div class="navigation-bar">
+            <div class="navigation-bar-header">
+                <a href="/" class="navigation-bar-header-home-link">
+                    <img
+                        class="navigation-bar-header-home-link-logo-icon"
+                        src="/img/icon128.png"
+                    />
+                    <h1 class="navigation-bar-header-home-link-text">
+                        MoosicBox
+                    </h1>
+                </a>
+                <div class="navigation-bar-header-action-links">
+                    <a
+                        class="settings-link"
+                        href="/settings"
+                        aria-describedby="settings-link-description"
+                    >
+                        <img
+                            class="settings-gear-icon"
+                            src="/img/settings-gear-white.svg"
+                            alt="View MoosicBox Settings"
+                        />
+                    </a>
+                    <div id="settings-link-description" style="display:none">
+                        View MoosicBox Settings
+                    </div>
+                    <button
+                        type="button"
+                        class="toggle-expand-button"
+                        aria-describedby="toggle-expand-button-link-description"
+                    >
+                        <img
+                            class="collapse-navigation-bar"
+                            src="/img/chevron-left-white.svg"
+                            alt="Collapse navigation"
+                        />
+                        <img
+                            class="expand-navigation-bar"
+                            src="/img/chevron-right-white.svg"
+                            alt="Expand navigation"
+                        />
+                    </button>
+                    <div
+                        id="toggle-expand-button-link-description"
+                        style="display:none"
+                    >
+                        Toggle navigation bar collapsed
+                    </div>
+                </div>
+            </div>
+            <ul>
+                <li>
+                    <a href="/">Home</a>
+                </li>
+                <li>
+                    <a href="/downloads">Downloads</a>
+                </li>
+            </ul>
+            <h1 class="my-collection-header">My Collection</h1>
+            <ul>
+                <li>
+                    <a href="/albums">Albums</a>
+                </li>
+                <li>
+                    <a href="/artists">Artists</a>
+                </li>
+            </ul>
+        </div>
+        <div class="mobile-toggle-expand-button">
+            <img
+                class="mobile-expand-navigation-bar"
+                src="/img/chevron-left.svg"
+            />
+        </div>
+    </aside>
+</navigation-sidebar>
+
+<script>
+    import { getQueryParam, isMobile, setQueryParam } from '~/services/util';
+
+    class NavbarAside extends HTMLElement {
+        container = this.querySelector('.navigation-bar-container')!;
+        toggleButton = this.querySelector('.toggle-expand-button')!;
+        mobileToggleButton = this.querySelector(
+            '.mobile-toggle-expand-button',
+        )!;
+
+        constructor() {
+            super();
+
+            if (isMobile()) {
+                this.querySelectorAll('a').forEach((e) => {
+                    e.addEventListener('click', () => this.toggle());
+                });
+            }
+
+            this.mobileToggleButton.addEventListener('click', () =>
+                this.toggle(),
+            );
+            this.toggleButton.addEventListener('click', () => this.toggle());
+        }
+
+        toggle(toggled?: boolean | undefined) {
+            if (typeof toggled === 'undefined') {
+                toggled = !this.container.classList.contains('toggled');
+            }
+
+            this.container.classList.toggle('toggled', toggled);
+            this.container.classList.toggle('default', !toggled);
+
+            const mainContent = document.querySelector('.main-content')!;
+
+            setQueryParam('navToggled', toggled.toString());
+
+            mainContent.classList.toggle('toggled', toggled);
+            mainContent.classList.toggle('default', !toggled);
+            setQueryParam('navToggled', toggled.toString());
+        }
+    }
+
+    customElements.define('navigation-sidebar', NavbarAside);
+
+    function initClasses() {
+        const toggled = document
+            .querySelector('.navigation-bar-container')!
+            .classList.contains('toggled');
+        const mainContent = document.querySelector('.main-content')!;
+        const param = getQueryParam('navToggled');
+
+        if (param && param !== toggled.toString()) {
+            setQueryParam('navToggled', toggled.toString());
+        }
+
+        mainContent.classList.toggle('toggled', toggled);
+        mainContent.classList.toggle('default', !toggled);
+    }
+
+    window.addEventListener('turbo:render', initClasses, false);
+
+    initClasses();
+</script>

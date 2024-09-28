@@ -1,0 +1,46 @@
+name: Deploy Website
+
+on:
+    workflow_dispatch:
+        inputs:
+            stage:
+                description: 'Stage'
+                required: false
+                default: 'prod'
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: pnpm/action-setup@v3
+              name: Install pnpm
+              with:
+                  version: 9
+                  run_install: false
+
+            - name: Deploy
+              shell: bash
+              env:
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  AWS_REGION: us-east-1
+              run: |
+                  pnpm install
+                  pnpm sst install
+                  pnpm sst deploy --stage ${{ github.event.inputs.stage }} --verbose
+
+            - name: Upload log
+              uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: log
+                  path: |
+                      .sst/log/event.log
+                      .sst/log/pulumi.log
+                      .sst/log/sst.log
+                  if-no-files-found: error
+                  retention-days: 90

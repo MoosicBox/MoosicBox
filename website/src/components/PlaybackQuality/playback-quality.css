@@ -1,0 +1,179 @@
+.playback-quality-playlist-tracks-track {
+    padding: 10px 0;
+}
+
+.playback-quality-playlist-tracks-track-album-artwork {
+    padding-right: 10px;
+}
+
+.playback-quality-playlist-tracks-track-album-artwork-icon {
+    position: relative;
+}
+
+.playback-quality-playlist-tracks-track.playing
+    .playback-quality-playlist-tracks-track-album-artwork-icon
+    .audio-icon {
+    display: inline;
+}
+
+.playback-quality-playlist-tracks-track-album-artwork-icon .audio-icon {
+    display: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+}
+
+.playback-quality-playlist-tracks-track.past {
+    opacity: 0.5;
+}
+
+.playback-quality-playlist-tracks-track {
+    display: flex;
+    flex-direction: row;
+    align-content: center;
+    align-items: center;
+}
+
+.playback-quality-playlist-tracks-track-details-artist {
+    text-align: left;
+    color: #808080;
+}
+
+.playback-quality-playlist-tracks-container {
+    position: relative;
+    overflow: hidden;
+}
+
+.playback-quality-playlist-tracks-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 200px;
+    background: linear-gradient(
+        to bottom,
+        rgba(8, 10, 11, 0) 0%,
+        rgba(8, 10, 11, 1) 90%
+    );
+    pointer-events: none;
+}
+
+.playback-quality-playlist-tracks {
+    max-height: 300px;
+    overflow: hidden;
+    padding: 0 30px;
+}
+
+.playback-quality-list-session-header {
+    display: flex;
+    align-items: center;
+    flex-direction: row;
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 0 30px;
+}
+
+.playback-quality-list-session-header-right {
+    display: flex;
+    margin-left: auto;
+}
+
+.playback-quality-list-session-header-show-audio-zone {
+    user-select: none;
+    margin-left: 13px;
+}
+
+.playback-quality-list-session-header-show-audio-zone .audio-icon {
+    width: 24px;
+}
+
+.playback-quality-list-session-header-delete-session {
+    user-select: none;
+    margin-left: 13px;
+}
+
+.playback-quality-list-session-header-delete-session .trash-icon {
+    width: 24px;
+}
+
+.playback-quality-list-session.active .playback-quality-list-session-header,
+.playback-quality-list-session-header:hover {
+    background-color: #333333;
+}
+
+.playback-quality-list-session-header button {
+    height: 2em;
+}
+
+.playback-quality-list-session-header-speaker-icon {
+    height: 30px;
+    margin-right: 10px;
+    user-select: none;
+}
+
+.playback-quality-list-session-header-checkmark-icon {
+    height: 20px;
+    margin-right: 13px;
+    user-select: none;
+}
+
+.playback-quality-list-session-header-playing-icon {
+    height: 24px;
+    margin-right: 10px;
+    user-select: none;
+}
+
+.playback-quality-list-session-header-session-name {
+    margin-right: 8px;
+}
+
+.playback-quality-list-session-header-session-tracks-queued {
+    margin-right: 15px;
+    font-size: 15px;
+    position: relative;
+    top: 2.5px;
+}
+
+.playback-session-audio-zone-modal-container {
+    max-height: calc(70vh - 230px);
+    overflow: auto;
+    padding-bottom: 15px;
+}
+
+.playback-session-audio-zone-modal-header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    height: 70px;
+    padding-bottom: 10px;
+}
+
+.playback-session-audio-zone-modal-header-close {
+    display: flex;
+    margin-left: auto;
+    cursor: pointer;
+    width: 50px;
+    height: 50px;
+    align-items: center;
+}
+
+.playback-session-audio-zone-modal-header .cross-icon {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    width: 34px;
+}
+
+.playback-session-audio-zone-modal-connection-player {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
+.playback-session-audio-zone-modal-connection-player .audio-icon {
+    width: 24px;
+    margin-left: 10px;
+    cursor: pointer;
+}

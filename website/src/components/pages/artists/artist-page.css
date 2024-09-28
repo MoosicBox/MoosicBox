@@ -1,0 +1,113 @@
+.artist-page-breadcrumbs {
+    padding-top: 20px;
+    padding-bottom: 20px;
+}
+
+.artist-page {
+    padding: 20px 60px;
+}
+
+.artist-page-header {
+    position: relative;
+    padding-bottom: 20px;
+}
+
+.artist-page-artist-info {
+    display: flex;
+    flex-direction: row;
+}
+
+.artist-page-artist-info-cover {
+    padding-right: 20px;
+}
+
+.artist-page-artist-info-details {
+    align-self: center;
+}
+
+.artist-page-artist-info-details-artist-title {
+    font-weight: bold;
+    color: #fff;
+    font-size: 48px;
+    margin: 10px 0;
+}
+
+.artist-page-albums-header {
+    font-weight: bold;
+    color: #fff;
+    font-size: 48px;
+}
+
+.artist-page-albums {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 200px);
+    grid-gap: 15px;
+    justify-content: space-evenly;
+}
+
+.artist-page-header-cover-image-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.artist-page-header-cover-image {
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.artist-page .artist-icon {
+    object-fit: contain;
+}
+
+@media (max-width: 600px) {
+    .artist-page {
+        padding: 0 10px;
+    }
+
+    .artist-page .artist-icon-container,
+    .artist-page .artist-icon {
+        width: 200px !important;
+        height: 200px !important;
+    }
+
+    .artist-page .album-icon-container,
+    .artist-page .album-icon {
+        width: 120px !important;
+        height: 120px !important;
+    }
+
+    .artist-page-albums {
+        grid-template-columns: repeat(auto-fill, 120px);
+        grid-gap: 5px;
+    }
+}
+
+@media (max-width: 1000px) {
+    .artist-page {
+        padding: 0 10px;
+    }
+
+    .artist-page-artist-info {
+        flex-direction: column-reverse;
+    }
+
+    .artist-page-artist-info-details {
+        align-self: auto;
+    }
+
+    .artist-page-artist-info-details {
+        align-self: start;
+    }
+
+    .artist-page .artist-icon-container,
+    .artist-page .artist-icon {
+        width: 300px !important;
+        height: 300px !important;
+    }
+}

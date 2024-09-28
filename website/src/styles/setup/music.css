@@ -1,0 +1,8 @@
+.add-music-folder-button {
+    padding: 10px;
+    background-color: #446b9e1a;
+    border-radius: 3px;
+    border: 2px solid rgba(68, 107, 158, 0);
+    outline: none;
+    cursor: pointer;
+}

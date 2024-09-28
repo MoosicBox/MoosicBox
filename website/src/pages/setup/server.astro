@@ -1,0 +1,8 @@
+---
+import Layout from './Layout.astro';
+import ServerPage from '~/components/pages/server/server-page.tsx';
+---
+
+<Layout title="Setup Server | MoosicBox">
+    <ServerPage client:only />
+</Layout>

@@ -19,7 +19,7 @@ export default defineConfig({
             allow: [
                 searchForWorkspaceRoot(process.cwd()),
                 //"node_modules/@moosicbox/moosicbox-ui/src",
-                //"../MoosicBoxUI/src",
+                //"../../website/src",
             ],
         },
     },

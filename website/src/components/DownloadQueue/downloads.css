@@ -1,0 +1,65 @@
+.downloads-page {
+    padding: 15px 30px;
+}
+
+.downloads-download-task {
+    display: flex;
+    padding: 18px 20px;
+    background-color: #111;
+    margin: 20px 0;
+    border-radius: 6px;
+    align-items: center;
+}
+
+.downloads-download-task-details {
+    padding-left: 20px;
+    flex-grow: 1;
+}
+
+.downloads-download-task-location-details {
+    word-break: break-word;
+}
+
+.downloads-download-task-progress-details {
+    padding-top: 10px;
+}
+
+.downloads-download-task-progress-bar {
+    margin-top: 10px;
+    flex: 1;
+    height: 6px;
+    width: 100%;
+    background-color: #222222;
+    position: relative;
+    border-radius: 10px;
+}
+
+.downloads-download-task-progress-bar-progress {
+    will-change: width;
+    transition-property: width;
+    transition-duration: 1s;
+    transition-timing-function: linear;
+    height: 100%;
+    background-color: #ffffff;
+    border-radius: 10px;
+    pointer-events: none;
+}
+
+.downloads-download-task-progress-bar-progress-trigger {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    bottom: 0;
+    padding: 20px 0;
+    transform: translateY(-50%);
+    cursor: pointer;
+}
+
+.downloads-download-tasks-history {
+    padding-top: 20px;
+}
+
+.downloads-download-tasks {
+    padding: 10px;
+}

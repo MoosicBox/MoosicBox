@@ -1,0 +1,163 @@
+.search-input {
+    position: relative;
+    padding: 0 10px;
+    text-indent: 20px;
+    padding-left: 20px;
+    border: none;
+    border-radius: 100px;
+    box-shadow: 0px 0px 4px 4px rgba(6, 8, 9, 0.3);
+    width: 100%;
+    height: 40px;
+    z-index: 18;
+    box-sizing: border-box;
+}
+
+.search-container:focus-within .search-input {
+    padding-right: 30px;
+    padding-left: 40px;
+    text-indent: 0;
+}
+
+.cancel-search-icon {
+    cursor: pointer;
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 25px;
+    height: 25px;
+    z-index: 18;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.search-container:focus-within .cancel-search-icon {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.search-container {
+    position: fixed;
+    right: 0;
+    top: 0;
+    z-index: 18;
+    padding: 20px 30px;
+    display: flex;
+    flex-direction: column;
+    justify-content: end;
+    width: 40px;
+    max-height: 100%;
+    box-sizing: content-box;
+}
+
+.search-container:focus-within {
+    left: 0;
+    width: unset;
+    box-sizing: border-box;
+}
+
+.search-label-container {
+    position: relative;
+    display: flex;
+    justify-content: end;
+    width: 100%;
+}
+
+.search-label {
+    width: 100%;
+    position: relative;
+    height: 100%;
+}
+
+.search-label:before {
+    content: '';
+    position: absolute;
+    padding: 0px;
+    left: 10px;
+    top: 50%;
+    width: 20px;
+    height: 20px;
+    transform: translateY(-50%);
+    background: url('/img/magnifying-glass.svg') center / contain no-repeat;
+    cursor: pointer;
+    z-index: 21;
+}
+
+.search-backdrop {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    opacity: 0;
+    background-color: #000;
+    pointer-events: none;
+    z-index: 12;
+}
+
+.search-container:focus-within .search-backdrop {
+    pointer-events: all;
+    opacity: 0.8;
+}
+
+.search-input:not(:focus) {
+    cursor: pointer;
+}
+
+.search-container:focus-within {
+    border-radius: 10px;
+    z-index: 20;
+}
+
+.search-results {
+    z-index: 18;
+    overflow: auto;
+    overflow-x: hidden;
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    background: rgba(8, 10, 11, 0.8);
+    border-radius: 20px;
+    overscroll-behavior: contain;
+    display: none;
+}
+
+.search-results-list.loading .search-results-result {
+    opacity: 0.4;
+}
+
+.search-container:focus-within .search-results {
+    display: block;
+}
+
+.search-results-result {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    padding: 10px;
+}
+
+.search-results-result-details-stop-word {
+    color: #808080;
+}
+
+.search-results-result-icon {
+    padding-right: 10px;
+}
+
+a.search-results-result-link {
+    display: block;
+    text-decoration: none;
+    border-radius: 10px;
+    margin-bottom: 5px;
+}
+
+.search-results-result-link:focus,
+.search-results-result-link:hover {
+    background-color: #333333;
+}
+
+.search-results-list {
+    padding: 10px;
+}

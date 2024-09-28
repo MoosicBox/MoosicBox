@@ -1,0 +1,67 @@
+.moosicbox-modal-container {
+    position: fixed;
+    left: -100vw;
+    top: -100vh;
+    width: 300vw;
+    height: 300vh;
+    background-color: rgba(0, 0, 0, 0.4);
+    overscroll-behavior: contain;
+}
+.moosicbox-modal-header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    height: 70px;
+    padding-bottom: 10px;
+}
+
+.moosicbox-modal-header-new-button {
+    height: 25px;
+    margin-left: 10px;
+}
+
+.moosicbox-modal-content {
+    overflow: auto;
+    overscroll-behavior: contain;
+    height: calc(100% - 120px);
+}
+
+.moosicbox-modal-container {
+    z-index: 35;
+}
+
+.moosicbox-modal {
+    position: fixed;
+    width: max(70vw, min(100vw, 1000px));
+    left: 50%;
+    top: 47%;
+    transform: translate(-50%, -50%);
+    background-color: #080a0b;
+    padding: 3% 5%;
+    border-radius: 15px;
+    box-sizing: border-box;
+    box-shadow: 0px 0px 12px 12px rgba(6, 8, 9, 0.3);
+}
+
+.moosicbox-modal-close {
+    display: flex;
+    margin-left: auto;
+    cursor: pointer;
+    width: 50px;
+    height: 50px;
+    align-items: center;
+}
+
+.moosicbox-modal-close .cross-icon {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    width: 34px;
+}
+
+@media (max-width: 600px) {
+    .moosicbox-modal {
+        width: 100%;
+        padding: 3% 5px;
+    }
+}

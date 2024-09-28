@@ -1,0 +1,187 @@
+.albums-container {
+    padding: 15px 30px;
+}
+
+.albums-container.loading {
+    opacity: 0.4;
+}
+
+.albums {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 200px);
+    grid-gap: 15px;
+    justify-content: space-evenly;
+}
+
+.albums-header-text {
+    margin: 0;
+    font-size: 40px;
+}
+
+.albums-header-album-count {
+    margin-top: 0;
+}
+
+.albums-header-sort-icon {
+    cursor: pointer;
+    width: 25px;
+}
+
+.albums-back-to-top-container {
+    position: absolute;
+    left: 50%;
+    text-align: center;
+    z-index: 17;
+    pointer-events: none;
+}
+
+.albums-back-to-top {
+    position: fixed;
+    transform: translateX(-50%);
+    background-color: #181a1b;
+    cursor: pointer;
+    display: inline-block;
+    padding: 15px 10px;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+    box-sizing: border-box;
+    box-shadow: 0px 0px 8px 8px rgba(6, 8, 9, 0.3);
+    pointer-events: all;
+    opacity: 0;
+    display: none;
+    transition: opacity 0.3s;
+}
+
+.albums-back-to-top-content {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
+.albums-back-to-top-chevron {
+    width: 25px;
+    height: 25px;
+    padding: 0 5px;
+}
+
+.albums-header-container {
+    /*position: sticky;
+    top: 0;*/
+    position: relative;
+    display: inline-block;
+    z-index: 12;
+    padding: 15px 30px 0 30px;
+    width: 100%;
+    box-sizing: border-box;
+    box-shadow: 0px 0px 8px 8px rgba(6, 8, 9, 0.3);
+}
+
+.albums-header-text-container {
+    position: relative;
+    display: inline-block;
+}
+
+.albums-header-backdrop {
+    background-color: #080a0b;
+    position: absolute;
+    left: -100vw;
+    right: 0;
+    top: -60px;
+    bottom: 0;
+    z-index: -1;
+}
+
+.albums-controls {
+    display: flex;
+    width: 200px;
+    position: absolute;
+    left: 100%;
+    top: calc(100% + 10px);
+    transform: translate(-50%, 0);
+    border-radius: 10px;
+    padding: 15px;
+    background: #080a0b;
+    z-index: 1;
+}
+
+.albums-sort-controls > div:not(:last-child) {
+    border-bottom: 1px solid #282a2b;
+}
+
+.albums-sort-controls > div {
+    cursor: pointer;
+    display: flex;
+    padding: 10px;
+}
+
+.albums-sort-controls > div:hover {
+    background: #888a8b;
+}
+
+.albums-filter-controls {
+    min-width: fit-content;
+}
+
+.albums-header-controls {
+    border-radius: 10px;
+    padding: 15px;
+    background: rgba(8, 10, 11, 0.8);
+}
+
+.sort-chevron-icon {
+    width: 15px;
+    margin-left: auto;
+}
+
+.filter-albums {
+    display: flex;
+    justify-content: center;
+    align-content: center;
+    align-items: center;
+    margin: 10px 0 20px 0;
+    height: 36px;
+    padding: 0 10px;
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0px 0px 4px 4px rgba(6, 8, 9, 0.3);
+    width: calc(min(100vw - max(240px, min(280px, 15vw)), max(100px, 30vw)));
+    transition: width 0.1s;
+}
+
+.filter-albums:focus {
+    width: calc(100vw - max(240px, min(280px, 15vw)) - 90px);
+    z-index: 20;
+}
+
+.main-content.toggled .filter-albums {
+    width: calc(min(100vw - 60px - 90px, max(100px, 30vw)));
+}
+
+.main-content.toggled .filter-albums:focus {
+    width: calc(100% - 20px);
+}
+
+@media (max-width: 600px) {
+    .albums-header-container {
+        padding: 5px 10px 0 10px;
+    }
+
+    .albums-container {
+        padding: 5px 10px;
+    }
+
+    .albums {
+        grid-template-columns: repeat(auto-fill, 120px);
+        grid-gap: 5px;
+    }
+
+    .albums .album-icon-container,
+    .albums .album-icon {
+        width: 120px !important;
+        height: 120px !important;
+    }
+
+    .albums-header-container {
+        position: relative;
+    }
+}

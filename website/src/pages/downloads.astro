@@ -1,0 +1,140 @@
+---
+import '~/components/DownloadQueue/downloads.css';
+import Layout from '~/layouts/Layout.astro';
+import DownloadQueue from '~/components/DownloadQueue/DownloadQueue';
+
+const search = Object.fromEntries(new URLSearchParams(Astro.url.searchParams));
+---
+
+<Layout title="MoosicBox">
+    <div class="downloads-page">
+        <div class="downloads-header-text-container">
+            <h1 class="downloads-header-text">Downloads</h1>
+        </div>
+        <download-tabs class="downloads-page-tabs" query-param="tab">
+            <download-tab
+                default
+                for="QUEUED"
+                class={`downloads-page-tabs-queued-tab${search.tab === 'QUEUED' ? ' active' : ''}`}
+            >
+                Queued
+            </download-tab>
+            <download-tab
+                for="HISTORY"
+                class={`downloads-page-tabs-history-tab${search.tab === 'HISTORY' ? ' active' : ''}`}
+            >
+                History
+            </download-tab>
+
+            <tab-content
+                value="QUEUED"
+                class={`downloads-page-queued-downloads${search.tab === 'QUEUED' ? ' active' : ''}`}
+            >
+                <DownloadQueue state="QUEUED" client:only />
+            </tab-content>
+            <tab-content
+                value="HISTORY"
+                class={`downloads-page-history-downloads${search.tab === 'HISTORY' ? ' active' : ''}`}
+            >
+                <DownloadQueue state="HISTORY" client:only />
+            </tab-content>
+        </download-tabs>
+    </div>
+</Layout>
+
+<style>
+    tab-content {
+        display: none;
+    }
+
+    tab-content.active {
+        display: block;
+    }
+
+    download-tab {
+        background-color: #333;
+        border-top-left-radius: 10px;
+        border-top-right-radius: 10px;
+        cursor: pointer;
+        padding: 10px;
+        margin-right: 5px;
+        display: inline-block;
+    }
+
+    .downloads-page-tabs tab-content {
+        background-color: #333;
+    }
+</style>
+
+<script>
+    import { setQueryParam, getQueryParam } from '~/services/util';
+
+    class Tabs extends HTMLElement {
+        constructor() {
+            super();
+
+            const queryParam = this.getAttribute('query-param');
+            const tabs = [...this.querySelectorAll('download-tab')];
+            const tabContents = [...this.querySelectorAll('tab-content')];
+
+            function activateTab(tab: Tab) {
+                const value = tab.getAttribute('for');
+
+                tabs.filter((x) => x !== tab).forEach((x) =>
+                    x.classList.toggle('active', false),
+                );
+
+                tab.classList.toggle('active', true);
+
+                if (value) {
+                    if (queryParam && getQueryParam(queryParam) !== value) {
+                        setQueryParam(queryParam, value);
+                    }
+
+                    const content = tabContents.find(
+                        (x) => x.getAttribute('value') === value,
+                    );
+
+                    tabContents
+                        .filter((x) => x !== content)
+                        .forEach((x) => x.classList.toggle('active', false));
+
+                    content?.classList.toggle('active', true);
+                }
+            }
+
+            const queryParamValue = queryParam && getQueryParam(queryParam);
+
+            tabs.forEach((tab) => {
+                tab.addEventListener('click', () => {
+                    activateTab(tab as Tab);
+                });
+
+                if (queryParam) {
+                    if (
+                        queryParamValue &&
+                        tab.getAttribute('for') === queryParamValue
+                    ) {
+                        activateTab(tab as Tab);
+                    } else {
+                        const isDefault = tab.hasAttribute('default');
+
+                        if (isDefault && !queryParamValue) {
+                            activateTab(tab as Tab);
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    customElements.define('download-tabs', Tabs);
+
+    class Tab extends HTMLElement {
+        constructor() {
+            super();
+        }
+    }
+
+    customElements.define('download-tab', Tab);
+</script>

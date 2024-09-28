@@ -1,0 +1,8 @@
+---
+import Layout from '~/layouts/Layout.astro';
+import AuthPage from '~/routes/auth.tsx';
+---
+
+<Layout title="MoosicBox">
+    <AuthPage client:only />
+</Layout>

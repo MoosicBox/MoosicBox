@@ -1,0 +1,8 @@
+---
+import Layout from '~/layouts/Layout.astro';
+import SettingsPage from '~/routes/settings.tsx';
+---
+
+<Layout title="MoosicBox">
+    <SettingsPage client:only />
+</Layout>

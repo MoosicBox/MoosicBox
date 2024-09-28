@@ -1,0 +1,115 @@
+.playlist-tracks {
+    text-align: left;
+    padding: 10px 20px;
+    padding-top: 20px;
+}
+
+.playlist-tracks-play-queue {
+    padding-bottom: 20px;
+}
+
+.playlist-tracks-playing-from {
+    padding-top: 40px;
+    padding-bottom: 10px;
+}
+
+.playlist-tracks-next-up {
+    padding-top: 40px;
+    padding-bottom: 10px;
+}
+
+.playlist-tracks-playing-from a {
+    text-decoration: none;
+}
+
+.playlist-tracks-track {
+    padding: 10px 0;
+}
+
+.playlist-tracks-track-album-artwork {
+    padding-right: 10px;
+}
+
+.playlist-tracks-track.playing
+    .playlist-tracks-track-album-artwork-icon
+    .album {
+    filter: brightness(50%);
+}
+
+.playlist-tracks-track:hover
+    > .playlist-tracks-track-album-artwork
+    > .playlist-tracks-track-album-artwork-icon
+    > .album {
+    filter: brightness(50%);
+}
+
+.playlist-tracks-track-album-artwork-icon {
+    position: relative;
+}
+
+.playlist-tracks-track.playing
+    .playlist-tracks-track-album-artwork-icon
+    .audio-icon {
+    display: inline;
+}
+
+.playlist-tracks-track-album-artwork-icon .audio-icon {
+    display: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+}
+
+.playlist-tracks-track {
+    cursor: pointer;
+}
+
+.playlist-tracks-track:hover
+    > .playlist-tracks-track-album-artwork
+    > .playlist-tracks-track-album-artwork-icon
+    > .play-icon {
+    display: inline;
+}
+
+.playlist-tracks-track-album-artwork-icon .play-icon {
+    position: absolute;
+    display: none;
+    top: 50%;
+    left: 55%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+}
+
+.playlist-tracks-track.past {
+    opacity: 0.5;
+}
+
+.playlist-tracks-track {
+    display: flex;
+    flex-direction: row;
+    align-content: center;
+    align-items: center;
+}
+
+.playlist-tracks-track-details-artist {
+    text-align: left;
+    color: #808080;
+}
+
+.playlist-tracks-track-remove {
+    display: flex;
+    margin-left: auto;
+    cursor: pointer;
+    width: 50px;
+    height: 50px;
+    align-items: center;
+}
+
+.playlist-tracks-track-remove .cross-icon {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    width: 20px;
+}

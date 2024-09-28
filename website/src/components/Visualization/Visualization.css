@@ -1,0 +1,171 @@
+.visualization .button {
+    font-family: inherit;
+    font-size: inherit;
+    padding: 0px;
+    color: #335d92;
+    background-color: rgba(68, 107, 158, 0.1);
+    border-radius: 2em;
+    border: 2px solid rgba(68, 107, 158, 0);
+    outline: none;
+    cursor: pointer;
+    width: 40px;
+    height: 40px;
+}
+
+.visualization .button:focus {
+    border: 2px solid #335d92;
+}
+
+.visualization .button:active {
+    background-color: rgba(68, 107, 158, 0.2);
+}
+
+.visualization-controls {
+    display: flex;
+    height: 100%;
+    padding-top: 10px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.visualization .visualization-now-playing {
+    display: flex;
+    align-items: center;
+    width: 35%;
+}
+
+.visualization .visualization-now-playing-details {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.visualization-album-details {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    height: 70px;
+    padding: 10px 0;
+    width: 100%;
+}
+
+.visualization-album-details-icon {
+    padding: 0 20px;
+}
+
+.dark .visualization-now-playing-details-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.visualization-now-playing-details-artist {
+    margin-top: 7px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.visualization-now-playing-details-album {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dark .visualization-now-playing-details-artist,
+.dark .visualization-now-playing-details-artist a {
+    color: #808080;
+}
+
+.dark .visualization-now-playing-details-album,
+.dark .visualization-now-playing-details-album a {
+    color: #808080;
+}
+
+.visualization-now-playing-details-artist,
+.visualization-now-playing-details-album {
+    font-size: 14px;
+}
+
+.visualization-now-playing-details a {
+    text-decoration: none;
+}
+
+.visualization-now-playing-details a:hover {
+    text-decoration: underline;
+}
+
+.visualization .visualization-media-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    width: max(200px, 30%);
+    max-width: 1000px;
+}
+
+.visualization .visualization-media-controls-seeker {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: row;
+    width: 100%;
+    padding-top: 5px;
+    padding-bottom: 4px;
+}
+
+.visualization .visualization-media-controls-seeker-current-time {
+    width: 65px;
+    text-align: right;
+    padding-right: 10px;
+}
+
+.visualization-media-controls-seeker-bar {
+    border-top: 3px solid #222;
+    padding-top: 8px;
+}
+
+.visualization-media-controls-seeker-bar-visualizer {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+}
+
+.visualization-media-controls-seeker-bar-visualizer-bar {
+    align-self: center;
+    width: 1px;
+    position: relative;
+}
+
+.visualization-media-controls-seeker-bar-progress-trigger:hover
+    + .visualization-media-controls-seeker-bar-progress-tooltip {
+    display: block;
+}
+
+.visualization .visualization-media-controls-seeker-bar-progress-tooltip {
+    display: none;
+    position: absolute;
+    left: 0%;
+    top: -34px;
+    transform: translateX(-50%);
+    background-color: #ffffff;
+    color: black;
+    padding: 1px 4px;
+    border-radius: 3px;
+    pointer-events: none;
+    z-index: 21;
+}
+
+.visualization .visualization-media-controls-seeker-bar-progress-trigger {
+    cursor: pointer;
+}
+
+.visualization .visualization-media-controls-seeker-total-time {
+    width: 65px;
+    text-align: left;
+    padding-left: 10px;
+}
+
+.visualization-canvas {
+    width: 100%;
+}

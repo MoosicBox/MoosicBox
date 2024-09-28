@@ -317,8 +317,7 @@ fn draw_element(
                         if let Some(path) = path
                             .parent()
                             .and_then(|x| x.parent())
-                            .and_then(|x| x.parent())
-                            .map(|x| x.join("MoosicBoxUI").join("public").join(source))
+                            .map(|x| x.join("website").join("public").join(source))
                         {
                             if let Ok(path) = path.canonicalize() {
                                 if path.is_file() {

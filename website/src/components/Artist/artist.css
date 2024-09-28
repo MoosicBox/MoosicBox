@@ -1,0 +1,118 @@
+.artist {
+    text-align: center;
+    display: inline-block;
+}
+
+.artist-controls {
+    cursor: pointer;
+    transition: opacity 0.04s;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    opacity: 0;
+}
+
+.artist-controls:hover {
+    opacity: 1;
+}
+
+.artist-controls .button {
+    border-radius: 100%;
+    border: none;
+    cursor: pointer;
+}
+
+.artist-controls .media-button.play-button {
+    transition: transform 0.1s;
+    background-color: white;
+    padding: 0px;
+    margin: 0px;
+    width: 40px;
+    height: 40px;
+    position: absolute;
+    left: 5%;
+    top: calc(95% - 40px);
+}
+
+.artist-controls .media-button.play-button:hover {
+    transform: scale(1.08);
+}
+
+.artist-controls .media-button.play-button img {
+    width: 16px;
+    position: relative;
+    left: 1px;
+    top: 2px;
+}
+
+.artist-controls .media-button.options-button {
+    transition: transform 0.1s;
+    background-color: white;
+    padding: 0px;
+    margin: 0px;
+    width: 40px;
+    height: 40px;
+    position: absolute;
+    right: 5%;
+    top: calc(95% - 40px);
+}
+
+.artist-controls .media-button.options-button:hover {
+    transform: scale(1.08);
+}
+
+.artist-controls .media-button.options-button img {
+    width: 22px;
+    position: relative;
+    right: 0.5px;
+    top: 2px;
+}
+
+.artist-icon-container {
+    position: relative;
+    display: inline-block;
+    overflow: hidden;
+}
+
+.artist-icon-container:hover ~ .artist-details .artist-title,
+.artist-title:hover {
+    text-decoration: underline;
+}
+
+.artist-title {
+    margin-top: 3px;
+    font-size: 16px;
+}
+
+.artist-title-text {
+    cursor: pointer;
+}
+
+.artist-artist {
+    margin-top: 3px;
+    font-size: 14px;
+}
+
+.dark .artist-title-link {
+    text-decoration: none;
+}
+
+.artist-link-link {
+    cursor: pointer;
+}
+
+.artist-link-link:hover {
+    text-decoration: underline;
+}
+
+.artist-year {
+    margin-top: 3px;
+    font-size: 12px;
+    color: #444;
+}
+
+.dark .artist-year {
+    color: #808080;
+}
