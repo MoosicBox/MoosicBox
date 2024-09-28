@@ -204,6 +204,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 height: get_number(tag, "sx-height").ok(),
             },
             "a" => crate::Element::Anchor {
+                href: get_tag_attr_value_owned(tag, "href"),
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),

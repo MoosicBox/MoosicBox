@@ -82,6 +82,7 @@ pub enum Element {
     },
     Anchor {
         element: ContainerElement,
+        href: Option<String>,
     },
     Heading {
         element: ContainerElement,
