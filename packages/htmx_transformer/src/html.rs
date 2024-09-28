@@ -265,6 +265,30 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     height: get_number(tag, "sx-height").ok(),
                 },
             },
+            "ul" => crate::Element::Ul {
+                element: crate::ContainerElement {
+                    direction: get_direction(tag),
+                    elements: parse_top_children(node.children(), parser),
+                    width: get_number(tag, "sx-width").ok(),
+                    height: get_number(tag, "sx-height").ok(),
+                },
+            },
+            "ol" => crate::Element::Ol {
+                element: crate::ContainerElement {
+                    direction: get_direction(tag),
+                    elements: parse_top_children(node.children(), parser),
+                    width: get_number(tag, "sx-width").ok(),
+                    height: get_number(tag, "sx-height").ok(),
+                },
+            },
+            "li" => crate::Element::Li {
+                element: crate::ContainerElement {
+                    direction: get_direction(tag),
+                    elements: parse_top_children(node.children(), parser),
+                    width: get_number(tag, "sx-width").ok(),
+                    height: get_number(tag, "sx-height").ok(),
+                },
+            },
             _ => {
                 return None;
             }

@@ -87,6 +87,15 @@ pub enum Element {
         element: ContainerElement,
         size: HeaderSize,
     },
+    Ul {
+        element: ContainerElement,
+    },
+    Ol {
+        element: ContainerElement,
+    },
+    Li {
+        element: ContainerElement,
+    },
 }
 
 #[derive(Copy, Clone, Debug)]
