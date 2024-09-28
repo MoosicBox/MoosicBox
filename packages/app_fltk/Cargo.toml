@@ -17,10 +17,12 @@ required-features = []
 
 [dependencies]
 moosicbox_app_fltk_ui   = { path = "../app_fltk/ui", default-features = false }
+moosicbox_env_utils     = { path = "../env_utils", default-features = false }
 moosicbox_logging       = { path = "../logging", default-features = false }
 moosicbox_renderer_fltk = { path = "../renderer_fltk", default-features = false }
 
-log = { workspace = true }
+log   = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
 default = ["unsafe"]

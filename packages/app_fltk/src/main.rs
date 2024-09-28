@@ -1,44 +1,46 @@
-const WIDTH: u16 = 1000;
-const HEIGHT: u16 = 600;
+use moosicbox_env_utils::{default_env_u16, default_env_usize};
+
+static WIDTH: u16 = default_env_u16!("WINDOW_WIDTH", 1000);
+static HEIGHT: u16 = default_env_u16!("WINDOW_HEIGHT", 600);
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     moosicbox_logging::init(None)?;
 
-    let mut renderer = moosicbox_renderer_fltk::Renderer::new(WIDTH, HEIGHT)?
-        .with_route("/", || {
-            moosicbox_app_fltk_ui::home()
-                .into_string()
-                .try_into()
-                .unwrap()
+    let renderer = moosicbox_renderer_fltk::Renderer::new(WIDTH, HEIGHT)?
+        .with_route("/", || async {
+            moosicbox_app_fltk_ui::home().into_string().try_into()
         })
-        .with_route("/home", || {
-            moosicbox_app_fltk_ui::home()
-                .into_string()
-                .try_into()
-                .unwrap()
+        .with_route("/home", || async {
+            moosicbox_app_fltk_ui::home().into_string().try_into()
         })
-        .with_route("/downloads", || {
-            moosicbox_app_fltk_ui::downloads()
-                .into_string()
-                .try_into()
-                .unwrap()
+        .with_route("/downloads", || async {
+            moosicbox_app_fltk_ui::downloads().into_string().try_into()
         })
-        .with_route("/albums", || {
-            moosicbox_app_fltk_ui::albums()
-                .into_string()
-                .try_into()
-                .unwrap()
+        .with_route("/albums", || async {
+            moosicbox_app_fltk_ui::albums().into_string().try_into()
         })
-        .with_route("/artists", || {
-            moosicbox_app_fltk_ui::artists()
-                .into_string()
-                .try_into()
-                .unwrap()
+        .with_route("/artists", || async {
+            moosicbox_app_fltk_ui::artists().into_string().try_into()
         });
 
-    renderer.navigate("/")?;
+    std::thread::spawn({
+        let mut renderer = renderer.clone();
+        move || {
+            let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
+            log::debug!("Running with {threads} max blocking threads");
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .max_blocking_threads(threads)
+                .build()
+                .unwrap();
 
-    renderer.run()?;
+            runtime.block_on(async move {
+                renderer.navigate("/").await.map_err(|e| e.to_string())?;
+                renderer.listen().await;
+                Ok::<_, String>(())
+            })
+        }
+    });
 
-    Ok(())
+    Ok(renderer.run()?)
 }

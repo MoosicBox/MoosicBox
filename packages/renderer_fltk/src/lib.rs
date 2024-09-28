@@ -1,6 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 use std::{
+    pin::Pin,
     str::FromStr as _,
     sync::{atomic::AtomicI32, Arc, Mutex, RwLock},
 };
@@ -14,12 +15,20 @@ use fltk::{
     prelude::*,
     window::{DoubleWindow, Window},
 };
-use flume::Sender;
+use flume::{Receiver, Sender};
+use futures::Future;
 use moosicbox_htmx_transformer::{
     ContainerElement, Element, ElementList, HeaderSize, LayoutDirection, Number,
 };
 
-type RouteFunc = Arc<Box<dyn Fn() -> ElementList + Send + Sync>>;
+type RouteFunc = Arc<
+    Box<
+        dyn (Fn() -> Pin<
+                Box<dyn Future<Output = Result<ElementList, Box<dyn std::error::Error>>> + Send>,
+            >) + Send
+            + Sync,
+    >,
+>;
 
 #[derive(Debug, Clone)]
 pub enum AppEvent {
@@ -36,6 +45,7 @@ pub struct Renderer {
     width: Arc<AtomicI32>,
     height: Arc<AtomicI32>,
     event_sender: Sender<AppEvent>,
+    event_receiver: Receiver<AppEvent>,
 }
 
 impl Renderer {
@@ -57,6 +67,7 @@ impl Renderer {
             width: Arc::new(AtomicI32::new(width as i32)),
             height: Arc::new(AtomicI32::new(height as i32)),
             event_sender: tx,
+            event_receiver: rx,
         };
 
         window.handle({
@@ -93,38 +104,44 @@ impl Renderer {
         window.make_resizable(true);
         window.show();
 
-        std::thread::spawn({
-            let mut renderer = renderer.clone();
-            move || {
-                while let Ok(event) = rx.recv() {
-                    log::debug!("received event {event:?}");
-                    match event {
-                        AppEvent::Navigate { href } => {
-                            if let Err(e) = renderer.navigate(&href) {
-                                log::error!("Failed to navigate: {e:?}");
-                            }
-                        }
-                    }
-                }
-            }
-        });
-
         Ok(renderer)
     }
 
-    pub fn with_route(
+    pub fn with_route<
+        F: Future<Output = Result<ElementList, E>> + Send + 'static,
+        E: Into<Box<dyn std::error::Error>>,
+    >(
         self,
         route: &str,
-        handler: impl Fn() -> ElementList + Send + Sync + 'static,
+        handler: impl Fn() -> F + Send + Sync + Clone + 'static,
     ) -> Self {
-        self.routes
-            .write()
-            .unwrap()
-            .push((route.to_string(), Arc::new(Box::new(handler))));
+        self.routes.write().unwrap().push((
+            route.to_string(),
+            Arc::new(Box::new(move || {
+                Box::pin({
+                    let handler = handler.clone();
+                    async move { handler().await.map_err(|e| e.into()) }
+                })
+            })),
+        ));
         self
     }
 
-    pub fn navigate(&mut self, path: &str) -> Result<(), FltkError> {
+    pub async fn listen(&self) {
+        let mut renderer = self.clone();
+        while let Ok(event) = renderer.event_receiver.recv_async().await {
+            log::debug!("received event {event:?}");
+            match event {
+                AppEvent::Navigate { href } => {
+                    if let Err(e) = renderer.navigate(&href).await {
+                        log::error!("Failed to navigate: {e:?}");
+                    }
+                }
+            }
+        }
+    }
+
+    pub async fn navigate(&mut self, path: &str) -> Result<(), FltkError> {
         let handler = {
             self.routes
                 .read()
@@ -135,7 +152,14 @@ impl Renderer {
                 .map(|(_, handler)| handler)
         };
         if let Some(handler) = handler {
-            self.render(handler())?;
+            match handler().await {
+                Ok(elements) => {
+                    self.render(elements)?;
+                }
+                Err(e) => {
+                    log::error!("Failed to fetch route elements: {e:?}");
+                }
+            }
         } else {
             log::warn!("Invalid navigation path={path:?}");
         }
@@ -176,9 +200,7 @@ impl Renderer {
     }
 
     pub fn run(self) -> Result<(), FltkError> {
-        self.app.run()?;
-
-        Ok(())
+        self.app.run()
     }
 }
 
