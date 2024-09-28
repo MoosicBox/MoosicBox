@@ -112,6 +112,36 @@ macro_rules! default_env_usize {
     };
 }
 
+#[macro_export]
+macro_rules! default_env_u64 {
+    ($name:expr, $default:expr $(,)?) => {
+        match $crate::option_env_u64!($name) {
+            Some(v) => v,
+            None => $default,
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! default_env_u32 {
+    ($name:expr, $default:expr $(,)?) => {
+        match $crate::option_env_u32!($name) {
+            Some(v) => v,
+            None => $default,
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! default_env_u16 {
+    ($name:expr, $default:expr $(,)?) => {
+        match $crate::option_env_u16!($name) {
+            Some(v) => v,
+            None => $default,
+        }
+    };
+}
+
 #[derive(Error, Debug)]
 pub enum OptionEnvUsizeError {
     #[error(transparent)]
@@ -138,12 +168,59 @@ macro_rules! option_env_usize {
     };
 }
 
+pub fn option_env_u64(name: &str) -> Result<Option<u64>, OptionEnvUsizeError> {
+    match std::env::var(name) {
+        Ok(value) => Ok(Some(value.parse::<u64>()?)),
+        Err(_) => Ok(None),
+    }
+}
+
+#[macro_export]
+macro_rules! option_env_u64 {
+    ($name:expr $(,)?) => {
+        match option_env!($name) {
+            Some(v) => match $crate::parse(v) {
+                Ok(v) => Some(v as u64),
+                Err(_e) => panic!("Invalid environment variable value"),
+            },
+            None => None,
+        }
+    };
+}
+
+pub fn option_env_u32(name: &str) -> Result<Option<u32>, OptionEnvUsizeError> {
+    match std::env::var(name) {
+        Ok(value) => Ok(Some(value.parse::<u32>()?)),
+        Err(_) => Ok(None),
+    }
+}
+
 #[macro_export]
 macro_rules! option_env_u32 {
     ($name:expr $(,)?) => {
         match option_env!($name) {
             Some(v) => match $crate::parse(v) {
                 Ok(v) => Some(v as u32),
+                Err(_e) => panic!("Invalid environment variable value"),
+            },
+            None => None,
+        }
+    };
+}
+
+pub fn option_env_u16(name: &str) -> Result<Option<u16>, OptionEnvUsizeError> {
+    match std::env::var(name) {
+        Ok(value) => Ok(Some(value.parse::<u16>()?)),
+        Err(_) => Ok(None),
+    }
+}
+
+#[macro_export]
+macro_rules! option_env_u16 {
+    ($name:expr $(,)?) => {
+        match option_env!($name) {
+            Some(v) => match $crate::parse(v) {
+                Ok(v) => Some(v as u16),
                 Err(_e) => panic!("Invalid environment variable value"),
             },
             None => None,
