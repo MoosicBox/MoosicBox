@@ -1,10 +1,15 @@
 [package]
 authors     = ["Braden Steffaniak"]
-description = ""
+categories  = ["gui"]
+description = "Player plugin"
 edition     = "2021"
 exclude     = ["/examples", "/node_modules", "/webview-dist", "/webview-src"]
+keywords    = ["app", "desktop", "gui", "linux", "macos", "windows"]
+license     = "MPL-2.0"
 links       = "tauri-plugin-player"
 name        = "tauri-plugin-player"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [package.metadata.cargo-machete]

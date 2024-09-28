@@ -1,6 +1,6 @@
 [package]
 authors     = ["Braden Steffaniak"]
-categories  = []
+categories  = ["gui"]
 description = "MoosicBoxApp bundled package"
 edition     = "2021"
 keywords    = ["bundled"]

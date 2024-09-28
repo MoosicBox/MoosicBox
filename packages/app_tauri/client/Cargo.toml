@@ -1,6 +1,6 @@
 [package]
 authors     = ["Braden Steffaniak"]
-categories  = []
+categories  = ["gui"]
 description = "MoosicBoxApp client package"
 edition     = "2021"
 keywords    = ["client"]

@@ -1,6 +1,6 @@
 [package]
 authors     = ["Braden Steffaniak"]
-categories  = []
+categories  = ["gui"]
 description = "Create config for MoosicBox App"
 edition     = "2021"
 keywords    = ["config"]
