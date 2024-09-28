@@ -72,7 +72,7 @@ pub fn footer() -> Markup {
 }
 
 #[must_use]
-pub fn main(slot: Markup) -> Markup {
+pub fn main(slot: &Markup) -> Markup {
     html! {
         main class="main-content" sx-background-color {
             (slot)
@@ -82,14 +82,14 @@ pub fn main(slot: Markup) -> Markup {
 
 #[must_use]
 pub fn home() -> Markup {
-    page(html! {
+    page(&html! {
         ("home")
     })
 }
 
 #[must_use]
 pub fn downloads() -> Markup {
-    page(html! {
+    page(&html! {
         ("downloads")
     })
 }
@@ -107,7 +107,7 @@ pub fn albums() -> Markup {
         ),
     ];
 
-    page(html! {
+    page(&html! {
         div sx-dir="row" {
             @for (title, img) in albums {
                 div {
@@ -121,18 +121,18 @@ pub fn albums() -> Markup {
 
 #[must_use]
 pub fn artists() -> Markup {
-    page(html! {
+    page(&html! {
         ("artists")
     })
 }
 
 #[must_use]
-pub fn page(slot: Markup) -> Markup {
+pub fn page(slot: &Markup) -> Markup {
     html! {
         div id="root" class="dark" {
             section class="navigation-bar-and-main-content" sx-dir="row" {
                 (sidebar_navigation())
-                (main(slot))
+                (main(&slot))
             }
             (footer())
         }
