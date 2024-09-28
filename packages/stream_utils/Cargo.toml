@@ -20,7 +20,7 @@ log         = { workspace = true }
 pin-project = { workspace = true }
 reqwest     = { workspace = true, optional = true }
 thiserror   = { workspace = true, optional = true }
-tokio       = { workspace = true }
+tokio       = { workspace = true, features = ["sync"] }
 tokio-util  = { workspace = true, optional = true }
 
 [features]
