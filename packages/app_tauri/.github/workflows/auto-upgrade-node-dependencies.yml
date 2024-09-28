@@ -1,0 +1,88 @@
+name: Auto-upgrade Node Dependencies
+
+on:
+    workflow_dispatch:
+    schedule:
+        - cron: '0 3 * * *'
+
+env:
+    CARGO_TERM_COLOR: always
+    AWS_REGION: us-east-1
+
+jobs:
+    upgrade:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+                  path: MoosicBoxServer
+
+            - name: Copy Files
+              working-directory: MoosicBoxServer/packages/app_tauri
+              shell: bash
+              run: |
+                  ./copy-files.sh
+
+            - uses: pnpm/action-setup@v3
+              name: Install pnpm
+              with:
+                  version: 9
+                  run_install: false
+
+            - name: Get pnpm store directory
+              shell: bash
+              run: |
+                  echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+            - name: ⚡ Cache pnpm
+              uses: actions/cache@v4
+              with:
+                  path: ${{ env.STORE_PATH }}
+                  key: ${{ matrix.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+                  restore-keys: |
+                      ${{ matrix.os }}-pnpm-store-
+
+            - uses: dtolnay/rust-toolchain@stable
+
+            - name: Generate config
+              working-directory: MoosicBoxServer/packages/app_tauri
+              run: cargo run --package moosicbox_app_create_config -- -o src/config.ts
+
+            - name: pnpm install
+              working-directory: MoosicBoxServer/packages/app_tauri
+              run: pnpm install
+
+            - name: Upgrade
+              working-directory: MoosicBoxServer/packages/app_tauri
+              id: upgrade
+              shell: bash
+              run: |
+                  pnpm update
+                  if [ -n "$(git status --porcelain)" ]; then
+                      echo "Found upgrades"
+                      echo "upgraded=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "No upgrades"
+                      echo "upgraded=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Validate
+              if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
+              working-directory: MoosicBoxServer/packages/app_tauri
+              shell: bash
+              run: |
+                  pnpm validate
+
+            - name: Commit
+              if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
+              working-directory: MoosicBoxServer/packages/app_tauri
+              shell: bash
+              run: |
+                  git config user.name "MoosicBoxBot"
+                  git config user.email "MoosicBoxBot@gmail.com"
+                  git add .
+                  git commit --message "Upgrade Dependencies"
+                  echo "Pushing upgrades"
+                  git push origin master

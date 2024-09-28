@@ -1,0 +1,66 @@
+name: Create Master Moosicbox Tauri App Release
+
+on:
+    push:
+        branches: [master]
+    workflow_dispatch:
+
+jobs:
+    create-master-release:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout audiotags
+              uses: actions/checkout@v4
+              with:
+                  repository: BSteffaniak/audiotags
+                  ref: feat/add-full-date-capabilities
+                  path: audiotags
+
+            - uses: actions/checkout@v4
+              with:
+                  token: ${{ secrets.WORKFLOW_MANAGEMENT_TOKEN }}
+                  path: MoosicBoxServer
+
+            - name: Get release hash
+              id: release_hash
+              run: |
+                  HASH="$({
+                      git -C MoosicBoxServer rev-parse --verify HEAD;
+                      git -C audiotags rev-parse --verify HEAD;
+                  } | shasum | head -c 10)"
+                  echo "hash: $HASH"
+                  echo "hash=$HASH" >> $GITHUB_OUTPUT
+
+            - name: Check tag exists for SHA
+              id: check_exists
+              working-directory: MoosicBoxServer
+              run: |
+                  git fetch --unshallow --tags
+                  if [[ -n $(git show-ref --tags -d) ]]; then
+                      git show-ref --tags -d
+
+                      if [[ $(git show-ref --tags -d | grep "${{ github.sha }}") =~ "master-${{ steps.release_hash.outputs.hash }}" ]]; then
+                          echo "exists=true" >> $GITHUB_OUTPUT
+                          echo "exists"
+                      else
+                          echo "exists=false" >> $GITHUB_OUTPUT
+                          echo "does not exist"
+                      fi
+                  fi
+
+            - uses: BSteffaniak/delete-older-releases@master
+              if: ${{ steps.check_exists.outputs.exists != 'true' }}
+              with:
+                  keep_latest: 2
+                  delete_tag_pattern: ^master-[0-9a-f]{10,10}$
+                  regex: true
+              env:
+                  GITHUB_TOKEN: ${{ secrets.WORKFLOW_MANAGEMENT_TOKEN }}
+
+            - name: Create and push tag
+              if: ${{ steps.check_exists.outputs.exists != 'true' }}
+              working-directory: MoosicBoxServer
+              run: |
+                  git tag master-${{ steps.release_hash.outputs.hash }}
+                  git push origin master-${{ steps.release_hash.outputs.hash }}

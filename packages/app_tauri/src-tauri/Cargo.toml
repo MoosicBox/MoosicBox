@@ -1,0 +1,104 @@
+[package]
+authors     = ["Braden Steffaniak"]
+description = "MoosicBox"
+edition     = "2021"
+license     = "MPL-2.0"
+name        = "moosicbox_app"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.12.0"
+
+[package.metadata.cargo-machete]
+ignored = ["strum", "tauri_build"]
+
+[lib]
+crate-type = ["cdylib", "rlib", "staticlib"]
+name       = "moosicbox_lib"
+
+[build-dependencies]
+tauri-build = { workspace = true, features = [] }
+
+[dependencies]
+moosicbox_app_ws = { path = "../ws", default-features = false }
+
+moosicbox_assert = { path = "../../assert", default-features = false }
+moosicbox_audio_output = { path = "../../audio_output", default-features = false }
+moosicbox_audio_zone = { path = "../../audio_zone", default-features = false }
+moosicbox_core = { path = "../../core", default-features = false }
+moosicbox_env_utils = { path = "../../env_utils", default-features = false }
+moosicbox_library = { path = "../../library", default-features = false }
+moosicbox_logging = { path = "../../logging", default-features = false }
+moosicbox_mdns = { path = "../../mdns", default-features = false, features = [
+    "scanner",
+] }
+moosicbox_music_api = { path = "../../music_api", default-features = false }
+moosicbox_paging = { path = "../../paging", default-features = false }
+moosicbox_player = { path = "../../player", default-features = false, features = [
+    "local",
+] }
+moosicbox_remote_library = { path = "../../remote_library", default-features = false }
+moosicbox_session = { path = "../../session", default-features = false }
+moosicbox_task = { path = "../../task", default-features = false }
+moosicbox_upnp = { path = "../../upnp", default-features = false, features = [
+    "player",
+] }
+moosicbox_ws = { path = "../../ws", default-features = false }
+
+# Bundled Dependencies
+moosicbox_app_bundled = { path = "../bundled", default-features = false, optional = true }
+
+# Client Dependencies
+moosicbox_app_client = { path = "../client", default-features = false, optional = true }
+
+tauri-plugin-player = { path = "../tauri-plugin-player" }
+
+async-recursion = { workspace = true }
+console-subscriber = { workspace = true }
+debounce = { workspace = true, optional = true }
+kanal = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+reqwest = { workspace = true, default-features = false, features = [
+    "rustls-tls",
+] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+tauri = { workspace = true, features = ["protocol-asset"] }
+tauri-plugin-dialog = { workspace = true }
+tauri-plugin-notification = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+tokio-util = { workspace = true }
+
+[features]
+default = ["cpal"]
+
+# this feature is used for production builds or when `devPath` points to the filesystem
+# DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]
+
+android = []
+desktop = ["all-encoders", "moosicbox_app_bundled?/tunnel"]
+
+all-encoders = ["aac", "flac", "mp3"]
+
+bundled = ["dep:moosicbox_app_bundled"]
+client  = ["dep:moosicbox_app_client"]
+
+# Encoders
+aac  = ["moosicbox_app_bundled?/aac", "moosicbox_core/aac"]
+flac = ["moosicbox_app_bundled?/flac", "moosicbox_core/flac"]
+mp3  = ["moosicbox_app_bundled?/mp3", "moosicbox_core/mp3"]
+
+# Player audio outputs
+asio                = ["moosicbox_player/asio"]
+cpal                = ["moosicbox_player/cpal", "moosicbox_player/oboe-shared-stdcxx"]
+jack                = ["moosicbox_player/jack"]
+pulseaudio          = ["moosicbox_player/pulseaudio"]
+pulseaudio-simple   = ["moosicbox_player/pulseaudio-simple"]
+pulseaudio-standard = ["moosicbox_player/pulseaudio-standard"]
+
+aptabase = ["dep:debounce"]
+
+devtools = ["tauri/devtools"]

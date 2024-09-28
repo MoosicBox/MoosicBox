@@ -1,0 +1,58 @@
+name: Build and Validate UI
+
+on:
+    push:
+        branches: ['master']
+    pull_request:
+        branches: ['master']
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        strategy:
+            fail-fast: false
+
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  path: MoosicBoxServer
+
+            - uses: dtolnay/rust-toolchain@stable
+
+            - name: Generate config
+              working-directory: MoosicBoxServer/package/app_tauri
+              run: cargo run --package moosicbox_app_create_config -- -o src/config.ts
+
+            - name: Copy Files
+              working-directory: MoosicBoxServer/package/app_tauri
+              shell: bash
+              run: |
+                  ./copy-files.sh
+
+            - uses: pnpm/action-setup@v3
+              name: Install pnpm
+              with:
+                  version: 9
+                  run_install: false
+
+            - name: Get pnpm store directory
+              shell: bash
+              run: |
+                  echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+            - name: pnpm install
+              working-directory: MoosicBoxServer/package/app_tauri
+              run: pnpm install
+
+            - name: pretty
+              working-directory: MoosicBoxServer/package/app_tauri
+              run: pnpm pretty
+
+            - name: lint
+              working-directory: MoosicBoxServer/package/app_tauri
+              run: pnpm lint
+
+            - name: typecheck
+              working-directory: MoosicBoxServer/package/app_tauri
+              run: pnpm typecheck

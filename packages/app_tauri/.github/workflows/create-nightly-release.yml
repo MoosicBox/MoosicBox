@@ -1,0 +1,47 @@
+name: Create Nightly MoosicBox Tauri App Release
+
+on:
+    schedule:
+        - cron: '0 5 * * *'
+
+jobs:
+    create-nightly-release:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  token: ${{ secrets.WORKFLOW_MANAGEMENT_TOKEN }}
+
+            - name: Check tag exists for SHA
+              id: check_exists
+              run: |
+                  git fetch --unshallow --tags
+                  git show-ref --tags -d
+                  if [[ $(git show-ref --tags -d | grep "${{ github.sha }}") =~ "-nightly-" ]]; then
+                      echo "exists=true" >> $GITHUB_OUTPUT
+                      echo "exists"
+                  else
+                      echo "exists=false" >> $GITHUB_OUTPUT
+                      echo "does not exist"
+                  fi
+
+            - uses: dev-drprasad/delete-older-releases@v0.2.0
+              if: ${{ steps.check_exists.outputs.exists != 'true' }}
+              with:
+                  keep_latest: 2
+                  delete_tag_pattern: -nightly-
+              env:
+                  GITHUB_TOKEN: ${{ secrets.WORKFLOW_MANAGEMENT_TOKEN }}
+
+            - name: Get Tag Name
+              if: ${{ steps.check_exists.outputs.exists != 'true' }}
+              id: tag_name
+              run: |
+                  echo "TAG_NAME=${GITHUB_REF##*/}-nightly-$(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
+            - name: Create and push tag
+              if: ${{ steps.check_exists.outputs.exists != 'true' }}
+              run: |
+                  git tag ${{ steps.tag_name.outputs.TAG_NAME }}
+                  git push origin ${{ steps.tag_name.outputs.TAG_NAME }}

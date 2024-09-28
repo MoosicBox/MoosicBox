@@ -1,0 +1,32 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["network-programming"]
+description = "MoosicBoxApp ws package"
+edition     = "2021"
+keywords    = ["websocket"]
+license     = "MPL-2.0"
+name        = "moosicbox_app_ws"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_assert    = { path = "../../assert", default-features = false }
+moosicbox_env_utils = { path = "../../env_utils", default-features = false }
+moosicbox_logging   = { path = "../../logging", default-features = false }
+moosicbox_task      = { path = "../../task", default-features = false }
+
+async-trait       = { workspace = true }
+bytes             = { workspace = true }
+futures-channel   = { workspace = true }
+futures-util      = { workspace = true }
+log               = { workspace = true }
+thiserror         = { workspace = true }
+tokio             = { workspace = true, features = ["tracing"] }
+tokio-tungstenite = { workspace = true }
+tokio-util        = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = []

@@ -1,0 +1,20 @@
+---
+import Layout from './Layout.astro';
+import { config } from '~/config';
+---
+
+<Layout title="Hello | MoosicBox">
+    <p>hello!</p>
+
+    {
+        config.bundled ? (
+            <a href="./profile">Next</a>
+        ) : (
+            <a href="./server">Next</a>
+        )
+    }
+</Layout>
+
+<script>
+    localStorage.setItem('settingUp', 'true');
+</script>

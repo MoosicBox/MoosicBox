@@ -1,0 +1,19 @@
+[package]
+authors     = ["Braden Steffaniak"]
+description = ""
+edition     = "2021"
+exclude     = ["/examples", "/node_modules", "/webview-dist", "/webview-src"]
+links       = "tauri-plugin-player"
+name        = "tauri-plugin-player"
+version     = "0.1.0"
+
+[package.metadata.cargo-machete]
+ignored = ["tauri_plugin"]
+
+[dependencies]
+serde     = { workspace = true }
+tauri     = { workspace = true }
+thiserror = { workspace = true }
+
+[build-dependencies]
+tauri-plugin = { workspace = true }

@@ -1,0 +1,30 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = []
+description = "Create config for MoosicBox App"
+edition     = "2021"
+keywords    = ["config"]
+license     = "MPL-2.0"
+name        = "moosicbox_app_create_config"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+version     = "0.1.0"
+
+[[bin]]
+name              = "moosicbox_create_config"
+path              = "src/main.rs"
+required-features = []
+
+[dependencies]
+moosicbox_assert  = { path = "../../assert", default-features = false }
+moosicbox_logging = { path = "../../logging", default-features = false }
+
+clap       = { workspace = true }
+log        = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = []

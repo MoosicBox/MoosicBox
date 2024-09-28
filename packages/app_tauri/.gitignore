@@ -1,0 +1,10 @@
+node_modules
+dist/
+.solid/
+.astro/settings.json
+/src/*
+!/src/app-*/
+!/src/startup.ts
+!/src/ws.ts
+/public/
+target/
