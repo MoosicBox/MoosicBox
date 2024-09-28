@@ -17,8 +17,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .try_into()
                 .unwrap()
         })
+        .with_route("/downloads", || {
+            moosicbox_app_fltk_ui::downloads()
+                .into_string()
+                .try_into()
+                .unwrap()
+        })
         .with_route("/albums", || {
-            moosicbox_app_fltk_ui::home()
+            moosicbox_app_fltk_ui::albums()
+                .into_string()
+                .try_into()
+                .unwrap()
+        })
+        .with_route("/artists", || {
+            moosicbox_app_fltk_ui::artists()
                 .into_string()
                 .try_into()
                 .unwrap()
