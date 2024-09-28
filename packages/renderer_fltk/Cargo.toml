@@ -15,8 +15,9 @@ moosicbox_htmx_transformer = { path = "../htmx_transformer", default-features = 
     "html",
 ] }
 
-fltk = { workspace = true }
-log  = { workspace = true }
+fltk  = { workspace = true }
+flume = { workspace = true }
+log   = { workspace = true }
 
 [features]
 default = ["unsafe"]

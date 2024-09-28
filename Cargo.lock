@@ -4834,8 +4834,10 @@ version = "0.1.0"
 dependencies = [
  "log",
  "moosicbox_app_fltk_ui",
+ "moosicbox_env_utils",
  "moosicbox_logging",
  "moosicbox_renderer_fltk",
+ "tokio",
 ]
 
 [[package]]
@@ -5435,8 +5437,12 @@ name = "moosicbox_renderer_fltk"
 version = "0.1.0"
 dependencies = [
  "fltk",
+ "flume",
+ "futures",
  "log",
  "moosicbox_htmx_transformer",
+ "moosicbox_task",
+ "tokio",
 ]
 
 [[package]]
