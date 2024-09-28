@@ -1,8 +1,3 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, LazyLock},
-};
-
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
@@ -10,7 +5,6 @@ use actix_web::{
     web::{self, Json},
     Result, Scope,
 };
-use moosicbox_audio_output::default_output_factory;
 use moosicbox_core::{
     app::AppState,
     integer_range::{parse_integer_ranges_to_ids, ParseIntegersError},
@@ -23,8 +17,8 @@ use moosicbox_session::models::PlaybackTarget;
 use serde::Deserialize;
 
 use crate::{
-    local::LocalPlayer, ApiPlaybackStatus, PlaybackHandler, PlaybackStatus, PlayerError,
-    PlayerSource, Track, DEFAULT_PLAYBACK_RETRY_OPTIONS,
+    ApiPlaybackStatus, PlaybackHandler, PlaybackStatus, PlayerError, Track,
+    DEFAULT_PLAYBACK_RETRY_OPTIONS,
 };
 
 pub fn bind_services<
@@ -123,52 +117,41 @@ impl From<PlayerError> for actix_web::Error {
     }
 }
 
-static PLAYER_CACHE: LazyLock<Arc<tokio::sync::Mutex<HashMap<String, PlaybackHandler>>>> =
-    LazyLock::new(|| Arc::new(tokio::sync::Mutex::new(HashMap::new())));
+#[cfg(feature = "local")]
+static PLAYER_CACHE: std::sync::LazyLock<
+    std::sync::Arc<tokio::sync::Mutex<std::collections::HashMap<String, PlaybackHandler>>>,
+> = std::sync::LazyLock::new(|| {
+    std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()))
+});
 
-async fn get_player(host: Option<&str>) -> Result<PlaybackHandler, actix_web::Error> {
-    Ok(PLAYER_CACHE
-        .lock()
-        .await
-        .entry(match &host {
-            Some(h) => format!("stream|{h}"),
-            None => "local".into(),
-        })
-        .or_insert(if let Some(host) = host {
-            let local_player = LocalPlayer::new(
-                PlayerSource::Remote {
-                    host: host.to_string(),
-                    query: None,
-                    headers: None,
-                },
-                Some(super::PlaybackType::Stream),
-            )
+async fn get_player(
+    #[allow(unused)] host: Option<&str>,
+) -> Result<PlaybackHandler, actix_web::Error> {
+    #[cfg(not(feature = "local"))]
+    {
+        unimplemented!("get_player not supported without `local` feature")
+    }
+    #[cfg(feature = "local")]
+    {
+        use crate::{local::LocalPlayer, PlayerSource};
+        use moosicbox_audio_output::default_output_factory;
+
+        Ok(PLAYER_CACHE
+            .lock()
             .await
-            .map_err(ErrorInternalServerError)?
-            .with_output(
-                default_output_factory()
-                    .await
-                    .ok_or(ErrorInternalServerError("Missing default audio output"))?,
-            );
-
-            let playback = local_player.playback.clone();
-            let output = local_player.output.clone();
-            let receiver = local_player.receiver.clone();
-
-            let handler = PlaybackHandler::new(local_player.clone())
-                .with_playback(playback)
-                .with_output(output)
-                .with_receiver(receiver);
-
-            local_player
-                .playback_handler
-                .write()
-                .unwrap()
-                .replace(handler.clone());
-
-            handler
-        } else {
-            let local_player = LocalPlayer::new(PlayerSource::Local, None)
+            .entry(match &host {
+                Some(h) => format!("stream|{h}"),
+                None => "local".into(),
+            })
+            .or_insert(if let Some(host) = host {
+                let local_player = LocalPlayer::new(
+                    PlayerSource::Remote {
+                        host: host.to_string(),
+                        query: None,
+                        headers: None,
+                    },
+                    Some(super::PlaybackType::Stream),
+                )
                 .await
                 .map_err(ErrorInternalServerError)?
                 .with_output(
@@ -177,24 +160,51 @@ async fn get_player(host: Option<&str>) -> Result<PlaybackHandler, actix_web::Er
                         .ok_or(ErrorInternalServerError("Missing default audio output"))?,
                 );
 
-            let playback = local_player.playback.clone();
-            let output = local_player.output.clone();
-            let receiver = local_player.receiver.clone();
+                let playback = local_player.playback.clone();
+                let output = local_player.output.clone();
+                let receiver = local_player.receiver.clone();
 
-            let handler = PlaybackHandler::new(local_player.clone())
-                .with_playback(playback)
-                .with_output(output)
-                .with_receiver(receiver);
+                let handler = PlaybackHandler::new(local_player.clone())
+                    .with_playback(playback)
+                    .with_output(output)
+                    .with_receiver(receiver);
 
-            local_player
-                .playback_handler
-                .write()
-                .unwrap()
-                .replace(handler.clone());
+                local_player
+                    .playback_handler
+                    .write()
+                    .unwrap()
+                    .replace(handler.clone());
 
-            handler
-        })
-        .clone())
+                handler
+            } else {
+                let local_player = LocalPlayer::new(PlayerSource::Local, None)
+                    .await
+                    .map_err(ErrorInternalServerError)?
+                    .with_output(
+                        default_output_factory()
+                            .await
+                            .ok_or(ErrorInternalServerError("Missing default audio output"))?,
+                    );
+
+                let playback = local_player.playback.clone();
+                let output = local_player.output.clone();
+                let receiver = local_player.receiver.clone();
+
+                let handler = PlaybackHandler::new(local_player.clone())
+                    .with_playback(playback)
+                    .with_output(output)
+                    .with_receiver(receiver);
+
+                local_player
+                    .playback_handler
+                    .write()
+                    .unwrap()
+                    .replace(handler.clone());
+
+                handler
+            })
+            .clone())
+    }
 }
 
 pub async fn get_track_or_ids_from_track_id_ranges(
