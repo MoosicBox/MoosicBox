@@ -2200,6 +2200,13 @@ impl TidalMusicApi {
     }
 }
 
+#[cfg(not(feature = "db"))]
+impl Default for TidalMusicApi {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl MusicApi for TidalMusicApi {
     fn source(&self) -> ApiSource {

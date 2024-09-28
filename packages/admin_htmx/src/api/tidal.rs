@@ -9,6 +9,7 @@ use actix_web::{
 use base64::{engine::general_purpose, Engine as _};
 use maud::{html, Markup};
 use moosicbox_database::profiles::LibraryDatabase;
+#[cfg(feature = "scan")]
 use moosicbox_music_api::MusicApis;
 #[cfg(feature = "scan")]
 use moosicbox_scan::ScanOrigin;
@@ -157,7 +158,7 @@ pub struct GetSettingsQuery {
 #[route("settings", method = "GET")]
 pub async fn get_settings_endpoint(
     _htmx: Htmx,
-    query: web::Query<GetSettingsQuery>,
+    #[allow(unused)] query: web::Query<GetSettingsQuery>,
     db: LibraryDatabase,
 ) -> Result<Markup, actix_web::Error> {
     settings(

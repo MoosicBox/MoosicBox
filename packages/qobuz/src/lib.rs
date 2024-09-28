@@ -1875,6 +1875,13 @@ impl QobuzMusicApi {
     }
 }
 
+#[cfg(not(feature = "db"))]
+impl Default for QobuzMusicApi {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl MusicApi for QobuzMusicApi {
     fn source(&self) -> ApiSource {

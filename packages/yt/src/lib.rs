@@ -2224,6 +2224,13 @@ impl YtMusicApi {
     }
 }
 
+#[cfg(not(feature = "db"))]
+impl Default for YtMusicApi {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl MusicApi for YtMusicApi {
     fn source(&self) -> ApiSource {
