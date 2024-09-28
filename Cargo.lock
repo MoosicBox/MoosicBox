@@ -5441,8 +5441,6 @@ dependencies = [
  "futures",
  "log",
  "moosicbox_htmx_transformer",
- "moosicbox_task",
- "tokio",
 ]
 
 [[package]]
