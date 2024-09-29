@@ -7,9 +7,7 @@ use futures::Future;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(untagged)]
+#[derive(Debug)]
 pub enum Page<T> {
     WithTotal {
         items: Vec<T>,
@@ -17,7 +15,6 @@ pub enum Page<T> {
         limit: u32,
         total: u32,
     },
-    #[serde(rename_all = "camelCase")]
     WithHasMore {
         items: Vec<T>,
         offset: u32,
@@ -41,7 +38,42 @@ impl<'__s, T> utoipa::ToSchema<'__s> for Page<T> {
     }
 }
 
-impl<T: Serialize> ::serde::Serialize for Page<T> {
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for Page<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Extended<T> {
+            items: Vec<T>,
+            offset: u32,
+            limit: u32,
+            total: Option<u32>,
+            has_more: bool,
+        }
+
+        let extended: Extended<T> = Extended::deserialize(deserializer)?;
+
+        Ok(if let Some(total) = extended.total {
+            Page::WithTotal {
+                offset: extended.offset,
+                limit: extended.limit,
+                total,
+                items: extended.items,
+            }
+        } else {
+            Page::WithHasMore {
+                offset: extended.offset,
+                limit: extended.limit,
+                has_more: extended.has_more,
+                items: extended.items,
+            }
+        })
+    }
+}
+
+impl<T: Serialize> Serialize for Page<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
