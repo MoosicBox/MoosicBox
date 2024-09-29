@@ -48,12 +48,14 @@ thiserror       = { workspace = true }
 tokio           = { workspace = true, features = ["macros", "tracing"] }
 
 [features]
-default = ["aac", "api", "flac", "mp3", "openapi", "opus"]
+default = ["all-formats", "api", "openapi"]
 
 fail-on-warnings = []
 
 api     = ["dep:actix-web", "moosicbox_database/api"]
 openapi = ["dep:utoipa", "moosicbox_search/openapi"]
+
+all-formats = ["aac", "flac", "mp3", "opus"]
 
 aac = [
     "dep:moosicbox_audio_output",
