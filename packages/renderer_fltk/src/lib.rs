@@ -180,6 +180,7 @@ impl Renderer {
             img_height as i32,
             enums::ColorDepth::Rgb8,
         )?;
+        let image = SharedImage::from_image(image)?;
 
         if !from_cache {
             IMAGE_CACHE
