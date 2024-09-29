@@ -174,7 +174,7 @@ impl Renderer {
             (img.as_bytes().to_vec(), img.width(), img.height())
         };
 
-        let mut image = RgbImage::new(
+        let image = RgbImage::new(
             &bytes,
             img_width as i32,
             img_height as i32,
@@ -192,10 +192,10 @@ impl Renderer {
             let width = calc_number(width.unwrap_or_default(), context_width).round() as i32;
             let height = calc_number(height.unwrap_or_default(), context_height).round() as i32;
 
-            image.scale(width, height, true, true);
+            frame.set_size(width, height);
         }
 
-        frame.set_image(Some(image));
+        frame.set_image_scaled(Some(image));
         frame.set_damage(true);
 
         Ok(())
@@ -518,7 +518,7 @@ fn draw_element(
                         {
                             if let Ok(path) = path.canonicalize() {
                                 if path.is_file() {
-                                    let mut image = SharedImage::load(path)?;
+                                    let image = SharedImage::load(path)?;
 
                                     if width.is_some() || height.is_some() {
                                         let width =
@@ -530,10 +530,10 @@ fn draw_element(
                                                 .round()
                                                 as i32;
 
-                                        image.scale(width, height, true, true);
+                                        frame.set_size(width, height);
                                     }
 
-                                    frame.set_image(Some(image));
+                                    frame.set_image_scaled(Some(image));
                                 }
                             }
                         }
