@@ -59,41 +59,60 @@ pub enum AppEvent {
 
 #[derive(Clone)]
 pub struct Renderer {
-    app: App,
-    window: DoubleWindow,
+    app: Option<App>,
+    window: Option<DoubleWindow>,
     elements: Arc<Mutex<ElementList>>,
     root: Arc<RwLock<Option<group::Flex>>>,
     routes: Arc<RwLock<Vec<(String, RouteFunc)>>>,
     width: Arc<AtomicI32>,
     height: Arc<AtomicI32>,
-    event_sender: Sender<AppEvent>,
-    event_receiver: Receiver<AppEvent>,
+    event_sender: Option<Sender<AppEvent>>,
+    event_receiver: Option<Receiver<AppEvent>>,
+}
+
+impl Default for Renderer {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Renderer {
-    pub fn new(width: u16, height: u16) -> Result<Self, FltkError> {
+    pub fn new() -> Self {
+        Self {
+            app: None,
+            window: None,
+            elements: Arc::new(Mutex::new(ElementList::default())),
+            root: Arc::new(RwLock::new(None)),
+            routes: Arc::new(RwLock::new(vec![])),
+            width: Arc::new(AtomicI32::new(0)),
+            height: Arc::new(AtomicI32::new(0)),
+            event_sender: None,
+            event_receiver: None,
+        }
+    }
+
+    pub fn start(mut self, width: u16, height: u16) -> Result<Self, FltkError> {
         let app = app::App::default();
+        self.app.replace(app);
+
         let mut window = Window::default()
             .with_size(width as i32, height as i32)
             .with_label("MoosicBox");
 
+        self.window.replace(window.clone());
+        self.width
+            .store(width as i32, std::sync::atomic::Ordering::SeqCst);
+        self.height
+            .store(height as i32, std::sync::atomic::Ordering::SeqCst);
+
         app::set_background_color(24, 26, 27);
 
         let (tx, rx) = flume::unbounded();
-        let renderer = Self {
-            app,
-            window: window.clone(),
-            elements: Arc::new(Mutex::new(ElementList::default())),
-            root: Arc::new(RwLock::new(None)),
-            routes: Arc::new(RwLock::new(vec![])),
-            width: Arc::new(AtomicI32::new(width as i32)),
-            height: Arc::new(AtomicI32::new(height as i32)),
-            event_sender: tx,
-            event_receiver: rx,
-        };
+        self.event_sender.replace(tx);
+        self.event_receiver.replace(rx);
 
         window.handle({
-            let mut renderer = renderer.clone();
+            let mut renderer = self.clone();
             move |window, ev| match ev {
                 Event::Resize => {
                     if renderer.width.load(std::sync::atomic::Ordering::SeqCst) != window.width()
@@ -132,9 +151,10 @@ impl Renderer {
         window.make_resizable(true);
         window.show();
 
-        Ok(renderer)
+        Ok(self)
     }
 
+    #[must_use]
     pub fn with_route<
         F: Future<Output = Result<ElementList, E>> + Send + 'static,
         E: Into<Box<dyn std::error::Error>>,
@@ -210,8 +230,11 @@ impl Renderer {
     }
 
     pub async fn listen(&self) {
+        let Some(rx) = self.event_receiver.clone() else {
+            moosicbox_assert::die_or_panic!("Cannot listen before app is started");
+        };
         let mut renderer = self.clone();
-        while let Ok(event) = renderer.event_receiver.recv_async().await {
+        while let Ok(event) = rx.recv_async().await {
             log::debug!("received event {event:?}");
             match event {
                 AppEvent::Navigate { href } => {
@@ -270,22 +293,25 @@ impl Renderer {
     }
 
     fn perform_render(&mut self) -> Result<(), FltkError> {
+        let (Some(mut window), Some(tx)) = (self.window.clone(), self.event_sender.clone()) else {
+            moosicbox_assert::die_or_panic!("Cannot perform_render before app is started");
+        };
         log::debug!("perform_render: started");
         let mut root = self.root.write().unwrap();
         if let Some(root) = root.take() {
-            self.window.remove(&root);
+            window.remove(&root);
             log::debug!("perform_render: removed root");
         }
-        self.window.begin();
+        window.begin();
         log::debug!("perform_render: begin");
         let elements: &[Element] = &self.elements.lock().unwrap();
         root.replace(draw_elements(
             elements,
-            Context::new(self.window.width() as f32, self.window.height() as f32),
-            self.event_sender.clone(),
+            Context::new(window.width() as f32, window.height() as f32),
+            tx,
         )?);
-        self.window.end();
-        self.window.flush();
+        window.end();
+        window.flush();
         log::debug!("perform_render: finished");
         Ok(())
     }
@@ -302,7 +328,10 @@ impl Renderer {
     }
 
     pub fn run(self) -> Result<(), FltkError> {
-        self.app.run()
+        let Some(app) = self.app else {
+            moosicbox_assert::die_or_panic!("Cannot listen before app is started");
+        };
+        app.run()
     }
 }
 

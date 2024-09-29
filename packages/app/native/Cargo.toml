@@ -18,6 +18,7 @@ required-features = []
 [dependencies]
 moosicbox_app_native_lib = { path = "lib", default-features = false }
 moosicbox_app_native_ui = { path = "ui", default-features = false }
+moosicbox_env_utils = { path = "../../env_utils", default-features = false }
 moosicbox_library_models = { path = "../../library/models", default-features = false, features = [
     "all-formats",
 ] }
