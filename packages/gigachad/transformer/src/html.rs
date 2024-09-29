@@ -128,6 +128,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 }
             },
             "main" => crate::Element::Main {
+                #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
@@ -137,6 +138,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 },
             },
             "header" => crate::Element::Header {
+                #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
@@ -146,6 +148,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 },
             },
             "footer" => crate::Element::Footer {
+                #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
@@ -155,6 +158,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 },
             },
             "aside" => crate::Element::Aside {
+                #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
@@ -164,6 +168,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 },
             },
             "div" => crate::Element::Div {
+                #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
@@ -173,6 +178,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 },
             },
             "section" => crate::Element::Section {
+                #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
@@ -182,6 +188,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 },
             },
             "form" => crate::Element::Form {
+                #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
@@ -191,6 +198,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 },
             },
             "button" => crate::Element::Button {
+                #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
@@ -206,6 +214,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
             },
             "a" => crate::Element::Anchor {
                 href: get_tag_attr_value_owned(tag, "href"),
+                #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
@@ -216,6 +225,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
             },
             "h1" => crate::Element::Heading {
                 size: crate::HeaderSize::H1,
+                #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
@@ -226,6 +236,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
             },
             "h2" => crate::Element::Heading {
                 size: crate::HeaderSize::H2,
+                #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
@@ -236,6 +247,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
             },
             "h3" => crate::Element::Heading {
                 size: crate::HeaderSize::H3,
+                #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
@@ -246,6 +258,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
             },
             "h4" => crate::Element::Heading {
                 size: crate::HeaderSize::H4,
+                #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
@@ -256,6 +269,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
             },
             "h5" => crate::Element::Heading {
                 size: crate::HeaderSize::H5,
+                #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
@@ -266,6 +280,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
             },
             "h6" => crate::Element::Heading {
                 size: crate::HeaderSize::H6,
+                #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
@@ -275,6 +290,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 },
             },
             "ul" => crate::Element::UnorderedList {
+                #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
@@ -284,6 +300,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 },
             },
             "ol" => crate::Element::OrderedList {
+                #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
@@ -293,6 +310,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 },
             },
             "li" => crate::Element::ListItem {
+                #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
