@@ -1,0 +1,44 @@
+[package]
+authors = ["Braden Steffaniak"]
+categories = ["development-tools", "gui"]
+description = "MoosicBox native fltk app lib package"
+edition = "2021"
+keywords = [
+    "desktop",
+    "gui",
+    "lib",
+    "linux",
+    "macos",
+    "render",
+    "renderer",
+    "windows",
+]
+license = "MPL-2.0"
+name = "moosicbox_app_native_lib"
+readme = "README.md"
+repository = "https://github.com/MoosicBox/MoosicBoxServer"
+version = "0.1.0"
+
+[dependencies]
+moosicbox_env_utils = { path = "../../env_utils", default-features = false }
+moosicbox_htmx_transformer = { path = "../../htmx_transformer", default-features = false, features = [
+    "html",
+] }
+moosicbox_renderer_fltk = { path = "../../renderer_fltk", default-features = false }
+moosicbox_task = { path = "../../task", default-features = false }
+
+fltk      = { workspace = true, features = ["use-ninja"] }
+flume     = { workspace = true }
+futures   = { workspace = true }
+image     = { workspace = true }
+log       = { workspace = true }
+reqwest   = { workspace = true }
+thiserror = { workspace = true }
+tokio     = { workspace = true, features = ["sync", "rt-multi-thread"] }
+
+[features]
+default = ["unsafe"]
+
+fail-on-warnings = []
+
+unsafe = []

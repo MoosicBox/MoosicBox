@@ -2,8 +2,9 @@
 members = [
     "packages/aconverter",
     "packages/admin_htmx",
-    "packages/app_fltk",
-    "packages/app_fltk/ui",
+    "packages/app_native",
+    "packages/app_native/lib",
+    "packages/app_native/ui",
     "packages/app_tauri/bundled",
     "packages/app_tauri/client",
     "packages/app_tauri/create_config",
