@@ -450,6 +450,7 @@ impl Renderer {
         }
         window.end();
         window.flush();
+        app::awake();
         log::debug!("perform_render: finished");
         Ok(())
     }
