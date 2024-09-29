@@ -23,6 +23,7 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
     "database",
     "serde_json",
 ] }
+moosicbox_library_models = { path = "models", default-features = false }
 moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_paging = { path = "../paging", default-features = false }
 moosicbox_search = { path = "../search", default-features = false, features = [
@@ -45,15 +46,23 @@ serde_json      = { workspace = true }
 strum           = { workspace = true }
 strum_macros    = { workspace = true }
 thiserror       = { workspace = true }
-tokio           = { workspace = true, features = ["macros", "tracing"] }
+tokio           = { workspace = true, features = ["macros", "rt", "tracing"] }
 
 [features]
 default = ["all-formats", "api", "openapi"]
 
 fail-on-warnings = []
 
-api     = ["dep:actix-web", "moosicbox_database/api"]
-openapi = ["dep:utoipa", "moosicbox_search/openapi"]
+api = [
+    "dep:actix-web",
+    "moosicbox_database/api",
+    "moosicbox_library_models/api",
+]
+openapi = [
+    "dep:utoipa",
+    "moosicbox_library_models/openapi",
+    "moosicbox_search/openapi",
+]
 
 all-formats = ["aac", "flac", "mp3", "opus"]
 
@@ -63,6 +72,7 @@ aac = [
     "moosicbox_audio_output/aac",
     "moosicbox_core/aac",
     "moosicbox_files/aac",
+    "moosicbox_library_models/aac",
 ]
 flac = [
     "dep:moosicbox_audio_output",
@@ -70,6 +80,7 @@ flac = [
     "moosicbox_audio_output/flac",
     "moosicbox_core/flac",
     "moosicbox_files/flac",
+    "moosicbox_library_models/flac",
 ]
 mp3 = [
     "dep:moosicbox_audio_output",
@@ -77,6 +88,7 @@ mp3 = [
     "moosicbox_audio_output/mp3",
     "moosicbox_core/mp3",
     "moosicbox_files/mp3",
+    "moosicbox_library_models/mp3",
 ]
 opus = [
     "dep:moosicbox_audio_output",
@@ -84,4 +96,5 @@ opus = [
     "moosicbox_audio_output/opus",
     "moosicbox_core/opus",
     "moosicbox_files/opus",
+    "moosicbox_library_models/opus",
 ]

@@ -1,3 +1,6 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+
 use std::{path::PathBuf, str::FromStr as _, sync::Arc};
 
 use async_trait::async_trait;
@@ -16,7 +19,7 @@ use moosicbox_database::{AsId, Database, DatabaseValue};
 use moosicbox_json_utils::{database::ToValue as _, MissingValue, ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 pub struct LibraryArtist {
     pub id: u64,
     pub title: String,
@@ -34,9 +37,9 @@ impl From<LibraryArtist> for Artist {
             cover: value.cover,
             source: ApiSource::Library,
             sources: ApiSources::default()
-                .with_source_opt(ApiSource::Tidal, value.tidal_id.map(|x| x.into()))
-                .with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(|x| x.into()))
-                .with_source_opt(ApiSource::Yt, value.yt_id.map(|x| x.into())),
+                .with_source_opt(ApiSource::Tidal, value.tidal_id.map(Into::into))
+                .with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(Into::into))
+                .with_source_opt(ApiSource::Yt, value.yt_id.map(Into::into)),
         }
     }
 }
@@ -75,11 +78,11 @@ impl AsModelResult<LibraryArtist, ParseError> for &moosicbox_database::Row {
 
 impl AsId for LibraryArtist {
     fn as_id(&self) -> DatabaseValue {
-        DatabaseValue::Number(self.id as i64)
+        DatabaseValue::Number(self.id.try_into().unwrap())
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiLibraryArtist {
     pub artist_id: u64,
@@ -90,7 +93,7 @@ pub struct ApiLibraryArtist {
     pub yt_id: Option<u64>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -147,13 +150,13 @@ impl From<LibraryAlbum> for Album {
             versions: value.versions,
             source: value.source,
             artist_sources: ApiSources::default()
-                .with_source_opt(ApiSource::Tidal, value.tidal_artist_id.map(|x| x.into()))
-                .with_source_opt(ApiSource::Qobuz, value.qobuz_artist_id.map(|x| x.into()))
-                .with_source_opt(ApiSource::Yt, value.yt_artist_id.map(|x| x.into())),
+                .with_source_opt(ApiSource::Tidal, value.tidal_artist_id.map(Into::into))
+                .with_source_opt(ApiSource::Qobuz, value.qobuz_artist_id.map(Into::into))
+                .with_source_opt(ApiSource::Yt, value.yt_artist_id.map(Into::into)),
             album_sources: ApiSources::default()
-                .with_source_opt(ApiSource::Tidal, value.tidal_id.map(|x| x.into()))
-                .with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(|x| x.into()))
-                .with_source_opt(ApiSource::Yt, value.yt_id.map(|x| x.into())),
+                .with_source_opt(ApiSource::Tidal, value.tidal_id.map(Into::into))
+                .with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(Into::into))
+                .with_source_opt(ApiSource::Yt, value.yt_id.map(Into::into)),
         }
     }
 }
@@ -172,12 +175,12 @@ impl From<Album> for LibraryAlbum {
             blur: value.blur,
             versions: value.versions,
             source: AlbumSource::Local,
-            tidal_id: value.album_sources.get(ApiSource::Tidal).map(|x| x.into()),
-            qobuz_id: value.album_sources.get(ApiSource::Qobuz).map(|x| x.into()),
-            yt_id: value.album_sources.get(ApiSource::Yt).map(|x| x.into()),
-            tidal_artist_id: value.artist_sources.get(ApiSource::Tidal).map(|x| x.into()),
-            qobuz_artist_id: value.artist_sources.get(ApiSource::Qobuz).map(|x| x.into()),
-            yt_artist_id: value.artist_sources.get(ApiSource::Yt).map(|x| x.into()),
+            tidal_id: value.album_sources.get(ApiSource::Tidal).map(Into::into),
+            qobuz_id: value.album_sources.get(ApiSource::Qobuz).map(Into::into),
+            yt_id: value.album_sources.get(ApiSource::Yt).map(Into::into),
+            tidal_artist_id: value.artist_sources.get(ApiSource::Tidal).map(Into::into),
+            qobuz_artist_id: value.artist_sources.get(ApiSource::Qobuz).map(Into::into),
+            yt_artist_id: value.artist_sources.get(ApiSource::Yt).map(Into::into),
         }
     }
 }
@@ -237,7 +240,8 @@ impl AsModelResult<LibraryAlbum, ParseError> for &moosicbox_database::Row {
     }
 }
 
-pub fn track_source_to_u8(source: TrackApiSource) -> u8 {
+#[must_use]
+pub const fn track_source_to_u8(source: TrackApiSource) -> u8 {
     match source {
         TrackApiSource::Local => 1,
         TrackApiSource::Tidal => 2,
@@ -261,6 +265,7 @@ pub fn sort_album_versions(versions: &mut [AlbumVersionQuality]) {
 }
 
 impl AsModelResultMapped<LibraryAlbum, DbError> for Vec<moosicbox_database::Row> {
+    #[allow(clippy::too_many_lines)]
     fn as_model_mapped(&self) -> Result<Vec<LibraryAlbum>, DbError> {
         let mut results: Vec<LibraryAlbum> = vec![];
         let mut last_album_id = 0;
@@ -402,7 +407,7 @@ impl AsModelQuery<LibraryAlbum> for &moosicbox_database::Row {
 
 impl AsId for LibraryAlbum {
     fn as_id(&self) -> DatabaseValue {
-        DatabaseValue::Number(self.id as i64)
+        DatabaseValue::Number(self.id.try_into().unwrap())
     }
 }
 
@@ -444,7 +449,11 @@ impl ToApi<ApiLibraryAlbum> for LibraryAlbum {
             date_added: self.date_added,
             source: self.source,
             blur: self.blur,
-            versions: self.versions.iter().map(|v| v.to_api()).collect(),
+            versions: self
+                .versions
+                .iter()
+                .map(moosicbox_core::sqlite::models::ToApi::to_api)
+                .collect(),
             tidal_id: self.tidal_id,
             qobuz_id: self.qobuz_id,
             yt_id: self.yt_id,
@@ -488,6 +497,10 @@ pub struct LibraryTrack {
 }
 
 impl LibraryTrack {
+    #[must_use]
+    /// # Panics
+    ///
+    /// Will panic if directory doesn't exist
     pub fn directory(&self) -> Option<String> {
         self.file
             .as_ref()
@@ -522,9 +535,9 @@ impl From<LibraryTrack> for Track {
             source: value.source,
             api_source: ApiSource::Library,
             sources: ApiSources::default()
-                .with_source_opt(ApiSource::Tidal, value.tidal_id.map(|x| x.into()))
-                .with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(|x| x.into()))
-                .with_source_opt(ApiSource::Yt, value.yt_id.map(|x| x.into())),
+                .with_source_opt(ApiSource::Tidal, value.tidal_id.map(Into::into))
+                .with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(Into::into))
+                .with_source_opt(ApiSource::Yt, value.yt_id.map(Into::into)),
         }
     }
 }
@@ -615,7 +628,7 @@ impl AsModelResult<LibraryTrack, ParseError> for &moosicbox_database::Row {
 
 impl AsId for LibraryTrack {
     fn as_id(&self) -> DatabaseValue {
-        DatabaseValue::Number(self.id as i64)
+        DatabaseValue::Number(self.id.try_into().unwrap())
     }
 }
 
@@ -656,16 +669,12 @@ impl Serialize for ApiTrack {
         S: serde::Serializer,
     {
         match self {
-            ApiTrack::Library { data, .. } => {
+            Self::Library { data, .. } => {
                 ApiTrackInner::Library(data.clone()).serialize(serializer)
             }
-            ApiTrack::Tidal { data, .. } => {
-                ApiTrackInner::Tidal(data.clone()).serialize(serializer)
-            }
-            ApiTrack::Qobuz { data, .. } => {
-                ApiTrackInner::Qobuz(data.clone()).serialize(serializer)
-            }
-            ApiTrack::Yt { data, .. } => ApiTrackInner::Yt(data.clone()).serialize(serializer),
+            Self::Tidal { data, .. } => ApiTrackInner::Tidal(data.clone()).serialize(serializer),
+            Self::Qobuz { data, .. } => ApiTrackInner::Qobuz(data.clone()).serialize(serializer),
+            Self::Yt { data, .. } => ApiTrackInner::Yt(data.clone()).serialize(serializer),
         }
     }
 }
@@ -676,11 +685,11 @@ impl<'de> Deserialize<'de> for ApiTrack {
         D: serde::Deserializer<'de>,
     {
         Ok(match ApiTrackInner::deserialize(deserializer)? {
-            ApiTrackInner::Library(track) => ApiTrack::Library {
+            ApiTrackInner::Library(track) => Self::Library {
                 track_id: track.track_id,
                 data: track,
             },
-            ApiTrackInner::Tidal(data) => ApiTrack::Tidal {
+            ApiTrackInner::Tidal(data) => Self::Tidal {
                 track_id: data
                     .get("id")
                     .expect("Failed to get tidal track id")
@@ -688,7 +697,7 @@ impl<'de> Deserialize<'de> for ApiTrack {
                     .unwrap(),
                 data,
             },
-            ApiTrackInner::Qobuz(data) => ApiTrack::Qobuz {
+            ApiTrackInner::Qobuz(data) => Self::Qobuz {
                 track_id: data
                     .get("id")
                     .expect("Failed to get qobuz track id")
@@ -696,7 +705,7 @@ impl<'de> Deserialize<'de> for ApiTrack {
                     .unwrap(),
                 data,
             },
-            ApiTrackInner::Yt(data) => ApiTrack::Yt {
+            ApiTrackInner::Yt(data) => Self::Yt {
                 track_id: data
                     .get("id")
                     .expect("Failed to get yt track id")
@@ -710,30 +719,33 @@ impl<'de> Deserialize<'de> for ApiTrack {
 }
 
 impl ApiTrack {
-    pub fn api_source(&self) -> ApiSource {
+    #[must_use]
+    pub const fn api_source(&self) -> ApiSource {
         match self {
-            ApiTrack::Library { .. } => ApiSource::Library,
-            ApiTrack::Tidal { .. } => ApiSource::Tidal,
-            ApiTrack::Qobuz { .. } => ApiSource::Qobuz,
-            ApiTrack::Yt { .. } => ApiSource::Yt,
+            Self::Library { .. } => ApiSource::Library,
+            Self::Tidal { .. } => ApiSource::Tidal,
+            Self::Qobuz { .. } => ApiSource::Qobuz,
+            Self::Yt { .. } => ApiSource::Yt,
         }
     }
 
+    #[must_use]
     pub fn track_id(&self) -> Id {
         match self {
-            ApiTrack::Library { track_id, .. } => track_id.into(),
-            ApiTrack::Tidal { track_id, .. } => track_id.into(),
-            ApiTrack::Qobuz { track_id, .. } => track_id.into(),
-            ApiTrack::Yt { track_id, .. } => track_id.into(),
+            Self::Library { track_id, .. }
+            | Self::Tidal { track_id, .. }
+            | Self::Qobuz { track_id, .. } => track_id.into(),
+            Self::Yt { track_id, .. } => track_id.into(),
         }
     }
 
+    #[must_use]
     pub fn data(&self) -> Option<serde_json::Value> {
         match self {
-            ApiTrack::Library { .. } => None,
-            ApiTrack::Tidal { data, .. } => Some(data.clone()),
-            ApiTrack::Qobuz { data, .. } => Some(data.clone()),
-            ApiTrack::Yt { data, .. } => Some(data.clone()),
+            Self::Library { .. } => None,
+            Self::Tidal { data, .. } | Self::Qobuz { data, .. } | Self::Yt { data, .. } => {
+                Some(data.clone())
+            }
         }
     }
 }

@@ -1,13 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
-#[cfg(feature = "api")]
-pub mod api;
-
-pub mod cache;
-pub mod db;
-pub mod models;
-pub mod profiles;
-
 use std::{
     cmp::Ordering,
     fs::File,
@@ -45,6 +37,17 @@ use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
 use tokio::sync::Mutex;
+
+#[cfg(feature = "api")]
+pub mod api;
+
+pub mod cache;
+pub mod db;
+pub mod profiles;
+
+pub mod models {
+    pub use moosicbox_library_models::*;
+}
 
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]

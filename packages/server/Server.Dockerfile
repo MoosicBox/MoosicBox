@@ -27,6 +27,7 @@ RUN cat Cargo.toml | \
     \"packages\/image\",\r\
     \"packages\/json_utils\",\r\
     \"packages\/library\",\r\
+    \"packages\/library\/models\",\r\
     \"packages\/logging\",\r\
     \"packages\/mdns\",\r\
     \"packages\/menu\",\r\
@@ -74,6 +75,7 @@ COPY packages/files/Cargo.toml packages/files/Cargo.toml
 COPY packages/image/Cargo.toml packages/image/Cargo.toml
 COPY packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
 COPY packages/library/Cargo.toml packages/library/Cargo.toml
+COPY packages/library/models/Cargo.toml packages/library/models/Cargo.toml
 COPY packages/logging/Cargo.toml packages/logging/Cargo.toml
 COPY packages/mdns/Cargo.toml packages/mdns/Cargo.toml
 COPY packages/menu/Cargo.toml packages/menu/Cargo.toml
@@ -124,6 +126,7 @@ packages/files|\
 packages/image|\
 packages/json_utils|\
 packages/library|\
+packages/library/models|\
 packages/logging|\
 packages/mdns|\
 packages/menu|\

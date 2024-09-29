@@ -21,6 +21,7 @@ pub use moosicbox_htmx_transformer as htmx_transformer;
 pub use moosicbox_image as image;
 pub use moosicbox_json_utils as json_utils;
 pub use moosicbox_library as library;
+pub use moosicbox_library_models as library_models;
 pub use moosicbox_load_balancer as load_balancer;
 pub use moosicbox_logging as logging;
 pub use moosicbox_mdns as mdns;

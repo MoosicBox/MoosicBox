@@ -148,6 +148,10 @@ jobs:
                       path: packages/library
                       os: ubuntu-latest
 
+                    - name: library_models
+                      path: packages/library/models
+                      os: ubuntu-latest
+
                     - name: load_balancer
                       path: packages/load_balancer
                       os: ubuntu-latest

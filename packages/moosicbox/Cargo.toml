@@ -32,6 +32,7 @@ moosicbox_htmx_transformer    = { version = "0.1.0", path = "../htmx_transformer
 moosicbox_image               = { version = "0.1.0", path = "../image", default-features = false }
 moosicbox_json_utils          = { version = "0.1.0", path = "../json_utils", default-features = false }
 moosicbox_library             = { version = "0.1.0", path = "../library", default-features = false }
+moosicbox_library_models      = { version = "0.1.0", path = "../library/models", default-features = false }
 moosicbox_load_balancer       = { version = "0.1.0", path = "../load_balancer", default-features = false }
 moosicbox_logging             = { version = "0.1.0", path = "../logging", default-features = false }
 moosicbox_mdns                = { version = "0.1.0", path = "../mdns", default-features = false }

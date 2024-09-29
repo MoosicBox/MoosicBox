@@ -19,6 +19,7 @@
 !/packages/image
 !/packages/json_utils
 !/packages/library
+!/packages/library/models
 !/packages/logging
 !/packages/mdns
 !/packages/menu

@@ -4679,6 +4679,7 @@ dependencies = [
  "moosicbox_image",
  "moosicbox_json_utils",
  "moosicbox_library",
+ "moosicbox_library_models",
  "moosicbox_load_balancer",
  "moosicbox_logging",
  "moosicbox_mdns",
@@ -5246,11 +5247,31 @@ dependencies = [
  "moosicbox_database",
  "moosicbox_files",
  "moosicbox_json_utils",
+ "moosicbox_library_models",
  "moosicbox_music_api",
  "moosicbox_paging",
  "moosicbox_search",
  "moosicbox_stream_utils",
  "regex",
+ "serde",
+ "serde_json",
+ "strum",
+ "strum_macros",
+ "thiserror",
+ "tokio",
+ "utoipa",
+]
+
+[[package]]
+name = "moosicbox_library_models"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "async-trait",
+ "log",
+ "moosicbox_core",
+ "moosicbox_database",
+ "moosicbox_json_utils",
  "serde",
  "serde_json",
  "strum",
