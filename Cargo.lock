@@ -4837,7 +4837,7 @@ dependencies = [
  "moosicbox_app_fltk_bundled",
  "moosicbox_app_fltk_ui",
  "moosicbox_env_utils",
- "moosicbox_library",
+ "moosicbox_library_models",
  "moosicbox_logging",
  "moosicbox_paging",
  "moosicbox_renderer_fltk",
@@ -4868,7 +4868,7 @@ name = "moosicbox_app_fltk_ui"
 version = "0.1.0"
 dependencies = [
  "maud",
- "moosicbox_library",
+ "moosicbox_library_models",
 ]
 
 [[package]]

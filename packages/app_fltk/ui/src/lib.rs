@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use maud::{html, Markup};
-use moosicbox_library::models::{ApiAlbum, ApiLibraryAlbum};
+use moosicbox_library_models::{ApiAlbum, ApiLibraryAlbum};
 
 #[must_use]
 pub fn sidebar_navigation() -> Markup {

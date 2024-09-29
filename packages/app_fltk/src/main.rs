@@ -1,5 +1,5 @@
 use moosicbox_env_utils::{default_env_u16, default_env_usize};
-use moosicbox_library::models::ApiAlbum;
+use moosicbox_library_models::ApiAlbum;
 use moosicbox_paging::Page;
 
 static WIDTH: u16 = default_env_u16!("WINDOW_WIDTH", 1000);

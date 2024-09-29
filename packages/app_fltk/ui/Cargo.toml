@@ -11,7 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_library = { path = "../../library", default-features = false }
+moosicbox_library_models = { path = "../../library/models", default-features = false }
 
 maud = { workspace = true }
 
