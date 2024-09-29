@@ -14,11 +14,16 @@ version     = "0.1.0"
 moosicbox_htmx_transformer = { path = "../htmx_transformer", default-features = false, features = [
     "html",
 ] }
+moosicbox_task = { path = "../task", default-features = false }
 
-fltk    = { workspace = true }
-flume   = { workspace = true }
-futures = { workspace = true }
-log     = { workspace = true }
+fltk      = { workspace = true }
+flume     = { workspace = true }
+futures   = { workspace = true }
+image     = { workspace = true }
+log       = { workspace = true }
+reqwest   = { workspace = true }
+thiserror = { workspace = true }
+tokio     = { workspace = true, features = ["sync"] }
 
 [features]
 default = ["unsafe"]

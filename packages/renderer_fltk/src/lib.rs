@@ -1,9 +1,10 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 use std::{
+    collections::HashMap,
     pin::Pin,
     str::FromStr as _,
-    sync::{atomic::AtomicI32, Arc, Mutex, RwLock},
+    sync::{atomic::AtomicI32, Arc, LazyLock, Mutex, RwLock},
 };
 
 use fltk::{
@@ -11,7 +12,7 @@ use fltk::{
     enums::{self, Event},
     frame::{self, Frame},
     group,
-    image::SharedImage,
+    image::{RgbImage, SharedImage},
     prelude::*,
     window::{DoubleWindow, Window},
 };
@@ -20,6 +21,7 @@ use futures::Future;
 use moosicbox_htmx_transformer::{
     ContainerElement, Element, ElementList, HeaderSize, LayoutDirection, Number,
 };
+use thiserror::Error;
 
 type RouteFunc = Arc<
     Box<
@@ -30,9 +32,29 @@ type RouteFunc = Arc<
     >,
 >;
 
+#[derive(Debug, Error)]
+pub enum LoadImageError {
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[error(transparent)]
+    Image(#[from] image::ImageError),
+    #[error(transparent)]
+    Fltk(#[from] FltkError),
+}
+
 #[derive(Debug, Clone)]
 pub enum AppEvent {
-    Navigate { href: String },
+    Navigate {
+        href: String,
+    },
+    LoadImage {
+        source: String,
+        width: Option<Number>,
+        height: Option<Number>,
+        context_width: f32,
+        context_height: f32,
+        frame: Frame,
+    },
 }
 
 #[derive(Clone)]
@@ -127,6 +149,58 @@ impl Renderer {
         self
     }
 
+    async fn load_image(
+        source: String,
+        width: Option<Number>,
+        height: Option<Number>,
+        context_width: f32,
+        context_height: f32,
+        mut frame: Frame,
+    ) -> Result<(), LoadImageError> {
+        type ImageCache = LazyLock<Arc<tokio::sync::RwLock<HashMap<String, (Vec<u8>, u32, u32)>>>>;
+        static IMAGE_CACHE: ImageCache =
+            LazyLock::new(|| Arc::new(tokio::sync::RwLock::new(HashMap::new())));
+
+        let key = format!("{source}:{width:?}:{height:?}");
+
+        let cached_bytes = { IMAGE_CACHE.read().await.get(&key).cloned() };
+        let from_cache = cached_bytes.is_some();
+
+        let (bytes, img_width, img_height) = if let Some((bytes, width, height)) = cached_bytes {
+            (bytes, width, height)
+        } else {
+            let data = reqwest::get(source).await?.bytes().await?;
+            let img = image::load_from_memory_with_format(&data, image::ImageFormat::WebP)?;
+            (img.as_bytes().to_vec(), img.width(), img.height())
+        };
+
+        let mut image = RgbImage::new(
+            &bytes,
+            img_width as i32,
+            img_height as i32,
+            enums::ColorDepth::Rgb8,
+        )?;
+
+        if !from_cache {
+            IMAGE_CACHE
+                .write()
+                .await
+                .insert(key, (bytes, img_width, img_height));
+        }
+
+        if width.is_some() || height.is_some() {
+            let width = calc_number(width.unwrap_or_default(), context_width).round() as i32;
+            let height = calc_number(height.unwrap_or_default(), context_height).round() as i32;
+
+            image.scale(width, height, true, true);
+        }
+
+        frame.set_image(Some(image));
+        frame.set_damage(true);
+
+        Ok(())
+    }
+
     pub async fn listen(&self) {
         let mut renderer = self.clone();
         while let Ok(event) = renderer.event_receiver.recv_async().await {
@@ -136,6 +210,26 @@ impl Renderer {
                     if let Err(e) = renderer.navigate(&href).await {
                         log::error!("Failed to navigate: {e:?}");
                     }
+                }
+                AppEvent::LoadImage {
+                    source,
+                    width,
+                    height,
+                    context_width,
+                    context_height,
+                    frame,
+                } => {
+                    moosicbox_task::spawn("renderer_fltk: load_image", async move {
+                        Self::load_image(
+                            source,
+                            width,
+                            height,
+                            context_width,
+                            context_height,
+                            frame,
+                        )
+                        .await
+                    });
                 }
             }
         }
@@ -398,7 +492,18 @@ fn draw_element(
             let mut frame = Frame::default_fill();
 
             if let Some(source) = source {
-                if let Ok(manifest_path) = std::env::var("CARGO_MANIFEST_DIR") {
+                if source.starts_with("http") {
+                    if let Err(e) = event_sender.send(AppEvent::LoadImage {
+                        source: source.to_owned(),
+                        width: width.to_owned(),
+                        height: height.to_owned(),
+                        context_width: context.width,
+                        context_height: context.height,
+                        frame: frame.clone(),
+                    }) {
+                        log::error!("Failed to send LoadImage event with source={source}: {e:?}");
+                    }
+                } else if let Ok(manifest_path) = std::env::var("CARGO_MANIFEST_DIR") {
                     if let Ok(path) = std::path::PathBuf::from_str(&manifest_path) {
                         let source = source
                             .chars()

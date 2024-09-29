@@ -2,6 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use maud::{html, Markup};
+use moosicbox_library::models::{ApiAlbum, ApiLibraryAlbum};
 
 #[must_use]
 pub fn sidebar_navigation() -> Markup {
@@ -94,25 +95,33 @@ pub fn downloads() -> Markup {
     })
 }
 
+fn album_cover_url(album: &ApiLibraryAlbum, width: u16, height: u16) -> String {
+    if album.contains_cover {
+        format!(
+            "http://localhost:8500/files/albums/{}/{width}x{height}?moosicboxProfile=master",
+            album.album_id
+        )
+    } else {
+        "/img/album.svg".to_string()
+    }
+}
+
 #[must_use]
-pub fn albums() -> Markup {
-    let albums = vec![
-        (
-            "test1",
-            "../../../.local/moosicbox/cache/tidal/Anberlin/Blueprints_For_The_Black_Market/album_320_1352282.jpg",
-        ),
-        (
-            "test2",
-            "../../../.local/moosicbox/cache/tidal/Anberlin/Cities/album_320_1345749.jpg",
-        ),
-    ];
+pub fn albums(albums: Vec<ApiAlbum>) -> Markup {
+    let albums = albums
+        .into_iter()
+        .map(|x| {
+            let ApiAlbum::Library(x) = x;
+            x
+        })
+        .collect::<Vec<_>>();
 
     page(&html! {
         div sx-dir="row" {
-            @for (title, img) in albums {
+            @for album in &albums {
                 div {
-                    img src=(img) sx-width="200" sx-height="200";
-                    (title)
+                    img src=(album_cover_url(album, 100, 100)) sx-width="100" sx-height="100";
+                    (album.title)
                 }
             }
         }

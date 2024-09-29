@@ -1,4 +1,6 @@
 use moosicbox_env_utils::{default_env_u16, default_env_usize};
+use moosicbox_library::models::ApiAlbum;
+use moosicbox_paging::Page;
 
 static WIDTH: u16 = default_env_u16!("WINDOW_WIDTH", 1000);
 static HEIGHT: u16 = default_env_u16!("WINDOW_HEIGHT", 600);
@@ -17,7 +19,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             moosicbox_app_fltk_ui::downloads().into_string().try_into()
         })
         .with_route("/albums", || async {
-            moosicbox_app_fltk_ui::albums().into_string().try_into()
+            let response = reqwest::get(
+                "http://localhost:8500/menu/albums?moosicboxProfile=master&offset=0&limit=10",
+            )
+            .await?;
+
+            if !response.status().is_success() {
+                log::debug!("Error: {}", response.status());
+            }
+
+            let albums: Page<ApiAlbum> = response.json().await?;
+
+            log::debug!("albums: {albums:?}");
+
+            Ok::<_, Box<dyn std::error::Error>>(
+                moosicbox_app_fltk_ui::albums(albums.items())
+                    .into_string()
+                    .try_into()?,
+            )
         })
         .with_route("/artists", || async {
             moosicbox_app_fltk_ui::artists().into_string().try_into()
