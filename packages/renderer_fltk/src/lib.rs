@@ -121,6 +121,12 @@ impl Renderer {
             }
         });
 
+        window.set_callback(|_| {
+            if fltk::app::event() == fltk::enums::Event::Close {
+                app::quit();
+            }
+        });
+
         window = window.center_screen();
         window.end();
         window.make_resizable(true);
