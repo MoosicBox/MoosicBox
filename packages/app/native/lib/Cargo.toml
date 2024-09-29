@@ -23,7 +23,7 @@ version = "0.1.0"
 moosicbox_app_native_renderer = { path = "../renderer", default-features = false }
 moosicbox_assert = { path = "../../../assert", default-features = false }
 moosicbox_env_utils = { path = "../../../env_utils", default-features = false }
-moosicbox_giga_chad_transformer = { path = "../../../giga_chad/transformer", default-features = false, features = [
+moosicbox_gigachad_transformer = { path = "../../../gigachad/transformer", default-features = false, features = [
     "html",
 ] }
 moosicbox_task = { path = "../../../task", default-features = false }

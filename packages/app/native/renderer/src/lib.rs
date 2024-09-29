@@ -19,7 +19,7 @@ use fltk::{
 };
 use flume::{Receiver, Sender};
 use futures::Future;
-use moosicbox_giga_chad_transformer::{
+use moosicbox_gigachad_transformer::{
     ContainerElement, Element, ElementList, HeaderSize, LayoutDirection, Number,
 };
 use thiserror::Error;

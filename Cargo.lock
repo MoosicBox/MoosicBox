@@ -4677,7 +4677,7 @@ dependencies = [
  "moosicbox_downloader",
  "moosicbox_env_utils",
  "moosicbox_files",
- "moosicbox_giga_chad_transformer",
+ "moosicbox_gigachad_transformer",
  "moosicbox_image",
  "moosicbox_json_utils",
  "moosicbox_library",
@@ -4876,7 +4876,7 @@ dependencies = [
  "moosicbox_app_native_renderer",
  "moosicbox_assert",
  "moosicbox_env_utils",
- "moosicbox_giga_chad_transformer",
+ "moosicbox_gigachad_transformer",
  "moosicbox_task",
  "reqwest 0.12.7",
  "thiserror",
@@ -4893,7 +4893,7 @@ dependencies = [
  "image",
  "log",
  "moosicbox_assert",
- "moosicbox_giga_chad_transformer",
+ "moosicbox_gigachad_transformer",
  "moosicbox_task",
  "reqwest 0.12.7",
  "thiserror",
@@ -5231,7 +5231,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "moosicbox_giga_chad_transformer"
+name = "moosicbox_gigachad_transformer"
 version = "0.1.0"
 dependencies = [
  "thiserror",
