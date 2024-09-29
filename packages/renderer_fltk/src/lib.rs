@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::{
     collections::HashMap,
@@ -32,6 +33,124 @@ type RouteFunc = Arc<
     >,
 >;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoutePath {
+    Literal(String),
+    Literals(Vec<String>),
+}
+
+impl RoutePath {
+    #[must_use]
+    pub fn matches(&self, path: &str) -> bool {
+        match self {
+            Self::Literal(route_path) => route_path == path,
+            Self::Literals(route_paths) => route_paths.iter().any(|x| x == path),
+        }
+    }
+}
+
+impl From<&str> for RoutePath {
+    fn from(value: &str) -> Self {
+        Self::Literal(value.to_owned())
+    }
+}
+
+impl From<&[&str; 1]> for RoutePath {
+    fn from(value: &[&str; 1]) -> Self {
+        Self::Literals(value.iter().map(ToString::to_string).collect())
+    }
+}
+
+impl From<&[&str; 2]> for RoutePath {
+    fn from(value: &[&str; 2]) -> Self {
+        Self::Literals(value.iter().map(ToString::to_string).collect())
+    }
+}
+
+impl From<&[&str; 3]> for RoutePath {
+    fn from(value: &[&str; 3]) -> Self {
+        Self::Literals(value.iter().map(ToString::to_string).collect())
+    }
+}
+
+impl From<&[&str; 4]> for RoutePath {
+    fn from(value: &[&str; 4]) -> Self {
+        Self::Literals(value.iter().map(ToString::to_string).collect())
+    }
+}
+
+impl From<&[&str; 5]> for RoutePath {
+    fn from(value: &[&str; 5]) -> Self {
+        Self::Literals(value.iter().map(ToString::to_string).collect())
+    }
+}
+
+impl From<&[&str; 6]> for RoutePath {
+    fn from(value: &[&str; 6]) -> Self {
+        Self::Literals(value.iter().map(ToString::to_string).collect())
+    }
+}
+
+impl From<&[&str; 7]> for RoutePath {
+    fn from(value: &[&str; 7]) -> Self {
+        Self::Literals(value.iter().map(ToString::to_string).collect())
+    }
+}
+
+impl From<&[&str; 8]> for RoutePath {
+    fn from(value: &[&str; 8]) -> Self {
+        Self::Literals(value.iter().map(ToString::to_string).collect())
+    }
+}
+
+impl From<&[&str; 9]> for RoutePath {
+    fn from(value: &[&str; 9]) -> Self {
+        Self::Literals(value.iter().map(ToString::to_string).collect())
+    }
+}
+
+impl From<&[&str; 10]> for RoutePath {
+    fn from(value: &[&str; 10]) -> Self {
+        Self::Literals(value.iter().map(ToString::to_string).collect())
+    }
+}
+
+impl From<&[&str]> for RoutePath {
+    fn from(value: &[&str]) -> Self {
+        Self::Literals(value.iter().map(ToString::to_string).collect())
+    }
+}
+
+impl From<Vec<&str>> for RoutePath {
+    fn from(value: Vec<&str>) -> Self {
+        Self::Literals(value.into_iter().map(ToString::to_string).collect())
+    }
+}
+
+impl From<String> for RoutePath {
+    fn from(value: String) -> Self {
+        Self::Literal(value)
+    }
+}
+
+impl From<&[String]> for RoutePath {
+    fn from(value: &[String]) -> Self {
+        Self::Literals(value.iter().map(ToString::to_string).collect())
+    }
+}
+
+impl From<&[&String]> for RoutePath {
+    fn from(value: &[&String]) -> Self {
+        Self::Literals(value.iter().map(ToString::to_string).collect())
+    }
+}
+
+impl From<Vec<String>> for RoutePath {
+    fn from(value: Vec<String>) -> Self {
+        Self::Literals(value)
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum LoadImageError {
     #[error(transparent)]
@@ -63,7 +182,7 @@ pub struct Renderer {
     window: Option<DoubleWindow>,
     elements: Arc<Mutex<ElementList>>,
     root: Arc<RwLock<Option<group::Flex>>>,
-    routes: Arc<RwLock<Vec<(String, RouteFunc)>>>,
+    routes: Arc<RwLock<Vec<(RoutePath, RouteFunc)>>>,
     width: Arc<AtomicI32>,
     height: Arc<AtomicI32>,
     event_sender: Option<Sender<AppEvent>>,
@@ -77,6 +196,7 @@ impl Default for Renderer {
 }
 
 impl Renderer {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             app: None,
@@ -91,19 +211,22 @@ impl Renderer {
         }
     }
 
+    /// # Errors
+    ///
+    /// Will error if FLTK app fails to start
     pub fn start(mut self, width: u16, height: u16) -> Result<Self, FltkError> {
         let app = app::App::default();
         self.app.replace(app);
 
         let mut window = Window::default()
-            .with_size(width as i32, height as i32)
+            .with_size(i32::from(width), i32::from(height))
             .with_label("MoosicBox");
 
         self.window.replace(window.clone());
         self.width
-            .store(width as i32, std::sync::atomic::Ordering::SeqCst);
+            .store(i32::from(width), std::sync::atomic::Ordering::SeqCst);
         self.height
-            .store(height as i32, std::sync::atomic::Ordering::SeqCst);
+            .store(i32::from(height), std::sync::atomic::Ordering::SeqCst);
 
         app::set_background_color(24, 26, 27);
 
@@ -112,7 +235,7 @@ impl Renderer {
         self.event_receiver.replace(rx);
 
         window.handle({
-            let mut renderer = self.clone();
+            let renderer = self.clone();
             move |window, ev| match ev {
                 Event::Resize => {
                     if renderer.width.load(std::sync::atomic::Ordering::SeqCst) != window.width()
@@ -155,20 +278,23 @@ impl Renderer {
     }
 
     #[must_use]
+    /// # Panics
+    ///
+    /// Will panic if routes `RwLock` is poisoned.
     pub fn with_route<
         F: Future<Output = Result<ElementList, E>> + Send + 'static,
         E: Into<Box<dyn std::error::Error>>,
     >(
         self,
-        route: &str,
+        route: impl Into<RoutePath>,
         handler: impl Fn() -> F + Send + Sync + Clone + 'static,
     ) -> Self {
         self.routes.write().unwrap().push((
-            route.to_string(),
+            route.into(),
             Arc::new(Box::new(move || {
                 Box::pin({
                     let handler = handler.clone();
-                    async move { handler().await.map_err(|e| e.into()) }
+                    async move { handler().await.map_err(Into::into) }
                 })
             })),
         ));
@@ -202,8 +328,8 @@ impl Renderer {
 
         let image = RgbImage::new(
             &bytes,
-            img_width as i32,
-            img_height as i32,
+            img_width.try_into().unwrap(),
+            img_height.try_into().unwrap(),
             enums::ColorDepth::Rgb8,
         )?;
         let image = SharedImage::from_image(image)?;
@@ -216,7 +342,9 @@ impl Renderer {
         }
 
         if width.is_some() || height.is_some() {
+            #[allow(clippy::cast_possible_truncation)]
             let width = calc_number(width.unwrap_or_default(), context_width).round() as i32;
+            #[allow(clippy::cast_possible_truncation)]
             let height = calc_number(height.unwrap_or_default(), context_height).round() as i32;
 
             frame.set_size(width, height);
@@ -266,13 +394,20 @@ impl Renderer {
         }
     }
 
+    /// # Errors
+    ///
+    /// Will error if FLTK fails to render the navigation result.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if routes `RwLock` is poisoned.
     pub async fn navigate(&mut self, path: &str) -> Result<(), FltkError> {
         let handler = {
             self.routes
                 .read()
                 .unwrap()
                 .iter()
-                .find(|(route, _)| route == path)
+                .find(|(route, _)| route.matches(path))
                 .cloned()
                 .map(|(_, handler)| handler)
         };
@@ -292,30 +427,40 @@ impl Renderer {
         Ok(())
     }
 
-    fn perform_render(&mut self) -> Result<(), FltkError> {
+    fn perform_render(&self) -> Result<(), FltkError> {
         let (Some(mut window), Some(tx)) = (self.window.clone(), self.event_sender.clone()) else {
             moosicbox_assert::die_or_panic!("Cannot perform_render before app is started");
         };
         log::debug!("perform_render: started");
-        let mut root = self.root.write().unwrap();
-        if let Some(root) = root.take() {
-            window.remove(&root);
-            log::debug!("perform_render: removed root");
+        {
+            let mut root = self.root.write().unwrap();
+            if let Some(root) = root.take() {
+                window.remove(&root);
+                log::debug!("perform_render: removed root");
+            }
+            window.begin();
+            log::debug!("perform_render: begin");
+            let elements: &[Element] = &self.elements.lock().unwrap();
+            root.replace(draw_elements(
+                elements,
+                #[allow(clippy::cast_precision_loss)]
+                Context::new(window.width() as f32, window.height() as f32),
+                tx,
+            )?);
         }
-        window.begin();
-        log::debug!("perform_render: begin");
-        let elements: &[Element] = &self.elements.lock().unwrap();
-        root.replace(draw_elements(
-            elements,
-            Context::new(window.width() as f32, window.height() as f32),
-            tx,
-        )?);
         window.end();
         window.flush();
         log::debug!("perform_render: finished");
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// Will error if FLTK fails to render the elements.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if elements `Mutex` is poisoned.
     pub fn render(&mut self, elements: ElementList) -> Result<(), FltkError> {
         log::debug!("render: {elements:?}");
         {
@@ -327,6 +472,9 @@ impl Renderer {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// Will error if FLTK fails to run the event loop.
     pub fn run(self) -> Result<(), FltkError> {
         let Some(app) = self.app else {
             moosicbox_assert::die_or_panic!("Cannot listen before app is started");
@@ -344,7 +492,7 @@ struct Context {
 }
 
 impl Context {
-    fn new(width: f32, height: f32) -> Self {
+    const fn new(width: f32, height: f32) -> Self {
         Self {
             size: 12,
             direction: LayoutDirection::Column,
@@ -353,16 +501,14 @@ impl Context {
         }
     }
 
-    fn with_container(mut self, container: &ContainerElement) -> Context {
+    fn with_container(mut self, container: &ContainerElement) -> Self {
         self.direction = container.direction;
         self.width = container
             .width
-            .map(|x| calc_number(x, self.width))
-            .unwrap_or(self.width);
+            .map_or(self.width, |x| calc_number(x, self.width));
         self.height = container
             .height
-            .map(|x| calc_number(x, self.height))
-            .unwrap_or(self.height);
+            .map_or(self.height, |x| calc_number(x, self.height));
         self
     }
 }
@@ -370,8 +516,10 @@ impl Context {
 fn calc_number(number: Number, container: f32) -> f32 {
     match number {
         Number::Real(x) => x,
+        #[allow(clippy::cast_precision_loss)]
         Number::Integer(x) => x as f32,
         Number::RealPercent(x) => container * (x / 100.0),
+        #[allow(clippy::cast_precision_loss)]
         Number::IntegerPercent(x) => container * (x as f32 / 100.0),
     }
 }
@@ -402,6 +550,8 @@ fn draw_elements(
     Ok(flex)
 }
 
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cognitive_complexity)]
 fn draw_element(
     element: &Element,
     mut context: Context,
@@ -558,10 +708,12 @@ fn draw_element(
                                     let image = SharedImage::load(path)?;
 
                                     if width.is_some() || height.is_some() {
+                                        #[allow(clippy::cast_possible_truncation)]
                                         let width =
                                             calc_number(width.unwrap_or_default(), context.width)
                                                 .round()
                                                 as i32;
+                                        #[allow(clippy::cast_possible_truncation)]
                                         let height =
                                             calc_number(height.unwrap_or_default(), context.height)
                                                 .round()
@@ -590,13 +742,11 @@ fn draw_element(
             }
             let mut elements = draw_elements(&element.elements, context, event_sender.clone())?;
             if let Some(href) = href.to_owned() {
-                let event_sender = event_sender.clone();
                 elements.handle(move |_, ev| match ev {
                     Event::Push => true,
                     Event::Released => {
-                        if let Err(e) = event_sender.send(AppEvent::Navigate {
-                            href: href.to_owned(),
-                        }) {
+                        if let Err(e) = event_sender.send(AppEvent::Navigate { href: href.clone() })
+                        {
                             log::error!("Failed to navigate to href={href}: {e:?}");
                         }
                         true
@@ -650,22 +800,24 @@ fn draw_element(
         match direction {
             LayoutDirection::Row => {
                 if let Some(width) = width {
+                    #[allow(clippy::cast_possible_truncation)]
                     flex.fixed(flex_element, width.round() as i32);
-                    log::debug!("draw_element: setting fixed width={width}")
+                    log::debug!("draw_element: setting fixed width={width}");
                 } else {
                     log::debug!(
                         "draw_element: not setting fixed width size width={width:?} height={height:?}"
-                    )
+                    );
                 }
             }
             LayoutDirection::Column => {
                 if let Some(height) = height {
+                    #[allow(clippy::cast_possible_truncation)]
                     flex.fixed(flex_element, height.round() as i32);
-                    log::debug!("draw_element: setting fixed height={height}")
+                    log::debug!("draw_element: setting fixed height={height}");
                 } else {
                     log::debug!(
                         "draw_element: not setting fixed height size width={width:?} height={height:?}"
-                    )
+                    );
                 }
             }
         }
