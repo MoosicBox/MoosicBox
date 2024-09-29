@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 #[cfg(feature = "html")]
 pub mod html;
@@ -13,7 +14,7 @@ pub enum Number {
 
 impl Default for Number {
     fn default() -> Self {
-        Number::Integer(0)
+        Self::Integer(0)
     }
 }
 

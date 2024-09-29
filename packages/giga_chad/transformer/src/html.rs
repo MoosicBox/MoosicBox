@@ -19,10 +19,7 @@ impl<'a> TryFrom<&'a str> for crate::ElementList {
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         let result = tl::parse(value, ParserOptions::new())?;
 
-        Ok(crate::ElementList(parse_children(
-            result.children(),
-            result.parser(),
-        )))
+        Ok(Self(parse_children(result.children(), result.parser())))
     }
 }
 
@@ -30,11 +27,9 @@ fn parse_top_children(
     children: Option<Children<'_, '_>>,
     parser: &Parser<'_>,
 ) -> Vec<crate::Element> {
-    if let Some(children) = children {
+    children.map_or_else(Vec::new, |children| {
         parse_children(&children.top().to_vec(), parser)
-    } else {
-        vec![]
-    }
+    })
 }
 
 fn parse_children(children: &[NodeHandle], parser: &Parser<'_>) -> Vec<crate::Element> {
@@ -68,7 +63,7 @@ fn get_tag_attr_value_lower(tag: &HTMLTag, name: &str) -> Option<String> {
 }
 
 fn get_direction(tag: &HTMLTag) -> LayoutDirection {
-    if let Some("row") = get_tag_attr_value_lower(tag, "sx-dir").as_deref() {
+    if get_tag_attr_value_lower(tag, "sx-dir").as_deref() == Some("row") {
         LayoutDirection::Row
     } else {
         LayoutDirection::Column
@@ -111,10 +106,11 @@ fn get_number(tag: &HTMLTag, name: &str) -> Result<Number, GetNumberError> {
             )
         }
     } else {
-        return Err(GetNumberError::Parse("".to_string()));
+        return Err(GetNumberError::Parse(String::new()));
     })
 }
 
+#[allow(clippy::too_many_lines)]
 fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
     Some(match node {
         Node::Tag(tag) => match tag.name().as_utf8_str().to_lowercase().as_str() {
@@ -127,10 +123,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     value: get_tag_attr_value_owned(tag, "value").unwrap_or_default(),
                     placeholder: get_tag_attr_value_owned(tag, "placeholder").unwrap_or_default(),
                 }),
-                Some(_) => {
-                    return None;
-                }
-                None => {
+                Some(_) | None => {
                     return None;
                 }
             },
