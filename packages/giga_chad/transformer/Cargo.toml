@@ -25,9 +25,11 @@ thiserror = { workspace = true }
 tl        = { workspace = true, optional = true }
 
 [features]
-default = ["html"]
+default = ["calc", "html"]
 
 fail-on-warnings = []
+
+calc = []
 
 html = ["dep:tl"]
 simd = ["tl?/simd"]
