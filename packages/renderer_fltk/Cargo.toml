@@ -16,7 +16,7 @@ moosicbox_htmx_transformer = { path = "../htmx_transformer", default-features = 
 ] }
 moosicbox_task = { path = "../task", default-features = false }
 
-fltk      = { workspace = true }
+fltk      = { workspace = true, features = ["use-ninja"] }
 flume     = { workspace = true }
 futures   = { workspace = true }
 image     = { workspace = true }
