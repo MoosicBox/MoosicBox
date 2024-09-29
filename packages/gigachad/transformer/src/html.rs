@@ -274,7 +274,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     ..Default::default()
                 },
             },
-            "ul" => crate::Element::Ul {
+            "ul" => crate::Element::UnorderedList {
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
@@ -283,7 +283,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     ..Default::default()
                 },
             },
-            "ol" => crate::Element::Ol {
+            "ol" => crate::Element::OrderedList {
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),
@@ -292,7 +292,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     ..Default::default()
                 },
             },
-            "li" => crate::Element::Li {
+            "li" => crate::Element::ListItem {
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     elements: parse_top_children(node.children(), parser),

@@ -745,13 +745,13 @@ fn draw_element(
             height = element.calculated_height;
             flex_element = Some(draw_elements(&element.elements, context, event_sender)?);
         }
-        Element::Ol { element } | Element::Ul { element } => {
+        Element::OrderedList { element } | Element::UnorderedList { element } => {
             context = context.with_container(element);
             width = element.calculated_width;
             height = element.calculated_height;
             flex_element = Some(draw_elements(&element.elements, context, event_sender)?);
         }
-        Element::Li { element } => {
+        Element::ListItem { element } => {
             context = context.with_container(element);
             width = element.calculated_width;
             height = element.calculated_height;

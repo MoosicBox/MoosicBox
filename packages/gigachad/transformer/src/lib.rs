@@ -102,13 +102,13 @@ pub enum Element {
         element: ContainerElement,
         size: HeaderSize,
     },
-    Ul {
+    UnorderedList {
         element: ContainerElement,
     },
-    Ol {
+    OrderedList {
         element: ContainerElement,
     },
-    Li {
+    ListItem {
         element: ContainerElement,
     },
 }
@@ -128,9 +128,9 @@ impl Element {
             | Self::Button { element }
             | Self::Anchor { element, .. }
             | Self::Heading { element, .. }
-            | Self::Ul { element }
-            | Self::Ol { element }
-            | Self::Li { element } => Some(element),
+            | Self::UnorderedList { element }
+            | Self::OrderedList { element }
+            | Self::ListItem { element } => Some(element),
             Self::Raw { .. } | Self::Image { .. } | Self::Input(_) => None,
         }
     }
@@ -148,9 +148,9 @@ impl Element {
             | Self::Button { element }
             | Self::Anchor { element, .. }
             | Self::Heading { element, .. }
-            | Self::Ul { element }
-            | Self::Ol { element }
-            | Self::Li { element } => Some(element),
+            | Self::UnorderedList { element }
+            | Self::OrderedList { element }
+            | Self::ListItem { element } => Some(element),
             Self::Raw { .. } | Self::Image { .. } | Self::Input(_) => None,
         }
     }
