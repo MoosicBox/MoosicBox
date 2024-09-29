@@ -23,28 +23,28 @@ tauri-build = { workspace = true, features = [] }
 [dependencies]
 moosicbox_app_ws = { path = "../ws", default-features = false }
 
-moosicbox_assert = { path = "../../assert", default-features = false }
-moosicbox_audio_output = { path = "../../audio_output", default-features = false }
-moosicbox_audio_zone = { path = "../../audio_zone", default-features = false }
-moosicbox_core = { path = "../../core", default-features = false }
-moosicbox_env_utils = { path = "../../env_utils", default-features = false }
-moosicbox_library = { path = "../../library", default-features = false }
-moosicbox_logging = { path = "../../logging", default-features = false }
-moosicbox_mdns = { path = "../../mdns", default-features = false, features = [
+moosicbox_assert = { path = "../../../assert", default-features = false }
+moosicbox_audio_output = { path = "../../../audio_output", default-features = false }
+moosicbox_audio_zone = { path = "../../../audio_zone", default-features = false }
+moosicbox_core = { path = "../../../core", default-features = false }
+moosicbox_env_utils = { path = "../../../env_utils", default-features = false }
+moosicbox_library = { path = "../../../library", default-features = false }
+moosicbox_logging = { path = "../../../logging", default-features = false }
+moosicbox_mdns = { path = "../../../mdns", default-features = false, features = [
     "scanner",
 ] }
-moosicbox_music_api = { path = "../../music_api", default-features = false }
-moosicbox_paging = { path = "../../paging", default-features = false }
-moosicbox_player = { path = "../../player", default-features = false, features = [
+moosicbox_music_api = { path = "../../../music_api", default-features = false }
+moosicbox_paging = { path = "../../../paging", default-features = false }
+moosicbox_player = { path = "../../../player", default-features = false, features = [
     "local",
 ] }
-moosicbox_remote_library = { path = "../../remote_library", default-features = false }
-moosicbox_session = { path = "../../session", default-features = false }
-moosicbox_task = { path = "../../task", default-features = false }
-moosicbox_upnp = { path = "../../upnp", default-features = false, features = [
+moosicbox_remote_library = { path = "../../../remote_library", default-features = false }
+moosicbox_session = { path = "../../../session", default-features = false }
+moosicbox_task = { path = "../../../task", default-features = false }
+moosicbox_upnp = { path = "../../../upnp", default-features = false, features = [
     "player",
 ] }
-moosicbox_ws = { path = "../../ws", default-features = false }
+moosicbox_ws = { path = "../../../ws", default-features = false }
 
 # Bundled Dependencies
 moosicbox_app_bundled = { path = "../bundled", default-features = false, optional = true }

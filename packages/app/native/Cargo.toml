@@ -18,11 +18,11 @@ required-features = []
 [dependencies]
 moosicbox_app_native_lib = { path = "lib", default-features = false }
 moosicbox_app_native_ui = { path = "ui", default-features = false }
-moosicbox_library_models = { path = "../library/models", default-features = false, features = [
+moosicbox_library_models = { path = "../../library/models", default-features = false, features = [
     "all-formats",
 ] }
-moosicbox_logging = { path = "../logging", default-features = false }
-moosicbox_paging = { path = "../paging", default-features = false }
+moosicbox_logging = { path = "../../logging", default-features = false }
+moosicbox_paging = { path = "../../paging", default-features = false }
 
 # Bundled dependencies
 moosicbox_app_native_bundled = { path = "bundled", optional = true, default-features = false }

@@ -16,8 +16,8 @@ path              = "src/main.rs"
 required-features = []
 
 [dependencies]
-moosicbox_assert  = { path = "../../assert", default-features = false }
-moosicbox_logging = { path = "../../logging", default-features = false }
+moosicbox_assert  = { path = "../../../assert", default-features = false }
+moosicbox_logging = { path = "../../../logging", default-features = false }
 
 clap       = { workspace = true }
 log        = { workspace = true }

@@ -20,12 +20,12 @@ repository = "https://github.com/MoosicBox/MoosicBoxServer"
 version = "0.1.0"
 
 [dependencies]
-moosicbox_env_utils = { path = "../../env_utils", default-features = false }
-moosicbox_htmx_transformer = { path = "../../htmx_transformer", default-features = false, features = [
+moosicbox_env_utils = { path = "../../../env_utils", default-features = false }
+moosicbox_htmx_transformer = { path = "../../../htmx_transformer", default-features = false, features = [
     "html",
 ] }
-moosicbox_renderer_fltk = { path = "../../renderer_fltk", default-features = false }
-moosicbox_task = { path = "../../task", default-features = false }
+moosicbox_renderer_fltk = { path = "../../../renderer_fltk", default-features = false }
+moosicbox_task = { path = "../../../task", default-features = false }
 
 fltk      = { workspace = true, features = ["use-ninja"] }
 flume     = { workspace = true }

@@ -58,13 +58,13 @@ jobs:
                       libsoup-3.0-dev
 
             - name: Build
-              working-directory: MoosicBoxServer/packages/app_tauri/src-tauri
+              working-directory: MoosicBoxServer/packages/app/tauri/src-tauri
               env:
                   APTABASE_APP_KEY: ${{ secrets.APTABASE_APP_KEY }}
               run: cargo build --verbose
 
             - name: Run tests
-              working-directory: MoosicBoxServer/packages/app_tauri/src-tauri
+              working-directory: MoosicBoxServer/packages/app/tauri/src-tauri
               env:
                   APTABASE_APP_KEY: ${{ secrets.APTABASE_APP_KEY }}
               run: cargo test --verbose

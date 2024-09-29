@@ -11,10 +11,10 @@ repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert    = { path = "../../assert", default-features = false }
-moosicbox_env_utils = { path = "../../env_utils", default-features = false }
-moosicbox_logging   = { path = "../../logging", default-features = false }
-moosicbox_task      = { path = "../../task", default-features = false }
+moosicbox_assert    = { path = "../../../assert", default-features = false }
+moosicbox_env_utils = { path = "../../../env_utils", default-features = false }
+moosicbox_logging   = { path = "../../../logging", default-features = false }
+moosicbox_task      = { path = "../../../task", default-features = false }
 
 async-trait       = { workspace = true }
 bytes             = { workspace = true }
