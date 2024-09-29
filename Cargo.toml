@@ -28,7 +28,7 @@ members = [
     "packages/downloader",
     "packages/env_utils",
     "packages/files",
-    "packages/htmx_transformer",
+    "packages/giga_chad/transformer",
     "packages/image",
     "packages/json_utils",
     "packages/library",

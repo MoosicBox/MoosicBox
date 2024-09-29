@@ -121,8 +121,8 @@ jobs:
                       path: packages/files
                       os: ubuntu-latest
 
-                    - name: htmx_transformer
-                      path: packages/htmx_transformer
+                    - name: giga_chad_transformer
+                      path: packages/giga_chad_transformer
                       os: ubuntu-latest
 
                     - name: image-bin
