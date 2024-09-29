@@ -20,9 +20,10 @@ impl Default for Number {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub enum LayoutDirection {
     Row,
+    #[default]
     Column,
 }
 
@@ -37,12 +38,22 @@ impl std::ops::Deref for ElementList {
     }
 }
 
-#[derive(Clone, Debug)]
+impl std::ops::DerefMut for ElementList {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct ContainerElement {
     pub elements: Vec<Element>,
     pub direction: LayoutDirection,
     pub width: Option<Number>,
     pub height: Option<Number>,
+    #[cfg(feature = "calc")]
+    pub calculated_width: Option<f32>,
+    #[cfg(feature = "calc")]
+    pub calculated_height: Option<f32>,
 }
 
 #[derive(Clone, Debug)]
@@ -100,6 +111,49 @@ pub enum Element {
     Li {
         element: ContainerElement,
     },
+}
+
+impl Element {
+    #[must_use]
+    pub const fn container_element(&self) -> Option<&ContainerElement> {
+        match self {
+            Self::Div { element }
+            | Self::Aside { element }
+            | Self::Main { element }
+            | Self::Header { element }
+            | Self::Footer { element }
+            | Self::Section { element }
+            | Self::Form { element }
+            | Self::Span { element }
+            | Self::Button { element }
+            | Self::Anchor { element, .. }
+            | Self::Heading { element, .. }
+            | Self::Ul { element }
+            | Self::Ol { element }
+            | Self::Li { element } => Some(element),
+            Self::Raw { .. } | Self::Image { .. } | Self::Input(_) => None,
+        }
+    }
+
+    pub fn container_element_mut(&mut self) -> Option<&mut ContainerElement> {
+        match self {
+            Self::Div { element }
+            | Self::Aside { element }
+            | Self::Main { element }
+            | Self::Header { element }
+            | Self::Footer { element }
+            | Self::Section { element }
+            | Self::Form { element }
+            | Self::Span { element }
+            | Self::Button { element }
+            | Self::Anchor { element, .. }
+            | Self::Heading { element, .. }
+            | Self::Ul { element }
+            | Self::Ol { element }
+            | Self::Li { element } => Some(element),
+            Self::Raw { .. } | Self::Image { .. } | Self::Input(_) => None,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug)]

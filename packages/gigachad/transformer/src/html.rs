@@ -133,6 +133,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
+                    ..Default::default()
                 },
             },
             "header" => crate::Element::Header {
@@ -141,6 +142,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
+                    ..Default::default()
                 },
             },
             "footer" => crate::Element::Footer {
@@ -149,6 +151,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
+                    ..Default::default()
                 },
             },
             "aside" => crate::Element::Aside {
@@ -157,6 +160,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
+                    ..Default::default()
                 },
             },
             "div" => crate::Element::Div {
@@ -165,6 +169,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
+                    ..Default::default()
                 },
             },
             "section" => crate::Element::Section {
@@ -173,6 +178,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
+                    ..Default::default()
                 },
             },
             "form" => crate::Element::Form {
@@ -181,6 +187,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
+                    ..Default::default()
                 },
             },
             "button" => crate::Element::Button {
@@ -189,6 +196,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
+                    ..Default::default()
                 },
             },
             "img" => crate::Element::Image {
@@ -203,6 +211,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
+                    ..Default::default()
                 },
             },
             "h1" => crate::Element::Heading {
@@ -212,6 +221,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
+                    ..Default::default()
                 },
             },
             "h2" => crate::Element::Heading {
@@ -221,6 +231,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
+                    ..Default::default()
                 },
             },
             "h3" => crate::Element::Heading {
@@ -230,6 +241,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
+                    ..Default::default()
                 },
             },
             "h4" => crate::Element::Heading {
@@ -239,6 +251,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
+                    ..Default::default()
                 },
             },
             "h5" => crate::Element::Heading {
@@ -248,6 +261,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
+                    ..Default::default()
                 },
             },
             "h6" => crate::Element::Heading {
@@ -257,6 +271,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
+                    ..Default::default()
                 },
             },
             "ul" => crate::Element::Ul {
@@ -265,6 +280,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
+                    ..Default::default()
                 },
             },
             "ol" => crate::Element::Ol {
@@ -273,6 +289,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
+                    ..Default::default()
                 },
             },
             "li" => crate::Element::Li {
@@ -281,6 +298,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
+                    ..Default::default()
                 },
             },
             _ => {

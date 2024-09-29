@@ -20,6 +20,7 @@ use fltk::{
 use flume::{Receiver, Sender};
 use futures::Future;
 use moosicbox_gigachad_transformer::{
+    calc::{calc_number, Calc as _},
     ContainerElement, Element, ElementList, HeaderSize, LayoutDirection, Number,
 };
 use thiserror::Error;
@@ -211,6 +212,10 @@ impl Renderer {
         }
     }
 
+    /// # Panics
+    ///
+    /// Will panic if elements `Mutex` is poisoned.
+    ///
     /// # Errors
     ///
     /// Will error if FLTK app fails to start
@@ -229,6 +234,7 @@ impl Renderer {
             .store(i32::from(height), std::sync::atomic::Ordering::SeqCst);
 
         app::set_background_color(24, 26, 27);
+        app::set_foreground_color(255, 255, 255);
 
         let (tx, rx) = flume::unbounded();
         self.event_sender.replace(tx);
@@ -253,6 +259,16 @@ impl Renderer {
                             window.width(),
                             window.height()
                         );
+
+                        #[allow(clippy::cast_precision_loss)]
+                        {
+                            renderer
+                                .elements
+                                .lock()
+                                .unwrap()
+                                .calc(window.width() as f32, window.height() as f32);
+                        }
+
                         if let Err(e) = renderer.perform_render() {
                             log::error!("Failed to draw elements: {e:?}");
                         }
@@ -277,10 +293,10 @@ impl Renderer {
         Ok(self)
     }
 
-    #[must_use]
     /// # Panics
     ///
     /// Will panic if routes `RwLock` is poisoned.
+    #[must_use]
     pub fn with_route<
         F: Future<Output = Result<ElementList, E>> + Send + 'static,
         E: Into<Box<dyn std::error::Error>>,
@@ -462,9 +478,16 @@ impl Renderer {
     /// # Panics
     ///
     /// Will panic if elements `Mutex` is poisoned.
-    pub fn render(&mut self, elements: ElementList) -> Result<(), FltkError> {
+    pub fn render(&mut self, mut elements: ElementList) -> Result<(), FltkError> {
         log::debug!("render: {elements:?}");
+
+        #[allow(clippy::cast_precision_loss)]
         {
+            elements.calc(
+                self.width.load(std::sync::atomic::Ordering::SeqCst) as f32,
+                self.height.load(std::sync::atomic::Ordering::SeqCst) as f32,
+            );
+
             *self.elements.lock().unwrap() = elements;
         }
 
@@ -505,23 +528,14 @@ impl Context {
     fn with_container(mut self, container: &ContainerElement) -> Self {
         self.direction = container.direction;
         self.width = container
-            .width
-            .map_or(self.width, |x| calc_number(x, self.width));
+            .calculated_width
+            .or_else(|| container.width.map(|x| calc_number(x, self.width)))
+            .unwrap_or(self.width);
         self.height = container
-            .height
-            .map_or(self.height, |x| calc_number(x, self.height));
+            .calculated_height
+            .or_else(|| container.height.map(|x| calc_number(x, self.height)))
+            .unwrap_or(self.height);
         self
-    }
-}
-
-fn calc_number(number: Number, container: f32) -> f32 {
-    match number {
-        Number::Real(x) => x,
-        #[allow(clippy::cast_precision_loss)]
-        Number::Integer(x) => x as f32,
-        Number::RealPercent(x) => container * (x / 100.0),
-        #[allow(clippy::cast_precision_loss)]
-        Number::IntegerPercent(x) => container * (x as f32 / 100.0),
     }
 }
 
@@ -583,93 +597,57 @@ fn draw_element(
         }
         Element::Div { element } => {
             context = context.with_container(element);
-            if element.width.is_some() {
-                width = Some(context.width);
-            }
-            if element.height.is_some() {
-                height = Some(context.height);
-            }
+            width = element.calculated_width;
+            height = element.calculated_height;
             flex_element = Some(draw_elements(&element.elements, context, event_sender)?);
         }
         Element::Aside { element } => {
             context = context.with_container(element);
-            if element.width.is_some() {
-                width = Some(context.width);
-            }
-            if element.height.is_some() {
-                height = Some(context.height);
-            }
+            width = element.calculated_width;
+            height = element.calculated_height;
             flex_element = Some(draw_elements(&element.elements, context, event_sender)?);
         }
         Element::Header { element } => {
             context = context.with_container(element);
-            if element.width.is_some() {
-                width = Some(context.width);
-            }
-            if element.height.is_some() {
-                height = Some(context.height);
-            }
+            width = element.calculated_width;
+            height = element.calculated_height;
             flex_element = Some(draw_elements(&element.elements, context, event_sender)?);
         }
         Element::Footer { element } => {
             context = context.with_container(element);
-            if element.width.is_some() {
-                width = Some(context.width);
-            }
-            if element.height.is_some() {
-                height = Some(context.height);
-            }
+            width = element.calculated_width;
+            height = element.calculated_height;
             flex_element = Some(draw_elements(&element.elements, context, event_sender)?);
         }
         Element::Main { element } => {
             context = context.with_container(element);
-            if element.width.is_some() {
-                width = Some(context.width);
-            }
-            if element.height.is_some() {
-                height = Some(context.height);
-            }
+            width = element.calculated_width;
+            height = element.calculated_height;
             flex_element = Some(draw_elements(&element.elements, context, event_sender)?);
         }
         Element::Section { element } => {
             context = context.with_container(element);
-            if element.width.is_some() {
-                width = Some(context.width);
-            }
-            if element.height.is_some() {
-                height = Some(context.height);
-            }
+            width = element.calculated_width;
+            height = element.calculated_height;
             flex_element = Some(draw_elements(&element.elements, context, event_sender)?);
         }
         Element::Form { element } => {
             context = context.with_container(element);
-            if element.width.is_some() {
-                width = Some(context.width);
-            }
-            if element.height.is_some() {
-                height = Some(context.height);
-            }
+            width = element.calculated_width;
+            height = element.calculated_height;
             flex_element = Some(draw_elements(&element.elements, context, event_sender)?);
         }
         Element::Span { element } => {
             context = context.with_container(element);
-            if element.width.is_some() {
-                width = Some(context.width);
-            }
-            if element.height.is_some() {
-                height = Some(context.height);
-            }
+            width = element.calculated_width;
+            height = element.calculated_height;
             flex_element = Some(draw_elements(&element.elements, context, event_sender)?);
         }
         Element::Input(_) => {}
         Element::Button { element } => {
             context = context.with_container(element);
-            if element.width.is_some() {
-                width = Some(context.width);
-            }
-            if element.height.is_some() {
-                height = Some(context.height);
-            }
+            width = element.calculated_width;
+            height = element.calculated_height;
             flex_element = Some(draw_elements(&element.elements, context, event_sender)?);
         }
         Element::Image {
@@ -735,12 +713,8 @@ fn draw_element(
         }
         Element::Anchor { element, href } => {
             context = context.with_container(element);
-            if element.width.is_some() {
-                width = Some(context.width);
-            }
-            if element.height.is_some() {
-                height = Some(context.height);
-            }
+            width = element.calculated_width;
+            height = element.calculated_height;
             let mut elements = draw_elements(&element.elements, context, event_sender.clone())?;
             if let Some(href) = href.to_owned() {
                 elements.handle(move |_, ev| match ev {
@@ -767,32 +741,20 @@ fn draw_element(
                 HeaderSize::H5 => 16,
                 HeaderSize::H6 => 12,
             };
-            if element.width.is_some() {
-                width = Some(context.width);
-            }
-            if element.height.is_some() {
-                height = Some(context.height);
-            }
+            width = element.calculated_width;
+            height = element.calculated_height;
             flex_element = Some(draw_elements(&element.elements, context, event_sender)?);
         }
         Element::Ol { element } | Element::Ul { element } => {
             context = context.with_container(element);
-            if element.width.is_some() {
-                width = Some(context.width);
-            }
-            if element.height.is_some() {
-                height = Some(context.height);
-            }
+            width = element.calculated_width;
+            height = element.calculated_height;
             flex_element = Some(draw_elements(&element.elements, context, event_sender)?);
         }
         Element::Li { element } => {
             context = context.with_container(element);
-            if element.width.is_some() {
-                width = Some(context.width);
-            }
-            if element.height.is_some() {
-                height = Some(context.height);
-            }
+            width = element.calculated_width;
+            height = element.calculated_height;
             flex_element = Some(draw_elements(&element.elements, context, event_sender)?);
         }
     }

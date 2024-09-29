@@ -13,6 +13,7 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_assert = { path = "../../../assert", default-features = false }
 moosicbox_gigachad_transformer = { path = "../../../gigachad/transformer", default-features = false, features = [
+    "calc",
     "html",
 ] }
 moosicbox_task = { path = "../../../task", default-features = false }
