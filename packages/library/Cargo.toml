@@ -62,22 +62,26 @@ aac = [
     "dep:moosicbox_stream_utils",
     "moosicbox_audio_output/aac",
     "moosicbox_core/aac",
+    "moosicbox_files/aac",
 ]
 flac = [
     "dep:moosicbox_audio_output",
     "dep:moosicbox_stream_utils",
     "moosicbox_audio_output/flac",
     "moosicbox_core/flac",
+    "moosicbox_files/flac",
 ]
 mp3 = [
     "dep:moosicbox_audio_output",
     "dep:moosicbox_stream_utils",
     "moosicbox_audio_output/mp3",
     "moosicbox_core/mp3",
+    "moosicbox_files/mp3",
 ]
 opus = [
     "dep:moosicbox_audio_output",
     "dep:moosicbox_stream_utils",
     "moosicbox_audio_output/opus",
     "moosicbox_core/opus",
+    "moosicbox_files/opus",
 ]
