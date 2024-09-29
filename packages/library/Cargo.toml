@@ -23,7 +23,9 @@ moosicbox_json_utils = { path = "../json_utils", default-features = false, featu
     "database",
     "serde_json",
 ] }
-moosicbox_library_models = { path = "models", default-features = false }
+moosicbox_library_models = { path = "models", default-features = false, features = [
+    "db",
+] }
 moosicbox_music_api = { path = "../music_api", default-features = false }
 moosicbox_paging = { path = "../paging", default-features = false }
 moosicbox_search = { path = "../search", default-features = false, features = [

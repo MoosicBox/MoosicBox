@@ -1,22 +1,23 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use std::{path::PathBuf, str::FromStr as _, sync::Arc};
+use std::{path::PathBuf, str::FromStr as _};
 
-use async_trait::async_trait;
+#[cfg(feature = "db")]
+use moosicbox_core::sqlite::db::{get_album_version_qualities, DbError};
 use moosicbox_core::{
-    sqlite::{
-        db::{get_album_version_qualities, DbError},
-        models::{
-            Album, AlbumSource, AlbumVersionQuality, ApiAlbumVersionQuality, ApiSource, ApiSources,
-            Artist, AsModel, AsModelQuery, AsModelResult, AsModelResultMapped, Id, ToApi, Track,
-            TrackApiSource,
-        },
+    sqlite::models::{
+        Album, AlbumSource, AlbumVersionQuality, ApiAlbumVersionQuality, ApiSource, ApiSources,
+        Artist, Id, ToApi, Track, TrackApiSource,
     },
     types::AudioFormat,
 };
+#[cfg(feature = "db")]
 use moosicbox_database::{AsId, Database, DatabaseValue};
-use moosicbox_json_utils::{database::ToValue as _, MissingValue, ParseError, ToValueType};
+#[cfg(feature = "db")]
+use moosicbox_json_utils::database::ToValue as _;
+#[cfg(feature = "db")]
+use moosicbox_json_utils::{MissingValue, ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
@@ -44,12 +45,14 @@ impl From<LibraryArtist> for Artist {
     }
 }
 
-impl AsModel<LibraryArtist> for &moosicbox_database::Row {
+#[cfg(feature = "db")]
+impl moosicbox_core::sqlite::models::AsModel<LibraryArtist> for &moosicbox_database::Row {
     fn as_model(&self) -> LibraryArtist {
-        AsModelResult::as_model(self).unwrap()
+        moosicbox_core::sqlite::models::AsModelResult::as_model(self).unwrap()
     }
 }
 
+#[cfg(feature = "db")]
 impl ToValueType<LibraryArtist> for &moosicbox_database::Row {
     fn to_value_type(self) -> Result<LibraryArtist, ParseError> {
         Ok(LibraryArtist {
@@ -63,7 +66,10 @@ impl ToValueType<LibraryArtist> for &moosicbox_database::Row {
     }
 }
 
-impl AsModelResult<LibraryArtist, ParseError> for &moosicbox_database::Row {
+#[cfg(feature = "db")]
+impl moosicbox_core::sqlite::models::AsModelResult<LibraryArtist, ParseError>
+    for &moosicbox_database::Row
+{
     fn as_model(&self) -> Result<LibraryArtist, ParseError> {
         Ok(LibraryArtist {
             id: self.to_value("id")?,
@@ -76,6 +82,7 @@ impl AsModelResult<LibraryArtist, ParseError> for &moosicbox_database::Row {
     }
 }
 
+#[cfg(feature = "db")]
 impl AsId for LibraryArtist {
     fn as_id(&self) -> DatabaseValue {
         DatabaseValue::Number(self.id.try_into().unwrap())
@@ -185,13 +192,16 @@ impl From<Album> for LibraryAlbum {
     }
 }
 
-impl AsModel<LibraryAlbum> for &moosicbox_database::Row {
+#[cfg(feature = "db")]
+impl moosicbox_core::sqlite::models::AsModel<LibraryAlbum> for &moosicbox_database::Row {
     fn as_model(&self) -> LibraryAlbum {
-        AsModelResult::as_model(self).unwrap()
+        moosicbox_core::sqlite::models::AsModelResult::as_model(self).unwrap()
     }
 }
 
+#[cfg(feature = "db")]
 impl MissingValue<LibraryAlbum> for &moosicbox_database::Row {}
+#[cfg(feature = "db")]
 impl ToValueType<LibraryAlbum> for &moosicbox_database::Row {
     fn to_value_type(self) -> Result<LibraryAlbum, ParseError> {
         Ok(LibraryAlbum {
@@ -216,7 +226,10 @@ impl ToValueType<LibraryAlbum> for &moosicbox_database::Row {
     }
 }
 
-impl AsModelResult<LibraryAlbum, ParseError> for &moosicbox_database::Row {
+#[cfg(feature = "db")]
+impl moosicbox_core::sqlite::models::AsModelResult<LibraryAlbum, ParseError>
+    for &moosicbox_database::Row
+{
     fn as_model(&self) -> Result<LibraryAlbum, ParseError> {
         Ok(LibraryAlbum {
             id: self.to_value("id")?,
@@ -264,7 +277,10 @@ pub fn sort_album_versions(versions: &mut [AlbumVersionQuality]) {
     versions.sort_by(|a, b| track_source_to_u8(a.source).cmp(&track_source_to_u8(b.source)));
 }
 
-impl AsModelResultMapped<LibraryAlbum, DbError> for Vec<moosicbox_database::Row> {
+#[cfg(feature = "db")]
+impl moosicbox_core::sqlite::models::AsModelResultMapped<LibraryAlbum, DbError>
+    for Vec<moosicbox_database::Row>
+{
     #[allow(clippy::too_many_lines)]
     fn as_model_mapped(&self) -> Result<Vec<LibraryAlbum>, DbError> {
         let mut results: Vec<LibraryAlbum> = vec![];
@@ -376,9 +392,13 @@ impl AsModelResultMapped<LibraryAlbum, DbError> for Vec<moosicbox_database::Row>
     }
 }
 
-#[async_trait]
-impl AsModelQuery<LibraryAlbum> for &moosicbox_database::Row {
-    async fn as_model_query(&self, db: Arc<Box<dyn Database>>) -> Result<LibraryAlbum, DbError> {
+#[cfg(feature = "db")]
+#[async_trait::async_trait]
+impl moosicbox_core::sqlite::models::AsModelQuery<LibraryAlbum> for &moosicbox_database::Row {
+    async fn as_model_query(
+        &self,
+        db: std::sync::Arc<Box<dyn Database>>,
+    ) -> Result<LibraryAlbum, DbError> {
         let id = self.to_value("id")?;
 
         Ok(LibraryAlbum {
@@ -405,6 +425,7 @@ impl AsModelQuery<LibraryAlbum> for &moosicbox_database::Row {
     }
 }
 
+#[cfg(feature = "db")]
 impl AsId for LibraryAlbum {
     fn as_id(&self) -> DatabaseValue {
         DatabaseValue::Number(self.id.try_into().unwrap())
@@ -542,12 +563,14 @@ impl From<LibraryTrack> for Track {
     }
 }
 
-impl AsModel<LibraryTrack> for &moosicbox_database::Row {
+#[cfg(feature = "db")]
+impl moosicbox_core::sqlite::models::AsModel<LibraryTrack> for &moosicbox_database::Row {
     fn as_model(&self) -> LibraryTrack {
-        AsModelResult::as_model(self).unwrap()
+        moosicbox_core::sqlite::models::AsModelResult::as_model(self).unwrap()
     }
 }
 
+#[cfg(feature = "db")]
 impl ToValueType<LibraryTrack> for &moosicbox_database::Row {
     fn to_value_type(self) -> Result<LibraryTrack, ParseError> {
         Ok(LibraryTrack {
@@ -587,7 +610,10 @@ impl ToValueType<LibraryTrack> for &moosicbox_database::Row {
     }
 }
 
-impl AsModelResult<LibraryTrack, ParseError> for &moosicbox_database::Row {
+#[cfg(feature = "db")]
+impl moosicbox_core::sqlite::models::AsModelResult<LibraryTrack, ParseError>
+    for &moosicbox_database::Row
+{
     fn as_model(&self) -> Result<LibraryTrack, ParseError> {
         Ok(LibraryTrack {
             id: self.to_value("id")?,
@@ -626,6 +652,7 @@ impl AsModelResult<LibraryTrack, ParseError> for &moosicbox_database::Row {
     }
 }
 
+#[cfg(feature = "db")]
 impl AsId for LibraryTrack {
     fn as_id(&self) -> DatabaseValue {
         DatabaseValue::Number(self.id.try_into().unwrap())
