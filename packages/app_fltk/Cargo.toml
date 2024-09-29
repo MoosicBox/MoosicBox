@@ -23,10 +23,15 @@ moosicbox_renderer_fltk = { path = "../renderer_fltk", default-features = false 
 
 log   = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+# Bundled dependencies
+moosicbox_app_fltk_bundled = { path = "bundled", optional = true, default-features = false }
+
 
 [features]
 default = ["unsafe"]
 
 fail-on-warnings = []
+
+bundled = ["dep:moosicbox_app_fltk_bundled"]
 
 unsafe = []

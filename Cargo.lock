@@ -4833,10 +4833,28 @@ name = "moosicbox_app_fltk"
 version = "0.1.0"
 dependencies = [
  "log",
+ "moosicbox_app_fltk_bundled",
  "moosicbox_app_fltk_ui",
  "moosicbox_env_utils",
  "moosicbox_logging",
  "moosicbox_renderer_fltk",
+ "tokio",
+]
+
+[[package]]
+name = "moosicbox_app_fltk_bundled"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "moosicbox_assert",
+ "moosicbox_async_service",
+ "moosicbox_config",
+ "moosicbox_server",
+ "moosicbox_task",
+ "strum",
+ "strum_macros",
+ "tauri",
+ "thiserror",
  "tokio",
 ]
 
