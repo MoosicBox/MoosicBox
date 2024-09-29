@@ -4660,6 +4660,7 @@ version = "0.1.0"
 dependencies = [
  "moosicbox_admin_htmx",
  "moosicbox_app_native_lib",
+ "moosicbox_app_native_renderer",
  "moosicbox_app_native_ui",
  "moosicbox_assert",
  "moosicbox_async_service",
@@ -4692,7 +4693,6 @@ dependencies = [
  "moosicbox_profiles",
  "moosicbox_qobuz",
  "moosicbox_remote_library",
- "moosicbox_renderer_fltk",
  "moosicbox_resampler",
  "moosicbox_scan",
  "moosicbox_schema",
@@ -4873,10 +4873,27 @@ dependencies = [
  "futures",
  "image",
  "log",
+ "moosicbox_app_native_renderer",
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_htmx_transformer",
- "moosicbox_renderer_fltk",
+ "moosicbox_task",
+ "reqwest 0.12.7",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "moosicbox_app_native_renderer"
+version = "0.1.0"
+dependencies = [
+ "fltk",
+ "flume",
+ "futures",
+ "image",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_htmx_transformer",
  "moosicbox_task",
  "reqwest 0.12.7",
  "thiserror",
@@ -5494,23 +5511,6 @@ dependencies = [
  "moosicbox_paging",
  "reqwest 0.12.7",
  "thiserror",
-]
-
-[[package]]
-name = "moosicbox_renderer_fltk"
-version = "0.1.0"
-dependencies = [
- "fltk",
- "flume",
- "futures",
- "image",
- "log",
- "moosicbox_assert",
- "moosicbox_htmx_transformer",
- "moosicbox_task",
- "reqwest 0.12.7",
- "thiserror",
- "tokio",
 ]
 
 [[package]]

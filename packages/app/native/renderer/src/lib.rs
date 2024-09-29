@@ -378,7 +378,7 @@ impl Renderer {
                     context_height,
                     frame,
                 } => {
-                    moosicbox_task::spawn("renderer_fltk: load_image", async move {
+                    moosicbox_task::spawn("renderer: load_image", async move {
                         Self::load_image(
                             source,
                             width,

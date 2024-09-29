@@ -25,7 +25,7 @@ moosicbox_env_utils = { path = "../../../env_utils", default-features = false }
 moosicbox_htmx_transformer = { path = "../../../htmx_transformer", default-features = false, features = [
     "html",
 ] }
-moosicbox_renderer_fltk = { path = "../../../renderer_fltk", default-features = false }
+moosicbox_app_native_renderer = { path = "../renderer", default-features = false }
 moosicbox_task = { path = "../../../task", default-features = false }
 
 fltk      = { workspace = true, features = ["use-ninja"] }

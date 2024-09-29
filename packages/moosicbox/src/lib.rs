@@ -1,6 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 pub use moosicbox_admin_htmx as admin_htmx;
+pub use moosicbox_app_native_renderer as app_native_renderer;
 pub use moosicbox_app_native_ui as app_native_ui;
 pub use moosicbox_assert as assert;
 pub use moosicbox_async_service as async_service;
@@ -33,7 +34,6 @@ pub use moosicbox_player as player;
 pub use moosicbox_profiles as profiles;
 pub use moosicbox_qobuz as qobuz;
 pub use moosicbox_remote_library as remote_library;
-pub use moosicbox_renderer_fltk as renderer_fltk;
 pub use moosicbox_resampler as resampler;
 pub use moosicbox_scan as scan;
 pub use moosicbox_schema as schema;

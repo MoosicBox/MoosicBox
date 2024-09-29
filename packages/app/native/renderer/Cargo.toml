@@ -5,17 +5,17 @@ description = "MoosicBox fltk renderer package"
 edition     = "2021"
 keywords    = ["desktop", "gui", "linux", "macos", "render", "renderer", "windows"]
 license     = "MPL-2.0"
-name        = "moosicbox_renderer_fltk"
+name        = "moosicbox_app_native_renderer"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBoxServer"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { path = "../assert", default-features = false }
-moosicbox_htmx_transformer = { path = "../htmx_transformer", default-features = false, features = [
+moosicbox_assert = { path = "../../../assert", default-features = false }
+moosicbox_htmx_transformer = { path = "../../../htmx_transformer", default-features = false, features = [
     "html",
 ] }
-moosicbox_task = { path = "../task", default-features = false }
+moosicbox_task = { path = "../../../task", default-features = false }
 
 fltk      = { workspace = true, features = ["use-ninja"] }
 flume     = { workspace = true }
