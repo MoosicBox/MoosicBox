@@ -98,7 +98,10 @@ pub fn downloads() -> Markup {
 fn album_cover_url(album: &ApiLibraryAlbum, width: u16, height: u16) -> String {
     if album.contains_cover {
         format!(
-            "http://localhost:8500/files/albums/{}/{width}x{height}?moosicboxProfile=master",
+            "{}/files/albums/{}/{width}x{height}?moosicboxProfile=master",
+            std::env::var("MOOSICBOX_HOST")
+                .as_deref()
+                .unwrap_or("http://localhost:8500"),
             album.album_id
         )
     } else {

@@ -19,9 +19,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             moosicbox_app_fltk_ui::downloads().into_string().try_into()
         })
         .with_route("/albums", || async {
-            let response = reqwest::get(
-                "http://localhost:8500/menu/albums?moosicboxProfile=master&offset=0&limit=10",
-            )
+            let response = reqwest::get(format!(
+                "{}/menu/albums?moosicboxProfile=master&offset=0&limit=10",
+                std::env::var("MOOSICBOX_HOST")
+                    .as_deref()
+                    .unwrap_or("http://localhost:8500")
+            ))
             .await?;
 
             if !response.status().is_success() {
