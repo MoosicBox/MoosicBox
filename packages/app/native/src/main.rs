@@ -10,10 +10,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut app = moosicbox_app_native_lib::NativeApp::new()
         .with_size(WIDTH, HEIGHT)
-        .with_route("/", || async {
-            moosicbox_app_native_ui::home().into_string().try_into()
-        })
-        .with_route("/home", || async {
+        .with_route(&["/", "/home"], || async {
             moosicbox_app_native_ui::home().into_string().try_into()
         })
         .with_route("/downloads", || async {
