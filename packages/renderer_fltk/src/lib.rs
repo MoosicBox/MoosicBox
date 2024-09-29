@@ -204,6 +204,7 @@ impl Renderer {
 
         frame.set_image_scaled(Some(image));
         frame.set_damage(true);
+        app::awake();
 
         Ok(())
     }
