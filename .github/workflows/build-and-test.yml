@@ -31,21 +31,21 @@ jobs:
                       path: packages/admin_htmx
                       os: ubuntu-latest
 
-                    - name: app_fltk-ubuntu
-                      path: packages/app_fltk
+                    - name: app_native-ubuntu
+                      path: packages/app/native
                       os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libpango1.0-dev libgl1-mesa-dev libglu1-mesa-dev
+                      dependencies: sudo apt-get update && sudo apt-get install libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libpango1.0-dev libgl1-mesa-dev libglu1-mesa-dev libgtk-3-dev
 
-                    - name: app_fltk-macos
-                      path: packages/app_fltk
+                    - name: app_native-macos
+                      path: packages/app/native
                       os: macos-latest
 
-                    - name: app_fltk-windows
-                      path: packages/app_fltk
+                    - name: app_native-windows
+                      path: packages/app/native
                       os: windows-latest
 
-                    - name: app_fltk_ui
-                      path: packages/app_fltk/ui
+                    - name: app_native_ui
+                      path: packages/app/native/ui
                       os: ubuntu-latest
 
                     - name: assert
