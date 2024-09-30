@@ -1,13 +1,15 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
+use std::sync::Arc;
+
 use fltk::prelude::FltkError;
 use futures::Future;
 use moosicbox_app_native_renderer::{Renderer, RoutePath};
 use moosicbox_env_utils::default_env_usize;
 use moosicbox_gigachad_transformer::ElementList;
 use thiserror::Error;
-use tokio::task::JoinHandle;
+use tokio::{runtime::Runtime, task::JoinHandle};
 
 #[derive(Debug, Error)]
 pub enum NativeAppError {
@@ -20,7 +22,8 @@ pub struct NativeApp {
     width: Option<u16>,
     height: Option<u16>,
     renderer: Renderer,
-    runtime: Option<tokio::runtime::Handle>,
+    runtime_handle: Option<tokio::runtime::Handle>,
+    runtime: Option<Arc<tokio::runtime::Runtime>>,
 }
 
 impl Default for NativeApp {
@@ -36,6 +39,7 @@ impl NativeApp {
             width: None,
             height: None,
             renderer: Renderer::new(),
+            runtime_handle: None,
             runtime: None,
         }
     }
@@ -57,6 +61,17 @@ impl NativeApp {
         self.with_width(width).with_height(height)
     }
 
+    #[must_use]
+    pub fn with_runtime(self, runtime: Runtime) -> Self {
+        self.with_runtime_arc(Arc::new(runtime))
+    }
+
+    #[must_use]
+    pub fn with_runtime_arc(mut self, runtime: Arc<Runtime>) -> Self {
+        self.runtime.replace(runtime);
+        self
+    }
+
     /// # Panics
     ///
     /// Will panic if failed to start tokio runtime
@@ -69,15 +84,19 @@ impl NativeApp {
             .renderer
             .start(self.width.unwrap_or(800), self.height.unwrap_or(600))?;
 
-        let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
-        log::debug!("Running with {threads} max blocking threads");
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .max_blocking_threads(threads)
-            .build()
-            .unwrap();
+        let runtime = self.runtime.take().unwrap_or_else(|| {
+            let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
+            log::debug!("Running with {threads} max blocking threads");
+            Arc::new(
+                tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .max_blocking_threads(threads)
+                    .build()
+                    .unwrap(),
+            )
+        });
 
-        self.runtime.replace(runtime.handle().clone());
+        self.runtime_handle.replace(runtime.handle().clone());
 
         std::thread::spawn({
             let renderer = self.renderer.clone();
@@ -123,12 +142,12 @@ impl NativeApp {
     ///
     /// Will error if there was an error starting the FLTK app
     pub fn navigate_spawn(&mut self, path: &str) -> JoinHandle<Result<(), FltkError>> {
-        let Some(runtime) = &self.runtime else {
+        let Some(handle) = &self.runtime_handle else {
             moosicbox_assert::die_or_panic!("NativeApp must be started before navigating");
         };
         let mut renderer = self.renderer.clone();
         let path = path.to_owned();
-        moosicbox_task::spawn_on("NativeApp navigate_spawn", runtime, async move {
+        moosicbox_task::spawn_on("NativeApp navigate_spawn", handle, async move {
             renderer.navigate(&path).await
         })
     }
