@@ -1,4 +1,6 @@
-use moosicbox_env_utils::default_env_u16;
+use std::sync::Arc;
+
+use moosicbox_env_utils::{default_env_u16, default_env_usize};
 use moosicbox_library_models::ApiAlbum;
 use moosicbox_paging::Page;
 
@@ -8,7 +10,46 @@ static HEIGHT: u16 = default_env_u16!("WINDOW_HEIGHT", 600);
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     moosicbox_logging::init(None)?;
 
+    let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
+    log::debug!("Running with {threads} max blocking threads");
+
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .max_blocking_threads(threads)
+        .build()
+        .unwrap();
+
+    #[cfg(feature = "bundled")]
+    let (join_app_server, app_server_handle) = {
+        use moosicbox_app_native_bundled::service::Commander as _;
+
+        log::debug!("Starting app server");
+
+        let context = moosicbox_app_native_bundled::Context::new(runtime.handle());
+        let server = moosicbox_app_native_bundled::service::Service::new(context);
+
+        let app_server_handle = server.handle();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+
+        let join_app_server = server.start_on(runtime.handle());
+
+        app_server_handle
+            .send_command(moosicbox_app_native_bundled::Command::WaitForStartup { sender: tx })
+            .expect("Failed to send WaitForStartup command");
+
+        log::debug!("Waiting for app server to start");
+
+        runtime.block_on(rx).expect("Failed to start app server");
+
+        log::debug!("App server started");
+
+        (join_app_server, app_server_handle)
+    };
+
+    let runtime = Arc::new(runtime);
+
     let mut app = moosicbox_app_native_lib::NativeApp::new()
+        .with_runtime_arc(runtime.clone())
         .with_size(WIDTH, HEIGHT)
         .with_route(&["/", "/home"], || async {
             moosicbox_app_native_ui::home().into_string().try_into()
@@ -49,6 +90,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     app.navigate_spawn("/");
 
     app.run()?;
+
+    #[cfg(feature = "bundled")]
+    {
+        use moosicbox_app_native_bundled::service::Commander as _;
+
+        log::debug!("Shutting down app server..");
+        if let Err(e) = app_server_handle.shutdown() {
+            log::error!("AppServer failed to shutdown: {e:?}");
+        }
+
+        log::debug!("Joining app server...");
+        match runtime.block_on(join_app_server) {
+            Err(e) => {
+                log::error!("Failed to join app server: {e:?}");
+            }
+            Ok(Err(e)) => {
+                log::error!("Failed to join app server: {e:?}");
+            }
+            _ => {}
+        }
+    }
 
     Ok(())
 }
