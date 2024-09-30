@@ -21,7 +21,7 @@ use flume::{Receiver, Sender};
 use futures::Future;
 use moosicbox_gigachad_transformer::{
     calc::{calc_number, Calc as _},
-    ContainerElement, Element, ElementList, HeaderSize, LayoutDirection, LayoutOverflow, Number,
+    ContainerElement, Element, ElementList, HeaderSize, LayoutDirection, LayoutOverflow,
 };
 use thiserror::Error;
 
@@ -169,10 +169,8 @@ pub enum AppEvent {
     },
     LoadImage {
         source: String,
-        width: Option<Number>,
-        height: Option<Number>,
-        context_width: f32,
-        context_height: f32,
+        width: Option<f32>,
+        height: Option<f32>,
         frame: Frame,
     },
 }
@@ -319,49 +317,42 @@ impl Renderer {
 
     async fn load_image(
         source: String,
-        width: Option<Number>,
-        height: Option<Number>,
-        context_width: f32,
-        context_height: f32,
+        width: Option<f32>,
+        height: Option<f32>,
         mut frame: Frame,
     ) -> Result<(), LoadImageError> {
-        type ImageCache = LazyLock<Arc<tokio::sync::RwLock<HashMap<String, (Vec<u8>, u32, u32)>>>>;
+        type ImageCache = LazyLock<Arc<tokio::sync::RwLock<HashMap<String, SharedImage>>>>;
         static IMAGE_CACHE: ImageCache =
             LazyLock::new(|| Arc::new(tokio::sync::RwLock::new(HashMap::new())));
 
         let key = format!("{source}:{width:?}:{height:?}");
 
-        let cached_bytes = { IMAGE_CACHE.read().await.get(&key).cloned() };
-        let from_cache = cached_bytes.is_some();
+        let cached_image = { IMAGE_CACHE.read().await.get(&key).cloned() };
 
-        let (bytes, img_width, img_height) = if let Some((bytes, width, height)) = cached_bytes {
-            (bytes, width, height)
+        let image = if let Some(image) = cached_image {
+            image
         } else {
             let data = reqwest::get(source).await?.bytes().await?;
-            let img = image::load_from_memory_with_format(&data, image::ImageFormat::WebP)?;
-            (img.as_bytes().to_vec(), img.width(), img.height())
+            let image = image::load_from_memory_with_format(&data, image::ImageFormat::WebP)?;
+            let image = RgbImage::new(
+                image.as_bytes(),
+                image.width().try_into().unwrap(),
+                image.height().try_into().unwrap(),
+                enums::ColorDepth::Rgb8,
+            )?;
+            let image = SharedImage::from_image(image)?;
+            IMAGE_CACHE.write().await.insert(key, image.clone());
+
+            image
         };
-
-        let image = RgbImage::new(
-            &bytes,
-            img_width.try_into().unwrap(),
-            img_height.try_into().unwrap(),
-            enums::ColorDepth::Rgb8,
-        )?;
-        let image = SharedImage::from_image(image)?;
-
-        if !from_cache {
-            IMAGE_CACHE
-                .write()
-                .await
-                .insert(key, (bytes, img_width, img_height));
-        }
 
         if width.is_some() || height.is_some() {
             #[allow(clippy::cast_possible_truncation)]
-            let width = calc_number(width.unwrap_or_default(), context_width).round() as i32;
+            #[allow(clippy::cast_precision_loss)]
+            let width = width.unwrap_or(image.width() as f32).round() as i32;
             #[allow(clippy::cast_possible_truncation)]
-            let height = calc_number(height.unwrap_or_default(), context_height).round() as i32;
+            #[allow(clippy::cast_precision_loss)]
+            let height = height.unwrap_or(image.height() as f32).round() as i32;
 
             frame.set_size(width, height);
         }
@@ -390,20 +381,10 @@ impl Renderer {
                     source,
                     width,
                     height,
-                    context_width,
-                    context_height,
                     frame,
                 } => {
                     moosicbox_task::spawn("renderer: load_image", async move {
-                        Self::load_image(
-                            source,
-                            width,
-                            height,
-                            context_width,
-                            context_height,
-                            frame,
-                        )
-                        .await
+                        Self::load_image(source, width, height, frame).await
                     });
                 }
             }
@@ -711,21 +692,18 @@ fn draw_element(
             height = element.calculated_height;
             flex_element = Some(draw_elements(&element.elements, context, event_sender)?);
         }
-        Element::Image {
-            source,
-            width,
-            height,
-        } => {
+        Element::Image { source, element } => {
+            context = context.with_container(element);
+            width = element.calculated_width;
+            height = element.calculated_height;
             let mut frame = Frame::default_fill();
 
             if let Some(source) = source {
                 if source.starts_with("http") {
                     if let Err(e) = event_sender.send(AppEvent::LoadImage {
                         source: source.to_owned(),
-                        width: width.to_owned(),
-                        height: height.to_owned(),
-                        context_width: context.width,
-                        context_height: context.height,
+                        width: element.width.map(|_| width.unwrap()),
+                        height: element.height.map(|_| height.unwrap()),
                         frame: frame.clone(),
                     }) {
                         log::error!("Failed to send LoadImage event with source={source}: {e:?}");
@@ -749,15 +727,19 @@ fn draw_element(
 
                                     if width.is_some() || height.is_some() {
                                         #[allow(clippy::cast_possible_truncation)]
-                                        let width =
-                                            calc_number(width.unwrap_or_default(), context.width)
-                                                .round()
-                                                as i32;
+                                        let width = calc_number(
+                                            element.width.unwrap_or_default(),
+                                            context.width,
+                                        )
+                                        .round()
+                                            as i32;
                                         #[allow(clippy::cast_possible_truncation)]
-                                        let height =
-                                            calc_number(height.unwrap_or_default(), context.height)
-                                                .round()
-                                                as i32;
+                                        let height = calc_number(
+                                            element.height.unwrap_or_default(),
+                                            context.height,
+                                        )
+                                        .round()
+                                            as i32;
 
                                         frame.set_size(width, height);
                                     }

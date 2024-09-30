@@ -117,8 +117,7 @@ pub enum Element {
     },
     Image {
         source: Option<String>,
-        width: Option<Number>,
-        height: Option<Number>,
+        element: ContainerElement,
     },
     Anchor {
         element: ContainerElement,
@@ -148,6 +147,7 @@ impl Element {
             | Self::Main { element }
             | Self::Header { element }
             | Self::Footer { element }
+            | Self::Image { element, .. }
             | Self::Section { element }
             | Self::Form { element }
             | Self::Span { element }
@@ -157,7 +157,7 @@ impl Element {
             | Self::UnorderedList { element }
             | Self::OrderedList { element }
             | Self::ListItem { element } => Some(element),
-            Self::Raw { .. } | Self::Image { .. } | Self::Input(_) => None,
+            Self::Raw { .. } | Self::Input(_) => None,
         }
     }
 
@@ -168,6 +168,7 @@ impl Element {
             | Self::Main { element }
             | Self::Header { element }
             | Self::Footer { element }
+            | Self::Image { element, .. }
             | Self::Section { element }
             | Self::Form { element }
             | Self::Span { element }
@@ -177,7 +178,7 @@ impl Element {
             | Self::UnorderedList { element }
             | Self::OrderedList { element }
             | Self::ListItem { element } => Some(element),
-            Self::Raw { .. } | Self::Image { .. } | Self::Input(_) => None,
+            Self::Raw { .. } | Self::Input(_) => None,
         }
     }
 }

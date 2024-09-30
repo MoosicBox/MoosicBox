@@ -225,8 +225,14 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
             },
             "img" => crate::Element::Image {
                 source: get_tag_attr_value_owned(tag, "src"),
-                width: get_number(tag, "sx-width").ok(),
-                height: get_number(tag, "sx-height").ok(),
+                element: crate::ContainerElement {
+                    direction: get_direction(tag),
+                    overflow: get_overflow(tag),
+                    elements: parse_top_children(node.children(), parser),
+                    width: get_number(tag, "sx-width").ok(),
+                    height: get_number(tag, "sx-height").ok(),
+                    ..Default::default()
+                },
             },
             "a" => crate::Element::Anchor {
                 href: get_tag_attr_value_owned(tag, "href"),
