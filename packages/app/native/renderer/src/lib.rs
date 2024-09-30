@@ -21,7 +21,7 @@ use flume::{Receiver, Sender};
 use futures::Future;
 use moosicbox_gigachad_transformer::{
     calc::{calc_number, Calc as _},
-    ContainerElement, Element, ElementList, HeaderSize, LayoutDirection, Number,
+    ContainerElement, Element, ElementList, HeaderSize, LayoutDirection, LayoutOverflow, Number,
 };
 use thiserror::Error;
 
@@ -511,15 +511,17 @@ impl Renderer {
 struct Context {
     size: u16,
     direction: LayoutDirection,
+    overflow: LayoutOverflow,
     width: f32,
     height: f32,
 }
 
 impl Context {
-    const fn new(width: f32, height: f32) -> Self {
+    fn new(width: f32, height: f32) -> Self {
         Self {
             size: 12,
-            direction: LayoutDirection::Column,
+            direction: LayoutDirection::default(),
+            overflow: LayoutOverflow::default(),
             width,
             height,
         }
@@ -527,6 +529,7 @@ impl Context {
 
     fn with_container(mut self, container: &ContainerElement) -> Self {
         self.direction = container.direction;
+        self.overflow = container.overflow;
         self.width = container
             .calculated_width
             .or_else(|| container.width.map(|x| calc_number(x, self.width)))
@@ -546,13 +549,68 @@ fn draw_elements(
 ) -> Result<group::Flex, FltkError> {
     log::debug!("draw_elements: elements={elements:?}");
 
+    let outer_flex = match context.overflow {
+        LayoutOverflow::Scroll | LayoutOverflow::Squash => None,
+        LayoutOverflow::Wrap => Some(match context.direction {
+            LayoutDirection::Row => group::Flex::default_fill().column(),
+            LayoutDirection::Column => group::Flex::default_fill().row(),
+        }),
+    };
+
     let flex = group::Flex::default_fill();
     let mut flex = match context.direction {
         LayoutDirection::Row => flex.row(),
         LayoutDirection::Column => flex.column(),
     };
 
+    let Some(first) = elements.first() else {
+        flex.end();
+        if let Some(outer) = outer_flex {
+            outer.end();
+            return Ok(outer);
+        }
+        return Ok(flex);
+    };
+
+    let (mut row, mut col) = first
+        .container_element()
+        .and_then(|x| {
+            x.calculated_position.as_ref().and_then(|x| match x {
+                moosicbox_gigachad_transformer::LayoutPosition::Wrap { row, col } => {
+                    Some((*row, *col))
+                }
+                moosicbox_gigachad_transformer::LayoutPosition::Default => None,
+            })
+        })
+        .unwrap_or((0, 0));
+
     for (i, element) in elements.iter().enumerate() {
+        let (current_row, current_col) = element
+            .container_element()
+            .and_then(|x| {
+                x.calculated_position.as_ref().and_then(|x| match x {
+                    moosicbox_gigachad_transformer::LayoutPosition::Wrap { row, col } => {
+                        Some((*row, *col))
+                    }
+                    moosicbox_gigachad_transformer::LayoutPosition::Default => None,
+                })
+            })
+            .unwrap_or((row, col));
+
+        if context.direction == LayoutDirection::Row && row != current_row
+            || context.direction == LayoutDirection::Column && col != current_col
+        {
+            flex.end();
+
+            flex = match context.direction {
+                LayoutDirection::Row => group::Flex::default_fill().row(),
+                LayoutDirection::Column => group::Flex::default_fill().column(),
+            };
+        }
+
+        row = current_row;
+        col = current_col;
+
         if i == elements.len() - 1 {
             draw_element(element, context, &mut flex, event_sender)?;
             break;
@@ -561,7 +619,10 @@ fn draw_elements(
     }
 
     flex.end();
-
+    if let Some(outer) = outer_flex {
+        outer.end();
+        return Ok(outer);
+    }
     Ok(flex)
 }
 

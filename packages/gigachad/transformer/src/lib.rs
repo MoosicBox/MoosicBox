@@ -20,11 +20,19 @@ impl Default for Number {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum LayoutDirection {
     Row,
     #[default]
     Column,
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub enum LayoutOverflow {
+    Scroll,
+    #[default]
+    Squash,
+    Wrap,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -44,16 +52,34 @@ impl std::ops::DerefMut for ElementList {
     }
 }
 
+#[cfg(feature = "calc")]
+#[derive(Clone, Debug, Default)]
+pub enum LayoutPosition {
+    Wrap {
+        row: u32,
+        col: u32,
+    },
+    #[default]
+    Default,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct ContainerElement {
     pub elements: Vec<Element>,
     pub direction: LayoutDirection,
+    pub overflow: LayoutOverflow,
     pub width: Option<Number>,
     pub height: Option<Number>,
     #[cfg(feature = "calc")]
     pub calculated_width: Option<f32>,
     #[cfg(feature = "calc")]
     pub calculated_height: Option<f32>,
+    #[cfg(feature = "calc")]
+    pub calculated_x: Option<f32>,
+    #[cfg(feature = "calc")]
+    pub calculated_y: Option<f32>,
+    #[cfg(feature = "calc")]
+    pub calculated_position: Option<LayoutPosition>,
 }
 
 #[derive(Clone, Debug)]
