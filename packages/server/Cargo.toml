@@ -145,14 +145,11 @@ url                = { workspace = true }
 
 [features]
 default = [
-    "aac",
     "all-apis",
+    "all-formats",
     "base64",
     "cpal",
-    "flac",
-    "mp3",
     "openapi",
-    "opus",
     "postgres-native-tls",
     "postgres-openssl",
     "postgres-raw",
@@ -183,6 +180,8 @@ pulseaudio-simple   = ["moosicbox_player?/pulseaudio-simple"]
 pulseaudio-standard = ["moosicbox_player?/pulseaudio-standard"]
 
 static-token-auth = ["dep:qstring"]
+
+all-formats = ["aac", "flac", "mp3", "opus"]
 
 aac = [
     "moosicbox_core/aac",
