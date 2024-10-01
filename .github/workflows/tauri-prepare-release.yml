@@ -254,7 +254,7 @@ jobs:
 
             - name: Free disk space
               if: ${{ matrix.release.target == 'android' }}
-              working-directory: MoosicBox/packages/app/tauri
+              working-directory: MoosicBox
               run: |
                   ./free_disk_space.sh
 

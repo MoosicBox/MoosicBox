@@ -256,7 +256,9 @@ jobs:
                     - name: server
                       path: packages/server
                       os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install libasound2-dev pulseaudio
+                      dependencies: |
+                          ./free_disk_space.sh
+                          sudo apt-get update && sudo apt-get install libasound2-dev pulseaudio
                       env: STATIC_TOKEN=123
 
                     - name: session
