@@ -16,293 +16,41 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
+    build-matrix:
+        name: Build matrix
+        runs-on: ubuntu-latest
+        outputs:
+            matrix: ${{ steps.build-matrix-step.outputs.matrix }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - uses: dtolnay/rust-toolchain@stable
+
+            - name: Build matrix JSON
+              id: build-matrix-step
+              run: |
+                  MATRIX=$(cargo run -p moosicbox_clippier features packages/server/Cargo.toml --chunked 10 -o json | jq -rcs '[{"name":"server","path":"packages/server","os":"ubuntu-latest","features":(.[][])}]')
+                  echo "Using matrix (raw):"
+                  echo $MATRIX
+                  echo "Using matrix:"
+                  echo $MATRIX | jq
+                  echo 'matrix<<EOF' >> $GITHUB_OUTPUT
+                  echo $MATRIX >> $GITHUB_OUTPUT
+                  echo 'EOF' >> $GITHUB_OUTPUT
+
     build:
         runs-on: ${{ matrix.package.os }}
+
+        needs: build-matrix
 
         strategy:
             fail-fast: false
 
             matrix:
-                package:
-                    - name: aconverter
-                      path: packages/aconverter
-                      os: ubuntu-latest
-
-                    - name: admin_htmx
-                      path: packages/admin_htmx
-                      os: ubuntu-latest
-
-                    - name: app_native-ubuntu
-                      path: packages/app/native
-                      os: ubuntu-latest
-                      dependencies: |
-                          sudo apt-get update && sudo apt-get install \
-                              curl \
-                              wget \
-                              file \
-                              libssl-dev \
-                              libayatana-appindicator3-dev \
-                              librsvg2-dev \
-                              libasound2-dev \
-                              libwebkit2gtk-4.1-dev \
-                              build-essential \
-                              libx11-dev \
-                              libxext-dev \
-                              libxft-dev \
-                              libxinerama-dev \
-                              libxcursor-dev \
-                              libxrender-dev \
-                              libxfixes-dev \
-                              libpango1.0-dev \
-                              libgl1-mesa-dev \
-                              libglu1-mesa-dev \
-                              libgtk-3-dev \
-                              libsoup-3.0-dev
-
-                    - name: app_native-macos
-                      path: packages/app/native
-                      os: macos-latest
-                      dependencies: brew install automake autoconf libtool
-
-                    - name: app_native-windows
-                      path: packages/app/native
-                      os: windows-latest
-
-                    - name: app_native_renderer
-                      path: packages/app/native/renderer
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libpango1.0-dev libgl1-mesa-dev libglu1-mesa-dev
-
-                    - name: app_native_ui
-                      path: packages/app/native/ui
-                      os: ubuntu-latest
-
-                    - name: assert
-                      path: packages/assert
-                      os: ubuntu-latest
-
-                    - name: async_service
-                      path: packages/async_service
-                      os: ubuntu-latest
-
-                    - name: audio_decoder
-                      path: packages/audio_decoder
-                      os: ubuntu-latest
-
-                    - name: audio_encoder
-                      path: packages/audio_encoder
-                      os: ubuntu-latest
-
-                    - name: audio_output
-                      path: packages/audio_output
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev jackd2 libjack-jackd2-dev
-
-                    - name: audio_output-windows
-                      path: packages/audio_output
-                      os: windows-latest
-                      dependencies: winget install -e --id Jackaudio.JACK2 --accept-source-agreements --accept-package-agreements
-
-                    - name: audio_output-macos
-                      path: packages/audio_output
-                      os: macos-latest
-                      dependencies: brew install jack automake autoconf libtool pulseaudio
-
-                    - name: audio_zone
-                      path: packages/audio_zone
-                      os: ubuntu-latest
-
-                    - name: auth
-                      path: packages/auth
-                      os: ubuntu-latest
-
-                    - name: channel_utils
-                      path: packages/channel_utils
-                      os: ubuntu-latest
-
-                    - name: clippier
-                      path: packages/clippier
-                      os: ubuntu-latest
-
-                    - name: config
-                      path: packages/config
-                      os: ubuntu-latest
-
-                    - name: core
-                      path: packages/core
-                      os: ubuntu-latest
-
-                    - name: database
-                      path: packages/database
-                      os: ubuntu-latest
-
-                    - name: database_connection
-                      path: packages/database_connection
-                      os: ubuntu-latest
-
-                    - name: downloader
-                      path: packages/downloader
-                      os: ubuntu-latest
-
-                    - name: env_utils
-                      path: packages/env_utils
-                      os: ubuntu-latest
-
-                    - name: files
-                      path: packages/files
-                      os: ubuntu-latest
-
-                    - name: gigachad_transformer
-                      path: packages/gigachad/transformer
-                      os: ubuntu-latest
-
-                    - name: image-bin
-                      path: packages/image
-                      os: ubuntu-latest
-                      cargo: --bin image_helper
-                      features: build-binary
-                      dependencies: sudo apt-get update && sudo apt-get install libvips-dev
-
-                    - name: image
-                      path: packages/image
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install libvips-dev
-
-                    - name: image-windows
-                      path: packages/image
-                      os: windows-latest
-
-                    - name: json_utils
-                      path: packages/json_utils
-                      os: ubuntu-latest
-
-                    - name: library
-                      path: packages/library
-                      os: ubuntu-latest
-
-                    - name: library_models
-                      path: packages/library/models
-                      os: ubuntu-latest
-
-                    - name: load_balancer
-                      path: packages/load_balancer
-                      os: ubuntu-latest
-
-                    - name: logging
-                      path: packages/logging
-                      os: ubuntu-latest
-
-                    - name: mdns
-                      path: packages/mdns
-                      os: ubuntu-latest
-
-                    - name: menu
-                      path: packages/menu
-                      os: ubuntu-latest
-
-                    - name: middleware
-                      path: packages/middleware
-                      os: ubuntu-latest
-
-                    - name: moosicbox
-                      path: packages/moosicbox
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libpango1.0-dev libgl1-mesa-dev libglu1-mesa-dev
-
-                    - name: music_api
-                      path: packages/music_api
-                      os: ubuntu-latest
-
-                    - name: openport
-                      path: packages/openport
-                      os: ubuntu-latest
-
-                    - name: paging
-                      path: packages/paging
-                      os: ubuntu-latest
-
-                    - name: player
-                      path: packages/player
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev jackd2 libjack-jackd2-dev
-
-                    - name: profiles
-                      path: packages/profiles
-                      os: ubuntu-latest
-
-                    - name: qobuz
-                      path: packages/qobuz
-                      os: ubuntu-latest
-
-                    - name: remote_library
-                      path: packages/remote_library
-                      os: ubuntu-latest
-
-                    - name: resampler
-                      path: packages/resampler
-                      os: ubuntu-latest
-
-                    - name: scan
-                      path: packages/scan
-                      os: ubuntu-latest
-
-                    - name: schema
-                      path: packages/schema
-                      os: ubuntu-latest
-
-                    - name: search
-                      path: packages/search
-                      os: ubuntu-latest
-
-                    - name: server
-                      path: packages/server
-                      os: ubuntu-latest
-                      dependencies: |
-                          ./free_disk_space.sh
-                          sudo apt-get update && sudo apt-get install libasound2-dev pulseaudio
-                      env: STATIC_TOKEN=123
-
-                    - name: session
-                      path: packages/session
-                      os: ubuntu-latest
-
-                    - name: stream_utils
-                      path: packages/stream_utils
-                      os: ubuntu-latest
-
-                    - name: task
-                      path: packages/task
-                      os: ubuntu-latest
-
-                    - name: tidal
-                      path: packages/tidal
-                      os: ubuntu-latest
-
-                    - name: tunnel
-                      path: packages/tunnel
-                      os: ubuntu-latest
-
-                    - name: tunnel_sender
-                      path: packages/tunnel_sender
-                      os: ubuntu-latest
-
-                    - name: tunnel_server
-                      path: packages/tunnel_server
-                      os: ubuntu-latest
-                      env: TUNNEL_ACCESS_TOKEN=123
-
-                    - name: upnp
-                      path: packages/upnp
-                      os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev
-
-                    - name: ws
-                      path: packages/ws
-                      os: ubuntu-latest
-
-                    - name: yt
-                      path: packages/yt
-                      os: ubuntu-latest
+                package: ${{ fromJson(needs.build-matrix.outputs.matrix) }}
 
         steps:
             - uses: actions/checkout@v4
@@ -335,11 +83,18 @@ jobs:
             - name: Clippy ${{ matrix.package.name }}
               shell: bash
               run: |
-                  source packages/clippier/utils.sh
                   (cd ${{ matrix.package.path }}; \
-                      ${{ matrix.package.env }} cargo_each_feature clippy \
-                        --no-default-features \
-                        --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }} ${{ matrix.package.cargo }})
+                      while read -r feature; do \
+                          echo "RUNNING \`${{ matrix.package.env }} cargo clippy --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}\`"
+                          if ${{ matrix.package.env }} cargo clippy \
+                              --no-default-features \
+                              --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}; then
+                              echo "SUCCESS \`$command\`";
+                          else
+                              >&2 echo "FAILED \`$command\`";
+                          fi
+                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
+
 
             - name: Format ${{ matrix.package.name }}
               shell: bash
@@ -349,11 +104,17 @@ jobs:
             - name: Run ${{ matrix.package.name }} tests
               shell: bash
               run: |
-                  source packages/clippier/utils.sh
                   (cd ${{ matrix.package.path }}; \
-                      ${{ matrix.package.env }} cargo_each_feature test \
-                        --no-default-features \
-                        --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }} ${{ matrix.package.cargo }})
+                      while read -r feature; do \
+                          echo "RUNNING \`${{ matrix.package.env }} cargo test --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}\`"
+                          if ${{ matrix.package.env }} cargo test \
+                              --no-default-features \
+                              --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}; then
+                              echo "SUCCESS \`$command\`";
+                          else
+                              >&2 echo "FAILED \`$command\`";
+                          fi
+                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
 
             - name: Install cargo-machete
               shell: bash
