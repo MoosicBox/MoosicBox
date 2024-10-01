@@ -7,7 +7,7 @@ keywords    = ["api", "websocket"]
 license     = "MPL-2.0"
 name        = "moosicbox_ws"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [package.metadata.cargo-machete]
@@ -38,11 +38,7 @@ default = ["aac", "flac", "mp3", "opus", "ws"]
 
 fail-on-warnings = []
 
-ws = [
-    "dep:async-trait",
-    "dep:log",
-    "dep:thiserror",
-]
+ws = ["dep:async-trait", "dep:log", "dep:thiserror"]
 
 aac  = ["moosicbox_session/aac"]
 flac = ["moosicbox_session/flac"]

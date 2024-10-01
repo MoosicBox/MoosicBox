@@ -7,7 +7,7 @@ keywords    = ["desktop", "gui", "linux", "macos", "render", "renderer", "window
 license     = "MPL-2.0"
 name        = "moosicbox_app_native_renderer"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]

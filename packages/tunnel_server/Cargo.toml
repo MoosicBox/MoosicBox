@@ -8,7 +8,7 @@ keywords    = ["api", "server", "tunnel", "websocket"]
 license     = "MPL-2.0"
 name        = "moosicbox_tunnel_server"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [package.metadata.cargo-machete]

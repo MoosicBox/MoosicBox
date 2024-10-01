@@ -14,9 +14,9 @@ jobs:
         steps:
             - uses: actions/checkout@v4
               with:
-                  path: MoosicBoxServer
+                  path: MoosicBox
 
-            - name: Get latest stable release of MoosicBoxServer Tauri app
+            - name: Get latest stable release of MoosicBox Tauri app
               uses: rez0n/actions-github-release@main
               id: stable_release
               env:
@@ -24,7 +24,7 @@ jobs:
                   repository: '${{ github.repository }}'
                   type: 'stable'
 
-            - name: Get latest release of MoosicBoxServer Tauri App
+            - name: Get latest release of MoosicBox Tauri App
               uses: rez0n/actions-github-release@main
               id: latest_release
               env:

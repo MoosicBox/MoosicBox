@@ -20,13 +20,13 @@ jobs:
             - uses: actions/checkout@v4
               with:
                   token: ${{ secrets.WORKFLOW_MANAGEMENT_TOKEN }}
-                  path: MoosicBoxServer
+                  path: MoosicBox
 
             - name: Get release hash
               id: release_hash
               run: |
                   HASH="$({
-                      git -C MoosicBoxServer rev-parse --verify HEAD;
+                      git -C MoosicBox rev-parse --verify HEAD;
                       git -C audiotags rev-parse --verify HEAD;
                   } | shasum | head -c 10)"
                   echo "hash: $HASH"
@@ -34,7 +34,7 @@ jobs:
 
             - name: Check tag exists for SHA
               id: check_exists
-              working-directory: MoosicBoxServer
+              working-directory: MoosicBox
               run: |
                   git fetch --unshallow --tags
                   if [[ -n $(git show-ref --tags -d) ]]; then
@@ -60,7 +60,7 @@ jobs:
 
             - name: Create and push tag
               if: ${{ steps.check_exists.outputs.exists != 'true' }}
-              working-directory: MoosicBoxServer
+              working-directory: MoosicBox
               run: |
                   git tag master-${{ steps.release_hash.outputs.hash }}
                   git push origin master-${{ steps.release_hash.outputs.hash }}

@@ -7,16 +7,16 @@ use tokio::{sync::RwLock, task::JoinHandle};
 use crate::TauriPlayerError;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct MoosicBoxServer {
+pub struct MoosicBox {
     pub id: String,
     pub name: String,
     pub host: String,
     pub dns: String,
 }
 
-impl From<moosicbox_mdns::scanner::MoosicBoxServer> for MoosicBoxServer {
-    fn from(value: moosicbox_mdns::scanner::MoosicBoxServer) -> Self {
-        MoosicBoxServer {
+impl From<moosicbox_mdns::scanner::MoosicBox> for MoosicBox {
+    fn from(value: moosicbox_mdns::scanner::MoosicBox) -> Self {
+        MoosicBox {
             id: value.id,
             name: value.name,
             host: format!("http://{}", value.host),
@@ -25,11 +25,11 @@ impl From<moosicbox_mdns::scanner::MoosicBoxServer> for MoosicBoxServer {
     }
 }
 
-static MOOSICBOX_SERVERS: LazyLock<Arc<RwLock<Vec<MoosicBoxServer>>>> =
+static MOOSICBOX_SERVERS: LazyLock<Arc<RwLock<Vec<MoosicBox>>>> =
     LazyLock::new(|| Arc::new(RwLock::new(vec![])));
 
 #[tauri::command]
-pub async fn fetch_moosicbox_servers() -> Result<Vec<MoosicBoxServer>, TauriPlayerError> {
+pub async fn fetch_moosicbox_servers() -> Result<Vec<MoosicBox>, TauriPlayerError> {
     log::debug!("fetch_moosicbox_servers");
 
     Ok(MOOSICBOX_SERVERS.read().await.clone())

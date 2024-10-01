@@ -7,7 +7,7 @@ keywords    = ["async", "channel", "receiver", "sender", "util", "utility"]
 license     = "MPL-2.0"
 name        = "moosicbox_channel_utils"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]

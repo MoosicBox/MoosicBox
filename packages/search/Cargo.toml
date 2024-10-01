@@ -7,7 +7,7 @@ keywords    = ["api", "database", "search", "tantivy"]
 license     = "MPL-2.0"
 name        = "moosicbox_search"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
@@ -33,7 +33,9 @@ thiserror = { workspace = true }
 tokio     = { workspace = true }
 
 [dev-dependencies]
-moosicbox_config = { path = "../config", default-features = false, features = ["test"] }
+moosicbox_config = { path = "../config", default-features = false, features = [
+    "test",
+] }
 
 pretty_assertions = { workspace = true }
 serial_test       = { workspace = true }

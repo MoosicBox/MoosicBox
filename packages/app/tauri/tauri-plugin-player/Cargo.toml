@@ -9,7 +9,7 @@ license     = "MPL-2.0"
 links       = "tauri-plugin-player"
 name        = "tauri-plugin-player"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [package.metadata.cargo-machete]

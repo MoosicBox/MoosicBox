@@ -7,7 +7,7 @@ keywords    = ["app", "desktop", "gui", "linux", "macos", "windows"]
 license     = "MPL-2.0"
 name        = "moosicbox_app"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.12.0"
 
 [package.metadata.cargo-machete]

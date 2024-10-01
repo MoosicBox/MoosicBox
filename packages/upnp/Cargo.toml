@@ -7,7 +7,7 @@ keywords    = ["dlna", "network", "upnp"]
 license     = "MPL-2.0"
 name        = "moosicbox_upnp"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [package.metadata.cargo-machete]
@@ -29,14 +29,14 @@ moosicbox_async_service = { path = "../async_service", optional = true }
 tokio-util              = { workspace = true, optional = true }
 
 # Player Dependencies
-async-trait = { workspace = true, optional = true }
-moosicbox_core = { path = "../core", default-features = false, optional = true }
+async-trait         = { workspace = true, optional = true }
+moosicbox_core      = { path = "../core", default-features = false, optional = true }
 moosicbox_music_api = { path = "../music_api", default-features = false, optional = true }
-moosicbox_player = { path = "../player", default-features = false, optional = true }
-moosicbox_session = { path = "../session", default-features = false, optional = true }
-rand = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true }
-symphonia = { workspace = true, optional = true }
+moosicbox_player    = { path = "../player", default-features = false, optional = true }
+moosicbox_session   = { path = "../session", default-features = false, optional = true }
+rand                = { workspace = true, optional = true }
+reqwest             = { workspace = true, optional = true }
+symphonia           = { workspace = true, optional = true }
 
 async-recursion = { workspace = true }
 futures         = { workspace = true }

@@ -28,7 +28,7 @@ jobs:
 
             - uses: actions/checkout@v4
               with:
-                  path: MoosicBoxServer
+                  path: MoosicBox
 
             - uses: dtolnay/rust-toolchain@stable
 
@@ -58,19 +58,19 @@ jobs:
                       libsoup-3.0-dev
 
             - name: Build
-              working-directory: MoosicBoxServer/packages/app/tauri/src-tauri
+              working-directory: MoosicBox/packages/app/tauri/src-tauri
               env:
                   APTABASE_APP_KEY: ${{ secrets.APTABASE_APP_KEY }}
               run: cargo build --verbose
 
             - name: Run tests
-              working-directory: MoosicBoxServer/packages/app/tauri/src-tauri
+              working-directory: MoosicBox/packages/app/tauri/src-tauri
               env:
                   APTABASE_APP_KEY: ${{ secrets.APTABASE_APP_KEY }}
               run: cargo test --verbose
 
             - name: Copy Files
-              working-directory: MoosicBoxServer/packages/app_tauri
+              working-directory: MoosicBox/packages/app_tauri
               shell: bash
               run: |
                   ./copy-files.sh
@@ -95,15 +95,15 @@ jobs:
                       ${{ matrix.os }}-pnpm-store-
 
             - name: Generate config
-              working-directory: MoosicBoxServer/packages/app_tauri
+              working-directory: MoosicBox/packages/app_tauri
               run: cargo run --package moosicbox_app_create_config -- -o src/config.ts
 
             - name: pnpm install
-              working-directory: MoosicBoxServer/packages/app_tauri
+              working-directory: MoosicBox/packages/app_tauri
               run: pnpm install
 
             - name: Build Tauri App
-              working-directory: MoosicBoxServer/packages/app_tauri
+              working-directory: MoosicBox/packages/app_tauri
               env:
                   APTABASE_APP_KEY: ${{ secrets.APTABASE_APP_KEY }}
               run: pnpm tauri build
@@ -112,12 +112,12 @@ jobs:
 
             - name: Install cargo-machete
               shell: bash
-              working-directory: MoosicBoxServer/packages/app_tauri
+              working-directory: MoosicBox/packages/app_tauri
               run: |
                   cargo install cargo-machete
 
             - name: Validate ${{ matrix.package.name }} dependencies (machete)
               shell: bash
-              working-directory: MoosicBoxServer/packages/app_tauri
+              working-directory: MoosicBox/packages/app_tauri
               run: |
                   cargo machete --with-metadata

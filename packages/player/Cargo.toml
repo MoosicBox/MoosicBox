@@ -7,7 +7,7 @@ keywords    = ["audio", "player"]
 license     = "MPL-2.0"
 name        = "moosicbox_player"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]

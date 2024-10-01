@@ -16,16 +16,16 @@ jobs:
         steps:
             - uses: actions/checkout@v4
               with:
-                  path: MoosicBoxServer
+                  path: MoosicBox
 
             - uses: dtolnay/rust-toolchain@stable
 
             - name: Generate config
-              working-directory: MoosicBoxServer/package/app_tauri
+              working-directory: MoosicBox/package/app_tauri
               run: cargo run --package moosicbox_app_create_config -- -o src/config.ts
 
             - name: Copy Files
-              working-directory: MoosicBoxServer/package/app_tauri
+              working-directory: MoosicBox/package/app_tauri
               shell: bash
               run: |
                   ./copy-files.sh
@@ -42,17 +42,17 @@ jobs:
                   echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
             - name: pnpm install
-              working-directory: MoosicBoxServer/package/app_tauri
+              working-directory: MoosicBox/package/app_tauri
               run: pnpm install
 
             - name: pretty
-              working-directory: MoosicBoxServer/package/app_tauri
+              working-directory: MoosicBox/package/app_tauri
               run: pnpm pretty
 
             - name: lint
-              working-directory: MoosicBoxServer/package/app_tauri
+              working-directory: MoosicBox/package/app_tauri
               run: pnpm lint
 
             - name: typecheck
-              working-directory: MoosicBoxServer/package/app_tauri
+              working-directory: MoosicBox/package/app_tauri
               run: pnpm typecheck

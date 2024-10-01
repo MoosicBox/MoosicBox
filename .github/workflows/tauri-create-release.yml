@@ -12,7 +12,7 @@ jobs:
         steps:
             - uses: actions/checkout@v4
               with:
-                  path: MoosicBoxServer
+                  path: MoosicBox
 
             - name: Get latest stable release of MoosicBox Tauri App
               uses: rez0n/actions-github-release@main

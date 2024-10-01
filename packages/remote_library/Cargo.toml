@@ -7,18 +7,18 @@ keywords    = ["audio", "library", "remote"]
 license     = "MPL-2.0"
 name        = "moosicbox_remote_library"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBoxServer"
+repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_core = { path = "../core", default-features = false }
+moosicbox_core      = { path = "../core", default-features = false }
 moosicbox_music_api = { path = "../music_api", default-features = false }
-moosicbox_paging = { path = "../paging", default-features = false }
+moosicbox_paging    = { path = "../paging", default-features = false }
 
-async-trait  = { workspace = true }
-log          = { workspace = true }
-reqwest      = { workspace = true, features = ["json"] }
-thiserror    = { workspace = true }
+async-trait = { workspace = true }
+log         = { workspace = true }
+reqwest     = { workspace = true, features = ["json"] }
+thiserror   = { workspace = true }
 
 [features]
 default = ["aac", "flac", "mp3", "opus"]

@@ -302,7 +302,7 @@ jobs:
         steps:
             - uses: actions/checkout@v4
               with:
-                  path: MoosicBoxServer
+                  path: MoosicBox
 
             - uses: dtolnay/rust-toolchain@stable
 
@@ -321,13 +321,13 @@ jobs:
 
             - name: Install clippier
               shell: bash
-              working-directory: MoosicBoxServer/packages/clippier
+              working-directory: MoosicBox/packages/clippier
               run: |
                   cargo install --debug --path .
 
             - name: Clippy ${{ matrix.package.name }}
               shell: bash
-              working-directory: MoosicBoxServer
+              working-directory: MoosicBox
               run: |
                   source packages/clippier/utils.sh
                   (cd ${{ matrix.package.path }}; \
@@ -338,7 +338,7 @@ jobs:
 
             - name: Build ${{ matrix.package.name }}
               shell: bash
-              working-directory: MoosicBoxServer
+              working-directory: MoosicBox
               run: |
                   source packages/clippier/utils.sh
                   (cd ${{ matrix.package.path }}; \
@@ -349,13 +349,13 @@ jobs:
 
             - name: Format ${{ matrix.package.name }}
               shell: bash
-              working-directory: MoosicBoxServer
+              working-directory: MoosicBox
               run: |
                   (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo fmt --verbose)
 
             - name: Run ${{ matrix.package.name }} tests
               shell: bash
-              working-directory: MoosicBoxServer
+              working-directory: MoosicBox
               run: |
                   source packages/clippier/utils.sh
                   (cd ${{ matrix.package.path }}; \
@@ -366,12 +366,12 @@ jobs:
 
             - name: Install cargo-machete
               shell: bash
-              working-directory: MoosicBoxServer
+              working-directory: MoosicBox
               run: |
                   cargo install cargo-machete
 
             - name: Validate ${{ matrix.package.name }} dependencies (machete)
               shell: bash
-              working-directory: MoosicBoxServer
+              working-directory: MoosicBox
               run: |
                   ${{ matrix.package.env }} cargo machete --with-metadata ${{ matrix.package.path }}

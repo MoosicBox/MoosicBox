@@ -6,7 +6,7 @@ use strum_macros::AsRefStr;
 use thiserror::Error;
 
 #[derive(Debug, Clone)]
-pub struct MoosicBoxServer {
+pub struct MoosicBox {
     pub id: String,
     pub name: String,
     pub host: SocketAddr,
@@ -35,11 +35,11 @@ impl std::fmt::Display for Command {
 pub struct Context {
     token: CancellationToken,
     handle: Option<JoinHandle<Result<(), Error>>>,
-    sender: kanal::AsyncSender<MoosicBoxServer>,
+    sender: kanal::AsyncSender<MoosicBox>,
 }
 
 impl Context {
-    pub fn new(sender: kanal::AsyncSender<MoosicBoxServer>) -> Self {
+    pub fn new(sender: kanal::AsyncSender<MoosicBox>) -> Self {
         Self {
             token: CancellationToken::new(),
             handle: None,
@@ -88,7 +88,7 @@ impl service::Processor for service::Service {
                             log::debug!("mdns scanner: Server address: {}", addr);
                             let dns = info.get_fullname().to_string();
 
-                            let server = MoosicBoxServer {
+                            let server = MoosicBox {
                                 id: dns.split_once(".").expect("Invalid dns").0.to_string(),
                                 name: info.get_hostname().to_string(),
                                 host: socket_addr,
