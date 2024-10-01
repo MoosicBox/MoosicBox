@@ -62,7 +62,7 @@ jobs:
                     - name: app_native-macos
                       path: packages/app/native
                       os: macos-latest
-                      dependencies: brew install automake libtool
+                      dependencies: brew install automake autoconf libtool
 
                     - name: app_native-windows
                       path: packages/app/native
@@ -100,7 +100,7 @@ jobs:
                     - name: audio_output-macos
                       path: packages/audio_output
                       os: macos-latest
-                      dependencies: brew install jack
+                      dependencies: brew install jack automake autoconf libtool
 
                     - name: audio_zone
                       path: packages/audio_zone
