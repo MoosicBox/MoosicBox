@@ -254,7 +254,7 @@ jobs:
 
             - name: Free disk space
               if: ${{ matrix.release.target == 'android' }}
-              working-directory: MoosicBox/packages/app_tauri
+              working-directory: MoosicBox/packages/app/tauri
               run: |
                   ./free_disk_space.sh
 
@@ -307,7 +307,7 @@ jobs:
                   java-version: '17'
 
             - name: Copy Files
-              working-directory: MoosicBox/packages/app_tauri
+              working-directory: MoosicBox/packages/app/tauri
               shell: bash
               run: |
                   ./copy-files.sh
@@ -325,21 +325,21 @@ jobs:
                   echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
             - name: Generate config
-              working-directory: MoosicBox/packages/app_tauri
+              working-directory: MoosicBox/packages/app/tauri
               run: cargo run --package moosicbox_app_create_config -- -o src/config.ts ${{ matrix.release.bundled && ' --bundled' || '' }}
 
             - name: pnpm install
-              working-directory: MoosicBox/packages/app_tauri
+              working-directory: MoosicBox/packages/app/tauri
               run: pnpm install
 
             - name: Build Tauri Desktop App
               if: ${{ matrix.release.target == 'desktop' }}
-              working-directory: MoosicBox/packages/app_tauri
+              working-directory: MoosicBox/packages/app/tauri
               run: pnpm tauri build${{ matrix.release.profile == 'debug' && ' --debug' || ' -- --profile ' }}${{ matrix.release.profile != 'debug' && matrix.release.profile || '' }} ${{ matrix.release.features && format('--features {0}', matrix.release.features) || '' }}
 
             - name: Set up Keystore
               if: ${{ matrix.release.target == 'android' }}
-              working-directory: MoosicBox/packages/app_tauri
+              working-directory: MoosicBox/packages/app/tauri
               run: |
                   echo "${{ secrets.ANDROID_SIGNING_KEY_KEYSTORE }}" | \
                       base64 -di > /home/runner/upload-keystore.jks
@@ -350,7 +350,7 @@ jobs:
 
             - name: Build Tauri Android App
               if: ${{ matrix.release.target == 'android' }}
-              working-directory: MoosicBox/packages/app_tauri
+              working-directory: MoosicBox/packages/app/tauri
               run: pnpm tauri ${{ matrix.release.target }} build${{ matrix.release.profile == 'debug' && ' --debug' || '' }} ${{ matrix.release.features && format('--features {0}', matrix.release.features) || '' }}
 
             - name: Make assets directory

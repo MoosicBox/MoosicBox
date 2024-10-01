@@ -70,7 +70,7 @@ jobs:
               run: cargo test --verbose
 
             - name: Copy Files
-              working-directory: MoosicBox/packages/app_tauri
+              working-directory: MoosicBox/packages/app/tauri
               shell: bash
               run: |
                   ./copy-files.sh
@@ -95,15 +95,15 @@ jobs:
                       ${{ matrix.os }}-pnpm-store-
 
             - name: Generate config
-              working-directory: MoosicBox/packages/app_tauri
+              working-directory: MoosicBox/packages/app/tauri
               run: cargo run --package moosicbox_app_create_config -- -o src/config.ts
 
             - name: pnpm install
-              working-directory: MoosicBox/packages/app_tauri
+              working-directory: MoosicBox/packages/app/tauri
               run: pnpm install
 
             - name: Build Tauri App
-              working-directory: MoosicBox/packages/app_tauri
+              working-directory: MoosicBox/packages/app/tauri
               env:
                   APTABASE_APP_KEY: ${{ secrets.APTABASE_APP_KEY }}
               run: pnpm tauri build
@@ -112,12 +112,12 @@ jobs:
 
             - name: Install cargo-machete
               shell: bash
-              working-directory: MoosicBox/packages/app_tauri
+              working-directory: MoosicBox/packages/app/tauri
               run: |
                   cargo install cargo-machete
 
             - name: Validate ${{ matrix.package.name }} dependencies (machete)
               shell: bash
-              working-directory: MoosicBox/packages/app_tauri
+              working-directory: MoosicBox/packages/app/tauri
               run: |
                   cargo machete --with-metadata

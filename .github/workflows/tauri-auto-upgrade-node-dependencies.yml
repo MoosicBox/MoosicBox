@@ -20,7 +20,7 @@ jobs:
                   path: MoosicBox
 
             - name: Copy Files
-              working-directory: MoosicBox/packages/app_tauri
+              working-directory: MoosicBox/packages/app/tauri
               shell: bash
               run: |
                   ./copy-files.sh
@@ -47,15 +47,15 @@ jobs:
             - uses: dtolnay/rust-toolchain@stable
 
             - name: Generate config
-              working-directory: MoosicBox/packages/app_tauri
+              working-directory: MoosicBox/packages/app/tauri
               run: cargo run --package moosicbox_app_create_config -- -o src/config.ts
 
             - name: pnpm install
-              working-directory: MoosicBox/packages/app_tauri
+              working-directory: MoosicBox/packages/app/tauri
               run: pnpm install
 
             - name: Upgrade
-              working-directory: MoosicBox/packages/app_tauri
+              working-directory: MoosicBox/packages/app/tauri
               id: upgrade
               shell: bash
               run: |
@@ -70,14 +70,14 @@ jobs:
 
             - name: Validate
               if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
-              working-directory: MoosicBox/packages/app_tauri
+              working-directory: MoosicBox/packages/app/tauri
               shell: bash
               run: |
                   pnpm validate
 
             - name: Commit
               if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
-              working-directory: MoosicBox/packages/app_tauri
+              working-directory: MoosicBox/packages/app/tauri
               shell: bash
               run: |
                   git config user.name "MoosicBoxBot"
