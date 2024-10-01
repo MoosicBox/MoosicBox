@@ -95,7 +95,7 @@ jobs:
                     - name: audio_output-windows
                       path: packages/audio_output
                       os: windows-latest
-                      dependencies: choco install jack
+                      dependencies: winget install -e --id Jackaudio.JACK2
 
                     - name: audio_output-macos
                       path: packages/audio_output
