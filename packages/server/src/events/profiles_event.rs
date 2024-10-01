@@ -42,6 +42,7 @@ async fn add_profile(
     let library_database =
         moosicbox_database::profiles::PROFILES.fetch_add(profile, library_database.clone());
 
+    #[allow(clippy::redundant_clone)]
     #[cfg(feature = "library")]
     let library_music_api = moosicbox_library::LibraryMusicApi::new(library_database.clone());
 
@@ -58,6 +59,7 @@ async fn add_profile(
     apis_map.insert(
         ApiSource::Tidal,
         Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
+            #[allow(clippy::redundant_clone)]
             moosicbox_tidal::TidalMusicApi::new(library_database.clone()),
         ))),
     );
@@ -65,6 +67,7 @@ async fn add_profile(
     apis_map.insert(
         ApiSource::Qobuz,
         Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
+            #[allow(clippy::redundant_clone)]
             moosicbox_qobuz::QobuzMusicApi::new(library_database.clone()),
         ))),
     );
@@ -72,6 +75,7 @@ async fn add_profile(
     apis_map.insert(
         ApiSource::Yt,
         Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
+            #[allow(clippy::redundant_clone)]
             moosicbox_yt::YtMusicApi::new(library_database.clone()),
         ))),
     );
