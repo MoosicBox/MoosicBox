@@ -5061,6 +5061,7 @@ name = "moosicbox_clippier"
 version = "0.1.0"
 dependencies = [
  "clap 4.5.18",
+ "itertools 0.13.0",
  "log",
  "moosicbox_logging",
  "serde_json",
