@@ -155,6 +155,7 @@ jobs:
                       os: ubuntu-latest
                       cargo: --bin image_helper
                       features: build-binary
+                      dependencies: sudo apt-get update && sudo apt-get install libvips-dev
 
                     - name: image
                       path: packages/image
