@@ -4843,7 +4843,6 @@ dependencies = [
  "moosicbox_logging",
  "moosicbox_paging",
  "reqwest 0.12.7",
- "serde_json",
  "tokio",
 ]
 
@@ -4869,16 +4868,13 @@ name = "moosicbox_app_native_lib"
 version = "0.1.0"
 dependencies = [
  "fltk",
- "flume",
  "futures",
- "image",
  "log",
  "moosicbox_app_native_renderer",
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_gigachad_transformer",
  "moosicbox_task",
- "reqwest 0.12.7",
  "thiserror",
  "tokio",
 ]
@@ -5303,7 +5299,6 @@ dependencies = [
 name = "moosicbox_library_models"
 version = "0.1.0"
 dependencies = [
- "actix-web",
  "async-trait",
  "log",
  "moosicbox_core",
@@ -5311,10 +5306,6 @@ dependencies = [
  "moosicbox_json_utils",
  "serde",
  "serde_json",
- "strum",
- "strum_macros",
- "thiserror",
- "tokio",
  "utoipa",
 ]
 

@@ -29,11 +29,8 @@ moosicbox_gigachad_transformer = { path = "../../../gigachad/transformer", defau
 moosicbox_task = { path = "../../../task", default-features = false }
 
 fltk      = { workspace = true, features = ["use-ninja"] }
-flume     = { workspace = true }
 futures   = { workspace = true }
-image     = { workspace = true }
 log       = { workspace = true }
-reqwest   = { workspace = true }
 thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
 
