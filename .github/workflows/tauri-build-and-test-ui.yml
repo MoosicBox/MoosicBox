@@ -1,4 +1,4 @@
-name: Build and Validate UI
+name: Tauri Build and Validate UI
 
 on:
     push:

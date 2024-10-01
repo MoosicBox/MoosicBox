@@ -1,4 +1,4 @@
-name: Create Nightly MoosicBox Tauri App Release
+name: Tauri Create Nightly MoosicBox App Release
 
 on:
     schedule:

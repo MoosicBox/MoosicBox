@@ -1,4 +1,4 @@
-name: Create MoosicBox Tauri App Prerelease
+name: Tauri Create MoosicBox App Prerelease
 
 on:
     push:

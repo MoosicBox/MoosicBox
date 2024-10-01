@@ -1,4 +1,4 @@
-name: Create Master Moosicbox Tauri App Release
+name: Tauri Create Master Moosicbox App Release
 
 on:
     push:

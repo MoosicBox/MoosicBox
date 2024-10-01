@@ -1,4 +1,4 @@
-name: Prepare MoosicBox Tauri App Release
+name: Tauri Prepare MoosicBox App Release
 
 on:
     release:
