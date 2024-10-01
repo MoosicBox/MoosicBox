@@ -18,7 +18,7 @@ moosicbox_assert = { path = "../../../assert", default-features = false }
 moosicbox_async_service = { path = "../../../async_service", default-features = false }
 moosicbox_config = { path = "../../../config", default-features = false }
 moosicbox_server = { path = "../../../server", default-features = false, features = [
-    "all-apis",
+    "app-apis",
     "all-formats",
     "sqlite-sqlx",
 ] }
