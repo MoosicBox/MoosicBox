@@ -225,6 +225,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
             },
             "img" => crate::Element::Image {
                 source: get_tag_attr_value_owned(tag, "src"),
+                #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
                     overflow: get_overflow(tag),
