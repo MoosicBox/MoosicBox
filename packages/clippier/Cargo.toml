@@ -18,9 +18,10 @@ required-features = []
 [dependencies]
 moosicbox_logging = { path = "../logging", default-features = false }
 
-clap = { workspace = true }
-log  = { workspace = true }
-toml = { workspace = true }
+clap       = { workspace = true }
+log        = { workspace = true }
+serde_json = { workspace = true }
+toml       = { workspace = true }
 
 [features]
 fail-on-warnings = []

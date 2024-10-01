@@ -1,11 +1,21 @@
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use toml::Value;
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+#[clap(rename_all = "kebab_case")]
+pub enum OutputType {
+    Json,
+    Raw,
+}
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
     #[arg(index = 1)]
     file: String,
+
+    #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
+    output: OutputType,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -19,10 +29,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Some(features) = value.get("features") {
         if let Some(features) = features.as_table() {
-            println!(
-                "{}",
-                features.keys().cloned().collect::<Vec<_>>().join("\n")
-            )
+            match args.output {
+                OutputType::Json => {
+                    println!(
+                        "{}",
+                        serde_json::to_value(features.keys().cloned().collect::<Vec<_>>()).unwrap()
+                    );
+                }
+                OutputType::Raw => {
+                    println!(
+                        "{}",
+                        features.keys().cloned().collect::<Vec<_>>().join("\n")
+                    );
+                }
+            }
         }
     }
 
