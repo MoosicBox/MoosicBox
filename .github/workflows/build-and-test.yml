@@ -8,6 +8,7 @@ on:
             - '*.toml'
             - Cargo.lock
             - .github/workflows/build-and-test.yml
+            - free_disk_space.sh
     pull_request:
         branches: ['master']
 
