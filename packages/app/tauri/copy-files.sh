@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 dir=$1
-[[ -z $dir ]] && dir='../../../website'
+[[ -z $dir ]] && dir='../../../app-website'
 
 echo "Copying $dir/public"
 rm -rf public
