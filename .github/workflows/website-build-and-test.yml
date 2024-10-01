@@ -1,4 +1,4 @@
-name: Build and Validate
+name: Webiste Build and Validate
 
 on:
     push:
@@ -36,15 +36,19 @@ jobs:
                       ${{ matrix.os }}-pnpm-store-
 
             - name: pnpm install
+              working-directory: website
               run: |
                   pnpm install
                   pnpm sst install
 
             - name: pretty
+              working-directory: website
               run: pnpm pretty
 
             - name: lint
+              working-directory: website
               run: pnpm lint
 
             - name: typecheck
+              working-directory: website
               run: pnpm typecheck

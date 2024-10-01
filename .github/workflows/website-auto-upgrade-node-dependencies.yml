@@ -1,4 +1,4 @@
-name: Auto-upgrade Node Dependencies
+name: Webiste Auto-upgrade Node Dependencies
 
 on:
     workflow_dispatch:
@@ -38,10 +38,12 @@ jobs:
                       ${{ matrix.os }}-pnpm-store-
 
             - name: pnpm install
+              working-directory: website
               run: pnpm install
 
             - name: Upgrade
               id: upgrade
+              working-directory: website
               shell: bash
               run: |
                   pnpm update
@@ -55,6 +57,7 @@ jobs:
 
             - name: Validate
               if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
+              working-directory: website
               shell: bash
               run: |
                   pnpm sst install
