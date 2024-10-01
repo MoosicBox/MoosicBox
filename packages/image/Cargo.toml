@@ -24,7 +24,6 @@ moosicbox_task = { path = "../task", default-features = false }
 bytes = { workspace = true }
 clap = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
-libvips = { workspace = true, optional = true }
 log = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
@@ -34,6 +33,11 @@ tokio = { workspace = true, optional = true, features = [
     "rt-multi-thread",
 ] }
 webp = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+libvips = { workspace = true, optional = true }
 
 [features]
 default = ["image", "libvips"]

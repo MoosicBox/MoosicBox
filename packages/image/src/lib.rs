@@ -4,6 +4,7 @@ use strum_macros::{AsRefStr, Display, EnumString};
 
 #[cfg(feature = "image")]
 pub mod image;
+#[cfg(not(target_os = "windows"))]
 #[cfg(feature = "libvips")]
 pub mod libvips;
 
