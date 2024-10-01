@@ -1,4 +1,4 @@
-name: Webiste Build and Validate
+name: Website Build and Validate
 
 on:
     push:

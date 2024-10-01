@@ -1,4 +1,4 @@
-name: Webiste Auto-upgrade Node Dependencies
+name: Website Auto-upgrade Node Dependencies
 
 on:
     workflow_dispatch:
