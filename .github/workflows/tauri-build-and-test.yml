@@ -66,13 +66,13 @@ jobs:
               working-directory: MoosicBox/packages/app/tauri/src-tauri
               env:
                   APTABASE_APP_KEY: ${{ secrets.APTABASE_APP_KEY }}
-              run: cargo build --verbose
+              run: cargo build
 
             - name: Run tests
               working-directory: MoosicBox/packages/app/tauri/src-tauri
               env:
                   APTABASE_APP_KEY: ${{ secrets.APTABASE_APP_KEY }}
-              run: cargo test --verbose
+              run: cargo test
 
             - name: Copy Files
               working-directory: MoosicBox/packages/app/tauri

@@ -333,7 +333,6 @@ jobs:
                   source packages/clippier/utils.sh
                   (cd ${{ matrix.package.path }}; \
                       ${{ matrix.package.env }} cargo_each_feature clippy \
-                        --verbose \
                         --no-default-features \
                         --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }} ${{ matrix.package.cargo }})
 
@@ -344,7 +343,6 @@ jobs:
                   source packages/clippier/utils.sh
                   (cd ${{ matrix.package.path }}; \
                       ${{ matrix.package.env }} cargo_each_feature build \
-                        --verbose \
                         --no-default-features \
                         --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }} ${{ matrix.package.cargo }})
 
@@ -352,7 +350,7 @@ jobs:
               shell: bash
               working-directory: MoosicBox
               run: |
-                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo fmt --verbose)
+                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo fmt)
 
             - name: Run ${{ matrix.package.name }} tests
               shell: bash
@@ -361,7 +359,6 @@ jobs:
                   source packages/clippier/utils.sh
                   (cd ${{ matrix.package.path }}; \
                       ${{ matrix.package.env }} cargo_each_feature test \
-                        --verbose \
                         --no-default-features \
                         --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }} ${{ matrix.package.cargo }})
 
