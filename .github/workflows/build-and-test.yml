@@ -91,7 +91,7 @@ jobs:
                     - name: audio_output
                       path: packages/audio_output
                       os: ubuntu-latest
-                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev
+                      dependencies: sudo apt-get update && sudo apt-get install pulseaudio libasound2-dev jackd2
 
                     - name: audio_output-windows
                       path: packages/audio_output
