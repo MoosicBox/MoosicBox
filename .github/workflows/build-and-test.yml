@@ -341,15 +341,6 @@ jobs:
                         --no-default-features \
                         --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }} ${{ matrix.package.cargo }})
 
-            - name: Build ${{ matrix.package.name }}
-              shell: bash
-              run: |
-                  source packages/clippier/utils.sh
-                  (cd ${{ matrix.package.path }}; \
-                      ${{ matrix.package.env }} cargo_each_feature build \
-                        --no-default-features \
-                        --features=fail-on-warnings${{ matrix.package.features && format(',{0}', matrix.package.features) || '' }} ${{ matrix.package.cargo }})
-
             - name: Format ${{ matrix.package.name }}
               shell: bash
               run: |
