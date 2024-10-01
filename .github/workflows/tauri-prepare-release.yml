@@ -390,7 +390,7 @@ jobs:
                       -mx=9 \
                       -tzip \
                       ${{ steps.assets_dir.outputs.path }}/MoosicBox${{ matrix.release.runner != 'self-hosted' && '_x64' || '' }}_macos${{ matrix.release.tag && format('_{0}', matrix.release.tag) || '' }}_app.zip \
-                      MoosicBoxApp/target/${{ matrix.release.profile }}/bundle/macos/MoosicBox.app
+                      MoosicBox/target/${{ matrix.release.profile }}/bundle/macos/MoosicBox.app
 
             - name: Add MoosicBox_macos${{ matrix.release.runner != 'self-hosted' && '_x64' || '' }}${{ matrix.release.tag && format('_{0}', matrix.release.tag) || '' }} Asset
               if: ${{ matrix.release.os == 'macos-latest' }}
