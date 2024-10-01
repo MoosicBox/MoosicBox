@@ -100,7 +100,7 @@ jobs:
                     - name: audio_output-macos
                       path: packages/audio_output
                       os: macos-latest
-                      dependencies: brew install jack automake autoconf libtool
+                      dependencies: brew install jack automake autoconf libtool pulseaudio
 
                     - name: audio_zone
                       path: packages/audio_zone
