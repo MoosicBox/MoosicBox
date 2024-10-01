@@ -18,8 +18,8 @@ moosicbox_assert = { path = "../../../assert", default-features = false }
 moosicbox_async_service = { path = "../../../async_service", default-features = false }
 moosicbox_config = { path = "../../../config", default-features = false }
 moosicbox_server = { path = "../../../server", default-features = false, features = [
-    "app-apis",
     "all-formats",
+    "app-apis",
     "sqlite-sqlx",
 ] }
 moosicbox_task = { path = "../../../task", default-features = false }
@@ -32,13 +32,16 @@ thiserror    = { workspace = true }
 tokio        = { workspace = true }
 
 [features]
-default = []
+default = ["all-formats"]
 
 fail-on-warnings = []
 
 tunnel = ["moosicbox_server/tunnel"]
 
+all-formats = ["aac", "flac", "mp3", "opus"]
+
 # Encoders
 aac  = ["moosicbox_server/aac"]
 flac = ["moosicbox_server/flac"]
 mp3  = ["moosicbox_server/mp3"]
+opus = ["moosicbox_server/opus"]
