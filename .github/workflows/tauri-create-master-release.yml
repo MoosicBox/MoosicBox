@@ -8,6 +8,7 @@ on:
             - '*.toml'
             - Cargo.lock
             - .github/workflows/tauri-create-master-release.yml
+            - .github/workflows/tauri-prepare-release.yml
     workflow_dispatch:
 
 jobs:
