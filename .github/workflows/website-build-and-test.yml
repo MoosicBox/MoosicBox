@@ -3,6 +3,9 @@ name: Website Build and Validate
 on:
     push:
         branches: ['master']
+        paths:
+            - website/**
+            - .github/workflows/website-build-and-test.yml
     pull_request:
         branches: ['master']
 
