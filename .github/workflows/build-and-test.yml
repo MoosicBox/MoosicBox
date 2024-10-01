@@ -96,6 +96,7 @@ jobs:
                     - name: audio_output-windows
                       path: packages/audio_output
                       os: windows-latest
+                      dependencies: choco install jack
 
                     - name: audio_output-macos
                       path: packages/audio_output
@@ -315,6 +316,10 @@ jobs:
                       ~/.cargo/git
                       target
                   key: ${{ runner.os }}-${{ matrix.package.name }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+            - name: Install Choco
+              if: ${{ matrix.package.os == 'windows-latest' }}
+              uses: crazy-max/ghaction-chocolatey@v3
 
             - name: Install dependencies
               if: ${{ matrix.package.dependencies }}
