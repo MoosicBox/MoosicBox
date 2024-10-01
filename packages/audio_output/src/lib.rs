@@ -17,6 +17,7 @@ pub mod encoder;
 #[cfg(feature = "api")]
 pub mod api;
 
+#[cfg(not(target_os = "windows"))]
 #[cfg(any(feature = "pulseaudio-standard", feature = "pulseaudio-simple"))]
 pub mod pulseaudio;
 
@@ -392,6 +393,7 @@ impl AudioOutputScanner {
             }
         }
 
+        #[cfg(not(target_os = "windows"))]
         #[cfg(feature = "pulseaudio-standard")]
         {
             self.outputs.extend(
@@ -456,6 +458,7 @@ impl AudioOutputScanner {
             }
         }
 
+        #[cfg(not(target_os = "windows"))]
         #[cfg(feature = "pulseaudio-simple")]
         {
             self.outputs.extend(

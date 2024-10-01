@@ -28,10 +28,6 @@ utoipa           = { workspace = true, optional = true }
 cpal = { workspace = true, optional = true }
 rb   = { workspace = true, optional = true }
 
-# PulseAudio
-libpulse-binding        = { workspace = true, optional = true }
-libpulse-simple-binding = { workspace = true, optional = true }
-
 # Encoders
 fdk-aac                 = { workspace = true, optional = true }
 moosicbox_audio_encoder = { path = "../audio_encoder", default-features = false, optional = true }
@@ -44,6 +40,13 @@ log       = { workspace = true }
 symphonia = { workspace = true }
 thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["rt-multi-thread", "tracing"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+# PulseAudio
+libpulse-binding        = { workspace = true, optional = true }
+libpulse-simple-binding = { workspace = true, optional = true }
 
 [features]
 default = ["api", "default-windows", "openapi", "pulseaudio"]
