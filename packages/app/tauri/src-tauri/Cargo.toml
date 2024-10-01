@@ -8,7 +8,7 @@ license     = "MPL-2.0"
 name        = "moosicbox_app"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
-version     = "0.12.0"
+version     = "0.13.0"
 
 [package.metadata.cargo-machete]
 ignored = ["strum", "tauri_build"]
