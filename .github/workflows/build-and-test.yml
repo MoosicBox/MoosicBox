@@ -146,7 +146,7 @@ jobs:
                       os: ubuntu-latest
 
                     - name: gigachad_transformer
-                      path: packages/gigachad_transformer
+                      path: packages/gigachad/transformer
                       os: ubuntu-latest
 
                     - name: image-bin
