@@ -145,8 +145,8 @@ jobs:
                       path: packages/files
                       os: ubuntu-latest
 
-                    - name: giga_chad_transformer
-                      path: packages/giga_chad_transformer
+                    - name: gigachad_transformer
+                      path: packages/gigachad_transformer
                       os: ubuntu-latest
 
                     - name: image-bin
