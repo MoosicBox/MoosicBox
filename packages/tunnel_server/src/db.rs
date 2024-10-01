@@ -32,6 +32,7 @@ pub enum DatabaseError {
 }
 
 pub async fn init() -> Result<(), DatabaseError> {
+    #[allow(unused_mut)]
     let mut binding = DB.lock().await;
     let db: Option<&Box<dyn Database>> = binding.as_ref();
 
@@ -45,24 +46,18 @@ pub async fn init() -> Result<(), DatabaseError> {
             .await
             .expect("Failed to get DB creds"),
     );
-    #[cfg(not(feature = "postgres"))]
+    #[cfg(all(not(feature = "postgres"), not(feature = "sqlite")))]
     let creds = None;
 
     #[cfg(feature = "sqlite")]
-    let db_path = {
-        unimplemented!("sqlite database is not implemented");
-    };
+    unimplemented!("sqlite database is not implemented");
 
-    binding.replace(
-        moosicbox_database_connection::init(
-            #[cfg(feature = "sqlite")]
-            &db_path,
-            creds,
-        )
-        .await?,
-    );
+    #[cfg(not(feature = "sqlite"))]
+    {
+        binding.replace(moosicbox_database_connection::init(creds).await?);
 
-    Ok(())
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
