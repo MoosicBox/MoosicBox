@@ -95,6 +95,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                             log::debug!("{file} conf={conf:?}");
 
+                            let global_env = conf.as_ref().and_then(|x| x.env.clone());
                             let configs = if let Some(config) = conf.map(|x| x.config) {
                                 config
                             } else {
@@ -122,12 +123,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         FeaturesList::Chunked(x) => {
                                             for features in x {
                                                 packages.push(create_map(
-                                                    &config, file, &name, features,
+                                                    &config,
+                                                    global_env.as_ref(),
+                                                    file,
+                                                    &name,
+                                                    features,
                                                 ));
                                             }
                                         }
                                         FeaturesList::NotChunked(x) => {
-                                            packages.push(create_map(&config, file, &name, x));
+                                            packages.push(create_map(
+                                                &config,
+                                                global_env.as_ref(),
+                                                file,
+                                                &name,
+                                                x,
+                                            ));
                                         }
                                     }
                                 }
@@ -157,6 +168,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn create_map(
     config: &ClippierConfiguration,
+    env: Option<&HashMap<String, ClippierEnv>>,
     file: &str,
     name: &str,
     features: &[String],
@@ -193,40 +205,41 @@ fn create_map(
         }
     }
 
-    if let Some(env) = &config.env {
-        let matches = env
-            .iter()
-            .filter(|(_k, v)| match v {
-                ClippierEnv::Value(..) => true,
-                ClippierEnv::FilteredValue { features: f, .. } => !f.as_ref().is_some_and(|f| {
-                    !f.iter()
-                        .any(|required| features.iter().any(|x| x == required))
-                }),
-            })
-            .map(|(k, v)| {
-                (
-                    k,
-                    match v {
-                        ClippierEnv::Value(value) => value,
-                        ClippierEnv::FilteredValue { value, .. } => value,
-                    },
-                )
-            })
-            .collect::<Vec<_>>();
+    let mut env = env.cloned().unwrap_or_default();
+    env.extend(config.env.clone().unwrap_or_default());
 
-        if !matches.is_empty() {
-            map.insert(
-                "env".to_string(),
-                serde_json::to_value(
-                    matches
-                        .iter()
-                        .map(|(k, v)| format!("{k}={}", serde_json::to_value(v).unwrap()))
-                        .collect::<Vec<_>>()
-                        .join("\n"),
-                )
-                .unwrap(),
-            );
-        }
+    let matches = env
+        .iter()
+        .filter(|(_k, v)| match v {
+            ClippierEnv::Value(..) => true,
+            ClippierEnv::FilteredValue { features: f, .. } => !f.as_ref().is_some_and(|f| {
+                !f.iter()
+                    .any(|required| features.iter().any(|x| x == required))
+            }),
+        })
+        .map(|(k, v)| {
+            (
+                k,
+                match v {
+                    ClippierEnv::Value(value) => value,
+                    ClippierEnv::FilteredValue { value, .. } => value,
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+
+    if !matches.is_empty() {
+        map.insert(
+            "env".to_string(),
+            serde_json::to_value(
+                matches
+                    .iter()
+                    .map(|(k, v)| format!("{k}={}", serde_json::to_value(v).unwrap()))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            )
+            .unwrap(),
+        );
     }
 
     map
@@ -350,4 +363,5 @@ pub struct ClippierConfiguration {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ClippierConf {
     config: Vec<ClippierConfiguration>,
+    env: Option<HashMap<String, ClippierEnv>>,
 }
