@@ -22,3 +22,6 @@ thiserror = { workspace = true }
 
 [build-dependencies]
 tauri-plugin = { workspace = true }
+
+[features]
+fail-on-warnings = []
