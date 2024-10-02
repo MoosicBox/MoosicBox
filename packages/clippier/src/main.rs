@@ -1,4 +1,4 @@
-use std::str::FromStr as _;
+use std::{collections::HashMap, str::FromStr as _};
 
 use clap::{Parser, Subcommand, ValueEnum};
 use itertools::Itertools;
@@ -101,6 +101,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 vec![ClippierConfiguration {
                                     os: "ubuntu".to_string(),
                                     dependencies: vec![],
+                                    env: None,
                                 }]
                             };
 
@@ -189,6 +190,42 @@ fn create_map(
             )
             .unwrap(),
         );
+    }
+
+    if let Some(env) = &config.env {
+        let matches = env
+            .iter()
+            .filter(|(_k, v)| match v {
+                ClippierEnv::Value(..) => true,
+                ClippierEnv::FilteredValue { features: f, .. } => !f.as_ref().is_some_and(|f| {
+                    !f.iter()
+                        .any(|required| features.iter().any(|x| x == required))
+                }),
+            })
+            .map(|(k, v)| {
+                (
+                    k,
+                    match v {
+                        ClippierEnv::Value(value) => value,
+                        ClippierEnv::FilteredValue { value, .. } => value,
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+
+        if !matches.is_empty() {
+            map.insert(
+                "env".to_string(),
+                serde_json::to_value(
+                    matches
+                        .iter()
+                        .map(|(k, v)| format!("{k}={}", serde_json::to_value(v).unwrap()))
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                )
+                .unwrap(),
+            );
+        }
     }
 
     map
@@ -293,7 +330,18 @@ pub struct ClippierDependency {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum ClippierEnv {
+    Value(String),
+    FilteredValue {
+        value: String,
+        features: Option<Vec<String>>,
+    },
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct ClippierConfiguration {
+    env: Option<HashMap<String, ClippierEnv>>,
     dependencies: Vec<ClippierDependency>,
     os: String,
 }
