@@ -2,7 +2,7 @@ name: Build and Test
 
 on:
     push:
-        branches: ['master', 'test-clippier']
+        branches: ['master']
         paths:
             - packages/**
             - '*.toml'
