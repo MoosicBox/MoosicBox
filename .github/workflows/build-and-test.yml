@@ -108,7 +108,7 @@ jobs:
                               echo "SUCCESS \`$command\`";
                           else
                               >&2 echo "FAILED \`$command\`";
-                              exit 1
+                              return 1
                           fi
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
 
@@ -125,7 +125,7 @@ jobs:
                               echo "SUCCESS \`$command\`";
                           else
                               >&2 echo "FAILED \`$command\`";
-                              exit 1
+                              return 1
                           fi
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
 
@@ -142,7 +142,7 @@ jobs:
                               echo "SUCCESS \`$command\`";
                           else
                               >&2 echo "FAILED \`$command\`";
-                              exit 1
+                              return 1
                           fi
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
 
