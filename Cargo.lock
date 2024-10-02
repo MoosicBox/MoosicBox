@@ -4759,8 +4759,8 @@ dependencies = [
  "kanal",
  "lazy_static",
  "log",
- "moosicbox_app_bundled",
  "moosicbox_app_client",
+ "moosicbox_app_tauri_bundled",
  "moosicbox_app_ws",
  "moosicbox_assert",
  "moosicbox_audio_output",
@@ -4791,23 +4791,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
-]
-
-[[package]]
-name = "moosicbox_app_bundled"
-version = "0.1.0"
-dependencies = [
- "log",
- "moosicbox_assert",
- "moosicbox_async_service",
- "moosicbox_config",
- "moosicbox_server",
- "moosicbox_task",
- "strum",
- "strum_macros",
- "tauri",
- "thiserror",
- "tokio",
 ]
 
 [[package]]
@@ -4902,6 +4885,23 @@ version = "0.1.0"
 dependencies = [
  "maud",
  "moosicbox_library_models",
+]
+
+[[package]]
+name = "moosicbox_app_tauri_bundled"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "moosicbox_assert",
+ "moosicbox_async_service",
+ "moosicbox_config",
+ "moosicbox_server",
+ "moosicbox_task",
+ "strum",
+ "strum_macros",
+ "tauri",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]

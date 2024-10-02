@@ -47,7 +47,7 @@ moosicbox_upnp = { path = "../../../upnp", default-features = false, features = 
 moosicbox_ws = { path = "../../../ws", default-features = false }
 
 # Bundled Dependencies
-moosicbox_app_bundled = { path = "../bundled", default-features = false, optional = true }
+moosicbox_app_tauri_bundled = { path = "../bundled", default-features = false, optional = true }
 
 # Client Dependencies
 moosicbox_app_client = { path = "../client", default-features = false, optional = true }
@@ -84,17 +84,17 @@ fail-on-warnings = []
 custom-protocol = ["tauri/custom-protocol"]
 
 android = []
-desktop = ["all-encoders", "moosicbox_app_bundled?/tunnel"]
+desktop = ["all-encoders", "moosicbox_app_tauri_bundled?/tunnel"]
 
 all-encoders = ["aac", "flac", "mp3"]
 
-bundled = ["dep:moosicbox_app_bundled"]
+bundled = ["dep:moosicbox_app_tauri_bundled"]
 client  = ["dep:moosicbox_app_client"]
 
 # Encoders
-aac  = ["moosicbox_app_bundled?/aac", "moosicbox_core/aac"]
-flac = ["moosicbox_app_bundled?/flac", "moosicbox_core/flac"]
-mp3  = ["moosicbox_app_bundled?/mp3", "moosicbox_core/mp3"]
+aac  = ["moosicbox_app_tauri_bundled?/aac", "moosicbox_core/aac"]
+flac = ["moosicbox_app_tauri_bundled?/flac", "moosicbox_core/flac"]
+mp3  = ["moosicbox_app_tauri_bundled?/mp3", "moosicbox_core/mp3"]
 
 # Player audio outputs
 asio                = ["moosicbox_player/asio"]

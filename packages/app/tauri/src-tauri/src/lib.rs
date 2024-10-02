@@ -2307,12 +2307,12 @@ pub fn run() {
 
     #[cfg(feature = "bundled")]
     let (join_app_server, app_server_handle) = {
-        use moosicbox_app_bundled::service::Commander as _;
+        use moosicbox_app_tauri_bundled::service::Commander as _;
 
         log::debug!("Starting app server");
 
-        let context = moosicbox_app_bundled::Context::new(RT.handle());
-        let server = moosicbox_app_bundled::service::Service::new(context);
+        let context = moosicbox_app_tauri_bundled::Context::new(RT.handle());
+        let server = moosicbox_app_tauri_bundled::service::Service::new(context);
 
         let app_server_handle = server.handle();
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -2320,7 +2320,7 @@ pub fn run() {
         let join_app_server = server.start_on(RT.handle());
 
         app_server_handle
-            .send_command(moosicbox_app_bundled::Command::WaitForStartup { sender: tx })
+            .send_command(moosicbox_app_tauri_bundled::Command::WaitForStartup { sender: tx })
             .expect("Failed to send WaitForStartup command");
 
         log::debug!("Waiting for app server to start");
@@ -2443,13 +2443,13 @@ pub fn run() {
 
                 #[cfg(feature = "bundled")]
                 {
-                    use moosicbox_app_bundled::service::Commander as _;
+                    use moosicbox_app_tauri_bundled::service::Commander as _;
 
-                    if let Err(e) =
-                        app_server_handle.send_command(moosicbox_app_bundled::Command::RunEvent {
+                    if let Err(e) = app_server_handle.send_command(
+                        moosicbox_app_tauri_bundled::Command::RunEvent {
                             event: event.clone(),
-                        })
-                    {
+                        },
+                    ) {
                         log::error!("AppServer failed to handle event: {e:?}");
                     }
                 }
@@ -2468,7 +2468,7 @@ pub fn run() {
 
     #[cfg(feature = "bundled")]
     {
-        use moosicbox_app_bundled::service::Commander as _;
+        use moosicbox_app_tauri_bundled::service::Commander as _;
 
         log::debug!("Shutting down app server..");
         if let Err(e) = app_server_handle.shutdown() {

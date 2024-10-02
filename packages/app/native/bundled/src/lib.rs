@@ -94,7 +94,7 @@ impl Context {
         let port = 8016;
 
         let server_handle = moosicbox_task::spawn_on(
-            "moosicbox_app_bundled server",
+            "moosicbox_app_tauri_bundled server",
             handle,
             moosicbox_server::run(AppType::App, addr, port, None, move || {
                 log::info!("App server listening on {addr}:{port}");
