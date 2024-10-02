@@ -13,7 +13,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [package.metadata.cargo-machete]
-ignored = ["tauri_plugin"]
+ignored = ["tauri-plugin"]
 
 [dependencies]
 serde     = { workspace = true }
