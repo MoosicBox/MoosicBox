@@ -5064,6 +5064,7 @@ dependencies = [
  "itertools 0.13.0",
  "log",
  "moosicbox_logging",
+ "serde",
  "serde_json",
  "toml 0.8.19",
 ]

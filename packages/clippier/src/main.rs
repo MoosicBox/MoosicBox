@@ -1,5 +1,8 @@
+use std::{collections::HashMap, str::FromStr as _};
+
 use clap::{Parser, Subcommand, ValueEnum};
 use itertools::Itertools;
+use serde::Deserialize;
 use toml::Value;
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -76,6 +79,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let source = std::fs::read_to_string(format!("{}/Cargo.toml", file))?;
                             let value: Value = toml::from_str(&source)?;
 
+                            let conf = if let Ok(path) =
+                                std::path::PathBuf::from_str(&format!("{}/clippier.toml", file))
+                            {
+                                if path.is_file() {
+                                    let source = std::fs::read_to_string(path)?;
+                                    let value: ClippierConf = toml::from_str(&source)?;
+                                    Some(value)
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            };
+
+                            let oses = if let Some(oses) = conf.as_ref().and_then(|x| x.os.clone())
+                            {
+                                oses
+                            } else {
+                                vec!["ubuntu-latest".to_string()]
+                            };
+
+                            log::debug!("{file} conf={conf:?}");
+
                             if let Some(name) = value
                                 .get("package")
                                 .and_then(|x| x.get("name"))
@@ -88,42 +114,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     spread,
                                 );
 
-                                match features {
-                                    FeaturesList::Chunked(x) => {
-                                        for features in x {
-                                            let mut map = serde_json::Map::new();
-                                            map.insert(
-                                                "path".to_string(),
-                                                serde_json::to_value(file).unwrap(),
-                                            );
-                                            map.insert(
-                                                "name".to_string(),
-                                                serde_json::to_value(&name).unwrap(),
-                                            );
-                                            map.insert(
-                                                "features".to_string(),
-                                                serde_json::to_value(features).unwrap(),
-                                            );
-
-                                            packages.push(map);
+                                for os in &oses {
+                                    match &features {
+                                        FeaturesList::Chunked(x) => {
+                                            for features in x {
+                                                packages.push(create_map(
+                                                    os,
+                                                    file,
+                                                    &name,
+                                                    features,
+                                                    conf.as_ref(),
+                                                ));
+                                            }
                                         }
-                                    }
-                                    FeaturesList::NotChunked(x) => {
-                                        let mut map = serde_json::Map::new();
-                                        map.insert(
-                                            "path".to_string(),
-                                            serde_json::to_value(file).unwrap(),
-                                        );
-                                        map.insert(
-                                            "name".to_string(),
-                                            serde_json::to_value(name).unwrap(),
-                                        );
-                                        map.insert(
-                                            "features".to_string(),
-                                            serde_json::to_value(x).unwrap(),
-                                        );
-
-                                        packages.push(map);
+                                        FeaturesList::NotChunked(x) => {
+                                            packages.push(create_map(
+                                                os,
+                                                file,
+                                                &name,
+                                                x,
+                                                conf.as_ref(),
+                                            ));
+                                        }
                                     }
                                 }
                             }
@@ -148,6 +160,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+fn create_map(
+    os: &str,
+    file: &str,
+    name: &str,
+    features: &[String],
+    config: Option<&ClippierConf>,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut map = serde_json::Map::new();
+    map.insert("os".to_string(), serde_json::to_value(os).unwrap());
+    map.insert("path".to_string(), serde_json::to_value(file).unwrap());
+    map.insert("name".to_string(), serde_json::to_value(name).unwrap());
+    map.insert("features".to_string(), features.into());
+
+    if let Some(config) = config {
+        let matches = config
+            .dependencies
+            .iter()
+            .filter(|(_, x)| !x.os.as_ref().is_some_and(|x| x != os))
+            .filter(|(_, x)| {
+                !x.features.as_ref().is_some_and(|f| {
+                    !f.iter()
+                        .any(|required| features.iter().any(|x| x == required))
+                })
+            })
+            .collect::<Vec<_>>();
+
+        if !matches.is_empty() {
+            map.insert(
+                "dependencies".to_string(),
+                serde_json::to_value(
+                    matches
+                        .iter()
+                        .map(|(_, x)| x.command.as_str())
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                )
+                .unwrap(),
+            );
+        }
+    }
+
+    map
 }
 
 enum FeaturesList {
@@ -240,4 +296,17 @@ impl<'a, T> Iterator for Split<'a, T> {
         self.slice = rest;
         Some(chunk)
     }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ClippierDependency {
+    command: String,
+    features: Option<Vec<String>>,
+    os: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ClippierConf {
+    os: Option<Vec<String>>,
+    dependencies: HashMap<String, ClippierDependency>,
 }
