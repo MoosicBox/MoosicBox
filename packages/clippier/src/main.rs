@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use clap::{Parser, Subcommand, ValueEnum};
 use itertools::Itertools;
 use toml::Value;
@@ -57,76 +59,147 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let source = std::fs::read_to_string(file)?;
             let value: Value = toml::from_str(&source)?;
 
-            if let Some(features) = value.get("features") {
-                if let Some(features) = features.as_table() {
-                    let offset = offset.unwrap_or_default().into();
-                    let feature_count = features.keys().len() - offset;
-                    let features = features
-                        .keys()
-                        .skip(offset)
-                        .take(
-                            max.map(|x| std::cmp::min(feature_count, x as usize))
-                                .unwrap_or(feature_count),
-                        )
-                        .cloned()
-                        .collect::<Vec<_>>();
+            match output {
+                OutputType::Json => {
+                    if let Some(workspace_members) = value
+                        .get("workspace")
+                        .and_then(|x| x.get("members"))
+                        .and_then(|x| x.as_array())
+                        .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
+                    {
+                        let mut packages = HashMap::new();
 
-                    match output {
-                        OutputType::Json => {
-                            if let Some(chunked) = chunked {
-                                let count = features.len();
-                                let features = if spread && count > 1 {
-                                    let mut features = features;
-                                    let mut spread_features = vec![];
+                        if output == OutputType::Raw {
+                            panic!("workspace Cargo.toml is not supported for raw output");
+                        }
 
-                                    let remainder = count % chunked as usize;
-                                    let chunk_count = count / chunked as usize
-                                        + (if remainder != 0 { 1 } else { 0 });
-                                    let mut underflow = chunk_count
-                                        - (chunked as usize
-                                            - std::cmp::max(1, chunked as usize - remainder));
+                        for file in workspace_members {
+                            log::debug!("Loading file '{}'", file);
+                            let source = std::fs::read_to_string(format!("{}/Cargo.toml", file))?;
+                            let value: Value = toml::from_str(&source)?;
 
-                                    while !features.is_empty() {
-                                        let offset = if underflow > 0 {
-                                            underflow -= 1;
-                                            0
-                                        } else {
-                                            1
-                                        };
-                                        let amount = std::cmp::min(
-                                            chunked as usize - offset,
-                                            features.len(),
-                                        );
-                                        spread_features
-                                            .push(features.drain(0..amount).collect::<Vec<_>>());
-                                    }
+                            if let Some(name) = value
+                                .get("package")
+                                .and_then(|x| x.get("name"))
+                                .and_then(|x| x.as_str())
+                                .map(|x| x.to_string())
+                            {
+                                let features = process_features(
+                                    fetch_features(&value, offset, max),
+                                    chunked,
+                                    spread,
+                                );
 
-                                    spread_features
-                                } else {
-                                    features
-                                        .into_iter()
-                                        .chunks(chunked as usize)
-                                        .into_iter()
-                                        .map(|x| x.collect::<Vec<_>>())
-                                        .collect::<Vec<_>>()
-                                };
+                                let mut map = serde_json::Map::new();
+                                map.insert("name".to_string(), serde_json::to_value(name).unwrap());
+                                map.insert(
+                                    "features".to_string(),
+                                    serde_json::to_value(features).unwrap(),
+                                );
 
-                                println!("{}", serde_json::to_value(features).unwrap());
-                            } else {
-                                println!("{}", serde_json::to_value(features).unwrap());
+                                packages.insert(file, map);
                             }
                         }
-                        OutputType::Raw => {
-                            if chunked.is_some() {
-                                panic!("chunked arg is not supported for raw output");
-                            }
-                            println!("{}", features.join("\n"));
-                        }
+                        println!("{}", serde_json::to_value(packages).unwrap());
+                    } else {
+                        let features =
+                            process_features(fetch_features(&value, offset, max), chunked, spread);
+                        println!("{}", serde_json::to_value(features).unwrap());
                     }
+                }
+                OutputType::Raw => {
+                    let features = fetch_features(&value, offset, max);
+                    if chunked.is_some() {
+                        panic!("chunked arg is not supported for raw output");
+                    }
+                    println!("{}", features.join("\n"));
                 }
             }
         }
     }
 
     Ok(())
+}
+
+fn process_features(
+    features: Vec<String>,
+    chunked: Option<u16>,
+    spread: bool,
+) -> serde_json::Value {
+    if let Some(chunked) = chunked {
+        let count = features.len();
+
+        if count <= chunked as usize {
+            serde_json::to_value(vec![features]).unwrap()
+        } else if spread && count > 1 {
+            serde_json::to_value(split(&features, chunked as usize).collect::<Vec<_>>()).unwrap()
+        } else {
+            serde_json::to_value(
+                features
+                    .into_iter()
+                    .chunks(chunked as usize)
+                    .into_iter()
+                    .map(|x| x.collect::<Vec<_>>())
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap()
+        }
+    } else {
+        serde_json::to_value(features).unwrap()
+    }
+}
+
+fn fetch_features(value: &Value, offset: Option<u16>, max: Option<u16>) -> Vec<String> {
+    if let Some(features) = value.get("features") {
+        if let Some(features) = features.as_table() {
+            let offset = offset.unwrap_or_default().into();
+            let feature_count = features.keys().len() - offset;
+            features
+                .keys()
+                .skip(offset)
+                .take(
+                    max.map(|x| std::cmp::min(feature_count, x as usize))
+                        .unwrap_or(feature_count),
+                )
+                .cloned()
+                .collect::<Vec<_>>()
+        } else {
+            vec![]
+        }
+    } else {
+        vec![]
+    }
+}
+
+pub fn split<T>(slice: &[T], n: usize) -> impl Iterator<Item = &[T]> {
+    let len = slice.len() / n;
+    let rem = slice.len() % n;
+    let len = if rem != 0 { len + 1 } else { len };
+    let len = slice.len() / len;
+    let rem = slice.len() % len;
+    Split { slice, len, rem }
+}
+
+struct Split<'a, T> {
+    slice: &'a [T],
+    len: usize,
+    rem: usize,
+}
+
+impl<'a, T> Iterator for Split<'a, T> {
+    type Item = &'a [T];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.slice.is_empty() {
+            return None;
+        }
+        let mut len = self.len;
+        if self.rem > 0 {
+            len += 1;
+            self.rem -= 1;
+        }
+        let (chunk, rest) = self.slice.split_at(len);
+        self.slice = rest;
+        Some(chunk)
+    }
 }
