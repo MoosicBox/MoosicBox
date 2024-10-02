@@ -1,0 +1,11 @@
+[dependencies]
+alsa = { command = "sudo apt-get update && sudo apt-get install libasound2-dev", features = [
+    "cpal",
+    "default",
+] }
+pulseaudio = { command = "sudo apt-get update && sudo apt-get install pulseaudio", features = [
+    "default",
+    "pulseaudio",
+    "pulseaudio-simple",
+    "pulseaudio-standard",
+] }
