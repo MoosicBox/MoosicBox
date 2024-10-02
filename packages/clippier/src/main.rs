@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use clap::{Parser, Subcommand, ValueEnum};
 use itertools::Itertools;
 use toml::Value;
@@ -67,7 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .and_then(|x| x.as_array())
                         .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
                     {
-                        let mut packages = HashMap::new();
+                        let mut packages = vec![];
 
                         if output == OutputType::Raw {
                             panic!("workspace Cargo.toml is not supported for raw output");
@@ -90,21 +88,52 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     spread,
                                 );
 
-                                let mut map = serde_json::Map::new();
-                                map.insert("name".to_string(), serde_json::to_value(name).unwrap());
-                                map.insert(
-                                    "features".to_string(),
-                                    serde_json::to_value(features).unwrap(),
-                                );
+                                match features {
+                                    FeaturesList::Chunked(x) => {
+                                        for features in x {
+                                            let mut map = serde_json::Map::new();
+                                            map.insert(
+                                                "path".to_string(),
+                                                serde_json::to_value(file).unwrap(),
+                                            );
+                                            map.insert(
+                                                "name".to_string(),
+                                                serde_json::to_value(&name).unwrap(),
+                                            );
+                                            map.insert(
+                                                "features".to_string(),
+                                                serde_json::to_value(features).unwrap(),
+                                            );
 
-                                packages.insert(file, map);
+                                            packages.push(map);
+                                        }
+                                    }
+                                    FeaturesList::NotChunked(x) => {
+                                        let mut map = serde_json::Map::new();
+                                        map.insert(
+                                            "path".to_string(),
+                                            serde_json::to_value(file).unwrap(),
+                                        );
+                                        map.insert(
+                                            "name".to_string(),
+                                            serde_json::to_value(name).unwrap(),
+                                        );
+                                        map.insert(
+                                            "features".to_string(),
+                                            serde_json::to_value(x).unwrap(),
+                                        );
+
+                                        packages.push(map);
+                                    }
+                                }
                             }
                         }
                         println!("{}", serde_json::to_value(packages).unwrap());
                     } else {
                         let features =
                             process_features(fetch_features(&value, offset, max), chunked, spread);
-                        println!("{}", serde_json::to_value(features).unwrap());
+                        let value: serde_json::Value = features.into();
+                        println!("{value}");
                     }
                 }
                 OutputType::Raw => {
@@ -121,31 +150,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn process_features(
-    features: Vec<String>,
-    chunked: Option<u16>,
-    spread: bool,
-) -> serde_json::Value {
+enum FeaturesList {
+    Chunked(Vec<Vec<String>>),
+    NotChunked(Vec<String>),
+}
+
+impl From<FeaturesList> for serde_json::Value {
+    fn from(value: FeaturesList) -> Self {
+        match value {
+            FeaturesList::Chunked(x) => serde_json::to_value(x).unwrap(),
+            FeaturesList::NotChunked(x) => serde_json::to_value(x).unwrap(),
+        }
+    }
+}
+
+fn process_features(features: Vec<String>, chunked: Option<u16>, spread: bool) -> FeaturesList {
     if let Some(chunked) = chunked {
         let count = features.len();
 
-        if count <= chunked as usize {
-            serde_json::to_value(vec![features]).unwrap()
+        FeaturesList::Chunked(if count <= chunked as usize {
+            vec![features]
         } else if spread && count > 1 {
-            serde_json::to_value(split(&features, chunked as usize).collect::<Vec<_>>()).unwrap()
+            split(&features, chunked as usize)
+                .map(|x| x.to_vec())
+                .collect::<Vec<_>>()
         } else {
-            serde_json::to_value(
-                features
-                    .into_iter()
-                    .chunks(chunked as usize)
-                    .into_iter()
-                    .map(|x| x.collect::<Vec<_>>())
-                    .collect::<Vec<_>>(),
-            )
-            .unwrap()
-        }
+            features
+                .into_iter()
+                .chunks(chunked as usize)
+                .into_iter()
+                .map(|x| x.collect::<Vec<_>>())
+                .collect::<Vec<_>>()
+        })
     } else {
-        serde_json::to_value(features).unwrap()
+        FeaturesList::NotChunked(features)
     }
 }
 
