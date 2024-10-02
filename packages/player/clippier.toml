@@ -1,0 +1,14 @@
+[[config]]
+os = "ubuntu"
+
+[[config.dependencies]]
+command  = "sudo apt-get update && sudo apt-get install jackd2 libjack-jackd2-dev"
+features = ["jack"]
+
+[[config.dependencies]]
+command  = "sudo apt-get update && sudo apt-get install libasound2-dev"
+features = ["asio", "cpal", "default", "default-windows", "oboe-shared-stdcxx"]
+
+[[config.dependencies]]
+command  = "sudo apt-get update && sudo apt-get install pulseaudio"
+features = ["default", "pulseaudio", "pulseaudio-simple", "pulseaudio-standard"]
