@@ -104,6 +104,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         dependencies: None,
                                         env: None,
                                         cargo: None,
+                                        name: None,
                                     }]
                                 };
 
@@ -177,7 +178,10 @@ fn create_map(
     let mut map = serde_json::Map::new();
     map.insert("os".to_string(), serde_json::to_value(&config.os).unwrap());
     map.insert("path".to_string(), serde_json::to_value(file).unwrap());
-    map.insert("name".to_string(), serde_json::to_value(name).unwrap());
+    map.insert(
+        "name".to_string(),
+        serde_json::to_value(config.name.as_deref().unwrap_or(name)).unwrap(),
+    );
     map.insert("features".to_string(), features.into());
 
     if let Some(dependencies) = &config.dependencies {
@@ -400,6 +404,7 @@ pub struct ClippierConfiguration {
     env: Option<HashMap<String, ClippierEnv>>,
     dependencies: Option<Vec<ClippierDependency>>,
     os: String,
+    name: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
