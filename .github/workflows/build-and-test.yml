@@ -79,7 +79,8 @@ jobs:
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          echo "RUNNING \`${{ matrix.package.env }} cargo clippy --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}\`"
+                          command="${{ matrix.package.env }} cargo clippy --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}"
+                          echo "RUNNING \`$command\`"
                           if ${{ matrix.package.env }} cargo clippy \
                               --no-default-features \
                               --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}; then
@@ -94,7 +95,8 @@ jobs:
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          echo "RUNNING \`${{ matrix.package.env }} cargo build --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}\`"
+                          command="${{ matrix.package.env }} cargo build --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}"
+                          echo "RUNNING \`$command\`"
                           if ${{ matrix.package.env }} cargo build \
                               --no-default-features \
                               --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}; then
@@ -109,7 +111,8 @@ jobs:
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          echo "RUNNING \`${{ matrix.package.env }} cargo test --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}\`"
+                          command="${{ matrix.package.env }} cargo test --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}"
+                          echo "RUNNING \`$command\`"
                           if ${{ matrix.package.env }} cargo test \
                               --no-default-features \
                               --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}; then
