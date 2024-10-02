@@ -22,7 +22,7 @@ futures-channel   = { workspace = true }
 futures-util      = { workspace = true }
 log               = { workspace = true }
 thiserror         = { workspace = true }
-tokio             = { workspace = true, features = ["tracing"] }
+tokio             = { workspace = true, features = ["macros", "tracing"] }
 tokio-tungstenite = { workspace = true }
 tokio-util        = { workspace = true }
 
