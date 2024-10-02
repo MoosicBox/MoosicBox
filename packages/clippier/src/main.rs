@@ -95,16 +95,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                             log::debug!("{file} conf={conf:?}");
 
-                            let global_env = conf.as_ref().and_then(|x| x.env.clone());
-                            let configs = if let Some(config) = conf.map(|x| x.config) {
-                                config
-                            } else {
-                                vec![ClippierConfiguration {
-                                    os: "ubuntu".to_string(),
-                                    dependencies: None,
-                                    env: None,
-                                }]
-                            };
+                            let configs =
+                                if let Some(config) = conf.as_ref().map(|x| x.config.clone()) {
+                                    config
+                                } else {
+                                    vec![ClippierConfiguration {
+                                        os: "ubuntu".to_string(),
+                                        dependencies: None,
+                                        env: None,
+                                        cargo: None,
+                                    }]
+                                };
 
                             if let Some(name) = value
                                 .get("package")
@@ -123,8 +124,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         FeaturesList::Chunked(x) => {
                                             for features in x {
                                                 packages.push(create_map(
+                                                    conf.as_ref(),
                                                     &config,
-                                                    global_env.as_ref(),
                                                     file,
                                                     &name,
                                                     features,
@@ -133,8 +134,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         }
                                         FeaturesList::NotChunked(x) => {
                                             packages.push(create_map(
+                                                conf.as_ref(),
                                                 &config,
-                                                global_env.as_ref(),
                                                 file,
                                                 &name,
                                                 x,
@@ -167,8 +168,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn create_map(
+    conf: Option<&ClippierConf>,
     config: &ClippierConfiguration,
-    env: Option<&HashMap<String, ClippierEnv>>,
     file: &str,
     name: &str,
     features: &[String],
@@ -205,7 +206,10 @@ fn create_map(
         }
     }
 
-    let mut env = env.cloned().unwrap_or_default();
+    let mut env = conf
+        .and_then(|x| x.env.as_ref())
+        .cloned()
+        .unwrap_or_default();
     env.extend(config.env.clone().unwrap_or_default());
 
     let matches = env
@@ -239,6 +243,21 @@ fn create_map(
                     .join("\n"),
             )
             .unwrap(),
+        );
+    }
+
+    let mut cargo: Vec<_> = conf
+        .and_then(|x| x.cargo.as_ref())
+        .cloned()
+        .unwrap_or_default()
+        .into();
+    let config_cargo: Vec<_> = config.cargo.clone().unwrap_or_default().into();
+    cargo.extend(config_cargo);
+
+    if !cargo.is_empty() {
+        map.insert(
+            "cargo".to_string(),
+            serde_json::to_value(cargo.join(" ")).unwrap(),
         );
     }
 
@@ -354,7 +373,30 @@ pub enum ClippierEnv {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum VecOrItem<T> {
+    Value(T),
+    Values(Vec<T>),
+}
+
+impl<T> From<VecOrItem<T>> for Vec<T> {
+    fn from(value: VecOrItem<T>) -> Self {
+        match value {
+            VecOrItem::Value(x) => vec![x],
+            VecOrItem::Values(x) => x,
+        }
+    }
+}
+
+impl<T> Default for VecOrItem<T> {
+    fn default() -> Self {
+        Self::Values(vec![])
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct ClippierConfiguration {
+    cargo: Option<VecOrItem<String>>,
     env: Option<HashMap<String, ClippierEnv>>,
     dependencies: Option<Vec<ClippierDependency>>,
     os: String,
@@ -362,6 +404,7 @@ pub struct ClippierConfiguration {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ClippierConf {
+    cargo: Option<VecOrItem<String>>,
     config: Vec<ClippierConfiguration>,
     env: Option<HashMap<String, ClippierEnv>>,
 }
