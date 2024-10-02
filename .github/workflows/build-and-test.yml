@@ -32,7 +32,7 @@ jobs:
             - name: Build matrix JSON
               id: build-matrix-step
               run: |
-                  MATRIX=$(cargo run -p moosicbox_clippier features Cargo.toml --chunked 5 -o json --spread | jq -rc '[.[] | {"name":(.name | sub("^moosicbox_"; "")),"path":(.path),"features":(.features),"os":(.os),"dependencies":(.dependencies)} | del(.dependencies | nulls)]')
+                  MATRIX=$(cargo run -p moosicbox_clippier features Cargo.toml --chunked 5 -o json --spread | jq -rc '[.[] | {"name":(.name | sub("^moosicbox_"; "")),"path":(.path),"features":(.features),"os":(.os + "-latest"),"dependencies":(.dependencies)} | del(.dependencies | nulls)]')
                   echo "Using matrix (raw):"
                   echo $MATRIX
                   echo "Using matrix:"

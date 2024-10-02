@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr as _};
+use std::str::FromStr as _;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use itertools::Itertools;
@@ -93,14 +93,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 None
                             };
 
-                            let oses = if let Some(oses) = conf.as_ref().and_then(|x| x.os.clone())
-                            {
-                                oses
-                            } else {
-                                vec!["ubuntu-latest".to_string()]
-                            };
-
                             log::debug!("{file} conf={conf:?}");
+
+                            let configs = if let Some(config) = conf.map(|x| x.config) {
+                                config
+                            } else {
+                                vec![ClippierConfiguration {
+                                    os: "ubuntu".to_string(),
+                                    dependencies: vec![],
+                                }]
+                            };
 
                             if let Some(name) = value
                                 .get("package")
@@ -114,27 +116,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     spread,
                                 );
 
-                                for os in &oses {
+                                for config in configs {
                                     match &features {
                                         FeaturesList::Chunked(x) => {
                                             for features in x {
                                                 packages.push(create_map(
-                                                    os,
-                                                    file,
-                                                    &name,
-                                                    features,
-                                                    conf.as_ref(),
+                                                    &config, file, &name, features,
                                                 ));
                                             }
                                         }
                                         FeaturesList::NotChunked(x) => {
-                                            packages.push(create_map(
-                                                os,
-                                                file,
-                                                &name,
-                                                x,
-                                                conf.as_ref(),
-                                            ));
+                                            packages.push(create_map(&config, file, &name, x));
                                         }
                                     }
                                 }
@@ -163,44 +155,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn create_map(
-    os: &str,
+    config: &ClippierConfiguration,
     file: &str,
     name: &str,
     features: &[String],
-    config: Option<&ClippierConf>,
 ) -> serde_json::Map<String, serde_json::Value> {
     let mut map = serde_json::Map::new();
-    map.insert("os".to_string(), serde_json::to_value(os).unwrap());
+    map.insert("os".to_string(), serde_json::to_value(&config.os).unwrap());
     map.insert("path".to_string(), serde_json::to_value(file).unwrap());
     map.insert("name".to_string(), serde_json::to_value(name).unwrap());
     map.insert("features".to_string(), features.into());
 
-    if let Some(config) = config {
-        let matches = config
-            .dependencies
-            .iter()
-            .filter(|(_, x)| !x.os.as_ref().is_some_and(|x| x != os))
-            .filter(|(_, x)| {
-                !x.features.as_ref().is_some_and(|f| {
-                    !f.iter()
-                        .any(|required| features.iter().any(|x| x == required))
-                })
+    let matches = config
+        .dependencies
+        .iter()
+        .filter(|x| {
+            !x.features.as_ref().is_some_and(|f| {
+                !f.iter()
+                    .any(|required| features.iter().any(|x| x == required))
             })
-            .collect::<Vec<_>>();
+        })
+        .collect::<Vec<_>>();
 
-        if !matches.is_empty() {
-            map.insert(
-                "dependencies".to_string(),
-                serde_json::to_value(
-                    matches
-                        .iter()
-                        .map(|(_, x)| x.command.as_str())
-                        .collect::<Vec<_>>()
-                        .join("\n"),
-                )
-                .unwrap(),
-            );
-        }
+    if !matches.is_empty() {
+        map.insert(
+            "dependencies".to_string(),
+            serde_json::to_value(
+                matches
+                    .iter()
+                    .map(|x| x.command.as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            )
+            .unwrap(),
+        );
     }
 
     map
@@ -302,11 +290,15 @@ impl<'a, T> Iterator for Split<'a, T> {
 pub struct ClippierDependency {
     command: String,
     features: Option<Vec<String>>,
-    os: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ClippierConfiguration {
+    dependencies: Vec<ClippierDependency>,
+    os: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ClippierConf {
-    os: Option<Vec<String>>,
-    dependencies: HashMap<String, ClippierDependency>,
+    config: Vec<ClippierConfiguration>,
 }
