@@ -11,7 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.13.0"
 
 [package.metadata.cargo-machete]
-ignored = ["strum", "tauri_build"]
+ignored = ["strum", "tauri-build"]
 
 [lib]
 crate-type = ["cdylib", "rlib", "staticlib"]
