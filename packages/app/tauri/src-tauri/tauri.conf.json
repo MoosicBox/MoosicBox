@@ -47,7 +47,7 @@
         }
     },
     "plugins": {
-        "tauri-plugin-player": {
+        "app_tauri_plugin_player": {
             "timeout": 30
         }
     }

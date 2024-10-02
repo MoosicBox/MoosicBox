@@ -16,7 +16,7 @@ Default permissions for the plugin
 <tr>
 <td>
 
-`player:allow-ping`
+`app-tauri-plugin-player:allow-ping`
 
 </td>
 <td>
@@ -29,7 +29,7 @@ Enables the ping command without any pre-configured scope.
 <tr>
 <td>
 
-`player:deny-ping`
+`app-tauri-plugin-player:deny-ping`
 
 </td>
 <td>

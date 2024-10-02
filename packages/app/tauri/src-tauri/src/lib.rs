@@ -1430,12 +1430,12 @@ async fn propagate_state_to_plugin(update: &ApiUpdateSession) {
 
     if current_session_id.is_some_and(|id| update.session_id == id) {
         if let Some((url, query)) = get_url_and_query().await {
-            use tauri_plugin_player::PlayerExt;
+            use app_tauri_plugin_player::PlayerExt;
 
             let player = APP.get().unwrap().player();
 
             log::debug!("propagate_state_to_plugin: update={update:?}");
-            if let Err(e) = player.update_state(tauri_plugin_player::UpdateState {
+            if let Err(e) = player.update_state(app_tauri_plugin_player::UpdateState {
                 playing: update.playing,
                 position: update.position,
                 seek: update.seek,
@@ -1443,7 +1443,7 @@ async fn propagate_state_to_plugin(update: &ApiUpdateSession) {
                 playlist: update
                     .playlist
                     .as_ref()
-                    .map(|x| tauri_plugin_player::Playlist {
+                    .map(|x| app_tauri_plugin_player::Playlist {
                         tracks: x
                             .tracks
                             .iter()
@@ -1520,7 +1520,7 @@ fn convert_track(
     value: moosicbox_library::models::ApiTrack,
     url: &str,
     query: &str,
-) -> Option<tauri_plugin_player::Track> {
+) -> Option<app_tauri_plugin_player::Track> {
     let api_source = value.api_source();
 
     match value {
@@ -1530,7 +1530,7 @@ fn convert_track(
             } else {
                 None
             };
-            Some(tauri_plugin_player::Track {
+            Some(app_tauri_plugin_player::Track {
                 id: track_id.to_string(),
                 number: data.number,
                 title: data.title,
@@ -1569,7 +1569,7 @@ fn convert_track(
 
                 log::trace!("handle_ws_message: Converting track data={x} contains_cover={contains_cover} album_cover={album_cover:?}");
 
-                tauri_plugin_player::Track {
+                app_tauri_plugin_player::Track {
                     id: value.track_id().to_string(),
                     number: x.get("number")
                         .and_then(|x| x.as_u64())
@@ -1617,7 +1617,7 @@ async fn get_url_and_query() -> Option<(String, String)> {
 }
 
 async fn update_playlist() -> Result<(), HandleWsMessageError> {
-    use tauri_plugin_player::PlayerExt;
+    use app_tauri_plugin_player::PlayerExt;
 
     log::trace!("update_playlist");
 
@@ -1653,12 +1653,12 @@ async fn update_playlist() -> Result<(), HandleWsMessageError> {
         .get()
         .unwrap()
         .player()
-        .update_state(tauri_plugin_player::UpdateState {
+        .update_state(app_tauri_plugin_player::UpdateState {
             playing: Some(session.playing),
             position: session.position,
             seek: session.seek.map(|x| x as f64),
             volume: session.volume,
-            playlist: Some(tauri_plugin_player::Playlist {
+            playlist: Some(app_tauri_plugin_player::Playlist {
                 tracks: session
                     .playlist
                     .tracks
@@ -2084,7 +2084,7 @@ async fn init_upnp_players() -> Result<(), InitUpnpError> {
 
 #[cfg(target_os = "android")]
 async fn handle_media_event(
-    event: tauri_plugin_player::MediaEvent,
+    event: app_tauri_plugin_player::MediaEvent,
 ) -> Result<(), TauriPlayerError> {
     log::trace!("handle_media_event: event={event:?}");
     let Some(current_session_id) = ({ *CURRENT_SESSION_ID.read().await }) else {
@@ -2304,20 +2304,20 @@ pub fn run() {
     let mut app_builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_player::init())
+        .plugin(app_tauri_plugin_player::init())
         .setup(|app| {
             APP.get_or_init(|| app.handle().clone());
 
             #[cfg(target_os = "android")]
             {
-                use tauri_plugin_player::PlayerExt as _;
+                use app_tauri_plugin_player::PlayerExt as _;
 
                 let player = app.player();
 
                 let channel = tauri::ipc::Channel::new(|event| {
                     tauri::async_runtime::spawn(async move {
                         log::trace!("Received event from channel: {event:?}");
-                        let event: tauri_plugin_player::MediaEvent =
+                        let event: app_tauri_plugin_player::MediaEvent =
                             event.deserialize().map_err(|x| x.to_string())?;
                         log::debug!("Received media event from channel: {event:?}");
 
@@ -2329,7 +2329,9 @@ pub fn run() {
                 });
 
                 log::debug!("moosicbox_app: init_channel");
-                if let Err(e) = player.init_channel(tauri_plugin_player::InitChannel { channel }) {
+                if let Err(e) =
+                    player.init_channel(app_tauri_plugin_player::InitChannel { channel })
+                {
                     log::error!("Failed to init_channel: {e:?}");
                 }
             }

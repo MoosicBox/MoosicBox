@@ -434,6 +434,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86fdf8605db99b54d3cd748a44c6d04df638eb5dafb219b135d0149bd0db01f6"
 
 [[package]]
+name = "app-tauri-plugin-player"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "tauri",
+ "tauri-plugin",
+ "thiserror",
+]
+
+[[package]]
 name = "arbitrary"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4747,6 +4757,7 @@ dependencies = [
 name = "moosicbox_app"
 version = "0.13.0"
 dependencies = [
+ "app-tauri-plugin-player",
  "async-recursion",
  "console-subscriber",
  "kanal",
@@ -4780,7 +4791,6 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-notification",
- "tauri-plugin-player",
  "thiserror",
  "tokio",
  "tokio-util",
@@ -9965,16 +9975,6 @@ dependencies = [
  "thiserror",
  "time",
  "url",
-]
-
-[[package]]
-name = "tauri-plugin-player"
-version = "0.1.0"
-dependencies = [
- "serde",
- "tauri",
- "tauri-plugin",
- "thiserror",
 ]
 
 [[package]]

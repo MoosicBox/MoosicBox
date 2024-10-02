@@ -52,7 +52,7 @@ moosicbox_app_tauri_bundled = { path = "../bundled", default-features = false, o
 # Client Dependencies
 moosicbox_app_client = { path = "../client", default-features = false, optional = true }
 
-tauri-plugin-player = { path = "../tauri-plugin-player" }
+app-tauri-plugin-player = { path = "../tauri-plugin-player" }
 
 async-recursion = { workspace = true }
 console-subscriber = { workspace = true }
