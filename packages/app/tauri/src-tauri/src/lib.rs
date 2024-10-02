@@ -1182,52 +1182,6 @@ pub fn on_playback_event(update: &UpdateSession, _current: &Playback) {
     );
 }
 
-#[cfg(feature = "aptabase")]
-fn track_event(handler: &tauri::AppHandle, name: &str, props: Option<serde_json::Value>) {
-    use std::{
-        collections::HashMap,
-        sync::{Mutex, OnceLock},
-        time::Duration,
-    };
-
-    use debounce::EventDebouncer;
-    use log::{debug, trace};
-    use tauri_plugin_aptabase::EventTracker;
-
-    static DISABLED_EVENTS: [&str; 2] = ["app_main_events_cleared", "app_window_event"];
-    static DEBOUNCER_COUNTS: OnceLock<Mutex<HashMap<String, u16>>> = OnceLock::new();
-    static DEBOUNCER: OnceLock<EventDebouncer<String>> = OnceLock::new();
-
-    DEBOUNCER.get_or_init(|| {
-        let debounce_duration = Duration::from_millis(10);
-        EventDebouncer::new(debounce_duration, move |data: String| {
-            let counts = DEBOUNCER_COUNTS.get().unwrap();
-            let count = *counts.lock().unwrap().get(&data).unwrap_or(&0);
-            if count > 1 {
-                trace!("{data} ({count} times)");
-            } else {
-                trace!("{}", data);
-            }
-            counts.lock().unwrap().remove(&data);
-        })
-    });
-    DEBOUNCER_COUNTS.get_or_init(|| Mutex::new(HashMap::new()));
-
-    if DISABLED_EVENTS.iter().any(|n| *n == name) {
-        let message = format!("Not tracking disabled event {name}: {props:?}").to_string();
-
-        DEBOUNCER.get().unwrap().put(message.clone());
-
-        let counts = DEBOUNCER_COUNTS.get().unwrap();
-        let count = *counts.lock().unwrap().get(&message).unwrap_or(&0);
-        counts.lock().unwrap().insert(message.clone(), count + 1);
-        return;
-    }
-
-    debug!("Tracking event {name}: {props:?}");
-    handler.track_event(name, props);
-}
-
 #[derive(Debug, Error)]
 pub enum ScanOutputsError {
     #[error(transparent)]
@@ -2394,42 +2348,6 @@ pub fn run() {
             mdns::fetch_moosicbox_servers,
         ]);
 
-    #[cfg(feature = "aptabase")]
-    {
-        use serde_json::json;
-        use tauri_plugin_aptabase::EventTracker;
-
-        let aptabase_app_key = std::env!("APTABASE_APP_KEY");
-
-        app_builder
-            .plugin(tauri_plugin_aptabase::Builder::new(aptabase_app_key).build())
-            .build(tauri::generate_context!())
-            .expect("error while running tauri application")
-            .run(|handler, event| match event {
-                tauri::RunEvent::Exit { .. } => {
-                    track_event(handler, "app_exited", None);
-                    handler.flush_events_blocking();
-                }
-                tauri::RunEvent::ExitRequested { api, .. } => track_event(
-                    handler,
-                    "app_exit_requested",
-                    Some(json!({"api": format!("{api:?}")})),
-                ),
-                tauri::RunEvent::WindowEvent { label, event, .. } => track_event(
-                    handler,
-                    "app_window_event",
-                    Some(json!({"label": label, "event": format!("{event:?}")})),
-                ),
-                tauri::RunEvent::Ready => track_event(handler, "app_ready", None),
-                tauri::RunEvent::Resumed => track_event(handler, "app_resumed", None),
-                tauri::RunEvent::MainEventsCleared => {
-                    track_event(handler, "app_main_events_cleared", None)
-                }
-                _ => {}
-            });
-    }
-
-    #[cfg(not(feature = "aptabase"))]
     app_builder
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

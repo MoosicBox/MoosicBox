@@ -56,7 +56,6 @@ tauri-plugin-player = { path = "../tauri-plugin-player" }
 
 async-recursion = { workspace = true }
 console-subscriber = { workspace = true }
-debounce = { workspace = true, optional = true }
 kanal = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
@@ -103,7 +102,5 @@ jack                = ["moosicbox_player/jack"]
 pulseaudio          = ["moosicbox_player/pulseaudio"]
 pulseaudio-simple   = ["moosicbox_player/pulseaudio-simple"]
 pulseaudio-standard = ["moosicbox_player/pulseaudio-standard"]
-
-aptabase = ["dep:debounce"]
 
 devtools = ["tauri/devtools"]
