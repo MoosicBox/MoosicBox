@@ -17,8 +17,34 @@ sudo apt install libwebkit2gtk-4.1-dev \
     libsoup-3.0-dev
 '''
 
+[[config.dependencies]]
+command  = "sudo apt-get update && sudo apt-get install jackd2 libjack-jackd2-dev"
+features = ["jack"]
+
+[[config.dependencies]]
+command  = "sudo apt-get update && sudo apt-get install libasound2-dev"
+features = ["asio", "cpal", "default", "default-windows", "oboe-shared-stdcxx"]
+
 [[config]]
 os = "macos"
 
+[[config.dependencies]]
+command  = "brew install jack"
+features = ["jack"]
+
+[[config.dependencies]]
+command = "brew install automake autoconf libtool pulseaudio"
+features = [
+    "default",
+    "default-windows",
+    "pulseaudio",
+    "pulseaudio-simple",
+    "pulseaudio-standard",
+]
+
 [[config]]
 os = "windows"
+
+[[config.dependencies]]
+command  = "winget install -e --id Jackaudio.JACK2 --accept-source-agreements --accept-package-agreements"
+features = ["jack"]
