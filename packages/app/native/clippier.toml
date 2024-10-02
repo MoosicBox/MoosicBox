@@ -32,3 +32,6 @@ os = "macos"
 
 [[config.dependencies]]
 command = 'brew install automake autoconf libtool'
+
+[[config]]
+os = "windows"
