@@ -100,7 +100,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             } else {
                                 vec![ClippierConfiguration {
                                     os: "ubuntu".to_string(),
-                                    dependencies: vec![],
+                                    dependencies: None,
                                     env: None,
                                 }]
                             };
@@ -167,29 +167,30 @@ fn create_map(
     map.insert("name".to_string(), serde_json::to_value(name).unwrap());
     map.insert("features".to_string(), features.into());
 
-    let matches = config
-        .dependencies
-        .iter()
-        .filter(|x| {
-            !x.features.as_ref().is_some_and(|f| {
-                !f.iter()
-                    .any(|required| features.iter().any(|x| x == required))
+    if let Some(dependencies) = &config.dependencies {
+        let matches = dependencies
+            .iter()
+            .filter(|x| {
+                !x.features.as_ref().is_some_and(|f| {
+                    !f.iter()
+                        .any(|required| features.iter().any(|x| x == required))
+                })
             })
-        })
-        .collect::<Vec<_>>();
+            .collect::<Vec<_>>();
 
-    if !matches.is_empty() {
-        map.insert(
-            "dependencies".to_string(),
-            serde_json::to_value(
-                matches
-                    .iter()
-                    .map(|x| x.command.as_str())
-                    .collect::<Vec<_>>()
-                    .join("\n"),
-            )
-            .unwrap(),
-        );
+        if !matches.is_empty() {
+            map.insert(
+                "dependencies".to_string(),
+                serde_json::to_value(
+                    matches
+                        .iter()
+                        .map(|x| x.command.as_str())
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                )
+                .unwrap(),
+            );
+        }
     }
 
     if let Some(env) = &config.env {
@@ -342,7 +343,7 @@ pub enum ClippierEnv {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ClippierConfiguration {
     env: Option<HashMap<String, ClippierEnv>>,
-    dependencies: Vec<ClippierDependency>,
+    dependencies: Option<Vec<ClippierDependency>>,
     os: String,
 }
 
