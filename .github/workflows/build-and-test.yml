@@ -74,12 +74,6 @@ jobs:
               if: ${{ matrix.package.dependencies }}
               run: ${{ matrix.package.dependencies }}
 
-            - name: Install clippier
-              shell: bash
-              working-directory: packages/clippier
-              run: |
-                  cargo install --debug --path .
-
             - name: Clippy ${{ matrix.package.name }}
               shell: bash
               run: |
