@@ -95,11 +95,20 @@ jobs:
                           fi
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
 
-
-            - name: Format ${{ matrix.package.name }}
+            - name: Build ${{ matrix.package.name }}
               shell: bash
               run: |
-                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo fmt)
+                  (cd ${{ matrix.package.path }}; \
+                      while read -r feature; do \
+                          echo "RUNNING \`${{ matrix.package.env }} cargo build --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}\`"
+                          if ${{ matrix.package.env }} cargo build \
+                              --no-default-features \
+                              --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}; then
+                              echo "SUCCESS \`$command\`";
+                          else
+                              >&2 echo "FAILED \`$command\`";
+                          fi
+                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
 
             - name: Run ${{ matrix.package.name }} tests
               shell: bash
@@ -115,6 +124,11 @@ jobs:
                               >&2 echo "FAILED \`$command\`";
                           fi
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
+
+            - name: Format ${{ matrix.package.name }}
+              shell: bash
+              run: |
+                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo fmt)
 
             - name: Install cargo-machete
               shell: bash
