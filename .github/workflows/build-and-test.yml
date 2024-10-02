@@ -32,7 +32,7 @@ jobs:
             - name: Build matrix JSON
               id: build-matrix-step
               run: |
-                  MATRIX=$(cargo run -p moosicbox_clippier features packages/server/Cargo.toml --chunked 10 -o json | jq -rcs '[{"name":"server","path":"packages/server","os":"ubuntu-latest","features":(.[][])}]')
+                  MATRIX=$(cargo run -p moosicbox_clippier features packages/server/Cargo.toml --chunked 10 -o json --spread | jq -rcs '[{"name":"server","path":"packages/server","os":"ubuntu-latest","features":(.[][])}]')
                   echo "Using matrix (raw):"
                   echo $MATRIX
                   echo "Using matrix:"
