@@ -340,6 +340,7 @@ impl FromStr for ArtistSort {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct AlbumVersionQuality {
     pub format: Option<AudioFormat>,
     pub bit_depth: Option<u8>,
@@ -408,6 +409,7 @@ impl AsModelResult<AlbumVersionQuality, ParseError> for &moosicbox_database::Row
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiSources(Vec<(ApiSource, Id)>);
 
 impl ApiSources {
@@ -699,14 +701,30 @@ pub enum Id {
 }
 
 #[cfg(feature = "openapi")]
-impl<'__s> utoipa::ToSchema<'__s> for Id {
-    fn schema() -> (
-        &'__s str,
-        utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
+impl utoipa::__dev::SchemaReferences for Id {
+    fn schemas(
+        schemas: &mut Vec<(
+            String,
+            utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
+        )>,
     ) {
         use utoipa::PartialSchema as _;
 
-        ("Id", String::schema())
+        schemas.push(("Id".to_string(), String::schema()))
+    }
+}
+
+#[cfg(feature = "openapi")]
+impl utoipa::PartialSchema for Id {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        String::schema()
+    }
+}
+
+#[cfg(feature = "openapi")]
+impl utoipa::ToSchema for Id {
+    fn name() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed("Id")
     }
 }
 
