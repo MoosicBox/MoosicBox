@@ -1,4 +1,8 @@
-use std::{collections::HashMap, str::FromStr as _};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use clap::{Parser, Subcommand, ValueEnum};
 use itertools::Itertools;
@@ -56,8 +60,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             spread,
             output,
         } => {
-            log::debug!("Loading file '{}'", file);
-            let source = std::fs::read_to_string(file)?;
+            let path = PathBuf::from_str(&file)?;
+            let cargo_path = path.join("Cargo.toml");
+            log::debug!("Loading file '{:?}'", cargo_path);
+            let source = std::fs::read_to_string(&cargo_path)?;
             let value: Value = toml::from_str(&source)?;
 
             match output {
@@ -75,82 +81,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
 
                         for file in workspace_members {
-                            log::debug!("Loading file '{}'", file);
-                            let source = std::fs::read_to_string(format!("{}/Cargo.toml", file))?;
-                            let value: Value = toml::from_str(&source)?;
+                            let path = PathBuf::from_str(file)?;
 
-                            let conf = if let Ok(path) =
-                                std::path::PathBuf::from_str(&format!("{}/clippier.toml", file))
-                            {
-                                if path.is_file() {
-                                    let source = std::fs::read_to_string(path)?;
-                                    let value: ClippierConf = toml::from_str(&source)?;
-                                    Some(value)
-                                } else {
-                                    None
-                                }
-                            } else {
-                                None
-                            };
-
-                            log::debug!("{file} conf={conf:?}");
-
-                            let configs =
-                                if let Some(config) = conf.as_ref().map(|x| x.config.clone()) {
-                                    config
-                                } else {
-                                    vec![ClippierConfiguration {
-                                        os: "ubuntu".to_string(),
-                                        dependencies: None,
-                                        env: None,
-                                        cargo: None,
-                                        name: None,
-                                    }]
-                                };
-
-                            if let Some(name) = value
-                                .get("package")
-                                .and_then(|x| x.get("name"))
-                                .and_then(|x| x.as_str())
-                                .map(|x| x.to_string())
-                            {
-                                let features = process_features(
-                                    fetch_features(&value, offset, max),
-                                    chunked,
-                                    spread,
-                                );
-
-                                for config in configs {
-                                    match &features {
-                                        FeaturesList::Chunked(x) => {
-                                            for features in x {
-                                                packages.push(create_map(
-                                                    conf.as_ref(),
-                                                    &config,
-                                                    file,
-                                                    &name,
-                                                    features,
-                                                ));
-                                            }
-                                        }
-                                        FeaturesList::NotChunked(x) => {
-                                            packages.push(create_map(
-                                                conf.as_ref(),
-                                                &config,
-                                                file,
-                                                &name,
-                                                x,
-                                            ));
-                                        }
-                                    }
-                                }
-                            }
+                            packages.extend(process_configs(&path, offset, max, chunked, spread)?);
                         }
                         println!("{}", serde_json::to_value(packages).unwrap());
                     } else {
-                        let features =
-                            process_features(fetch_features(&value, offset, max), chunked, spread);
-                        let value: serde_json::Value = features.into();
+                        let value: serde_json::Value = serde_json::to_value(process_configs(
+                            &path, offset, max, chunked, spread,
+                        )?)?;
                         println!("{value}");
                     }
                 }
@@ -168,19 +107,93 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn process_configs(
+    path: &Path,
+    offset: Option<u16>,
+    max: Option<u16>,
+    chunked: Option<u16>,
+    spread: bool,
+) -> Result<Vec<serde_json::Map<String, serde_json::Value>>, Box<dyn std::error::Error>> {
+    log::debug!("Loading file '{:?}'", path);
+    let cargo_path = path.join("Cargo.toml");
+    let source = std::fs::read_to_string(cargo_path)?;
+    let value: Value = toml::from_str(&source)?;
+
+    let conf_path = path.join("clippier.toml");
+    let conf = if conf_path.is_file() {
+        let source = std::fs::read_to_string(conf_path)?;
+        let value: ClippierConf = toml::from_str(&source)?;
+        Some(value)
+    } else {
+        None
+    };
+
+    log::debug!("{path:?} conf={conf:?}");
+
+    let configs = if let Some(config) = conf.as_ref().map(|x| x.config.clone()) {
+        config
+    } else {
+        vec![ClippierConfiguration {
+            os: "ubuntu".to_string(),
+            dependencies: None,
+            env: None,
+            cargo: None,
+            name: None,
+        }]
+    };
+
+    let mut packages = vec![];
+
+    if let Some(name) = value
+        .get("package")
+        .and_then(|x| x.get("name"))
+        .and_then(|x| x.as_str())
+        .map(|x| x.to_string())
+    {
+        let features = process_features(fetch_features(&value, offset, max), chunked, spread);
+
+        for config in configs {
+            match &features {
+                FeaturesList::Chunked(x) => {
+                    for features in x {
+                        packages.push(create_map(
+                            conf.as_ref(),
+                            &config,
+                            path.to_str().unwrap(),
+                            &name,
+                            features,
+                        )?);
+                    }
+                }
+                FeaturesList::NotChunked(x) => {
+                    packages.push(create_map(
+                        conf.as_ref(),
+                        &config,
+                        path.to_str().unwrap(),
+                        &name,
+                        x,
+                    )?);
+                }
+            }
+        }
+    }
+
+    Ok(packages)
+}
+
 fn create_map(
     conf: Option<&ClippierConf>,
     config: &ClippierConfiguration,
     file: &str,
     name: &str,
     features: &[String],
-) -> serde_json::Map<String, serde_json::Value> {
+) -> Result<serde_json::Map<String, serde_json::Value>, Box<dyn std::error::Error>> {
     let mut map = serde_json::Map::new();
-    map.insert("os".to_string(), serde_json::to_value(&config.os).unwrap());
-    map.insert("path".to_string(), serde_json::to_value(file).unwrap());
+    map.insert("os".to_string(), serde_json::to_value(&config.os)?);
+    map.insert("path".to_string(), serde_json::to_value(file)?);
     map.insert(
         "name".to_string(),
-        serde_json::to_value(config.name.as_deref().unwrap_or(name)).unwrap(),
+        serde_json::to_value(config.name.as_deref().unwrap_or(name))?,
     );
     map.insert("features".to_string(), features.into());
 
@@ -204,8 +217,7 @@ fn create_map(
                         .map(|x| x.command.as_str())
                         .collect::<Vec<_>>()
                         .join("\n"),
-                )
-                .unwrap(),
+                )?,
             );
         }
     }
@@ -242,11 +254,10 @@ fn create_map(
             serde_json::to_value(
                 matches
                     .iter()
-                    .map(|(k, v)| format!("{k}={}", serde_json::to_value(v).unwrap()))
-                    .collect::<Vec<_>>()
+                    .map(|(k, v)| serde_json::to_value(v).map(|v| format!("{k}={v}")))
+                    .collect::<Result<Vec<_>, _>>()?
                     .join("\n"),
-            )
-            .unwrap(),
+            )?,
         );
     }
 
@@ -259,13 +270,10 @@ fn create_map(
     cargo.extend(config_cargo);
 
     if !cargo.is_empty() {
-        map.insert(
-            "cargo".to_string(),
-            serde_json::to_value(cargo.join(" ")).unwrap(),
-        );
+        map.insert("cargo".to_string(), serde_json::to_value(cargo.join(" "))?);
     }
 
-    map
+    Ok(map)
 }
 
 enum FeaturesList {
