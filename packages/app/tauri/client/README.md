@@ -1,0 +1,1 @@
+# MoosicBox apptauri/client/ crate

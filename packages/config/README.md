@@ -1,0 +1,1 @@
+# MoosicBox config crate
