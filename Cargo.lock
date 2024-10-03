@@ -3157,6 +3157,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "gigachad"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_gigachad_transformer",
+]
+
+[[package]]
 name = "gimli"
 version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
