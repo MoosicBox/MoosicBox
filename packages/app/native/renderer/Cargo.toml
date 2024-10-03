@@ -11,11 +11,11 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { path = "../../../assert", default-features = false }
-moosicbox_gigachad_transformer = { path = "../../../gigachad/transformer", default-features = false, features = [
+gigachad_transformer = { path = "../../../gigachad/transformer", default-features = false, features = [
     "calc",
     "html",
 ] }
+moosicbox_assert = { path = "../../../assert", default-features = false }
 moosicbox_task = { path = "../../../task", default-features = false }
 
 fltk      = { workspace = true, features = ["use-ninja"] }

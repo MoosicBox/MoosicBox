@@ -1,5 +1,6 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
+pub use gigachad_transformer;
 pub use moosicbox_admin_htmx as admin_htmx;
 pub use moosicbox_app_native_lib as app_native_lib;
 pub use moosicbox_app_native_renderer as app_native_renderer;
@@ -19,7 +20,6 @@ pub use moosicbox_database_connection as database_connection;
 pub use moosicbox_downloader as downloader;
 pub use moosicbox_env_utils as env_utils;
 pub use moosicbox_files as files;
-pub use moosicbox_gigachad_transformer as gigachad_transformer;
 pub use moosicbox_image as image;
 pub use moosicbox_json_utils as json_utils;
 pub use moosicbox_library as library;

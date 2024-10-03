@@ -3160,7 +3160,15 @@ dependencies = [
 name = "gigachad"
 version = "0.1.0"
 dependencies = [
- "moosicbox_gigachad_transformer",
+ "gigachad_transformer",
+]
+
+[[package]]
+name = "gigachad_transformer"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
+ "tl",
 ]
 
 [[package]]
@@ -4699,6 +4707,7 @@ dependencies = [
 name = "moosicbox"
 version = "0.1.0"
 dependencies = [
+ "gigachad_transformer",
  "moosicbox_admin_htmx",
  "moosicbox_app_native_lib",
  "moosicbox_app_native_renderer",
@@ -4718,7 +4727,6 @@ dependencies = [
  "moosicbox_downloader",
  "moosicbox_env_utils",
  "moosicbox_files",
- "moosicbox_gigachad_transformer",
  "moosicbox_image",
  "moosicbox_json_utils",
  "moosicbox_library",
@@ -4892,11 +4900,11 @@ version = "0.1.0"
 dependencies = [
  "fltk",
  "futures",
+ "gigachad_transformer",
  "log",
  "moosicbox_app_native_renderer",
  "moosicbox_assert",
  "moosicbox_env_utils",
- "moosicbox_gigachad_transformer",
  "moosicbox_task",
  "thiserror",
  "tokio",
@@ -4909,10 +4917,10 @@ dependencies = [
  "fltk",
  "flume",
  "futures",
+ "gigachad_transformer",
  "image",
  "log",
  "moosicbox_assert",
- "moosicbox_gigachad_transformer",
  "moosicbox_task",
  "reqwest 0.12.8",
  "thiserror",
@@ -5267,14 +5275,6 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "utoipa",
-]
-
-[[package]]
-name = "moosicbox_gigachad_transformer"
-version = "0.1.0"
-dependencies = [
- "thiserror",
- "tl",
 ]
 
 [[package]]

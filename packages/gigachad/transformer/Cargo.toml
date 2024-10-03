@@ -15,7 +15,7 @@ keywords = [
     "web",
 ]
 license = "MPL-2.0"
-name = "moosicbox_gigachad_transformer"
+name = "gigachad_transformer"
 readme = "README.md"
 repository = "https://github.com/MoosicBox/MoosicBox"
 version = "0.1.0"
