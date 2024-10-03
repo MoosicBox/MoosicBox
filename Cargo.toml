@@ -3,6 +3,7 @@ members = [
     "packages/aconverter",
     "packages/admin_htmx",
     "packages/app/native",
+    "packages/app/native/bundled",
     "packages/app/native/lib",
     "packages/app/native/renderer",
     "packages/app/native/ui",
