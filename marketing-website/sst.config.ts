@@ -6,7 +6,10 @@ export default $config({
             name: 'moosicbox-marketing',
             removal: input?.stage === 'prod' ? 'retain' : 'remove',
             home: 'aws',
-            providers: { aws: { region: 'us-east-1' }, cloudflare: true },
+            providers: {
+                aws: { region: 'us-east-1', version: '6.52.0' },
+                cloudflare: '5.40.0',
+            },
         };
     },
     async run() {
