@@ -9,10 +9,10 @@ use std::{
 };
 
 use atomic_float::AtomicF64;
-use audiotags::AudioTag;
 use bytes::Bytes;
 use futures::{StreamExt, TryStreamExt};
 use futures_core::{Future, Stream};
+use moosicbox_audiotags::AudioTag;
 use thiserror::Error;
 use tokio::{
     io::{AsyncSeekExt, AsyncWriteExt, BufWriter},
@@ -414,11 +414,15 @@ pub async fn search_for_cover(
         if let Some(tag) = tag {
             if let Some(tag_cover) = tag.album_cover() {
                 let cover_file_path = match tag_cover.mime_type {
-                    audiotags::MimeType::Png => save_path.join(format!("{filename}.png")),
-                    audiotags::MimeType::Jpeg => save_path.join(format!("{filename}.jpg")),
-                    audiotags::MimeType::Tiff => save_path.join(format!("{filename}.tiff")),
-                    audiotags::MimeType::Bmp => save_path.join(format!("{filename}.bmp")),
-                    audiotags::MimeType::Gif => save_path.join(format!("{filename}.gif")),
+                    moosicbox_audiotags::MimeType::Png => save_path.join(format!("{filename}.png")),
+                    moosicbox_audiotags::MimeType::Jpeg => {
+                        save_path.join(format!("{filename}.jpg"))
+                    }
+                    moosicbox_audiotags::MimeType::Tiff => {
+                        save_path.join(format!("{filename}.tiff"))
+                    }
+                    moosicbox_audiotags::MimeType::Bmp => save_path.join(format!("{filename}.bmp")),
+                    moosicbox_audiotags::MimeType::Gif => save_path.join(format!("{filename}.gif")),
                 };
                 save_bytes_to_file(tag_cover.data, &cover_file_path, None)?;
                 return Ok(Some(cover_file_path));

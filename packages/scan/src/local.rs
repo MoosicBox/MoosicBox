@@ -1,7 +1,6 @@
 use async_recursion::async_recursion;
-use audiotags::Tag;
 use futures::Future;
-use lofty::{AudioFile, ParseOptions};
+use moosicbox_audiotags::Tag;
 use moosicbox_core::{
     sqlite::{
         db::DbError,
@@ -11,6 +10,7 @@ use moosicbox_core::{
 };
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_files::{sanitize_filename, search_for_cover};
+use moosicbox_lofty::{AudioFile, ParseOptions};
 use regex::Regex;
 use std::{
     fs::Metadata,
@@ -41,7 +41,7 @@ pub enum ScanError {
     #[error(transparent)]
     Join(#[from] JoinError),
     #[error(transparent)]
-    Tag(#[from] audiotags::error::Error),
+    Tag(#[from] moosicbox_audiotags::error::Error),
     #[error(transparent)]
     IO(#[from] tokio::io::Error),
     #[error(transparent)]
@@ -194,7 +194,7 @@ fn scan_track(
                 }
                 _ => None,
             };
-            let lofty_tag = lofty::Probe::open(&path)
+            let moosicbox_lofty_tag = moosicbox_lofty::Probe::open(&path)
                 .expect("ERROR: Bad path provided!")
                 .options(ParseOptions::new().read_picture(false))
                 .read()
@@ -273,11 +273,11 @@ fn scan_track(
                 .and_then(|tag| tag.date())
                 .map(|date| date.to_string());
 
-            let audio_bitrate = lofty_tag.properties().audio_bitrate();
-            let overall_bitrate = lofty_tag.properties().overall_bitrate();
-            let sample_rate = lofty_tag.properties().sample_rate();
-            let bit_depth = lofty_tag.properties().bit_depth();
-            let channels = lofty_tag.properties().channels();
+            let audio_bitrate = moosicbox_lofty_tag.properties().audio_bitrate();
+            let overall_bitrate = moosicbox_lofty_tag.properties().overall_bitrate();
+            let sample_rate = moosicbox_lofty_tag.properties().sample_rate();
+            let bit_depth = moosicbox_lofty_tag.properties().bit_depth();
+            let channels = moosicbox_lofty_tag.properties().channels();
 
             log::debug!("====== {} ======", path.clone().to_str().unwrap());
             log::debug!("title: {}", title);

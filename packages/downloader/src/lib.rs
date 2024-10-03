@@ -12,13 +12,13 @@ use crate::{db::models::DownloadApiSource, queue::GenericProgressEvent};
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use atomic_float::AtomicF64;
-use audiotags::Tag;
 use db::{
     create_download_task, get_download_location,
     models::{CreateDownloadTask, DownloadItem, DownloadTask},
 };
 use futures::StreamExt;
 use id3::Timestamp;
+use moosicbox_audiotags::Tag;
 use moosicbox_config::get_config_dir_path;
 use moosicbox_core::{
     integer_range::{parse_id_ranges, ParseIdsError, ParseIntegersError},
@@ -725,7 +725,7 @@ async fn download_track_inner(
 #[derive(Debug, Error)]
 pub enum TagTrackFileError {
     #[error(transparent)]
-    Tag(#[from] audiotags::Error),
+    Tag(#[from] moosicbox_audiotags::Error),
 }
 
 pub async fn tag_track_file(track_path: &Path, track: &Track) -> Result<(), TagTrackFileError> {

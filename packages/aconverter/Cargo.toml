@@ -24,7 +24,7 @@ moosicbox_files = { version = "0.1.0", path = "../files", default-features = fal
 moosicbox_logging = { version = "0.1.0", path = "../logging", default-features = false }
 moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false }
 
-audiotags = { workspace = true }
+moosicbox_audiotags = { workspace = true }
 clap = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }

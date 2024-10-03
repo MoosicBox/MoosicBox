@@ -35,23 +35,23 @@ moosicbox_task = { version = "0.1.0", path = "../task", default-features = false
 actix-web = { workspace = true, optional = true }
 utoipa    = { workspace = true, optional = true }
 
-async-recursion = { workspace = true }
-async-trait     = { workspace = true }
-atomic_float    = { workspace = true }
-audiotags       = { workspace = true }
-futures         = { workspace = true }
-hyper           = { version = "1.4.1" }
-id3             = { workspace = true }
-lazy_static     = { workspace = true }
-log             = { workspace = true }
-regex           = { workspace = true }
-serde           = { workspace = true, features = ["derive"] }
-serde_json      = { workspace = true }
-strum           = { workspace = true }
-strum_macros    = { workspace = true }
-thiserror       = { workspace = true }
-tokio           = { workspace = true }
-tokio-util      = { workspace = true }
+async-recursion     = { workspace = true }
+async-trait         = { workspace = true }
+atomic_float        = { workspace = true }
+futures             = { workspace = true }
+hyper               = { version = "1.4.1" }
+id3                 = { workspace = true }
+lazy_static         = { workspace = true }
+log                 = { workspace = true }
+moosicbox_audiotags = { workspace = true }
+regex               = { workspace = true }
+serde               = { workspace = true, features = ["derive"] }
+serde_json          = { workspace = true }
+strum               = { workspace = true }
+strum_macros        = { workspace = true }
+thiserror           = { workspace = true }
+tokio               = { workspace = true }
+tokio-util          = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

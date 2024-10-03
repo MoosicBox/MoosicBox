@@ -29,26 +29,26 @@ moosicbox_task          = { version = "0.1.0", path = "../task", optional = true
 # API Dependencies
 utoipa = { workspace = true, optional = true }
 
-actix-files  = { workspace = true, optional = true }
-actix-web    = { workspace = true, optional = true }
-atomic_float = { workspace = true }
-audiotags    = { workspace = true }
-bytes        = { workspace = true }
-flume        = { workspace = true, optional = true }
-futures      = { workspace = true }
-futures-core = { workspace = true }
-lazy_static  = { workspace = true, optional = true }
-log          = { workspace = true }
-regex        = { workspace = true }
-reqwest      = { workspace = true }
-serde        = { workspace = true, features = ["derive"] }
-strum        = { workspace = true, optional = true }
-strum_macros = { workspace = true, optional = true }
-symphonia    = { workspace = true, optional = true }
-thiserror    = { workspace = true }
-tokio        = { workspace = true }
-tokio-stream = { workspace = true, optional = true }
-tokio-util   = { workspace = true, optional = true }
+actix-files         = { workspace = true, optional = true }
+actix-web           = { workspace = true, optional = true }
+atomic_float        = { workspace = true }
+bytes               = { workspace = true }
+flume               = { workspace = true, optional = true }
+futures             = { workspace = true }
+futures-core        = { workspace = true }
+lazy_static         = { workspace = true, optional = true }
+log                 = { workspace = true }
+moosicbox_audiotags = { workspace = true }
+regex               = { workspace = true }
+reqwest             = { workspace = true }
+serde               = { workspace = true, features = ["derive"] }
+strum               = { workspace = true, optional = true }
+strum_macros        = { workspace = true, optional = true }
+symphonia           = { workspace = true, optional = true }
+thiserror           = { workspace = true }
+tokio               = { workspace = true }
+tokio-stream        = { workspace = true, optional = true }
+tokio-util          = { workspace = true, optional = true }
 
 [features]
 default = [

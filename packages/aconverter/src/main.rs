@@ -5,9 +5,9 @@ use std::{
     str::FromStr,
 };
 
-use audiotags::Tag;
 use clap::Parser;
 use futures::StreamExt as _;
+use moosicbox_audiotags::Tag;
 use moosicbox_core::{
     sqlite::models::TrackApiSource,
     types::{from_extension_to_audio_format, AudioFormat},
@@ -106,7 +106,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[derive(Debug, Error)]
 pub enum TagTrackFileError {
     #[error(transparent)]
-    Tag(#[from] audiotags::Error),
+    Tag(#[from] moosicbox_audiotags::Error),
 }
 
 pub async fn tag_track_file(
