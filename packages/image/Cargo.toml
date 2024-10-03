@@ -19,7 +19,7 @@ path              = "src/main.rs"
 required-features = ["build-binary"]
 
 [dependencies]
-moosicbox_task = { path = "../task", default-features = false }
+moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
 
 bytes = { workspace = true }
 clap = { workspace = true, optional = true }

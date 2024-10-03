@@ -11,7 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_task = { path = "../task", optional = true, default-features = false }
+moosicbox_task = { version = "0.1.0", path = "../task", optional = true, default-features = false }
 
 bytes       = { workspace = true }
 flume       = { workspace = true, optional = true }

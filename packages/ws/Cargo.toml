@@ -14,15 +14,15 @@ version     = "0.1.0"
 ignored = ["strum"]
 
 [dependencies]
-moosicbox_assert = { path = "../assert", default-features = false }
-moosicbox_audio_zone = { path = "../audio_zone", default-features = false }
-moosicbox_core = { path = "../core", default-features = false }
-moosicbox_database = { path = "../database", default-features = false }
-moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
+moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
+moosicbox_audio_zone = { version = "0.1.0", path = "../audio_zone", default-features = false }
+moosicbox_core = { version = "0.1.0", path = "../core", default-features = false }
+moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
+moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
     "database",
 ] }
-moosicbox_logging = { path = "../logging", default-features = false }
-moosicbox_session = { path = "../session", default-features = false }
+moosicbox_logging = { version = "0.1.0", path = "../logging", default-features = false }
+moosicbox_session = { version = "0.1.0", path = "../session", default-features = false }
 
 async-trait = { workspace = true, optional = true }
 log         = { workspace = true, optional = true }

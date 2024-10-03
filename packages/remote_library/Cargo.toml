@@ -11,9 +11,9 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_core      = { path = "../core", default-features = false }
-moosicbox_music_api = { path = "../music_api", default-features = false }
-moosicbox_paging    = { path = "../paging", default-features = false }
+moosicbox_core      = { version = "0.1.0", path = "../core", default-features = false }
+moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false }
+moosicbox_paging    = { version = "0.1.0", path = "../paging", default-features = false }
 
 async-trait = { workspace = true }
 log         = { workspace = true }

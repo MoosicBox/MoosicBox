@@ -11,14 +11,14 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { path = "../assert", default-features = false }
-moosicbox_profiles = { path = "../profiles", default-features = false, features = [
+moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
+moosicbox_profiles = { version = "0.1.0", path = "../profiles", default-features = false, features = [
     "events",
 ] }
 
 # DB dependencies
-moosicbox_database = { path = "../database", optional = true, default-features = false }
-moosicbox_json_utils = { path = "../json_utils", optional = true, default-features = false, features = [
+moosicbox_database = { version = "0.1.0", path = "../database", optional = true, default-features = false }
+moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", optional = true, default-features = false, features = [
     "database",
 ] }
 nanoid = { workspace = true, optional = true }

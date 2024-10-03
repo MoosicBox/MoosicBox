@@ -14,17 +14,17 @@ version     = "0.1.0"
 ignored = ["strum"]
 
 [dependencies]
-moosicbox_assert        = { path = "../assert", default-features = false }
-moosicbox_async_service = { path = "../async_service", optional = true, default-features = false }
-moosicbox_audio_decoder = { path = "../audio_decoder", optional = true, default-features = false }
-moosicbox_audio_output  = { path = "../audio_output", optional = true, default-features = false }
-moosicbox_config        = { path = "../config", default-features = false }
-moosicbox_core          = { path = "../core", optional = true, default-features = false }
-moosicbox_database      = { path = "../database", optional = true, default-features = false }
-moosicbox_image         = { path = "../image", optional = true, default-features = false }
-moosicbox_music_api     = { path = "../music_api", optional = true, default-features = false }
-moosicbox_stream_utils  = { path = "../stream_utils", default-features = false }
-moosicbox_task          = { path = "../task", optional = true, default-features = false }
+moosicbox_assert        = { version = "0.1.0", path = "../assert", default-features = false }
+moosicbox_async_service = { version = "0.1.0", path = "../async_service", optional = true, default-features = false }
+moosicbox_audio_decoder = { version = "0.1.0", path = "../audio_decoder", optional = true, default-features = false }
+moosicbox_audio_output  = { version = "0.1.0", path = "../audio_output", optional = true, default-features = false }
+moosicbox_config        = { version = "0.1.0", path = "../config", default-features = false }
+moosicbox_core          = { version = "0.1.0", path = "../core", optional = true, default-features = false }
+moosicbox_database      = { version = "0.1.0", path = "../database", optional = true, default-features = false }
+moosicbox_image         = { version = "0.1.0", path = "../image", optional = true, default-features = false }
+moosicbox_music_api     = { version = "0.1.0", path = "../music_api", optional = true, default-features = false }
+moosicbox_stream_utils  = { version = "0.1.0", path = "../stream_utils", default-features = false }
+moosicbox_task          = { version = "0.1.0", path = "../task", optional = true, default-features = false }
 
 # API Dependencies
 utoipa = { workspace = true, optional = true }

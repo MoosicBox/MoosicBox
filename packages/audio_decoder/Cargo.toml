@@ -11,11 +11,11 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_stream_utils = { path = "../stream_utils", default-features = false, features = [
+moosicbox_stream_utils = { version = "0.1.0", path = "../stream_utils", default-features = false, features = [
     "remote-bytestream",
     "stalled-monitor",
 ] }
-moosicbox_task = { path = "../task", default-features = false }
+moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
 
 bytes      = { workspace = true }
 flume      = { workspace = true }

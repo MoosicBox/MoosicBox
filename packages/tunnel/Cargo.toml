@@ -14,7 +14,7 @@ version     = "0.1.0"
 ignored = ["strum"]
 
 [dependencies]
-moosicbox_assert = { path = "../assert", default-features = false }
+moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
 
 # Base64 dependencies
 base64 = { workspace = true, optional = true }

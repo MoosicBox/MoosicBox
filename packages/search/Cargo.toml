@@ -11,14 +11,14 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_config = { path = "../config", default-features = false }
-moosicbox_core = { path = "../core", default-features = false, features = [
+moosicbox_config = { version = "0.1.0", path = "../config", default-features = false }
+moosicbox_core = { version = "0.1.0", path = "../core", default-features = false, features = [
     "tantivy",
 ] }
-moosicbox_json_utils = { path = "../json_utils", default-features = false, features = [
+moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
     "tantivy",
 ] }
-moosicbox_task = { path = "../task" }
+moosicbox_task = { version = "0.1.0", path = "../task" }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -33,7 +33,7 @@ thiserror = { workspace = true }
 tokio     = { workspace = true }
 
 [dev-dependencies]
-moosicbox_config = { path = "../config", default-features = false, features = [
+moosicbox_config = { version = "0.1.0", path = "../config", default-features = false, features = [
     "test",
 ] }
 

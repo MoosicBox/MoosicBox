@@ -11,12 +11,12 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { path = "../assert", default-features = false }
-moosicbox_task   = { path = "../task", default-features = false }
+moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
+moosicbox_task   = { version = "0.1.0", path = "../task", default-features = false }
 
 # Scanner dependencies
 kanal                   = { workspace = true, optional = true }
-moosicbox_async_service = { path = "../async_service", optional = true, default-features = false }
+moosicbox_async_service = { version = "0.1.0", path = "../async_service", optional = true, default-features = false }
 strum_macros            = { workspace = true, optional = true }
 
 hostname  = { workspace = true }

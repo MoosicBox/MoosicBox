@@ -11,31 +11,33 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { path = "../assert", default-features = false }
-moosicbox_audio_decoder = { path = "../audio_decoder", default-features = false }
-moosicbox_audio_output = { path = "../audio_output", default-features = false }
-moosicbox_auth = { path = "../auth", default-features = false }
-moosicbox_channel_utils = { path = "../channel_utils", default-features = false, features = [
+moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
+moosicbox_audio_decoder = { version = "0.1.0", path = "../audio_decoder", default-features = false }
+moosicbox_audio_output = { version = "0.1.0", path = "../audio_output", default-features = false }
+moosicbox_auth = { version = "0.1.0", path = "../auth", default-features = false }
+moosicbox_channel_utils = { version = "0.1.0", path = "../channel_utils", default-features = false, features = [
     "futures-channel",
 ] }
-moosicbox_core = { path = "../core", default-features = false }
-moosicbox_database = { path = "../database", default-features = false }
-moosicbox_env_utils = { path = "../env_utils", default-features = false }
-moosicbox_files = { path = "../files", default-features = false, features = [
+moosicbox_core = { version = "0.1.0", path = "../core", default-features = false }
+moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
+moosicbox_env_utils = { version = "0.1.0", path = "../env_utils", default-features = false }
+moosicbox_files = { version = "0.1.0", path = "../files", default-features = false, features = [
     "api",
     "files",
     "range",
     "track-range",
 ] }
-moosicbox_image = { path = "../image", default-features = false, features = [
+moosicbox_image = { version = "0.1.0", path = "../image", default-features = false, features = [
     "image",
 ] }
-moosicbox_music_api = { path = "../music_api", default-features = false }
-moosicbox_player = { path = "../player", default-features = false }
-moosicbox_stream_utils = { path = "../stream_utils", default-features = false }
-moosicbox_task = { path = "../task", default-features = false }
-moosicbox_tunnel = { path = "../tunnel", default-features = false }
-moosicbox_ws = { path = "../ws", default-features = false, features = ["ws"] }
+moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false }
+moosicbox_player = { version = "0.1.0", path = "../player", default-features = false }
+moosicbox_stream_utils = { version = "0.1.0", path = "../stream_utils", default-features = false }
+moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
+moosicbox_tunnel = { version = "0.1.0", path = "../tunnel", default-features = false }
+moosicbox_ws = { version = "0.1.0", path = "../ws", default-features = false, features = [
+    "ws",
+] }
 
 # Base64 dependencies
 base64 = { workspace = true, optional = true }

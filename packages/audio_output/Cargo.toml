@@ -11,16 +11,16 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert        = { path = "../assert", default-features = false }
-moosicbox_audio_decoder = { path = "../audio_decoder", default-features = false }
-moosicbox_env_utils     = { path = "../env_utils", default-features = false }
-moosicbox_resampler     = { path = "../resampler", default-features = false }
-moosicbox_stream_utils  = { path = "../stream_utils", default-features = false }
-moosicbox_task          = { path = "../task", default-features = false }
+moosicbox_assert        = { version = "0.1.0", path = "../assert", default-features = false }
+moosicbox_audio_decoder = { version = "0.1.0", path = "../audio_decoder", default-features = false }
+moosicbox_env_utils     = { version = "0.1.0", path = "../env_utils", default-features = false }
+moosicbox_resampler     = { version = "0.1.0", path = "../resampler", default-features = false }
+moosicbox_stream_utils  = { version = "0.1.0", path = "../stream_utils", default-features = false }
+moosicbox_task          = { version = "0.1.0", path = "../task", default-features = false }
 
 # API Dependencies
 actix-web        = { workspace = true, optional = true }
-moosicbox_paging = { path = "../paging", optional = true }
+moosicbox_paging = { version = "0.1.0", path = "../paging", optional = true }
 serde            = { workspace = true, optional = true }
 utoipa           = { workspace = true, optional = true }
 
@@ -30,7 +30,7 @@ rb   = { workspace = true, optional = true }
 
 # Encoders
 fdk-aac                 = { workspace = true, optional = true }
-moosicbox_audio_encoder = { path = "../audio_encoder", default-features = false, optional = true }
+moosicbox_audio_encoder = { version = "0.1.0", path = "../audio_encoder", default-features = false, optional = true }
 mp3lame-encoder         = { workspace = true, optional = true }
 ogg                     = { workspace = true, optional = true }
 opus                    = { workspace = true, optional = true }
