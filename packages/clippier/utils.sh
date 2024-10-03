@@ -152,6 +152,32 @@ function cargo_each_package_each_feature() {
     echo "done"
 }
 
+function cargo_each_package() {
+    while read -r package; do
+        local command="cargo $*"
+        local dir="${package/Cargo.toml/}"
+
+        if ! (
+            cd "$dir" || return 1
+
+            echo "IN \`$dir\` RUNNING \`$command\`"
+
+            if [[ -z "$CLIPPIER_DRY_RUN" ]]; then
+                if cargo "$@"; then
+                    echo "IN \`$dir\` FINISHED \`$command\`"
+                else
+                    >&2 echo "IN \`$dir\` FAILED \`$command\`"
+                    return 1
+                fi
+            fi
+        ); then
+            return 1
+        fi
+    done <<<"$(find packages -name 'Cargo.toml')"
+
+    echo "done"
+}
+
 function cargo_each_package_each_feature_permutation() {
     while read -r package; do
         local command="cargo_each_feature_permutation $*"
