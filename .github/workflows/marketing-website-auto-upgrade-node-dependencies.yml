@@ -1,9 +1,9 @@
-name: App Website Auto-upgrade Node Dependencies
+name: Marketing Website Auto-upgrade Node Dependencies
 
 on:
     workflow_dispatch:
     schedule:
-        - cron: '0 4 * * *'
+        - cron: '0 6 * * *'
 
 env:
     CARGO_TERM_COLOR: always
@@ -38,14 +38,14 @@ jobs:
                       ${{ matrix.os }}-pnpm-store-
 
             - name: pnpm install
-              working-directory: app-website
+              working-directory: marketing-website
               run: |
                   pnpm install
                   pnpm sst install
 
             - name: Upgrade
               id: upgrade
-              working-directory: app-website
+              working-directory: marketing-website
               shell: bash
               run: |
                   pnpm update
@@ -58,13 +58,13 @@ jobs:
                   fi
 
             - name: Validate
-              if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
-              working-directory: app-website
+              if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
+              working-directory: marketing-website
               shell: bash
               run: pnpm validate
 
             - name: Commit
-              if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
+              if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
               shell: bash
               run: |
                   git config user.name "MoosicBoxBot"

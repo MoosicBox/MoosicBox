@@ -1,0 +1,124 @@
+---
+
+---
+
+<header class="header-nav" data-turbo-permanent id="header-nav">
+    <div class="header-nav-header">
+        <a class="header-nav-header-link" href="/">
+            <img class="header-nav-header-logo-icon" src="/img/icon128.png" />
+            <h1 class="header-nav-header-link-text">MoosicBox</h1>
+        </a>
+    </div>
+    <div class="header-nav-items">
+        <ul>
+            <li>
+                <a class="header-nav-items-link" href="/download">Download</a>
+            </li>
+            <li>
+                <a
+                    class="header-nav-items-link"
+                    href="https://app.moosicbox.com/login">Log in</a
+                >
+            </li>
+            <li>
+                <a
+                    class="header-nav-items-link header-nav-items-link-try-now header-nav-items-link-try-now-desktop"
+                    href="/try-now">Start Free Trial</a
+                >
+                <a
+                    class="header-nav-items-link header-nav-items-link-try-now header-nav-items-link-try-now-mobile"
+                    href="/try-now">Try</a
+                >
+            </li>
+        </ul>
+    </div>
+</header>
+
+<style>
+    .header-nav {
+        display: flex;
+        position: fixed;
+        top: 0;
+        width: 100%;
+        background: #080a0b;
+        z-index: 10;
+    }
+
+    .header-nav-header {
+        padding: 0 20px;
+    }
+
+    .header-nav-header-logo-icon {
+        width: 40px;
+        height: 40px;
+        margin-right: 5px;
+    }
+
+    .header-nav-header-link {
+        display: flex;
+        align-items: center;
+        color: white;
+        text-decoration: none;
+    }
+
+    .header-nav-header-link-text {
+        font-size: 20px;
+    }
+
+    .header-nav-items {
+        display: flex;
+        margin-left: auto;
+        padding: 0 20px;
+    }
+
+    .header-nav-items ul {
+        display: flex;
+        list-style-type: none;
+        margin-left: auto;
+    }
+
+    .header-nav-items li {
+        display: inline-block;
+    }
+
+    .header-nav-items li:not(:first-of-type) {
+        margin-left: 20px;
+    }
+
+    .header-nav-items-link {
+        color: white;
+    }
+
+    .header-nav-items-link-try-now {
+        background: #282a2b;
+        padding: 8px;
+        border-radius: 5px;
+        color: white;
+    }
+
+    .header-nav-items-link-try-now-mobile {
+        display: none;
+    }
+
+    @media (max-width: 600px) {
+        .header-nav-header {
+            padding: 0 10px;
+        }
+
+        .header-nav-items {
+            padding: 0 10px;
+        }
+
+        .header-nav-items li:not(:first-of-type) {
+            margin-left: 10px;
+        }
+
+        .header-nav-items-link-try-now-desktop {
+            display: none;
+        }
+
+        .header-nav-items-link-try-now-mobile {
+            display: initial;
+        }
+    }
+</style>

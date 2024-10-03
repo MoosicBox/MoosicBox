@@ -1,4 +1,4 @@
-name: App Website Deploy
+name: Marketing Website Deploy
 
 on:
     workflow_dispatch:
@@ -22,7 +22,7 @@ jobs:
                   run_install: false
 
             - name: Deploy
-              working-directory: app-website
+              working-directory: marketing-website
               shell: bash
               env:
                   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
