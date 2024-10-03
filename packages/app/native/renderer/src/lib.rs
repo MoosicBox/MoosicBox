@@ -558,7 +558,7 @@ fn draw_elements(
         .and_then(|x| {
             x.calculated_position.as_ref().and_then(|x| match x {
                 gigachad_transformer::LayoutPosition::Wrap { row, col } => Some((*row, *col)),
-                moosicbox_gigachad_transformer::LayoutPosition::Default => None,
+                gigachad_transformer::LayoutPosition::Default => None,
             })
         })
         .unwrap_or((0, 0));
@@ -568,10 +568,8 @@ fn draw_elements(
             .container_element()
             .and_then(|x| {
                 x.calculated_position.as_ref().and_then(|x| match x {
-                    moosicbox_gigachad_transformer::LayoutPosition::Wrap { row, col } => {
-                        Some((*row, *col))
-                    }
-                    moosicbox_gigachad_transformer::LayoutPosition::Default => None,
+                    gigachad_transformer::LayoutPosition::Wrap { row, col } => Some((*row, *col)),
+                    gigachad_transformer::LayoutPosition::Default => None,
                 })
             })
             .unwrap_or((row, col));
