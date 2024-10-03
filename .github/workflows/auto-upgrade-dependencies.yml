@@ -30,23 +30,22 @@ jobs:
                       cargo run -p moosicbox_clippier \
                           features \
                           packages/server \
-                          --chunked 5 \
                           -o json \
-                          --spread \
+                          --features default \
                           | jq -rc \
-                              '[[
+                              '[
                                   .[]
                                   | {
                                       "name": (.name | sub("^moosicbox_"; "")),
                                       "path": (.path),
-                                      "features": ["default"],
+                                      "features": (.features),
                                       "os": (.os + "-latest"),
                                       "dependencies": (.dependencies),
                                       "env": (.env)
                                   }
                                   | del(.dependencies | nulls)
                                   | del(.env | nulls)
-                              ][0]]'
+                              ]'
                   )
                   echo "Using matrix (raw):"
                   echo $MATRIX
