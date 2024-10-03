@@ -10,8 +10,65 @@ env:
     AWS_REGION: us-east-1
 
 jobs:
-    upgrade:
+    build-matrix:
+        name: Build matrix
         runs-on: ubuntu-latest
+        outputs:
+            matrix: ${{ steps.build-matrix-step.outputs.matrix }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - uses: dtolnay/rust-toolchain@stable
+
+            - name: Build matrix JSON
+              id: build-matrix-step
+              run: |
+                  MATRIX=$(
+                      cargo run -p moosicbox_clippier \
+                          features \
+                          packages/server \
+                          --chunked 5 \
+                          -o json \
+                          --spread \
+                          | jq -rc \
+                              '[
+                                  .[]
+                                  | {
+                                      "name": (.name | sub("^moosicbox_"; "")),
+                                      "path": (.path),
+                                      "features": (.features),
+                                      "os": (.os + "-latest"),
+                                      "dependencies": (.dependencies),
+                                      "env": (.env)
+                                  }
+                                  | del(.dependencies | nulls)
+                                  | del(.env | nulls)
+                              ]'
+                  )
+                  echo "Using matrix (raw):"
+                  echo $MATRIX
+                  echo "Using matrix:"
+                  echo $MATRIX | jq
+                  echo 'matrix<<EOF' >> $GITHUB_OUTPUT
+                  echo $MATRIX >> $GITHUB_OUTPUT
+                  echo 'EOF' >> $GITHUB_OUTPUT
+
+    upgrade:
+        runs-on: ${{ matrix.package.os }}
+
+        needs: build-matrix
+
+        strategy:
+            fail-fast: false
+
+            matrix:
+                package: ${{ fromJson(needs.build-matrix.outputs.matrix) }}
+
+        outputs:
+            upgraded: ${{ steps.upgrade.outputs.upgraded == 'true' }}
 
         steps:
             - uses: actions/checkout@v4
@@ -42,44 +99,88 @@ jobs:
                       echo "upgraded=false" >> "$GITHUB_OUTPUT"
                   fi
 
-            - name: Build
-              if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
-              shell: bash
-              run: |
-                  sudo apt-get update && sudo apt-get install \
-                      curl \
-                      wget \
-                      file \
-                      libssl-dev \
-                      libayatana-appindicator3-dev \
-                      librsvg2-dev \
-                      libasound2-dev \
-                      libwebkit2gtk-4.1-dev \
-                      build-essential \
-                      libx11-dev \
-                      libxext-dev \
-                      libxft-dev \
-                      libxinerama-dev \
-                      libxcursor-dev \
-                      libxrender-dev \
-                      libxfixes-dev \
-                      libpango1.0-dev \
-                      libgl1-mesa-dev \
-                      libglu1-mesa-dev \
-                      libgtk-3-dev \
-                      libsoup-3.0-dev\
-                      pulseaudio \
-                      libvips-dev
-                  STATIC_TOKEN=123 TUNNEL_ACCESS_TOKEN=123 cargo build
+            - name: Install winget
+              if: ${{ steps.upgrade.outputs.upgraded == 'true' && matrix.package.os == 'windows-latest' }}
+              uses: Cyberboss/install-winget@v1
 
-            - name: Test
-              if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
+            - name: Install dependencies
+              if: ${{ steps.upgrade.outputs.upgraded == 'true' && matrix.package.dependencies }}
+              run: ${{ matrix.package.dependencies }}
+
+            - name: Clippy ${{ matrix.package.name }}
+              if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
               shell: bash
               run: |
-                  STATIC_TOKEN=123 TUNNEL_ACCESS_TOKEN=123 cargo test
+                  (cd ${{ matrix.package.path }}; \
+                      while read -r feature; do \
+                          command="${{ matrix.package.env }} cargo clippy --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}"
+                          echo "RUNNING \`$command\`"
+                          if ${{ matrix.package.env }} cargo clippy \
+                              --no-default-features \
+                              --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}; then
+                              echo "SUCCESS \`$command\`";
+                          else
+                              >&2 echo "FAILED \`$command\`";
+                              return 1
+                          fi
+                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
+
+            - name: Build ${{ matrix.package.name }}
+              if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
+              shell: bash
+              run: |
+                  (cd ${{ matrix.package.path }}; \
+                      while read -r feature; do \
+                          command="${{ matrix.package.env }} cargo build --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}"
+                          echo "RUNNING \`$command\`"
+                          if ${{ matrix.package.env }} cargo build \
+                              --no-default-features \
+                              --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}; then
+                              echo "SUCCESS \`$command\`";
+                          else
+                              >&2 echo "FAILED \`$command\`";
+                              return 1
+                          fi
+                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
+
+            - name: Run ${{ matrix.package.name }} tests
+              if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
+              shell: bash
+              run: |
+                  (cd ${{ matrix.package.path }}; \
+                      while read -r feature; do \
+                          command="${{ matrix.package.env }} cargo test --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}"
+                          echo "RUNNING \`$command\`"
+                          if ${{ matrix.package.env }} cargo test \
+                              --no-default-features \
+                              --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}; then
+                              echo "SUCCESS \`$command\`";
+                          else
+                              >&2 echo "FAILED \`$command\`";
+                              return 1
+                          fi
+                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
+
+            - name: Format ${{ matrix.package.name }}
+              if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
+              shell: bash
+              run: |
+                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo fmt)
+
+            - name: Install cargo-machete
+              if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
+              shell: bash
+              run: |
+                  cargo install cargo-machete
+
+            - name: Validate ${{ matrix.package.name }} dependencies (machete)
+              if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
+              shell: bash
+              run: |
+                  ${{ matrix.package.env }} cargo machete --with-metadata ${{ matrix.package.path }}
 
             - name: Commit
-              if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
+              if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
               shell: bash
               run: |
                   git config user.name "MoosicBoxBot"
