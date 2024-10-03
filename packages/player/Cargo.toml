@@ -65,7 +65,7 @@ default = [
 fail-on-warnings = []
 
 api     = ["dep:actix-web", "moosicbox_music_api/api"]
-openapi = ["dep:utoipa"]
+openapi = ["dep:utoipa", "moosicbox_core/openapi"]
 
 # Player audio outputs
 asio                = ["moosicbox_audio_output/asio"]

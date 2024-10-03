@@ -31,7 +31,7 @@ default = ["all-formats", "api", "db", "openapi"]
 fail-on-warnings = []
 
 api     = ["moosicbox_database/api"]
-openapi = ["dep:utoipa"]
+openapi = ["dep:utoipa", "moosicbox_core/openapi"]
 
 db = [
     "dep:async-trait",

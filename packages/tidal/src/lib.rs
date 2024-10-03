@@ -1776,6 +1776,7 @@ pub async fn track(
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, EnumString, AsRefStr)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum SearchType {
     Artists,
     Albums,

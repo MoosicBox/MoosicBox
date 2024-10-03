@@ -46,6 +46,8 @@ api = ["dep:actix-web", "dep:moosicbox_paging", "moosicbox_database/api"]
 openapi = [
     "dep:utoipa",
     "moosicbox_audio_zone/openapi",
+    "moosicbox_core/openapi",
+    "moosicbox_library/openapi",
     "moosicbox_paging/openapi",
 ]
 

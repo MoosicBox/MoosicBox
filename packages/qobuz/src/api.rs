@@ -71,6 +71,7 @@ pub struct Api;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ApiAlbum {
     Qobuz(ApiQobuzAlbum),
 }
@@ -163,6 +164,7 @@ pub async fn user_login_endpoint(
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiQobuzAlbum {
     pub id: String,
     pub artist: String,
@@ -177,6 +179,7 @@ pub struct ApiQobuzAlbum {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiQobuzRelease {
     pub id: String,
     pub artist: String,
@@ -192,6 +195,7 @@ pub struct ApiQobuzRelease {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ApiRelease {
     Qobuz(ApiQobuzRelease),
 }
@@ -256,6 +260,7 @@ pub struct ApiQobuzTrack {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ApiArtist {
     Qobuz(ApiQobuzArtist),
 }
@@ -272,6 +277,7 @@ impl ToApi<ApiArtist> for QobuzArtist {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiQobuzArtist {
     pub id: u64,
     pub contains_cover: bool,

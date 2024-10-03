@@ -91,6 +91,7 @@ impl AsId for LibraryArtist {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiLibraryArtist {
     pub artist_id: u64,
     pub title: String,
@@ -442,6 +443,7 @@ pub enum ApiAlbum {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiLibraryAlbum {
     pub album_id: u64,
     pub title: String,
@@ -779,6 +781,7 @@ impl ApiTrack {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiLibraryTrack {
     pub track_id: u64,
     pub number: u32,

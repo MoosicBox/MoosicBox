@@ -95,7 +95,11 @@ files = [
     "dep:tokio-stream",
     "dep:tokio-util",
 ]
-openapi = ["dep:utoipa", "moosicbox_core?/openapi"]
+openapi = [
+    "dep:utoipa",
+    "moosicbox_core?/openapi",
+    "moosicbox_music_api?/openapi",
+]
 range = ["dep:moosicbox_audio_output"]
 track-range = ["dep:moosicbox_audio_output"]
 

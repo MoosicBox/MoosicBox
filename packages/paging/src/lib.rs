@@ -24,17 +24,18 @@ pub enum Page<T> {
 }
 
 #[cfg(feature = "openapi")]
-impl<'__s, T> utoipa::ToSchema<'__s> for Page<T> {
-    fn schema() -> (
-        &'__s str,
-        utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
-    ) {
+impl<T> utoipa::PartialSchema for Page<T> {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
         use utoipa::openapi::{ObjectBuilder, RefOr, Schema};
 
-        (
-            "Page",
-            RefOr::T(Schema::Object(ObjectBuilder::new().build())),
-        )
+        RefOr::T(Schema::Object(ObjectBuilder::new().build()))
+    }
+}
+
+#[cfg(feature = "openapi")]
+impl<T> utoipa::ToSchema for Page<T> {
+    fn name() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed("Page")
     }
 }
 
