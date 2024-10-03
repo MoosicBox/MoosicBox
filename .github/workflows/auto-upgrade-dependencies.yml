@@ -179,7 +179,7 @@ jobs:
                   ${{ matrix.package.env }} cargo machete --with-metadata ${{ matrix.package.path }}
 
             - name: Commit
-              if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
+              if: ${{ steps.upgrade.outputs.upgraded == 'true' && success() }}
               shell: bash
               run: |
                   git config user.name "MoosicBoxBot"
@@ -188,3 +188,16 @@ jobs:
                   git commit --message "Upgrade Dependencies"
                   echo "Pushing upgrades"
                   git push origin master
+
+            - name: Commit
+              if: ${{ steps.upgrade.outputs.upgraded == 'true' && failure() }}
+              shell: bash
+              run: |
+                  branch="$(date +"auto-upgrade-%Y%m%d%H%M%S")"
+                  git config user.name "MoosicBoxBot"
+                  git config user.email "MoosicBoxBot@gmail.com"
+                  git checkout -b "$branch"
+                  git add .
+                  git commit --message "Upgrade Dependencies"
+                  echo "Pushing upgrades"
+                  git push origin "$branch"
