@@ -5,12 +5,9 @@ function getCustomDomain() {
     };
 }
 
-const domain = process.env.DOMAIN || 'moosicbox.com';
-
-if (!domain) throw new Error('Missing DOMAIN environment variable');
-
 const isProd = $app.stage === 'prod';
 const subdomain = isProd ? '' : `marketing-${$app.stage}.`;
+const domain = process.env.DOMAIN ?? 'moosicbox.com';
 const domainName = `${subdomain}${domain}`;
 
 const customDomain = getCustomDomain();
