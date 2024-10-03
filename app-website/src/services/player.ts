@@ -57,8 +57,11 @@ const onPlaybackQualityChangedListener =
 export const onPlaybackQualityChanged = onPlaybackQualityChangedListener.on;
 export const offPlaybackQualityChanged = onPlaybackQualityChangedListener.off;
 export const playbackQuality = _playbackQuality;
+type PlaybackQualityType = ReturnType<typeof _playbackQuality>;
 export const setPlaybackQuality = (
-    value: Parameters<typeof _setPlaybackQuality>[0],
+    value:
+        | PlaybackQualityType
+        | ((old: PlaybackQualityType) => PlaybackQualityType),
     trigger = true,
 ) => {
     const old = _playbackQuality();
@@ -93,8 +96,11 @@ export const onCurrentPlaybackTargetChanged =
 export const offCurrentPlaybackTargetChanged =
     onCurrentPlaybackTargetChangedListener.off;
 export const currentPlaybackTarget = _currentPlaybackTarget;
+type CurrentPlaybackTargetType = ReturnType<typeof _currentPlaybackTarget>;
 export const setCurrentPlaybackTarget = (
-    value: Parameters<typeof _setCurrentPlaybackTarget>[0],
+    value:
+        | CurrentPlaybackTargetType
+        | ((old: CurrentPlaybackTargetType) => CurrentPlaybackTargetType),
     trigger = true,
 ) => {
     const old = _currentPlaybackTarget();
@@ -144,8 +150,11 @@ const onCurrentSeekChangedListener =
 export const onCurrentSeekChanged = onCurrentSeekChangedListener.on;
 export const offCurrentSeekChanged = onCurrentSeekChangedListener.off;
 export const currentSeek = _currentSeek;
+type CurrentSeekType = ReturnType<typeof _currentSeek>;
 export const setCurrentSeek = (
-    value: Parameters<typeof _setCurrentSeek>[0],
+    value:
+        | CurrentSeekType
+        | ((old: CurrentSeekType) => CurrentSeekType),
     trigger = true,
 ) => {
     const old = _currentSeek();
@@ -176,8 +185,11 @@ export const onCurrentTrackLengthChanged =
 export const offCurrentTrackLengthChanged =
     onCurrentTrackLengthChangedListener.off;
 export const currentTrackLength = _currentTrackLength;
+type CurrentTrackLengthType = ReturnType<typeof _currentTrackLength>;
 export const setCurrentTrackLength = (
-    value: Parameters<typeof _setCurrentTrackLength>[0],
+    value:
+        | CurrentTrackLengthType
+        | ((old: CurrentTrackLengthType) => CurrentTrackLengthType),
     trigger = true,
 ) => {
     const old = _currentTrackLength();
@@ -213,8 +225,11 @@ const onPlaylistPositionChangedListener =
 export const onPlaylistPositionChanged = onPlaylistPositionChangedListener.on;
 export const offPlaylistPositionChanged = onPlaylistPositionChangedListener.off;
 export const playlistPosition = _playlistPosition;
+type PlaylistPositionType = ReturnType<typeof _playlistPosition>;
 export const setPlaylistPosition = (
-    value: Parameters<typeof _setPlaylistPosition>[0],
+    value:
+        | PlaylistPositionType
+        | ((old: PlaylistPositionType) => PlaylistPositionType),
     trigger = true,
 ) => {
     const old = _playlistPosition();
@@ -241,8 +256,11 @@ const onPlaylistChangedListener =
 export const onPlaylistChanged = onPlaylistChangedListener.on;
 export const offPlaylistChanged = onPlaylistChangedListener.off;
 export const playlist = _playlist;
+type PlaylistType = ReturnType<typeof _playlist>;
 export const setPlaylist = (
-    value: Parameters<typeof _setPlaylist>[0],
+    value:
+        | PlaylistType
+        | ((old: PlaylistType) => PlaylistType),
     trigger = true,
 ) => {
     const old = _playlist();
@@ -1052,7 +1070,7 @@ export function updateSessionPartial(
             if (typeof playlistPosition() === 'number') {
                 const track =
                     state.currentPlaybackSession.playlist.tracks[
-                        playlistPosition()!
+                    playlistPosition()!
                     ];
 
                 if (track) {
@@ -1184,7 +1202,7 @@ if (!isServer) {
         });
     }
 
-    document.body.onkeydown = function (e) {
+    document.body.onkeydown = function(e) {
         const target = e.target as HTMLElement;
 
         if (
