@@ -35,7 +35,7 @@ jobs:
                   MATRIX=$(
                       cargo run -p moosicbox_clippier \
                           features \
-                          Cargo.toml \
+                          . \
                           --chunked 5 \
                           -o json \
                           --spread \
