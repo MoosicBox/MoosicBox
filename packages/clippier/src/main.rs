@@ -41,6 +41,9 @@ enum Commands {
         #[arg(short, long)]
         spread: bool,
 
+        #[arg(long)]
+        features: Option<String>,
+
         #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
         output: OutputType,
     },
@@ -58,6 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             max,
             chunked,
             spread,
+            features: specific_features,
             output,
         } => {
             let path = PathBuf::from_str(&file)?;
@@ -65,6 +69,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             log::debug!("Loading file '{:?}'", cargo_path);
             let source = std::fs::read_to_string(&cargo_path)?;
             let value: Value = toml::from_str(&source)?;
+
+            let specific_features =
+                specific_features.map(|x| x.split(",").map(|x| x.to_string()).collect_vec());
 
             match output {
                 OutputType::Json => {
@@ -83,18 +90,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         for file in workspace_members {
                             let path = PathBuf::from_str(file)?;
 
-                            packages.extend(process_configs(&path, offset, max, chunked, spread)?);
+                            packages.extend(process_configs(
+                                &path,
+                                offset,
+                                max,
+                                chunked,
+                                spread,
+                                specific_features.as_deref(),
+                            )?);
                         }
                         println!("{}", serde_json::to_value(packages).unwrap());
                     } else {
                         let value: serde_json::Value = serde_json::to_value(process_configs(
-                            &path, offset, max, chunked, spread,
+                            &path,
+                            offset,
+                            max,
+                            chunked,
+                            spread,
+                            specific_features.as_deref(),
                         )?)?;
                         println!("{value}");
                     }
                 }
                 OutputType::Raw => {
-                    let features = fetch_features(&value, offset, max);
+                    let features =
+                        fetch_features(&value, offset, max, specific_features.as_deref());
                     if chunked.is_some() {
                         panic!("chunked arg is not supported for raw output");
                     }
@@ -113,6 +133,7 @@ fn process_configs(
     max: Option<u16>,
     chunked: Option<u16>,
     spread: bool,
+    specific_features: Option<&[String]>,
 ) -> Result<Vec<serde_json::Map<String, serde_json::Value>>, Box<dyn std::error::Error>> {
     log::debug!("Loading file '{:?}'", path);
     let cargo_path = path.join("Cargo.toml");
@@ -150,7 +171,11 @@ fn process_configs(
         .and_then(|x| x.as_str())
         .map(|x| x.to_string())
     {
-        let features = process_features(fetch_features(&value, offset, max), chunked, spread);
+        let features = process_features(
+            fetch_features(&value, offset, max, specific_features),
+            chunked,
+            spread,
+        );
 
         for config in configs {
             match &features {
@@ -313,13 +338,19 @@ fn process_features(features: Vec<String>, chunked: Option<u16>, spread: bool) -
     }
 }
 
-fn fetch_features(value: &Value, offset: Option<u16>, max: Option<u16>) -> Vec<String> {
+fn fetch_features(
+    value: &Value,
+    offset: Option<u16>,
+    max: Option<u16>,
+    specific_features: Option<&[String]>,
+) -> Vec<String> {
     if let Some(features) = value.get("features") {
         if let Some(features) = features.as_table() {
             let offset = offset.unwrap_or_default().into();
             let feature_count = features.keys().len() - offset;
             features
                 .keys()
+                .filter(|x| !specific_features.as_ref().is_some_and(|s| !s.contains(x)))
                 .skip(offset)
                 .take(
                     max.map(|x| std::cmp::min(feature_count, x as usize))
