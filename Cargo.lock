@@ -1700,6 +1700,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1462739cb27611015575c0c11df5df7601141071f07518d56fcc1be504cbec97"
 
 [[package]]
+name = "clippier"
+version = "0.1.0"
+dependencies = [
+ "clap 4.5.19",
+ "itertools 0.13.0",
+ "log",
+ "moosicbox_logging",
+ "serde",
+ "serde_json",
+ "toml 0.8.19",
+]
+
+[[package]]
 name = "cmake"
 version = "0.1.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5102,19 +5115,6 @@ dependencies = [
  "futures-core",
  "log",
  "moosicbox_assert",
-]
-
-[[package]]
-name = "moosicbox_clippier"
-version = "0.1.0"
-dependencies = [
- "clap 4.5.19",
- "itertools 0.13.0",
- "log",
- "moosicbox_logging",
- "serde",
- "serde_json",
- "toml 0.8.19",
 ]
 
 [[package]]

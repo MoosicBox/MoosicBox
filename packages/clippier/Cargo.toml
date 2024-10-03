@@ -5,13 +5,13 @@ description = "MoosicBox clippier package"
 edition     = "2021"
 keywords    = ["clippier", "util", "utilities", "utils"]
 license     = "MPL-2.0"
-name        = "moosicbox_clippier"
+name        = "clippier"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [[bin]]
-name              = "moosicbox_clippier"
+name              = "clippier"
 path              = "src/main.rs"
 required-features = []
 

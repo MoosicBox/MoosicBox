@@ -27,7 +27,7 @@ jobs:
               id: build-matrix-step
               run: |
                   MATRIX=$(
-                      cargo run -p moosicbox_clippier \
+                      cargo run -p clippier \
                           features \
                           packages/server \
                           -o json \

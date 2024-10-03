@@ -14,7 +14,7 @@ function cargo_each_feature() {
                 return 1
             fi
         fi
-    done <<<"$(moosicbox_clippier features Cargo.toml)"
+    done <<<"$(clippier features Cargo.toml)"
 
     echo "done"
 }
@@ -29,7 +29,7 @@ function each_feature_permutation() {
         fi
 
         all_features+=("$feature")
-    done <<<"$(moosicbox_clippier features Cargo.toml)"
+    done <<<"$(clippier features Cargo.toml)"
 
     function each_feature_permutation_inner() {
         local feature_count=$1
