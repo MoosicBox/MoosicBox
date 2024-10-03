@@ -39,9 +39,6 @@ jobs:
               if: always()
               with:
                   name: log
-                  path: |
-                      .sst/log/event.log
-                      .sst/log/pulumi.log
-                      .sst/log/sst.log
+                  path: .sst/log
                   if-no-files-found: error
                   retention-days: 90
