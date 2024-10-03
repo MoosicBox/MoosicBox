@@ -48,6 +48,7 @@ pub struct CreateSessionPlaylist {
 #[serde(tag = "type")]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum PlaybackTarget {
     #[serde(rename_all = "camelCase")]
     AudioZone { audio_zone_id: u64 },

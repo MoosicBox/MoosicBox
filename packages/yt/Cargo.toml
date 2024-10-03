@@ -52,4 +52,4 @@ fail-on-warnings = []
 
 api     = ["dep:actix-web", "moosicbox_database/api", "moosicbox_database/api"]
 db      = ["moosicbox_music_api/db"]
-openapi = ["dep:utoipa"]
+openapi = ["dep:utoipa", "moosicbox_search/openapi"]

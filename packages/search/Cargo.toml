@@ -49,4 +49,4 @@ fail-on-warnings = []
 
 api     = ["db", "dep:actix-web"]
 db      = []
-openapi = ["dep:utoipa"]
+openapi = ["dep:utoipa", "moosicbox_core/openapi"]

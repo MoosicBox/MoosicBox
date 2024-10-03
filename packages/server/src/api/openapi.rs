@@ -13,7 +13,7 @@ pub fn init() -> OpenApi {
     #[allow(unused)]
     fn nest_api(api: OpenApi, path: &str, mut nested: OpenApi) -> OpenApi {
         nested.paths.paths.iter_mut().for_each(|(path, item)| {
-            item.operations.iter_mut().for_each(|(_, operation)| {
+            item.options.iter_mut().for_each(|operation| {
                 operation.operation_id = Some(path.to_owned());
             });
         });

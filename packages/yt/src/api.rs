@@ -339,7 +339,7 @@ pub struct YtTrackFileUrlQuery {
         path = "/track/url",
         description = "Get YouTube Music track file stream URL",
         params(
-            ("audioQuality" = TidalAudioQuality, Query, description = "Audio quality to fetch the file stream for"),
+            ("audioQuality" = YtAudioQuality, Query, description = "Audio quality to fetch the file stream for"),
             ("trackId" = u64, Query, description = "YouTube Music track ID to fetch track stream URL for"),
         ),
         responses(
@@ -392,14 +392,14 @@ pub struct YtTrackPlaybackInfoQuery {
         path = "/track/playback-info",
         description = "Get YouTube Music track metadata info",
         params(
-            ("audioQuality" = TidalAudioQuality, Query, description = "Audio quality to fetch the track metadata for"),
+            ("audioQuality" = YtAudioQuality, Query, description = "Audio quality to fetch the track metadata for"),
             ("trackId" = u64, Query, description = "YouTube Music track ID to fetch track metadata for"),
         ),
         responses(
             (
                 status = 200,
                 description = "YouTube Music track metadata info",
-                body = TidalTrackPlaybackInfo,
+                body = YtTrackPlaybackInfo,
             )
         )
     )
@@ -453,11 +453,11 @@ pub struct YtFavoriteArtistsQuery {
         params(
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
-            ("order" = Option<TidalArtistOrder>, Query, description = "Sort property to sort the artists by"),
-            ("orderDirection" = Option<TidalAlbumOrderDirection>, Query, description = "Sort order direction to order the artists by"),
+            ("order" = Option<YtArtistOrder>, Query, description = "Sort property to sort the artists by"),
+            ("orderDirection" = Option<YtAlbumOrderDirection>, Query, description = "Sort order direction to order the artists by"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
-            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("deviceType" = Option<YtDeviceType>, Query, description = "Device type making the request"),
             ("userId" = Option<u64>, Query, description = "User ID making the request"),
         ),
         responses(
@@ -524,7 +524,7 @@ pub struct YtAddFavoriteArtistsQuery {
             ("artistId" = u64, Query, description = "YouTube Music artist ID to favorite"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
-            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("deviceType" = Option<YtDeviceType>, Query, description = "Device type making the request"),
             ("userId" = Option<u64>, Query, description = "User ID making the request"),
         ),
         responses(
@@ -588,7 +588,7 @@ pub struct YtRemoveFavoriteArtistsQuery {
             ("artistId" = u64, Query, description = "YouTube Music artist ID to remove from favorites"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
-            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("deviceType" = Option<YtDeviceType>, Query, description = "Device type making the request"),
             ("userId" = Option<u64>, Query, description = "User ID making the request"),
         ),
         responses(
@@ -654,11 +654,11 @@ pub struct YtFavoriteAlbumsQuery {
         params(
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
-            ("order" = Option<TidalAlbumOrder>, Query, description = "Sort property to sort the albums by"),
-            ("orderDirection" = Option<TidalAlbumOrderDirection>, Query, description = "Sort order direction to order the albums by"),
+            ("order" = Option<YtAlbumOrder>, Query, description = "Sort property to sort the albums by"),
+            ("orderDirection" = Option<YtAlbumOrderDirection>, Query, description = "Sort order direction to order the albums by"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
-            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("deviceType" = Option<YtDeviceType>, Query, description = "Device type making the request"),
             ("userId" = Option<u64>, Query, description = "User ID making the request"),
         ),
         responses(
@@ -725,7 +725,7 @@ pub struct YtAddFavoriteAlbumsQuery {
             ("albumId" = u64, Query, description = "YouTube Music album ID to favorite"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
-            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("deviceType" = Option<YtDeviceType>, Query, description = "Device type making the request"),
             ("userId" = Option<u64>, Query, description = "User ID making the request"),
         ),
         responses(
@@ -789,7 +789,7 @@ pub struct YtRemoveFavoriteAlbumsQuery {
             ("albumId" = u64, Query, description = "YouTube Music album ID to remove from favorites"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
-            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("deviceType" = Option<YtDeviceType>, Query, description = "Device type making the request"),
             ("userId" = Option<u64>, Query, description = "User ID making the request"),
         ),
         responses(
@@ -853,7 +853,7 @@ pub struct YtAddFavoriteTracksQuery {
             ("trackId" = u64, Query, description = "YouTube Music track ID to favorite"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
-            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("deviceType" = Option<YtDeviceType>, Query, description = "Device type making the request"),
             ("userId" = Option<u64>, Query, description = "User ID making the request"),
         ),
         responses(
@@ -917,7 +917,7 @@ pub struct YtRemoveFavoriteTracksQuery {
             ("trackId" = u64, Query, description = "YouTube Music track ID to remove from favorites"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
-            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("deviceType" = Option<YtDeviceType>, Query, description = "Device type making the request"),
             ("userId" = Option<u64>, Query, description = "User ID making the request"),
         ),
         responses(
@@ -983,11 +983,11 @@ pub struct YtFavoriteTracksQuery {
         params(
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
-            ("order" = Option<TidalTrackOrder>, Query, description = "Sort property to sort the tracks by"),
-            ("orderDirection" = Option<TidalTrackOrderDirection>, Query, description = "Sort order direction to order the tracks by"),
+            ("order" = Option<YtTrackOrder>, Query, description = "Sort property to sort the tracks by"),
+            ("orderDirection" = Option<YtTrackOrderDirection>, Query, description = "Sort order direction to order the tracks by"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
-            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("deviceType" = Option<YtDeviceType>, Query, description = "Device type making the request"),
             ("userId" = Option<u64>, Query, description = "User ID making the request"),
         ),
         responses(
@@ -1049,6 +1049,7 @@ pub struct YtArtistAlbumsQuery {
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Copy, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum AlbumType {
     Lp,
     EpsAndSingles,
@@ -1078,7 +1079,7 @@ impl From<AlbumType> for YtAlbumType {
             ("albumType" = Option<AlbumType>, Query, description = "Album type to filter to"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
-            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("deviceType" = Option<YtDeviceType>, Query, description = "Device type making the request"),
         ),
         responses(
             (
@@ -1146,7 +1147,7 @@ pub struct YtAlbumTracksQuery {
             ("limit" = Option<u32>, Query, description = "Page limit"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
-            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("deviceType" = Option<YtDeviceType>, Query, description = "Device type making the request"),
         ),
         responses(
             (
@@ -1219,7 +1220,7 @@ pub struct YtAlbumQuery {
             ("albumId" = u64, Query, description = "YouTube Music album ID to fetch"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
-            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("deviceType" = Option<YtDeviceType>, Query, description = "Device type making the request"),
         ),
         responses(
             (
@@ -1278,7 +1279,7 @@ pub struct YtArtistQuery {
             ("artistId" = u64, Query, description = "YouTube Music artist ID to fetch"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
-            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("deviceType" = Option<YtDeviceType>, Query, description = "Device type making the request"),
         ),
         responses(
             (
@@ -1337,7 +1338,7 @@ pub struct YtTrackQuery {
             ("trackId" = u64, Query, description = "YouTube Music track ID to fetch"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
-            ("deviceType" = Option<TidalDeviceType>, Query, description = "Device type making the request"),
+            ("deviceType" = Option<YtDeviceType>, Query, description = "Device type making the request"),
         ),
         responses(
             (
