@@ -1,24 +1,14 @@
 [package]
-authors = ["Braden Steffaniak"]
-categories = ["development-tools", "gui", "web-programming"]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools", "gui", "web-programming"]
 description = "MoosicBox Giga-Chad Transformer package"
-edition = "2021"
-keywords = [
-    "chad",
-    "dom",
-    "giga",
-    "gigachad",
-    "gui",
-    "html",
-    "htmx",
-    "transformer",
-    "web",
-]
-license = "MPL-2.0"
-name = "gigachad_transformer"
-readme = "README.md"
-repository = "https://github.com/MoosicBox/MoosicBox"
-version = "0.1.0"
+edition     = "2021"
+keywords    = ["dom", "gigachad", "gui", "transformer", "web"]
+license     = "MPL-2.0"
+name        = "gigachad_transformer"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
 
 [dependencies]
 thiserror = { workspace = true }
