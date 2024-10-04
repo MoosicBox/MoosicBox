@@ -67,50 +67,50 @@ moosicbox_ws = { version = "0.1.0", path = "../ws", default-features = false, fe
 ] }
 
 # APIs
-moosicbox_admin_htmx = { path = "../admin_htmx", default-features = false, features = [
+moosicbox_admin_htmx = { version = "0.1.0", path = "../admin_htmx", default-features = false, features = [
     "qobuz",
     "tidal",
 ], optional = true }
-moosicbox_downloader = { path = "../downloader", default-features = false, features = [
+moosicbox_downloader = { version = "0.1.0", path = "../downloader", default-features = false, features = [
     "api",
 ], optional = true }
-moosicbox_library = { path = "../library", default-features = false, features = [
+moosicbox_library = { version = "0.1.0", path = "../library", default-features = false, features = [
     "api",
 ], optional = true }
-moosicbox_menu = { path = "../menu", default-features = false, features = [
+moosicbox_menu = { version = "0.1.0", path = "../menu", default-features = false, features = [
     "api",
 ], optional = true }
-moosicbox_player = { path = "../player", default-features = false, features = [
+moosicbox_player = { version = "0.1.0", path = "../player", default-features = false, features = [
     "local",
 ], optional = true }
-moosicbox_qobuz = { path = "../qobuz", default-features = false, features = [
+moosicbox_qobuz = { version = "0.1.0", path = "../qobuz", default-features = false, features = [
     "api",
     "db",
 ], optional = true }
-moosicbox_scan = { path = "../scan", default-features = false, features = [
+moosicbox_scan = { version = "0.1.0", path = "../scan", default-features = false, features = [
     "api",
     "local",
 ], optional = true }
-moosicbox_search = { path = "../search", default-features = false, features = [
+moosicbox_search = { version = "0.1.0", path = "../search", default-features = false, features = [
     "api",
 ], optional = true }
-moosicbox_tidal = { path = "../tidal", default-features = false, features = [
+moosicbox_tidal = { version = "0.1.0", path = "../tidal", default-features = false, features = [
     "api",
     "db",
 ], optional = true }
-moosicbox_upnp = { path = "../upnp", optional = true, default-features = false, features = [
+moosicbox_upnp = { version = "0.1.0", path = "../upnp", optional = true, default-features = false, features = [
     "api",
     "listener",
     "player",
 ] }
-moosicbox_yt = { path = "../yt", default-features = false, features = [
+moosicbox_yt = { version = "0.1.0", path = "../yt", default-features = false, features = [
     "api",
     "db",
 ], optional = true }
 
 # Tunnel dependencies
-moosicbox_tunnel        = { path = "../tunnel", optional = true, default-features = false }
-moosicbox_tunnel_sender = { path = "../tunnel_sender", optional = true, default-features = false }
+moosicbox_tunnel        = { version = "0.1.0", path = "../tunnel", optional = true, default-features = false }
+moosicbox_tunnel_sender = { version = "0.1.0", path = "../tunnel_sender", optional = true, default-features = false }
 
 utoipa            = { workspace = true, optional = true }
 utoipa-rapidoc    = { workspace = true, optional = true }
