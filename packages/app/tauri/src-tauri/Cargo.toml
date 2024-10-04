@@ -6,6 +6,7 @@ edition     = "2021"
 keywords    = ["app", "desktop", "gui"]
 license     = "MPL-2.0"
 name        = "moosicbox_app"
+publish     = []
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.13.1"
