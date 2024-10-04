@@ -4769,7 +4769,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_app"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "app-tauri-plugin-player",
  "async-recursion",
