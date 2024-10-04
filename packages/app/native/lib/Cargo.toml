@@ -1,23 +1,14 @@
 [package]
-authors = ["Braden Steffaniak"]
-categories = ["development-tools", "gui"]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools", "gui"]
 description = "MoosicBox native fltk app lib package"
-edition = "2021"
-keywords = [
-    "desktop",
-    "gui",
-    "lib",
-    "linux",
-    "macos",
-    "render",
-    "renderer",
-    "windows",
-]
-license = "MPL-2.0"
-name = "moosicbox_app_native_lib"
-readme = "README.md"
-repository = "https://github.com/MoosicBox/MoosicBox"
-version = "0.1.0"
+edition     = "2021"
+keywords    = ["desktop", "gui", "lib", "render", "renderer"]
+license     = "MPL-2.0"
+name        = "moosicbox_app_native_lib"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
 
 [dependencies]
 gigachad_transformer = { version = "0.1.0", path = "../../../gigachad/transformer", default-features = false, features = [
