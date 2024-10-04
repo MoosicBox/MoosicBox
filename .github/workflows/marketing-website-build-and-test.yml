@@ -3,6 +3,9 @@ name: Marketing Website Build and Validate
 on:
     push:
         branches: ['master']
+        paths:
+            - marketing-website/**
+            - .github/workflows/marketing-website-build-and-test.yml
     pull_request:
         branches: ['master']
 
