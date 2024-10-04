@@ -10,6 +10,9 @@ readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.13.0"
 
+[package.metadata.workspaces]
+independent = true
+
 [package.metadata.cargo-machete]
 ignored = ["strum", "tauri-build"]
 
