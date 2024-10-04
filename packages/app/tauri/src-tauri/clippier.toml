@@ -1,3 +1,9 @@
+[[ci_steps]]
+command = '''
+./free_disk_space.sh
+mkdir packages/app/tauri/dist
+'''
+
 [[config]]
 os = "ubuntu"
 
@@ -18,12 +24,6 @@ sudo apt install libwebkit2gtk-4.1-dev \
 '''
 
 [[config.dependencies]]
-command = '''
-./free_disk_space.sh
-mkdir packages/app/tauri/dist
-'''
-
-[[config.dependencies]]
 command  = "sudo apt-get update && sudo apt-get install jackd2 libjack-jackd2-dev"
 features = ["jack"]
 
@@ -33,12 +33,6 @@ features = ["asio", "cpal", "default", "default-windows", "oboe-shared-stdcxx"]
 
 [[config]]
 os = "macos"
-
-[[config.dependencies]]
-command = '''
-./free_disk_space.sh
-mkdir packages/app/tauri/dist
-'''
 
 [[config.dependencies]]
 command  = "brew install jack"
@@ -56,12 +50,6 @@ features = [
 
 [[config]]
 os = "windows"
-
-[[config.dependencies]]
-command = '''
-./free_disk_space.sh
-mkdir packages/app/tauri/dist
-'''
 
 [[config.dependencies]]
 command  = "winget install -e --id Jackaudio.JACK2 --accept-source-agreements --accept-package-agreements"
