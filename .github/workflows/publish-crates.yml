@@ -3,7 +3,7 @@ name: Publish Crates
 on:
     workflow_dispatch:
     schedule:
-        - cron: '*/10 * * * *'
+        - cron: '*/30 * * * *'
 
 jobs:
     deploy:
