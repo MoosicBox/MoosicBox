@@ -5206,6 +5206,9 @@ dependencies = [
 name = "moosicbox_env_utils"
 version = "0.1.0"
 dependencies = [
+ "log",
+ "pretty_assertions",
+ "test-log",
  "thiserror",
 ]
 

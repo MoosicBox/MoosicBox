@@ -13,5 +13,10 @@ version     = "0.1.0"
 [dependencies]
 thiserror = { workspace = true }
 
+[dev-dependencies]
+log               = { workspace = true }
+pretty_assertions = { workspace = true }
+test-log          = { workspace = true }
+
 [features]
 fail-on-warnings = []
