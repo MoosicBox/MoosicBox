@@ -1,6 +1,6 @@
 [package]
 authors     = ["Braden Steffaniak"]
-categories  = ["configuration"]
+categories  = ["config"]
 description = "MoosicBox configuration package"
 edition     = "2021"
 keywords    = ["config", "configuration"]
