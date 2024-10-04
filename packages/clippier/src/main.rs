@@ -160,6 +160,7 @@ fn process_configs(
             env: None,
             cargo: None,
             name: None,
+            ci_steps: None,
         }]
     };
 
@@ -298,6 +299,37 @@ fn create_map(
         map.insert("cargo".to_string(), serde_json::to_value(cargo.join(" "))?);
     }
 
+    let mut ci_steps: Vec<_> = conf
+        .and_then(|x| x.ci_steps.as_ref())
+        .cloned()
+        .unwrap_or_default()
+        .into();
+    let config_ci_steps: Vec<_> = config.ci_steps.clone().unwrap_or_default().into();
+    ci_steps.extend(config_ci_steps);
+
+    let ci_steps = ci_steps
+        .into_iter()
+        .filter(|x| {
+            !x.features.as_ref().is_some_and(|f| {
+                !f.iter()
+                    .any(|required| features.iter().any(|x| x == required))
+            })
+        })
+        .collect_vec();
+
+    if !ci_steps.is_empty() {
+        map.insert(
+            "ciSteps".to_string(),
+            serde_json::to_value(
+                ci_steps
+                    .iter()
+                    .map(|x| x.command.as_str())
+                    .collect_vec()
+                    .join("\n"),
+            )?,
+        );
+    }
+
     Ok(map)
 }
 
@@ -400,7 +432,7 @@ impl<'a, T> Iterator for Split<'a, T> {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct ClippierDependency {
+pub struct CommandFilteredByFeatures {
     command: String,
     features: Option<Vec<String>>,
 }
@@ -439,15 +471,17 @@ impl<T> Default for VecOrItem<T> {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ClippierConfiguration {
+    ci_steps: Option<VecOrItem<CommandFilteredByFeatures>>,
     cargo: Option<VecOrItem<String>>,
     env: Option<HashMap<String, ClippierEnv>>,
-    dependencies: Option<Vec<ClippierDependency>>,
+    dependencies: Option<Vec<CommandFilteredByFeatures>>,
     os: String,
     name: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ClippierConf {
+    ci_steps: Option<VecOrItem<CommandFilteredByFeatures>>,
     cargo: Option<VecOrItem<String>>,
     config: Vec<ClippierConfiguration>,
     env: Option<HashMap<String, ClippierEnv>>,
