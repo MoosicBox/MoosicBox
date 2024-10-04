@@ -3,7 +3,7 @@ name: Publish Crates
 on:
     workflow_dispatch:
     schedule:
-        - cron: '*/30 * * * *'
+        - cron: '0 * * * *'
 
 jobs:
     deploy:
@@ -14,11 +14,24 @@ jobs:
 
             - uses: dtolnay/rust-toolchain@stable
 
+            - name: Get Dependencies
+              id: get-deps
+              run: |
+                  DEPENDENCIES=$(cargo run -p clippier features . -o json | jq -rc '[.[] | select(.os == "ubuntu") | select(.dependencies) | .dependencies] | unique | .[]')
+                  echo "Using deps (raw):"
+                  echo "$DEPENDENCIES"
+                  echo 'deps<<EOF' >> $GITHUB_OUTPUT
+                  echo "$DEPENDENCIES" >> $GITHUB_OUTPUT
+                  echo 'EOF' >> $GITHUB_OUTPUT
+
+            - name: Install Dependencies
+              run: ${{ steps.get-deps.outputs.deps }}
+
             - name: Install cargo-workspaces
               shell: bash
               run: cargo install cargo-workspaces
 
-            - name: Deploy
+            - name: Publish
               shell: bash
               env:
                   STATIC_TOKEN: 123
