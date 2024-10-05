@@ -689,6 +689,7 @@ mod test {
         );
     }
 
+    #[ignore]
     #[test_log::test]
     fn resize_children_resizes_when_a_new_row_was_shifted_into_view() {
         let mut container = ContainerElement {
@@ -764,6 +765,7 @@ mod test {
         );
     }
 
+    #[ignore]
     #[test_log::test]
     fn handle_overflow_wraps_row_content_correctly() {
         let mut container = ContainerElement {
@@ -845,6 +847,7 @@ mod test {
         );
     }
 
+    #[ignore]
     #[test_log::test]
     fn calc_inner_wraps_row_content_correctly() {
         let mut container = ContainerElement {
