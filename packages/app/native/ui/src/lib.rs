@@ -66,7 +66,7 @@ pub fn player() -> Markup {
 #[must_use]
 pub fn footer() -> Markup {
     html! {
-        footer {
+        footer sx-height="100" {
             (player())
         }
     }
