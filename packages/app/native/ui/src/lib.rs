@@ -57,7 +57,7 @@ pub fn sidebar_navigation() -> Markup {
 #[must_use]
 pub fn player() -> Markup {
     html! {
-        div {
+        div sx-height="100" {
             ("player")
         }
     }
