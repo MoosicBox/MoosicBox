@@ -70,7 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .with_route("/albums", || async {
             let response = reqwest::get(format!(
-                "{}/menu/albums?moosicboxProfile=master&offset=0&limit=10",
+                "{}/menu/albums?moosicboxProfile=master&offset=0&limit=2000",
                 std::env::var("MOOSICBOX_HOST")
                     .as_deref()
                     .unwrap_or("http://localhost:8500")
