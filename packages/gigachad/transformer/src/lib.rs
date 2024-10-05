@@ -68,18 +68,21 @@ pub enum LayoutPosition {
     Default,
 }
 
+#[cfg(feature = "calc")]
 impl LayoutPosition {
-    pub fn row(&self) -> Option<u32> {
+    #[must_use]
+    pub const fn row(&self) -> Option<u32> {
         match self {
-            LayoutPosition::Wrap { row, .. } => Some(*row),
-            LayoutPosition::Default => None,
+            Self::Wrap { row, .. } => Some(*row),
+            Self::Default => None,
         }
     }
 
-    pub fn column(&self) -> Option<u32> {
+    #[must_use]
+    pub const fn column(&self) -> Option<u32> {
         match self {
-            LayoutPosition::Wrap { col, .. } => Some(*col),
-            LayoutPosition::Default => None,
+            Self::Wrap { col, .. } => Some(*col),
+            Self::Default => None,
         }
     }
 }
