@@ -3,8 +3,6 @@
 
 use std::{fmt::Display, io::Write};
 
-use itertools::Itertools;
-
 #[cfg(feature = "calc")]
 pub mod calc;
 #[cfg(feature = "html")]
@@ -179,7 +177,7 @@ impl Attrs {
                 self.values
                     .iter()
                     .map(|(name, value)| format!("{name}=\"{value}\""))
-                    .collect_vec()
+                    .collect::<Vec<_>>()
                     .join(" ")
             )
         }
