@@ -235,7 +235,119 @@ impl ContainerElement {
         layout_shifted || self.resize_children()
     }
 
-    fn contained_width(&self) -> f32 {
+    fn contained_sized_width(&self) -> f32 {
+        match self.direction {
+            LayoutDirection::Row => self
+                .elements
+                .iter()
+                .chunk_by(|x| {
+                    x.container_element().and_then(|x| {
+                        x.calculated_position.as_ref().and_then(|x| match x {
+                            LayoutPosition::Wrap { row, .. } => Some(row),
+                            LayoutPosition::Default => None,
+                        })
+                    })
+                })
+                .into_iter()
+                .map(|(_, elements)| {
+                    elements
+                        .map(|x| {
+                            x.container_element()
+                                .and_then(|x| x.width)
+                                .map_or(0.0, |x| {
+                                    calc_number(x, self.calculated_width.unwrap_or(0.0))
+                                })
+                        })
+                        .max_by(order_float)
+                        .unwrap_or(0.0)
+                })
+                .sum(),
+            LayoutDirection::Column => self
+                .elements
+                .iter()
+                .chunk_by(|x| {
+                    x.container_element().and_then(|x| {
+                        x.calculated_position.as_ref().and_then(|x| match x {
+                            LayoutPosition::Wrap { col, .. } => Some(col),
+                            LayoutPosition::Default => None,
+                        })
+                    })
+                })
+                .into_iter()
+                .map(|(_, elements)| {
+                    elements
+                        .map(|x| {
+                            x.container_element()
+                                .and_then(|x| x.width)
+                                .map_or(0.0, |x| {
+                                    calc_number(x, self.calculated_width.unwrap_or(0.0))
+                                })
+                        })
+                        .max_by(order_float)
+                        .unwrap_or(0.0)
+                })
+                .max_by(order_float)
+                .unwrap_or(0.0),
+        }
+    }
+
+    fn contained_sized_height(&self) -> f32 {
+        match self.direction {
+            LayoutDirection::Row => self
+                .elements
+                .iter()
+                .chunk_by(|x| {
+                    x.container_element().and_then(|x| {
+                        x.calculated_position.as_ref().and_then(|x| match x {
+                            LayoutPosition::Wrap { row, .. } => Some(row),
+                            LayoutPosition::Default => None,
+                        })
+                    })
+                })
+                .into_iter()
+                .map(|(_, elements)| {
+                    elements
+                        .map(|x| {
+                            x.container_element()
+                                .and_then(|x| x.height)
+                                .map_or(0.0, |x| {
+                                    calc_number(x, self.calculated_height.unwrap_or(0.0))
+                                })
+                        })
+                        .max_by(order_float)
+                        .unwrap_or(0.0)
+                })
+                .sum(),
+            LayoutDirection::Column => self
+                .elements
+                .iter()
+                .chunk_by(|x| {
+                    x.container_element().and_then(|x| {
+                        x.calculated_position.as_ref().and_then(|x| match x {
+                            LayoutPosition::Wrap { col, .. } => Some(col),
+                            LayoutPosition::Default => None,
+                        })
+                    })
+                })
+                .into_iter()
+                .map(|(_, elements)| {
+                    elements
+                        .map(|x| {
+                            x.container_element()
+                                .and_then(|x| x.height)
+                                .map_or(0.0, |x| {
+                                    calc_number(x, self.calculated_height.unwrap_or(0.0))
+                                })
+                        })
+                        .max_by(order_float)
+                        .unwrap_or(0.0)
+                })
+                .max_by(order_float)
+                .unwrap_or(0.0),
+        }
+    }
+
+    fn contained_calculated_width(&self) -> f32 {
         match self.direction {
             LayoutDirection::Row => self
                 .elements
@@ -287,7 +399,7 @@ impl ContainerElement {
         }
     }
 
-    fn contained_height(&self) -> f32 {
+    fn contained_calculated_height(&self) -> f32 {
         match self.direction {
             LayoutDirection::Row => self
                 .elements
@@ -347,29 +459,31 @@ impl ContainerElement {
         };
         let mut layout_shifted = false;
 
-        let contained_width = self.contained_width();
-        let contained_height = self.contained_height();
+        let contained_calculated_width = self.contained_calculated_width();
+        let contained_calculated_height = self.contained_calculated_height();
 
         log::trace!(
-            "width={width} contained_width={contained_width} height={height} contained_height={contained_height} {}",
+            "width={width} contained_calculated_width={contained_calculated_width} height={height} contained_calculated_height={contained_calculated_height} {}",
             self.direction,
         );
 
-        if width < contained_width {
+        if width < contained_calculated_width {
+            let contained_sized_width = self.contained_sized_width();
             log::trace!(
-                "resize_children: {} updated width from {width} -> {contained_width}",
+                "resize_children: {} updated width from {width} -> {contained_calculated_width} (contained_sized_width={contained_sized_width})",
                 self.direction,
             );
-            self.calculated_width.replace(contained_width);
+            self.calculated_width.replace(contained_calculated_width);
             layout_shifted = true;
         }
-        if height < contained_height {
+        if height < contained_calculated_height {
+            let contained_sized_height = self.contained_sized_height();
             log::trace!(
-                "resize_children: {} updated height from {height} -> {contained_height}",
+                "resize_children: {} updated height from {height} -> {contained_calculated_height} (contained_sized_height={contained_sized_height})",
                 self.direction,
             );
 
-            self.calculated_height.replace(contained_height);
+            self.calculated_height.replace(contained_calculated_height);
             layout_shifted = true;
         }
 
@@ -674,7 +788,7 @@ mod test {
     }
 
     #[test_log::test]
-    fn contained_width_calculates_wrapped_width_correctly() {
+    fn contained_sized_width_calculates_wrapped_width_correctly() {
         let container = ContainerElement {
             elements: vec![
                 Element::Div {
@@ -711,7 +825,7 @@ mod test {
             overflow: LayoutOverflow::Wrap,
             ..Default::default()
         };
-        let width = container.contained_width();
+        let width = container.contained_sized_width();
         let expected = 50.0;
 
         assert_eq!(
@@ -722,7 +836,7 @@ mod test {
     }
 
     #[test_log::test]
-    fn contained_height_calculates_wrapped_height_correctly() {
+    fn contained_sized_height_calculates_wrapped_height_correctly() {
         let container = ContainerElement {
             elements: vec![
                 Element::Div {
@@ -759,7 +873,103 @@ mod test {
             overflow: LayoutOverflow::Wrap,
             ..Default::default()
         };
-        let height = container.contained_height();
+        let height = container.contained_sized_height();
+        let expected = 0.0;
+
+        assert_eq!(
+            (height - expected).abs() < 0.0001,
+            true,
+            "height expected to be {expected} (actual={height})"
+        );
+    }
+
+    #[test_log::test]
+    fn contained_calculated_width_calculates_wrapped_width_correctly() {
+        let container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(50.0),
+            calculated_height: Some(40.0),
+            direction: LayoutDirection::Row,
+            overflow: LayoutOverflow::Wrap,
+            ..Default::default()
+        };
+        let width = container.contained_calculated_width();
+        let expected = 50.0;
+
+        assert_eq!(
+            (width - expected).abs() < 0.0001,
+            true,
+            "width expected to be {expected} (actual={width})"
+        );
+    }
+
+    #[test_log::test]
+    fn contained_calculated_height_calculates_wrapped_height_correctly() {
+        let container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(50.0),
+            calculated_height: Some(40.0),
+            direction: LayoutDirection::Row,
+            overflow: LayoutOverflow::Wrap,
+            ..Default::default()
+        };
+        let height = container.contained_calculated_height();
         let expected = 80.0;
 
         assert_eq!(
@@ -818,24 +1028,18 @@ mod test {
                     Element::Div {
                         element: ContainerElement {
                             calculated_height: Some(20.0),
-                            calculated_x: Some(0.0),
-                            calculated_y: Some(0.0),
                             ..container.elements[0].container_element().unwrap().clone()
                         },
                     },
                     Element::Div {
                         element: ContainerElement {
                             calculated_height: Some(20.0),
-                            calculated_x: Some(25.0),
-                            calculated_y: Some(0.0),
                             ..container.elements[1].container_element().unwrap().clone()
                         },
                     },
                     Element::Div {
                         element: ContainerElement {
                             calculated_height: Some(20.0),
-                            calculated_x: Some(0.0),
-                            calculated_y: Some(0.0),
                             ..container.elements[2].container_element().unwrap().clone()
                         },
                     },
