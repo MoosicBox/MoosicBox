@@ -1274,7 +1274,6 @@ mod test {
         );
     }
 
-    #[ignore]
     #[test_log::test]
     fn calc_inner_wraps_row_content_correctly() {
         let mut container = ContainerElement {
@@ -1338,7 +1337,7 @@ mod test {
                             calculated_width: Some(25.0),
                             calculated_height: Some(20.0),
                             calculated_x: Some(0.0),
-                            calculated_y: Some(0.0),
+                            calculated_y: Some(20.0),
                             calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
                             ..Default::default()
                         },
