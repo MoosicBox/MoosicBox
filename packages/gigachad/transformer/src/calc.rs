@@ -1470,4 +1470,130 @@ mod test {
             }
         );
     }
+
+    #[test_log::test]
+    fn calc_can_calc_horizontal_split_with_row_content_in_right_pane_above_a_vertial_split_with_a_specified_height(
+    ) {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        elements: vec![
+                            Element::Div {
+                                element: ContainerElement::default(),
+                            },
+                            Element::Div {
+                                element: ContainerElement {
+                                    elements: vec![
+                                        Element::Div {
+                                            element: ContainerElement::default(),
+                                        },
+                                        Element::Div {
+                                            element: ContainerElement::default(),
+                                        },
+                                    ],
+                                    direction: LayoutDirection::Row,
+                                    ..Default::default()
+                                },
+                            },
+                        ],
+                        direction: LayoutDirection::Row,
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        elements: vec![],
+                        height: Some(Number::Integer(10)),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(100.0),
+            calculated_height: Some(80.0),
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            elements: vec![
+                                Element::Div {
+                                    element: ContainerElement {
+                                        calculated_width: Some(50.0),
+                                        calculated_height: Some(70.0),
+                                        calculated_x: Some(0.0),
+                                        calculated_y: Some(0.0),
+                                        calculated_position: Some(LayoutPosition::Default),
+                                        ..Default::default()
+                                    },
+                                },
+                                Element::Div {
+                                    element: ContainerElement {
+                                        calculated_width: Some(50.0),
+                                        calculated_height: Some(70.0),
+                                        calculated_x: Some(50.0),
+                                        calculated_y: Some(0.0),
+                                        calculated_position: Some(LayoutPosition::Default),
+                                        direction: LayoutDirection::Row,
+                                        elements: vec![
+                                            Element::Div {
+                                                element: ContainerElement {
+                                                    calculated_width: Some(25.0),
+                                                    calculated_height: Some(70.0),
+                                                    calculated_x: Some(0.0),
+                                                    calculated_y: Some(0.0),
+                                                    calculated_position: Some(
+                                                        LayoutPosition::Default
+                                                    ),
+                                                    ..Default::default()
+                                                },
+                                            },
+                                            Element::Div {
+                                                element: ContainerElement {
+                                                    calculated_width: Some(25.0),
+                                                    calculated_height: Some(70.0),
+                                                    calculated_x: Some(25.0),
+                                                    calculated_y: Some(0.0),
+                                                    calculated_position: Some(
+                                                        LayoutPosition::Default
+                                                    ),
+                                                    ..Default::default()
+                                                },
+                                            },
+                                        ],
+                                        ..Default::default()
+                                    },
+                                },
+                            ],
+                            calculated_width: Some(100.0),
+                            calculated_height: Some(70.0),
+                            calculated_x: Some(0.0),
+                            calculated_y: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Default),
+                            direction: LayoutDirection::Row,
+                            ..Default::default()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            elements: vec![],
+                            height: Some(Number::Integer(10)),
+                            calculated_width: Some(100.0),
+                            calculated_height: Some(10.0),
+                            calculated_x: Some(0.0),
+                            calculated_y: Some(70.0),
+                            calculated_position: Some(LayoutPosition::Default),
+                            ..Default::default()
+                        },
+                    }
+                ],
+                ..container
+            }
+        );
+    }
 }
