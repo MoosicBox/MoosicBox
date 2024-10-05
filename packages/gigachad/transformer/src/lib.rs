@@ -68,6 +68,22 @@ pub enum LayoutPosition {
     Default,
 }
 
+impl LayoutPosition {
+    pub fn row(&self) -> Option<u32> {
+        match self {
+            LayoutPosition::Wrap { row, .. } => Some(*row),
+            LayoutPosition::Default => None,
+        }
+    }
+
+    pub fn column(&self) -> Option<u32> {
+        match self {
+            LayoutPosition::Wrap { col, .. } => Some(*col),
+            LayoutPosition::Default => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ContainerElement {
     pub elements: Vec<Element>,
