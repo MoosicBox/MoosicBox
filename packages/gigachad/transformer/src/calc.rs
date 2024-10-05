@@ -125,6 +125,7 @@ impl ContainerElement {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn handle_overflow(&mut self) -> bool {
         let mut layout_shifted = false;
 
@@ -148,32 +149,25 @@ impl ContainerElement {
                 let width = element.calculated_width.unwrap_or(0.0);
                 let height = element.calculated_height.unwrap_or(0.0);
 
-                element.calculated_x.replace(x);
-                element.calculated_y.replace(y);
+                let mut current_row = row;
+                let mut current_col = col;
 
                 match overflow {
                     LayoutOverflow::Scroll | LayoutOverflow::Squash => {
+                        match direction {
+                            LayoutDirection::Row => {
+                                x += width;
+                            }
+                            LayoutDirection::Column => {
+                                y += height;
+                            }
+                        }
+
                         element
                             .calculated_position
                             .replace(LayoutPosition::default());
                     }
                     LayoutOverflow::Wrap => {
-                        if let Some(LayoutPosition::Wrap {
-                            row: old_row,
-                            col: old_col,
-                        }) = element.calculated_position
-                        {
-                            if row != old_row || col != old_col {
-                                layout_shifted = true;
-                            }
-                        } else {
-                            layout_shifted = true;
-                        }
-
-                        element
-                            .calculated_position
-                            .replace(LayoutPosition::Wrap { row, col });
-
                         match direction {
                             LayoutDirection::Row => {
                                 let next_row = x > 0.0 && x + width > container_width;
@@ -186,6 +180,8 @@ impl ContainerElement {
                                     max_height = 0.0;
                                     row += 1;
                                     col = 0;
+                                    current_row = row;
+                                    current_col = col;
                                 } else {
                                     x += width;
                                     col += 1;
@@ -202,11 +198,36 @@ impl ContainerElement {
                                     max_width = 0.0;
                                     col += 1;
                                     row = 0;
+                                    current_row = row;
+                                    current_col = col;
                                 } else {
                                     y += height;
                                     row += 1;
                                 }
                             }
+                        }
+
+                        let updated = if let Some(LayoutPosition::Wrap {
+                            row: old_row,
+                            col: old_col,
+                        }) = element.calculated_position
+                        {
+                            if current_row != old_row || current_col != old_col {
+                                layout_shifted = true;
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            true
+                        };
+
+                        if updated {
+                            log::debug!("handle_overflow: setting element row/col ({current_row}, {current_col})");
+                            element.calculated_position.replace(LayoutPosition::Wrap {
+                                row: current_row,
+                                col: current_col,
+                            });
                         }
                     }
                 }
@@ -217,23 +238,82 @@ impl ContainerElement {
                     height
                 };
                 max_width = if max_width > width { max_width } else { width };
-
-                match direction {
-                    LayoutDirection::Row => {
-                        x += element.calculated_width.unwrap_or(0.0);
-                    }
-                    LayoutDirection::Column => {
-                        y += element.calculated_height.unwrap_or(0.0);
-                    }
-                }
-
-                element.resize_children();
             }
         }
 
         self.resize_children();
+        self.position_children();
 
         layout_shifted
+    }
+
+    fn position_children(&mut self) {
+        log::trace!("position_children");
+
+        let mut x = 0.0;
+        let mut y = 0.0;
+        let mut max_width = 0.0;
+        let mut max_height = 0.0;
+
+        for element in self
+            .elements
+            .iter_mut()
+            .filter_map(|x| x.container_element_mut())
+        {
+            log::trace!("position_children: x={x} y={y} child={element:?}");
+
+            let (Some(width), Some(height), Some(position)) = (
+                element.calculated_width,
+                element.calculated_height,
+                element.calculated_position.as_ref(),
+            ) else {
+                moosicbox_assert::die_or_warn!("position_children: missing width, height, and/or position. continuing on to next element");
+                continue;
+            };
+
+            element.calculated_x.replace(x);
+            element.calculated_y.replace(y);
+
+            match self.direction {
+                LayoutDirection::Row => {
+                    match position {
+                        LayoutPosition::Wrap { col, .. } => {
+                            if *col == 0 {
+                                x = 0.0;
+                                y += max_height;
+                                max_height = 0.0;
+                                element.calculated_x.replace(x);
+                                element.calculated_y.replace(y);
+                            }
+                        }
+                        LayoutPosition::Default => {}
+                    }
+                    x += width;
+                }
+                LayoutDirection::Column => {
+                    match position {
+                        LayoutPosition::Wrap { row, .. } => {
+                            if *row == 0 {
+                                y = 0.0;
+                                x += max_width;
+                                max_width = 0.0;
+                                element.calculated_x.replace(x);
+                                element.calculated_y.replace(y);
+                            }
+                        }
+                        LayoutPosition::Default => {}
+                    }
+                    y += height;
+                }
+            }
+
+            max_height = if max_height > height {
+                max_height
+            } else {
+                height
+            };
+            max_width = if max_width > width { max_width } else { width };
+        }
     }
 
     fn contained_sized_width(&self) -> f32 {
@@ -1113,7 +1193,6 @@ mod test {
         );
     }
 
-    #[ignore]
     #[test_log::test]
     fn handle_overflow_wraps_row_content_correctly() {
         let mut container = ContainerElement {
@@ -1151,7 +1230,7 @@ mod test {
         };
         let shifted = container.handle_overflow();
 
-        assert_eq!(shifted, true);
+        assert_eq!(shifted, false);
         assert_eq!(
             container.clone(),
             ContainerElement {
@@ -1184,7 +1263,7 @@ mod test {
                             calculated_width: Some(25.0),
                             calculated_height: Some(20.0),
                             calculated_x: Some(0.0),
-                            calculated_y: Some(0.0),
+                            calculated_y: Some(20.0),
                             calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
                             ..Default::default()
                         },
