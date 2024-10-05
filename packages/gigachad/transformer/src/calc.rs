@@ -474,16 +474,18 @@ impl ContainerElement {
             + 1
     }
 
-    fn resize_children(&mut self) {
+    fn resize_children(&mut self) -> bool {
         if self.elements.is_empty() {
             log::trace!("resize_children: no children");
-            return;
+            return false;
         }
         let (Some(width), Some(height)) = (self.calculated_width, self.calculated_height) else {
             moosicbox_assert::die_or_panic!(
                 "ContainerElement missing calculated_width and/or calculated_height: {self:?}"
             );
         };
+
+        let mut resized = false;
 
         let contained_calculated_width = self.contained_calculated_width();
         let contained_calculated_height = self.contained_calculated_height();
@@ -513,6 +515,7 @@ impl ContainerElement {
                     .replace(evenly_split_remaining_size);
 
                 element.resize_children();
+                resized = true;
             }
 
             log::trace!(
@@ -540,6 +543,7 @@ impl ContainerElement {
                     .replace(evenly_split_remaining_size);
 
                 element.resize_children();
+                resized = true;
             }
 
             log::trace!(
@@ -547,6 +551,8 @@ impl ContainerElement {
                 self.direction,
             );
         }
+
+        resized
     }
 }
 
@@ -1076,8 +1082,9 @@ mod test {
             overflow: LayoutOverflow::Wrap,
             ..Default::default()
         };
-        container.resize_children();
+        let resized = container.resize_children();
 
+        assert_eq!(resized, true);
         assert_eq!(
             container.clone(),
             ContainerElement {
