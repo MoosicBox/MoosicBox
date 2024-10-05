@@ -267,11 +267,6 @@ impl Renderer {
                             window.height()
                         );
 
-                        #[allow(clippy::cast_precision_loss)]
-                        {
-                            renderer.elements.lock().unwrap().calc();
-                        }
-
                         if let Err(e) = renderer.perform_render() {
                             log::error!("Failed to draw elements: {e:?}");
                         }
@@ -421,18 +416,7 @@ impl Renderer {
         };
         if let Some(handler) = handler {
             match handler().await {
-                Ok(mut elements) => {
-                    #[allow(clippy::cast_precision_loss)]
-                    {
-                        elements
-                            .calculated_width
-                            .replace(self.width.load(std::sync::atomic::Ordering::SeqCst) as f32);
-                        elements
-                            .calculated_height
-                            .replace(self.height.load(std::sync::atomic::Ordering::SeqCst) as f32);
-                    }
-                    log::debug!("Initialized ContainerElement for route {elements:?}");
-
+                Ok(elements) => {
                     self.render(elements)?;
                 }
                 Err(e) => {
@@ -459,11 +443,34 @@ impl Renderer {
             }
             window.begin();
             log::debug!("perform_render: begin");
-            let elements: &ContainerElement = &self.elements.lock().unwrap();
+            let container: &mut ContainerElement = &mut self.elements.lock().unwrap();
+
+            #[allow(clippy::cast_precision_loss)]
+            let window_width = self.width.load(std::sync::atomic::Ordering::SeqCst) as f32;
+            #[allow(clippy::cast_precision_loss)]
+            let window_height = self.height.load(std::sync::atomic::Ordering::SeqCst) as f32;
+
+            let recalc = if let (Some(width), Some(height)) =
+                (container.calculated_width, container.calculated_height)
+            {
+                (width - window_width).abs() < 0.01 || (height - window_height).abs() < 0.01
+            } else {
+                true
+            };
+
+            if recalc {
+                container.calculated_width.replace(window_width);
+                container.calculated_height.replace(window_height);
+
+                container.calc();
+            }
+
+            log::debug!("Initialized ContainerElement for rendering {container:?}");
+
             root.replace(draw_elements(
-                elements,
+                container,
                 #[allow(clippy::cast_precision_loss)]
-                Context::new(window.width() as f32, window.height() as f32),
+                Context::new(window_width, window_height),
                 tx,
             )?);
         }
@@ -481,13 +488,10 @@ impl Renderer {
     /// # Panics
     ///
     /// Will panic if elements `Mutex` is poisoned.
-    pub fn render(&mut self, mut elements: ContainerElement) -> Result<(), FltkError> {
+    pub fn render(&mut self, elements: ContainerElement) -> Result<(), FltkError> {
         log::debug!("render: {elements:?}");
 
-        #[allow(clippy::cast_precision_loss)]
         {
-            elements.calc();
-
             *self.elements.lock().unwrap() = elements;
         }
 
