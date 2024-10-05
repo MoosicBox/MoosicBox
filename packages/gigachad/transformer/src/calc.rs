@@ -125,7 +125,6 @@ impl ContainerElement {
         }
     }
 
-    #[allow(clippy::similar_names)]
     fn handle_overflow(&mut self) -> bool {
         let mut layout_shifted = false;
 
@@ -228,11 +227,13 @@ impl ContainerElement {
                     }
                 }
 
-                layout_shifted = layout_shifted || element.resize_children();
+                element.resize_children();
             }
         }
 
-        layout_shifted || self.resize_children()
+        self.resize_children();
+
+        layout_shifted
     }
 
     fn contained_sized_width(&self) -> f32 {
@@ -451,13 +452,38 @@ impl ContainerElement {
         }
     }
 
-    fn resize_children(&mut self) -> bool {
+    fn rows(&self) -> u32 {
+        self.elements
+            .iter()
+            .filter_map(|x| x.container_element())
+            .filter_map(|x| x.calculated_position.as_ref())
+            .filter_map(LayoutPosition::row)
+            .max()
+            .unwrap_or(0)
+            + 1
+    }
+
+    fn columns(&self) -> u32 {
+        self.elements
+            .iter()
+            .filter_map(|x| x.container_element())
+            .filter_map(|x| x.calculated_position.as_ref())
+            .filter_map(LayoutPosition::column)
+            .max()
+            .unwrap_or(0)
+            + 1
+    }
+
+    fn resize_children(&mut self) {
+        if self.elements.is_empty() {
+            log::trace!("resize_children: no children");
+            return;
+        }
         let (Some(width), Some(height)) = (self.calculated_width, self.calculated_height) else {
             moosicbox_assert::die_or_panic!(
                 "ContainerElement missing calculated_width and/or calculated_height: {self:?}"
             );
         };
-        let mut layout_shifted = false;
 
         let contained_calculated_width = self.contained_calculated_width();
         let contained_calculated_height = self.contained_calculated_height();
@@ -469,25 +495,58 @@ impl ContainerElement {
 
         if width < contained_calculated_width {
             let contained_sized_width = self.contained_sized_width();
+            #[allow(clippy::cast_precision_loss)]
+            let evenly_split_remaining_size = if width > contained_sized_width {
+                (width - contained_sized_width) / (self.columns() as f32)
+            } else {
+                0.0
+            };
+
+            for element in self
+                .elements
+                .iter_mut()
+                .filter_map(|x| x.container_element_mut())
+                .filter(|x| x.width.is_none())
+            {
+                element
+                    .calculated_width
+                    .replace(evenly_split_remaining_size);
+
+                element.resize_children();
+            }
+
             log::trace!(
-                "resize_children: {} updated width from {width} -> {contained_calculated_width} (contained_sized_width={contained_sized_width})",
+                "resize_children: {} updated unsized children width to {evenly_split_remaining_size}",
                 self.direction,
             );
-            self.calculated_width.replace(contained_calculated_width);
-            layout_shifted = true;
         }
         if height < contained_calculated_height {
             let contained_sized_height = self.contained_sized_height();
+            #[allow(clippy::cast_precision_loss)]
+            let evenly_split_remaining_size = if height > contained_sized_height {
+                (height - contained_sized_height) / (self.rows() as f32)
+            } else {
+                0.0
+            };
+
+            for element in self
+                .elements
+                .iter_mut()
+                .filter_map(|x| x.container_element_mut())
+                .filter(|x| x.height.is_none())
+            {
+                element
+                    .calculated_height
+                    .replace(evenly_split_remaining_size);
+
+                element.resize_children();
+            }
+
             log::trace!(
-                "resize_children: {} updated height from {height} -> {contained_calculated_height} (contained_sized_height={contained_sized_height})",
+                "resize_children: {} updated unsized children height to {evenly_split_remaining_size}",
                 self.direction,
             );
-
-            self.calculated_height.replace(contained_calculated_height);
-            layout_shifted = true;
         }
-
-        layout_shifted
     }
 }
 
@@ -979,7 +1038,6 @@ mod test {
         );
     }
 
-    #[ignore]
     #[test_log::test]
     fn resize_children_resizes_when_a_new_row_was_shifted_into_view() {
         let mut container = ContainerElement {
@@ -1018,9 +1076,8 @@ mod test {
             overflow: LayoutOverflow::Wrap,
             ..Default::default()
         };
-        let shifted = container.resize_children();
+        container.resize_children();
 
-        assert_eq!(shifted, true);
         assert_eq!(
             container.clone(),
             ContainerElement {
