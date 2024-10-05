@@ -1,11 +1,8 @@
 use std::sync::Arc;
 
-use moosicbox_env_utils::{default_env_u16, default_env_usize};
+use moosicbox_env_utils::{default_env_usize, option_env_i32, option_env_u16};
 use moosicbox_library_models::ApiAlbum;
 use moosicbox_paging::Page;
-
-static WIDTH: u16 = default_env_u16!("WINDOW_WIDTH", 1000);
-static HEIGHT: u16 = default_env_u16!("WINDOW_HEIGHT", 600);
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     moosicbox_logging::init(None)?;
@@ -50,7 +47,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut app = moosicbox_app_native_lib::NativeApp::new()
         .with_runtime_arc(runtime.clone())
-        .with_size(WIDTH, HEIGHT)
+        .with_size(
+            option_env_u16("WINDOW_WIDTH").unwrap().unwrap_or(1000),
+            option_env_u16("WINDOW_HEIGHT").unwrap().unwrap_or(600),
+        );
+
+    if let (Some(x), Some(y)) = (
+        option_env_i32("WINDOW_X").unwrap(),
+        option_env_i32("WINDOW_Y").unwrap(),
+    ) {
+        app = app.with_position(x, y);
+    }
+
+    app = app
         .with_route(&["/", "/home"], || async {
             moosicbox_app_native_ui::home().into_string().try_into()
         })

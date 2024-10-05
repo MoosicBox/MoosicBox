@@ -217,7 +217,13 @@ impl Renderer {
     /// # Errors
     ///
     /// Will error if FLTK app fails to start
-    pub fn start(mut self, width: u16, height: u16) -> Result<Self, FltkError> {
+    pub fn start(
+        mut self,
+        width: u16,
+        height: u16,
+        x: Option<i32>,
+        y: Option<i32>,
+    ) -> Result<Self, FltkError> {
         let app = app::App::default();
         self.app.replace(app);
 
@@ -283,7 +289,13 @@ impl Renderer {
             }
         });
 
-        window = window.center_screen();
+        if let (Some(x), Some(y)) = (x, y) {
+            log::debug!("start: positioning window x={x} y={y}");
+            window = window.with_pos(x, y);
+        } else {
+            log::debug!("start: centering window");
+            window = window.center_screen();
+        }
         window.end();
         window.make_resizable(true);
         window.show();

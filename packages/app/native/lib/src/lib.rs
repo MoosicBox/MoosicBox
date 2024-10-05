@@ -19,6 +19,8 @@ pub enum NativeAppError {
 
 #[derive(Clone)]
 pub struct NativeApp {
+    x: Option<i32>,
+    y: Option<i32>,
     width: Option<u16>,
     height: Option<u16>,
     renderer: Renderer,
@@ -36,6 +38,8 @@ impl NativeApp {
     #[must_use]
     pub fn new() -> Self {
         Self {
+            x: None,
+            y: None,
             width: None,
             height: None,
             renderer: Renderer::new(),
@@ -62,6 +66,23 @@ impl NativeApp {
     }
 
     #[must_use]
+    pub fn with_x(mut self, x: i32) -> Self {
+        self.x.replace(x);
+        self
+    }
+
+    #[must_use]
+    pub fn with_y(mut self, y: i32) -> Self {
+        self.y.replace(y);
+        self
+    }
+
+    #[must_use]
+    pub fn with_position(self, x: i32, y: i32) -> Self {
+        self.with_x(x).with_y(y)
+    }
+
+    #[must_use]
     pub fn with_runtime(self, runtime: Runtime) -> Self {
         self.with_runtime_arc(Arc::new(runtime))
     }
@@ -80,9 +101,12 @@ impl NativeApp {
     ///
     /// Will error if there was an error starting the FLTK app
     pub fn start(mut self) -> Result<Self, NativeAppError> {
-        self.renderer = self
-            .renderer
-            .start(self.width.unwrap_or(800), self.height.unwrap_or(600))?;
+        self.renderer = self.renderer.start(
+            self.width.unwrap_or(800),
+            self.height.unwrap_or(600),
+            self.x,
+            self.y,
+        )?;
 
         let runtime = self.runtime.take().unwrap_or_else(|| {
             let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
