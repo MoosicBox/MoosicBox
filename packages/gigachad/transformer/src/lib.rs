@@ -210,10 +210,13 @@ impl ContainerElement {
         }
 
         if with_debug_attrs {
-            attrs.add_opt("dbg-x", self.calculated_x);
-            attrs.add_opt("dbg-y", self.calculated_y);
-            attrs.add_opt("dbg-width", self.calculated_width);
-            attrs.add_opt("dbg-height", self.calculated_height);
+            #[cfg(feature = "calc")]
+            {
+                attrs.add_opt("dbg-x", self.calculated_x);
+                attrs.add_opt("dbg-y", self.calculated_y);
+                attrs.add_opt("dbg-width", self.calculated_width);
+                attrs.add_opt("dbg-height", self.calculated_height);
+            }
         }
 
         attrs
