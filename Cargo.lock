@@ -3171,8 +3171,14 @@ dependencies = [
 name = "gigachad_transformer"
 version = "0.1.0"
 dependencies = [
+ "itertools 0.13.0",
+ "log",
+ "moosicbox_assert",
+ "pretty_assertions",
+ "test-log",
  "thiserror",
  "tl",
+ "xml",
 ]
 
 [[package]]

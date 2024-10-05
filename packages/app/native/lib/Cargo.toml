@@ -30,4 +30,5 @@ default = ["unsafe"]
 
 fail-on-warnings = []
 
-unsafe = []
+debug  = ["moosicbox_app_native_renderer/debug"]
+unsafe = ["moosicbox_app_native_renderer/unsafe"]

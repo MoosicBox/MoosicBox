@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use fltk::prelude::FltkError;
 use futures::Future;
-use gigachad_transformer::ElementList;
+use gigachad_transformer::ContainerElement;
 use moosicbox_app_native_renderer::{Renderer, RoutePath};
 use moosicbox_env_utils::default_env_usize;
 use thiserror::Error;
@@ -144,7 +144,7 @@ impl NativeApp {
 
     #[must_use]
     pub fn with_route<
-        F: Future<Output = Result<ElementList, E>> + Send + 'static,
+        F: Future<Output = Result<ContainerElement, E>> + Send + 'static,
         E: Into<Box<dyn std::error::Error>>,
     >(
         mut self,

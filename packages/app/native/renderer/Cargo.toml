@@ -32,4 +32,5 @@ default = ["unsafe"]
 
 fail-on-warnings = []
 
+debug  = []
 unsafe = []

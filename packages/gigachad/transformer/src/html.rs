@@ -5,7 +5,7 @@ use tl::{Children, HTMLTag, Node, NodeHandle, ParseError, Parser, ParserOptions}
 
 use crate::{LayoutDirection, LayoutOverflow, Number};
 
-impl TryFrom<String> for crate::ElementList {
+impl TryFrom<String> for crate::ContainerElement {
     type Error = ParseError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
@@ -13,13 +13,16 @@ impl TryFrom<String> for crate::ElementList {
     }
 }
 
-impl<'a> TryFrom<&'a str> for crate::ElementList {
+impl<'a> TryFrom<&'a str> for crate::ContainerElement {
     type Error = ParseError;
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         let result = tl::parse(value, ParserOptions::new())?;
 
-        Ok(Self(parse_children(result.children(), result.parser())))
+        Ok(Self {
+            elements: parse_children(result.children(), result.parser()),
+            ..Default::default()
+        })
     }
 }
 
@@ -124,12 +127,12 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
         Node::Tag(tag) => match tag.name().as_utf8_str().to_lowercase().as_str() {
             "input" => match get_tag_attr_value_lower(tag, "type").as_deref() {
                 Some("text") => crate::Element::Input(crate::Input::Text {
-                    value: get_tag_attr_value_owned(tag, "value").unwrap_or_default(),
-                    placeholder: get_tag_attr_value_owned(tag, "placeholder").unwrap_or_default(),
+                    value: get_tag_attr_value_owned(tag, "value"),
+                    placeholder: get_tag_attr_value_owned(tag, "placeholder"),
                 }),
                 Some("password") => crate::Element::Input(crate::Input::Password {
-                    value: get_tag_attr_value_owned(tag, "value").unwrap_or_default(),
-                    placeholder: get_tag_attr_value_owned(tag, "placeholder").unwrap_or_default(),
+                    value: get_tag_attr_value_owned(tag, "value"),
+                    placeholder: get_tag_attr_value_owned(tag, "placeholder"),
                 }),
                 Some(_) | None => {
                     return None;

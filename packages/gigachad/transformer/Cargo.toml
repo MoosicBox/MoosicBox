@@ -11,15 +11,26 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
+moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
+
+itertools = { workspace = true, optional = true }
+log       = { workspace = true }
 thiserror = { workspace = true }
 tl        = { workspace = true, optional = true }
+xml       = { workspace = true, optional = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+test-log          = { workspace = true }
 
 [features]
-default = ["calc", "html"]
+default = ["calc", "format", "html"]
 
 fail-on-warnings = []
 
-calc = []
+calc = ["dep:itertools"]
 
 html = ["dep:tl"]
 simd = ["tl?/simd"]
+
+format = ["dep:xml"]
