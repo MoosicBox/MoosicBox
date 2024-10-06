@@ -30,7 +30,9 @@ moosicbox_app_ws = { version = "0.1.0", path = "../ws", default-features = false
 moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
 moosicbox_audio_output = { version = "0.1.0", path = "../../../audio_output", default-features = false }
 moosicbox_audio_zone = { version = "0.1.0", path = "../../../audio_zone", default-features = false }
-moosicbox_core = { version = "0.1.0", path = "../../../core", default-features = false }
+moosicbox_core = { version = "0.1.0", path = "../../../core", default-features = false, features = [
+    "all-formats",
+] }
 moosicbox_env_utils = { version = "0.1.0", path = "../../../env_utils", default-features = false }
 moosicbox_library = { version = "0.1.0", path = "../../../library", default-features = false }
 moosicbox_logging = { version = "0.1.0", path = "../../../logging", default-features = false }

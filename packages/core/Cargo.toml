@@ -35,7 +35,7 @@ pretty_assertions = { workspace = true }
 test-log          = { workspace = true }
 
 [features]
-default = ["aac", "flac", "mp3", "openapi", "opus", "tantivy"]
+default = ["all-formats", "openapi", "tantivy"]
 
 fail-on-warnings = []
 
@@ -43,6 +43,8 @@ aac  = []
 flac = []
 mp3  = []
 opus = []
+
+all-formats = ["aac", "flac", "mp3", "opus"]
 
 openapi = ["dep:utoipa"]
 
