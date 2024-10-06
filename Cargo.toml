@@ -111,9 +111,9 @@ async-trait = "0.1.83"
 atomic_float = "1.1.0"
 audiopus = "0.2.0"
 awc = "3.5.1"
-aws-config = "1.5.7"
-aws-sdk-apigatewaymanagement = "1.44.0"
-aws-sdk-ssm = "1.49.0"
+aws-config = "1.5.8"
+aws-sdk-apigatewaymanagement = "1.45.0"
+aws-sdk-ssm = "1.50.0"
 base64 = "0.22.1"
 bytes = "1.7.2"
 chrono = { version = "0.4.38", default-features = false, features = [
@@ -136,10 +136,10 @@ fltk = "1.4.34"
 flume = "0.11.0"
 free_log_client = { version = "0.3.0" }
 futures = "0.3"
-futures-channel = "0.3.30"
-futures-core = "0.3.30"
-futures-sink = "0.3.30"
-futures-util = { version = "0.3.30", default-features = false, features = [
+futures-channel = "0.3.31"
+futures-core = "0.3.31"
+futures-sink = "0.3.31"
+futures-util = { version = "0.3.31", default-features = false, features = [
     "std",
 ] }
 hex = "0.4.3"
@@ -176,7 +176,7 @@ ogg = "0.9.1"
 open = "5.3.0"
 openssl = { version = "0.10.66", features = ["v110"] }
 opus = "0.3.0"
-pin-project = "1.1.5"
+pin-project = "1.1.6"
 pin-utils = "0.1.0"
 pingora = "0.3.0"
 pingora-core = "0.3.0"
