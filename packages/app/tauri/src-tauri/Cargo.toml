@@ -30,9 +30,7 @@ moosicbox_app_ws = { version = "0.1.0", path = "../ws", default-features = false
 moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
 moosicbox_audio_output = { version = "0.1.0", path = "../../../audio_output", default-features = false }
 moosicbox_audio_zone = { version = "0.1.0", path = "../../../audio_zone", default-features = false }
-moosicbox_core = { version = "0.1.0", path = "../../../core", default-features = false, features = [
-    "all-formats",
-] }
+moosicbox_core = { version = "0.1.0", path = "../../../core", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../../../env_utils", default-features = false }
 moosicbox_library = { version = "0.1.0", path = "../../../library", default-features = false }
 moosicbox_logging = { version = "0.1.0", path = "../../../logging", default-features = false }
@@ -80,7 +78,7 @@ tokio = { workspace = true, features = ["macros"] }
 tokio-util = { workspace = true }
 
 [features]
-default = ["cpal"]
+default = ["all-supported-formats", "cpal"]
 
 fail-on-warnings = []
 
@@ -95,6 +93,9 @@ all-encoders = ["aac", "flac", "mp3"]
 
 bundled = ["dep:moosicbox_app_tauri_bundled"]
 client  = ["dep:moosicbox_app_client"]
+
+
+all-supported-formats = ["aac", "flac", "mp3"]
 
 # Encoders
 aac  = ["moosicbox_app_tauri_bundled?/aac", "moosicbox_core/aac"]
