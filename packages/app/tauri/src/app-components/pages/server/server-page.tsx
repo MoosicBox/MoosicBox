@@ -81,6 +81,16 @@ export default function serverPage() {
         window.location.href = './profile';
     }
 
+    async function skip() {
+        await setConnection(getNewConnectionId(), {
+            name: 'MoosicBox Server',
+            apiUrl: '',
+        });
+
+        localStorage.removeItem('settingUp');
+        window.location.href = '/';
+    }
+
     return (
         <div>
             <h1>Set up your MoosicBox server connection:</h1>
@@ -119,6 +129,14 @@ export default function serverPage() {
                 class="remove-button-styles finish-button"
             >
                 Save
+            </button>
+            <h2>or skip:</h2>
+            <button
+                onClick={async () => await skip()}
+                type="button"
+                class="remove-button-styles finish-button"
+            >
+                Skip
             </button>
         </div>
     );
