@@ -213,6 +213,27 @@ impl Renderer {
         }
     }
 
+    fn handle_resize(&self, window: &Window) {
+        let width = self.width.load(std::sync::atomic::Ordering::SeqCst);
+        let height = self.height.load(std::sync::atomic::Ordering::SeqCst);
+
+        if width != window.width() || height != window.height() {
+            self.width
+                .store(window.width(), std::sync::atomic::Ordering::SeqCst);
+            self.height
+                .store(window.height(), std::sync::atomic::Ordering::SeqCst);
+            log::debug!(
+                "event resize: width={width}->{} height={height}->{}",
+                window.width(),
+                window.height()
+            );
+
+            if let Err(e) = self.perform_render() {
+                log::error!("Failed to draw elements: {e:?}");
+            }
+        }
+    }
+
     /// # Panics
     ///
     /// Will panic if elements `Mutex` is poisoned.
@@ -251,26 +272,7 @@ impl Renderer {
             let renderer = self.clone();
             move |window, ev| match ev {
                 Event::Resize => {
-                    if renderer.width.load(std::sync::atomic::Ordering::SeqCst) != window.width()
-                        || renderer.height.load(std::sync::atomic::Ordering::SeqCst)
-                            != window.height()
-                    {
-                        renderer
-                            .width
-                            .store(window.width(), std::sync::atomic::Ordering::SeqCst);
-                        renderer
-                            .height
-                            .store(window.height(), std::sync::atomic::Ordering::SeqCst);
-                        log::debug!(
-                            "event resize: width={} height={}",
-                            window.width(),
-                            window.height()
-                        );
-
-                        if let Err(e) = renderer.perform_render() {
-                            log::error!("Failed to draw elements: {e:?}");
-                        }
-                    }
+                    renderer.handle_resize(window);
                     true
                 }
                 _ => false,
