@@ -432,7 +432,9 @@ impl Renderer {
 
     fn perform_render(&self) -> Result<(), FltkError> {
         let (Some(mut window), Some(tx)) = (self.window.clone(), self.event_sender.clone()) else {
-            moosicbox_assert::die_or_panic!("Cannot perform_render before app is started");
+            moosicbox_assert::die_or_panic!(
+                "perform_render: cannot perform_render before app is started"
+            );
         };
         log::debug!("perform_render: started");
         {
@@ -465,11 +467,11 @@ impl Renderer {
                 container.calc();
             }
 
-            log::debug!("Initialized ContainerElement for rendering {container:?}");
+            log::debug!("perform_render: initialized ContainerElement for rendering {container:?} window_width={window_width} window_height={window_height}");
 
             root.replace(draw_elements(
                 container,
-                #[allow(clippy::cast_precision_loss)]
+                0,
                 Context::new(window_width, window_height),
                 tx,
             )?);
@@ -548,10 +550,11 @@ impl Context {
 
 fn draw_elements(
     element: &ContainerElement,
+    depth: usize,
     context: Context,
     event_sender: Sender<AppEvent>,
 ) -> Result<group::Flex, FltkError> {
-    log::debug!("draw_elements: element={element:?}");
+    log::debug!("draw_elements: element={element:?} depth={depth}");
 
     let outer_flex = match context.overflow {
         LayoutOverflow::Scroll | LayoutOverflow::Squash => None,
@@ -615,10 +618,17 @@ fn draw_elements(
         col = current_col;
 
         if i == len - 1 {
-            draw_element(element, context, &mut flex, event_sender)?;
+            draw_element(element, i, depth + 1, context, &mut flex, event_sender)?;
             break;
         }
-        draw_element(element, context.clone(), &mut flex, event_sender.clone())?;
+        draw_element(
+            element,
+            i,
+            depth + 1,
+            context.clone(),
+            &mut flex,
+            event_sender.clone(),
+        )?;
     }
 
     flex.end();
@@ -633,12 +643,14 @@ fn draw_elements(
 #[allow(clippy::cognitive_complexity)]
 fn draw_element(
     element: &Element,
+    index: usize,
+    depth: usize,
     mut context: Context,
     flex: &mut group::Flex,
     event_sender: Sender<AppEvent>,
 ) -> Result<Option<Box<dyn WidgetExt>>, FltkError> {
     log::debug!(
-        "draw_element: element={element:?} flex_width={} flex_height={} bounds={:?}",
+        "draw_element: element={element:?} flex_width={} flex_height={} bounds={:?} index={index} depth={depth}",
         flex.width(),
         flex.height(),
         flex.bounds()
@@ -672,56 +684,56 @@ fn draw_element(
             context = context.with_container(element);
             width = element.calculated_width;
             height = element.calculated_height;
-            flex_element = Some(draw_elements(element, context, event_sender)?);
+            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::Aside { element } => {
             context = context.with_container(element);
             width = element.calculated_width;
             height = element.calculated_height;
-            flex_element = Some(draw_elements(element, context, event_sender)?);
+            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::Header { element } => {
             context = context.with_container(element);
             width = element.calculated_width;
             height = element.calculated_height;
-            flex_element = Some(draw_elements(element, context, event_sender)?);
+            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::Footer { element } => {
             context = context.with_container(element);
             width = element.calculated_width;
             height = element.calculated_height;
-            flex_element = Some(draw_elements(element, context, event_sender)?);
+            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::Main { element } => {
             context = context.with_container(element);
             width = element.calculated_width;
             height = element.calculated_height;
-            flex_element = Some(draw_elements(element, context, event_sender)?);
+            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::Section { element } => {
             context = context.with_container(element);
             width = element.calculated_width;
             height = element.calculated_height;
-            flex_element = Some(draw_elements(element, context, event_sender)?);
+            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::Form { element } => {
             context = context.with_container(element);
             width = element.calculated_width;
             height = element.calculated_height;
-            flex_element = Some(draw_elements(element, context, event_sender)?);
+            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::Span { element } => {
             context = context.with_container(element);
             width = element.calculated_width;
             height = element.calculated_height;
-            flex_element = Some(draw_elements(element, context, event_sender)?);
+            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::Input(_) => {}
         Element::Button { element } => {
             context = context.with_container(element);
             width = element.calculated_width;
             height = element.calculated_height;
-            flex_element = Some(draw_elements(element, context, event_sender)?);
+            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::Image { source, element } => {
             context = context.with_container(element);
@@ -794,7 +806,7 @@ fn draw_element(
             context = context.with_container(element);
             width = element.calculated_width;
             height = element.calculated_height;
-            let mut elements = draw_elements(element, context, event_sender.clone())?;
+            let mut elements = draw_elements(element, depth, context, event_sender.clone())?;
             if let Some(href) = href.to_owned() {
                 elements.handle(move |_, ev| match ev {
                     Event::Push => true,
@@ -822,19 +834,19 @@ fn draw_element(
             };
             width = element.calculated_width;
             height = element.calculated_height;
-            flex_element = Some(draw_elements(element, context, event_sender)?);
+            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::OrderedList { element } | Element::UnorderedList { element } => {
             context = context.with_container(element);
             width = element.calculated_width;
             height = element.calculated_height;
-            flex_element = Some(draw_elements(element, context, event_sender)?);
+            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::ListItem { element } => {
             context = context.with_container(element);
             width = element.calculated_width;
             height = element.calculated_height;
-            flex_element = Some(draw_elements(element, context, event_sender)?);
+            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
     }
 
@@ -850,25 +862,51 @@ fn draw_element(
         let mut container = group::Flex::default_fill().row();
 
         #[cfg(feature = "debug")]
-        container.draw({
-            let element_name = element.tag_display_str();
-            move |w| {
-                use fltk::draw;
+        if depth == 1 || index > 0 {
+            let mut element_info = vec![];
 
-                draw::set_draw_color(enums::Color::Red);
-                draw::draw_rect(w.x(), w.y(), w.w(), w.h());
-                draw::set_font(fltk::draw::font(), 8);
-                let text = format!(
-                    "{element_name} ({}, {}, {}, {})",
-                    w.x(),
-                    w.y(),
-                    w.w(),
-                    w.h()
+            let mut child = Some(element);
+
+            while let Some(element) = child.take() {
+                let element_name = element.tag_display_str();
+                let text = element.container_element().map_or_else(
+                    || element_name.to_string(),
+                    |container| {
+                        format!(
+                            "{element_name} ({}, {}, {}, {})",
+                            container.calculated_x.unwrap_or(0.0),
+                            container.calculated_y.unwrap_or(0.0),
+                            container.calculated_width.unwrap_or(0.0),
+                            container.calculated_height.unwrap_or(0.0),
+                        )
+                    },
                 );
-                let (_t_x, _t_y, _t_w, t_h) = draw::text_extents(&text);
-                draw::draw_text(&text, w.x(), w.y() + t_h);
+
+                element_info.push(text);
+
+                if let Some(container) = element.container_element() {
+                    child = container.elements.first();
+                }
             }
-        });
+
+            container.draw({
+                move |w| {
+                    use fltk::draw;
+
+                    draw::set_draw_color(enums::Color::Red);
+                    draw::draw_rect(w.x(), w.y(), w.w(), w.h());
+                    draw::set_font(fltk::draw::font(), 8);
+
+                    let mut y_offset = 0;
+
+                    for text in &element_info {
+                        let (_t_x, _t_y, _t_w, t_h) = draw::text_extents(text);
+                        y_offset += t_h;
+                        draw::draw_text(text, w.x(), w.y() + y_offset);
+                    }
+                }
+            });
+        }
         flex.remove(&flex_element);
         container.add(&flex_element);
 
