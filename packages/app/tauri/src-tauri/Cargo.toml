@@ -33,7 +33,9 @@ moosicbox_audio_zone = { version = "0.1.0", path = "../../../audio_zone", defaul
 moosicbox_core = { version = "0.1.0", path = "../../../core", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../../../env_utils", default-features = false }
 moosicbox_library = { version = "0.1.0", path = "../../../library", default-features = false }
-moosicbox_logging = { version = "0.1.0", path = "../../../logging", default-features = false }
+moosicbox_logging = { version = "0.1.0", path = "../../../logging", default-features = false, features = [
+    "free_log",
+] }
 moosicbox_mdns = { version = "0.1.0", path = "../../../mdns", default-features = false, features = [
     "scanner",
 ] }

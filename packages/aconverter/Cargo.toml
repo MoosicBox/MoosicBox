@@ -21,13 +21,15 @@ moosicbox_core = { version = "0.1.0", path = "../core", default-features = false
 moosicbox_files = { version = "0.1.0", path = "../files", default-features = false, features = [
     "files",
 ] }
-moosicbox_logging = { version = "0.1.0", path = "../logging", default-features = false }
+moosicbox_logging = { version = "0.1.0", path = "../logging", default-features = false, features = [
+    "free_log",
+] }
 moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false }
 
-moosicbox_audiotags = { workspace = true }
 clap = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
+moosicbox_audiotags = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [
     "macros",

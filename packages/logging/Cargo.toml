@@ -11,12 +11,21 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_config    = { version = "0.1.0", path = "../config", default-features = false }
-moosicbox_env_utils = { version = "0.1.0", path = "../env_utils", default-features = false }
+moosicbox_config    = { version = "0.1.0", path = "../config", optional = true, default-features = false }
+moosicbox_env_utils = { version = "0.1.0", path = "../env_utils", optional = true, default-features = false }
 
 free_log_client = { workspace = true }
 log             = { workspace = true }
 thiserror       = { workspace = true }
 
 [features]
+default = ["api", "free_log", "macros"]
+
 fail-on-warnings = []
+
+
+api      = ["free_log_client/api"]
+
+free_log = ["dep:moosicbox_config", "dep:moosicbox_env_utils"]
+
+macros = []
