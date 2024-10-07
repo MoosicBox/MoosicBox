@@ -122,7 +122,7 @@ pub fn albums_page_content(albums: Vec<ApiAlbum>) -> Markup {
     html! {
         div sx-dir="row" sx-overflow="wrap" {
             @for album in &albums {
-                div {
+                div sx-width="100" sx-height="130" {
                     img src=(album_cover_url(album, 100, 100)) sx-width="100" sx-height="100";
                     (album.title)
                 }
