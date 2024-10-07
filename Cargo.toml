@@ -92,6 +92,10 @@ lto      = "fat"
 inherits = "release-lto"
 panic    = "abort"
 
+[profile.small]
+inherits  = "release-lto-no-panic"
+opt-level = "z"
+
 [workspace.package]
 edition = "2021"
 
