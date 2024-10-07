@@ -3174,6 +3174,7 @@ dependencies = [
  "itertools 0.13.0",
  "log",
  "moosicbox_assert",
+ "moosicbox_logging",
  "pretty_assertions",
  "test-log",
  "thiserror",

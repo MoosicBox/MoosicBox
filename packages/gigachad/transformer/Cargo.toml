@@ -11,7 +11,8 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
+moosicbox_assert  = { version = "0.1.0", path = "../../assert", default-features = false }
+moosicbox_logging = { version = "0.1.0", path = "../../logging", default-features = false }
 
 itertools = { workspace = true, optional = true }
 log       = { workspace = true }
