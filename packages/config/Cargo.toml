@@ -12,7 +12,7 @@ version     = "0.1.0"
 
 [dependencies]
 moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
-moosicbox_profiles = { version = "0.1.0", path = "../profiles", default-features = false, features = [
+moosicbox_profiles = { version = "0.1.0", path = "../profiles", optional = true, default-features = false, features = [
     "events",
 ] }
 
@@ -42,7 +42,12 @@ fail-on-warnings = []
 
 test = ["dep:rand"]
 
-db = ["dep:moosicbox_database", "dep:moosicbox_json_utils", "dep:nanoid"]
+db = [
+    "dep:moosicbox_database",
+    "dep:moosicbox_json_utils",
+    "dep:moosicbox_profiles",
+    "dep:nanoid",
+]
 
 api     = ["db", "dep:actix-web", "dep:serde", "moosicbox_database?/api"]
 openapi = ["dep:utoipa"]
