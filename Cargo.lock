@@ -2798,13 +2798,12 @@ dependencies = [
 
 [[package]]
 name = "free_log_client"
-version = "0.3.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e24e153667c498b7b8031772d1aa592a1e92f581de8a6c4d7c7aa1563ead551"
+checksum = "ea36e2fb879a217fbdab6443ee8005b2314dcb6afcc13864144fdf3d24c0b04b"
 dependencies = [
  "free_log_models",
  "futures-util",
- "once_cell",
  "reqwest 0.12.8",
  "serde",
  "serde_json",
