@@ -37,6 +37,14 @@ type RouteFunc = Arc<
     >,
 >;
 
+#[cfg(feature = "debug")]
+static DEBUG: LazyLock<RwLock<bool>> = LazyLock::new(|| {
+    RwLock::new(
+        std::env::var("DEBUG_RENDERER")
+            .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str())),
+    )
+});
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RoutePath {
     Literal(String),
@@ -578,10 +586,14 @@ fn draw_elements(
     };
 
     #[cfg(feature = "debug")]
-    flex.draw(|w| {
-        fltk::draw::set_draw_color(enums::Color::White);
-        fltk::draw::draw_rect(w.x(), w.y(), w.w(), w.h());
-    });
+    {
+        if *DEBUG.read().unwrap() {
+            flex.draw(|w| {
+                fltk::draw::set_draw_color(enums::Color::White);
+                fltk::draw::draw_rect(w.x(), w.y(), w.w(), w.h());
+            });
+        }
+    }
 
     let (mut row, mut col) = element
         .calculated_position
@@ -615,10 +627,14 @@ fn draw_elements(
             };
 
             #[cfg(feature = "debug")]
-            flex.draw(|w| {
-                fltk::draw::set_draw_color(enums::Color::White);
-                fltk::draw::draw_rect(w.x(), w.y(), w.w(), w.h());
-            });
+            {
+                if *DEBUG.read().unwrap() {
+                    flex.draw(|w| {
+                        fltk::draw::set_draw_color(enums::Color::White);
+                        fltk::draw::draw_rect(w.x(), w.y(), w.w(), w.h());
+                    });
+                }
+            }
         }
 
         row = current_row;
@@ -680,10 +696,14 @@ fn draw_element(
                 .with_align(enums::Align::Inside | enums::Align::Left);
 
             #[cfg(feature = "debug")]
-            frame.draw(|w| {
-                fltk::draw::set_draw_color(enums::Color::White);
-                fltk::draw::draw_rect(w.x(), w.y(), w.w(), w.h());
-            });
+            {
+                if *DEBUG.read().unwrap() {
+                    frame.draw(|w| {
+                        fltk::draw::set_draw_color(enums::Color::White);
+                        fltk::draw::draw_rect(w.x(), w.y(), w.w(), w.h());
+                    });
+                }
+            }
 
             other_element = Some(Box::new(frame));
         }
@@ -749,10 +769,14 @@ fn draw_element(
             let mut frame = Frame::default_fill();
 
             #[cfg(feature = "debug")]
-            frame.draw(|w| {
-                fltk::draw::set_draw_color(enums::Color::White);
-                fltk::draw::draw_rect(w.x(), w.y(), w.w(), w.h());
-            });
+            {
+                if *DEBUG.read().unwrap() {
+                    frame.draw(|w| {
+                        fltk::draw::set_draw_color(enums::Color::White);
+                        fltk::draw::draw_rect(w.x(), w.y(), w.w(), w.h());
+                    });
+                }
+            }
 
             if let Some(source) = source {
                 if source.starts_with("http") {
@@ -869,50 +893,52 @@ fn draw_element(
         let mut container = group::Flex::default_fill().row();
 
         #[cfg(feature = "debug")]
-        if depth == 1 || index > 0 {
-            let mut element_info = vec![];
+        {
+            if *DEBUG.read().unwrap() && (depth == 1 || index > 0) {
+                let mut element_info = vec![];
 
-            let mut child = Some(element);
+                let mut child = Some(element);
 
-            while let Some(element) = child.take() {
-                let element_name = element.tag_display_str();
-                let text = element.container_element().map_or_else(
-                    || element_name.to_string(),
-                    |container| {
-                        format!(
-                            "{element_name} ({}, {}, {}, {})",
-                            container.calculated_x.unwrap_or(0.0),
-                            container.calculated_y.unwrap_or(0.0),
-                            container.calculated_width.unwrap_or(0.0),
-                            container.calculated_height.unwrap_or(0.0),
-                        )
-                    },
-                );
+                while let Some(element) = child.take() {
+                    let element_name = element.tag_display_str();
+                    let text = element.container_element().map_or_else(
+                        || element_name.to_string(),
+                        |container| {
+                            format!(
+                                "{element_name} ({}, {}, {}, {})",
+                                container.calculated_x.unwrap_or(0.0),
+                                container.calculated_y.unwrap_or(0.0),
+                                container.calculated_width.unwrap_or(0.0),
+                                container.calculated_height.unwrap_or(0.0),
+                            )
+                        },
+                    );
 
-                element_info.push(text);
+                    element_info.push(text);
 
-                if let Some(container) = element.container_element() {
-                    child = container.elements.first();
-                }
-            }
-
-            container.draw({
-                move |w| {
-                    use fltk::draw;
-
-                    draw::set_draw_color(enums::Color::Red);
-                    draw::draw_rect(w.x(), w.y(), w.w(), w.h());
-                    draw::set_font(fltk::draw::font(), 8);
-
-                    let mut y_offset = 0;
-
-                    for text in &element_info {
-                        let (_t_x, _t_y, _t_w, t_h) = draw::text_extents(text);
-                        y_offset += t_h;
-                        draw::draw_text(text, w.x(), w.y() + y_offset);
+                    if let Some(container) = element.container_element() {
+                        child = container.elements.first();
                     }
                 }
-            });
+
+                container.draw({
+                    move |w| {
+                        use fltk::draw;
+
+                        draw::set_draw_color(enums::Color::Red);
+                        draw::draw_rect(w.x(), w.y(), w.w(), w.h());
+                        draw::set_font(fltk::draw::font(), 8);
+
+                        let mut y_offset = 0;
+
+                        for text in &element_info {
+                            let (_t_x, _t_y, _t_w, t_h) = draw::text_extents(text);
+                            y_offset += t_h;
+                            draw::draw_text(text, w.x(), w.y() + y_offset);
+                        }
+                    }
+                });
+            }
         }
         flex.remove(&flex_element);
         container.add(&flex_element);
