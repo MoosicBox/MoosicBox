@@ -14,10 +14,12 @@ version     = "0.1.0"
 ignored = ["strum"]
 
 [dependencies]
-moosicbox_assert       = { version = "0.1.0", path = "../assert", default-features = false }
+moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
 moosicbox_audio_output = { version = "0.1.0", path = "../audio_output", optional = true, default-features = false }
-moosicbox_logging      = { version = "0.1.0", path = "../logging", optional = true, default-features = false }
-moosicbox_task         = { version = "0.1.0", path = "../task", default-features = false }
+moosicbox_logging = { version = "0.1.0", path = "../logging", optional = true, default-features = false, features = [
+    "macros",
+] }
+moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }

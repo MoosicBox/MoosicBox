@@ -21,7 +21,9 @@ moosicbox_database = { version = "0.1.0", path = "../database", default-features
 moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
     "database",
 ] }
-moosicbox_logging = { version = "0.1.0", path = "../logging", default-features = false }
+moosicbox_logging = { version = "0.1.0", path = "../logging", default-features = false, features = [
+    "macros",
+] }
 moosicbox_session = { version = "0.1.0", path = "../session", default-features = false }
 
 async-trait = { workspace = true, optional = true }

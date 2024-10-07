@@ -19,7 +19,9 @@ moosicbox_database = { version = "0.1.0", path = "../database", default-features
 moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
     "serde_json",
 ] }
-moosicbox_logging = { version = "0.1.0", path = "../logging", default-features = false }
+moosicbox_logging = { version = "0.1.0", path = "../logging", default-features = false, features = [
+    "macros",
+] }
 moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false }
 moosicbox_resampler = { version = "0.1.0", path = "../resampler", default-features = false }
 moosicbox_session = { version = "0.1.0", path = "../session", default-features = false }

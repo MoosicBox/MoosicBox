@@ -29,7 +29,9 @@ moosicbox_env_utils = { version = "0.1.0", path = "../env_utils" }
 moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
     "database",
 ] }
-moosicbox_logging = { version = "0.1.0", path = "../logging" }
+moosicbox_logging = { version = "0.1.0", path = "../logging", features = [
+    "free_log",
+] }
 moosicbox_middleware = { version = "0.1.0", path = "../middleware", default-features = false }
 moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
 moosicbox_tunnel = { version = "0.1.0", path = "../tunnel", default-features = false }
