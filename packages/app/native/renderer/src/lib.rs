@@ -858,17 +858,15 @@ fn draw_element(
                 draw::set_draw_color(enums::Color::Red);
                 draw::draw_rect(w.x(), w.y(), w.w(), w.h());
                 draw::set_font(fltk::draw::font(), 8);
-                draw::draw_text(
-                    &format!(
-                        "{element_name} ({}, {}, {}, {})",
-                        w.x(),
-                        w.y(),
-                        w.w(),
-                        w.h()
-                    ),
+                let text = format!(
+                    "{element_name} ({}, {}, {}, {})",
                     w.x(),
-                    w.y() + app::font_size(),
+                    w.y(),
+                    w.w(),
+                    w.h()
                 );
+                let (_t_x, _t_y, _t_w, t_h) = draw::text_extents(&text);
+                draw::draw_text(&text, w.x(), w.y() + t_h);
             }
         });
         flex.remove(&flex_element);
