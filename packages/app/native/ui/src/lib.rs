@@ -110,7 +110,7 @@ fn album_cover_url(album: &ApiLibraryAlbum, width: u16, height: u16) -> String {
 }
 
 #[must_use]
-pub fn albums(albums: Vec<ApiAlbum>) -> Markup {
+pub fn albums_page_content(albums: Vec<ApiAlbum>) -> Markup {
     let albums = albums
         .into_iter()
         .map(|x| {
@@ -119,7 +119,7 @@ pub fn albums(albums: Vec<ApiAlbum>) -> Markup {
         })
         .collect::<Vec<_>>();
 
-    page(&html! {
+    html! {
         div sx-dir="row" sx-overflow="wrap" {
             @for album in &albums {
                 div {
@@ -128,7 +128,12 @@ pub fn albums(albums: Vec<ApiAlbum>) -> Markup {
                 }
             }
         }
-    })
+    }
+}
+
+#[must_use]
+pub fn albums(albums: Vec<ApiAlbum>) -> Markup {
+    page(&albums_page_content(albums))
 }
 
 #[must_use]
