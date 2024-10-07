@@ -411,17 +411,94 @@ impl ContainerElement {
                     })
                 })
                 .into_iter()
-                .map(|(_, elements)| {
-                    elements
+                .filter_map(|(_, elements)| {
+                    let mut widths = elements
                         .filter_map(|x| x.container_element())
                         .filter_map(|x| {
                             x.width
                                 .map(|x| calc_number(x, calculated_width))
                                 .or_else(|| x.contained_sized_width())
                         })
-                        .max_by(order_float)
+                        .peekable();
+
+                    if widths.peek().is_some() {
+                        Some(widths.sum())
+                    } else {
+                        None
+                    }
                 })
-                .sum(),
+                .max_by(order_float),
+            LayoutDirection::Column => {
+                let columns = self.elements.iter().chunk_by(|x| {
+                    x.container_element().and_then(|x| {
+                        x.calculated_position.as_ref().and_then(|x| match x {
+                            LayoutPosition::Wrap { col, .. } => Some(col),
+                            LayoutPosition::Default => None,
+                        })
+                    })
+                });
+
+                let mut widths = columns
+                    .into_iter()
+                    .filter_map(|(_, elements)| {
+                        elements
+                            .filter_map(|x| x.container_element())
+                            .filter_map(|x| {
+                                x.width
+                                    .map(|x| calc_number(x, calculated_width))
+                                    .or_else(|| x.contained_sized_width())
+                            })
+                            .max_by(order_float)
+                    })
+                    .peekable();
+
+                if widths.peek().is_some() {
+                    Some(widths.sum())
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    fn contained_sized_height(&self) -> Option<f32> {
+        let Some(calculated_height) = self.calculated_height else {
+            moosicbox_assert::die_or_panic!(
+                "calculated_height is required to get the contained_sized_height"
+            );
+        };
+
+        match self.direction {
+            LayoutDirection::Row => {
+                let rows = self.elements.iter().chunk_by(|x| {
+                    x.container_element().and_then(|x| {
+                        x.calculated_position.as_ref().and_then(|x| match x {
+                            LayoutPosition::Wrap { row, .. } => Some(row),
+                            LayoutPosition::Default => None,
+                        })
+                    })
+                });
+
+                let mut heights = rows
+                    .into_iter()
+                    .filter_map(|(_, elements)| {
+                        elements
+                            .filter_map(|x| x.container_element())
+                            .filter_map(|x| {
+                                x.height
+                                    .map(|x| calc_number(x, calculated_height))
+                                    .or_else(|| x.contained_sized_height())
+                            })
+                            .max_by(order_float)
+                    })
+                    .peekable();
+
+                if heights.peek().is_some() {
+                    Some(heights.sum())
+                } else {
+                    None
+                }
+            }
             LayoutDirection::Column => self
                 .elements
                 .iter()
@@ -435,71 +512,20 @@ impl ContainerElement {
                 })
                 .into_iter()
                 .filter_map(|(_, elements)| {
-                    elements
-                        .filter_map(|x| x.container_element())
-                        .filter_map(|x| {
-                            x.width
-                                .map(|x| calc_number(x, calculated_width))
-                                .or_else(|| x.contained_sized_width())
-                        })
-                        .max_by(order_float)
-                })
-                .max_by(order_float),
-        }
-    }
-
-    fn contained_sized_height(&self) -> Option<f32> {
-        let Some(calculated_height) = self.calculated_height else {
-            moosicbox_assert::die_or_panic!(
-                "calculated_height is required to get the contained_sized_height"
-            );
-        };
-
-        match self.direction {
-            LayoutDirection::Row => self
-                .elements
-                .iter()
-                .chunk_by(|x| {
-                    x.container_element().and_then(|x| {
-                        x.calculated_position.as_ref().and_then(|x| match x {
-                            LayoutPosition::Wrap { row, .. } => Some(row),
-                            LayoutPosition::Default => None,
-                        })
-                    })
-                })
-                .into_iter()
-                .map(|(_, elements)| {
-                    elements
+                    let mut heights = elements
                         .filter_map(|x| x.container_element())
                         .filter_map(|x| {
                             x.height
                                 .map(|x| calc_number(x, calculated_height))
                                 .or_else(|| x.contained_sized_height())
                         })
-                        .max_by(order_float)
-                })
-                .sum(),
-            LayoutDirection::Column => self
-                .elements
-                .iter()
-                .chunk_by(|x| {
-                    x.container_element().and_then(|x| {
-                        x.calculated_position.as_ref().and_then(|x| match x {
-                            LayoutPosition::Wrap { col, .. } => Some(col),
-                            LayoutPosition::Default => None,
-                        })
-                    })
-                })
-                .into_iter()
-                .map(|(_, elements)| {
-                    elements
-                        .filter_map(|x| x.container_element())
-                        .filter_map(|x| {
-                            x.height
-                                .map(|x| calc_number(x, calculated_height))
-                                .or_else(|| x.contained_sized_height())
-                        })
-                        .sum()
+                        .peekable();
+
+                    if heights.peek().is_some() {
+                        Some(heights.sum())
+                    } else {
+                        None
+                    }
                 })
                 .max_by(order_float),
         }
