@@ -457,7 +457,10 @@ impl Renderer {
             let recalc = if let (Some(width), Some(height)) =
                 (container.calculated_width, container.calculated_height)
             {
-                (width - window_width).abs() < 0.01 || (height - window_height).abs() < 0.01
+                let diff_width = (width - window_width).abs();
+                let diff_height = (height - window_height).abs();
+                log::trace!("perform_render: diff_width={diff_width} diff_height={diff_height}");
+                diff_width > 0.01 || diff_height > 0.01
             } else {
                 true
             };
@@ -467,6 +470,8 @@ impl Renderer {
                 container.calculated_height.replace(window_height);
 
                 container.calc();
+            } else {
+                log::debug!("perform_render: ContainerElement had same size, not recalculating");
             }
 
             log::debug!("perform_render: initialized ContainerElement for rendering {container:?} window_width={window_width} window_height={window_height}");
