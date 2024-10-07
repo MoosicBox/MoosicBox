@@ -283,6 +283,27 @@ impl Renderer {
                     renderer.handle_resize(window);
                     true
                 }
+                #[cfg(feature = "debug")]
+                Event::KeyUp => {
+                    let key = app::event_key();
+                    log::debug!("Received key press {key:?}");
+                    if key == enums::Key::F3 {
+                        let value = {
+                            let mut handle = DEBUG.write().unwrap();
+                            let value = *handle;
+                            let value = !value;
+                            *handle = value;
+                            value
+                        };
+                        log::debug!("Set DEBUG to {value}");
+                        if let Err(e) = renderer.perform_render() {
+                            log::error!("Failed to draw elements: {e:?}");
+                        }
+                        true
+                    } else {
+                        false
+                    }
+                }
                 _ => false,
             }
         });
