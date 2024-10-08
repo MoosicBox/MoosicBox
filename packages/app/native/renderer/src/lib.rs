@@ -939,6 +939,8 @@ fn draw_element(
                 }
             }
 
+            fixed_size!(direction, width, height, flex, &frame);
+
             other_element = Some(Box::new(frame));
         }
         Element::Anchor { element, href } => {
