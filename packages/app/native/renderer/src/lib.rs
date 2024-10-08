@@ -790,8 +790,6 @@ fn draw_element(
     );
 
     let direction = context.direction;
-    let container_width = context.width;
-    let container_height = context.height;
     let mut width = None;
     let mut height = None;
     let mut flex_element = None;
@@ -1054,30 +1052,7 @@ fn draw_element(
         flex.remove(&flex_element);
         container.add(&flex_element);
 
-        match direction {
-            LayoutDirection::Row => {
-                if let Some(width) = width {
-                    #[allow(clippy::cast_possible_truncation)]
-                    flex.fixed(&container, width.round() as i32);
-                    log::debug!("draw_element: setting fixed width={width} (container_width={container_width} container_height={container_height})");
-                } else {
-                    log::debug!(
-                        "draw_element: not setting fixed width size width={width:?} height={height:?} (container_width={container_width} container_height={container_height})"
-                    );
-                }
-            }
-            LayoutDirection::Column => {
-                if let Some(height) = height {
-                    #[allow(clippy::cast_possible_truncation)]
-                    flex.fixed(&container, height.round() as i32);
-                    log::debug!("draw_element: setting fixed height={height} (container_width={container_width} container_height={container_height})");
-                } else {
-                    log::debug!(
-                        "draw_element: not setting fixed height size width={width:?} height={height:?} (container_width={container_width} container_height={container_height})"
-                    );
-                }
-            }
-        }
+        fixed_size!(direction, width, height, flex, &container);
 
         container.end();
 
@@ -1087,4 +1062,38 @@ fn draw_element(
     Ok(flex_element
         .map(|x| Box::new(x) as Box<dyn WidgetExt>)
         .or(other_element))
+}
+
+#[macro_export]
+macro_rules! fixed_size {
+    ($direction:expr, $width:expr, $height:expr, $container:expr, $element:expr $(,)?) => {
+        match $direction {
+            LayoutDirection::Row => {
+                if let Some(width) = $width {
+                    #[allow(clippy::cast_possible_truncation)]
+                    $container.fixed($element, width.round() as i32);
+                    log::debug!("draw_element: setting fixed width={width}");
+                } else {
+                    log::debug!(
+                        "draw_element: not setting fixed width size width={:?} height={:?}",
+                        $width,
+                        $height,
+                    );
+                }
+            }
+            LayoutDirection::Column => {
+                if let Some(height) = $height {
+                    #[allow(clippy::cast_possible_truncation)]
+                    $container.fixed($element, height.round() as i32);
+                    log::debug!("draw_element: setting fixed height={height})");
+                } else {
+                    log::debug!(
+                        "draw_element: not setting fixed height size width={:?} height={:?}",
+                        $width,
+                        $height,
+                    );
+                }
+            }
+        }
+    };
 }
