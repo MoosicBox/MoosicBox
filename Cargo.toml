@@ -228,7 +228,7 @@ strum = "0.26.3"
 strum_macros = "0.26.4"
 symphonia = { version = "0.5.4", features = ["all"] }
 tantivy = "0.22.0"
-tauri = { version = "2.0.1", features = ["protocol-asset"] }
+tauri = { version = "2.0.2", features = ["protocol-asset"] }
 tauri-build = { version = "2.0.1", features = [] }
 tauri-plugin = { version = "2.0.1", features = ["build"] }
 tauri-plugin-dialog = "2.0.1"
