@@ -257,10 +257,9 @@ impl ContainerElement {
                                     col = 0;
                                     current_row = row;
                                     current_col = col;
-                                } else {
-                                    x += width;
-                                    col += 1;
                                 }
+                                x += width;
+                                col += 1;
                             }
                             LayoutDirection::Column => {
                                 let next_col = y > 0.0 && y + height > container_height;
@@ -275,10 +274,9 @@ impl ContainerElement {
                                     row = 0;
                                     current_row = row;
                                     current_col = col;
-                                } else {
-                                    y += height;
-                                    row += 1;
                                 }
+                                y += height;
+                                row += 1;
                             }
                         }
 
@@ -1573,7 +1571,7 @@ mod test {
     }
 
     #[test_log::test]
-    fn handle_overflow_wraps_row_content_correctly() {
+    fn handle_overflow_wraps_single_row_overflow_content_correctly() {
         let mut container = ContainerElement {
             elements: vec![
                 Element::Div {
@@ -1645,6 +1643,128 @@ mod test {
                             calculated_x: Some(0.0),
                             calculated_y: Some(20.0),
                             calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                            ..Default::default()
+                        },
+                    },
+                ],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn handle_overflow_wraps_multi_row_overflow_content_correctly() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(50.0),
+            calculated_height: Some(40.0),
+            direction: LayoutDirection::Row,
+            overflow_x: LayoutOverflow::Wrap,
+            overflow_y: LayoutOverflow::default(),
+            ..Default::default()
+        };
+        let shifted = container.handle_overflow();
+
+        let row_height = 40.0 / 3.0;
+
+        assert_eq!(shifted, false);
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            width: Some(Number::Integer(25)),
+                            calculated_width: Some(25.0),
+                            calculated_height: Some(row_height),
+                            calculated_x: Some(0.0),
+                            calculated_y: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                            ..Default::default()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            width: Some(Number::Integer(25)),
+                            calculated_width: Some(25.0),
+                            calculated_height: Some(row_height),
+                            calculated_x: Some(25.0),
+                            calculated_y: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                            ..Default::default()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            width: Some(Number::Integer(25)),
+                            calculated_width: Some(25.0),
+                            calculated_height: Some(row_height),
+                            calculated_x: Some(0.0),
+                            calculated_y: Some(row_height),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                            ..Default::default()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            width: Some(Number::Integer(25)),
+                            calculated_width: Some(25.0),
+                            calculated_height: Some(row_height),
+                            calculated_x: Some(25.0),
+                            calculated_y: Some(row_height),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
+                            ..Default::default()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            width: Some(Number::Integer(25)),
+                            calculated_width: Some(25.0),
+                            calculated_height: Some(row_height),
+                            calculated_x: Some(0.0),
+                            calculated_y: Some(row_height * 2.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
                             ..Default::default()
                         },
                     },
