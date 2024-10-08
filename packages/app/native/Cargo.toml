@@ -42,4 +42,5 @@ fail-on-warnings = []
 bundled = ["dep:moosicbox_app_native_bundled"]
 
 debug  = ["moosicbox_app_native_lib/debug"]
+format = ["moosicbox_app_native_lib/format"]
 unsafe = ["moosicbox_app_native_lib/unsafe"]
