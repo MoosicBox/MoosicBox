@@ -122,6 +122,23 @@ fn get_number(tag: &HTMLTag, name: &str) -> Result<Number, GetNumberError> {
     })
 }
 
+fn parse_element(
+    tag: &HTMLTag<'_>,
+    node: &Node<'_>,
+    parser: &Parser<'_>,
+) -> crate::ContainerElement {
+    #[allow(clippy::needless_update)]
+    crate::ContainerElement {
+        direction: get_direction(tag),
+        overflow_x: get_overflow(tag, "sx-overflow-x"),
+        overflow_y: get_overflow(tag, "sx-overflow-y"),
+        elements: parse_top_children(node.children(), parser),
+        width: get_number(tag, "sx-width").ok(),
+        height: get_number(tag, "sx-height").ok(),
+        ..Default::default()
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
     Some(match node {
@@ -140,240 +157,69 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 }
             },
             "main" => crate::Element::Main {
-                #[allow(clippy::needless_update)]
-                element: crate::ContainerElement {
-                    direction: get_direction(tag),
-                    overflow_x: get_overflow(tag, "sx-overflow-x"),
-                    overflow_y: get_overflow(tag, "sx-overflow-y"),
-                    elements: parse_top_children(node.children(), parser),
-                    width: get_number(tag, "sx-width").ok(),
-                    height: get_number(tag, "sx-height").ok(),
-                    ..Default::default()
-                },
+                element: parse_element(tag, node, parser),
             },
             "header" => crate::Element::Header {
-                #[allow(clippy::needless_update)]
-                element: crate::ContainerElement {
-                    direction: get_direction(tag),
-                    overflow_x: get_overflow(tag, "sx-overflow-x"),
-                    overflow_y: get_overflow(tag, "sx-overflow-y"),
-                    elements: parse_top_children(node.children(), parser),
-                    width: get_number(tag, "sx-width").ok(),
-                    height: get_number(tag, "sx-height").ok(),
-                    ..Default::default()
-                },
+                element: parse_element(tag, node, parser),
             },
             "footer" => crate::Element::Footer {
-                #[allow(clippy::needless_update)]
-                element: crate::ContainerElement {
-                    direction: get_direction(tag),
-                    overflow_x: get_overflow(tag, "sx-overflow-x"),
-                    overflow_y: get_overflow(tag, "sx-overflow-y"),
-                    elements: parse_top_children(node.children(), parser),
-                    width: get_number(tag, "sx-width").ok(),
-                    height: get_number(tag, "sx-height").ok(),
-                    ..Default::default()
-                },
+                element: parse_element(tag, node, parser),
             },
             "aside" => crate::Element::Aside {
-                #[allow(clippy::needless_update)]
-                element: crate::ContainerElement {
-                    direction: get_direction(tag),
-                    overflow_x: get_overflow(tag, "sx-overflow-x"),
-                    overflow_y: get_overflow(tag, "sx-overflow-y"),
-                    elements: parse_top_children(node.children(), parser),
-                    width: get_number(tag, "sx-width").ok(),
-                    height: get_number(tag, "sx-height").ok(),
-                    ..Default::default()
-                },
+                element: parse_element(tag, node, parser),
             },
             "div" => crate::Element::Div {
-                #[allow(clippy::needless_update)]
-                element: crate::ContainerElement {
-                    direction: get_direction(tag),
-                    overflow_x: get_overflow(tag, "sx-overflow-x"),
-                    overflow_y: get_overflow(tag, "sx-overflow-y"),
-                    elements: parse_top_children(node.children(), parser),
-                    width: get_number(tag, "sx-width").ok(),
-                    height: get_number(tag, "sx-height").ok(),
-                    ..Default::default()
-                },
+                element: parse_element(tag, node, parser),
             },
             "section" => crate::Element::Section {
-                #[allow(clippy::needless_update)]
-                element: crate::ContainerElement {
-                    direction: get_direction(tag),
-                    overflow_x: get_overflow(tag, "sx-overflow-x"),
-                    overflow_y: get_overflow(tag, "sx-overflow-y"),
-                    elements: parse_top_children(node.children(), parser),
-                    width: get_number(tag, "sx-width").ok(),
-                    height: get_number(tag, "sx-height").ok(),
-                    ..Default::default()
-                },
+                element: parse_element(tag, node, parser),
             },
             "form" => crate::Element::Form {
-                #[allow(clippy::needless_update)]
-                element: crate::ContainerElement {
-                    direction: get_direction(tag),
-                    overflow_x: get_overflow(tag, "sx-overflow-x"),
-                    overflow_y: get_overflow(tag, "sx-overflow-y"),
-                    elements: parse_top_children(node.children(), parser),
-                    width: get_number(tag, "sx-width").ok(),
-                    height: get_number(tag, "sx-height").ok(),
-                    ..Default::default()
-                },
+                element: parse_element(tag, node, parser),
             },
             "button" => crate::Element::Button {
-                #[allow(clippy::needless_update)]
-                element: crate::ContainerElement {
-                    direction: get_direction(tag),
-                    overflow_x: get_overflow(tag, "sx-overflow-x"),
-                    overflow_y: get_overflow(tag, "sx-overflow-y"),
-                    elements: parse_top_children(node.children(), parser),
-                    width: get_number(tag, "sx-width").ok(),
-                    height: get_number(tag, "sx-height").ok(),
-                    ..Default::default()
-                },
+                element: parse_element(tag, node, parser),
             },
             "img" => crate::Element::Image {
                 source: get_tag_attr_value_owned(tag, "src"),
-                #[allow(clippy::needless_update)]
-                element: crate::ContainerElement {
-                    direction: get_direction(tag),
-                    overflow_x: get_overflow(tag, "sx-overflow-x"),
-                    overflow_y: get_overflow(tag, "sx-overflow-y"),
-                    elements: parse_top_children(node.children(), parser),
-                    width: get_number(tag, "sx-width").ok(),
-                    height: get_number(tag, "sx-height").ok(),
-                    ..Default::default()
-                },
+                element: parse_element(tag, node, parser),
             },
             "a" => crate::Element::Anchor {
                 href: get_tag_attr_value_owned(tag, "href"),
-                #[allow(clippy::needless_update)]
-                element: crate::ContainerElement {
-                    direction: get_direction(tag),
-                    overflow_x: get_overflow(tag, "sx-overflow-x"),
-                    overflow_y: get_overflow(tag, "sx-overflow-y"),
-                    elements: parse_top_children(node.children(), parser),
-                    width: get_number(tag, "sx-width").ok(),
-                    height: get_number(tag, "sx-height").ok(),
-                    ..Default::default()
-                },
+                element: parse_element(tag, node, parser),
             },
             "h1" => crate::Element::Heading {
                 size: crate::HeaderSize::H1,
-                #[allow(clippy::needless_update)]
-                element: crate::ContainerElement {
-                    direction: get_direction(tag),
-                    overflow_x: get_overflow(tag, "sx-overflow-x"),
-                    overflow_y: get_overflow(tag, "sx-overflow-y"),
-                    elements: parse_top_children(node.children(), parser),
-                    width: get_number(tag, "sx-width").ok(),
-                    height: get_number(tag, "sx-height").ok(),
-                    ..Default::default()
-                },
+                element: parse_element(tag, node, parser),
             },
             "h2" => crate::Element::Heading {
                 size: crate::HeaderSize::H2,
-                #[allow(clippy::needless_update)]
-                element: crate::ContainerElement {
-                    direction: get_direction(tag),
-                    overflow_x: get_overflow(tag, "sx-overflow-x"),
-                    overflow_y: get_overflow(tag, "sx-overflow-y"),
-                    elements: parse_top_children(node.children(), parser),
-                    width: get_number(tag, "sx-width").ok(),
-                    height: get_number(tag, "sx-height").ok(),
-                    ..Default::default()
-                },
+                element: parse_element(tag, node, parser),
             },
             "h3" => crate::Element::Heading {
                 size: crate::HeaderSize::H3,
-                #[allow(clippy::needless_update)]
-                element: crate::ContainerElement {
-                    direction: get_direction(tag),
-                    overflow_x: get_overflow(tag, "sx-overflow-x"),
-                    overflow_y: get_overflow(tag, "sx-overflow-y"),
-                    elements: parse_top_children(node.children(), parser),
-                    width: get_number(tag, "sx-width").ok(),
-                    height: get_number(tag, "sx-height").ok(),
-                    ..Default::default()
-                },
+                element: parse_element(tag, node, parser),
             },
             "h4" => crate::Element::Heading {
                 size: crate::HeaderSize::H4,
-                #[allow(clippy::needless_update)]
-                element: crate::ContainerElement {
-                    direction: get_direction(tag),
-                    overflow_x: get_overflow(tag, "sx-overflow-x"),
-                    overflow_y: get_overflow(tag, "sx-overflow-y"),
-                    elements: parse_top_children(node.children(), parser),
-                    width: get_number(tag, "sx-width").ok(),
-                    height: get_number(tag, "sx-height").ok(),
-                    ..Default::default()
-                },
+                element: parse_element(tag, node, parser),
             },
             "h5" => crate::Element::Heading {
                 size: crate::HeaderSize::H5,
-                #[allow(clippy::needless_update)]
-                element: crate::ContainerElement {
-                    direction: get_direction(tag),
-                    overflow_x: get_overflow(tag, "sx-overflow-x"),
-                    overflow_y: get_overflow(tag, "sx-overflow-y"),
-                    elements: parse_top_children(node.children(), parser),
-                    width: get_number(tag, "sx-width").ok(),
-                    height: get_number(tag, "sx-height").ok(),
-                    ..Default::default()
-                },
+                element: parse_element(tag, node, parser),
             },
             "h6" => crate::Element::Heading {
                 size: crate::HeaderSize::H6,
-                #[allow(clippy::needless_update)]
-                element: crate::ContainerElement {
-                    direction: get_direction(tag),
-                    overflow_x: get_overflow(tag, "sx-overflow-x"),
-                    overflow_y: get_overflow(tag, "sx-overflow-y"),
-                    elements: parse_top_children(node.children(), parser),
-                    width: get_number(tag, "sx-width").ok(),
-                    height: get_number(tag, "sx-height").ok(),
-                    ..Default::default()
-                },
+                element: parse_element(tag, node, parser),
             },
             "ul" => crate::Element::UnorderedList {
-                #[allow(clippy::needless_update)]
-                element: crate::ContainerElement {
-                    direction: get_direction(tag),
-                    overflow_x: get_overflow(tag, "sx-overflow-x"),
-                    overflow_y: get_overflow(tag, "sx-overflow-y"),
-                    elements: parse_top_children(node.children(), parser),
-                    width: get_number(tag, "sx-width").ok(),
-                    height: get_number(tag, "sx-height").ok(),
-                    ..Default::default()
-                },
+                element: parse_element(tag, node, parser),
             },
             "ol" => crate::Element::OrderedList {
-                #[allow(clippy::needless_update)]
-                element: crate::ContainerElement {
-                    direction: get_direction(tag),
-                    overflow_x: get_overflow(tag, "sx-overflow-x"),
-                    overflow_y: get_overflow(tag, "sx-overflow-y"),
-                    elements: parse_top_children(node.children(), parser),
-                    width: get_number(tag, "sx-width").ok(),
-                    height: get_number(tag, "sx-height").ok(),
-                    ..Default::default()
-                },
+                element: parse_element(tag, node, parser),
             },
             "li" => crate::Element::ListItem {
-                #[allow(clippy::needless_update)]
-                element: crate::ContainerElement {
-                    direction: get_direction(tag),
-                    overflow_x: get_overflow(tag, "sx-overflow-x"),
-                    overflow_y: get_overflow(tag, "sx-overflow-y"),
-                    elements: parse_top_children(node.children(), parser),
-                    width: get_number(tag, "sx-width").ok(),
-                    height: get_number(tag, "sx-height").ok(),
-                    ..Default::default()
-                },
+                element: parse_element(tag, node, parser),
             },
             _ => {
                 return None;
