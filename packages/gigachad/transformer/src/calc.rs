@@ -1775,6 +1775,88 @@ mod test {
     }
 
     #[test_log::test]
+    fn handle_overflow_wraps_row_content_correctly_in_overflow_y_scroll() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(50.0),
+            calculated_height: Some(40.0),
+            direction: LayoutDirection::Row,
+            overflow_x: LayoutOverflow::Wrap,
+            overflow_y: LayoutOverflow::Scroll,
+            ..Default::default()
+        };
+        let shifted = container.handle_overflow();
+
+        assert_eq!(shifted, false);
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            width: Some(Number::Integer(25)),
+                            calculated_width: Some(25.0),
+                            calculated_height: Some(40.0),
+                            calculated_x: Some(0.0),
+                            calculated_y: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                            ..Default::default()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            width: Some(Number::Integer(25)),
+                            calculated_width: Some(25.0),
+                            calculated_height: Some(40.0),
+                            calculated_x: Some(25.0),
+                            calculated_y: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                            ..Default::default()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            width: Some(Number::Integer(25)),
+                            calculated_width: Some(25.0),
+                            calculated_height: Some(40.0),
+                            calculated_x: Some(0.0),
+                            calculated_y: Some(40.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                            ..Default::default()
+                        },
+                    },
+                ],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
     fn calc_inner_wraps_row_content_correctly() {
         let mut container = ContainerElement {
             elements: vec![
