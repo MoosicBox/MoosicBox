@@ -307,30 +307,34 @@ impl Element {
 
         #[cfg(feature = "format")]
         let data = {
-            use xml::{reader::ParserConfig, writer::EmitterConfig};
-            let data: &[u8] = &data;
+            if data[0] == b'<' {
+                use xml::{reader::ParserConfig, writer::EmitterConfig};
+                let data: &[u8] = &data;
 
-            let reader = ParserConfig::new()
-                .trim_whitespace(true)
-                .ignore_comments(false)
-                .create_reader(data);
+                let reader = ParserConfig::new()
+                    .trim_whitespace(true)
+                    .ignore_comments(false)
+                    .create_reader(data);
 
-            let mut dest = Vec::new();
+                let mut dest = Vec::new();
 
-            let mut writer = EmitterConfig::new()
-                .perform_indent(true)
-                .normalize_empty_elements(false)
-                .autopad_comments(false)
-                .write_document_declaration(false)
-                .create_writer(&mut dest);
+                let mut writer = EmitterConfig::new()
+                    .perform_indent(true)
+                    .normalize_empty_elements(false)
+                    .autopad_comments(false)
+                    .write_document_declaration(false)
+                    .create_writer(&mut dest);
 
-            for event in reader {
-                if let Some(event) = event?.as_writer_event() {
-                    writer.write(event)?;
+                for event in reader {
+                    if let Some(event) = event?.as_writer_event() {
+                        writer.write(event)?;
+                    }
                 }
-            }
 
-            dest
+                dest
+            } else {
+                data
+            }
         };
 
         let pretty = String::from_utf8(data)?;
