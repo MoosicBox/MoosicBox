@@ -595,7 +595,7 @@ fn draw_elements(
 ) -> Result<group::Flex, FltkError> {
     log::debug!("draw_elements: element={element:?} depth={depth}");
 
-    let mut outer_flex = match context.overflow_y {
+    let mut outer_flex = match context.overflow_x {
         LayoutOverflow::Auto | LayoutOverflow::Scroll | LayoutOverflow::Squash => None,
         LayoutOverflow::Wrap => Some(match context.direction {
             LayoutDirection::Row => group::Flex::default_fill().column(),
