@@ -229,6 +229,30 @@ impl ContainerElement {
         if let Some(height) = self.height {
             attrs.add("sx-height", height);
         }
+        match self.overflow_x {
+            LayoutOverflow::Auto => {
+                attrs.add("sx-overflow-x", "auto");
+            }
+            LayoutOverflow::Scroll => {
+                attrs.add("sx-overflow-x", "scroll");
+            }
+            LayoutOverflow::Squash => {}
+            LayoutOverflow::Wrap => {
+                attrs.add("sx-overflow-x", "wrap");
+            }
+        }
+        match self.overflow_y {
+            LayoutOverflow::Auto => {
+                attrs.add("sx-overflow-y", "auto");
+            }
+            LayoutOverflow::Scroll => {
+                attrs.add("sx-overflow-y", "scroll");
+            }
+            LayoutOverflow::Squash => {}
+            LayoutOverflow::Wrap => {
+                attrs.add("sx-overflow-y", "wrap");
+            }
+        }
 
         if with_debug_attrs {
             #[cfg(feature = "calc")]
