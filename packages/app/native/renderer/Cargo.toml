@@ -28,7 +28,7 @@ thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["sync"] }
 
 [features]
-default = ["format", "unsafe"]
+default = ["debug", "format", "unsafe"]
 
 fail-on-warnings = []
 
