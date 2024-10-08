@@ -28,9 +28,10 @@ thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["sync"] }
 
 [features]
-default = ["unsafe"]
+default = ["format", "unsafe"]
 
 fail-on-warnings = []
 
 debug  = []
+format = ["gigachad_transformer/format"]
 unsafe = []

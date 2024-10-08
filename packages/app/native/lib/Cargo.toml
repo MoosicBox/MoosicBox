@@ -26,9 +26,10 @@ thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
 
 [features]
-default = ["unsafe"]
+default = ["format", "unsafe"]
 
 fail-on-warnings = []
 
 debug  = ["moosicbox_app_native_renderer/debug"]
+format = ["gigachad_transformer/format", "moosicbox_app_native_renderer/format"]
 unsafe = ["moosicbox_app_native_renderer/unsafe"]
