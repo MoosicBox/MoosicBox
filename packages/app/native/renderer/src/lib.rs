@@ -592,19 +592,24 @@ fn draw_elements(
 ) -> Result<group::Flex, FltkError> {
     log::debug!("draw_elements: element={element:?} depth={depth}");
 
-    let outer_flex = match context.overflow {
+    let mut outer_flex = match context.overflow {
         LayoutOverflow::Scroll | LayoutOverflow::Squash => None,
         LayoutOverflow::Wrap => Some(match context.direction {
             LayoutDirection::Row => group::Flex::default_fill().column(),
             LayoutDirection::Column => group::Flex::default_fill().row(),
         }),
     };
+    if let Some(outer) = &mut outer_flex {
+        outer.set_pad(0);
+    }
 
     let flex = group::Flex::default_fill();
     let mut flex = match context.direction {
         LayoutDirection::Row => flex.row(),
         LayoutDirection::Column => flex.column(),
     };
+
+    flex.set_pad(0);
 
     #[cfg(feature = "debug")]
     {
@@ -912,6 +917,7 @@ fn draw_element(
         }
 
         let mut container = group::Flex::default_fill().row();
+        container.set_pad(0);
 
         #[cfg(feature = "debug")]
         {
