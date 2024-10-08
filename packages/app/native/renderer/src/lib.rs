@@ -587,6 +587,47 @@ impl Context {
     }
 }
 
+trait Group {
+    fn end(&mut self);
+}
+
+impl Group for group::Pack {
+    fn end(&mut self) {
+        <Self as GroupExt>::end(self);
+    }
+}
+
+impl From<group::Pack> for Box<dyn Group> {
+    fn from(value: group::Pack) -> Self {
+        Box::new(value)
+    }
+}
+
+impl Group for group::Flex {
+    fn end(&mut self) {
+        <Self as GroupExt>::end(self);
+    }
+}
+
+impl From<group::Flex> for Box<dyn Group> {
+    fn from(value: group::Flex) -> Self {
+        Box::new(value)
+    }
+}
+
+impl Group for group::Scroll {
+    fn end(&mut self) {
+        <Self as GroupExt>::end(self);
+    }
+}
+
+impl From<group::Scroll> for Box<dyn Group> {
+    fn from(value: group::Scroll) -> Self {
+        Box::new(value)
+    }
+}
+
+#[allow(clippy::too_many_lines)]
 fn draw_elements(
     element: &ContainerElement,
     depth: usize,
@@ -595,16 +636,51 @@ fn draw_elements(
 ) -> Result<group::Flex, FltkError> {
     log::debug!("draw_elements: element={element:?} depth={depth}");
 
-    let mut outer_flex = match context.overflow_x {
-        LayoutOverflow::Auto | LayoutOverflow::Scroll | LayoutOverflow::Squash => None,
-        LayoutOverflow::Wrap => Some(match context.direction {
-            LayoutDirection::Row => group::Flex::default_fill().column(),
-            LayoutDirection::Column => group::Flex::default_fill().row(),
+    let mut container = group::Flex::default_fill();
+    container.set_pad(0);
+
+    let container_y: Option<Box<dyn Group>> = match context.overflow_y {
+        LayoutOverflow::Auto => Some(
+            group::Scroll::default_fill()
+                .with_type(group::ScrollType::Vertical)
+                .into(),
+        ),
+        LayoutOverflow::Scroll => Some(
+            group::Scroll::default_fill()
+                .with_type(group::ScrollType::VerticalAlways)
+                .into(),
+        ),
+        LayoutOverflow::Squash => None,
+        LayoutOverflow::Wrap => Some({
+            let mut flex = match context.direction {
+                LayoutDirection::Row => group::Flex::default_fill().column(),
+                LayoutDirection::Column => group::Flex::default_fill().row(),
+            };
+            flex.set_pad(0);
+            flex.into()
         }),
     };
-    if let Some(outer) = &mut outer_flex {
-        outer.set_pad(0);
-    }
+    let container_x: Option<Box<dyn Group>> = match context.overflow_x {
+        LayoutOverflow::Auto => Some(
+            group::Scroll::default_fill()
+                .with_type(group::ScrollType::Horizontal)
+                .into(),
+        ),
+        LayoutOverflow::Scroll => Some(
+            group::Scroll::default_fill()
+                .with_type(group::ScrollType::HorizontalAlways)
+                .into(),
+        ),
+        LayoutOverflow::Squash => None,
+        LayoutOverflow::Wrap => Some({
+            let mut flex = match context.direction {
+                LayoutDirection::Row => group::Flex::default_fill().column(),
+                LayoutDirection::Column => group::Flex::default_fill().row(),
+            };
+            flex.set_pad(0);
+            flex.into()
+        }),
+    };
 
     let flex = group::Flex::default_fill();
     let mut flex = match context.direction {
@@ -654,6 +730,7 @@ fn draw_elements(
                 LayoutDirection::Row => group::Flex::default_fill().row(),
                 LayoutDirection::Column => group::Flex::default_fill().column(),
             };
+            flex.set_pad(0);
 
             #[cfg(feature = "debug")]
             {
@@ -684,11 +761,15 @@ fn draw_elements(
     }
 
     flex.end();
-    if let Some(outer) = outer_flex {
-        outer.end();
-        return Ok(outer);
+    if let Some(mut container) = container_x {
+        container.end();
     }
-    Ok(flex)
+    if let Some(mut container) = container_y {
+        container.end();
+    }
+    container.end();
+
+    Ok(container)
 }
 
 #[allow(clippy::too_many_lines)]
