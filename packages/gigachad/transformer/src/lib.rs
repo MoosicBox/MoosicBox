@@ -276,7 +276,10 @@ impl Display for Element {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(
             &self
-                .display_to_string(std::env::var("DEBUG_ATTRS").is_ok_and(|x| &x == "1"))
+                .display_to_string(
+                    std::env::var("DEBUG_ATTRS")
+                        .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str())),
+                )
                 .unwrap(),
         )?;
 
