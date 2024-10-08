@@ -553,7 +553,8 @@ impl Renderer {
 struct Context {
     size: u16,
     direction: LayoutDirection,
-    overflow: LayoutOverflow,
+    overflow_x: LayoutOverflow,
+    overflow_y: LayoutOverflow,
     width: f32,
     height: f32,
 }
@@ -563,7 +564,8 @@ impl Context {
         Self {
             size: 12,
             direction: LayoutDirection::default(),
-            overflow: LayoutOverflow::default(),
+            overflow_x: LayoutOverflow::default(),
+            overflow_y: LayoutOverflow::default(),
             width,
             height,
         }
@@ -571,7 +573,8 @@ impl Context {
 
     fn with_container(mut self, container: &ContainerElement) -> Self {
         self.direction = container.direction;
-        self.overflow = container.overflow;
+        self.overflow_x = container.overflow_x;
+        self.overflow_y = container.overflow_y;
         self.width = container
             .calculated_width
             .or_else(|| container.width.map(|x| calc_number(x, self.width)))
@@ -592,7 +595,7 @@ fn draw_elements(
 ) -> Result<group::Flex, FltkError> {
     log::debug!("draw_elements: element={element:?} depth={depth}");
 
-    let mut outer_flex = match context.overflow {
+    let mut outer_flex = match context.overflow_y {
         LayoutOverflow::Scroll | LayoutOverflow::Squash => None,
         LayoutOverflow::Wrap => Some(match context.direction {
             LayoutDirection::Row => group::Flex::default_fill().column(),

@@ -73,8 +73,8 @@ fn get_direction(tag: &HTMLTag) -> LayoutDirection {
     }
 }
 
-fn get_overflow(tag: &HTMLTag) -> LayoutOverflow {
-    match get_tag_attr_value_lower(tag, "sx-overflow").as_deref() {
+fn get_overflow(tag: &HTMLTag, name: &str) -> LayoutOverflow {
+    match get_tag_attr_value_lower(tag, name).as_deref() {
         Some("wrap") => LayoutOverflow::Wrap,
         Some("scroll") => LayoutOverflow::Scroll,
         _ => LayoutOverflow::default(),
@@ -142,7 +142,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
-                    overflow: get_overflow(tag),
+                    overflow_x: get_overflow(tag, "sx-overflow-x"),
+                    overflow_y: get_overflow(tag, "sx-overflow-y"),
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
@@ -153,7 +154,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
-                    overflow: get_overflow(tag),
+                    overflow_x: get_overflow(tag, "sx-overflow-x"),
+                    overflow_y: get_overflow(tag, "sx-overflow-y"),
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
@@ -164,7 +166,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
-                    overflow: get_overflow(tag),
+                    overflow_x: get_overflow(tag, "sx-overflow-x"),
+                    overflow_y: get_overflow(tag, "sx-overflow-y"),
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
@@ -175,7 +178,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
-                    overflow: get_overflow(tag),
+                    overflow_x: get_overflow(tag, "sx-overflow-x"),
+                    overflow_y: get_overflow(tag, "sx-overflow-y"),
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
@@ -186,7 +190,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
-                    overflow: get_overflow(tag),
+                    overflow_x: get_overflow(tag, "sx-overflow-x"),
+                    overflow_y: get_overflow(tag, "sx-overflow-y"),
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
@@ -197,7 +202,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
-                    overflow: get_overflow(tag),
+                    overflow_x: get_overflow(tag, "sx-overflow-x"),
+                    overflow_y: get_overflow(tag, "sx-overflow-y"),
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
@@ -208,7 +214,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
-                    overflow: get_overflow(tag),
+                    overflow_x: get_overflow(tag, "sx-overflow-x"),
+                    overflow_y: get_overflow(tag, "sx-overflow-y"),
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
@@ -219,7 +226,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
-                    overflow: get_overflow(tag),
+                    overflow_x: get_overflow(tag, "sx-overflow-x"),
+                    overflow_y: get_overflow(tag, "sx-overflow-y"),
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
@@ -231,7 +239,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
-                    overflow: get_overflow(tag),
+                    overflow_x: get_overflow(tag, "sx-overflow-x"),
+                    overflow_y: get_overflow(tag, "sx-overflow-y"),
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
@@ -243,7 +252,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
-                    overflow: get_overflow(tag),
+                    overflow_x: get_overflow(tag, "sx-overflow-x"),
+                    overflow_y: get_overflow(tag, "sx-overflow-y"),
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
@@ -255,7 +265,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
-                    overflow: get_overflow(tag),
+                    overflow_x: get_overflow(tag, "sx-overflow-x"),
+                    overflow_y: get_overflow(tag, "sx-overflow-y"),
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
@@ -267,7 +278,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
-                    overflow: get_overflow(tag),
+                    overflow_x: get_overflow(tag, "sx-overflow-x"),
+                    overflow_y: get_overflow(tag, "sx-overflow-y"),
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
@@ -279,7 +291,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
-                    overflow: get_overflow(tag),
+                    overflow_x: get_overflow(tag, "sx-overflow-x"),
+                    overflow_y: get_overflow(tag, "sx-overflow-y"),
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
@@ -291,7 +304,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
-                    overflow: get_overflow(tag),
+                    overflow_x: get_overflow(tag, "sx-overflow-x"),
+                    overflow_y: get_overflow(tag, "sx-overflow-y"),
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
@@ -303,7 +317,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
-                    overflow: get_overflow(tag),
+                    overflow_x: get_overflow(tag, "sx-overflow-x"),
+                    overflow_y: get_overflow(tag, "sx-overflow-y"),
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
@@ -315,7 +330,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
-                    overflow: get_overflow(tag),
+                    overflow_x: get_overflow(tag, "sx-overflow-x"),
+                    overflow_y: get_overflow(tag, "sx-overflow-y"),
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
@@ -326,7 +342,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
-                    overflow: get_overflow(tag),
+                    overflow_x: get_overflow(tag, "sx-overflow-x"),
+                    overflow_y: get_overflow(tag, "sx-overflow-y"),
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
@@ -337,7 +354,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
-                    overflow: get_overflow(tag),
+                    overflow_x: get_overflow(tag, "sx-overflow-x"),
+                    overflow_y: get_overflow(tag, "sx-overflow-y"),
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),
@@ -348,7 +366,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
                 #[allow(clippy::needless_update)]
                 element: crate::ContainerElement {
                     direction: get_direction(tag),
-                    overflow: get_overflow(tag),
+                    overflow_x: get_overflow(tag, "sx-overflow-x"),
+                    overflow_y: get_overflow(tag, "sx-overflow-y"),
                     elements: parse_top_children(node.children(), parser),
                     width: get_number(tag, "sx-width").ok(),
                     height: get_number(tag, "sx-height").ok(),

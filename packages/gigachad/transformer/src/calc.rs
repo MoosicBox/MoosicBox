@@ -204,7 +204,7 @@ impl ContainerElement {
         let mut layout_shifted = false;
 
         let direction = self.direction;
-        let overflow = self.overflow;
+        let overflow = self.overflow_x;
         let container_width = self.calculated_width.unwrap_or(0.0);
         let container_height = self.calculated_height.unwrap_or(0.0);
 
@@ -977,7 +977,8 @@ mod test {
             calculated_width: Some(100.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow: LayoutOverflow::default(),
+            overflow_x: LayoutOverflow::default(),
+            overflow_y: LayoutOverflow::default(),
             ..Default::default()
         };
         container.calc_inner();
@@ -1070,7 +1071,8 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap,
+            overflow_y: LayoutOverflow::default(),
             ..Default::default()
         };
         let width = container.contained_sized_width();
@@ -1120,7 +1122,8 @@ mod test {
             calculated_width: Some(40.0),
             calculated_height: Some(50.0),
             direction: LayoutDirection::Row,
-            overflow: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap,
+            overflow_y: LayoutOverflow::default(),
             ..Default::default()
         };
         let width = container.contained_sized_width();
@@ -1163,7 +1166,8 @@ mod test {
             calculated_width: Some(40.0),
             calculated_height: Some(50.0),
             direction: LayoutDirection::Column,
-            overflow: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap,
+            overflow_y: LayoutOverflow::default(),
             ..Default::default()
         };
         let height = container.contained_sized_height();
@@ -1213,7 +1217,8 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap,
+            overflow_y: LayoutOverflow::default(),
             ..Default::default()
         };
         let height = container.contained_sized_height();
@@ -1256,7 +1261,8 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap,
+            overflow_y: LayoutOverflow::default(),
             ..Default::default()
         };
         let width = container.contained_calculated_width();
@@ -1304,7 +1310,8 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap,
+            overflow_y: LayoutOverflow::default(),
             ..Default::default()
         };
         let height = container.contained_calculated_height();
@@ -1352,7 +1359,8 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap,
+            overflow_y: LayoutOverflow::default(),
             ..Default::default()
         };
         let resized = container.resize_children();
@@ -1418,7 +1426,8 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap,
+            overflow_y: LayoutOverflow::default(),
             ..Default::default()
         };
         let shifted = container.handle_overflow();
@@ -1493,7 +1502,8 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap,
+            overflow_y: LayoutOverflow::default(),
             ..Default::default()
         };
         container.calc();
@@ -1582,7 +1592,8 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap,
+            overflow_y: LayoutOverflow::default(),
             ..Default::default()
         };
         container.calc();
@@ -1706,7 +1717,8 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap,
+            overflow_y: LayoutOverflow::default(),
             ..Default::default()
         };
         container.calc();

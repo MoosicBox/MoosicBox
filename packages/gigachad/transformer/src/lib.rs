@@ -91,7 +91,8 @@ impl LayoutPosition {
 pub struct ContainerElement {
     pub elements: Vec<Element>,
     pub direction: LayoutDirection,
-    pub overflow: LayoutOverflow,
+    pub overflow_x: LayoutOverflow,
+    pub overflow_y: LayoutOverflow,
     pub width: Option<Number>,
     pub height: Option<Number>,
     #[cfg(feature = "calc")]
