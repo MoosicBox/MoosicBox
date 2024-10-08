@@ -1074,10 +1074,10 @@ macro_rules! fixed_size {
                 if let Some(width) = $width {
                     #[allow(clippy::cast_possible_truncation)]
                     $container.fixed($element, width.round() as i32);
-                    log::debug!("draw_element: setting fixed width={width}");
+                    log::debug!("fixed_size!: setting fixed width={width}");
                 } else {
                     log::debug!(
-                        "draw_element: not setting fixed width size width={:?} height={:?}",
+                        "fixed_size!: not setting fixed width size width={:?} height={:?}",
                         $width,
                         $height,
                     );
@@ -1087,10 +1087,10 @@ macro_rules! fixed_size {
                 if let Some(height) = $height {
                     #[allow(clippy::cast_possible_truncation)]
                     $container.fixed($element, height.round() as i32);
-                    log::debug!("draw_element: setting fixed height={height})");
+                    log::debug!("fixed_size!: setting fixed height={height})");
                 } else {
                     log::debug!(
-                        "draw_element: not setting fixed height size width={:?} height={:?}",
+                        "fixed_size!: not setting fixed height size width={:?} height={:?}",
                         $width,
                         $height,
                     );
