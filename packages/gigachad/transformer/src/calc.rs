@@ -228,7 +228,7 @@ impl ContainerElement {
                 let mut current_col = col;
 
                 match overflow {
-                    LayoutOverflow::Scroll | LayoutOverflow::Squash => {
+                    LayoutOverflow::Auto | LayoutOverflow::Scroll | LayoutOverflow::Squash => {
                         match direction {
                             LayoutDirection::Row => {
                                 x += width;

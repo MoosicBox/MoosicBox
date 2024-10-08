@@ -77,6 +77,7 @@ fn get_overflow(tag: &HTMLTag, name: &str) -> LayoutOverflow {
     match get_tag_attr_value_lower(tag, name).as_deref() {
         Some("wrap") => LayoutOverflow::Wrap,
         Some("scroll") => LayoutOverflow::Scroll,
+        Some("auto") => LayoutOverflow::Auto,
         _ => LayoutOverflow::default(),
     }
 }

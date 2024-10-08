@@ -51,6 +51,7 @@ impl Display for LayoutDirection {
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum LayoutOverflow {
+    Auto,
     Scroll,
     #[default]
     Squash,
