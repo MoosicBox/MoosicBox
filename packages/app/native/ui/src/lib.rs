@@ -75,7 +75,7 @@ pub fn footer() -> Markup {
 #[must_use]
 pub fn main(slot: &Markup) -> Markup {
     html! {
-        main class="main-content" sx-background-color {
+        main class="main-content" sx-overflow-y="auto" {
             (slot)
         }
     }
