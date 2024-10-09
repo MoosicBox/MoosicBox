@@ -675,14 +675,24 @@ impl ContainerElement {
         let contained_calculated_height = self.contained_calculated_height();
 
         log::trace!(
-            "width={width} contained_calculated_width={contained_calculated_width} height={height} contained_calculated_height={contained_calculated_height} {}",
+            "calculated_width={width} contained_calculated_width={contained_calculated_width} calculated_height={height} contained_calculated_height={contained_calculated_height} {} overflow_x={} overflow_y={} width={:?} height={:?}",
             self.direction,
+            self.overflow_x,
+            self.overflow_y,
+            self.width,
+            self.height,
         );
 
-        match self.overflow_x {
-            LayoutOverflow::Auto | LayoutOverflow::Scroll | LayoutOverflow::Show => {}
-            LayoutOverflow::Squash | LayoutOverflow::Wrap => {
-                if width < contained_calculated_width {
+        if width < contained_calculated_width {
+            match self.overflow_x {
+                LayoutOverflow::Auto | LayoutOverflow::Scroll => {}
+                LayoutOverflow::Show => {
+                    if self.width.is_none() {
+                        self.calculated_width.replace(contained_calculated_width);
+                        resized = true;
+                    }
+                }
+                LayoutOverflow::Squash | LayoutOverflow::Wrap => {
                     let contained_sized_width = self.contained_sized_width().unwrap_or(0.0);
                     #[allow(clippy::cast_precision_loss)]
                     let evenly_split_remaining_size = if width > contained_sized_width {
@@ -712,10 +722,16 @@ impl ContainerElement {
                 }
             }
         }
-        match self.overflow_y {
-            LayoutOverflow::Auto | LayoutOverflow::Scroll | LayoutOverflow::Show => {}
-            LayoutOverflow::Squash | LayoutOverflow::Wrap => {
-                if height < contained_calculated_height {
+        if height < contained_calculated_height {
+            match self.overflow_y {
+                LayoutOverflow::Auto | LayoutOverflow::Scroll => {}
+                LayoutOverflow::Show => {
+                    if self.height.is_none() {
+                        self.calculated_height.replace(contained_calculated_height);
+                        resized = true;
+                    }
+                }
+                LayoutOverflow::Squash | LayoutOverflow::Wrap => {
                     let contained_sized_height = self.contained_sized_height().unwrap_or(0.0);
                     #[allow(clippy::cast_precision_loss)]
                     let evenly_split_remaining_size = if height > contained_sized_height {
@@ -1535,6 +1551,102 @@ mod test {
             (height - expected).abs() < 0.0001,
             true,
             "height expected to be {expected} (actual={height})"
+        );
+    }
+
+    #[test_log::test]
+    fn resize_children_show_y_nested_expands_parent_height_correctly() {
+        let mut container = ContainerElement {
+            elements: vec![Element::Div {
+                element: ContainerElement {
+                    elements: vec![
+                        Element::Div {
+                            element: ContainerElement {
+                                width: Some(Number::Integer(25)),
+                                calculated_width: Some(25.0),
+                                calculated_height: Some(40.0),
+                                calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                                ..Default::default()
+                            },
+                        },
+                        Element::Div {
+                            element: ContainerElement {
+                                width: Some(Number::Integer(25)),
+                                calculated_width: Some(25.0),
+                                calculated_height: Some(40.0),
+                                calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                                ..Default::default()
+                            },
+                        },
+                        Element::Div {
+                            element: ContainerElement {
+                                width: Some(Number::Integer(25)),
+                                calculated_width: Some(25.0),
+                                calculated_height: Some(40.0),
+                                calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                                ..Default::default()
+                            },
+                        },
+                    ],
+                    calculated_width: Some(50.0),
+                    calculated_height: Some(80.0),
+                    ..Default::default()
+                },
+            }],
+            calculated_width: Some(50.0),
+            calculated_height: Some(40.0),
+            direction: LayoutDirection::Row,
+            overflow_x: LayoutOverflow::Wrap,
+            overflow_y: LayoutOverflow::Show,
+            ..Default::default()
+        };
+        let resized = container.resize_children();
+
+        assert_eq!(resized, true);
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![Element::Div {
+                    element: ContainerElement {
+                        elements: vec![
+                            Element::Div {
+                                element: ContainerElement {
+                                    calculated_height: Some(40.0),
+                                    ..container.elements[0].container_element().unwrap().elements[0]
+                                        .container_element()
+                                        .unwrap()
+                                        .clone()
+                                },
+                            },
+                            Element::Div {
+                                element: ContainerElement {
+                                    calculated_height: Some(40.0),
+                                    ..container.elements[0].container_element().unwrap().elements[1]
+                                        .container_element()
+                                        .unwrap()
+                                        .clone()
+                                },
+                            },
+                            Element::Div {
+                                element: ContainerElement {
+                                    calculated_height: Some(40.0),
+                                    ..container.elements[0].container_element().unwrap().elements[2]
+                                        .container_element()
+                                        .unwrap()
+                                        .clone()
+                                },
+                            },
+                        ],
+                        calculated_width: Some(50.0),
+                        calculated_height: Some(80.0),
+                        ..Default::default()
+                    },
+                }],
+                calculated_width: Some(50.0),
+                calculated_height: Some(80.0),
+                direction: LayoutDirection::Row,
+                ..container
+            }
         );
     }
 
