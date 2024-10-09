@@ -392,7 +392,7 @@ impl ContainerElement {
         }
     }
 
-    fn contained_sized_width(&self) -> Option<f32> {
+    pub fn contained_sized_width(&self) -> Option<f32> {
         let Some(calculated_width) = self.calculated_width else {
             moosicbox_assert::die_or_panic!(
                 "calculated_width is required to get the contained_sized_width"
@@ -462,7 +462,7 @@ impl ContainerElement {
         }
     }
 
-    fn contained_sized_height(&self) -> Option<f32> {
+    pub fn contained_sized_height(&self) -> Option<f32> {
         let Some(calculated_height) = self.calculated_height else {
             moosicbox_assert::die_or_panic!(
                 "calculated_height is required to get the contained_sized_height"
@@ -532,7 +532,7 @@ impl ContainerElement {
         }
     }
 
-    fn contained_calculated_width(&self) -> f32 {
+    pub fn contained_calculated_width(&self) -> f32 {
         match self.direction {
             LayoutDirection::Row => self
                 .elements
@@ -584,7 +584,7 @@ impl ContainerElement {
         }
     }
 
-    fn contained_calculated_height(&self) -> f32 {
+    pub fn contained_calculated_height(&self) -> f32 {
         match self.direction {
             LayoutDirection::Row => self
                 .elements
@@ -636,7 +636,7 @@ impl ContainerElement {
         }
     }
 
-    fn rows(&self) -> u32 {
+    pub fn rows(&self) -> u32 {
         self.elements
             .iter()
             .filter_map(|x| x.container_element())
@@ -647,7 +647,7 @@ impl ContainerElement {
             + 1
     }
 
-    fn columns(&self) -> u32 {
+    pub fn columns(&self) -> u32 {
         self.elements
             .iter()
             .filter_map(|x| x.container_element())
