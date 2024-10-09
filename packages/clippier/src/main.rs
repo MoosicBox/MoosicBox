@@ -174,7 +174,9 @@ fn process_configs(
     {
         let features = process_features(
             fetch_features(&value, offset, max, specific_features),
-            chunked,
+            conf.as_ref()
+                .and_then(|x| x.parallelization.as_ref().map(|x| x.chunked))
+                .or(chunked),
             spread,
         );
 
@@ -480,9 +482,15 @@ pub struct ClippierConfiguration {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct ParallelizationConfig {
+    chunked: u16,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct ClippierConf {
     ci_steps: Option<VecOrItem<CommandFilteredByFeatures>>,
     cargo: Option<VecOrItem<String>>,
     config: Vec<ClippierConfiguration>,
     env: Option<HashMap<String, ClippierEnv>>,
+    parallelization: Option<ParallelizationConfig>,
 }
