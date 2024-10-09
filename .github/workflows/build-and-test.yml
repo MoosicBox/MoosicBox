@@ -90,7 +90,7 @@ jobs:
                   key: ${{ runner.os }}-${{ matrix.package.name }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
             - name: Install winget
-              if: ${{ matrix.package.os == 'windows-latest' }}
+              if: ${{ matrix.package.os == 'windows-latest' && contains(matrix.package.dependencies, 'winget') }}
               uses: Cyberboss/install-winget@v1
 
             - name: Setup CI
