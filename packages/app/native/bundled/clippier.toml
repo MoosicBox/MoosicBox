@@ -1,3 +1,6 @@
+[parallelization]
+chunked = 3
+
 [[config]]
 os = "ubuntu"
 
