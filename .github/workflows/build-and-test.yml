@@ -181,7 +181,7 @@ jobs:
             - name: Get release hash
               id: release_hash
               run: |
-                  HASH="$(git -C MoosicBox rev-parse --verify HEAD)"
+                  HASH="$(git -C MoosicBox rev-parse --verify HEAD | head -c 10)"
                   echo "hash: $HASH"
                   echo "hash=$HASH" >> $GITHUB_OUTPUT
 
