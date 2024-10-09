@@ -166,3 +166,54 @@ jobs:
               shell: bash
               run: |
                   ${{ matrix.package.env }} cargo machete --with-metadata ${{ matrix.package.path }}
+
+    create-tauri-app-release:
+        runs-on: ubuntu-latest
+
+        needs: build
+
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  token: ${{ secrets.WORKFLOW_MANAGEMENT_TOKEN }}
+                  path: MoosicBox
+
+            - name: Get release hash
+              id: release_hash
+              run: |
+                  HASH="$(git -C MoosicBox rev-parse --verify HEAD)"
+                  echo "hash: $HASH"
+                  echo "hash=$HASH" >> $GITHUB_OUTPUT
+
+            - name: Check tag exists for SHA
+              id: check_exists
+              working-directory: MoosicBox
+              run: |
+                  git fetch --unshallow --tags
+                  if [[ -n $(git show-ref --tags -d) ]]; then
+                      git show-ref --tags -d
+
+                      if [[ $(git show-ref --tags -d | grep "${{ github.sha }}") =~ "master-${{ steps.release_hash.outputs.hash }}" ]]; then
+                          echo "exists=true" >> $GITHUB_OUTPUT
+                          echo "exists"
+                      else
+                          echo "exists=false" >> $GITHUB_OUTPUT
+                          echo "does not exist"
+                      fi
+                  fi
+
+            - uses: BSteffaniak/delete-older-releases@master
+              if: ${{ steps.check_exists.outputs.exists != 'true' }}
+              with:
+                  keep_latest: 2
+                  delete_tag_pattern: ^master-[0-9a-f]{10,10}$
+                  regex: true
+              env:
+                  GITHUB_TOKEN: ${{ secrets.WORKFLOW_MANAGEMENT_TOKEN }}
+
+            - name: Create and push tag
+              if: ${{ steps.check_exists.outputs.exists != 'true' }}
+              working-directory: MoosicBox
+              run: |
+                  git tag master-${{ steps.release_hash.outputs.hash }}
+                  git push origin master-${{ steps.release_hash.outputs.hash }}
