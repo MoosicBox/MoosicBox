@@ -8,13 +8,6 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - name: Checkout audiotags
-              uses: actions/checkout@v4
-              with:
-                  repository: BSteffaniak/audiotags
-                  ref: feat/add-full-date-capabilities
-                  path: audiotags
-
             - uses: actions/checkout@v4
               with:
                   token: ${{ secrets.WORKFLOW_MANAGEMENT_TOKEN }}
@@ -23,10 +16,7 @@ jobs:
             - name: Get release hash
               id: release_hash
               run: |
-                  HASH="$({
-                      git -C MoosicBox rev-parse --verify HEAD;
-                      git -C audiotags rev-parse --verify HEAD;
-                  } | shasum | head -c 10)"
+                  HASH="$(git -C MoosicBox rev-parse --verify HEAD | head -c 10)"
                   echo "hash: $HASH"
                   echo "hash=$HASH" >> $GITHUB_OUTPUT
 
