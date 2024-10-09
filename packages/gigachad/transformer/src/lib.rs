@@ -59,6 +59,18 @@ pub enum LayoutOverflow {
     Wrap,
 }
 
+impl Display for LayoutOverflow {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Auto => f.write_str("Auto"),
+            Self::Scroll => f.write_str("Scroll"),
+            Self::Show => f.write_str("Show"),
+            Self::Squash => f.write_str("Squash"),
+            Self::Wrap => f.write_str("Wrap"),
+        }
+    }
+}
+
 #[cfg(feature = "calc")]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum LayoutPosition {
