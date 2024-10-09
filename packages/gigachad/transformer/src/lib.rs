@@ -53,6 +53,7 @@ impl Display for LayoutDirection {
 pub enum LayoutOverflow {
     Auto,
     Scroll,
+    Show,
     #[default]
     Squash,
     Wrap,
@@ -236,6 +237,9 @@ impl ContainerElement {
             LayoutOverflow::Scroll => {
                 attrs.add("sx-overflow-x", "scroll");
             }
+            LayoutOverflow::Show => {
+                attrs.add("sx-overflow-x", "show");
+            }
             LayoutOverflow::Squash => {}
             LayoutOverflow::Wrap => {
                 attrs.add("sx-overflow-x", "wrap");
@@ -247,6 +251,9 @@ impl ContainerElement {
             }
             LayoutOverflow::Scroll => {
                 attrs.add("sx-overflow-y", "scroll");
+            }
+            LayoutOverflow::Show => {
+                attrs.add("sx-overflow-y", "show");
             }
             LayoutOverflow::Squash => {}
             LayoutOverflow::Wrap => {

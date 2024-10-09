@@ -650,7 +650,7 @@ fn draw_elements(
                 .with_type(group::ScrollType::VerticalAlways)
                 .into(),
         ),
-        LayoutOverflow::Squash => None,
+        LayoutOverflow::Squash | LayoutOverflow::Show => None,
         LayoutOverflow::Wrap => Some({
             let mut flex = match context.direction {
                 LayoutDirection::Row => group::Flex::default_fill().column(),
@@ -671,7 +671,7 @@ fn draw_elements(
                 .with_type(group::ScrollType::HorizontalAlways)
                 .into(),
         ),
-        LayoutOverflow::Squash => None,
+        LayoutOverflow::Squash | LayoutOverflow::Show => None,
         LayoutOverflow::Wrap => Some({
             let mut flex = match context.direction {
                 LayoutDirection::Row => group::Flex::default_fill().column(),

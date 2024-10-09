@@ -228,7 +228,10 @@ impl ContainerElement {
                 let mut current_col = col;
 
                 match overflow {
-                    LayoutOverflow::Auto | LayoutOverflow::Scroll | LayoutOverflow::Squash => {
+                    LayoutOverflow::Auto
+                    | LayoutOverflow::Scroll
+                    | LayoutOverflow::Show
+                    | LayoutOverflow::Squash => {
                         match direction {
                             LayoutDirection::Row => {
                                 x += width;
@@ -677,7 +680,7 @@ impl ContainerElement {
         );
 
         match self.overflow_x {
-            LayoutOverflow::Auto | LayoutOverflow::Scroll => {}
+            LayoutOverflow::Auto | LayoutOverflow::Scroll | LayoutOverflow::Show => {}
             LayoutOverflow::Squash | LayoutOverflow::Wrap => {
                 if width < contained_calculated_width {
                     let contained_sized_width = self.contained_sized_width().unwrap_or(0.0);
@@ -710,7 +713,7 @@ impl ContainerElement {
             }
         }
         match self.overflow_y {
-            LayoutOverflow::Auto | LayoutOverflow::Scroll => {}
+            LayoutOverflow::Auto | LayoutOverflow::Scroll | LayoutOverflow::Show => {}
             LayoutOverflow::Squash | LayoutOverflow::Wrap => {
                 if height < contained_calculated_height {
                     let contained_sized_height = self.contained_sized_height().unwrap_or(0.0);
@@ -1418,6 +1421,111 @@ mod test {
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
             overflow_y: LayoutOverflow::Scroll,
+            ..Default::default()
+        };
+        let height = container.contained_calculated_height();
+        let expected = 80.0;
+
+        assert_eq!(
+            (height - expected).abs() < 0.0001,
+            true,
+            "height expected to be {expected} (actual={height})"
+        );
+    }
+
+    #[test_log::test]
+    fn contained_calculated_show_y_calculates_height_correctly() {
+        let container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(50.0),
+            calculated_height: Some(40.0),
+            direction: LayoutDirection::Row,
+            overflow_x: LayoutOverflow::Wrap,
+            overflow_y: LayoutOverflow::Show,
+            ..Default::default()
+        };
+        let height = container.contained_calculated_height();
+        let expected = 80.0;
+
+        assert_eq!(
+            (height - expected).abs() < 0.0001,
+            true,
+            "height expected to be {expected} (actual={height})"
+        );
+    }
+
+    #[test_log::test]
+    fn contained_calculated_show_y_nested_calculates_height_correctly() {
+        let container = ContainerElement {
+            elements: vec![Element::Div {
+                element: ContainerElement {
+                    elements: vec![
+                        Element::Div {
+                            element: ContainerElement {
+                                width: Some(Number::Integer(25)),
+                                calculated_width: Some(25.0),
+                                calculated_height: Some(40.0),
+                                calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                                ..Default::default()
+                            },
+                        },
+                        Element::Div {
+                            element: ContainerElement {
+                                width: Some(Number::Integer(25)),
+                                calculated_width: Some(25.0),
+                                calculated_height: Some(40.0),
+                                calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                                ..Default::default()
+                            },
+                        },
+                        Element::Div {
+                            element: ContainerElement {
+                                width: Some(Number::Integer(25)),
+                                calculated_width: Some(25.0),
+                                calculated_height: Some(40.0),
+                                calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                                ..Default::default()
+                            },
+                        },
+                    ],
+                    calculated_width: Some(50.0),
+                    calculated_height: Some(80.0),
+                    ..Default::default()
+                },
+            }],
+            calculated_width: Some(50.0),
+            calculated_height: Some(40.0),
+            direction: LayoutDirection::Row,
+            overflow_x: LayoutOverflow::Wrap,
+            overflow_y: LayoutOverflow::Show,
             ..Default::default()
         };
         let height = container.contained_calculated_height();
