@@ -657,6 +657,7 @@ fn draw_elements(
     event_sender: Sender<AppEvent>,
 ) -> Result<group::Flex, FltkError> {
     static SCROLL_LINESIZE: i32 = 40;
+    static SCROLLBAR_SIZE: i32 = 16;
 
     log::debug!("draw_elements: element={element:?} depth={depth}");
 
@@ -683,22 +684,24 @@ fn draw_elements(
     #[allow(clippy::cast_possible_truncation)]
     let container_scroll_y: Option<Box<dyn Group>> = match context.overflow_y {
         LayoutOverflow::Auto => Some({
-            let scroll = group::Scroll::default_fill()
+            let mut scroll = group::Scroll::default_fill()
                 .with_size(
                     calculated_width.round() as i32,
                     calculated_height.round() as i32,
                 )
                 .with_type(group::ScrollType::Vertical);
+            scroll.set_scrollbar_size(SCROLLBAR_SIZE);
             scroll.scrollbar().set_linesize(SCROLL_LINESIZE);
             scroll.into()
         }),
         LayoutOverflow::Scroll => Some({
-            let scroll = group::Scroll::default_fill()
+            let mut scroll = group::Scroll::default_fill()
                 .with_size(
                     calculated_width.round() as i32,
                     calculated_height.round() as i32,
                 )
                 .with_type(group::ScrollType::VerticalAlways);
+            scroll.set_scrollbar_size(SCROLLBAR_SIZE);
             scroll.scrollbar().set_linesize(SCROLL_LINESIZE);
             scroll.into()
         }),
@@ -707,22 +710,24 @@ fn draw_elements(
     #[allow(clippy::cast_possible_truncation)]
     let container_scroll_x: Option<Box<dyn Group>> = match context.overflow_x {
         LayoutOverflow::Auto => Some({
-            let scroll = group::Scroll::default_fill()
+            let mut scroll = group::Scroll::default_fill()
                 .with_size(
                     calculated_width.round() as i32,
                     calculated_height.round() as i32,
                 )
                 .with_type(group::ScrollType::Horizontal);
+            scroll.set_scrollbar_size(SCROLLBAR_SIZE);
             scroll.hscrollbar().set_linesize(SCROLL_LINESIZE);
             scroll.into()
         }),
         LayoutOverflow::Scroll => Some({
-            let scroll = group::Scroll::default_fill()
+            let mut scroll = group::Scroll::default_fill()
                 .with_size(
                     calculated_width.round() as i32,
                     calculated_height.round() as i32,
                 )
                 .with_type(group::ScrollType::HorizontalAlways);
+            scroll.set_scrollbar_size(SCROLLBAR_SIZE);
             scroll.hscrollbar().set_linesize(SCROLL_LINESIZE);
             scroll.into()
         }),
