@@ -109,6 +109,10 @@ pub struct ContainerElement {
     pub overflow_y: LayoutOverflow,
     pub width: Option<Number>,
     pub height: Option<Number>,
+    pub padding_left: Option<f32>,
+    pub padding_right: Option<f32>,
+    pub padding_top: Option<f32>,
+    pub padding_bottom: Option<f32>,
     #[cfg(feature = "calc")]
     pub calculated_width: Option<f32>,
     #[cfg(feature = "calc")]
@@ -280,6 +284,15 @@ impl ContainerElement {
                 attrs.add_opt("dbg-y", self.calculated_y);
                 attrs.add_opt("dbg-width", self.calculated_width);
                 attrs.add_opt("dbg-height", self.calculated_height);
+                attrs.add_opt("dbg-padding-left", self.padding_left);
+                attrs.add_opt("dbg-padding-right", self.padding_right);
+                attrs.add_opt("dbg-padding-top", self.padding_top);
+                attrs.add_opt("dbg-padding-bottom", self.padding_bottom);
+
+                if let Some(LayoutPosition::Wrap { row, col }) = &self.calculated_position {
+                    attrs.add("dbg-row", *row);
+                    attrs.add("dbg-col", *col);
+                }
             }
         }
 
