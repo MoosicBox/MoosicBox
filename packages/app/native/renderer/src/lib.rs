@@ -12,9 +12,10 @@ use fltk::{
     app::{self, App},
     enums::{self, Event},
     frame::{self, Frame},
-    group,
+    group::{self},
     image::{RgbImage, SharedImage},
     prelude::*,
+    widget,
     window::{DoubleWindow, Window},
 };
 use flume::{Receiver, Sender};
@@ -280,33 +281,36 @@ impl Renderer {
 
         window.handle({
             let renderer = self.clone();
-            move |window, ev| match ev {
-                Event::Resize => {
-                    renderer.handle_resize(window);
-                    true
-                }
-                #[cfg(feature = "debug")]
-                Event::KeyUp => {
-                    let key = app::event_key();
-                    log::debug!("Received key press {key:?}");
-                    if key == enums::Key::F3 {
-                        let value = {
-                            let mut handle = DEBUG.write().unwrap();
-                            let value = *handle;
-                            let value = !value;
-                            *handle = value;
-                            value
-                        };
-                        log::debug!("Set DEBUG to {value}");
-                        if let Err(e) = renderer.perform_render() {
-                            log::error!("Failed to draw elements: {e:?}");
-                        }
+            move |window, ev| {
+                log::trace!("Received event: {ev}");
+                match ev {
+                    Event::Resize => {
+                        renderer.handle_resize(window);
                         true
-                    } else {
-                        false
                     }
+                    #[cfg(feature = "debug")]
+                    Event::KeyUp => {
+                        let key = app::event_key();
+                        log::debug!("Received key press {key:?}");
+                        if key == enums::Key::F3 {
+                            let value = {
+                                let mut handle = DEBUG.write().unwrap();
+                                let value = *handle;
+                                let value = !value;
+                                *handle = value;
+                                value
+                            };
+                            log::debug!("Set DEBUG to {value}");
+                            if let Err(e) = renderer.perform_render() {
+                                log::error!("Failed to draw elements: {e:?}");
+                            }
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    _ => false,
                 }
-                _ => false,
             }
         });
 
@@ -591,23 +595,26 @@ impl Context {
 
 trait Group {
     fn end(&mut self);
-}
-
-impl Group for group::Pack {
-    fn end(&mut self) {
-        <Self as GroupExt>::end(self);
-    }
-}
-
-impl From<group::Pack> for Box<dyn Group> {
-    fn from(value: group::Pack) -> Self {
-        Box::new(value)
-    }
+    fn type_str(&self) -> &'static str;
+    fn wid(&self) -> i32;
+    fn hei(&self) -> i32;
 }
 
 impl Group for group::Flex {
     fn end(&mut self) {
         <Self as GroupExt>::end(self);
+    }
+
+    fn type_str(&self) -> &'static str {
+        "Flex"
+    }
+
+    fn wid(&self) -> i32 {
+        <Self as fltk::prelude::WidgetExt>::w(self)
+    }
+
+    fn hei(&self) -> i32 {
+        <Self as fltk::prelude::WidgetExt>::h(self)
     }
 }
 
@@ -621,6 +628,18 @@ impl Group for group::Scroll {
     fn end(&mut self) {
         <Self as GroupExt>::end(self);
     }
+
+    fn type_str(&self) -> &'static str {
+        "Scroll"
+    }
+
+    fn wid(&self) -> i32 {
+        <Self as fltk::prelude::WidgetExt>::w(self)
+    }
+
+    fn hei(&self) -> i32 {
+        <Self as fltk::prelude::WidgetExt>::h(self)
+    }
 }
 
 impl From<group::Scroll> for Box<dyn Group> {
@@ -630,66 +649,153 @@ impl From<group::Scroll> for Box<dyn Group> {
 }
 
 #[allow(clippy::too_many_lines)]
+#[allow(clippy::cognitive_complexity)]
 fn draw_elements(
     element: &ContainerElement,
     depth: usize,
     context: Context,
     event_sender: Sender<AppEvent>,
 ) -> Result<group::Flex, FltkError> {
+    static SCROLL_LINESIZE: i32 = 40;
+
     log::debug!("draw_elements: element={element:?} depth={depth}");
 
-    let mut container = group::Flex::default_fill();
+    let (Some(calculated_width), Some(calculated_height)) =
+        (element.calculated_width, element.calculated_height)
+    else {
+        moosicbox_assert::die_or_panic!(
+            "draw_elements: missing calculated_width and/or calculated_height value"
+        );
+    };
+    log::debug!(
+        "draw_elements: calculated_width={calculated_width} calculated_height={calculated_height}"
+    );
+    let direction = context.direction;
+
+    #[allow(clippy::cast_possible_truncation)]
+    let mut container = group::Flex::default_fill().with_size(
+        calculated_width.round() as i32,
+        calculated_height.round() as i32,
+    );
+    container.set_clip_children(false);
     container.set_pad(0);
 
-    let container_y: Option<Box<dyn Group>> = match context.overflow_y {
-        LayoutOverflow::Auto => Some(
-            group::Scroll::default_fill()
-                .with_type(group::ScrollType::Vertical)
-                .into(),
-        ),
-        LayoutOverflow::Scroll => Some(
-            group::Scroll::default_fill()
-                .with_type(group::ScrollType::VerticalAlways)
-                .into(),
-        ),
-        LayoutOverflow::Squash | LayoutOverflow::Show => None,
-        LayoutOverflow::Wrap => Some({
-            let mut flex = match context.direction {
-                LayoutDirection::Row => group::Flex::default_fill().column(),
-                LayoutDirection::Column => group::Flex::default_fill().row(),
-            };
-            flex.set_pad(0);
-            flex.into()
+    #[allow(clippy::cast_possible_truncation)]
+    let container_scroll_y: Option<Box<dyn Group>> = match context.overflow_y {
+        LayoutOverflow::Auto => Some({
+            let scroll = group::Scroll::default_fill()
+                .with_size(
+                    calculated_width.round() as i32,
+                    calculated_height.round() as i32,
+                )
+                .with_type(group::ScrollType::Vertical);
+            scroll.scrollbar().set_linesize(SCROLL_LINESIZE);
+            scroll.into()
         }),
+        LayoutOverflow::Scroll => Some({
+            let scroll = group::Scroll::default_fill()
+                .with_size(
+                    calculated_width.round() as i32,
+                    calculated_height.round() as i32,
+                )
+                .with_type(group::ScrollType::VerticalAlways);
+            scroll.scrollbar().set_linesize(SCROLL_LINESIZE);
+            scroll.into()
+        }),
+        LayoutOverflow::Squash | LayoutOverflow::Show | LayoutOverflow::Wrap => None,
     };
-    let container_x: Option<Box<dyn Group>> = match context.overflow_x {
-        LayoutOverflow::Auto => Some(
-            group::Scroll::default_fill()
-                .with_type(group::ScrollType::Horizontal)
-                .into(),
-        ),
-        LayoutOverflow::Scroll => Some(
-            group::Scroll::default_fill()
-                .with_type(group::ScrollType::HorizontalAlways)
-                .into(),
-        ),
-        LayoutOverflow::Squash | LayoutOverflow::Show => None,
-        LayoutOverflow::Wrap => Some({
-            let mut flex = match context.direction {
-                LayoutDirection::Row => group::Flex::default_fill().column(),
-                LayoutDirection::Column => group::Flex::default_fill().row(),
-            };
-            flex.set_pad(0);
-            flex.into()
+    #[allow(clippy::cast_possible_truncation)]
+    let container_scroll_x: Option<Box<dyn Group>> = match context.overflow_x {
+        LayoutOverflow::Auto => Some({
+            let scroll = group::Scroll::default_fill()
+                .with_size(
+                    calculated_width.round() as i32,
+                    calculated_height.round() as i32,
+                )
+                .with_type(group::ScrollType::Horizontal);
+            scroll.hscrollbar().set_linesize(SCROLL_LINESIZE);
+            scroll.into()
         }),
+        LayoutOverflow::Scroll => Some({
+            let scroll = group::Scroll::default_fill()
+                .with_size(
+                    calculated_width.round() as i32,
+                    calculated_height.round() as i32,
+                )
+                .with_type(group::ScrollType::HorizontalAlways);
+            scroll.hscrollbar().set_linesize(SCROLL_LINESIZE);
+            scroll.into()
+        }),
+        LayoutOverflow::Squash | LayoutOverflow::Show | LayoutOverflow::Wrap => None,
     };
 
+    #[allow(clippy::cast_possible_truncation)]
+    let container_wrap_y: Option<Box<dyn Group>> = if context.overflow_y == LayoutOverflow::Wrap {
+        Some({
+            let mut flex = match context.direction {
+                LayoutDirection::Row => group::Flex::default_fill().column(),
+                LayoutDirection::Column => group::Flex::default_fill().row(),
+            }
+            .with_size(
+                calculated_width.round() as i32,
+                calculated_height.round() as i32,
+            );
+            flex.set_pad(0);
+            flex.set_clip_children(false);
+            flex.into()
+        })
+    } else {
+        None
+    };
+    #[allow(clippy::cast_possible_truncation)]
+    let container_wrap_x: Option<Box<dyn Group>> = if context.overflow_x == LayoutOverflow::Wrap {
+        Some({
+            let mut flex = match context.direction {
+                LayoutDirection::Row => group::Flex::default_fill().column(),
+                LayoutDirection::Column => group::Flex::default_fill().row(),
+            }
+            .with_size(
+                calculated_width.round() as i32,
+                calculated_height.round() as i32,
+            );
+            flex.set_pad(0);
+            flex.set_clip_children(false);
+            flex.into()
+        })
+    } else {
+        None
+    };
+
+    let contained_width = element.contained_calculated_width();
+    let contained_height = element.contained_calculated_height();
+
+    log::debug!(
+        "draw_elements: contained_width={contained_width} contained_height={contained_height}"
+    );
+    #[allow(clippy::cast_possible_truncation)]
+    let contained_width = contained_width.round() as i32;
+    #[allow(clippy::cast_possible_truncation)]
+    let contained_height = contained_height.round() as i32;
+    log::debug!(
+        "draw_elements: rounded contained_width={contained_width} contained_height={contained_height}"
+    );
+
+    let inner_container = if contained_width > 0 && contained_height > 0 {
+        Some(
+            group::Flex::default()
+                .with_size(contained_width, contained_height)
+                .column(),
+        )
+    } else {
+        None
+    };
     let flex = group::Flex::default_fill();
     let mut flex = match context.direction {
         LayoutDirection::Row => flex.row(),
         LayoutDirection::Column => flex.column(),
     };
 
+    flex.set_clip_children(false);
     flex.set_pad(0);
 
     #[cfg(feature = "debug")]
@@ -726,13 +832,18 @@ fn draw_elements(
         if context.direction == LayoutDirection::Row && row != current_row
             || context.direction == LayoutDirection::Column && col != current_col
         {
+            log::debug!("draw_elements: finished row/col current_row={current_row} current_col={current_col} flex_width={} flex_height={}", flex.w(), flex.h());
             flex.end();
 
-            flex = match context.direction {
-                LayoutDirection::Row => group::Flex::default_fill().row(),
-                LayoutDirection::Column => group::Flex::default_fill().column(),
-            };
-            flex.set_pad(0);
+            #[allow(clippy::cast_possible_truncation)]
+            {
+                flex = match context.direction {
+                    LayoutDirection::Row => group::Flex::default_fill().row(),
+                    LayoutDirection::Column => group::Flex::default_fill().column(),
+                };
+                flex.set_clip_children(false);
+                flex.set_pad(0);
+            }
 
             #[cfg(feature = "debug")]
             {
@@ -749,27 +860,109 @@ fn draw_elements(
         col = current_col;
 
         if i == len - 1 {
-            draw_element(element, i, depth + 1, context, &mut flex, event_sender)?;
+            if let Some(widget) = draw_element(element, i, depth + 1, context, event_sender)? {
+                fixed_size(
+                    direction,
+                    element.container_element().and_then(|x| x.calculated_width),
+                    element
+                        .container_element()
+                        .and_then(|x| x.calculated_height),
+                    &mut flex,
+                    &widget,
+                );
+            }
             break;
         }
-        draw_element(
-            element,
-            i,
-            depth + 1,
-            context.clone(),
-            &mut flex,
-            event_sender.clone(),
-        )?;
+        if let Some(widget) =
+            draw_element(element, i, depth + 1, context.clone(), event_sender.clone())?
+        {
+            fixed_size(
+                direction,
+                element.container_element().and_then(|x| x.calculated_width),
+                element
+                    .container_element()
+                    .and_then(|x| x.calculated_height),
+                &mut flex,
+                &widget,
+            );
+        }
     }
 
+    log::debug!(
+        "draw_elements: finished draw: container_wrap_x={:?} container_wrap_y={:?} container_scroll_x={:?} container_scroll_y={:?} container={}",
+        container_wrap_x.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
+        container_wrap_y.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
+        container_scroll_x.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
+        container_scroll_y.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
+        format!("({}, {})", container.w(), container.h()),
+    );
     flex.end();
-    if let Some(mut container) = container_x {
+
+    if let Some(container) = inner_container {
         container.end();
     }
-    if let Some(mut container) = container_y {
+
+    if let Some(mut container) = container_wrap_x {
+        log::debug!(
+            "draw_elements: ending container_wrap_x {} ({}, {})",
+            container.type_str(),
+            container.wid(),
+            container.hei(),
+        );
         container.end();
     }
+    if let Some(mut container) = container_wrap_y {
+        log::debug!(
+            "draw_elements: ending container_wrap_y {} ({}, {})",
+            container.type_str(),
+            container.wid(),
+            container.hei(),
+        );
+        container.end();
+    }
+    if let Some(mut container) = container_scroll_x {
+        log::debug!(
+            "draw_elements: ending container_scroll_x {} ({}, {})",
+            container.type_str(),
+            container.wid(),
+            container.hei(),
+        );
+        container.end();
+    }
+    if let Some(mut container) = container_scroll_y {
+        log::debug!(
+            "draw_elements: ending container_scroll_y {} ({}, {})",
+            container.type_str(),
+            container.wid(),
+            container.hei(),
+        );
+        container.end();
+    }
+    log::debug!(
+        "draw_elements: ending container {} ({}, {})",
+        container.type_str(),
+        container.wid(),
+        container.hei(),
+    );
     container.end();
+
+    if log::log_enabled!(log::Level::Trace) {
+        let mut hierarchy = String::new();
+
+        let mut current = Some(flex.as_base_widget());
+        while let Some(widget) = current.take() {
+            hierarchy.push_str(&format!(
+                "\n\t({}, {}, {}, {})",
+                widget.x(),
+                widget.y(),
+                widget.w(),
+                widget.h()
+            ));
+            current = widget.parent().map(|x| x.as_base_widget());
+        }
+
+        log::trace!("draw_elements: hierarchy:{hierarchy}");
+    }
 
     Ok(container)
 }
@@ -781,21 +974,12 @@ fn draw_element(
     index: usize,
     depth: usize,
     mut context: Context,
-    flex: &mut group::Flex,
     event_sender: Sender<AppEvent>,
-) -> Result<Option<Box<dyn WidgetExt>>, FltkError> {
-    log::debug!(
-        "draw_element: element={element:?} flex_width={} flex_height={} bounds={:?} index={index} depth={depth}",
-        flex.width(),
-        flex.height(),
-        flex.bounds()
-    );
+) -> Result<Option<widget::Widget>, FltkError> {
+    log::debug!("draw_element: element={element:?} index={index} depth={depth}");
 
-    let direction = context.direction;
-    let mut width = None;
-    let mut height = None;
     let mut flex_element = None;
-    let mut other_element: Option<Box<dyn WidgetExt>> = None;
+    let mut other_element: Option<widget::Widget> = None;
 
     match element {
         Element::Raw { value } => {
@@ -815,67 +999,49 @@ fn draw_element(
                 }
             }
 
-            other_element = Some(Box::new(frame));
+            other_element = Some(frame.as_base_widget());
         }
         Element::Div { element } => {
             context = context.with_container(element);
-            width = element.calculated_width;
-            height = element.calculated_height;
             flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::Aside { element } => {
             context = context.with_container(element);
-            width = element.calculated_width;
-            height = element.calculated_height;
             flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::Header { element } => {
             context = context.with_container(element);
-            width = element.calculated_width;
-            height = element.calculated_height;
             flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::Footer { element } => {
             context = context.with_container(element);
-            width = element.calculated_width;
-            height = element.calculated_height;
             flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::Main { element } => {
             context = context.with_container(element);
-            width = element.calculated_width;
-            height = element.calculated_height;
             flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::Section { element } => {
             context = context.with_container(element);
-            width = element.calculated_width;
-            height = element.calculated_height;
             flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::Form { element } => {
             context = context.with_container(element);
-            width = element.calculated_width;
-            height = element.calculated_height;
             flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::Span { element } => {
             context = context.with_container(element);
-            width = element.calculated_width;
-            height = element.calculated_height;
             flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::Input(_) => {}
         Element::Button { element } => {
             context = context.with_container(element);
-            width = element.calculated_width;
-            height = element.calculated_height;
             flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::Image { source, element } => {
             context = context.with_container(element);
-            width = element.calculated_width;
-            height = element.calculated_height;
+            let width = element.calculated_width;
+            let height = element.calculated_height;
             let mut frame = Frame::default_fill();
 
             #[cfg(feature = "debug")]
@@ -941,14 +1107,12 @@ fn draw_element(
                 }
             }
 
-            fixed_size!(direction, width, height, flex, &frame);
+            // fixed_size(direction, width, height, flex, &frame);
 
-            other_element = Some(Box::new(frame));
+            other_element = Some(frame.as_base_widget());
         }
         Element::Anchor { element, href } => {
             context = context.with_container(element);
-            width = element.calculated_width;
-            height = element.calculated_height;
             let mut elements = draw_elements(element, depth, context, event_sender.clone())?;
             if let Some(href) = href.to_owned() {
                 elements.handle(move |_, ev| match ev {
@@ -975,129 +1139,125 @@ fn draw_element(
                 HeaderSize::H5 => 16,
                 HeaderSize::H6 => 12,
             };
-            width = element.calculated_width;
-            height = element.calculated_height;
             flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::OrderedList { element } | Element::UnorderedList { element } => {
             context = context.with_container(element);
-            width = element.calculated_width;
-            height = element.calculated_height;
             flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
         Element::ListItem { element } => {
             context = context.with_container(element);
-            width = element.calculated_width;
-            height = element.calculated_height;
             flex_element = Some(draw_elements(element, depth, context, event_sender)?);
         }
     }
 
-    if let Some(mut flex_element) = flex_element {
-        #[allow(clippy::cast_possible_truncation)]
-        {
-            flex_element = flex_element.with_size(
-                width.unwrap().round() as i32,
-                height.unwrap().round() as i32,
-            );
-        }
+    #[cfg(feature = "debug")]
+    if let Some(flex_element) = &mut flex_element {
+        if *DEBUG.read().unwrap() && (depth == 1 || index > 0) {
+            let mut element_info = vec![];
 
-        let mut container = group::Flex::default_fill().row();
-        container.set_pad(0);
+            let mut child = Some(element);
 
-        #[cfg(feature = "debug")]
-        {
-            if *DEBUG.read().unwrap() && (depth == 1 || index > 0) {
-                let mut element_info = vec![];
+            while let Some(element) = child.take() {
+                let element_name = element.tag_display_str();
+                let text = element_name.to_string();
+                let first = element_info.is_empty();
 
-                let mut child = Some(element);
+                element_info.push(text);
 
-                while let Some(element) = child.take() {
-                    let element_name = element.tag_display_str();
-                    let text = element.container_element().map_or_else(
-                        || element_name.to_string(),
-                        |container| {
-                            format!(
-                                "{element_name} ({}, {}, {}, {})",
-                                container.calculated_x.unwrap_or(0.0),
-                                container.calculated_y.unwrap_or(0.0),
-                                container.calculated_width.unwrap_or(0.0),
-                                container.calculated_height.unwrap_or(0.0),
-                            )
-                        },
+                if let Some(container) = element.container_element() {
+                    let text = format!(
+                        "    ({}, {}, {}, {})",
+                        container.calculated_x.unwrap_or(0.0),
+                        container.calculated_y.unwrap_or(0.0),
+                        container.calculated_width.unwrap_or(0.0),
+                        container.calculated_height.unwrap_or(0.0),
                     );
 
                     element_info.push(text);
-
-                    if let Some(container) = element.container_element() {
-                        child = container.elements.first();
-                    }
                 }
 
-                container.draw({
-                    move |w| {
-                        use fltk::draw;
+                if first {
+                    let text = format!(
+                        "    ({}, {}, {}, {})",
+                        flex_element.x(),
+                        flex_element.y(),
+                        flex_element.w(),
+                        flex_element.h(),
+                    );
 
-                        draw::set_draw_color(enums::Color::Red);
-                        draw::draw_rect(w.x(), w.y(), w.w(), w.h());
-                        draw::set_font(fltk::draw::font(), 8);
+                    element_info.push(text);
+                }
 
-                        let mut y_offset = 0;
-
-                        for text in &element_info {
-                            let (_t_x, _t_y, _t_w, t_h) = draw::text_extents(text);
-                            y_offset += t_h;
-                            draw::draw_text(text, w.x(), w.y() + y_offset);
-                        }
-                    }
-                });
+                if let Some(container) = element.container_element() {
+                    child = container.elements.first();
+                }
             }
+
+            flex_element.draw({
+                move |w| {
+                    use fltk::draw;
+
+                    draw::set_draw_color(enums::Color::Red);
+                    draw::draw_rect(w.x(), w.y(), w.w(), w.h());
+                    draw::set_font(fltk::draw::font(), 8);
+
+                    let mut y_offset = 0;
+
+                    for text in &element_info {
+                        let (_t_x, _t_y, _t_w, t_h) = draw::text_extents(text);
+                        y_offset += t_h;
+                        draw::draw_text(text, w.x(), w.y() + y_offset);
+                    }
+                }
+            });
         }
-        flex.remove(&flex_element);
-        container.add(&flex_element);
-
-        fixed_size!(direction, width, height, flex, &container);
-
-        container.end();
-
-        return Ok(Some(Box::new(container) as Box<dyn WidgetExt>));
     }
 
-    Ok(flex_element
-        .map(|x| Box::new(x) as Box<dyn WidgetExt>)
-        .or(other_element))
+    Ok(flex_element.map(|x| x.as_base_widget()).or(other_element))
 }
 
-#[macro_export]
-macro_rules! fixed_size {
-    ($direction:expr, $width:expr, $height:expr, $container:expr, $element:expr $(,)?) => {
-        match $direction {
-            LayoutDirection::Row => {
-                if let Some(width) = $width {
-                    #[allow(clippy::cast_possible_truncation)]
-                    $container.fixed($element, width.round() as i32);
-                    log::debug!("fixed_size!: setting fixed width={width}");
-                } else {
-                    log::debug!(
-                        "fixed_size!: not setting fixed width size width={:?} height={:?}",
-                        $width,
-                        $height,
-                    );
-                }
-            }
-            LayoutDirection::Column => {
-                if let Some(height) = $height {
-                    #[allow(clippy::cast_possible_truncation)]
-                    $container.fixed($element, height.round() as i32);
-                    log::debug!("fixed_size!: setting fixed height={height})");
-                } else {
-                    log::debug!(
-                        "fixed_size!: not setting fixed height size width={:?} height={:?}",
-                        $width,
-                        $height,
-                    );
-                }
+fn fixed_size<W: WidgetExt>(
+    direction: LayoutDirection,
+    width: Option<f32>,
+    height: Option<f32>,
+    container: &mut group::Flex,
+    element: &W,
+) {
+    call_fixed_size(direction, width, height, move |size| {
+        container.fixed(element, size);
+    });
+}
+
+#[inline]
+fn call_fixed_size<F: FnMut(i32)>(
+    direction: LayoutDirection,
+    width: Option<f32>,
+    height: Option<f32>,
+    mut f: F,
+) {
+    match direction {
+        LayoutDirection::Row => {
+            if let Some(width) = width {
+                #[allow(clippy::cast_possible_truncation)]
+                f(width.round() as i32);
+                log::debug!("call_fixed_size: setting fixed width={width}");
+            } else {
+                log::debug!(
+                    "call_fixed_size: not setting fixed width size width={width:?} height={height:?}"
+                );
             }
         }
-    };
+        LayoutDirection::Column => {
+            if let Some(height) = height {
+                #[allow(clippy::cast_possible_truncation)]
+                f(height.round() as i32);
+                log::debug!("call_fixed_size: setting fixed height={height})");
+            } else {
+                log::debug!(
+                    "call_fixed_size: not setting fixed height size width={width:?} height={height:?}"
+                );
+            }
+        }
+    }
 }
