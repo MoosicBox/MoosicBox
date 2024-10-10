@@ -15,7 +15,7 @@ use fltk::{
     app::{self, App},
     enums::{self, Event},
     frame::{self, Frame},
-    group::{self},
+    group,
     image::{RgbImage, SharedImage},
     prelude::*,
     widget,
@@ -208,6 +208,63 @@ pub struct RegisteredImage {
     frame: Frame,
 }
 
+pub struct ViewportListener {
+    widget: widget::Widget,
+    viewport: Option<Viewport>,
+    visible: bool,
+    callback: Box<dyn FnMut(bool) + Send + Sync>,
+}
+
+impl std::fmt::Debug for ViewportListener {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ViewportListener")
+            .field("widget", &self.widget)
+            .field("viewport", &self.viewport)
+            .field("visible", &self.visible)
+            .finish_non_exhaustive()
+    }
+}
+
+impl ViewportListener {
+    fn new(
+        widget: widget::Widget,
+        viewport: Option<Viewport>,
+        callback: impl FnMut(bool) + Send + Sync + 'static,
+    ) -> Self {
+        let mut this = Self {
+            widget,
+            viewport,
+            visible: false,
+            callback: Box::new(callback),
+        };
+
+        this.init();
+        this
+    }
+
+    fn is_visible(&self) -> bool {
+        !self
+            .viewport
+            .as_ref()
+            .is_some_and(|x| !x.is_widget_visible(&self.widget))
+    }
+
+    fn init(&mut self) {
+        let visible = self.is_visible();
+        self.visible = visible;
+        (self.callback)(visible);
+    }
+
+    pub fn check(&mut self) {
+        let visible = self.is_visible();
+
+        if visible != self.visible {
+            self.visible = visible;
+            (self.callback)(visible);
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Renderer {
     app: Option<App>,
@@ -216,6 +273,7 @@ pub struct Renderer {
     root: Arc<RwLock<Option<group::Flex>>>,
     routes: Arc<RwLock<Vec<(RoutePath, RouteFunc)>>>,
     images: Arc<RwLock<Vec<RegisteredImage>>>,
+    viewport_listeners: Arc<RwLock<Vec<ViewportListener>>>,
     width: Arc<AtomicI32>,
     height: Arc<AtomicI32>,
     event_sender: Option<Sender<AppEvent>>,
@@ -238,6 +296,7 @@ impl Renderer {
             root: Arc::new(RwLock::new(None)),
             routes: Arc::new(RwLock::new(vec![])),
             images: Arc::new(RwLock::new(vec![])),
+            viewport_listeners: Arc::new(RwLock::new(vec![])),
             width: Arc::new(AtomicI32::new(0)),
             height: Arc::new(AtomicI32::new(0)),
             event_sender: None,
@@ -419,11 +478,25 @@ impl Renderer {
             height,
             frame: frame.clone(),
         });
-        if !viewport.is_some_and(|x| !x.is_widget_visible(&frame.as_base_widget())) {
-            if let Err(e) = self.trigger_load_image(frame) {
-                log::error!("Failed to trigger_load_image: {e:?}");
-            }
-        }
+
+        let mut frame = frame.clone();
+        let renderer = self.clone();
+        self.viewport_listeners
+            .write()
+            .unwrap()
+            .push(ViewportListener::new(
+                frame.as_base_widget(),
+                viewport,
+                move |visible| {
+                    if visible {
+                        if let Err(e) = renderer.trigger_load_image(&frame) {
+                            log::error!("Failed to trigger_load_image: {e:?}");
+                        }
+                    } else {
+                        Self::set_frame_image(&mut frame, None);
+                    }
+                },
+            ));
     }
 
     fn set_frame_image(frame: &mut Frame, image: Option<SharedImage>) {
