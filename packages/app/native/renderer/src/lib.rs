@@ -271,6 +271,8 @@ impl Renderer {
 
         app::set_background_color(24, 26, 27);
         app::set_foreground_color(255, 255, 255);
+        fltk::image::Image::set_scaling_algorithm(fltk::image::RgbScaling::Bilinear);
+        RgbImage::set_scaling_algorithm(fltk::image::RgbScaling::Bilinear);
 
         let (tx, rx) = flume::unbounded();
         self.event_sender.replace(tx);
