@@ -325,6 +325,12 @@ impl Renderer {
         }
     }
 
+    fn check_viewports(&self) {
+        for listener in self.viewport_listeners.write().unwrap().iter_mut() {
+            listener.check();
+        }
+    }
+
     /// # Panics
     ///
     /// Will panic if elements `Mutex` is poisoned.
@@ -368,7 +374,12 @@ impl Renderer {
                 match ev {
                     Event::Resize => {
                         renderer.handle_resize(window);
+                        renderer.check_viewports();
                         true
+                    }
+                    Event::MouseWheel => {
+                        renderer.check_viewports();
+                        false
                     }
                     #[cfg(feature = "debug")]
                     Event::KeyUp => {
