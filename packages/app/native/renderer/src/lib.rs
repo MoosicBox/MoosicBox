@@ -668,6 +668,13 @@ fn draw_elements(
             "draw_elements: missing calculated_width and/or calculated_height value"
         );
     };
+
+    moosicbox_assert::assert!(
+        calculated_width > 0.0 && calculated_height > 0.0
+            || calculated_width <= 0.0 && calculated_height <= 0.0,
+        "Invalid calculated_width/calculated_height: calculated_width={calculated_width} calculated_height={calculated_height}"
+    );
+
     log::debug!(
         "draw_elements: calculated_width={calculated_width} calculated_height={calculated_height}"
     );
@@ -774,6 +781,12 @@ fn draw_elements(
     let contained_width = element.contained_calculated_width();
     let contained_height = element.contained_calculated_height();
 
+    moosicbox_assert::assert!(
+        contained_width > 0.0 && contained_height > 0.0
+            || contained_width <= 0.0 && contained_height <= 0.0,
+        "Invalid contained_width/contained_height: contained_width={contained_width} contained_height={contained_height}"
+    );
+
     log::debug!(
         "draw_elements: contained_width={contained_width} contained_height={contained_height}"
     );
@@ -828,7 +841,10 @@ fn draw_elements(
             .container_element()
             .and_then(|x| {
                 x.calculated_position.as_ref().and_then(|x| match x {
-                    gigachad_transformer::LayoutPosition::Wrap { row, col } => Some((*row, *col)),
+                    gigachad_transformer::LayoutPosition::Wrap { row, col } => {
+                        log::debug!("draw_elements: drawing row={row} col={col}");
+                        Some((*row, *col))
+                    }
                     gigachad_transformer::LayoutPosition::Default => None,
                 })
             })
