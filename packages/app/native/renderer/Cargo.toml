@@ -18,6 +18,7 @@ gigachad_transformer = { version = "0.1.0", path = "../../../gigachad/transforme
 moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
 moosicbox_task = { version = "0.1.0", path = "../../../task", default-features = false }
 
+bytes     = { workspace = true }
 fltk      = { workspace = true, features = ["use-ninja"] }
 flume     = { workspace = true }
 futures   = { workspace = true }

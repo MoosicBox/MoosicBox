@@ -4889,6 +4889,7 @@ dependencies = [
 name = "moosicbox_app_native_renderer"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "fltk",
  "flume",
  "futures",

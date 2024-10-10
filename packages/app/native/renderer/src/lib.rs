@@ -2,12 +2,15 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::{
+    borrow::Cow,
     collections::HashMap,
+    ops::Deref,
     pin::Pin,
     str::FromStr as _,
     sync::{atomic::AtomicI32, Arc, LazyLock, Mutex, RwLock},
 };
 
+use bytes::Bytes;
 use fltk::{
     app::{self, App},
     enums::{self, Event},
@@ -179,12 +182,30 @@ pub enum AppEvent {
     Navigate {
         href: String,
     },
+    RegisterImage {
+        viewport: Option<Viewport>,
+        source: String,
+        width: Option<f32>,
+        height: Option<f32>,
+        frame: Frame,
+    },
     LoadImage {
         source: String,
         width: Option<f32>,
         height: Option<f32>,
         frame: Frame,
     },
+    UnloadImage {
+        frame: Frame,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct RegisteredImage {
+    source: String,
+    width: Option<f32>,
+    height: Option<f32>,
+    frame: Frame,
 }
 
 #[derive(Clone)]
@@ -194,6 +215,7 @@ pub struct Renderer {
     elements: Arc<Mutex<ContainerElement>>,
     root: Arc<RwLock<Option<group::Flex>>>,
     routes: Arc<RwLock<Vec<(RoutePath, RouteFunc)>>>,
+    images: Arc<RwLock<Vec<RegisteredImage>>>,
     width: Arc<AtomicI32>,
     height: Arc<AtomicI32>,
     event_sender: Option<Sender<AppEvent>>,
@@ -215,6 +237,7 @@ impl Renderer {
             elements: Arc::new(Mutex::new(ContainerElement::default())),
             root: Arc::new(RwLock::new(None)),
             routes: Arc::new(RwLock::new(vec![])),
+            images: Arc::new(RwLock::new(vec![])),
             width: Arc::new(AtomicI32::new(0)),
             height: Arc::new(AtomicI32::new(0)),
             event_sender: None,
@@ -358,13 +381,64 @@ impl Renderer {
         self
     }
 
+    fn trigger_load_image(&self, frame: &Frame) -> Result<(), flume::SendError<AppEvent>> {
+        let image = {
+            self.images
+                .write()
+                .unwrap()
+                .iter()
+                .find(|x| x.frame.is_same(frame))
+                .cloned()
+        };
+
+        if let Some(image) = image {
+            if let Some(sender) = &self.event_sender {
+                sender.send(AppEvent::LoadImage {
+                    source: image.source,
+                    width: image.width,
+                    height: image.height,
+                    frame: frame.to_owned(),
+                })?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn register_image(
+        &self,
+        viewport: Option<Viewport>,
+        source: String,
+        width: Option<f32>,
+        height: Option<f32>,
+        frame: &Frame,
+    ) {
+        self.images.write().unwrap().push(RegisteredImage {
+            source,
+            width,
+            height,
+            frame: frame.clone(),
+        });
+        if !viewport.is_some_and(|x| !x.is_widget_visible(&frame.as_base_widget())) {
+            if let Err(e) = self.trigger_load_image(frame) {
+                log::error!("Failed to trigger_load_image: {e:?}");
+            }
+        }
+    }
+
+    fn set_frame_image(frame: &mut Frame, image: Option<SharedImage>) {
+        frame.set_image_scaled(image);
+        frame.set_damage(true);
+        app::awake();
+    }
+
     async fn load_image(
         source: String,
         width: Option<f32>,
         height: Option<f32>,
         mut frame: Frame,
     ) -> Result<(), LoadImageError> {
-        type ImageCache = LazyLock<Arc<tokio::sync::RwLock<HashMap<String, SharedImage>>>>;
+        type ImageCache = LazyLock<Arc<tokio::sync::RwLock<HashMap<String, Bytes>>>>;
         static IMAGE_CACHE: ImageCache =
             LazyLock::new(|| Arc::new(tokio::sync::RwLock::new(HashMap::new())));
 
@@ -372,22 +446,23 @@ impl Renderer {
 
         let cached_image = { IMAGE_CACHE.read().await.get(&key).cloned() };
 
-        let image = if let Some(image) = cached_image {
-            image
+        let data = if let Some(data) = cached_image {
+            data
         } else {
             let data = reqwest::get(source).await?.bytes().await?;
-            let image = image::load_from_memory_with_format(&data, image::ImageFormat::WebP)?;
-            let image = RgbImage::new(
-                image.as_bytes(),
-                image.width().try_into().unwrap(),
-                image.height().try_into().unwrap(),
-                enums::ColorDepth::Rgb8,
-            )?;
-            let image = SharedImage::from_image(image)?;
-            IMAGE_CACHE.write().await.insert(key, image.clone());
+            IMAGE_CACHE.write().await.insert(key, data.clone());
 
-            image
+            data
         };
+
+        let image = image::load_from_memory_with_format(&data, image::ImageFormat::WebP)?;
+        let image = RgbImage::new(
+            image.as_bytes(),
+            image.width().try_into().unwrap(),
+            image.height().try_into().unwrap(),
+            enums::ColorDepth::Rgb8,
+        )?;
+        let image = SharedImage::from_image(image)?;
 
         if width.is_some() || height.is_some() {
             #[allow(clippy::cast_possible_truncation)]
@@ -400,9 +475,7 @@ impl Renderer {
             frame.set_size(width, height);
         }
 
-        frame.set_image_scaled(Some(image));
-        frame.set_damage(true);
-        app::awake();
+        Self::set_frame_image(&mut frame, Some(image));
 
         Ok(())
     }
@@ -420,6 +493,15 @@ impl Renderer {
                         log::error!("Failed to navigate: {e:?}");
                     }
                 }
+                AppEvent::RegisterImage {
+                    viewport,
+                    source,
+                    width,
+                    height,
+                    frame,
+                } => {
+                    renderer.register_image(viewport, source, width, height, &frame);
+                }
                 AppEvent::LoadImage {
                     source,
                     width,
@@ -429,6 +511,9 @@ impl Renderer {
                     moosicbox_task::spawn("renderer: load_image", async move {
                         Self::load_image(source, width, height, frame).await
                     });
+                }
+                AppEvent::UnloadImage { mut frame } => {
+                    Self::set_frame_image(&mut frame, None);
                 }
             }
         }
@@ -511,7 +596,8 @@ impl Renderer {
 
             log::debug!("perform_render: initialized ContainerElement for rendering {container:?} window_width={window_width} window_height={window_height}");
 
-            root.replace(draw_elements(
+            root.replace(self.draw_elements(
+                Cow::Owned(None),
                 container,
                 0,
                 Context::new(window_width, window_height),
@@ -542,6 +628,645 @@ impl Renderer {
         self.perform_render()?;
 
         Ok(())
+    }
+
+    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::cognitive_complexity)]
+    fn draw_elements(
+        &self,
+        mut viewport: Cow<'_, Option<Viewport>>,
+        element: &ContainerElement,
+        depth: usize,
+        context: Context,
+        event_sender: Sender<AppEvent>,
+    ) -> Result<group::Flex, FltkError> {
+        static SCROLL_LINESIZE: i32 = 40;
+        static SCROLLBAR_SIZE: i32 = 16;
+
+        log::debug!("draw_elements: element={element:?} depth={depth} viewport={viewport:?}");
+
+        let (Some(calculated_width), Some(calculated_height)) =
+            (element.calculated_width, element.calculated_height)
+        else {
+            moosicbox_assert::die_or_panic!(
+                "draw_elements: missing calculated_width and/or calculated_height value"
+            );
+        };
+
+        moosicbox_assert::assert!(
+        calculated_width > 0.0 && calculated_height > 0.0
+            || calculated_width <= 0.0 && calculated_height <= 0.0,
+        "Invalid calculated_width/calculated_height: calculated_width={calculated_width} calculated_height={calculated_height}"
+    );
+
+        log::debug!(
+        "draw_elements: calculated_width={calculated_width} calculated_height={calculated_height}"
+    );
+        let direction = context.direction;
+
+        #[allow(clippy::cast_possible_truncation)]
+        let mut container = group::Flex::default_fill().with_size(
+            calculated_width.round() as i32,
+            calculated_height.round() as i32,
+        );
+        container.set_clip_children(false);
+        container.set_pad(0);
+
+        #[allow(clippy::cast_possible_truncation)]
+        let container_scroll_y: Option<Box<dyn Group>> = match context.overflow_y {
+            LayoutOverflow::Auto => Some({
+                let mut scroll = group::Scroll::default_fill()
+                    .with_size(
+                        calculated_width.round() as i32,
+                        calculated_height.round() as i32,
+                    )
+                    .with_type(group::ScrollType::Vertical);
+                scroll.set_scrollbar_size(SCROLLBAR_SIZE);
+                scroll.scrollbar().set_linesize(SCROLL_LINESIZE);
+                let parent = viewport.deref().clone();
+                viewport
+                    .to_mut()
+                    .replace(Viewport::new(parent, scroll.clone()));
+                scroll.into()
+            }),
+            LayoutOverflow::Scroll => Some({
+                let mut scroll = group::Scroll::default_fill()
+                    .with_size(
+                        calculated_width.round() as i32,
+                        calculated_height.round() as i32,
+                    )
+                    .with_type(group::ScrollType::VerticalAlways);
+                scroll.set_scrollbar_size(SCROLLBAR_SIZE);
+                scroll.scrollbar().set_linesize(SCROLL_LINESIZE);
+                let parent = viewport.deref().clone();
+                viewport
+                    .to_mut()
+                    .replace(Viewport::new(parent, scroll.clone()));
+                scroll.into()
+            }),
+            LayoutOverflow::Squash | LayoutOverflow::Show | LayoutOverflow::Wrap => None,
+        };
+        #[allow(clippy::cast_possible_truncation)]
+        let container_scroll_x: Option<Box<dyn Group>> = match context.overflow_x {
+            LayoutOverflow::Auto => Some({
+                let mut scroll = group::Scroll::default_fill()
+                    .with_size(
+                        calculated_width.round() as i32,
+                        calculated_height.round() as i32,
+                    )
+                    .with_type(group::ScrollType::Horizontal);
+                scroll.set_scrollbar_size(SCROLLBAR_SIZE);
+                scroll.hscrollbar().set_linesize(SCROLL_LINESIZE);
+                let parent = viewport.deref().clone();
+                viewport
+                    .to_mut()
+                    .replace(Viewport::new(parent, scroll.clone()));
+                scroll.into()
+            }),
+            LayoutOverflow::Scroll => Some({
+                let mut scroll = group::Scroll::default_fill()
+                    .with_size(
+                        calculated_width.round() as i32,
+                        calculated_height.round() as i32,
+                    )
+                    .with_type(group::ScrollType::HorizontalAlways);
+                scroll.set_scrollbar_size(SCROLLBAR_SIZE);
+                scroll.hscrollbar().set_linesize(SCROLL_LINESIZE);
+                let parent = viewport.deref().clone();
+                viewport
+                    .to_mut()
+                    .replace(Viewport::new(parent, scroll.clone()));
+                scroll.into()
+            }),
+            LayoutOverflow::Squash | LayoutOverflow::Show | LayoutOverflow::Wrap => None,
+        };
+
+        #[allow(clippy::cast_possible_truncation)]
+        let container_wrap_y: Option<Box<dyn Group>> = if context.overflow_y == LayoutOverflow::Wrap
+        {
+            Some({
+                let mut flex = match context.direction {
+                    LayoutDirection::Row => group::Flex::default_fill().column(),
+                    LayoutDirection::Column => group::Flex::default_fill().row(),
+                }
+                .with_size(
+                    calculated_width.round() as i32,
+                    calculated_height.round() as i32,
+                );
+                flex.set_pad(0);
+                flex.set_clip_children(false);
+                flex.into()
+            })
+        } else {
+            None
+        };
+        #[allow(clippy::cast_possible_truncation)]
+        let container_wrap_x: Option<Box<dyn Group>> = if context.overflow_x == LayoutOverflow::Wrap
+        {
+            Some({
+                let mut flex = match context.direction {
+                    LayoutDirection::Row => group::Flex::default_fill().column(),
+                    LayoutDirection::Column => group::Flex::default_fill().row(),
+                }
+                .with_size(
+                    calculated_width.round() as i32,
+                    calculated_height.round() as i32,
+                );
+                flex.set_pad(0);
+                flex.set_clip_children(false);
+                flex.into()
+            })
+        } else {
+            None
+        };
+
+        let contained_width = element.contained_calculated_width();
+        let contained_height = element.contained_calculated_height();
+
+        moosicbox_assert::assert!(
+        contained_width > 0.0 && contained_height > 0.0
+            || contained_width <= 0.0 && contained_height <= 0.0,
+        "Invalid contained_width/contained_height: contained_width={contained_width} contained_height={contained_height}"
+    );
+
+        log::debug!(
+            "draw_elements: contained_width={contained_width} contained_height={contained_height}"
+        );
+        #[allow(clippy::cast_possible_truncation)]
+        let contained_width = contained_width.round() as i32;
+        #[allow(clippy::cast_possible_truncation)]
+        let contained_height = contained_height.round() as i32;
+        log::debug!(
+        "draw_elements: rounded contained_width={contained_width} contained_height={contained_height}"
+    );
+
+        let inner_container = if contained_width > 0 && contained_height > 0 {
+            Some(
+                group::Flex::default()
+                    .with_size(contained_width, contained_height)
+                    .column(),
+            )
+        } else {
+            None
+        };
+        let flex = group::Flex::default_fill();
+        let mut flex = match context.direction {
+            LayoutDirection::Row => flex.row(),
+            LayoutDirection::Column => flex.column(),
+        };
+
+        flex.set_clip_children(false);
+        flex.set_pad(0);
+
+        #[cfg(feature = "debug")]
+        {
+            if *DEBUG.read().unwrap() {
+                flex.draw(|w| {
+                    fltk::draw::set_draw_color(enums::Color::White);
+                    fltk::draw::draw_rect(w.x(), w.y(), w.w(), w.h());
+                });
+            }
+        }
+
+        let (mut row, mut col) = element
+            .calculated_position
+            .as_ref()
+            .and_then(|x| match x {
+                gigachad_transformer::LayoutPosition::Wrap { row, col } => Some((*row, *col)),
+                gigachad_transformer::LayoutPosition::Default => None,
+            })
+            .unwrap_or((0, 0));
+
+        let len = element.elements.len();
+        for (i, element) in element.elements.iter().enumerate() {
+            let (current_row, current_col) = element
+                .container_element()
+                .and_then(|x| {
+                    x.calculated_position.as_ref().and_then(|x| match x {
+                        gigachad_transformer::LayoutPosition::Wrap { row, col } => {
+                            log::debug!("draw_elements: drawing row={row} col={col}");
+                            Some((*row, *col))
+                        }
+                        gigachad_transformer::LayoutPosition::Default => None,
+                    })
+                })
+                .unwrap_or((row, col));
+
+            if context.direction == LayoutDirection::Row && row != current_row
+                || context.direction == LayoutDirection::Column && col != current_col
+            {
+                log::debug!("draw_elements: finished row/col current_row={current_row} current_col={current_col} flex_width={} flex_height={}", flex.w(), flex.h());
+                flex.end();
+
+                #[allow(clippy::cast_possible_truncation)]
+                {
+                    flex = match context.direction {
+                        LayoutDirection::Row => group::Flex::default_fill().row(),
+                        LayoutDirection::Column => group::Flex::default_fill().column(),
+                    };
+                    flex.set_clip_children(false);
+                    flex.set_pad(0);
+                }
+
+                #[cfg(feature = "debug")]
+                {
+                    if *DEBUG.read().unwrap() {
+                        flex.draw(|w| {
+                            fltk::draw::set_draw_color(enums::Color::White);
+                            fltk::draw::draw_rect(w.x(), w.y(), w.w(), w.h());
+                        });
+                    }
+                }
+            }
+
+            row = current_row;
+            col = current_col;
+
+            if i == len - 1 {
+                if let Some(widget) = self.draw_element(
+                    Cow::Borrowed(&viewport),
+                    element,
+                    i,
+                    depth + 1,
+                    context,
+                    event_sender,
+                )? {
+                    fixed_size(
+                        direction,
+                        element.container_element().and_then(|x| x.calculated_width),
+                        element
+                            .container_element()
+                            .and_then(|x| x.calculated_height),
+                        &mut flex,
+                        &widget,
+                    );
+                }
+                break;
+            }
+            if let Some(widget) = self.draw_element(
+                Cow::Borrowed(&viewport),
+                element,
+                i,
+                depth + 1,
+                context.clone(),
+                event_sender.clone(),
+            )? {
+                fixed_size(
+                    direction,
+                    element.container_element().and_then(|x| x.calculated_width),
+                    element
+                        .container_element()
+                        .and_then(|x| x.calculated_height),
+                    &mut flex,
+                    &widget,
+                );
+            }
+        }
+
+        log::debug!(
+        "draw_elements: finished draw: container_wrap_x={:?} container_wrap_y={:?} container_scroll_x={:?} container_scroll_y={:?} container={}",
+        container_wrap_x.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
+        container_wrap_y.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
+        container_scroll_x.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
+        container_scroll_y.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
+        format!("({}, {})", container.w(), container.h()),
+    );
+        flex.end();
+
+        if let Some(container) = inner_container {
+            container.end();
+        }
+
+        if let Some(mut container) = container_wrap_x {
+            log::debug!(
+                "draw_elements: ending container_wrap_x {} ({}, {})",
+                container.type_str(),
+                container.wid(),
+                container.hei(),
+            );
+            container.end();
+        }
+        if let Some(mut container) = container_wrap_y {
+            log::debug!(
+                "draw_elements: ending container_wrap_y {} ({}, {})",
+                container.type_str(),
+                container.wid(),
+                container.hei(),
+            );
+            container.end();
+        }
+        if let Some(mut container) = container_scroll_x {
+            log::debug!(
+                "draw_elements: ending container_scroll_x {} ({}, {})",
+                container.type_str(),
+                container.wid(),
+                container.hei(),
+            );
+            container.end();
+        }
+        if let Some(mut container) = container_scroll_y {
+            log::debug!(
+                "draw_elements: ending container_scroll_y {} ({}, {})",
+                container.type_str(),
+                container.wid(),
+                container.hei(),
+            );
+            container.end();
+        }
+        log::debug!(
+            "draw_elements: ending container {} ({}, {})",
+            container.type_str(),
+            container.wid(),
+            container.hei(),
+        );
+        container.end();
+
+        if log::log_enabled!(log::Level::Trace) {
+            let mut hierarchy = String::new();
+
+            let mut current = Some(flex.as_base_widget());
+            while let Some(widget) = current.take() {
+                hierarchy.push_str(&format!(
+                    "\n\t({}, {}, {}, {})",
+                    widget.x(),
+                    widget.y(),
+                    widget.w(),
+                    widget.h()
+                ));
+                current = widget.parent().map(|x| x.as_base_widget());
+            }
+
+            log::trace!("draw_elements: hierarchy:{hierarchy}");
+        }
+
+        Ok(container)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::cognitive_complexity)]
+    fn draw_element(
+        &self,
+        viewport: Cow<'_, Option<Viewport>>,
+        element: &Element,
+        index: usize,
+        depth: usize,
+        mut context: Context,
+        event_sender: Sender<AppEvent>,
+    ) -> Result<Option<widget::Widget>, FltkError> {
+        log::debug!("draw_element: element={element:?} index={index} depth={depth}");
+
+        let mut flex_element = None;
+        let mut other_element: Option<widget::Widget> = None;
+
+        match element {
+            Element::Raw { value } => {
+                app::set_font_size(context.size);
+                #[allow(unused_mut)]
+                let mut frame = frame::Frame::default()
+                    .with_label(value)
+                    .with_align(enums::Align::Inside | enums::Align::Left);
+
+                #[cfg(feature = "debug")]
+                {
+                    if *DEBUG.read().unwrap() {
+                        frame.draw(|w| {
+                            fltk::draw::set_draw_color(enums::Color::White);
+                            fltk::draw::draw_rect(w.x(), w.y(), w.w(), w.h());
+                        });
+                    }
+                }
+
+                other_element = Some(frame.as_base_widget());
+            }
+            Element::Div { element } => {
+                context = context.with_container(element);
+                flex_element =
+                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+            }
+            Element::Aside { element } => {
+                context = context.with_container(element);
+                flex_element =
+                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+            }
+            Element::Header { element } => {
+                context = context.with_container(element);
+                flex_element =
+                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+            }
+            Element::Footer { element } => {
+                context = context.with_container(element);
+                flex_element =
+                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+            }
+            Element::Main { element } => {
+                context = context.with_container(element);
+                flex_element =
+                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+            }
+            Element::Section { element } => {
+                context = context.with_container(element);
+                flex_element =
+                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+            }
+            Element::Form { element } => {
+                context = context.with_container(element);
+                flex_element =
+                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+            }
+            Element::Span { element } => {
+                context = context.with_container(element);
+                flex_element =
+                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+            }
+            Element::Input(_) => {}
+            Element::Button { element } => {
+                context = context.with_container(element);
+                flex_element =
+                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+            }
+            Element::Image { source, element } => {
+                context = context.with_container(element);
+                let width = element.calculated_width;
+                let height = element.calculated_height;
+                let mut frame = Frame::default_fill();
+
+                #[cfg(feature = "debug")]
+                {
+                    if *DEBUG.read().unwrap() {
+                        frame.draw(|w| {
+                            fltk::draw::set_draw_color(enums::Color::White);
+                            fltk::draw::draw_rect(w.x(), w.y(), w.w(), w.h());
+                        });
+                    }
+                }
+
+                if let Some(source) = source {
+                    if source.starts_with("http") {
+                        if let Err(e) = event_sender.send(AppEvent::RegisterImage {
+                            viewport: viewport.deref().clone(),
+                            source: source.to_owned(),
+                            width: element.width.map(|_| width.unwrap()),
+                            height: element.height.map(|_| height.unwrap()),
+                            frame: frame.clone(),
+                        }) {
+                            log::error!(
+                                "Failed to send LoadImage event with source={source}: {e:?}"
+                            );
+                        }
+                    } else if let Ok(manifest_path) = std::env::var("CARGO_MANIFEST_DIR") {
+                        if let Ok(path) = std::path::PathBuf::from_str(&manifest_path) {
+                            let source = source
+                                .chars()
+                                .skip_while(|x| *x == '/' || *x == '\\')
+                                .collect::<String>();
+
+                            if let Some(path) = path
+                                .parent()
+                                .and_then(|x| x.parent())
+                                .map(|x| x.join("app-website").join("public").join(source))
+                            {
+                                if let Ok(path) = path.canonicalize() {
+                                    if path.is_file() {
+                                        let image = SharedImage::load(path)?;
+
+                                        if width.is_some() || height.is_some() {
+                                            #[allow(clippy::cast_possible_truncation)]
+                                            let width = calc_number(
+                                                element.width.unwrap_or_default(),
+                                                context.width,
+                                            )
+                                            .round()
+                                                as i32;
+                                            #[allow(clippy::cast_possible_truncation)]
+                                            let height = calc_number(
+                                                element.height.unwrap_or_default(),
+                                                context.height,
+                                            )
+                                            .round()
+                                                as i32;
+
+                                            frame.set_size(width, height);
+                                        }
+
+                                        frame.set_image_scaled(Some(image));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                other_element = Some(frame.as_base_widget());
+            }
+            Element::Anchor { element, href } => {
+                context = context.with_container(element);
+                let mut elements =
+                    self.draw_elements(viewport, element, depth, context, event_sender.clone())?;
+                if let Some(href) = href.to_owned() {
+                    elements.handle(move |_, ev| match ev {
+                        Event::Push => true,
+                        Event::Released => {
+                            if let Err(e) =
+                                event_sender.send(AppEvent::Navigate { href: href.clone() })
+                            {
+                                log::error!("Failed to navigate to href={href}: {e:?}");
+                            }
+                            true
+                        }
+                        _ => false,
+                    });
+                }
+                flex_element = Some(elements);
+            }
+            Element::Heading { element, size } => {
+                context = context.with_container(element);
+                context.size = match size {
+                    HeaderSize::H1 => 36,
+                    HeaderSize::H2 => 30,
+                    HeaderSize::H3 => 24,
+                    HeaderSize::H4 => 20,
+                    HeaderSize::H5 => 16,
+                    HeaderSize::H6 => 12,
+                };
+                flex_element =
+                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+            }
+            Element::OrderedList { element } | Element::UnorderedList { element } => {
+                context = context.with_container(element);
+                flex_element =
+                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+            }
+            Element::ListItem { element } => {
+                context = context.with_container(element);
+                flex_element =
+                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+            }
+        }
+
+        #[cfg(feature = "debug")]
+        if let Some(flex_element) = &mut flex_element {
+            if *DEBUG.read().unwrap() && (depth == 1 || index > 0) {
+                let mut element_info = vec![];
+
+                let mut child = Some(element);
+
+                while let Some(element) = child.take() {
+                    let element_name = element.tag_display_str();
+                    let text = element_name.to_string();
+                    let first = element_info.is_empty();
+
+                    element_info.push(text);
+
+                    if let Some(container) = element.container_element() {
+                        let text = format!(
+                            "    ({}, {}, {}, {})",
+                            container.calculated_x.unwrap_or(0.0),
+                            container.calculated_y.unwrap_or(0.0),
+                            container.calculated_width.unwrap_or(0.0),
+                            container.calculated_height.unwrap_or(0.0),
+                        );
+
+                        element_info.push(text);
+                    }
+
+                    if first {
+                        let text = format!(
+                            "    ({}, {}, {}, {})",
+                            flex_element.x(),
+                            flex_element.y(),
+                            flex_element.w(),
+                            flex_element.h(),
+                        );
+
+                        element_info.push(text);
+                    }
+
+                    if let Some(container) = element.container_element() {
+                        child = container.elements.first();
+                    }
+                }
+
+                flex_element.draw({
+                    move |w| {
+                        use fltk::draw;
+
+                        draw::set_draw_color(enums::Color::Red);
+                        draw::draw_rect(w.x(), w.y(), w.w(), w.h());
+                        draw::set_font(fltk::draw::font(), 8);
+
+                        let mut y_offset = 0;
+
+                        for text in &element_info {
+                            let (_t_x, _t_y, _t_w, t_h) = draw::text_extents(text);
+                            y_offset += t_h;
+                            draw::draw_text(text, w.x(), w.y() + y_offset);
+                        }
+                    }
+                });
+            }
+        }
+
+        Ok(flex_element.map(|x| x.as_base_widget()).or(other_element))
     }
 
     /// # Errors
@@ -590,6 +1315,198 @@ impl Context {
             .or_else(|| container.height.map(|x| calc_number(x, self.height)))
             .unwrap_or(self.height);
         self
+    }
+}
+
+#[derive(Clone)]
+pub struct Viewport {
+    parent: Option<Box<Viewport>>,
+    position: Arc<Box<dyn ViewportPosition + Send + Sync>>,
+}
+
+impl std::fmt::Debug for Viewport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut binding = f.debug_struct("Viewport");
+        let x = binding
+            .field("x", &self.x())
+            .field("y", &self.y())
+            .field("w", &self.w())
+            .field("h", &self.h());
+
+        if let Some(parent) = &self.parent {
+            x.field("parent", &parent);
+        }
+
+        x.finish_non_exhaustive()
+    }
+}
+
+impl Viewport {
+    fn new(parent: Option<Self>, position: impl ViewportPosition + Send + Sync + 'static) -> Self {
+        Self {
+            parent: parent.map(Box::new),
+            position: Arc::new(Box::new(position)),
+        }
+    }
+
+    fn x(&self) -> i32 {
+        self.position.viewport_x()
+    }
+
+    fn y(&self) -> i32 {
+        self.position.viewport_y()
+    }
+
+    fn w(&self) -> i32 {
+        self.position.viewport_w()
+    }
+
+    fn h(&self) -> i32 {
+        self.position.viewport_h()
+    }
+
+    fn as_base_widget(&self) -> widget::Widget {
+        self.position.viewport_as_base_widget()
+    }
+
+    fn is_widget_visible(&self, widget: &widget::Widget) -> bool {
+        self.position.is_widget_visible(widget)
+            // FIXME: This doesn't correctly check the position leaf widget (the param above)
+            // within this viewport itself, but this probably isn't a huge issue since nested
+            // `Viewport`s isn't super likely yet.
+            && !self
+                .parent
+                .as_ref()
+                .is_some_and(|x| !x.is_widget_visible(&self.as_base_widget()))
+    }
+}
+
+trait ViewportPosition {
+    fn viewport_x(&self) -> i32;
+    fn viewport_y(&self) -> i32;
+    fn viewport_w(&self) -> i32;
+    fn viewport_h(&self) -> i32;
+    fn viewport_as_base_widget(&self) -> widget::Widget;
+
+    fn is_widget_visible(&self, widget: &widget::Widget) -> bool {
+        let mut x = widget.x();
+        let mut y = widget.y();
+        let w = widget.w();
+        let h = widget.h();
+        log::trace!("is_widget_visible: widget x={x} y={y} w={w} h={h}");
+        let this_widget = self.viewport_as_base_widget();
+
+        let mut current = widget.parent();
+
+        let is_child = loop {
+            if let Some(group) = current.take() {
+                log::trace!("is_widget_visible: group={group:?}",);
+
+                if group.is_same(&this_widget) {
+                    log::trace!(
+                        "is_widget_visible: {x} -= {} = {}",
+                        group.x(),
+                        x - group.x()
+                    );
+                    x -= group.x();
+                    log::trace!(
+                        "is_widget_visible: {y} -= {} = {}",
+                        group.y(),
+                        y - group.y()
+                    );
+                    y -= group.y();
+                    break true;
+                }
+
+                current = group.parent();
+            } else {
+                break false;
+            }
+        };
+
+        let viewport_x = self.viewport_x();
+        let viewport_y = self.viewport_y();
+        let viewport_w = self.viewport_w();
+        let viewport_h = self.viewport_h();
+
+        moosicbox_assert::assert!(
+            is_child,
+            "Called is_widget_visible on a non-child: viewport=({viewport_x}, {viewport_y}, {viewport_w}, {viewport_h}) widget={widget:?} ({}, {})",
+            widget.x(),
+            widget.y()
+        );
+
+        log::trace!(
+            "is_widget_visible:\n\t\
+            {x} + {w} > {viewport_x} &&\n\t\
+            {x} < {viewport_x} + {viewport_w} &&\n\t\
+            {y} + {h} > {viewport_y} &&\n\t\
+            {y} < {viewport_y} + {viewport_h}"
+        );
+
+        if is_child
+            && x + w > viewport_x
+            && x < viewport_x + viewport_w
+            && y + h > viewport_y
+            && y < viewport_y + viewport_h
+        {
+            log::trace!("is_widget_visible: visible");
+            return true;
+        }
+
+        log::trace!("is_widget_visible: not visible");
+
+        false
+    }
+}
+
+impl std::fmt::Debug for dyn ViewportPosition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ViewportPosition")
+            .field("x", &self.viewport_x())
+            .field("y", &self.viewport_y())
+            .field("w", &self.viewport_w())
+            .field("h", &self.viewport_h())
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for Box<dyn ViewportPosition + Send + Sync> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ViewportPosition")
+            .field("x", &self.viewport_x())
+            .field("y", &self.viewport_y())
+            .field("w", &self.viewport_w())
+            .field("h", &self.viewport_h())
+            .finish()
+    }
+}
+
+impl ViewportPosition for group::Scroll {
+    fn viewport_x(&self) -> i32 {
+        self.xposition()
+    }
+
+    fn viewport_y(&self) -> i32 {
+        self.yposition()
+    }
+
+    fn viewport_w(&self) -> i32 {
+        self.w()
+    }
+
+    fn viewport_h(&self) -> i32 {
+        self.h()
+    }
+
+    fn viewport_as_base_widget(&self) -> widget::Widget {
+        self.as_base_widget()
+    }
+}
+
+impl From<group::Scroll> for Box<dyn ViewportPosition + Send + Sync> {
+    fn from(value: group::Scroll) -> Self {
+        Box::new(value)
     }
 }
 
@@ -646,596 +1563,6 @@ impl From<group::Scroll> for Box<dyn Group> {
     fn from(value: group::Scroll) -> Self {
         Box::new(value)
     }
-}
-
-#[allow(clippy::too_many_lines)]
-#[allow(clippy::cognitive_complexity)]
-fn draw_elements(
-    element: &ContainerElement,
-    depth: usize,
-    context: Context,
-    event_sender: Sender<AppEvent>,
-) -> Result<group::Flex, FltkError> {
-    static SCROLL_LINESIZE: i32 = 40;
-    static SCROLLBAR_SIZE: i32 = 16;
-
-    log::debug!("draw_elements: element={element:?} depth={depth}");
-
-    let (Some(calculated_width), Some(calculated_height)) =
-        (element.calculated_width, element.calculated_height)
-    else {
-        moosicbox_assert::die_or_panic!(
-            "draw_elements: missing calculated_width and/or calculated_height value"
-        );
-    };
-
-    moosicbox_assert::assert!(
-        calculated_width > 0.0 && calculated_height > 0.0
-            || calculated_width <= 0.0 && calculated_height <= 0.0,
-        "Invalid calculated_width/calculated_height: calculated_width={calculated_width} calculated_height={calculated_height}"
-    );
-
-    log::debug!(
-        "draw_elements: calculated_width={calculated_width} calculated_height={calculated_height}"
-    );
-    let direction = context.direction;
-
-    #[allow(clippy::cast_possible_truncation)]
-    let mut container = group::Flex::default_fill().with_size(
-        calculated_width.round() as i32,
-        calculated_height.round() as i32,
-    );
-    container.set_clip_children(false);
-    container.set_pad(0);
-
-    #[allow(clippy::cast_possible_truncation)]
-    let container_scroll_y: Option<Box<dyn Group>> = match context.overflow_y {
-        LayoutOverflow::Auto => Some({
-            let mut scroll = group::Scroll::default_fill()
-                .with_size(
-                    calculated_width.round() as i32,
-                    calculated_height.round() as i32,
-                )
-                .with_type(group::ScrollType::Vertical);
-            scroll.set_scrollbar_size(SCROLLBAR_SIZE);
-            scroll.scrollbar().set_linesize(SCROLL_LINESIZE);
-            scroll.into()
-        }),
-        LayoutOverflow::Scroll => Some({
-            let mut scroll = group::Scroll::default_fill()
-                .with_size(
-                    calculated_width.round() as i32,
-                    calculated_height.round() as i32,
-                )
-                .with_type(group::ScrollType::VerticalAlways);
-            scroll.set_scrollbar_size(SCROLLBAR_SIZE);
-            scroll.scrollbar().set_linesize(SCROLL_LINESIZE);
-            scroll.into()
-        }),
-        LayoutOverflow::Squash | LayoutOverflow::Show | LayoutOverflow::Wrap => None,
-    };
-    #[allow(clippy::cast_possible_truncation)]
-    let container_scroll_x: Option<Box<dyn Group>> = match context.overflow_x {
-        LayoutOverflow::Auto => Some({
-            let mut scroll = group::Scroll::default_fill()
-                .with_size(
-                    calculated_width.round() as i32,
-                    calculated_height.round() as i32,
-                )
-                .with_type(group::ScrollType::Horizontal);
-            scroll.set_scrollbar_size(SCROLLBAR_SIZE);
-            scroll.hscrollbar().set_linesize(SCROLL_LINESIZE);
-            scroll.into()
-        }),
-        LayoutOverflow::Scroll => Some({
-            let mut scroll = group::Scroll::default_fill()
-                .with_size(
-                    calculated_width.round() as i32,
-                    calculated_height.round() as i32,
-                )
-                .with_type(group::ScrollType::HorizontalAlways);
-            scroll.set_scrollbar_size(SCROLLBAR_SIZE);
-            scroll.hscrollbar().set_linesize(SCROLL_LINESIZE);
-            scroll.into()
-        }),
-        LayoutOverflow::Squash | LayoutOverflow::Show | LayoutOverflow::Wrap => None,
-    };
-
-    #[allow(clippy::cast_possible_truncation)]
-    let container_wrap_y: Option<Box<dyn Group>> = if context.overflow_y == LayoutOverflow::Wrap {
-        Some({
-            let mut flex = match context.direction {
-                LayoutDirection::Row => group::Flex::default_fill().column(),
-                LayoutDirection::Column => group::Flex::default_fill().row(),
-            }
-            .with_size(
-                calculated_width.round() as i32,
-                calculated_height.round() as i32,
-            );
-            flex.set_pad(0);
-            flex.set_clip_children(false);
-            flex.into()
-        })
-    } else {
-        None
-    };
-    #[allow(clippy::cast_possible_truncation)]
-    let container_wrap_x: Option<Box<dyn Group>> = if context.overflow_x == LayoutOverflow::Wrap {
-        Some({
-            let mut flex = match context.direction {
-                LayoutDirection::Row => group::Flex::default_fill().column(),
-                LayoutDirection::Column => group::Flex::default_fill().row(),
-            }
-            .with_size(
-                calculated_width.round() as i32,
-                calculated_height.round() as i32,
-            );
-            flex.set_pad(0);
-            flex.set_clip_children(false);
-            flex.into()
-        })
-    } else {
-        None
-    };
-
-    let contained_width = element.contained_calculated_width();
-    let contained_height = element.contained_calculated_height();
-
-    moosicbox_assert::assert!(
-        contained_width > 0.0 && contained_height > 0.0
-            || contained_width <= 0.0 && contained_height <= 0.0,
-        "Invalid contained_width/contained_height: contained_width={contained_width} contained_height={contained_height}"
-    );
-
-    log::debug!(
-        "draw_elements: contained_width={contained_width} contained_height={contained_height}"
-    );
-    #[allow(clippy::cast_possible_truncation)]
-    let contained_width = contained_width.round() as i32;
-    #[allow(clippy::cast_possible_truncation)]
-    let contained_height = contained_height.round() as i32;
-    log::debug!(
-        "draw_elements: rounded contained_width={contained_width} contained_height={contained_height}"
-    );
-
-    let inner_container = if contained_width > 0 && contained_height > 0 {
-        Some(
-            group::Flex::default()
-                .with_size(contained_width, contained_height)
-                .column(),
-        )
-    } else {
-        None
-    };
-    let flex = group::Flex::default_fill();
-    let mut flex = match context.direction {
-        LayoutDirection::Row => flex.row(),
-        LayoutDirection::Column => flex.column(),
-    };
-
-    flex.set_clip_children(false);
-    flex.set_pad(0);
-
-    #[cfg(feature = "debug")]
-    {
-        if *DEBUG.read().unwrap() {
-            flex.draw(|w| {
-                fltk::draw::set_draw_color(enums::Color::White);
-                fltk::draw::draw_rect(w.x(), w.y(), w.w(), w.h());
-            });
-        }
-    }
-
-    let (mut row, mut col) = element
-        .calculated_position
-        .as_ref()
-        .and_then(|x| match x {
-            gigachad_transformer::LayoutPosition::Wrap { row, col } => Some((*row, *col)),
-            gigachad_transformer::LayoutPosition::Default => None,
-        })
-        .unwrap_or((0, 0));
-
-    let len = element.elements.len();
-    for (i, element) in element.elements.iter().enumerate() {
-        let (current_row, current_col) = element
-            .container_element()
-            .and_then(|x| {
-                x.calculated_position.as_ref().and_then(|x| match x {
-                    gigachad_transformer::LayoutPosition::Wrap { row, col } => {
-                        log::debug!("draw_elements: drawing row={row} col={col}");
-                        Some((*row, *col))
-                    }
-                    gigachad_transformer::LayoutPosition::Default => None,
-                })
-            })
-            .unwrap_or((row, col));
-
-        if context.direction == LayoutDirection::Row && row != current_row
-            || context.direction == LayoutDirection::Column && col != current_col
-        {
-            log::debug!("draw_elements: finished row/col current_row={current_row} current_col={current_col} flex_width={} flex_height={}", flex.w(), flex.h());
-            flex.end();
-
-            #[allow(clippy::cast_possible_truncation)]
-            {
-                flex = match context.direction {
-                    LayoutDirection::Row => group::Flex::default_fill().row(),
-                    LayoutDirection::Column => group::Flex::default_fill().column(),
-                };
-                flex.set_clip_children(false);
-                flex.set_pad(0);
-            }
-
-            #[cfg(feature = "debug")]
-            {
-                if *DEBUG.read().unwrap() {
-                    flex.draw(|w| {
-                        fltk::draw::set_draw_color(enums::Color::White);
-                        fltk::draw::draw_rect(w.x(), w.y(), w.w(), w.h());
-                    });
-                }
-            }
-        }
-
-        row = current_row;
-        col = current_col;
-
-        if i == len - 1 {
-            if let Some(widget) = draw_element(element, i, depth + 1, context, event_sender)? {
-                fixed_size(
-                    direction,
-                    element.container_element().and_then(|x| x.calculated_width),
-                    element
-                        .container_element()
-                        .and_then(|x| x.calculated_height),
-                    &mut flex,
-                    &widget,
-                );
-            }
-            break;
-        }
-        if let Some(widget) =
-            draw_element(element, i, depth + 1, context.clone(), event_sender.clone())?
-        {
-            fixed_size(
-                direction,
-                element.container_element().and_then(|x| x.calculated_width),
-                element
-                    .container_element()
-                    .and_then(|x| x.calculated_height),
-                &mut flex,
-                &widget,
-            );
-        }
-    }
-
-    log::debug!(
-        "draw_elements: finished draw: container_wrap_x={:?} container_wrap_y={:?} container_scroll_x={:?} container_scroll_y={:?} container={}",
-        container_wrap_x.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
-        container_wrap_y.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
-        container_scroll_x.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
-        container_scroll_y.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
-        format!("({}, {})", container.w(), container.h()),
-    );
-    flex.end();
-
-    if let Some(container) = inner_container {
-        container.end();
-    }
-
-    if let Some(mut container) = container_wrap_x {
-        log::debug!(
-            "draw_elements: ending container_wrap_x {} ({}, {})",
-            container.type_str(),
-            container.wid(),
-            container.hei(),
-        );
-        container.end();
-    }
-    if let Some(mut container) = container_wrap_y {
-        log::debug!(
-            "draw_elements: ending container_wrap_y {} ({}, {})",
-            container.type_str(),
-            container.wid(),
-            container.hei(),
-        );
-        container.end();
-    }
-    if let Some(mut container) = container_scroll_x {
-        log::debug!(
-            "draw_elements: ending container_scroll_x {} ({}, {})",
-            container.type_str(),
-            container.wid(),
-            container.hei(),
-        );
-        container.end();
-    }
-    if let Some(mut container) = container_scroll_y {
-        log::debug!(
-            "draw_elements: ending container_scroll_y {} ({}, {})",
-            container.type_str(),
-            container.wid(),
-            container.hei(),
-        );
-        container.end();
-    }
-    log::debug!(
-        "draw_elements: ending container {} ({}, {})",
-        container.type_str(),
-        container.wid(),
-        container.hei(),
-    );
-    container.end();
-
-    if log::log_enabled!(log::Level::Trace) {
-        let mut hierarchy = String::new();
-
-        let mut current = Some(flex.as_base_widget());
-        while let Some(widget) = current.take() {
-            hierarchy.push_str(&format!(
-                "\n\t({}, {}, {}, {})",
-                widget.x(),
-                widget.y(),
-                widget.w(),
-                widget.h()
-            ));
-            current = widget.parent().map(|x| x.as_base_widget());
-        }
-
-        log::trace!("draw_elements: hierarchy:{hierarchy}");
-    }
-
-    Ok(container)
-}
-
-#[allow(clippy::too_many_lines)]
-#[allow(clippy::cognitive_complexity)]
-fn draw_element(
-    element: &Element,
-    index: usize,
-    depth: usize,
-    mut context: Context,
-    event_sender: Sender<AppEvent>,
-) -> Result<Option<widget::Widget>, FltkError> {
-    log::debug!("draw_element: element={element:?} index={index} depth={depth}");
-
-    let mut flex_element = None;
-    let mut other_element: Option<widget::Widget> = None;
-
-    match element {
-        Element::Raw { value } => {
-            app::set_font_size(context.size);
-            #[allow(unused_mut)]
-            let mut frame = frame::Frame::default()
-                .with_label(value)
-                .with_align(enums::Align::Inside | enums::Align::Left);
-
-            #[cfg(feature = "debug")]
-            {
-                if *DEBUG.read().unwrap() {
-                    frame.draw(|w| {
-                        fltk::draw::set_draw_color(enums::Color::White);
-                        fltk::draw::draw_rect(w.x(), w.y(), w.w(), w.h());
-                    });
-                }
-            }
-
-            other_element = Some(frame.as_base_widget());
-        }
-        Element::Div { element } => {
-            context = context.with_container(element);
-            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
-        }
-        Element::Aside { element } => {
-            context = context.with_container(element);
-            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
-        }
-        Element::Header { element } => {
-            context = context.with_container(element);
-            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
-        }
-        Element::Footer { element } => {
-            context = context.with_container(element);
-            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
-        }
-        Element::Main { element } => {
-            context = context.with_container(element);
-            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
-        }
-        Element::Section { element } => {
-            context = context.with_container(element);
-            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
-        }
-        Element::Form { element } => {
-            context = context.with_container(element);
-            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
-        }
-        Element::Span { element } => {
-            context = context.with_container(element);
-            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
-        }
-        Element::Input(_) => {}
-        Element::Button { element } => {
-            context = context.with_container(element);
-            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
-        }
-        Element::Image { source, element } => {
-            context = context.with_container(element);
-            let width = element.calculated_width;
-            let height = element.calculated_height;
-            let mut frame = Frame::default_fill();
-
-            #[cfg(feature = "debug")]
-            {
-                if *DEBUG.read().unwrap() {
-                    frame.draw(|w| {
-                        fltk::draw::set_draw_color(enums::Color::White);
-                        fltk::draw::draw_rect(w.x(), w.y(), w.w(), w.h());
-                    });
-                }
-            }
-
-            if let Some(source) = source {
-                if source.starts_with("http") {
-                    if let Err(e) = event_sender.send(AppEvent::LoadImage {
-                        source: source.to_owned(),
-                        width: element.width.map(|_| width.unwrap()),
-                        height: element.height.map(|_| height.unwrap()),
-                        frame: frame.clone(),
-                    }) {
-                        log::error!("Failed to send LoadImage event with source={source}: {e:?}");
-                    }
-                } else if let Ok(manifest_path) = std::env::var("CARGO_MANIFEST_DIR") {
-                    if let Ok(path) = std::path::PathBuf::from_str(&manifest_path) {
-                        let source = source
-                            .chars()
-                            .skip_while(|x| *x == '/' || *x == '\\')
-                            .collect::<String>();
-
-                        if let Some(path) = path
-                            .parent()
-                            .and_then(|x| x.parent())
-                            .map(|x| x.join("app-website").join("public").join(source))
-                        {
-                            if let Ok(path) = path.canonicalize() {
-                                if path.is_file() {
-                                    let image = SharedImage::load(path)?;
-
-                                    if width.is_some() || height.is_some() {
-                                        #[allow(clippy::cast_possible_truncation)]
-                                        let width = calc_number(
-                                            element.width.unwrap_or_default(),
-                                            context.width,
-                                        )
-                                        .round()
-                                            as i32;
-                                        #[allow(clippy::cast_possible_truncation)]
-                                        let height = calc_number(
-                                            element.height.unwrap_or_default(),
-                                            context.height,
-                                        )
-                                        .round()
-                                            as i32;
-
-                                        frame.set_size(width, height);
-                                    }
-
-                                    frame.set_image_scaled(Some(image));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // fixed_size(direction, width, height, flex, &frame);
-
-            other_element = Some(frame.as_base_widget());
-        }
-        Element::Anchor { element, href } => {
-            context = context.with_container(element);
-            let mut elements = draw_elements(element, depth, context, event_sender.clone())?;
-            if let Some(href) = href.to_owned() {
-                elements.handle(move |_, ev| match ev {
-                    Event::Push => true,
-                    Event::Released => {
-                        if let Err(e) = event_sender.send(AppEvent::Navigate { href: href.clone() })
-                        {
-                            log::error!("Failed to navigate to href={href}: {e:?}");
-                        }
-                        true
-                    }
-                    _ => false,
-                });
-            }
-            flex_element = Some(elements);
-        }
-        Element::Heading { element, size } => {
-            context = context.with_container(element);
-            context.size = match size {
-                HeaderSize::H1 => 36,
-                HeaderSize::H2 => 30,
-                HeaderSize::H3 => 24,
-                HeaderSize::H4 => 20,
-                HeaderSize::H5 => 16,
-                HeaderSize::H6 => 12,
-            };
-            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
-        }
-        Element::OrderedList { element } | Element::UnorderedList { element } => {
-            context = context.with_container(element);
-            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
-        }
-        Element::ListItem { element } => {
-            context = context.with_container(element);
-            flex_element = Some(draw_elements(element, depth, context, event_sender)?);
-        }
-    }
-
-    #[cfg(feature = "debug")]
-    if let Some(flex_element) = &mut flex_element {
-        if *DEBUG.read().unwrap() && (depth == 1 || index > 0) {
-            let mut element_info = vec![];
-
-            let mut child = Some(element);
-
-            while let Some(element) = child.take() {
-                let element_name = element.tag_display_str();
-                let text = element_name.to_string();
-                let first = element_info.is_empty();
-
-                element_info.push(text);
-
-                if let Some(container) = element.container_element() {
-                    let text = format!(
-                        "    ({}, {}, {}, {})",
-                        container.calculated_x.unwrap_or(0.0),
-                        container.calculated_y.unwrap_or(0.0),
-                        container.calculated_width.unwrap_or(0.0),
-                        container.calculated_height.unwrap_or(0.0),
-                    );
-
-                    element_info.push(text);
-                }
-
-                if first {
-                    let text = format!(
-                        "    ({}, {}, {}, {})",
-                        flex_element.x(),
-                        flex_element.y(),
-                        flex_element.w(),
-                        flex_element.h(),
-                    );
-
-                    element_info.push(text);
-                }
-
-                if let Some(container) = element.container_element() {
-                    child = container.elements.first();
-                }
-            }
-
-            flex_element.draw({
-                move |w| {
-                    use fltk::draw;
-
-                    draw::set_draw_color(enums::Color::Red);
-                    draw::draw_rect(w.x(), w.y(), w.w(), w.h());
-                    draw::set_font(fltk::draw::font(), 8);
-
-                    let mut y_offset = 0;
-
-                    for text in &element_info {
-                        let (_t_x, _t_y, _t_w, t_h) = draw::text_extents(text);
-                        y_offset += t_h;
-                        draw::draw_text(text, w.x(), w.y() + y_offset);
-                    }
-                }
-            });
-        }
-    }
-
-    Ok(flex_element.map(|x| x.as_base_widget()).or(other_element))
 }
 
 fn fixed_size<W: WidgetExt>(
