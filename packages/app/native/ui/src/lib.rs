@@ -119,11 +119,16 @@ pub fn albums_page_content(albums: Vec<ApiAlbum>) -> Markup {
         })
         .collect::<Vec<_>>();
 
+    let size: u16 = 200;
+    #[allow(clippy::cast_sign_loss)]
+    #[allow(clippy::cast_possible_truncation)]
+    let request_size = (f64::from(size) * 1.33).round() as u16;
+
     html! {
         div sx-dir="row" sx-overflow-x="wrap" sx-overflow-y="show" {
             @for album in &albums {
-                div sx-width="100" sx-height="130" {
-                    img src=(album_cover_url(album, 100, 100)) sx-width="100" sx-height="100";
+                div sx-width=(size) sx-height=(size + 30) {
+                    img src=(album_cover_url(album, request_size, request_size)) sx-width=(size) sx-height=(size);
                     (album.title)
                 }
             }
