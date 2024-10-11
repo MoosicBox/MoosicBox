@@ -624,14 +624,21 @@ impl Renderer {
                 AppEvent::Resize {} => {}
                 AppEvent::MouseWheel {} => {
                     {
-                        if let Some((handle, cancel)) = renderer
-                            .viewport_listener_join_handle
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .as_mut()
-                        {
+                        let values = {
+                            let value = renderer
+                                .viewport_listener_join_handle
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                .take();
+                            if let Some((handle, cancel)) = value {
+                                Some((handle, cancel))
+                            } else {
+                                None
+                            }
+                        };
+                        if let Some((handle, cancel)) = values {
                             cancel.store(true, std::sync::atomic::Ordering::SeqCst);
-                            handle.abort();
+                            let _ = handle.await;
                         }
                     }
 
