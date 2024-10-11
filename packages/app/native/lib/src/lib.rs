@@ -6,7 +6,7 @@ use std::sync::Arc;
 use fltk::prelude::FltkError;
 use futures::Future;
 use gigachad_transformer::ContainerElement;
-use moosicbox_app_native_renderer::{Renderer, RoutePath};
+use moosicbox_app_native_renderer::{Renderer, RoutePath, RouteRequest};
 use moosicbox_env_utils::default_env_usize;
 use thiserror::Error;
 use tokio::{runtime::Runtime, task::JoinHandle};
@@ -149,7 +149,7 @@ impl NativeApp {
     >(
         mut self,
         route: impl Into<RoutePath>,
-        handler: impl Fn() -> F + Send + Sync + Clone + 'static,
+        handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
     ) -> Self {
         self.renderer = self.renderer.with_route(route, handler);
         self

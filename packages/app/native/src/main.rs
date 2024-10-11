@@ -60,15 +60,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     app = app
-        .with_route(&["/", "/home"], || async {
+        .with_route(&["/", "/home"], |_| async {
             moosicbox_app_native_ui::home().into_string().try_into()
         })
-        .with_route("/downloads", || async {
+        .with_route("/downloads", |_| async {
             moosicbox_app_native_ui::downloads()
                 .into_string()
                 .try_into()
         })
-        .with_route("/albums", || async {
+        .with_route("/albums", |_| async move {
             let response = reqwest::get(format!(
                 "{}/menu/albums?moosicboxProfile=master&offset=0&limit=2000",
                 std::env::var("MOOSICBOX_HOST")
@@ -91,7 +91,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .try_into()?,
             )
         })
-        .with_route("/artists", || async {
+        .with_route("/artists", |_| async {
             moosicbox_app_native_ui::artists().into_string().try_into()
         })
         .start()?;

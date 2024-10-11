@@ -30,12 +30,15 @@ use gigachad_transformer::{
     calc::{calc_number, Calc as _},
     ContainerElement, Element, HeaderSize, LayoutDirection, LayoutOverflow,
 };
+use qstring::QString;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
 type RouteFunc = Arc<
     Box<
-        dyn (Fn() -> Pin<
+        dyn (Fn(
+                RouteRequest,
+            ) -> Pin<
                 Box<
                     dyn Future<Output = Result<ContainerElement, Box<dyn std::error::Error>>>
                         + Send,
@@ -52,6 +55,28 @@ static DEBUG: LazyLock<RwLock<bool>> = LazyLock::new(|| {
             .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str())),
     )
 });
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RouteRequest {
+    pub path: String,
+    pub query: HashMap<String, String>,
+}
+
+impl RouteRequest {
+    #[must_use]
+    pub fn from_path(path: &str) -> Self {
+        let (path, query) = if let Some((path, query)) = path.split_once('?') {
+            (path, query)
+        } else {
+            (path, "")
+        };
+
+        Self {
+            path: path.to_owned(),
+            query: QString::from(query).into_iter().collect(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RoutePath {
@@ -452,14 +477,14 @@ impl Renderer {
     >(
         self,
         route: impl Into<RoutePath>,
-        handler: impl Fn() -> F + Send + Sync + Clone + 'static,
+        handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
     ) -> Self {
         self.routes.write().unwrap().push((
             route.into(),
-            Arc::new(Box::new(move || {
+            Arc::new(Box::new(move |req| {
                 Box::pin({
                     let handler = handler.clone();
-                    async move { handler().await.map_err(Into::into) }
+                    async move { handler(req).await.map_err(Into::into) }
                 })
             })),
         ));
@@ -656,17 +681,18 @@ impl Renderer {
     ///
     /// Will panic if routes `RwLock` is poisoned.
     pub async fn navigate(&mut self, path: &str) -> Result<(), FltkError> {
+        let req = RouteRequest::from_path(path);
         let handler = {
             self.routes
                 .read()
                 .unwrap()
                 .iter()
-                .find(|(route, _)| route.matches(path))
+                .find(|(route, _)| route.matches(&req.path))
                 .cloned()
                 .map(|(_, handler)| handler)
         };
         if let Some(handler) = handler {
-            match handler().await {
+            match handler(req).await {
                 Ok(elements) => {
                     self.render(elements)?;
                 }

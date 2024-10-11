@@ -4898,6 +4898,7 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "moosicbox_task",
+ "qstring",
  "reqwest 0.12.8",
  "thiserror",
  "tokio",

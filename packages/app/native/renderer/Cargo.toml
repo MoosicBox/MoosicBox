@@ -24,6 +24,7 @@ flume     = { workspace = true }
 futures   = { workspace = true }
 image     = { workspace = true }
 log       = { workspace = true }
+qstring   = { workspace = true }
 reqwest   = { workspace = true }
 thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["sync"] }
