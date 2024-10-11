@@ -296,6 +296,8 @@ impl ViewportListener {
     }
 }
 
+type JoinHandleAndCancelled = (JoinHandle<()>, Arc<AtomicBool>);
+
 #[derive(Clone)]
 pub struct Renderer {
     app: Option<App>,
@@ -309,7 +311,7 @@ pub struct Renderer {
     height: Arc<AtomicI32>,
     event_sender: Option<Sender<AppEvent>>,
     event_receiver: Option<Receiver<AppEvent>>,
-    viewport_listener_join_handle: Arc<Mutex<Option<(JoinHandle<()>, Arc<AtomicBool>)>>>,
+    viewport_listener_join_handle: Arc<Mutex<Option<JoinHandleAndCancelled>>>,
 }
 
 impl Default for Renderer {
