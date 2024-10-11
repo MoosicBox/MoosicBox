@@ -243,7 +243,8 @@ pub struct ViewportListener {
     widget: widget::Widget,
     viewport: Option<Viewport>,
     visible: bool,
-    callback: Box<dyn FnMut(bool) + Send + Sync>,
+    dist: u32,
+    callback: Box<dyn FnMut(bool, u32) + Send + Sync>,
 }
 
 impl std::fmt::Debug for ViewportListener {
@@ -260,12 +261,13 @@ impl ViewportListener {
     fn new(
         widget: widget::Widget,
         viewport: Option<Viewport>,
-        callback: impl FnMut(bool) + Send + Sync + 'static,
+        callback: impl FnMut(bool, u32) + Send + Sync + 'static,
     ) -> Self {
         let mut this = Self {
             widget,
             viewport,
             visible: false,
+            dist: 0,
             callback: Box::new(callback),
         };
 
@@ -273,25 +275,32 @@ impl ViewportListener {
         this
     }
 
-    fn is_visible(&self) -> bool {
-        !self
+    fn is_visible(&self) -> (bool, u32) {
+        if let Some((visible, dist)) = self
             .viewport
             .as_ref()
-            .is_some_and(|x| !x.is_widget_visible(&self.widget).0)
+            .map(|x| x.is_widget_visible(&self.widget))
+        {
+            (visible, dist)
+        } else {
+            (true, 0)
+        }
     }
 
     fn init(&mut self) {
-        let visible = self.is_visible();
+        let (visible, dist) = self.is_visible();
         self.visible = visible;
-        (self.callback)(visible);
+        self.dist = dist;
+        (self.callback)(visible, dist);
     }
 
     pub fn check(&mut self) {
-        let visible = self.is_visible();
+        let (visible, dist) = self.is_visible();
 
-        if visible != self.visible {
+        if visible != self.visible || dist != self.dist {
             self.visible = visible;
-            (self.callback)(visible);
+            self.dist = dist;
+            (self.callback)(visible, dist);
         }
     }
 }
@@ -542,8 +551,8 @@ impl Renderer {
             .push(ViewportListener::new(
                 frame.as_base_widget(),
                 viewport,
-                move |visible| {
-                    if visible {
+                move |_visible, dist| {
+                    if dist < 200 {
                         if let Err(e) = renderer.trigger_load_image(&frame) {
                             log::error!("Failed to trigger_load_image: {e:?}");
                         }
