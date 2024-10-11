@@ -398,6 +398,7 @@ impl Renderer {
 
         app::set_background_color(24, 26, 27);
         app::set_foreground_color(255, 255, 255);
+        app::set_frame_type(enums::FrameType::NoBox);
         fltk::image::Image::set_scaling_algorithm(fltk::image::RgbScaling::Bilinear);
         RgbImage::set_scaling_algorithm(fltk::image::RgbScaling::Bilinear);
 
