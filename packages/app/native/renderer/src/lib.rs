@@ -7,7 +7,10 @@ use std::{
     ops::Deref,
     pin::Pin,
     str::FromStr as _,
-    sync::{atomic::AtomicI32, Arc, LazyLock, Mutex, RwLock},
+    sync::{
+        atomic::{AtomicBool, AtomicI32},
+        Arc, LazyLock, Mutex, RwLock,
+    },
 };
 
 use bytes::Bytes;
@@ -28,6 +31,7 @@ use gigachad_transformer::{
     ContainerElement, Element, HeaderSize, LayoutDirection, LayoutOverflow,
 };
 use thiserror::Error;
+use tokio::task::JoinHandle;
 
 type RouteFunc = Arc<
     Box<
@@ -179,6 +183,8 @@ pub enum LoadImageError {
 
 #[derive(Debug, Clone)]
 pub enum AppEvent {
+    Resize {},
+    MouseWheel {},
     Navigate {
         href: String,
     },
@@ -278,6 +284,7 @@ pub struct Renderer {
     height: Arc<AtomicI32>,
     event_sender: Option<Sender<AppEvent>>,
     event_receiver: Option<Receiver<AppEvent>>,
+    viewport_listener_join_handle: Arc<Mutex<Option<(JoinHandle<()>, Arc<AtomicBool>)>>>,
 }
 
 impl Default for Renderer {
@@ -301,6 +308,7 @@ impl Renderer {
             height: Arc::new(AtomicI32::new(0)),
             event_sender: None,
             event_receiver: None,
+            viewport_listener_join_handle: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -325,8 +333,11 @@ impl Renderer {
         }
     }
 
-    fn check_viewports(&self) {
+    fn check_viewports(&self, cancelled: &AtomicBool) {
         for listener in self.viewport_listeners.write().unwrap().iter_mut() {
+            if cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                break;
+            }
             listener.check();
         }
     }
@@ -374,11 +385,15 @@ impl Renderer {
                 match ev {
                     Event::Resize => {
                         renderer.handle_resize(window);
-                        renderer.check_viewports();
+                        if let Some(sender) = &renderer.event_sender {
+                            let _ = sender.send(AppEvent::Resize {});
+                        }
                         true
                     }
                     Event::MouseWheel => {
-                        renderer.check_viewports();
+                        if let Some(sender) = &renderer.event_sender {
+                            let _ = sender.send(AppEvent::MouseWheel {});
+                        }
                         false
                     }
                     #[cfg(feature = "debug")]
@@ -460,6 +475,7 @@ impl Renderer {
                 .find(|x| x.frame.is_same(frame))
                 .cloned()
         };
+        log::debug!("trigger_load_image: image={image:?}");
 
         if let Some(image) = image {
             if let Some(sender) = &self.event_sender {
@@ -577,6 +593,35 @@ impl Renderer {
                         log::error!("Failed to navigate: {e:?}");
                     }
                 }
+                AppEvent::Resize {} => {}
+                AppEvent::MouseWheel {} => {
+                    {
+                        if let Some((handle, cancel)) = renderer
+                            .viewport_listener_join_handle
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .as_mut()
+                        {
+                            cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+                            handle.abort();
+                        }
+                    }
+
+                    let cancel = Arc::new(AtomicBool::new(false));
+                    let handle = moosicbox_task::spawn("check_viewports", {
+                        let renderer = renderer.clone();
+                        let cancel = cancel.clone();
+                        async move {
+                            renderer.check_viewports(&cancel);
+                        }
+                    });
+
+                    renderer
+                        .viewport_listener_join_handle
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .replace((handle, cancel));
+                }
                 AppEvent::RegisterImage {
                     viewport,
                     source,
@@ -678,7 +723,20 @@ impl Renderer {
                 log::debug!("perform_render: ContainerElement had same size, not recalculating");
             }
 
-            log::debug!("perform_render: initialized ContainerElement for rendering {container:?} window_width={window_width} window_height={window_height}");
+            log::trace!("perform_render: initialized ContainerElement for rendering {container:?} window_width={window_width} window_height={window_height}");
+
+            {
+                log::debug!("perform_render: aborting any existing viewport_listener_join_handle");
+                let handle = self.viewport_listener_join_handle.lock().unwrap().take();
+                if let Some((handle, cancel)) = handle {
+                    cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+                    handle.abort();
+                }
+                log::debug!("perform_render: clearing images");
+                self.images.write().unwrap().clear();
+                log::debug!("perform_render: clearing viewport_listeners");
+                self.viewport_listeners.write().unwrap().clear();
+            }
 
             root.replace(self.draw_elements(
                 Cow::Owned(None),
@@ -1522,18 +1580,13 @@ trait ViewportPosition {
 
         log::trace!(
             "is_widget_visible:\n\t\
-            {x} + {w} > {viewport_x} &&\n\t\
-            {x} < {viewport_x} + {viewport_w} &&\n\t\
-            {y} + {h} > {viewport_y} &&\n\t\
-            {y} < {viewport_y} + {viewport_h}"
+            {x} + {w} > 0 &&\n\t\
+            {x} < {viewport_w} &&\n\t\
+            {y} + {h} > 0 &&\n\t\
+            {y} < {viewport_h}"
         );
 
-        if is_child
-            && x + w > viewport_x
-            && x < viewport_x + viewport_w
-            && y + h > viewport_y
-            && y < viewport_y + viewport_h
-        {
+        if is_child && x + w > 0 && x < viewport_w && y + h > 0 && y < viewport_h {
             log::trace!("is_widget_visible: visible");
             return true;
         }
