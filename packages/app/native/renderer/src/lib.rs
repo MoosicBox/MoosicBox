@@ -277,7 +277,7 @@ impl ViewportListener {
         !self
             .viewport
             .as_ref()
-            .is_some_and(|x| !x.is_widget_visible(&self.widget))
+            .is_some_and(|x| !x.is_widget_visible(&self.widget).0)
     }
 
     fn init(&mut self) {
@@ -1545,15 +1545,27 @@ impl Viewport {
         self.position.viewport_h()
     }
 
-    fn is_widget_visible(&self, widget: &widget::Widget) -> bool {
-        self.position.is_widget_visible(&self.widget, widget)
-            // FIXME: This doesn't correctly check the position leaf widget (the param above)
-            // within this viewport itself, but this probably isn't a huge issue since nested
-            // `Viewport`s isn't super likely yet.
-            && !self
-                .parent
+    fn is_widget_visible(&self, widget: &widget::Widget) -> (bool, u32) {
+        let (visible_in_current_viewport, dist) =
+            self.position.is_widget_visible(&self.widget, widget);
+
+        // FIXME: This doesn't correctly check the position leaf widget (the param above)
+        // within this viewport itself, but this probably isn't a huge issue since nested
+        // `Viewport`s isn't super likely yet.
+        if visible_in_current_viewport {
+            self.parent
                 .as_ref()
-                .is_some_and(|x| !x.is_widget_visible(&self.widget))
+                .map_or((visible_in_current_viewport, dist), |parent| {
+                    let (parent_visible, parent_dist) = parent.is_widget_visible(&self.widget);
+
+                    (
+                        visible_in_current_viewport && parent_visible,
+                        dist + parent_dist,
+                    )
+                })
+        } else {
+            (false, dist)
+        }
     }
 }
 
@@ -1564,7 +1576,11 @@ trait ViewportPosition {
     fn viewport_h(&self) -> i32;
     fn viewport_as_base_widget(&self) -> widget::Widget;
 
-    fn is_widget_visible(&self, this_widget: &widget::Widget, widget: &widget::Widget) -> bool {
+    fn is_widget_visible(
+        &self,
+        this_widget: &widget::Widget,
+        widget: &widget::Widget,
+    ) -> (bool, u32) {
         let mut x = widget.x();
         let mut y = widget.y();
         let w = widget.w();
@@ -1587,22 +1603,27 @@ trait ViewportPosition {
         let viewport_w = self.viewport_w();
         let viewport_h = self.viewport_h();
 
+        #[allow(clippy::cast_sign_loss)]
+        let dist_x = std::cmp::max(0, std::cmp::max(-(x + w), x - viewport_w)) as u32;
+        #[allow(clippy::cast_sign_loss)]
+        let dist_y = std::cmp::max(0, std::cmp::max(-(y + h), y - viewport_h)) as u32;
+
+        let dist = std::cmp::max(dist_x, dist_y);
+
         log::trace!(
             "is_widget_visible:\n\t\
-            {x} + {w} > 0 &&\n\t\
-            {x} < {viewport_w} &&\n\t\
-            {y} + {h} > 0 &&\n\t\
-            {y} < {viewport_h}"
+            {dist_x} == 0 &&\n\t\
+            {dist_y} == 0"
         );
 
-        if x + w > 0 && x < viewport_w && y + h > 0 && y < viewport_h {
+        if dist_x == 0 && dist_y == 0 {
             log::trace!("is_widget_visible: visible");
-            return true;
+            return (true, dist);
         }
 
         log::trace!("is_widget_visible: not visible");
 
-        false
+        (false, dist)
     }
 }
 
