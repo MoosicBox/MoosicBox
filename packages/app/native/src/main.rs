@@ -68,28 +68,48 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .into_string()
                 .try_into()
         })
-        .with_route("/albums", |_| async move {
-            let response = reqwest::get(format!(
-                "{}/menu/albums?moosicboxProfile=master&offset=0&limit=2000",
-                std::env::var("MOOSICBOX_HOST")
-                    .as_deref()
-                    .unwrap_or("http://localhost:8500")
-            ))
-            .await?;
+        .with_route("/albums", |req| async move {
+            Ok::<_, Box<dyn std::error::Error>>(if let Some(album_id) = req.query.get("albumId") {
+                let response = reqwest::get(format!(
+                    "{}/menu/album?moosicboxProfile=master&albumId={album_id}",
+                    std::env::var("MOOSICBOX_HOST")
+                        .as_deref()
+                        .unwrap_or("http://localhost:8500")
+                ))
+                .await?;
 
-            if !response.status().is_success() {
-                log::debug!("Error: {}", response.status());
-            }
+                if !response.status().is_success() {
+                    log::debug!("Error: {}", response.status());
+                }
 
-            let albums: Page<ApiAlbum> = response.json().await?;
+                let album: ApiAlbum = response.json().await?;
 
-            log::debug!("albums: {albums:?}");
+                log::debug!("album: {album:?}");
 
-            Ok::<_, Box<dyn std::error::Error>>(
+                moosicbox_app_native_ui::album(album)
+                    .into_string()
+                    .try_into()?
+            } else {
+                let response = reqwest::get(format!(
+                    "{}/menu/albums?moosicboxProfile=master&offset=0&limit=2000",
+                    std::env::var("MOOSICBOX_HOST")
+                        .as_deref()
+                        .unwrap_or("http://localhost:8500")
+                ))
+                .await?;
+
+                if !response.status().is_success() {
+                    log::debug!("Error: {}", response.status());
+                }
+
+                let albums: Page<ApiAlbum> = response.json().await?;
+
+                log::debug!("albums: {albums:?}");
+
                 moosicbox_app_native_ui::albums(albums.items())
                     .into_string()
-                    .try_into()?,
-            )
+                    .try_into()?
+            })
         })
         .with_route("/artists", |_| async {
             moosicbox_app_native_ui::artists().into_string().try_into()

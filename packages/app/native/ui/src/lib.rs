@@ -110,6 +110,36 @@ fn album_cover_url(album: &ApiLibraryAlbum, width: u16, height: u16) -> String {
 }
 
 #[must_use]
+pub fn album_page_content(album: ApiAlbum) -> Markup {
+    let ApiAlbum::Library(album) = album;
+
+    let size: u16 = 200;
+    #[allow(clippy::cast_sign_loss)]
+    #[allow(clippy::cast_possible_truncation)]
+    let request_size = (f64::from(size) * 1.33).round() as u16;
+
+    html! {
+        div sx-dir="row" {
+            div sx-width=(size) sx-height=(size + 30) {
+                img src=(album_cover_url(&album, request_size, request_size)) sx-width=(size) sx-height=(size);
+            }
+            div {
+                h1 { (album.title) }
+                h2 { (album.artist) }
+                @if let Some(version) = album.versions.first() {
+                    h3 { (version.source) }
+                }
+            }
+        }
+    }
+}
+
+#[must_use]
+pub fn album(album: ApiAlbum) -> Markup {
+    page(&album_page_content(album))
+}
+
+#[must_use]
 pub fn albums_page_content(albums: Vec<ApiAlbum>) -> Markup {
     let albums = albums
         .into_iter()
@@ -127,9 +157,11 @@ pub fn albums_page_content(albums: Vec<ApiAlbum>) -> Markup {
     html! {
         div sx-dir="row" sx-overflow-x="wrap" sx-overflow-y="show" {
             @for album in &albums {
-                div sx-width=(size) sx-height=(size + 30) {
-                    img src=(album_cover_url(album, request_size, request_size)) sx-width=(size) sx-height=(size);
-                    (album.title)
+                a href={"/albums?albumId="(album.album_id)} sx-width=(size) sx-height=(size + 30) {
+                    div sx-width=(size) sx-height=(size + 30) {
+                        img src=(album_cover_url(album, request_size, request_size)) sx-width=(size) sx-height=(size);
+                        (album.title)
+                    }
                 }
             }
         }
