@@ -1498,6 +1498,7 @@ impl Context {
 
 #[derive(Clone)]
 pub struct Viewport {
+    widget: widget::Widget,
     parent: Option<Box<Viewport>>,
     position: Arc<Box<dyn ViewportPosition + Send + Sync>>,
 }
@@ -1522,6 +1523,7 @@ impl std::fmt::Debug for Viewport {
 impl Viewport {
     fn new(parent: Option<Self>, position: impl ViewportPosition + Send + Sync + 'static) -> Self {
         Self {
+            widget: position.viewport_as_base_widget(),
             parent: parent.map(Box::new),
             position: Arc::new(Box::new(position)),
         }
@@ -1543,19 +1545,15 @@ impl Viewport {
         self.position.viewport_h()
     }
 
-    fn as_base_widget(&self) -> widget::Widget {
-        self.position.viewport_as_base_widget()
-    }
-
     fn is_widget_visible(&self, widget: &widget::Widget) -> bool {
-        self.position.is_widget_visible(widget)
+        self.position.is_widget_visible(&self.widget, widget)
             // FIXME: This doesn't correctly check the position leaf widget (the param above)
             // within this viewport itself, but this probably isn't a huge issue since nested
             // `Viewport`s isn't super likely yet.
             && !self
                 .parent
                 .as_ref()
-                .is_some_and(|x| !x.is_widget_visible(&self.as_base_widget()))
+                .is_some_and(|x| !x.is_widget_visible(&self.widget))
     }
 }
 
@@ -1566,53 +1564,28 @@ trait ViewportPosition {
     fn viewport_h(&self) -> i32;
     fn viewport_as_base_widget(&self) -> widget::Widget;
 
-    fn is_widget_visible(&self, widget: &widget::Widget) -> bool {
+    fn is_widget_visible(&self, this_widget: &widget::Widget, widget: &widget::Widget) -> bool {
         let mut x = widget.x();
         let mut y = widget.y();
         let w = widget.w();
         let h = widget.h();
         log::trace!("is_widget_visible: widget x={x} y={y} w={w} h={h}");
-        let this_widget = self.viewport_as_base_widget();
 
-        let mut current = widget.parent();
+        log::trace!(
+            "is_widget_visible: {x} -= {} = {}",
+            this_widget.x(),
+            x - this_widget.x()
+        );
+        x -= this_widget.x();
+        log::trace!(
+            "is_widget_visible: {y} -= {} = {}",
+            this_widget.y(),
+            y - this_widget.y()
+        );
+        y -= this_widget.y();
 
-        let is_child = loop {
-            if let Some(group) = current.take() {
-                log::trace!("is_widget_visible: group={group:?}",);
-
-                if group.is_same(&this_widget) {
-                    log::trace!(
-                        "is_widget_visible: {x} -= {} = {}",
-                        group.x(),
-                        x - group.x()
-                    );
-                    x -= group.x();
-                    log::trace!(
-                        "is_widget_visible: {y} -= {} = {}",
-                        group.y(),
-                        y - group.y()
-                    );
-                    y -= group.y();
-                    break true;
-                }
-
-                current = group.parent();
-            } else {
-                break false;
-            }
-        };
-
-        let viewport_x = self.viewport_x();
-        let viewport_y = self.viewport_y();
         let viewport_w = self.viewport_w();
         let viewport_h = self.viewport_h();
-
-        moosicbox_assert::assert!(
-            is_child,
-            "Called is_widget_visible on a non-child: viewport=({viewport_x}, {viewport_y}, {viewport_w}, {viewport_h}) widget={widget:?} ({}, {})",
-            widget.x(),
-            widget.y()
-        );
 
         log::trace!(
             "is_widget_visible:\n\t\
@@ -1622,7 +1595,7 @@ trait ViewportPosition {
             {y} < {viewport_h}"
         );
 
-        if is_child && x + w > 0 && x < viewport_w && y + h > 0 && y < viewport_h {
+        if x + w > 0 && x < viewport_w && y + h > 0 && y < viewport_h {
             log::trace!("is_widget_visible: visible");
             return true;
         }
