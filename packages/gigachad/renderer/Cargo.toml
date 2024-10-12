@@ -1,0 +1,21 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["gui"]
+description = "Giga-Chad renderer package"
+edition     = "2021"
+keywords    = ["desktop", "gui", "render", "renderer"]
+license     = "MPL-2.0"
+name        = "gigachad_renderer"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+gigachad_transformer = { version = "0.1.0", path = "../transformer", default-features = false }
+
+async-trait = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = []

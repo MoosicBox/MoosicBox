@@ -3,38 +3,38 @@
 
 use std::sync::Arc;
 
-use fltk::prelude::FltkError;
-use futures::Future;
-use gigachad_transformer::ContainerElement;
-use moosicbox_app_native_renderer::{Renderer, RoutePath, RouteRequest};
+use gigachad_renderer::{RenderRunner, Renderer};
 use moosicbox_env_utils::default_env_usize;
+use router::Router;
 use thiserror::Error;
-use tokio::{runtime::Runtime, task::JoinHandle};
+use tokio::{runtime::Runtime, sync::RwLock};
+
+pub mod router;
 
 #[derive(Debug, Error)]
 pub enum NativeAppError {
     #[error(transparent)]
-    Fltk(#[from] FltkError),
+    Other(#[from] Box<dyn std::error::Error + Send>),
 }
 
-#[derive(Clone)]
-pub struct NativeApp {
+pub struct NativeAppBuilder {
     x: Option<i32>,
     y: Option<i32>,
     width: Option<u16>,
     height: Option<u16>,
-    renderer: Renderer,
+    router: Option<Router>,
+    renderer: Option<Box<dyn Renderer>>,
     runtime_handle: Option<tokio::runtime::Handle>,
     runtime: Option<Arc<tokio::runtime::Runtime>>,
 }
 
-impl Default for NativeApp {
+impl Default for NativeAppBuilder {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl NativeApp {
+impl NativeAppBuilder {
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -42,10 +42,23 @@ impl NativeApp {
             y: None,
             width: None,
             height: None,
-            renderer: Renderer::new(),
+            router: None,
+            renderer: None,
             runtime_handle: None,
             runtime: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_renderer(mut self, renderer: impl Renderer + 'static) -> Self {
+        self.renderer.replace(Box::new(renderer));
+        self
+    }
+
+    #[must_use]
+    pub fn with_router(mut self, router: Router) -> Self {
+        self.router.replace(router);
+        self
     }
 
     #[must_use]
@@ -100,13 +113,45 @@ impl NativeApp {
     /// # Errors
     ///
     /// Will error if there was an error starting the FLTK app
-    pub fn start(mut self) -> Result<Self, NativeAppError> {
-        self.renderer = self.renderer.start(
-            self.width.unwrap_or(800),
-            self.height.unwrap_or(600),
-            self.x,
-            self.y,
-        )?;
+    pub async fn start(self) -> Result<NativeApp, NativeAppError> {
+        let mut app = NativeApp {
+            x: self.x,
+            y: self.y,
+            width: self.width,
+            height: self.height,
+            router: self.router.unwrap(),
+            renderer: Arc::new(RwLock::new(self.renderer.unwrap())),
+            runtime_handle: self.runtime_handle,
+            runtime: self.runtime,
+        };
+        app.start().await?;
+        Ok(app)
+    }
+}
+
+pub struct NativeApp {
+    x: Option<i32>,
+    y: Option<i32>,
+    width: Option<u16>,
+    height: Option<u16>,
+    pub router: Router,
+    renderer: Arc<RwLock<Box<dyn Renderer>>>,
+    runtime_handle: Option<tokio::runtime::Handle>,
+    runtime: Option<Arc<tokio::runtime::Runtime>>,
+}
+
+impl NativeApp {
+    async fn start(&mut self) -> Result<(), NativeAppError> {
+        self.renderer
+            .write()
+            .await
+            .init(
+                self.width.unwrap_or(800),
+                self.height.unwrap_or(600),
+                self.x,
+                self.y,
+            )
+            .await?;
 
         let runtime = self.runtime.take().unwrap_or_else(|| {
             let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
@@ -122,57 +167,32 @@ impl NativeApp {
 
         self.runtime_handle.replace(runtime.handle().clone());
 
-        std::thread::spawn({
+        moosicbox_task::spawn_on("app_native_lib::start: router", runtime.handle(), {
+            let router = self.router.clone();
             let renderer = self.renderer.clone();
-            move || {
-                runtime.block_on(async move {
-                    renderer.listen().await;
-                    Ok::<_, String>(())
-                })
+            async move {
+                log::debug!("app_native_lib::start: router listening");
+                while let Some(element) = router.wait_for_navigation().await {
+                    log::debug!("app_native_lib::start: router received element");
+                    renderer.write().await.render(element)?;
+                }
+                Ok::<_, NativeAppError>(())
             }
         });
 
-        Ok(self)
+        Ok(())
     }
 
     /// # Errors
     ///
-    /// Will error if there was an error starting the FLTK app
-    pub fn run(self) -> Result<(), NativeAppError> {
-        Ok(self.renderer.run()?)
-    }
-
-    #[must_use]
-    pub fn with_route<
-        F: Future<Output = Result<ContainerElement, E>> + Send + 'static,
-        E: Into<Box<dyn std::error::Error>>,
-    >(
-        mut self,
-        route: impl Into<RoutePath>,
-        handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
-    ) -> Self {
-        self.renderer = self.renderer.with_route(route, handler);
-        self
-    }
-
-    /// # Errors
-    ///
-    /// Will error if there was an error starting the FLTK app
-    pub async fn navigate(&mut self, path: &str) -> Result<(), FltkError> {
-        self.renderer.navigate(path).await
-    }
-
-    /// # Errors
-    ///
-    /// Will error if there was an error starting the FLTK app
-    pub fn navigate_spawn(&mut self, path: &str) -> JoinHandle<Result<(), FltkError>> {
-        let Some(handle) = &self.runtime_handle else {
-            moosicbox_assert::die_or_panic!("NativeApp must be started before navigating");
-        };
-        let mut renderer = self.renderer.clone();
-        let path = path.to_owned();
-        moosicbox_task::spawn_on("NativeApp navigate_spawn", handle, async move {
-            renderer.navigate(&path).await
-        })
+    /// Will error if there was an error starting the app
+    pub async fn to_runner(self) -> Result<Box<dyn RenderRunner>, NativeAppError> {
+        log::debug!("run: getting runner");
+        self.renderer
+            .write()
+            .await
+            .to_runner()
+            .await
+            .map_err(NativeAppError::Other)
     }
 }

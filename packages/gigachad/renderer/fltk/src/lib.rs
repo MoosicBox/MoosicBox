@@ -5,7 +5,6 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     ops::Deref,
-    pin::Pin,
     str::FromStr as _,
     sync::{
         atomic::{AtomicBool, AtomicI32},
@@ -13,6 +12,7 @@ use std::{
     },
 };
 
+use async_trait::async_trait;
 use bytes::Bytes;
 use fltk::{
     app::{self, App},
@@ -25,28 +25,14 @@ use fltk::{
     window::{DoubleWindow, Window},
 };
 use flume::{Receiver, Sender};
-use futures::Future;
 use gigachad_transformer::{
     calc::{calc_number, Calc as _},
     ContainerElement, Element, HeaderSize, LayoutDirection, LayoutOverflow,
 };
-use qstring::QString;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
-type RouteFunc = Arc<
-    Box<
-        dyn (Fn(
-                RouteRequest,
-            ) -> Pin<
-                Box<
-                    dyn Future<Output = Result<ContainerElement, Box<dyn std::error::Error>>>
-                        + Send,
-                >,
-            >) + Send
-            + Sync,
-    >,
->;
+pub use gigachad_renderer::*;
 
 #[cfg(feature = "debug")]
 static DEBUG: LazyLock<RwLock<bool>> = LazyLock::new(|| {
@@ -55,146 +41,6 @@ static DEBUG: LazyLock<RwLock<bool>> = LazyLock::new(|| {
             .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str())),
     )
 });
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RouteRequest {
-    pub path: String,
-    pub query: HashMap<String, String>,
-}
-
-impl RouteRequest {
-    #[must_use]
-    pub fn from_path(path: &str) -> Self {
-        let (path, query) = if let Some((path, query)) = path.split_once('?') {
-            (path, query)
-        } else {
-            (path, "")
-        };
-
-        Self {
-            path: path.to_owned(),
-            query: QString::from(query).into_iter().collect(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RoutePath {
-    Literal(String),
-    Literals(Vec<String>),
-}
-
-impl RoutePath {
-    #[must_use]
-    pub fn matches(&self, path: &str) -> bool {
-        match self {
-            Self::Literal(route_path) => route_path == path,
-            Self::Literals(route_paths) => route_paths.iter().any(|x| x == path),
-        }
-    }
-}
-
-impl From<&str> for RoutePath {
-    fn from(value: &str) -> Self {
-        Self::Literal(value.to_owned())
-    }
-}
-
-impl From<&[&str; 1]> for RoutePath {
-    fn from(value: &[&str; 1]) -> Self {
-        Self::Literals(value.iter().map(ToString::to_string).collect())
-    }
-}
-
-impl From<&[&str; 2]> for RoutePath {
-    fn from(value: &[&str; 2]) -> Self {
-        Self::Literals(value.iter().map(ToString::to_string).collect())
-    }
-}
-
-impl From<&[&str; 3]> for RoutePath {
-    fn from(value: &[&str; 3]) -> Self {
-        Self::Literals(value.iter().map(ToString::to_string).collect())
-    }
-}
-
-impl From<&[&str; 4]> for RoutePath {
-    fn from(value: &[&str; 4]) -> Self {
-        Self::Literals(value.iter().map(ToString::to_string).collect())
-    }
-}
-
-impl From<&[&str; 5]> for RoutePath {
-    fn from(value: &[&str; 5]) -> Self {
-        Self::Literals(value.iter().map(ToString::to_string).collect())
-    }
-}
-
-impl From<&[&str; 6]> for RoutePath {
-    fn from(value: &[&str; 6]) -> Self {
-        Self::Literals(value.iter().map(ToString::to_string).collect())
-    }
-}
-
-impl From<&[&str; 7]> for RoutePath {
-    fn from(value: &[&str; 7]) -> Self {
-        Self::Literals(value.iter().map(ToString::to_string).collect())
-    }
-}
-
-impl From<&[&str; 8]> for RoutePath {
-    fn from(value: &[&str; 8]) -> Self {
-        Self::Literals(value.iter().map(ToString::to_string).collect())
-    }
-}
-
-impl From<&[&str; 9]> for RoutePath {
-    fn from(value: &[&str; 9]) -> Self {
-        Self::Literals(value.iter().map(ToString::to_string).collect())
-    }
-}
-
-impl From<&[&str; 10]> for RoutePath {
-    fn from(value: &[&str; 10]) -> Self {
-        Self::Literals(value.iter().map(ToString::to_string).collect())
-    }
-}
-
-impl From<&[&str]> for RoutePath {
-    fn from(value: &[&str]) -> Self {
-        Self::Literals(value.iter().map(ToString::to_string).collect())
-    }
-}
-
-impl From<Vec<&str>> for RoutePath {
-    fn from(value: Vec<&str>) -> Self {
-        Self::Literals(value.into_iter().map(ToString::to_string).collect())
-    }
-}
-
-impl From<String> for RoutePath {
-    fn from(value: String) -> Self {
-        Self::Literal(value)
-    }
-}
-
-impl From<&[String]> for RoutePath {
-    fn from(value: &[String]) -> Self {
-        Self::Literals(value.iter().map(ToString::to_string).collect())
-    }
-}
-
-impl From<&[&String]> for RoutePath {
-    fn from(value: &[&String]) -> Self {
-        Self::Literals(value.iter().map(ToString::to_string).collect())
-    }
-}
-
-impl From<Vec<String>> for RoutePath {
-    fn from(value: Vec<String>) -> Self {
-        Self::Literals(value)
-    }
-}
 
 #[derive(Debug, Error)]
 pub enum LoadImageError {
@@ -308,12 +154,11 @@ impl ViewportListener {
 type JoinHandleAndCancelled = (JoinHandle<()>, Arc<AtomicBool>);
 
 #[derive(Clone)]
-pub struct Renderer {
+pub struct FltkRenderer {
     app: Option<App>,
     window: Option<DoubleWindow>,
     elements: Arc<Mutex<ContainerElement>>,
     root: Arc<RwLock<Option<group::Flex>>>,
-    routes: Arc<RwLock<Vec<(RoutePath, RouteFunc)>>>,
     images: Arc<RwLock<Vec<RegisteredImage>>>,
     viewport_listeners: Arc<RwLock<Vec<ViewportListener>>>,
     width: Arc<AtomicI32>,
@@ -321,23 +166,25 @@ pub struct Renderer {
     event_sender: Option<Sender<AppEvent>>,
     event_receiver: Option<Receiver<AppEvent>>,
     viewport_listener_join_handle: Arc<Mutex<Option<JoinHandleAndCancelled>>>,
+    sender: Sender<String>,
+    receiver: Receiver<String>,
 }
 
-impl Default for Renderer {
+impl Default for FltkRenderer {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Renderer {
+impl FltkRenderer {
     #[must_use]
     pub fn new() -> Self {
+        let (tx, rx) = flume::unbounded();
         Self {
             app: None,
             window: None,
             elements: Arc::new(Mutex::new(ContainerElement::default())),
             root: Arc::new(RwLock::new(None)),
-            routes: Arc::new(RwLock::new(vec![])),
             images: Arc::new(RwLock::new(vec![])),
             viewport_listeners: Arc::new(RwLock::new(vec![])),
             width: Arc::new(AtomicI32::new(0)),
@@ -345,6 +192,8 @@ impl Renderer {
             event_sender: None,
             event_receiver: None,
             viewport_listener_join_handle: Arc::new(Mutex::new(None)),
+            sender: tx,
+            receiver: rx,
         }
     }
 
@@ -376,131 +225,6 @@ impl Renderer {
             }
             listener.check();
         }
-    }
-
-    /// # Panics
-    ///
-    /// Will panic if elements `Mutex` is poisoned.
-    ///
-    /// # Errors
-    ///
-    /// Will error if FLTK app fails to start
-    pub fn start(
-        mut self,
-        width: u16,
-        height: u16,
-        x: Option<i32>,
-        y: Option<i32>,
-    ) -> Result<Self, FltkError> {
-        let app = app::App::default();
-        self.app.replace(app);
-
-        let mut window = Window::default()
-            .with_size(i32::from(width), i32::from(height))
-            .with_label("MoosicBox");
-
-        self.window.replace(window.clone());
-        self.width
-            .store(i32::from(width), std::sync::atomic::Ordering::SeqCst);
-        self.height
-            .store(i32::from(height), std::sync::atomic::Ordering::SeqCst);
-
-        app::set_background_color(24, 26, 27);
-        app::set_foreground_color(255, 255, 255);
-        app::set_frame_type(enums::FrameType::NoBox);
-        fltk::image::Image::set_scaling_algorithm(fltk::image::RgbScaling::Bilinear);
-        RgbImage::set_scaling_algorithm(fltk::image::RgbScaling::Bilinear);
-
-        let (tx, rx) = flume::unbounded();
-        self.event_sender.replace(tx);
-        self.event_receiver.replace(rx);
-
-        window.handle({
-            let renderer = self.clone();
-            move |window, ev| {
-                log::trace!("Received event: {ev}");
-                match ev {
-                    Event::Resize => {
-                        renderer.handle_resize(window);
-                        if let Some(sender) = &renderer.event_sender {
-                            let _ = sender.send(AppEvent::Resize {});
-                        }
-                        true
-                    }
-                    Event::MouseWheel => {
-                        if let Some(sender) = &renderer.event_sender {
-                            let _ = sender.send(AppEvent::MouseWheel {});
-                        }
-                        false
-                    }
-                    #[cfg(feature = "debug")]
-                    Event::KeyUp => {
-                        let key = app::event_key();
-                        log::debug!("Received key press {key:?}");
-                        if key == enums::Key::F3 {
-                            let value = {
-                                let mut handle = DEBUG.write().unwrap();
-                                let value = *handle;
-                                let value = !value;
-                                *handle = value;
-                                value
-                            };
-                            log::debug!("Set DEBUG to {value}");
-                            if let Err(e) = renderer.perform_render() {
-                                log::error!("Failed to draw elements: {e:?}");
-                            }
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    _ => false,
-                }
-            }
-        });
-
-        window.set_callback(|_| {
-            if fltk::app::event() == fltk::enums::Event::Close {
-                app::quit();
-            }
-        });
-
-        if let (Some(x), Some(y)) = (x, y) {
-            log::debug!("start: positioning window x={x} y={y}");
-            window = window.with_pos(x, y);
-        } else {
-            log::debug!("start: centering window");
-            window = window.center_screen();
-        }
-        window.end();
-        window.make_resizable(true);
-        window.show();
-
-        Ok(self)
-    }
-
-    /// # Panics
-    ///
-    /// Will panic if routes `RwLock` is poisoned.
-    #[must_use]
-    pub fn with_route<
-        F: Future<Output = Result<ContainerElement, E>> + Send + 'static,
-        E: Into<Box<dyn std::error::Error>>,
-    >(
-        self,
-        route: impl Into<RoutePath>,
-        handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
-    ) -> Self {
-        self.routes.write().unwrap().push((
-            route.into(),
-            Arc::new(Box::new(move |req| {
-                Box::pin({
-                    let handler = handler.clone();
-                    async move { handler(req).await.map_err(Into::into) }
-                })
-            })),
-        ));
-        self
     }
 
     fn trigger_load_image(&self, frame: &Frame) -> Result<(), flume::SendError<AppEvent>> {
@@ -617,115 +341,6 @@ impl Renderer {
         Ok(())
     }
 
-    pub async fn listen(&self) {
-        let Some(rx) = self.event_receiver.clone() else {
-            moosicbox_assert::die_or_panic!("Cannot listen before app is started");
-        };
-        let mut renderer = self.clone();
-        while let Ok(event) = rx.recv_async().await {
-            log::debug!("received event {event:?}");
-            match event {
-                AppEvent::Navigate { href } => {
-                    if let Err(e) = renderer.navigate(&href).await {
-                        log::error!("Failed to navigate: {e:?}");
-                    }
-                }
-                AppEvent::Resize {} => {}
-                AppEvent::MouseWheel {} => {
-                    {
-                        let values = {
-                            let value = renderer
-                                .viewport_listener_join_handle
-                                .lock()
-                                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                                .take();
-                            if let Some((handle, cancel)) = value {
-                                Some((handle, cancel))
-                            } else {
-                                None
-                            }
-                        };
-                        if let Some((handle, cancel)) = values {
-                            cancel.store(true, std::sync::atomic::Ordering::SeqCst);
-                            let _ = handle.await;
-                        }
-                    }
-
-                    let cancel = Arc::new(AtomicBool::new(false));
-                    let handle = moosicbox_task::spawn("check_viewports", {
-                        let renderer = renderer.clone();
-                        let cancel = cancel.clone();
-                        async move {
-                            renderer.check_viewports(&cancel);
-                        }
-                    });
-
-                    renderer
-                        .viewport_listener_join_handle
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .replace((handle, cancel));
-                }
-                AppEvent::RegisterImage {
-                    viewport,
-                    source,
-                    width,
-                    height,
-                    frame,
-                } => {
-                    renderer.register_image(viewport, source, width, height, &frame);
-                }
-                AppEvent::LoadImage {
-                    source,
-                    width,
-                    height,
-                    frame,
-                } => {
-                    moosicbox_task::spawn("renderer: load_image", async move {
-                        Self::load_image(source, width, height, frame).await
-                    });
-                }
-                AppEvent::UnloadImage { mut frame } => {
-                    Self::set_frame_image(&mut frame, None);
-                }
-            }
-        }
-    }
-
-    /// # Errors
-    ///
-    /// Will error if FLTK fails to render the navigation result.
-    ///
-    /// # Panics
-    ///
-    /// Will panic if routes `RwLock` is poisoned.
-    pub async fn navigate(&mut self, path: &str) -> Result<(), FltkError> {
-        let req = RouteRequest::from_path(path);
-        let handler = {
-            self.routes
-                .read()
-                .unwrap()
-                .iter()
-                .find(|(route, _)| route.matches(&req.path))
-                .cloned()
-                .map(|(_, handler)| handler)
-        };
-        if let Some(handler) = handler {
-            match handler(req).await {
-                Ok(elements) => {
-                    self.render(elements)?;
-                }
-                Err(e) => {
-                    log::error!("Failed to fetch route elements: {e:?}");
-                }
-            }
-        } else {
-            log::warn!("Invalid navigation path={path:?}");
-        }
-
-        Ok(())
-    }
-
     fn perform_render(&self) -> Result<(), FltkError> {
         let (Some(mut window), Some(tx)) = (self.window.clone(), self.event_sender.clone()) else {
             moosicbox_assert::die_or_panic!(
@@ -795,25 +410,6 @@ impl Renderer {
         window.flush();
         app::awake();
         log::debug!("perform_render: finished");
-        Ok(())
-    }
-
-    /// # Errors
-    ///
-    /// Will error if FLTK fails to render the elements.
-    ///
-    /// # Panics
-    ///
-    /// Will panic if elements `Mutex` is poisoned.
-    pub fn render(&mut self, elements: ContainerElement) -> Result<(), FltkError> {
-        log::debug!("render: {elements:?}");
-
-        {
-            *self.elements.lock().unwrap() = elements;
-        }
-
-        self.perform_render()?;
-
         Ok(())
     }
 
@@ -971,10 +567,10 @@ impl Renderer {
         let contained_height = element.contained_calculated_height();
 
         moosicbox_assert::assert!(
-        contained_width > 0.0 && contained_height > 0.0
-            || contained_width <= 0.0 && contained_height <= 0.0,
-        "Invalid contained_width/contained_height: contained_width={contained_width} contained_height={contained_height}"
-    );
+            contained_width > 0.0 && contained_height > 0.0
+                || contained_width <= 0.0 && contained_height <= 0.0,
+            "Invalid contained_width/contained_height: contained_width={contained_width} contained_height={contained_height}"
+        );
 
         log::debug!(
             "draw_elements: contained_width={contained_width} contained_height={contained_height}"
@@ -984,8 +580,8 @@ impl Renderer {
         #[allow(clippy::cast_possible_truncation)]
         let contained_height = contained_height.round() as i32;
         log::debug!(
-        "draw_elements: rounded contained_width={contained_width} contained_height={contained_height}"
-    );
+            "draw_elements: rounded contained_width={contained_width} contained_height={contained_height}"
+        );
 
         let inner_container = if contained_width > 0 && contained_height > 0 {
             Some(
@@ -1111,13 +707,13 @@ impl Renderer {
         }
 
         log::debug!(
-        "draw_elements: finished draw: container_wrap_x={:?} container_wrap_y={:?} container_scroll_x={:?} container_scroll_y={:?} container={}",
-        container_wrap_x.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
-        container_wrap_y.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
-        container_scroll_x.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
-        container_scroll_y.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
-        format!("({}, {})", container.w(), container.h()),
-    );
+            "draw_elements: finished draw: container_wrap_x={:?} container_wrap_y={:?} container_scroll_x={:?} container_scroll_y={:?} container={}",
+            container_wrap_x.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
+            container_wrap_y.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
+            container_scroll_x.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
+            container_scroll_y.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
+            format!("({}, {})", container.w(), container.h()),
+        );
         flex.end();
 
         if let Some(container) = inner_container {
@@ -1456,14 +1052,253 @@ impl Renderer {
         Ok(flex_element.map(|x| x.as_base_widget()).or(other_element))
     }
 
+    async fn listen(&self) {
+        let Some(rx) = self.event_receiver.clone() else {
+            moosicbox_assert::die_or_panic!("Cannot listen before app is started");
+        };
+        let renderer = self.clone();
+        while let Ok(event) = rx.recv_async().await {
+            log::debug!("received event {event:?}");
+            match event {
+                AppEvent::Navigate { href } => {
+                    if let Err(e) = self.sender.send(href) {
+                        log::error!("Failed to send navigation href: {e:?}");
+                    }
+                }
+                AppEvent::Resize {} => {}
+                AppEvent::MouseWheel {} => {
+                    {
+                        let values = {
+                            let value = renderer
+                                .viewport_listener_join_handle
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                .take();
+                            if let Some((handle, cancel)) = value {
+                                Some((handle, cancel))
+                            } else {
+                                None
+                            }
+                        };
+                        if let Some((handle, cancel)) = values {
+                            cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+                            let _ = handle.await;
+                        }
+                    }
+
+                    let cancel = Arc::new(AtomicBool::new(false));
+                    let handle = moosicbox_task::spawn("check_viewports", {
+                        let renderer = renderer.clone();
+                        let cancel = cancel.clone();
+                        async move {
+                            renderer.check_viewports(&cancel);
+                        }
+                    });
+
+                    renderer
+                        .viewport_listener_join_handle
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .replace((handle, cancel));
+                }
+                AppEvent::RegisterImage {
+                    viewport,
+                    source,
+                    width,
+                    height,
+                    frame,
+                } => {
+                    renderer.register_image(viewport, source, width, height, &frame);
+                }
+                AppEvent::LoadImage {
+                    source,
+                    width,
+                    height,
+                    frame,
+                } => {
+                    moosicbox_task::spawn("renderer: load_image", async move {
+                        Self::load_image(source, width, height, frame).await
+                    });
+                }
+                AppEvent::UnloadImage { mut frame } => {
+                    Self::set_frame_image(&mut frame, None);
+                }
+            }
+        }
+    }
+
+    #[must_use]
+    pub async fn wait_for_navigation(&self) -> Option<String> {
+        self.receiver.recv_async().await.ok()
+    }
+}
+
+pub struct FltkRenderRunner {
+    app: App,
+}
+
+impl RenderRunner for FltkRenderRunner {
     /// # Errors
     ///
     /// Will error if FLTK fails to run the event loop.
-    pub fn run(self) -> Result<(), FltkError> {
+    fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
+        let app = self.app;
+        log::debug!("run: starting");
+        app.run()
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+        log::debug!("run: finished");
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl Renderer for FltkRenderer {
+    /// # Panics
+    ///
+    /// Will panic if elements `Mutex` is poisoned.
+    ///
+    /// # Errors
+    ///
+    /// Will error if FLTK app fails to start
+    async fn init(
+        &mut self,
+        width: u16,
+        height: u16,
+        x: Option<i32>,
+        y: Option<i32>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        let app = app::App::default();
+        self.app.replace(app);
+
+        let mut window = Window::default()
+            .with_size(i32::from(width), i32::from(height))
+            .with_label("MoosicBox");
+
+        self.window.replace(window.clone());
+        self.width
+            .store(i32::from(width), std::sync::atomic::Ordering::SeqCst);
+        self.height
+            .store(i32::from(height), std::sync::atomic::Ordering::SeqCst);
+
+        app::set_background_color(24, 26, 27);
+        app::set_foreground_color(255, 255, 255);
+        app::set_frame_type(enums::FrameType::NoBox);
+        fltk::image::Image::set_scaling_algorithm(fltk::image::RgbScaling::Bilinear);
+        RgbImage::set_scaling_algorithm(fltk::image::RgbScaling::Bilinear);
+
+        let (tx, rx) = flume::unbounded();
+        self.event_sender.replace(tx);
+        self.event_receiver.replace(rx);
+
+        window.handle({
+            let renderer = self.clone();
+            move |window, ev| {
+                log::trace!("Received event: {ev}");
+                match ev {
+                    Event::Resize => {
+                        renderer.handle_resize(window);
+                        if let Some(sender) = &renderer.event_sender {
+                            let _ = sender.send(AppEvent::Resize {});
+                        }
+                        true
+                    }
+                    Event::MouseWheel => {
+                        if let Some(sender) = &renderer.event_sender {
+                            let _ = sender.send(AppEvent::MouseWheel {});
+                        }
+                        false
+                    }
+                    #[cfg(feature = "debug")]
+                    Event::KeyUp => {
+                        let key = app::event_key();
+                        log::debug!("Received key press {key:?}");
+                        if key == enums::Key::F3 {
+                            let value = {
+                                let mut handle = DEBUG.write().unwrap();
+                                let value = *handle;
+                                let value = !value;
+                                *handle = value;
+                                value
+                            };
+                            log::debug!("Set DEBUG to {value}");
+                            if let Err(e) = renderer.perform_render() {
+                                log::error!("Failed to draw elements: {e:?}");
+                            }
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    _ => false,
+                }
+            }
+        });
+
+        window.set_callback(|_| {
+            if fltk::app::event() == fltk::enums::Event::Close {
+                app::quit();
+            }
+        });
+
+        if let (Some(x), Some(y)) = (x, y) {
+            log::debug!("start: positioning window x={x} y={y}");
+            window = window.with_pos(x, y);
+        } else {
+            log::debug!("start: centering window");
+            window = window.center_screen();
+        }
+        window.end();
+        window.make_resizable(true);
+        window.show();
+        log::debug!("start: started");
+
+        log::debug!("start: spawning listen thread");
+        moosicbox_task::spawn("renderer_fltk::start: listen", {
+            let renderer = self.clone();
+            async move {
+                log::debug!("start: listening");
+                renderer.listen().await;
+                Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
+            }
+        });
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// Will error if FLTK fails to run the event loop.
+    async fn to_runner(
+        &mut self,
+    ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
         let Some(app) = self.app else {
             moosicbox_assert::die_or_panic!("Cannot listen before app is started");
         };
-        app.run()
+
+        Ok(Box::new(FltkRenderRunner { app }))
+    }
+
+    /// # Errors
+    ///
+    /// Will error if FLTK fails to render the elements.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if elements `Mutex` is poisoned.
+    fn render(
+        &mut self,
+        elements: ContainerElement,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        log::debug!("render: {elements:?}");
+
+        {
+            *self.elements.lock().unwrap() = elements;
+        }
+
+        self.perform_render()
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)?;
+
+        Ok(())
     }
 }
 

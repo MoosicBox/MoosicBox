@@ -5,7 +5,6 @@ members = [
     "packages/app/native",
     "packages/app/native/bundled",
     "packages/app/native/lib",
-    "packages/app/native/renderer",
     "packages/app/native/ui",
     "packages/app/tauri/bundled",
     "packages/app/tauri/client",
@@ -30,6 +29,8 @@ members = [
     "packages/env_utils",
     "packages/files",
     "packages/gigachad",
+    "packages/gigachad/renderer",
+    "packages/gigachad/renderer/fltk",
     "packages/gigachad/transformer",
     "packages/image",
     "packages/json_utils",
@@ -132,6 +133,7 @@ derive_more = "1.0.0"
 diesel = { version = "2.2.4", default-features = false }
 diesel_migrations = { version = "2.2.0", default-features = false }
 dotenv = "0.15"
+dyn-clone = "1.0.17"
 enum-as-inner = "0.6.1"
 env_logger = "0.11"
 fdk-aac = "0.7.0"

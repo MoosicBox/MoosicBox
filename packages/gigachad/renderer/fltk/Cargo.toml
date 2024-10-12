@@ -1,0 +1,39 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["gui"]
+description = "Giga-Chad FLTK renderer package"
+edition     = "2021"
+keywords    = ["desktop", "fltk", "gui", "render", "renderer"]
+license     = "MPL-2.0"
+name        = "gigachad_renderer_fltk"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+gigachad_renderer = { version = "0.1.0", path = "../", default-features = false }
+gigachad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [
+    "calc",
+    "html",
+] }
+moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
+moosicbox_task = { version = "0.1.0", path = "../../../task", default-features = false }
+
+async-trait = { workspace = true }
+bytes       = { workspace = true }
+fltk        = { workspace = true, features = ["use-ninja"] }
+flume       = { workspace = true }
+image       = { workspace = true }
+log         = { workspace = true }
+reqwest     = { workspace = true }
+thiserror   = { workspace = true }
+tokio       = { workspace = true, features = ["sync"] }
+
+[features]
+default = ["debug", "format", "unsafe"]
+
+fail-on-warnings = []
+
+debug  = []
+format = ["gigachad_transformer/format"]
+unsafe = []

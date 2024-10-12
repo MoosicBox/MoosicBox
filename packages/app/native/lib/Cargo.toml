@@ -11,25 +11,24 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
+gigachad_renderer = { version = "0.1.0", path = "../../../gigachad/renderer", default-features = false }
 gigachad_transformer = { version = "0.1.0", path = "../../../gigachad/transformer", default-features = false, features = [
     "html",
 ] }
-moosicbox_app_native_renderer = { version = "0.1.0", path = "../renderer", default-features = false }
 moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../../../env_utils", default-features = false }
 moosicbox_task = { version = "0.1.0", path = "../../../task", default-features = false }
 
-fltk      = { workspace = true, features = ["use-ninja"] }
+flume     = { workspace = true }
 futures   = { workspace = true }
 log       = { workspace = true }
+qstring   = { workspace = true }
 thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
 
 [features]
-default = ["format", "unsafe"]
+default = ["format"]
 
 fail-on-warnings = []
 
-debug  = ["moosicbox_app_native_renderer/debug"]
-format = ["gigachad_transformer/format", "moosicbox_app_native_renderer/format"]
-unsafe = ["moosicbox_app_native_renderer/unsafe"]
+format = ["gigachad_transformer/format"]

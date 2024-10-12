@@ -3167,6 +3167,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "gigachad_renderer"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "gigachad_transformer",
+]
+
+[[package]]
+name = "gigachad_renderer_fltk"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "fltk",
+ "flume",
+ "gigachad_renderer",
+ "gigachad_transformer",
+ "image",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_task",
+ "reqwest 0.12.8",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "gigachad_transformer"
 version = "0.1.0"
 dependencies = [
@@ -4682,10 +4709,11 @@ dependencies = [
 name = "moosicbox"
 version = "0.1.0"
 dependencies = [
+ "gigachad_renderer",
+ "gigachad_renderer_fltk",
  "gigachad_transformer",
  "moosicbox_admin_htmx",
  "moosicbox_app_native_lib",
- "moosicbox_app_native_renderer",
  "moosicbox_app_native_ui",
  "moosicbox_assert",
  "moosicbox_async_service",
@@ -4840,6 +4868,7 @@ dependencies = [
 name = "moosicbox_app_native"
 version = "0.1.0"
 dependencies = [
+ "gigachad_renderer_fltk",
  "log",
  "moosicbox_app_native_bundled",
  "moosicbox_app_native_lib",
@@ -4848,6 +4877,7 @@ dependencies = [
  "moosicbox_library_models",
  "moosicbox_logging",
  "moosicbox_paging",
+ "moosicbox_task",
  "reqwest 0.12.8",
  "tokio",
 ]
@@ -4873,33 +4903,15 @@ dependencies = [
 name = "moosicbox_app_native_lib"
 version = "0.1.0"
 dependencies = [
- "fltk",
+ "flume",
  "futures",
+ "gigachad_renderer",
  "gigachad_transformer",
  "log",
- "moosicbox_app_native_renderer",
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_task",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "moosicbox_app_native_renderer"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "fltk",
- "flume",
- "futures",
- "gigachad_transformer",
- "image",
- "log",
- "moosicbox_assert",
- "moosicbox_task",
  "qstring",
- "reqwest 0.12.8",
  "thiserror",
  "tokio",
 ]
