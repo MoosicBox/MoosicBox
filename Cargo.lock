@@ -3172,6 +3172,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "gigachad_transformer",
+ "log",
 ]
 
 [[package]]

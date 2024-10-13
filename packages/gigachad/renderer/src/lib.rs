@@ -1,6 +1,9 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
+#[cfg(feature = "viewport")]
+pub mod viewport;
+
 use async_trait::async_trait;
 use gigachad_transformer::ContainerElement;
 
