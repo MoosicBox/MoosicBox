@@ -11,7 +11,9 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-gigachad_renderer = { version = "0.1.0", path = "../", default-features = false }
+gigachad_renderer = { version = "0.1.0", path = "../", default-features = false, features = [
+    "viewport",
+] }
 gigachad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [
     "calc",
     "html",

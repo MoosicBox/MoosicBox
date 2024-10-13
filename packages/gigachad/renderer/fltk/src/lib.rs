@@ -25,6 +25,7 @@ use fltk::{
     window::{DoubleWindow, Window},
 };
 use flume::{Receiver, Sender};
+use gigachad_renderer::viewport::{Viewport, ViewportListener, ViewportPosition, WidgetPosition};
 use gigachad_transformer::{
     calc::{calc_number, Calc as _},
     ContainerElement, Element, HeaderSize, LayoutDirection, LayoutOverflow,
@@ -83,72 +84,6 @@ pub struct RegisteredImage {
     width: Option<f32>,
     height: Option<f32>,
     frame: Frame,
-}
-
-pub struct ViewportListener {
-    widget: widget::Widget,
-    viewport: Option<Viewport>,
-    visible: bool,
-    dist: u32,
-    callback: Box<dyn FnMut(bool, u32) + Send + Sync>,
-}
-
-impl std::fmt::Debug for ViewportListener {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ViewportListener")
-            .field("widget", &self.widget)
-            .field("viewport", &self.viewport)
-            .field("visible", &self.visible)
-            .finish_non_exhaustive()
-    }
-}
-
-impl ViewportListener {
-    fn new(
-        widget: widget::Widget,
-        viewport: Option<Viewport>,
-        callback: impl FnMut(bool, u32) + Send + Sync + 'static,
-    ) -> Self {
-        let mut this = Self {
-            widget,
-            viewport,
-            visible: false,
-            dist: 0,
-            callback: Box::new(callback),
-        };
-
-        this.init();
-        this
-    }
-
-    fn is_visible(&self) -> (bool, u32) {
-        if let Some((visible, dist)) = self
-            .viewport
-            .as_ref()
-            .map(|x| x.is_widget_visible(&self.widget))
-        {
-            (visible, dist)
-        } else {
-            (true, 0)
-        }
-    }
-
-    fn init(&mut self) {
-        let (visible, dist) = self.is_visible();
-        self.visible = visible;
-        self.dist = dist;
-        (self.callback)(visible, dist);
-    }
-
-    pub fn check(&mut self) {
-        let (visible, dist) = self.is_visible();
-
-        if visible != self.visible || dist != self.dist {
-            self.visible = visible;
-            self.dist = dist;
-            (self.callback)(visible, dist);
-        }
-    }
 }
 
 type JoinHandleAndCancelled = (JoinHandle<()>, Arc<AtomicBool>);
@@ -273,7 +208,7 @@ impl FltkRenderer {
             .write()
             .unwrap()
             .push(ViewportListener::new(
-                frame.as_base_widget(),
+                WidgetWrapper(frame.as_base_widget()),
                 viewport,
                 move |_visible, dist| {
                     if dist < 200 {
@@ -469,7 +404,7 @@ impl FltkRenderer {
                 let parent = viewport.deref().clone();
                 viewport
                     .to_mut()
-                    .replace(Viewport::new(parent, scroll.clone()));
+                    .replace(Viewport::new(parent, ScrollWrapper(scroll.clone())));
                 scroll.into()
             }),
             LayoutOverflow::Scroll => Some({
@@ -484,7 +419,7 @@ impl FltkRenderer {
                 let parent = viewport.deref().clone();
                 viewport
                     .to_mut()
-                    .replace(Viewport::new(parent, scroll.clone()));
+                    .replace(Viewport::new(parent, ScrollWrapper(scroll.clone())));
                 scroll.into()
             }),
             LayoutOverflow::Squash | LayoutOverflow::Show | LayoutOverflow::Wrap => None,
@@ -503,7 +438,7 @@ impl FltkRenderer {
                 let parent = viewport.deref().clone();
                 viewport
                     .to_mut()
-                    .replace(Viewport::new(parent, scroll.clone()));
+                    .replace(Viewport::new(parent, ScrollWrapper(scroll.clone())));
                 scroll.into()
             }),
             LayoutOverflow::Scroll => Some({
@@ -518,7 +453,7 @@ impl FltkRenderer {
                 let parent = viewport.deref().clone();
                 viewport
                     .to_mut()
-                    .replace(Viewport::new(parent, scroll.clone()));
+                    .replace(Viewport::new(parent, ScrollWrapper(scroll.clone())));
                 scroll.into()
             }),
             LayoutOverflow::Squash | LayoutOverflow::Show | LayoutOverflow::Wrap => None,
@@ -1341,182 +1276,83 @@ impl Context {
 }
 
 #[derive(Clone)]
-pub struct Viewport {
-    widget: widget::Widget,
-    parent: Option<Box<Viewport>>,
-    position: Arc<Box<dyn ViewportPosition + Send + Sync>>,
-}
+struct WidgetWrapper(widget::Widget);
 
-impl std::fmt::Debug for Viewport {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut binding = f.debug_struct("Viewport");
-        let x = binding
-            .field("x", &self.x())
-            .field("y", &self.y())
-            .field("w", &self.w())
-            .field("h", &self.h());
-
-        if let Some(parent) = &self.parent {
-            x.field("parent", &parent);
-        }
-
-        x.finish_non_exhaustive()
+impl From<widget::Widget> for WidgetWrapper {
+    fn from(value: widget::Widget) -> Self {
+        Self(value)
     }
 }
 
-impl Viewport {
-    fn new(parent: Option<Self>, position: impl ViewportPosition + Send + Sync + 'static) -> Self {
-        Self {
-            widget: position.viewport_as_base_widget(),
-            parent: parent.map(Box::new),
-            position: Arc::new(Box::new(position)),
-        }
+impl WidgetPosition for WidgetWrapper {
+    fn widget_x(&self) -> i32 {
+        self.0.x()
     }
 
-    fn x(&self) -> i32 {
-        self.position.viewport_x()
+    fn widget_y(&self) -> i32 {
+        self.0.y()
     }
 
-    fn y(&self) -> i32 {
-        self.position.viewport_y()
+    fn widget_w(&self) -> i32 {
+        self.0.w()
     }
 
-    fn w(&self) -> i32 {
-        self.position.viewport_w()
-    }
-
-    fn h(&self) -> i32 {
-        self.position.viewport_h()
-    }
-
-    fn is_widget_visible(&self, widget: &widget::Widget) -> (bool, u32) {
-        let (visible_in_current_viewport, dist) =
-            self.position.is_widget_visible(&self.widget, widget);
-
-        // FIXME: This doesn't correctly check the position leaf widget (the param above)
-        // within this viewport itself, but this probably isn't a huge issue since nested
-        // `Viewport`s isn't super likely yet.
-        if visible_in_current_viewport {
-            self.parent
-                .as_ref()
-                .map_or((visible_in_current_viewport, dist), |parent| {
-                    let (parent_visible, parent_dist) = parent.is_widget_visible(&self.widget);
-
-                    (
-                        visible_in_current_viewport && parent_visible,
-                        dist + parent_dist,
-                    )
-                })
-        } else {
-            (false, dist)
-        }
+    fn widget_h(&self) -> i32 {
+        self.0.h()
     }
 }
 
-trait ViewportPosition {
-    fn viewport_x(&self) -> i32;
-    fn viewport_y(&self) -> i32;
-    fn viewport_w(&self) -> i32;
-    fn viewport_h(&self) -> i32;
-    fn viewport_as_base_widget(&self) -> widget::Widget;
+#[derive(Clone)]
+struct ScrollWrapper(group::Scroll);
 
-    fn is_widget_visible(
-        &self,
-        this_widget: &widget::Widget,
-        widget: &widget::Widget,
-    ) -> (bool, u32) {
-        let mut x = widget.x();
-        let mut y = widget.y();
-        let w = widget.w();
-        let h = widget.h();
-        log::trace!("is_widget_visible: widget x={x} y={y} w={w} h={h}");
-
-        log::trace!(
-            "is_widget_visible: {x} -= {} = {}",
-            this_widget.x(),
-            x - this_widget.x()
-        );
-        x -= this_widget.x();
-        log::trace!(
-            "is_widget_visible: {y} -= {} = {}",
-            this_widget.y(),
-            y - this_widget.y()
-        );
-        y -= this_widget.y();
-
-        let viewport_w = self.viewport_w();
-        let viewport_h = self.viewport_h();
-
-        #[allow(clippy::cast_sign_loss)]
-        let dist_x = std::cmp::max(0, std::cmp::max(-(x + w), x - viewport_w)) as u32;
-        #[allow(clippy::cast_sign_loss)]
-        let dist_y = std::cmp::max(0, std::cmp::max(-(y + h), y - viewport_h)) as u32;
-
-        let dist = std::cmp::max(dist_x, dist_y);
-
-        log::trace!(
-            "is_widget_visible:\n\t\
-            {dist_x} == 0 &&\n\t\
-            {dist_y} == 0"
-        );
-
-        if dist_x == 0 && dist_y == 0 {
-            log::trace!("is_widget_visible: visible");
-            return (true, dist);
-        }
-
-        log::trace!("is_widget_visible: not visible");
-
-        (false, dist)
+impl From<group::Scroll> for ScrollWrapper {
+    fn from(value: group::Scroll) -> Self {
+        Self(value)
     }
 }
 
-impl std::fmt::Debug for dyn ViewportPosition {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ViewportPosition")
-            .field("x", &self.viewport_x())
-            .field("y", &self.viewport_y())
-            .field("w", &self.viewport_w())
-            .field("h", &self.viewport_h())
-            .finish()
+impl WidgetPosition for ScrollWrapper {
+    fn widget_x(&self) -> i32 {
+        self.0.x()
+    }
+
+    fn widget_y(&self) -> i32 {
+        self.0.y()
+    }
+
+    fn widget_w(&self) -> i32 {
+        self.0.w()
+    }
+
+    fn widget_h(&self) -> i32 {
+        self.0.h()
     }
 }
 
-impl std::fmt::Debug for Box<dyn ViewportPosition + Send + Sync> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ViewportPosition")
-            .field("x", &self.viewport_x())
-            .field("y", &self.viewport_y())
-            .field("w", &self.viewport_w())
-            .field("h", &self.viewport_h())
-            .finish()
-    }
-}
-
-impl ViewportPosition for group::Scroll {
+impl ViewportPosition for ScrollWrapper {
     fn viewport_x(&self) -> i32 {
-        self.xposition()
+        self.0.xposition()
     }
 
     fn viewport_y(&self) -> i32 {
-        self.yposition()
+        self.0.yposition()
     }
 
     fn viewport_w(&self) -> i32 {
-        self.w()
+        self.0.w()
     }
 
     fn viewport_h(&self) -> i32 {
-        self.h()
+        self.0.h()
     }
 
-    fn viewport_as_base_widget(&self) -> widget::Widget {
-        self.as_base_widget()
+    fn as_widget_position(&self) -> Box<dyn WidgetPosition> {
+        Box::new(self.clone())
     }
 }
 
-impl From<group::Scroll> for Box<dyn ViewportPosition + Send + Sync> {
-    fn from(value: group::Scroll) -> Self {
+impl From<ScrollWrapper> for Box<dyn ViewportPosition + Send + Sync> {
+    fn from(value: ScrollWrapper) -> Self {
         Box::new(value)
     }
 }
