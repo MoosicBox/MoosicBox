@@ -192,88 +192,186 @@ impl EguiApp {
         });
     }
 
+    #[allow(clippy::too_many_lines)]
     fn render_container(
         &self,
         ui: &mut Ui,
         container: &ContainerElement,
         handler: Option<&Handler>,
     ) {
-        egui::Frame::none().show(ui, move |ui| {
-            if let Some(width) = container.calculated_width {
-                ui.set_width(width);
+        match (container.overflow_x, container.overflow_y) {
+            (
+                gigachad_transformer::LayoutOverflow::Auto,
+                gigachad_transformer::LayoutOverflow::Auto,
+            ) => {
+                egui::ScrollArea::both()
+                    .scroll_bar_visibility(
+                        egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
+                    )
+                    .show(ui, move |ui| {
+                        self.render_container_contents(ui, container, handler);
+                    });
             }
-            if let Some(height) = container.calculated_height {
-                ui.set_height(height);
+            (
+                gigachad_transformer::LayoutOverflow::Scroll,
+                gigachad_transformer::LayoutOverflow::Scroll,
+            ) => {
+                egui::ScrollArea::both()
+                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                    .show(ui, move |ui| {
+                        self.render_container_contents(ui, container, handler);
+                    });
             }
-            match container.direction {
-                LayoutDirection::Row => {
-                    let rows = container
-                        .elements
-                        .iter()
-                        .filter_map(|x| x.container_element().map(|y| (x, y)))
-                        .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
-                        .filter_map(|(x, y)| match y {
-                            gigachad_transformer::LayoutPosition::Wrap { row, .. } => {
-                                Some((*row, x))
-                            }
-                            gigachad_transformer::LayoutPosition::Default => None,
-                        })
-                        .chunk_by(|(row, _element)| *row);
-
-                    let mut rows = rows
-                        .into_iter()
-                        .map(|(_row, y)| y.into_iter().map(|(_, element)| element).collect_vec())
-                        .peekable();
-
-                    if rows.peek().is_some() {
-                        for row in rows {
-                            ui.vertical(move |ui| {
-                                ui.horizontal(move |ui| {
-                                    self.render_elements_ref(ui, &row, handler);
-                                });
+            (
+                gigachad_transformer::LayoutOverflow::Auto,
+                gigachad_transformer::LayoutOverflow::Scroll,
+            ) => {
+                egui::ScrollArea::vertical()
+                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                    .show(ui, move |ui| {
+                        egui::ScrollArea::horizontal()
+                            .scroll_bar_visibility(
+                                egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
+                            )
+                            .show(ui, move |ui| {
+                                self.render_container_contents(ui, container, handler);
                             });
-                        }
-                    } else {
-                        ui.horizontal(move |ui| {
-                            self.render_elements(ui, &container.elements, handler);
-                        });
-                    }
-                }
-                LayoutDirection::Column => {
-                    let cols = container
-                        .elements
-                        .iter()
-                        .filter_map(|x| x.container_element().map(|y| (x, y)))
-                        .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
-                        .filter_map(|(x, y)| match y {
-                            gigachad_transformer::LayoutPosition::Wrap { col, .. } => {
-                                Some((*col, x))
-                            }
-                            gigachad_transformer::LayoutPosition::Default => None,
-                        })
-                        .chunk_by(|(col, _element)| *col);
-
-                    let mut cols = cols
-                        .into_iter()
-                        .map(|(_row, y)| y.into_iter().map(|(_, element)| element).collect_vec())
-                        .peekable();
-
-                    if cols.peek().is_some() {
-                        for col in cols {
-                            ui.horizontal(move |ui| {
-                                ui.vertical(move |ui| {
-                                    self.render_elements_ref(ui, &col, handler);
-                                });
+                    });
+            }
+            (
+                gigachad_transformer::LayoutOverflow::Scroll,
+                gigachad_transformer::LayoutOverflow::Auto,
+            ) => {
+                egui::ScrollArea::vertical()
+                    .scroll_bar_visibility(
+                        egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
+                    )
+                    .show(ui, move |ui| {
+                        egui::ScrollArea::horizontal()
+                            .scroll_bar_visibility(
+                                egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                            )
+                            .show(ui, move |ui| {
+                                self.render_container_contents(ui, container, handler);
                             });
-                        }
-                    } else {
+                    });
+            }
+            (gigachad_transformer::LayoutOverflow::Auto, _) => {
+                egui::ScrollArea::horizontal()
+                    .scroll_bar_visibility(
+                        egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
+                    )
+                    .show(ui, move |ui| {
+                        self.render_container_contents(ui, container, handler);
+                    });
+            }
+            (gigachad_transformer::LayoutOverflow::Scroll, _) => {
+                egui::ScrollArea::horizontal()
+                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                    .show(ui, move |ui| {
+                        self.render_container_contents(ui, container, handler);
+                    });
+            }
+            (_, gigachad_transformer::LayoutOverflow::Auto) => {
+                egui::ScrollArea::vertical()
+                    .scroll_bar_visibility(
+                        egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
+                    )
+                    .show(ui, move |ui| {
+                        self.render_container_contents(ui, container, handler);
+                    });
+            }
+            (_, gigachad_transformer::LayoutOverflow::Scroll) => {
+                egui::ScrollArea::vertical()
+                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                    .show(ui, move |ui| {
+                        self.render_container_contents(ui, container, handler);
+                    });
+            }
+            (_, _) => {
+                egui::Frame::none().show(ui, move |ui| {
+                    self.render_container_contents(ui, container, handler);
+                });
+            }
+        }
+    }
+
+    fn render_container_contents(
+        &self,
+        ui: &mut Ui,
+        container: &ContainerElement,
+        handler: Option<&Handler>,
+    ) {
+        if let Some(width) = container.calculated_width {
+            ui.set_width(width);
+        }
+        if let Some(height) = container.calculated_height {
+            ui.set_height(height);
+        }
+        match container.direction {
+            LayoutDirection::Row => {
+                let rows = container
+                    .elements
+                    .iter()
+                    .filter_map(|x| x.container_element().map(|y| (x, y)))
+                    .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
+                    .filter_map(|(x, y)| match y {
+                        gigachad_transformer::LayoutPosition::Wrap { row, .. } => Some((*row, x)),
+                        gigachad_transformer::LayoutPosition::Default => None,
+                    })
+                    .chunk_by(|(row, _element)| *row);
+
+                let mut rows = rows
+                    .into_iter()
+                    .map(|(_row, y)| y.into_iter().map(|(_, element)| element).collect_vec())
+                    .peekable();
+
+                if rows.peek().is_some() {
+                    for row in rows {
                         ui.vertical(move |ui| {
-                            self.render_elements(ui, &container.elements, handler);
+                            ui.horizontal(move |ui| {
+                                self.render_elements_ref(ui, &row, handler);
+                            });
                         });
                     }
+                } else {
+                    ui.horizontal(move |ui| {
+                        self.render_elements(ui, &container.elements, handler);
+                    });
                 }
             }
-        });
+            LayoutDirection::Column => {
+                let cols = container
+                    .elements
+                    .iter()
+                    .filter_map(|x| x.container_element().map(|y| (x, y)))
+                    .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
+                    .filter_map(|(x, y)| match y {
+                        gigachad_transformer::LayoutPosition::Wrap { col, .. } => Some((*col, x)),
+                        gigachad_transformer::LayoutPosition::Default => None,
+                    })
+                    .chunk_by(|(col, _element)| *col);
+
+                let mut cols = cols
+                    .into_iter()
+                    .map(|(_row, y)| y.into_iter().map(|(_, element)| element).collect_vec())
+                    .peekable();
+
+                if cols.peek().is_some() {
+                    for col in cols {
+                        ui.horizontal(move |ui| {
+                            ui.vertical(move |ui| {
+                                self.render_elements_ref(ui, &col, handler);
+                            });
+                        });
+                    }
+                } else {
+                    ui.vertical(move |ui| {
+                        self.render_elements(ui, &container.elements, handler);
+                    });
+                }
+            }
+        }
     }
 
     fn render_elements(&self, ui: &mut Ui, elements: &[Element], handler: Option<&Handler>) {
