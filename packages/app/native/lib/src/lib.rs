@@ -120,7 +120,19 @@ impl NativeAppBuilder {
             if cfg!(feature = "egui") {
                 #[cfg(feature = "egui")]
                 {
-                    Box::new(gigachad_renderer_egui::EguiRenderer::new()) as Box<dyn Renderer>
+                    let renderer = gigachad_renderer_egui::EguiRenderer::new();
+                    moosicbox_task::spawn("egui navigation listener", {
+                        let renderer = renderer.clone();
+                        let mut router = router.clone();
+                        async move {
+                            while let Some(path) = renderer.wait_for_navigation().await {
+                                if let Err(e) = router.navigate(&path).await {
+                                    log::error!("Failed to navigate: {e:?}");
+                                }
+                            }
+                        }
+                    });
+                    Box::new(renderer) as Box<dyn Renderer>
                 }
                 #[cfg(not(feature = "egui"))]
                 unreachable!()

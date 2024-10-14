@@ -21,8 +21,12 @@ gigachad_transformer = { version = "0.1.0", path = "../../transformer", default-
 moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
 
 async-trait = { workspace = true }
-eframe      = { workspace = true, features = ["__screenshot", "default"] }
-log         = { workspace = true }
+eframe = { workspace = true, default-features = false, features = [
+    "__screenshot",
+    "default",
+] }
+flume = { workspace = true }
+log = { workspace = true }
 
 [features]
 default = ["debug"]
