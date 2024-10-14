@@ -199,101 +199,109 @@ impl EguiApp {
         container: &ContainerElement,
         handler: Option<&Handler>,
     ) {
-        match (container.overflow_x, container.overflow_y) {
-            (
-                gigachad_transformer::LayoutOverflow::Auto,
-                gigachad_transformer::LayoutOverflow::Auto,
-            ) => {
-                egui::ScrollArea::both()
-                    .scroll_bar_visibility(
-                        egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
-                    )
-                    .show(ui, move |ui| {
-                        self.render_container_contents(ui, container, handler);
-                    });
-            }
-            (
-                gigachad_transformer::LayoutOverflow::Scroll,
-                gigachad_transformer::LayoutOverflow::Scroll,
-            ) => {
-                egui::ScrollArea::both()
-                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-                    .show(ui, move |ui| {
-                        self.render_container_contents(ui, container, handler);
-                    });
-            }
-            (
-                gigachad_transformer::LayoutOverflow::Auto,
-                gigachad_transformer::LayoutOverflow::Scroll,
-            ) => {
-                egui::ScrollArea::vertical()
-                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-                    .show(ui, move |ui| {
-                        egui::ScrollArea::horizontal()
-                            .scroll_bar_visibility(
-                                egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
-                            )
-                            .show(ui, move |ui| {
-                                self.render_container_contents(ui, container, handler);
-                            });
-                    });
-            }
-            (
-                gigachad_transformer::LayoutOverflow::Scroll,
-                gigachad_transformer::LayoutOverflow::Auto,
-            ) => {
-                egui::ScrollArea::vertical()
-                    .scroll_bar_visibility(
-                        egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
-                    )
-                    .show(ui, move |ui| {
-                        egui::ScrollArea::horizontal()
-                            .scroll_bar_visibility(
-                                egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
-                            )
-                            .show(ui, move |ui| {
-                                self.render_container_contents(ui, container, handler);
-                            });
-                    });
-            }
-            (gigachad_transformer::LayoutOverflow::Auto, _) => {
-                egui::ScrollArea::horizontal()
-                    .scroll_bar_visibility(
-                        egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
-                    )
-                    .show(ui, move |ui| {
-                        self.render_container_contents(ui, container, handler);
-                    });
-            }
-            (gigachad_transformer::LayoutOverflow::Scroll, _) => {
-                egui::ScrollArea::horizontal()
-                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-                    .show(ui, move |ui| {
-                        self.render_container_contents(ui, container, handler);
-                    });
-            }
-            (_, gigachad_transformer::LayoutOverflow::Auto) => {
-                egui::ScrollArea::vertical()
-                    .scroll_bar_visibility(
-                        egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
-                    )
-                    .show(ui, move |ui| {
-                        self.render_container_contents(ui, container, handler);
-                    });
-            }
-            (_, gigachad_transformer::LayoutOverflow::Scroll) => {
-                egui::ScrollArea::vertical()
-                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-                    .show(ui, move |ui| {
-                        self.render_container_contents(ui, container, handler);
-                    });
-            }
-            (_, _) => {
-                egui::Frame::none().show(ui, move |ui| {
+        egui::Frame::none().show(ui, move |ui| {
+            match (container.overflow_x, container.overflow_y) {
+                (
+                    gigachad_transformer::LayoutOverflow::Auto,
+                    gigachad_transformer::LayoutOverflow::Auto,
+                ) => {
+                    egui::ScrollArea::both()
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
+                        )
+                        .show(ui, move |ui| {
+                            self.render_container_contents(ui, container, handler);
+                        });
+                }
+                (
+                    gigachad_transformer::LayoutOverflow::Scroll,
+                    gigachad_transformer::LayoutOverflow::Scroll,
+                ) => {
+                    egui::ScrollArea::both()
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                        )
+                        .show(ui, move |ui| {
+                            self.render_container_contents(ui, container, handler);
+                        });
+                }
+                (
+                    gigachad_transformer::LayoutOverflow::Auto,
+                    gigachad_transformer::LayoutOverflow::Scroll,
+                ) => {
+                    egui::ScrollArea::vertical()
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                        )
+                        .show(ui, move |ui| {
+                            egui::ScrollArea::horizontal()
+                                .scroll_bar_visibility(
+                                    egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
+                                )
+                                .show(ui, move |ui| {
+                                    self.render_container_contents(ui, container, handler);
+                                });
+                        });
+                }
+                (
+                    gigachad_transformer::LayoutOverflow::Scroll,
+                    gigachad_transformer::LayoutOverflow::Auto,
+                ) => {
+                    egui::ScrollArea::vertical()
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
+                        )
+                        .show(ui, move |ui| {
+                            egui::ScrollArea::horizontal()
+                                .scroll_bar_visibility(
+                                    egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                                )
+                                .show(ui, move |ui| {
+                                    self.render_container_contents(ui, container, handler);
+                                });
+                        });
+                }
+                (gigachad_transformer::LayoutOverflow::Auto, _) => {
+                    egui::ScrollArea::horizontal()
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
+                        )
+                        .show(ui, move |ui| {
+                            self.render_container_contents(ui, container, handler);
+                        });
+                }
+                (gigachad_transformer::LayoutOverflow::Scroll, _) => {
+                    egui::ScrollArea::horizontal()
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                        )
+                        .show(ui, move |ui| {
+                            self.render_container_contents(ui, container, handler);
+                        });
+                }
+                (_, gigachad_transformer::LayoutOverflow::Auto) => {
+                    egui::ScrollArea::vertical()
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
+                        )
+                        .show(ui, move |ui| {
+                            self.render_container_contents(ui, container, handler);
+                        });
+                }
+                (_, gigachad_transformer::LayoutOverflow::Scroll) => {
+                    egui::ScrollArea::vertical()
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                        )
+                        .show(ui, move |ui| {
+                            self.render_container_contents(ui, container, handler);
+                        });
+                }
+                (_, _) => {
                     self.render_container_contents(ui, container, handler);
-                });
+                }
             }
-        }
+        });
     }
 
     fn render_container_contents(
@@ -407,7 +415,6 @@ impl EguiApp {
                 let sender = self.sender.clone();
                 Some(Box::new(move |response| {
                     if response.clicked() {
-                        log::debug!("clicked link {href:?}!");
                         if let Some(href) = href.clone() {
                             if let Err(e) = sender.send(href) {
                                 log::error!("Failed to send href event: {e:?}");
