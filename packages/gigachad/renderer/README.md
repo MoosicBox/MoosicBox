@@ -1,1 +1,1 @@
-# MoosicBox appnative/renderer/ crate
+# MoosicBox GigaChad Renderer crate

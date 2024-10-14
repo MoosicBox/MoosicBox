@@ -1,1 +1,1 @@
-# MoosicBox appnative/bundled/ crate
+# MoosicBox 'Bundled' Native App crate

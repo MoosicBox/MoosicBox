@@ -1,1 +1,1 @@
-# MoosicBox appnative/ crate
+# MoosicBox Native App crate
