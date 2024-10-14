@@ -14,11 +14,19 @@ version     = "0.1.0"
 gigachad_renderer = { version = "0.1.0", path = "../", default-features = false, features = [
     "viewport",
 ] }
+gigachad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [
+    "calc",
+    "html",
+] }
 moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
+
+async-trait = { workspace = true }
+eframe      = { workspace = true, features = ["__screenshot", "default"] }
+log         = { workspace = true }
 
 [features]
 default = ["debug"]
 
 fail-on-warnings = []
 
-debug  = []
+debug = []
