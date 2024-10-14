@@ -205,7 +205,7 @@ impl EguiApp {
         container: &ContainerElement,
         handler: Option<&Handler>,
     ) {
-        egui::Frame::none().show(ui, move |ui| {
+        let response = egui::Frame::none().show(ui, move |ui| {
             match (container.overflow_x, container.overflow_y) {
                 (
                     gigachad_transformer::LayoutOverflow::Auto,
@@ -308,6 +308,10 @@ impl EguiApp {
                 }
             }
         });
+
+        if let Some(handler) = handler {
+            handler(&response.response);
+        }
     }
 
     fn render_container_contents(
@@ -431,7 +435,7 @@ impl EguiApp {
             return;
         }
 
-        let handler: Option<Handler> = match element {
+        let immediate_handler: Option<Handler> = match element {
             Element::Button { .. } => Some(Box::new(|response| {
                 if response.clicked() {
                     log::debug!("clicked button!");
@@ -441,7 +445,7 @@ impl EguiApp {
                 let href = href.to_owned();
                 let sender = self.sender.clone();
                 Some(Box::new(move |response| {
-                    if response.clicked() {
+                    if response.interact(egui::Sense::click()).clicked() {
                         if let Some(href) = href.clone() {
                             if let Err(e) = sender.send(href) {
                                 log::error!("Failed to send href event: {e:?}");
@@ -454,7 +458,7 @@ impl EguiApp {
         };
 
         if let Some(container) = element.container_element() {
-            self.render_container(ui, container, handler.as_ref());
+            self.render_container(ui, container, immediate_handler.as_ref().or(handler));
         }
     }
 }
