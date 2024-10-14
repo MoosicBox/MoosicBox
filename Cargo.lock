@@ -3718,6 +3718,7 @@ dependencies = [
  "flume",
  "gigachad_renderer",
  "gigachad_transformer",
+ "itertools 0.13.0",
  "log",
  "moosicbox_assert",
 ]

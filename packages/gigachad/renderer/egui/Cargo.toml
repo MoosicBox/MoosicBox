@@ -26,6 +26,7 @@ eframe = { workspace = true, default-features = false, features = [
     "default",
 ] }
 flume = { workspace = true }
+itertools = { workspace = true }
 log = { workspace = true }
 
 [features]

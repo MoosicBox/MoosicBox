@@ -8,6 +8,7 @@ use eframe::egui::{self, Response, Ui};
 use flume::{Receiver, Sender};
 pub use gigachad_renderer::*;
 use gigachad_transformer::{calc::Calc, ContainerElement, Element, LayoutDirection};
+use itertools::Itertools;
 
 #[derive(Clone)]
 pub struct EguiRenderer {
@@ -206,20 +207,82 @@ impl EguiApp {
             }
             match container.direction {
                 LayoutDirection::Row => {
-                    ui.horizontal(move |ui| {
-                        self.render_elements(ui, &container.elements, handler);
-                    });
+                    let rows = container
+                        .elements
+                        .iter()
+                        .filter_map(|x| x.container_element().map(|y| (x, y)))
+                        .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
+                        .filter_map(|(x, y)| match y {
+                            gigachad_transformer::LayoutPosition::Wrap { row, .. } => {
+                                Some((*row, x))
+                            }
+                            gigachad_transformer::LayoutPosition::Default => None,
+                        })
+                        .chunk_by(|(row, _element)| *row);
+
+                    let mut rows = rows
+                        .into_iter()
+                        .map(|(_row, y)| y.into_iter().map(|(_, element)| element).collect_vec())
+                        .peekable();
+
+                    if rows.peek().is_some() {
+                        for row in rows {
+                            ui.vertical(move |ui| {
+                                ui.horizontal(move |ui| {
+                                    self.render_elements_ref(ui, &row, handler);
+                                });
+                            });
+                        }
+                    } else {
+                        ui.horizontal(move |ui| {
+                            self.render_elements(ui, &container.elements, handler);
+                        });
+                    }
                 }
                 LayoutDirection::Column => {
-                    ui.vertical(move |ui| {
-                        self.render_elements(ui, &container.elements, handler);
-                    });
+                    let cols = container
+                        .elements
+                        .iter()
+                        .filter_map(|x| x.container_element().map(|y| (x, y)))
+                        .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
+                        .filter_map(|(x, y)| match y {
+                            gigachad_transformer::LayoutPosition::Wrap { col, .. } => {
+                                Some((*col, x))
+                            }
+                            gigachad_transformer::LayoutPosition::Default => None,
+                        })
+                        .chunk_by(|(col, _element)| *col);
+
+                    let mut cols = cols
+                        .into_iter()
+                        .map(|(_row, y)| y.into_iter().map(|(_, element)| element).collect_vec())
+                        .peekable();
+
+                    if cols.peek().is_some() {
+                        for col in cols {
+                            ui.horizontal(move |ui| {
+                                ui.vertical(move |ui| {
+                                    self.render_elements_ref(ui, &col, handler);
+                                });
+                            });
+                        }
+                    } else {
+                        ui.vertical(move |ui| {
+                            self.render_elements(ui, &container.elements, handler);
+                        });
+                    }
                 }
             }
         });
     }
 
     fn render_elements(&self, ui: &mut Ui, elements: &[Element], handler: Option<&Handler>) {
+        for element in elements {
+            self.render_element(ui, element, handler);
+        }
+    }
+
+    fn render_elements_ref(&self, ui: &mut Ui, elements: &[&Element], handler: Option<&Handler>) {
         for element in elements {
             self.render_element(ui, element, handler);
         }
