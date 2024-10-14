@@ -42,7 +42,7 @@ pub struct EguiRenderRunner {
 impl RenderRunner for EguiRenderRunner {
     /// # Errors
     ///
-    /// Will error if FLTK fails to run the event loop.
+    /// Will error if egui fails to run the event loop.
     fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
         let mut viewport = egui::ViewportBuilder::default()
             .with_inner_size([f32::from(self.width), f32::from(self.height)]);
@@ -78,7 +78,7 @@ impl Renderer for EguiRenderer {
     ///
     /// # Errors
     ///
-    /// Will error if FLTK app fails to start
+    /// Will error if egui app fails to start
     async fn init(
         &mut self,
         width: u16,
@@ -95,7 +95,7 @@ impl Renderer for EguiRenderer {
 
     /// # Errors
     ///
-    /// Will error if FLTK fails to run the event loop.
+    /// Will error if egui fails to run the event loop.
     async fn to_runner(
         &mut self,
     ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
@@ -109,7 +109,7 @@ impl Renderer for EguiRenderer {
 
     /// # Errors
     ///
-    /// Will error if FLTK fails to render the elements.
+    /// Will error if egui fails to render the elements.
     ///
     /// # Panics
     ///
