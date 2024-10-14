@@ -12,6 +12,8 @@ version     = "0.1.0"
 
 [dependencies]
 gigachad_renderer = { version = "0.1.0", path = "../../../gigachad/renderer", default-features = false }
+gigachad_renderer_egui = { version = "0.1.0", path = "../../../gigachad/renderer/egui", optional = true, default-features = false }
+gigachad_renderer_fltk = { version = "0.1.0", path = "../../../gigachad/renderer/fltk", optional = true, default-features = false }
 gigachad_transformer = { version = "0.1.0", path = "../../../gigachad/transformer", default-features = false, features = [
     "html",
 ] }
@@ -27,8 +29,13 @@ thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
 
 [features]
-default = ["format"]
+default = ["egui", "fltk", "format"]
 
 fail-on-warnings = []
 
-format = ["gigachad_transformer/format"]
+egui = ["dep:gigachad_renderer_egui"]
+fltk = ["dep:gigachad_renderer_fltk"]
+
+debug  = ["gigachad_renderer_fltk/debug"]
+format = ["gigachad_renderer_fltk/format", "gigachad_transformer/format"]
+unsafe = ["gigachad_renderer_fltk/unsafe"]

@@ -16,7 +16,6 @@ path              = "src/main.rs"
 required-features = []
 
 [dependencies]
-gigachad_renderer_fltk = { version = "0.1.0", path = "../../gigachad/renderer/fltk", default-features = false }
 moosicbox_app_native_lib = { version = "0.1.0", path = "lib", default-features = false }
 moosicbox_app_native_ui = { version = "0.1.0", path = "ui", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../../env_utils", default-features = false }
@@ -27,7 +26,6 @@ moosicbox_logging = { version = "0.1.0", path = "../../logging", default-feature
     "free_log",
 ] }
 moosicbox_paging = { version = "0.1.0", path = "../../paging", default-features = false }
-moosicbox_task = { version = "0.1.0", path = "../../task", default-features = false }
 
 # Bundled dependencies
 moosicbox_app_native_bundled = { version = "0.1.0", path = "bundled", optional = true, default-features = false }
@@ -37,12 +35,15 @@ reqwest = { workspace = true, features = ["json"] }
 tokio   = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
-default = ["unsafe"]
+default = ["egui", "fltk", "unsafe"]
 
 fail-on-warnings = []
 
+egui = ["moosicbox_app_native_lib/egui"]
+fltk = ["moosicbox_app_native_lib/fltk"]
+
 bundled = ["dep:moosicbox_app_native_bundled"]
 
-debug  = ["gigachad_renderer_fltk/debug"]
-format = ["gigachad_renderer_fltk/format", "moosicbox_app_native_lib/format"]
-unsafe = ["gigachad_renderer_fltk/unsafe"]
+debug  = ["moosicbox_app_native_lib/debug"]
+format = ["moosicbox_app_native_lib/format"]
+unsafe = ["moosicbox_app_native_lib/unsafe"]

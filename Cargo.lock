@@ -5655,7 +5655,6 @@ dependencies = [
  "moosicbox_library_models",
  "moosicbox_logging",
  "moosicbox_paging",
- "moosicbox_task",
  "reqwest 0.12.8",
  "tokio",
 ]

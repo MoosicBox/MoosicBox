@@ -114,13 +114,47 @@ impl NativeAppBuilder {
     ///
     /// Will error if there was an error starting the FLTK app
     pub async fn start(self) -> Result<NativeApp, NativeAppError> {
+        let router = self.router.unwrap();
+
+        let renderer = self.renderer.unwrap_or_else(|| {
+            if cfg!(feature = "egui") {
+                #[cfg(feature = "egui")]
+                {
+                    Box::new(gigachad_renderer_egui::EguiRenderer::new()) as Box<dyn Renderer>
+                }
+                #[cfg(not(feature = "egui"))]
+                unreachable!()
+            } else if cfg!(feature = "fltk") {
+                #[cfg(feature = "fltk")]
+                {
+                    let renderer = gigachad_renderer_fltk::FltkRenderer::new();
+                    moosicbox_task::spawn("fltk navigation listener", {
+                        let renderer = renderer.clone();
+                        let mut router = router.clone();
+                        async move {
+                            while let Some(path) = renderer.wait_for_navigation().await {
+                                if let Err(e) = router.navigate(&path).await {
+                                    log::error!("Failed to navigate: {e:?}");
+                                }
+                            }
+                        }
+                    });
+                    Box::new(renderer) as Box<dyn Renderer>
+                }
+                #[cfg(not(feature = "fltk"))]
+                unreachable!()
+            } else {
+                panic!("Missing renderer")
+            }
+        });
+
         let mut app = NativeApp {
             x: self.x,
             y: self.y,
             width: self.width,
             height: self.height,
-            router: self.router.unwrap(),
-            renderer: Arc::new(RwLock::new(self.renderer.unwrap())),
+            router,
+            renderer: Arc::new(RwLock::new(renderer)),
             runtime_handle: self.runtime_handle,
             runtime: self.runtime,
         };

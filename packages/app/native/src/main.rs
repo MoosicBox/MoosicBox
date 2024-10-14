@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use gigachad_renderer_fltk::FltkRenderer;
 use moosicbox_app_native_lib::router::Router;
 use moosicbox_env_utils::{default_env_usize, option_env_i32, option_env_u16};
 use moosicbox_library_models::ApiAlbum;
@@ -20,7 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let runtime = Arc::new(runtime);
 
-    let mut router = Router::new()
+    let router = Router::new()
         .with_route(&["/", "/home"], |_| async {
             moosicbox_app_native_ui::home().into_string().try_into()
         })
@@ -76,10 +75,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             moosicbox_app_native_ui::artists().into_string().try_into()
         });
 
-    let renderer = FltkRenderer::new();
-
     let mut app = moosicbox_app_native_lib::NativeAppBuilder::new()
-        .with_renderer(renderer.clone())
         .with_router(router.clone())
         .with_runtime_arc(runtime.clone())
         .with_size(
@@ -114,14 +110,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             (join_app_server, app_server_handle)
         };
-
-        moosicbox_task::spawn("fltk navigation listener", async move {
-            while let Some(path) = renderer.wait_for_navigation().await {
-                if let Err(e) = router.navigate(&path).await {
-                    log::error!("Failed to navigate: {e:?}");
-                }
-            }
-        });
 
         if let (Some(x), Some(y)) = (
             option_env_i32("WINDOW_X").unwrap(),
