@@ -36,6 +36,6 @@ fail-on-warnings = []
 egui = ["dep:gigachad_renderer_egui"]
 fltk = ["dep:gigachad_renderer_fltk"]
 
-debug  = ["gigachad_renderer_fltk?/debug"]
+debug  = ["gigachad_renderer_egui?/debug", "gigachad_renderer_fltk?/debug"]
 format = ["gigachad_renderer_fltk?/format", "gigachad_transformer/format"]
 unsafe = ["gigachad_renderer_fltk?/unsafe"]
