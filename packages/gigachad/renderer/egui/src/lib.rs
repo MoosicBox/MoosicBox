@@ -1,10 +1,13 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use std::sync::{Arc, RwLock};
+use std::{
+    borrow::Cow,
+    sync::{Arc, RwLock},
+};
 
 use async_trait::async_trait;
-use eframe::egui::{self, Response, Ui};
+use eframe::egui::{self, Response, Ui, Widget};
 use flume::{Receiver, Sender};
 pub use gigachad_renderer::*;
 use gigachad_transformer::{calc::Calc, ContainerElement, Element, LayoutDirection};
@@ -77,7 +80,10 @@ impl RenderRunner for EguiRenderRunner {
         if let Err(e) = eframe::run_native(
             "MoosicBox",
             options,
-            Box::new(|_cc| Ok(Box::new(self.app.clone()))),
+            Box::new(|cc| {
+                egui_extras::install_image_loaders(&cc.egui_ctx);
+                Ok(Box::new(self.app.clone()))
+            }),
         ) {
             log::error!("run: eframe error: {e:?}");
         }
@@ -335,13 +341,13 @@ impl EguiApp {
                     .peekable();
 
                 if rows.peek().is_some() {
-                    for row in rows {
-                        ui.vertical(move |ui| {
+                    ui.vertical(move |ui| {
+                        for row in rows {
                             ui.horizontal(move |ui| {
                                 self.render_elements_ref(ui, &row, handler);
                             });
-                        });
-                    }
+                        }
+                    });
                 } else {
                     ui.horizontal(move |ui| {
                         self.render_elements(ui, &container.elements, handler);
@@ -366,13 +372,13 @@ impl EguiApp {
                     .peekable();
 
                 if cols.peek().is_some() {
-                    for col in cols {
-                        ui.horizontal(move |ui| {
+                    ui.horizontal(move |ui| {
+                        for col in cols {
                             ui.vertical(move |ui| {
                                 self.render_elements_ref(ui, &col, handler);
                             });
-                        });
-                    }
+                        }
+                    });
                 } else {
                     ui.vertical(move |ui| {
                         self.render_elements(ui, &container.elements, handler);
@@ -397,11 +403,32 @@ impl EguiApp {
     fn render_element(&self, ui: &mut Ui, element: &Element, handler: Option<&Handler>) {
         let response: Option<Response> = match element {
             Element::Raw { value } => Some(ui.label(value)),
+            Element::Image { source, element } => source.as_ref().map(|source| {
+                let source = egui::ImageSource::Uri(if source.starts_with("http") {
+                    Cow::Borrowed(source)
+                } else {
+                    Cow::Owned(format!("file://{source}"))
+                });
+
+                let mut image = egui::Image::new(source);
+
+                if element.width.is_some() {
+                    image = image.max_width(element.calculated_width.unwrap());
+                }
+                if element.height.is_some() {
+                    image = image.max_height(element.calculated_height.unwrap());
+                }
+
+                image.ui(ui)
+            }),
             _ => None,
         };
 
-        if let (Some(handler), Some(response)) = (handler, response) {
-            handler(&response);
+        if let Some(response) = response {
+            if let Some(handler) = handler {
+                handler(&response);
+            }
+            return;
         }
 
         let handler: Option<Handler> = match element {

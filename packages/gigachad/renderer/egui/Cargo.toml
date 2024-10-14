@@ -10,6 +10,9 @@ readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
+[package.metadata.cargo-machete]
+ignored = ["image"]
+
 [dependencies]
 gigachad_renderer = { version = "0.1.0", path = "../", default-features = false, features = [
     "viewport",
@@ -25,7 +28,9 @@ eframe = { workspace = true, default-features = false, features = [
     "__screenshot",
     "default",
 ] }
+egui_extras = { workspace = true, features = ["http", "image"] }
 flume = { workspace = true }
+image = { workspace = true, features = ["webp"] }
 itertools = { workspace = true }
 log = { workspace = true }
 
