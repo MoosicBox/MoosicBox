@@ -476,6 +476,7 @@ impl eframe::App for EguiApp {
             style.spacing.window_margin.right = 0.0;
             style.spacing.window_margin.top = 0.0;
             style.spacing.window_margin.bottom = 0.0;
+            style.spacing.item_spacing = egui::emath::Vec2::splat(0.0);
             #[cfg(feature = "debug")]
             {
                 style.debug.debug_on_hover = true;
