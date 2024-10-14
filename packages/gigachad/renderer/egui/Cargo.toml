@@ -1,0 +1,24 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["gui"]
+description = "Giga-Chad egui renderer package"
+edition     = "2021"
+keywords    = ["desktop", "egui", "gui", "render", "renderer"]
+license     = "MPL-2.0"
+name        = "gigachad_renderer_egui"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+gigachad_renderer = { version = "0.1.0", path = "../", default-features = false, features = [
+    "viewport",
+] }
+moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
+
+[features]
+default = ["debug"]
+
+fail-on-warnings = []
+
+debug  = []

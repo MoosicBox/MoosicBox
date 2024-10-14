@@ -30,6 +30,7 @@ members = [
     "packages/files",
     "packages/gigachad",
     "packages/gigachad/renderer",
+    "packages/gigachad/renderer/egui",
     "packages/gigachad/renderer/fltk",
     "packages/gigachad/transformer",
     "packages/image",
@@ -134,6 +135,7 @@ diesel = { version = "2.2.4", default-features = false }
 diesel_migrations = { version = "2.2.0", default-features = false }
 dotenv = "0.15"
 dyn-clone = "1.0.17"
+eframe = "0.29.1"
 enum-as-inner = "0.6.1"
 env_logger = "0.11"
 fdk-aac = "0.7.0"
