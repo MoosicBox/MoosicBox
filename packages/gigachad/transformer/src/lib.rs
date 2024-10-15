@@ -103,6 +103,8 @@ impl LayoutPosition {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ContainerElement {
+    #[cfg(feature = "id")]
+    pub id: usize,
     pub elements: Vec<Element>,
     pub direction: LayoutDirection,
     pub overflow_x: LayoutOverflow,

@@ -27,7 +27,7 @@ pretty_assertions = { workspace = true }
 test-log          = { workspace = true }
 
 [features]
-default = ["calc", "format", "html"]
+default = ["calc", "format", "html", "id"]
 
 fail-on-warnings = []
 
@@ -37,3 +37,5 @@ html = ["dep:tl"]
 simd = ["tl?/simd"]
 
 format = ["dep:xml"]
+
+id = []

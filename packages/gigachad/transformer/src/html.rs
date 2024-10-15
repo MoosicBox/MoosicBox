@@ -128,8 +128,14 @@ fn parse_element(
     node: &Node<'_>,
     parser: &Parser<'_>,
 ) -> crate::ContainerElement {
+    #[cfg(feature = "id")]
+    static CURRENT_ID: std::sync::LazyLock<std::sync::Arc<std::sync::atomic::AtomicUsize>> =
+        std::sync::LazyLock::new(|| std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(1)));
+
     #[allow(clippy::needless_update)]
     crate::ContainerElement {
+        #[cfg(feature = "id")]
+        id: CURRENT_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
         direction: get_direction(tag),
         overflow_x: get_overflow(tag, "sx-overflow-x"),
         overflow_y: get_overflow(tag, "sx-overflow-y"),
