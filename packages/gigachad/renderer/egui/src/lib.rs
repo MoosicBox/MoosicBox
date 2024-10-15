@@ -702,7 +702,7 @@ impl EguiApp {
 
                 let (_, (dist, prev_dist)) = listener.check();
 
-                let image = if !prev_dist.is_some_and(|x| x < 200.0) && dist < 200.0 {
+                let image = if !prev_dist.is_some_and(|x| x < 1000.0) && dist < 1000.0 {
                     let contains_image = {
                         matches!(
                             self.images.read().unwrap().get(&source),
