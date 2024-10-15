@@ -144,8 +144,13 @@ impl Renderer for EguiRenderer {
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         log::debug!("render: {elements:?}");
 
-        elements.calculated_width = self.width.map(f32::from);
-        elements.calculated_height = self.height.map(f32::from);
+        elements.calculated_width = self.app.width.read().unwrap().or(self.width.map(f32::from));
+        elements.calculated_height = self
+            .app
+            .height
+            .read()
+            .unwrap()
+            .or(self.height.map(f32::from));
         elements.calc();
         *self.app.container.write().unwrap() = elements;
 
@@ -155,8 +160,8 @@ impl Renderer for EguiRenderer {
 
 #[derive(Clone)]
 struct EguiApp {
-    width: Option<f32>,
-    height: Option<f32>,
+    width: Arc<RwLock<Option<f32>>>,
+    height: Arc<RwLock<Option<f32>>>,
     container: Arc<RwLock<ContainerElement>>,
     sender: Sender<String>,
 }
@@ -166,8 +171,8 @@ type Handler = Box<dyn Fn(&Response)>;
 impl EguiApp {
     fn new(sender: Sender<String>) -> Self {
         Self {
-            width: None,
-            height: None,
+            width: Arc::new(RwLock::new(None)),
+            height: Arc::new(RwLock::new(None)),
             container: Arc::new(RwLock::new(ContainerElement::default())),
             sender,
         }
@@ -177,8 +182,10 @@ impl EguiApp {
         ctx.input(move |i| {
             let width = i.screen_rect.width();
             let height = i.screen_rect.height();
-            if !self.width.is_some_and(|x| (x - width).abs() < 0.01)
-                || !self.height.is_some_and(|x| (x - height).abs() < 0.01)
+            let current_width = *self.width.read().unwrap();
+            let current_height = *self.height.read().unwrap();
+            if !current_width.is_some_and(|x| (x - width).abs() < 0.01)
+                || !current_height.is_some_and(|x| (x - height).abs() < 0.01)
             {
                 log::debug!(
                     "calc: frame size changed from ({:?}, {:?}) -> ({width}, {height})",
@@ -193,8 +200,8 @@ impl EguiApp {
                     container.calc();
                 }
 
-                self.width.replace(width);
-                self.height.replace(height);
+                self.width.write().unwrap().replace(width);
+                self.height.write().unwrap().replace(height);
             }
         });
     }
