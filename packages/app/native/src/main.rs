@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 let albums: Page<ApiAlbum> = response.json().await?;
 
-                log::debug!("albums: {albums:?}");
+                log::trace!("albums: {albums:?}");
 
                 moosicbox_app_native_ui::albums(albums.items())
                     .into_string()
