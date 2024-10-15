@@ -12170,9 +12170,9 @@ dependencies = [
 
 [[package]]
 name = "utoipa-rapidoc"
-version = "4.0.1-rc.0"
+version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4d3324d5874fb734762214827dd30b47aa78510d12abab674a97f6d7c53688f"
+checksum = "2f5e784e313457e79d65c378bdfc2f74275f0db91a72252be7d34360ec2afbe1"
 dependencies = [
  "actix-web",
  "serde",
@@ -12182,9 +12182,9 @@ dependencies = [
 
 [[package]]
 name = "utoipa-redoc"
-version = "4.0.1-rc.0"
+version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4375bb6b0cb78a240c973f5e99977c482f3e92aeea1907367caa28776b9aaf9"
+checksum = "9218304bba9a0ea5e92085b0a427ccce5fd56eaaf6436d245b7578e6a95787e1"
 dependencies = [
  "actix-web",
  "serde",
@@ -12206,9 +12206,9 @@ dependencies = [
 
 [[package]]
 name = "utoipa-swagger-ui"
-version = "7.1.1-rc.0"
+version = "8.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd1174c37d2bdc9a2ce8d94aa0baf3e3c4862f80b7b1fb592738f374ab9f8803"
+checksum = "f0800ca865caaff4484adca065a77927a801bd9c48879f0451ec08846eb6a12b"
 dependencies = [
  "actix-web",
  "mime_guess",
