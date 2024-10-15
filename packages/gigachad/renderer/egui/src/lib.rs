@@ -172,6 +172,7 @@ impl EguiApp {
             sender,
         }
     }
+
     fn calc(&mut self, ctx: &egui::Context) {
         ctx.input(move |i| {
             let width = i.screen_rect.width();
@@ -201,6 +202,7 @@ impl EguiApp {
     #[allow(clippy::too_many_lines)]
     fn render_container(
         &self,
+        ctx: &egui::Context,
         ui: &mut Ui,
         container: &ContainerElement,
         handler: Option<&Handler>,
@@ -216,7 +218,7 @@ impl EguiApp {
                             egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
                         )
                         .show(ui, move |ui| {
-                            self.render_container_contents(ui, container, handler);
+                            self.render_container_contents(ctx, ui, container, handler, true);
                         });
                 }
                 (
@@ -228,7 +230,7 @@ impl EguiApp {
                             egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
                         )
                         .show(ui, move |ui| {
-                            self.render_container_contents(ui, container, handler);
+                            self.render_container_contents(ctx, ui, container, handler, true);
                         });
                 }
                 (
@@ -245,7 +247,9 @@ impl EguiApp {
                                     egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
                                 )
                                 .show(ui, move |ui| {
-                                    self.render_container_contents(ui, container, handler);
+                                    self.render_container_contents(
+                                        ctx, ui, container, handler, true,
+                                    );
                                 });
                         });
                 }
@@ -263,7 +267,9 @@ impl EguiApp {
                                     egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
                                 )
                                 .show(ui, move |ui| {
-                                    self.render_container_contents(ui, container, handler);
+                                    self.render_container_contents(
+                                        ctx, ui, container, handler, true,
+                                    );
                                 });
                         });
                 }
@@ -273,7 +279,7 @@ impl EguiApp {
                             egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
                         )
                         .show(ui, move |ui| {
-                            self.render_container_contents(ui, container, handler);
+                            self.render_container_contents(ctx, ui, container, handler, false);
                         });
                 }
                 (gigachad_transformer::LayoutOverflow::Scroll, _) => {
@@ -282,7 +288,7 @@ impl EguiApp {
                             egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
                         )
                         .show(ui, move |ui| {
-                            self.render_container_contents(ui, container, handler);
+                            self.render_container_contents(ctx, ui, container, handler, false);
                         });
                 }
                 (_, gigachad_transformer::LayoutOverflow::Auto) => {
@@ -291,7 +297,7 @@ impl EguiApp {
                             egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
                         )
                         .show(ui, move |ui| {
-                            self.render_container_contents(ui, container, handler);
+                            self.render_container_contents(ctx, ui, container, handler, true);
                         });
                 }
                 (_, gigachad_transformer::LayoutOverflow::Scroll) => {
@@ -300,11 +306,11 @@ impl EguiApp {
                             egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
                         )
                         .show(ui, move |ui| {
-                            self.render_container_contents(ui, container, handler);
+                            self.render_container_contents(ctx, ui, container, handler, true);
                         });
                 }
                 (_, _) => {
-                    self.render_container_contents(ui, container, handler);
+                    self.render_container_contents(ctx, ui, container, handler, false);
                 }
             }
         });
@@ -316,15 +322,28 @@ impl EguiApp {
 
     fn render_container_contents(
         &self,
+        ctx: &egui::Context,
         ui: &mut Ui,
         container: &ContainerElement,
         handler: Option<&Handler>,
+        vscroll: bool,
     ) {
         if let Some(width) = container.calculated_width {
             ui.set_width(width);
         }
         if let Some(height) = container.calculated_height {
             ui.set_height(height);
+
+            if vscroll {
+                if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
+                    let rect = egui::Rect::from_pos(egui::emath::pos2(0.0, height));
+                    ui.scroll_to_rect(rect, Some(egui::Align::TOP));
+                }
+                if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
+                    let rect = egui::Rect::from_pos(egui::emath::pos2(0.0, -height));
+                    ui.scroll_to_rect(rect, Some(egui::Align::TOP));
+                }
+            }
         }
         match container.direction {
             LayoutDirection::Row => {
@@ -348,13 +367,13 @@ impl EguiApp {
                     ui.vertical(move |ui| {
                         for row in rows {
                             ui.horizontal(move |ui| {
-                                self.render_elements_ref(ui, &row, handler);
+                                self.render_elements_ref(ctx, ui, &row, handler);
                             });
                         }
                     });
                 } else {
                     ui.horizontal(move |ui| {
-                        self.render_elements(ui, &container.elements, handler);
+                        self.render_elements(ctx, ui, &container.elements, handler);
                     });
                 }
             }
@@ -379,32 +398,50 @@ impl EguiApp {
                     ui.horizontal(move |ui| {
                         for col in cols {
                             ui.vertical(move |ui| {
-                                self.render_elements_ref(ui, &col, handler);
+                                self.render_elements_ref(ctx, ui, &col, handler);
                             });
                         }
                     });
                 } else {
                     ui.vertical(move |ui| {
-                        self.render_elements(ui, &container.elements, handler);
+                        self.render_elements(ctx, ui, &container.elements, handler);
                     });
                 }
             }
         }
     }
 
-    fn render_elements(&self, ui: &mut Ui, elements: &[Element], handler: Option<&Handler>) {
+    fn render_elements(
+        &self,
+        ctx: &egui::Context,
+        ui: &mut Ui,
+        elements: &[Element],
+        handler: Option<&Handler>,
+    ) {
         for element in elements {
-            self.render_element(ui, element, handler);
+            self.render_element(ctx, ui, element, handler);
         }
     }
 
-    fn render_elements_ref(&self, ui: &mut Ui, elements: &[&Element], handler: Option<&Handler>) {
+    fn render_elements_ref(
+        &self,
+        ctx: &egui::Context,
+        ui: &mut Ui,
+        elements: &[&Element],
+        handler: Option<&Handler>,
+    ) {
         for element in elements {
-            self.render_element(ui, element, handler);
+            self.render_element(ctx, ui, element, handler);
         }
     }
 
-    fn render_element(&self, ui: &mut Ui, element: &Element, handler: Option<&Handler>) {
+    fn render_element(
+        &self,
+        ctx: &egui::Context,
+        ui: &mut Ui,
+        element: &Element,
+        handler: Option<&Handler>,
+    ) {
         let response: Option<Response> = match element {
             Element::Raw { value } => Some(ui.label(value)),
             Element::Image { source, element } => source.as_ref().map(|source| {
@@ -458,7 +495,7 @@ impl EguiApp {
         };
 
         if let Some(container) = element.container_element() {
-            self.render_container(ui, container, immediate_handler.as_ref().or(handler));
+            self.render_container(ctx, ui, container, immediate_handler.as_ref().or(handler));
         }
     }
 }
@@ -481,7 +518,7 @@ impl eframe::App for EguiApp {
             {
                 style.debug.debug_on_hover = true;
             }
-            self.render_container(ui, container, None);
+            self.render_container(ctx, ui, container, None);
         });
     }
 }
