@@ -223,14 +223,19 @@ impl EguiApp {
         element: &ContainerElement,
         parent: Option<&Viewport>,
     ) -> Viewport {
-        self.viewports.read().unwrap().get(&element.id).map_or_else(
-            || {
-                let pos = ui.next_widget_position();
-                Viewport {
+        let pos = ui.cursor();
+
+        let mut viewport = self
+            .viewports
+            .write()
+            .unwrap()
+            .get(&element.id)
+            .map_or_else(
+                || Viewport {
                     parent: parent.cloned().map(Box::new),
                     pos: Pos {
-                        x: pos.x,
-                        y: pos.y,
+                        x: 0.0,
+                        y: 0.0,
                         w: element.calculated_width.unwrap(),
                         h: element.calculated_height.unwrap(),
                     },
@@ -240,10 +245,19 @@ impl EguiApp {
                         w: element.calculated_width.unwrap(),
                         h: element.calculated_height.unwrap(),
                     },
-                }
-            },
-            Clone::clone,
-        )
+                },
+                Clone::clone,
+            );
+
+        viewport.pos.x = pos.left();
+        viewport.pos.y = pos.top();
+        log::debug!(
+            "get_scroll_container: ({}, {})",
+            viewport.pos.x,
+            viewport.pos.y
+        );
+
+        viewport
     }
 
     fn update_scroll_container(
@@ -596,18 +610,18 @@ impl EguiApp {
 
                 let listeners: &mut HashMap<_, _> = &mut self.viewport_listeners.write().unwrap();
 
-                let pos = ui.next_widget_position();
+                let pos = ui.cursor();
                 let listener = listeners.entry(element.id).or_insert_with(|| {
                     ViewportListener::new(
                         viewport.cloned(),
-                        pos.x,
-                        pos.y,
+                        0.0,
+                        0.0,
                         element.calculated_width.unwrap(),
                         element.calculated_height.unwrap(),
                     )
                 });
-                listener.pos.x = pos.x;
-                listener.pos.y = pos.y;
+                listener.pos.x = pos.left();
+                listener.pos.y = pos.top();
 
                 let (_, (dist, prev_dist)) = listener.check();
 

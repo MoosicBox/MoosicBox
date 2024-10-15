@@ -57,12 +57,21 @@ impl ViewportListener {
     }
 
     fn is_visible(&self) -> (bool, f32) {
-        if let Some(((visible, dist), vp)) =
-            self.viewport.as_ref().map(|x| (x.is_visible(), x.viewport))
+        if let Some(((visible, dist), vp, pos)) = self
+            .viewport
+            .as_ref()
+            .map(|x| (x.is_visible(), x.viewport, x.pos))
         {
             if visible {
                 super::is_visible(
-                    vp.x, vp.y, vp.w, vp.h, self.pos.x, self.pos.y, self.pos.w, self.pos.h,
+                    vp.x + pos.x,
+                    vp.y + pos.y,
+                    vp.w,
+                    vp.h,
+                    self.pos.x,
+                    self.pos.y,
+                    self.pos.w,
+                    self.pos.h,
                 )
             } else {
                 (false, dist)
