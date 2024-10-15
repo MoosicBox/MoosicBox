@@ -18,6 +18,7 @@ allowed-duplicate-crates = [
     "hyper-rustls",
     "indexmap",
     "itertools",
+    "libloading",
     "miniz_oxide",
     "mio",
     "ndk-sys",

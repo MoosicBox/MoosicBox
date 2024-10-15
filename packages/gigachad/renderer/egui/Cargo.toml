@@ -23,17 +23,22 @@ gigachad_transformer = { version = "0.1.0", path = "../../transformer", default-
     "id",
 ] }
 moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
+moosicbox_logging = { version = "0.1.0", path = "../../../logging", default-features = false, features = [
+    "macros",
+] }
+moosicbox_task = { version = "0.1.0", path = "../../../task", default-features = false }
 
 async-trait = { workspace = true }
 eframe = { workspace = true, default-features = false, features = [
     "__screenshot",
     "default",
 ] }
-egui_extras = { workspace = true, features = ["http", "image"] }
+egui_extras = { workspace = true, features = ["image"] }
 flume = { workspace = true }
 image = { workspace = true, features = ["webp"] }
 itertools = { workspace = true }
 log = { workspace = true }
+reqwest = { workspace = true }
 
 [features]
 default = ["debug"]

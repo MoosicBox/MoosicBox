@@ -2,7 +2,6 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::{
-    borrow::Cow,
     collections::HashMap,
     sync::{Arc, RwLock},
 };
@@ -35,12 +34,13 @@ impl EguiRenderer {
     #[must_use]
     pub fn new() -> Self {
         let (tx, rx) = flume::unbounded();
+        let (event_tx, event_rx) = flume::unbounded();
         Self {
             width: None,
             height: None,
             x: None,
             y: None,
-            app: EguiApp::new(tx),
+            app: EguiApp::new(tx, event_tx, event_rx),
             receiver: rx,
         }
     }
@@ -84,7 +84,9 @@ impl RenderRunner for EguiRenderRunner {
             options,
             Box::new(|cc| {
                 egui_extras::install_image_loaders(&cc.egui_ctx);
-                Ok(Box::new(self.app.clone()))
+                let app = self.app.clone();
+                *app.ctx.write().unwrap() = Some(cc.egui_ctx.clone());
+                Ok(Box::new(app))
             }),
         ) {
             log::error!("run: eframe error: {e:?}");
@@ -115,6 +117,17 @@ impl Renderer for EguiRenderer {
         self.height = Some(height);
         self.x = x;
         self.y = y;
+
+        log::debug!("start: spawning listen thread");
+        moosicbox_task::spawn("renderer_egui::start: listen", {
+            let app = self.app.clone();
+            async move {
+                log::debug!("start: listening");
+                app.listen().await;
+                Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
+            }
+        });
+
         Ok(())
     }
 
@@ -144,7 +157,7 @@ impl Renderer for EguiRenderer {
         &mut self,
         mut elements: ContainerElement,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        log::debug!("render: {elements:?}");
+        moosicbox_logging::debug_or_trace!(("render: start"), ("render: start {elements:?}"));
 
         elements.calculated_width = self.app.width.read().unwrap().or(self.width.map(f32::from));
         elements.calculated_height = self
@@ -158,35 +171,104 @@ impl Renderer for EguiRenderer {
         *self.app.viewport_listeners.write().unwrap() = HashMap::new();
         *self.app.viewports.write().unwrap() = HashMap::new();
 
+        log::debug!("render: finished");
+        if let Some(ctx) = &*self.app.ctx.read().unwrap() {
+            ctx.request_repaint();
+        }
+
         Ok(())
     }
 }
 
+#[derive(Debug)]
+enum AppEvent {
+    LoadImage { source: String },
+}
+
+#[derive(Clone)]
+enum AppImage {
+    Loading,
+    Bytes(Arc<[u8]>),
+}
+
 #[derive(Clone)]
 struct EguiApp {
+    ctx: Arc<RwLock<Option<egui::Context>>>,
     width: Arc<RwLock<Option<f32>>>,
     height: Arc<RwLock<Option<f32>>>,
     container: Arc<RwLock<ContainerElement>>,
     sender: Sender<String>,
+    event: Sender<AppEvent>,
+    event_receiver: Receiver<AppEvent>,
     viewport_listeners: Arc<RwLock<HashMap<usize, ViewportListener>>>,
     viewports: Arc<RwLock<HashMap<usize, Viewport>>>,
+    images: Arc<RwLock<HashMap<String, AppImage>>>,
 }
 
 type Handler = Box<dyn Fn(&Response)>;
 
 impl EguiApp {
-    fn new(sender: Sender<String>) -> Self {
+    fn new(
+        sender: Sender<String>,
+        event: Sender<AppEvent>,
+        event_receiver: Receiver<AppEvent>,
+    ) -> Self {
         Self {
+            ctx: Arc::new(RwLock::new(None)),
             width: Arc::new(RwLock::new(None)),
             height: Arc::new(RwLock::new(None)),
             container: Arc::new(RwLock::new(ContainerElement::default())),
             sender,
+            event,
+            event_receiver,
             viewport_listeners: Arc::new(RwLock::new(HashMap::new())),
             viewports: Arc::new(RwLock::new(HashMap::new())),
+            images: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    fn calc(&mut self, ctx: &egui::Context) {
+    async fn listen(&self) {
+        while let Ok(event) = self.event_receiver.recv_async().await {
+            log::debug!("received event {event:?}");
+            match event {
+                AppEvent::LoadImage { source } => {
+                    let images = self.images.clone();
+                    let ctx = self.ctx.clone();
+                    moosicbox_task::spawn("renderer: load_image", async move {
+                        log::debug!("loading image {source}");
+                        match reqwest::get(&source).await {
+                            Ok(response) => {
+                                if !response.status().is_success() {
+                                    return;
+                                }
+
+                                match response.bytes().await {
+                                    Ok(bytes) => {
+                                        images
+                                            .write()
+                                            .unwrap()
+                                            .insert(source, AppImage::Bytes(bytes.to_vec().into()));
+
+                                        if let Some(ctx) = &*ctx.read().unwrap() {
+                                            ctx.request_repaint();
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to fetch image: {e:?}");
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                log::error!("Failed to fetch image: {e:?}");
+                            }
+                        }
+                    });
+                }
+            }
+        }
+    }
+
+    fn calc(&self, ctx: &egui::Context) {
         ctx.input(move |i| {
             let width = i.screen_rect.width();
             let height = i.screen_rect.height();
@@ -251,7 +333,7 @@ impl EguiApp {
 
         viewport.pos.x = pos.left();
         viewport.pos.y = pos.top();
-        log::debug!(
+        log::trace!(
             "get_scroll_container: ({}, {})",
             viewport.pos.x,
             viewport.pos.y
@@ -591,6 +673,7 @@ impl EguiApp {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn render_element(
         &self,
         ctx: &egui::Context,
@@ -601,13 +684,7 @@ impl EguiApp {
     ) {
         let response: Option<Response> = match element {
             Element::Raw { value } => Some(ui.label(value)),
-            Element::Image { source, element } => source.as_ref().map(|source| {
-                let image_source = egui::ImageSource::Uri(if source.starts_with("http") {
-                    Cow::Borrowed(source)
-                } else {
-                    Cow::Owned(format!("file://{source}"))
-                });
-
+            Element::Image { source, element } => source.clone().map(|source| {
                 let listeners: &mut HashMap<_, _> = &mut self.viewport_listeners.write().unwrap();
 
                 let pos = ui.cursor();
@@ -625,18 +702,56 @@ impl EguiApp {
 
                 let (_, (dist, prev_dist)) = listener.check();
 
-                if !prev_dist.is_some_and(|x| x < 200.0) && dist < 200.0 {
-                    let mut image = egui::Image::new(image_source);
+                let image = if !prev_dist.is_some_and(|x| x < 200.0) && dist < 200.0 {
+                    let contains_image = {
+                        matches!(
+                            self.images.read().unwrap().get(&source),
+                            Some(AppImage::Bytes(_))
+                        )
+                    };
+                    if contains_image {
+                        let Some(AppImage::Bytes(bytes)) =
+                            self.images.read().unwrap().get(&source).cloned()
+                        else {
+                            unreachable!()
+                        };
+                        let mut image =
+                            egui::Image::from_bytes(source, egui::load::Bytes::Shared(bytes));
 
-                    if element.width.is_some() {
-                        image = image.max_width(element.calculated_width.unwrap());
-                    }
-                    if element.height.is_some() {
-                        image = image.max_height(element.calculated_height.unwrap());
-                    }
+                        if element.width.is_some() {
+                            image = image.max_width(element.calculated_width.unwrap());
+                        }
+                        if element.height.is_some() {
+                            image = image.max_height(element.calculated_height.unwrap());
+                        }
 
-                    image.ui(ui)
+                        Some(image.ui(ui))
+                    } else {
+                        let loading_image = {
+                            matches!(
+                                self.images.read().unwrap().get(&source),
+                                Some(AppImage::Loading)
+                            )
+                        };
+
+                        if !loading_image {
+                            self.images
+                                .write()
+                                .unwrap()
+                                .insert(source.clone(), AppImage::Loading);
+
+                            if let Err(e) = self.event.send(AppEvent::LoadImage { source }) {
+                                log::error!("Failed to send LoadImage event: {e:?}");
+                            }
+                        }
+
+                        None
+                    }
                 } else {
+                    None
+                };
+
+                image.unwrap_or_else(|| {
                     let frame = egui::Frame::none();
                     frame
                         .show(ui, |ui| {
@@ -648,7 +763,7 @@ impl EguiApp {
                             }
                         })
                         .response
-                }
+                })
             }),
             _ => None,
         };
@@ -692,10 +807,8 @@ impl EguiApp {
             );
         }
     }
-}
 
-impl eframe::App for EguiApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn paint(&self, ctx: &egui::Context) {
         self.calc(ctx);
 
         let container = self.container.clone();
@@ -714,5 +827,12 @@ impl eframe::App for EguiApp {
             }
             self.render_container(ctx, ui, container, None, None);
         });
+    }
+}
+
+impl eframe::App for EguiApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        log::debug!("PAINTING");
+        self.paint(ctx);
     }
 }
