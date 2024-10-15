@@ -108,49 +108,21 @@ pub trait ViewportPosition {
         this_widget: &dyn WidgetPosition,
         widget: &dyn WidgetPosition,
     ) -> (bool, u32) {
-        let mut x = widget.widget_x();
-        let mut y = widget.widget_y();
-        let w = widget.widget_w();
-        let h = widget.widget_h();
-        log::trace!("is_widget_visible: widget x={x} y={y} w={w} h={h}");
-
-        log::trace!(
-            "is_widget_visible: {x} -= {} = {}",
-            this_widget.widget_x(),
-            x - this_widget.widget_x()
+        #[allow(clippy::cast_precision_loss)]
+        let (visible, dist) = super::is_visible(
+            this_widget.widget_x() as f32,
+            this_widget.widget_y() as f32,
+            self.viewport_w() as f32,
+            self.viewport_y() as f32,
+            widget.widget_x() as f32,
+            widget.widget_y() as f32,
+            widget.widget_w() as f32,
+            widget.widget_h() as f32,
         );
-        x -= this_widget.widget_x();
-        log::trace!(
-            "is_widget_visible: {y} -= {} = {}",
-            this_widget.widget_y(),
-            y - this_widget.widget_y()
-        );
-        y -= this_widget.widget_y();
 
-        let viewport_w = self.viewport_w();
-        let viewport_h = self.viewport_h();
-
+        #[allow(clippy::cast_possible_truncation)]
         #[allow(clippy::cast_sign_loss)]
-        let dist_x = std::cmp::max(0, std::cmp::max(-(x + w), x - viewport_w)) as u32;
-        #[allow(clippy::cast_sign_loss)]
-        let dist_y = std::cmp::max(0, std::cmp::max(-(y + h), y - viewport_h)) as u32;
-
-        let dist = std::cmp::max(dist_x, dist_y);
-
-        log::trace!(
-            "is_widget_visible:\n\t\
-            {dist_x} == 0 &&\n\t\
-            {dist_y} == 0"
-        );
-
-        if dist_x == 0 && dist_y == 0 {
-            log::trace!("is_widget_visible: visible");
-            return (true, dist);
-        }
-
-        log::trace!("is_widget_visible: not visible");
-
-        (false, dist)
+        (visible, dist.round() as u32)
     }
 }
 

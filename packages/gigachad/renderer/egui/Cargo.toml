@@ -15,11 +15,12 @@ ignored = ["image"]
 
 [dependencies]
 gigachad_renderer = { version = "0.1.0", path = "../", default-features = false, features = [
-    "viewport",
+    "viewport-immediate",
 ] }
 gigachad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [
     "calc",
     "html",
+    "id",
 ] }
 moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
 

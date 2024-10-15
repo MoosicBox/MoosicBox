@@ -17,8 +17,10 @@ async-trait = { workspace = true }
 log         = { workspace = true }
 
 [features]
-default = ["viewport"]
+default = ["viewport", "viewport-immediate", "viewport-retained"]
 
 fail-on-warnings = []
 
-viewport = []
+viewport           = []
+viewport-immediate = ["viewport"]
+viewport-retained  = ["viewport"]
