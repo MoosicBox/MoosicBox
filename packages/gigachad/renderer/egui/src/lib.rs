@@ -195,6 +195,9 @@ impl EguiApp {
             if !current_width.is_some_and(|x| (x - width).abs() < 0.01)
                 || !current_height.is_some_and(|x| (x - height).abs() < 0.01)
             {
+                *self.viewport_listeners.write().unwrap() = HashMap::new();
+                *self.viewports.write().unwrap() = HashMap::new();
+
                 log::debug!(
                     "calc: frame size changed from ({:?}, {:?}) -> ({width}, {height})",
                     self.width,
