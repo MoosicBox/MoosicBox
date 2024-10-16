@@ -685,6 +685,10 @@ impl EguiApp {
         viewport: Option<&Viewport>,
     ) {
         let response: Option<Response> = match element {
+            Element::Table { .. } => {
+                self.render_table(ctx, ui, element, handler, viewport);
+                return;
+            }
             Element::Raw { value } => Some(ui.label(value)),
             Element::Image { source, element } => source.clone().map(|source| {
                 let listeners: &mut HashMap<_, _> = &mut self.viewport_listeners.write().unwrap();
@@ -808,6 +812,86 @@ impl EguiApp {
                 viewport,
             );
         }
+    }
+
+    fn render_table(
+        &self,
+        ctx: &egui::Context,
+        ui: &mut Ui,
+        element: &Element,
+        handler: Option<&Handler>,
+        viewport: Option<&Viewport>,
+    ) {
+        let container = element.container_element().expect("Not a table");
+
+        let mut rows_builder: Option<Vec<Box<dyn Iterator<Item = &ContainerElement>>>> = None;
+        let mut headings: Option<Box<dyn Iterator<Item = &ContainerElement>>> = None;
+        let mut rows: Box<dyn Iterator<Item = Box<dyn Iterator<Item = &ContainerElement>>>> =
+            Box::new(vec![].into_iter());
+
+        for element in &container.elements {
+            match element {
+                Element::THead { element } => {
+                    headings = Some(Box::new(
+                        element
+                            .elements
+                            .iter()
+                            .filter_map(|x| x.container_element()),
+                    ));
+                }
+                Element::TBody { element } => {
+                    rows = Box::new(
+                        element
+                            .elements
+                            .iter()
+                            .filter_map(|x| x.container_element())
+                            .map(|x| {
+                                Box::new(x.elements.iter().filter_map(|x| x.container_element()))
+                                    as Box<dyn Iterator<Item = &ContainerElement>>
+                            }),
+                    );
+                }
+                Element::TR { element } => {
+                    if let Some(builder) = &mut rows_builder {
+                        builder.push(Box::new(
+                            element
+                                .elements
+                                .iter()
+                                .filter_map(|x| x.container_element()),
+                        ));
+                    }
+                }
+                _ => {
+                    panic!("Invalid table element: {element}");
+                }
+            }
+        }
+
+        if let Some(rows_builder) = rows_builder {
+            rows = Box::new(rows_builder.into_iter());
+        }
+
+        let grid = egui::Grid::new(format!("grid-{}", container.id));
+
+        grid.show(ui, |ui| {
+            if let Some(headings) = headings {
+                for heading in headings {
+                    egui::Frame::none().show(ui, |ui| {
+                        self.render_container(ctx, ui, heading, handler, viewport);
+                    });
+                }
+
+                ui.end_row();
+            }
+            for row in rows {
+                for td in row {
+                    egui::Frame::none().show(ui, |ui| {
+                        self.render_container(ctx, ui, td, handler, viewport);
+                    });
+                }
+                ui.end_row();
+            }
+        });
     }
 
     fn paint(&self, ctx: &egui::Context) {
