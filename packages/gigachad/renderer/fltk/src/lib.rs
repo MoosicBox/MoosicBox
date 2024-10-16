@@ -798,6 +798,36 @@ impl FltkRenderer {
                 flex_element =
                     Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
             }
+            Element::Table { element } => {
+                context = context.with_container(element);
+                flex_element =
+                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+            }
+            Element::THead { element } => {
+                context = context.with_container(element);
+                flex_element =
+                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+            }
+            Element::TH { element } => {
+                context = context.with_container(element);
+                flex_element =
+                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+            }
+            Element::TBody { element } => {
+                context = context.with_container(element);
+                flex_element =
+                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+            }
+            Element::TR { element } => {
+                context = context.with_container(element);
+                flex_element =
+                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+            }
+            Element::TD { element } => {
+                context = context.with_container(element);
+                flex_element =
+                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+            }
             Element::Input(_) => {}
             Element::Button { element } => {
                 context = context.with_container(element);

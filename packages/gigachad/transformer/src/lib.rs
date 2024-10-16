@@ -181,6 +181,24 @@ pub enum Element {
     ListItem {
         element: ContainerElement,
     },
+    Table {
+        element: ContainerElement,
+    },
+    THead {
+        element: ContainerElement,
+    },
+    TH {
+        element: ContainerElement,
+    },
+    TBody {
+        element: ContainerElement,
+    },
+    TR {
+        element: ContainerElement,
+    },
+    TD {
+        element: ContainerElement,
+    },
 }
 
 #[derive(Default)]
@@ -516,6 +534,54 @@ impl Element {
                 display_elements(&element.elements, f, with_debug_attrs)?;
                 f.write_fmt(format_args!("</li>"))?;
             }
+            Self::Table { element } => {
+                f.write_fmt(format_args!(
+                    "<table{attrs}>",
+                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&element.elements, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</table>"))?;
+            }
+            Self::THead { element } => {
+                f.write_fmt(format_args!(
+                    "<thead{attrs}>",
+                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&element.elements, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</thead>"))?;
+            }
+            Self::TH { element } => {
+                f.write_fmt(format_args!(
+                    "<th{attrs}>",
+                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&element.elements, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</th>"))?;
+            }
+            Self::TBody { element } => {
+                f.write_fmt(format_args!(
+                    "<tbody{attrs}>",
+                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&element.elements, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</tbody>"))?;
+            }
+            Self::TR { element } => {
+                f.write_fmt(format_args!(
+                    "<tr{attrs}>",
+                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&element.elements, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</tr>"))?;
+            }
+            Self::TD { element } => {
+                f.write_fmt(format_args!(
+                    "<td{attrs}>",
+                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&element.elements, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</td>"))?;
+            }
         }
 
         Ok(())
@@ -541,6 +607,12 @@ impl Element {
             Self::UnorderedList { .. } => "UnorderedList",
             Self::OrderedList { .. } => "OrderedList",
             Self::ListItem { .. } => "ListItem",
+            Self::Table { .. } => "Table",
+            Self::THead { .. } => "THead",
+            Self::TH { .. } => "TH",
+            Self::TBody { .. } => "TBody",
+            Self::TR { .. } => "TR",
+            Self::TD { .. } => "TD",
         }
     }
 }
@@ -563,6 +635,12 @@ impl Element {
             | Self::Heading { element, .. }
             | Self::UnorderedList { element }
             | Self::OrderedList { element }
+            | Self::Table { element }
+            | Self::THead { element }
+            | Self::TH { element }
+            | Self::TBody { element }
+            | Self::TR { element }
+            | Self::TD { element }
             | Self::ListItem { element } => Some(element),
             Self::Raw { .. } | Self::Input(_) => None,
         }
@@ -584,6 +662,12 @@ impl Element {
             | Self::Heading { element, .. }
             | Self::UnorderedList { element }
             | Self::OrderedList { element }
+            | Self::Table { element }
+            | Self::THead { element }
+            | Self::TH { element }
+            | Self::TBody { element }
+            | Self::TR { element }
+            | Self::TD { element }
             | Self::ListItem { element } => Some(element),
             Self::Raw { .. } | Self::Input(_) => None,
         }

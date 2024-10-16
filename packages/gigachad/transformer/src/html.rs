@@ -228,6 +228,24 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
             "li" => crate::Element::ListItem {
                 element: parse_element(tag, node, parser),
             },
+            "table" => crate::Element::Table {
+                element: parse_element(tag, node, parser),
+            },
+            "thead" => crate::Element::THead {
+                element: parse_element(tag, node, parser),
+            },
+            "th" => crate::Element::TH {
+                element: parse_element(tag, node, parser),
+            },
+            "tbody" => crate::Element::TBody {
+                element: parse_element(tag, node, parser),
+            },
+            "tr" => crate::Element::TR {
+                element: parse_element(tag, node, parser),
+            },
+            "td" => crate::Element::TD {
+                element: parse_element(tag, node, parser),
+            },
             _ => {
                 return None;
             }
