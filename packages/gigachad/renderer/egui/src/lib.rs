@@ -833,7 +833,6 @@ impl EguiApp {
 
 impl eframe::App for EguiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        log::debug!("PAINTING");
         self.paint(ctx);
     }
 }
