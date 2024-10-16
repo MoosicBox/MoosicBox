@@ -20,7 +20,7 @@ use moosicbox_search::{
     DeleteFromIndexError, PopulateIndexError,
 };
 use moosicbox_session::delete_session_playlist_tracks_by_track_id;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
@@ -85,7 +85,7 @@ pub fn sort_album_versions(versions: &mut [AlbumVersion]) {
     versions.sort_by(|a, b| track_source_to_u8(a.source).cmp(&track_source_to_u8(b.source)));
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiAlbumVersion {
