@@ -184,7 +184,7 @@ native-tls = "0.2.12"
 ndk-context = "0.1.1"
 ogg = "0.9.1"
 open = "5.3.0"
-openssl = { version = "0.10.66", features = ["v110"] }
+openssl = { version = "0.10.67", features = ["v110"] }
 opus = "0.3.0"
 pin-project = "1.1.6"
 pin-utils = "0.1.0"
