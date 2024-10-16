@@ -32,7 +32,6 @@ async-trait = { workspace = true }
 eframe = { workspace = true, default-features = false, features = [
     "__screenshot",
     "default",
-    "wgpu",
 ] }
 egui_extras = { workspace = true, features = ["image"] }
 flume = { workspace = true }
@@ -42,8 +41,10 @@ log = { workspace = true }
 reqwest = { workspace = true }
 
 [features]
-default = ["debug"]
+default = ["debug", "wgpu"]
 
 fail-on-warnings = []
+
+wgpu = ["eframe/wgpu"]
 
 debug = []

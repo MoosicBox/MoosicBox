@@ -75,6 +75,7 @@ impl RenderRunner for EguiRenderRunner {
         let options = eframe::NativeOptions {
             viewport,
             centered: true,
+            #[cfg(feature = "wgpu")]
             renderer: eframe::Renderer::Wgpu,
             ..Default::default()
         };
