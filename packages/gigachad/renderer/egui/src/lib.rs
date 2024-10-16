@@ -816,6 +816,10 @@ impl EguiApp {
         let container = self.container.clone();
         let container: &ContainerElement = &container.read().unwrap();
 
+        ctx.memory_mut(|x| {
+            x.options.line_scroll_speed = 100.0;
+        });
+
         egui::CentralPanel::default().show(ctx, |ui| {
             let style = ui.style_mut();
             style.spacing.window_margin.left = 0.0;
