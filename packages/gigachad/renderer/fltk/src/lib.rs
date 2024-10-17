@@ -265,10 +265,10 @@ impl FltkRenderer {
         if width.is_some() || height.is_some() {
             #[allow(clippy::cast_possible_truncation)]
             #[allow(clippy::cast_precision_loss)]
-            let width = width.unwrap_or(image.width() as f32).round() as i32;
+            let width = width.unwrap_or_else(|| image.width() as f32).round() as i32;
             #[allow(clippy::cast_possible_truncation)]
             #[allow(clippy::cast_precision_loss)]
-            let height = height.unwrap_or(image.height() as f32).round() as i32;
+            let height = height.unwrap_or_else(|| image.height() as f32).round() as i32;
 
             frame.set_size(width, height);
         }
@@ -864,42 +864,42 @@ impl FltkRenderer {
                             );
                         }
                     } else if let Ok(manifest_path) = std::env::var("CARGO_MANIFEST_DIR") {
-                        if let Ok(path) = std::path::PathBuf::from_str(&manifest_path) {
-                            let source = source
-                                .chars()
-                                .skip_while(|x| *x == '/' || *x == '\\')
-                                .collect::<String>();
+                        let Ok(path) = std::path::PathBuf::from_str(&manifest_path);
 
-                            if let Some(path) = path
-                                .parent()
-                                .and_then(|x| x.parent())
-                                .map(|x| x.join("app-website").join("public").join(source))
-                            {
-                                if let Ok(path) = path.canonicalize() {
-                                    if path.is_file() {
-                                        let image = SharedImage::load(path)?;
+                        let source = source
+                            .chars()
+                            .skip_while(|x| *x == '/' || *x == '\\')
+                            .collect::<String>();
 
-                                        if width.is_some() || height.is_some() {
-                                            #[allow(clippy::cast_possible_truncation)]
-                                            let width = calc_number(
-                                                element.width.unwrap_or_default(),
-                                                context.width,
-                                            )
-                                            .round()
-                                                as i32;
-                                            #[allow(clippy::cast_possible_truncation)]
-                                            let height = calc_number(
-                                                element.height.unwrap_or_default(),
-                                                context.height,
-                                            )
-                                            .round()
-                                                as i32;
+                        if let Some(path) = path
+                            .parent()
+                            .and_then(|x| x.parent())
+                            .map(|x| x.join("app-website").join("public").join(source))
+                        {
+                            if let Ok(path) = path.canonicalize() {
+                                if path.is_file() {
+                                    let image = SharedImage::load(path)?;
 
-                                            frame.set_size(width, height);
-                                        }
+                                    if width.is_some() || height.is_some() {
+                                        #[allow(clippy::cast_possible_truncation)]
+                                        let width = calc_number(
+                                            element.width.unwrap_or_default(),
+                                            context.width,
+                                        )
+                                        .round()
+                                            as i32;
+                                        #[allow(clippy::cast_possible_truncation)]
+                                        let height = calc_number(
+                                            element.height.unwrap_or_default(),
+                                            context.height,
+                                        )
+                                        .round()
+                                            as i32;
 
-                                        frame.set_image_scaled(Some(image));
+                                        frame.set_size(width, height);
                                     }
+
+                                    frame.set_image_scaled(Some(image));
                                 }
                             }
                         }
