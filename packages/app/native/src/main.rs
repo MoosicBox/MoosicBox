@@ -5,6 +5,7 @@ use std::sync::Arc;
 use moosicbox_app_native_lib::router::Router;
 use moosicbox_env_utils::{default_env_usize, option_env_i32, option_env_u16};
 use moosicbox_library_models::ApiAlbum;
+use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_paging::Page;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -48,7 +49,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 log::debug!("album: {album:?}");
 
-                moosicbox_app_native_ui::album(album)
+                let response = reqwest::get(format!(
+                    "{}/menu/album/versions?moosicboxProfile=master&albumId={album_id}",
+                    std::env::var("MOOSICBOX_HOST")
+                        .as_deref()
+                        .unwrap_or("http://localhost:8500")
+                ))
+                .await?;
+
+                if !response.status().is_success() {
+                    log::debug!("Error: {}", response.status());
+                }
+
+                let versions: Vec<ApiAlbumVersion> = response.json().await?;
+
+                log::debug!("versions: {versions:?}");
+
+                moosicbox_app_native_ui::album(album, &versions)
                     .into_string()
                     .try_into()?
             } else {

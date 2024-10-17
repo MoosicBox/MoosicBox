@@ -12,6 +12,9 @@ version     = "0.1.0"
 
 [dependencies]
 moosicbox_library_models = { version = "0.1.0", path = "../../../library/models", default-features = false }
+moosicbox_menu_models = { version = "0.1.0", path = "../../../menu/models", default-features = false, features = [
+    "api",
+] }
 
 maud = { workspace = true }
 

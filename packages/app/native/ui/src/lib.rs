@@ -2,7 +2,8 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use maud::{html, Markup};
-use moosicbox_library_models::{ApiAlbum, ApiLibraryAlbum};
+use moosicbox_library_models::{ApiAlbum, ApiLibraryAlbum, ApiTrack};
+use moosicbox_menu_models::api::ApiAlbumVersion;
 
 #[must_use]
 pub fn sidebar_navigation() -> Markup {
@@ -110,7 +111,7 @@ fn album_cover_url(album: &ApiLibraryAlbum, width: u16, height: u16) -> String {
 }
 
 #[must_use]
-pub fn album_page_content(album: ApiAlbum) -> Markup {
+pub fn album_page_content(album: ApiAlbum, versions: &[ApiAlbumVersion]) -> Markup {
     let ApiAlbum::Library(album) = album;
 
     let size: u16 = 200;
@@ -131,12 +132,41 @@ pub fn album_page_content(album: ApiAlbum) -> Markup {
                 }
             }
         }
+        div {
+            @if let Some(version) = versions.first() {
+                table {
+                    thead {
+                        tr{
+                            th { ("#") }
+                            th { ("Title") }
+                            th { ("Artist") }
+                            th { ("Time") }
+                        }
+                    }
+                    tbody {
+                        @for track in version.tracks.iter().filter_map(|x| match x {
+                            ApiTrack::Library { data, .. } => Some(data),
+                            ApiTrack::Tidal { .. } |
+                            ApiTrack::Qobuz { .. } |
+                            ApiTrack::Yt { .. } => None,
+                        }) {
+                            tr {
+                                td { (track.number) }
+                                td { (track.title) }
+                                td { (track.artist) }
+                                td { (track.duration) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 #[must_use]
-pub fn album(album: ApiAlbum) -> Markup {
-    page(&album_page_content(album))
+pub fn album(album: ApiAlbum, versions: &[ApiAlbumVersion]) -> Markup {
+    page(&album_page_content(album, versions))
 }
 
 #[must_use]
