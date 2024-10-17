@@ -22,13 +22,14 @@ use moosicbox_library::{
     models::{ApiAlbum, ApiArtist, ApiTrack},
     LibraryMusicApi,
 };
+use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_music_api::{AlbumFilters, AlbumsRequest, MusicApis, SourceToMusicApi as _};
 use moosicbox_paging::{Page, PagingRequest};
 use serde::Deserialize;
 use thiserror::Error;
 
 use crate::library::{
-    albums::{add_album, get_album_versions, refavorite_album, remove_album, ApiAlbumVersion},
+    albums::{add_album, get_album_versions, refavorite_album, remove_album},
     artists::{get_all_artists, ArtistFilters, ArtistsRequest},
     get_album, get_artist, get_artist_albums, GetArtistError,
 };

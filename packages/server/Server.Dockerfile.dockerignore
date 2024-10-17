@@ -23,6 +23,7 @@
 !/packages/logging
 !/packages/mdns
 !/packages/menu
+!/packages/menu/models
 !/packages/middleware
 !/packages/music_api
 !/packages/openport

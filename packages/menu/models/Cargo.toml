@@ -1,0 +1,34 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools"]
+description = "MoosicBox menu models package"
+edition     = "2021"
+keywords    = ["album", "artist", "menu", "playlist", "track"]
+license     = "MPL-2.0"
+name        = "moosicbox_menu_models"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_assert         = { version = "0.1.0", path = "../../assert", default-features = false }
+moosicbox_core           = { version = "0.1.0", path = "../../core", default-features = false }
+moosicbox_library_models = { version = "0.1.0", path = "../../library/models", default-features = false }
+
+# API Dependencies
+utoipa = { workspace = true, optional = true }
+
+log   = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+
+[features]
+default = ["api", "openapi"]
+
+fail-on-warnings = []
+
+api = ["moosicbox_library_models/api"]
+openapi = [
+    "dep:utoipa",
+    "moosicbox_core/openapi",
+    "moosicbox_library_models/openapi",
+]

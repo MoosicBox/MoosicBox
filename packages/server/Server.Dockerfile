@@ -31,6 +31,7 @@ RUN cat Cargo.toml | \
     \"packages\/logging\",\r\
     \"packages\/mdns\",\r\
     \"packages\/menu\",\r\
+    \"packages\/menu/models\",\r\
     \"packages\/middleware\",\r\
     \"packages\/music_api\",\r\
     \"packages\/openport\",\r\
@@ -79,6 +80,7 @@ COPY packages/library/models/Cargo.toml packages/library/models/Cargo.toml
 COPY packages/logging/Cargo.toml packages/logging/Cargo.toml
 COPY packages/mdns/Cargo.toml packages/mdns/Cargo.toml
 COPY packages/menu/Cargo.toml packages/menu/Cargo.toml
+COPY packages/menu/models/Cargo.toml packages/menu/models/Cargo.toml
 COPY packages/middleware/Cargo.toml packages/middleware/Cargo.toml
 COPY packages/music_api/Cargo.toml packages/music_api/Cargo.toml
 COPY packages/openport/Cargo.toml packages/openport/Cargo.toml
@@ -130,6 +132,7 @@ packages/library/models|\
 packages/logging|\
 packages/mdns|\
 packages/menu|\
+packages/menu/models|\
 packages/middleware|\
 packages/music_api|\
 packages/openport|\

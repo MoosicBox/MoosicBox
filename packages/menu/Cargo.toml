@@ -15,6 +15,7 @@ moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = f
 moosicbox_core = { version = "0.1.0", path = "../core", default-features = false }
 moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
 moosicbox_library = { version = "0.1.0", path = "../library", default-features = false }
+moosicbox_menu_models = { version = "0.1.0", path = "models", default-features = false }
 moosicbox_music_api = { version = "0.1.0", path = "../music_api", features = [
     "db",
 ] }
@@ -39,5 +40,15 @@ fail-on-warnings = []
 
 local = ["moosicbox_scan/local"]
 
-api     = ["dep:actix-web", "moosicbox_library/api", "moosicbox_music_api/api"]
-openapi = ["dep:utoipa", "moosicbox_core/openapi", "moosicbox_library/openapi"]
+api = [
+    "dep:actix-web",
+    "moosicbox_library/api",
+    "moosicbox_menu_models/api",
+    "moosicbox_music_api/api",
+]
+openapi = [
+    "dep:utoipa",
+    "moosicbox_core/openapi",
+    "moosicbox_library/openapi",
+    "moosicbox_menu_models/openapi",
+]

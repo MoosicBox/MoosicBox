@@ -1,18 +1,16 @@
 use std::sync::{Arc, PoisonError};
 
-use moosicbox_core::{
-    sqlite::{
-        db::DbError,
-        models::{Album, ApiSource, Artist, Id, ToApi, TrackApiSource},
-    },
-    types::AudioFormat,
+use moosicbox_core::sqlite::{
+    db::DbError,
+    models::{Album, ApiSource, Artist, Id, TrackApiSource},
 };
 use moosicbox_database::{profiles::LibraryDatabase, query::*, DatabaseError, DatabaseValue};
 use moosicbox_library::{
     db::{delete_track_sizes_by_track_id, delete_tracks},
-    models::{track_source_to_u8, ApiTrack, LibraryAlbum, LibraryTrack},
+    models::{track_source_to_u8, LibraryAlbum},
     LibraryAlbumTracksError, LibraryFavoriteAlbumsError, LibraryMusicApi,
 };
+use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_api::{AlbumType, AlbumsRequest, LibraryAlbumError, MusicApi, TracksError};
 use moosicbox_scan::{music_api::ScanError, output::ScanOutput};
 use moosicbox_search::{
@@ -20,7 +18,6 @@ use moosicbox_search::{
     DeleteFromIndexError, PopulateIndexError,
 };
 use moosicbox_session::delete_session_playlist_tracks_by_track_id;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
@@ -48,29 +45,6 @@ impl<T> From<PoisonError<T>> for GetAlbumTracksError {
     }
 }
 
-#[derive(Clone)]
-pub struct AlbumVersion {
-    pub tracks: Vec<LibraryTrack>,
-    pub format: Option<AudioFormat>,
-    pub bit_depth: Option<u8>,
-    pub sample_rate: Option<u32>,
-    pub channels: Option<u8>,
-    pub source: TrackApiSource,
-}
-
-impl ToApi<ApiAlbumVersion> for AlbumVersion {
-    fn to_api(self) -> ApiAlbumVersion {
-        ApiAlbumVersion {
-            tracks: self.tracks.iter().map(|track| track.to_api()).collect(),
-            format: self.format,
-            bit_depth: self.bit_depth,
-            sample_rate: self.sample_rate,
-            channels: self.channels,
-            source: self.source,
-        }
-    }
-}
-
 pub fn sort_album_versions(versions: &mut [AlbumVersion]) {
     versions.sort_by(|a, b| {
         b.sample_rate
@@ -83,18 +57,6 @@ pub fn sort_album_versions(versions: &mut [AlbumVersion]) {
             .cmp(&a.bit_depth.unwrap_or_default())
     });
     versions.sort_by(|a, b| track_source_to_u8(a.source).cmp(&track_source_to_u8(b.source)));
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub struct ApiAlbumVersion {
-    pub tracks: Vec<ApiTrack>,
-    pub format: Option<AudioFormat>,
-    pub bit_depth: Option<u8>,
-    pub sample_rate: Option<u32>,
-    pub channels: Option<u8>,
-    pub source: TrackApiSource,
 }
 
 #[derive(Debug, Error)]

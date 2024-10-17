@@ -41,6 +41,7 @@ members = [
     "packages/logging",
     "packages/mdns",
     "packages/menu",
+    "packages/menu/models",
     "packages/middleware",
     "packages/moosicbox",
     "packages/music_api",
