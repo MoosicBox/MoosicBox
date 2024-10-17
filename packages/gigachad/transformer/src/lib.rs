@@ -674,6 +674,221 @@ impl Element {
     }
 }
 
+pub struct TableIter<'a> {
+    pub headings:
+        Option<Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'a ContainerElement> + 'a>> + 'a>>,
+    pub rows: Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'a ContainerElement> + 'a>> + 'a>,
+}
+
+pub struct TableIterMut<'a> {
+    pub headings: Option<
+        Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'a mut ContainerElement> + 'a>> + 'a>,
+    >,
+    pub rows:
+        Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'a mut ContainerElement> + 'a>> + 'a>,
+}
+
+impl Element {
+    /// # Panics
+    ///
+    /// Will panic if `Element` is not a table
+    #[must_use]
+    pub fn table_iter<'a, 'b>(&'a self) -> TableIter<'b>
+    where
+        'a: 'b,
+    {
+        let Self::Table { element: container } = self else {
+            panic!("Not a table");
+        };
+
+        let mut rows_builder: Option<Vec<Box<dyn Iterator<Item = &'b ContainerElement>>>> = None;
+        let mut headings: Option<
+            Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b ContainerElement>>>>,
+        > = None;
+        let mut rows: Box<
+            dyn Iterator<Item = Box<dyn Iterator<Item = &'b ContainerElement>>> + 'b,
+        > = Box::new(std::iter::empty());
+
+        for element in &container.elements {
+            match element {
+                Self::THead { element } => {
+                    headings = Some(Box::new(
+                        element
+                            .elements
+                            .iter()
+                            .filter_map(|x| x.container_element())
+                            .map(|x| {
+                                Box::new(x.elements.iter().filter_map(|x| x.container_element()))
+                                    as Box<dyn Iterator<Item = &ContainerElement>>
+                            }),
+                    )
+                        as Box<
+                            dyn Iterator<Item = Box<dyn Iterator<Item = &'b ContainerElement>>>
+                                + 'b,
+                        >);
+                }
+                Self::TBody { element } => {
+                    rows = Box::new(
+                        element
+                            .elements
+                            .iter()
+                            .filter_map(|x| x.container_element())
+                            .map(|x| {
+                                Box::new(x.elements.iter().filter_map(|x| x.container_element()))
+                                    as Box<dyn Iterator<Item = &ContainerElement>>
+                            }),
+                    )
+                        as Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b ContainerElement>>>>;
+                }
+                Self::TR { element } => {
+                    if let Some(builder) = &mut rows_builder {
+                        builder.push(Box::new(
+                            element
+                                .elements
+                                .iter()
+                                .filter_map(|x| x.container_element()),
+                        )
+                            as Box<dyn Iterator<Item = &'b ContainerElement>>);
+                    } else {
+                        rows_builder.replace(vec![Box::new(
+                            element
+                                .elements
+                                .iter()
+                                .filter_map(|x| x.container_element()),
+                        )
+                            as Box<dyn Iterator<Item = &'b ContainerElement>>]);
+                    }
+                }
+                _ => {
+                    panic!("Invalid table element: {element}");
+                }
+            }
+        }
+
+        if let Some(rows_builder) = rows_builder {
+            rows = Box::new(rows_builder.into_iter());
+        }
+
+        TableIter { headings, rows }
+    }
+
+    /// # Panics
+    ///
+    /// Will panic if `Element` is not a table
+    #[must_use]
+    pub fn table_iter_mut<'a, 'b>(&'a mut self) -> TableIterMut<'b>
+    where
+        'a: 'b,
+    {
+        self.table_iter_mut_with_observer(None::<fn(&mut Self)>)
+    }
+
+    /// # Panics
+    ///
+    /// Will panic if `Element` is not a table
+    #[must_use]
+    pub fn table_iter_mut_with_observer<'a, 'b>(
+        &'a mut self,
+        mut observer: Option<impl FnMut(&mut Self)>,
+    ) -> TableIterMut<'b>
+    where
+        'a: 'b,
+    {
+        let Self::Table { element: container } = self else {
+            panic!("Not a table");
+        };
+
+        let mut rows_builder: Option<Vec<Box<dyn Iterator<Item = &'b mut ContainerElement>>>> =
+            None;
+        let mut headings: Option<
+            Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b mut ContainerElement>>> + 'b>,
+        > = None;
+        let mut rows: Box<
+            dyn Iterator<Item = Box<dyn Iterator<Item = &'b mut ContainerElement>>> + 'b,
+        > = Box::new(std::iter::empty());
+
+        for element in &mut container.elements {
+            if let Some(observer) = &mut observer {
+                match element {
+                    Self::THead { .. } | Self::TBody { .. } | Self::TR { .. } => {
+                        observer(element);
+                    }
+                    _ => {}
+                }
+            }
+            match element {
+                Self::THead { element } => {
+                    headings = Some(Box::new(
+                        element
+                            .elements
+                            .iter_mut()
+                            .filter_map(|x| x.container_element_mut())
+                            .map(|x| {
+                                Box::new(
+                                    x.elements
+                                        .iter_mut()
+                                        .filter_map(|x| x.container_element_mut()),
+                                )
+                                    as Box<dyn Iterator<Item = &mut ContainerElement>>
+                            }),
+                    )
+                        as Box<
+                            dyn Iterator<Item = Box<dyn Iterator<Item = &'b mut ContainerElement>>>
+                                + 'b,
+                        >);
+                }
+                Self::TBody { element } => {
+                    rows = Box::new(
+                        element
+                            .elements
+                            .iter_mut()
+                            .filter_map(|x| x.container_element_mut())
+                            .map(|x| {
+                                Box::new(
+                                    x.elements
+                                        .iter_mut()
+                                        .filter_map(|x| x.container_element_mut()),
+                                )
+                                    as Box<dyn Iterator<Item = &mut ContainerElement>>
+                            }),
+                    )
+                        as Box<
+                            dyn Iterator<Item = Box<dyn Iterator<Item = &'b mut ContainerElement>>>,
+                        >;
+                }
+                Self::TR { element } => {
+                    if let Some(builder) = &mut rows_builder {
+                        builder.push(Box::new(
+                            element
+                                .elements
+                                .iter_mut()
+                                .filter_map(|x| x.container_element_mut()),
+                        )
+                            as Box<dyn Iterator<Item = &'b mut ContainerElement>>);
+                    } else {
+                        rows_builder.replace(vec![Box::new(
+                            element
+                                .elements
+                                .iter_mut()
+                                .filter_map(|x| x.container_element_mut()),
+                        )
+                            as Box<dyn Iterator<Item = &'b mut ContainerElement>>]);
+                    }
+                }
+                _ => {
+                    panic!("Invalid table element: {element}");
+                }
+            }
+        }
+
+        if let Some(rows_builder) = rows_builder {
+            rows = Box::new(rows_builder.into_iter());
+        }
+
+        TableIterMut { headings, rows }
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum HeaderSize {
     H1,

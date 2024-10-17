@@ -2,7 +2,10 @@ use std::sync::atomic::AtomicU16;
 
 use itertools::Itertools;
 
-use crate::{ContainerElement, Element, LayoutDirection, LayoutOverflow, LayoutPosition, Number};
+use crate::{
+    ContainerElement, Element, LayoutDirection, LayoutOverflow, LayoutPosition, Number, TableIter,
+    TableIterMut,
+};
 
 static SCROLLBAR_SIZE: AtomicU16 = AtomicU16::new(16);
 
@@ -16,6 +19,322 @@ pub fn set_scrollbar_size(size: u16) {
 
 pub trait Calc {
     fn calc(&mut self);
+}
+
+impl Calc for Element {
+    fn calc(&mut self) {
+        if let Self::Table { .. } = self {
+            self.calc_table();
+        } else if let Some(container) = self.container_element_mut() {
+            container.calc();
+        }
+    }
+}
+
+impl Element {
+    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::cognitive_complexity)]
+    fn calc_table(&mut self) {
+        fn size_cells<'a>(
+            iter: impl Iterator<Item = &'a mut ContainerElement>,
+            col_sizes: &mut Vec<Option<f32>>,
+            cols: &mut Vec<&'a mut ContainerElement>,
+        ) -> f32 {
+            let mut col_count = 0;
+
+            let sized_cols = iter.enumerate().map(|(i, x)| {
+                col_count += 1;
+
+                let width = x.contained_sized_width(true);
+                let height = x.contained_sized_height(true);
+
+                if i >= cols.len() {
+                    cols.push(x);
+                } else {
+                    cols[i] = x;
+                }
+
+                (width, height)
+            });
+
+            let mut max_height = None;
+
+            for (i, (width, height)) in sized_cols.enumerate() {
+                if let Some(width) = width {
+                    while i >= col_sizes.len() {
+                        col_sizes.push(None);
+                    }
+
+                    if let Some(col) = col_sizes[i] {
+                        if width > col {
+                            col_sizes[i].replace(width);
+                        }
+                    } else {
+                        col_sizes[i] = Some(width);
+                    }
+                }
+                if let Some(height) = height {
+                    if let Some(max) = max_height {
+                        if height > max {
+                            max_height.replace(height);
+                        }
+                    } else {
+                        max_height = Some(height);
+                    }
+                }
+            }
+
+            let row_height = max_height.unwrap_or(25.0);
+
+            for container in cols {
+                container.calculated_height.replace(row_height);
+            }
+
+            row_height
+        }
+
+        moosicbox_logging::debug_or_trace!(("calc_table"), ("calc_table: {self:?}"));
+
+        let (container_width, container_height) = {
+            let Self::Table { element: container } = self else {
+                panic!("Not a table");
+            };
+
+            let (Some(container_width), Some(container_height)) = (
+                container.calculated_width_minus_padding(),
+                container.calculated_height_minus_padding(),
+            ) else {
+                moosicbox_assert::die_or_panic!(
+                    "calc_table requires calculated_width and calculated_height to be set"
+                );
+            };
+
+            container.calc_hardsized_elements();
+
+            (container_width, container_height)
+        };
+
+        // calc max sized cell sizes
+        let (body_height, heading_height) = {
+            let col_count = {
+                let TableIter { rows, headings } = self.table_iter();
+
+                let heading_count = headings.map_or(0, Iterator::count);
+                let body_count = rows.map(Iterator::count).max().unwrap_or(0);
+
+                std::cmp::max(heading_count, body_count)
+            };
+
+            let mut body_height = 0.0;
+            let mut heading_height = None;
+            let mut col_sizes = vec![None; col_count];
+            let mut cols = Vec::with_capacity(col_count);
+
+            // Initial cell size
+            {
+                #[allow(clippy::cast_precision_loss)]
+                let evenly_split_size = container_width / (col_count as f32);
+
+                let TableIterMut { rows, headings } = self.table_iter_mut();
+
+                if let Some(headings) = headings {
+                    for heading in headings {
+                        #[allow(clippy::manual_inspect)]
+                        let heading = heading.map(|x| {
+                            if x.height.is_some() {
+                                x.calc_sized_element_height(container_height);
+                            } else if x.calculated_height.is_none() {
+                                x.calculated_height = Some(25.0);
+                            }
+                            if x.width.is_some() {
+                                x.calc_sized_element_width(container_width);
+                            } else if x.calculated_width.is_none() {
+                                x.calculated_width = Some(evenly_split_size);
+                                x.calc_unsized_element_size(evenly_split_size);
+                            }
+                            x
+                        });
+                        let height = size_cells(heading, &mut col_sizes, &mut cols);
+                        heading_height.replace(heading_height.map_or(height, |x| x + height));
+                        log::trace!("calc_table: increased heading_height={heading_height:?}");
+                    }
+                }
+
+                for row in rows {
+                    #[allow(clippy::manual_inspect)]
+                    let row = row.map(|x| {
+                        if x.height.is_some() {
+                            x.calc_sized_element_height(container_height);
+                        } else if x.calculated_height.is_none() {
+                            x.calculated_height = Some(25.0);
+                        }
+                        if x.width.is_some() {
+                            x.calc_sized_element_width(container_width);
+                        } else if x.calculated_width.is_none() {
+                            x.calculated_width = Some(evenly_split_size);
+                            x.calc_unsized_element_size(evenly_split_size);
+                        }
+                        x
+                    });
+                    body_height += size_cells(row, &mut col_sizes, &mut cols);
+                    log::trace!("calc_table: increased body_height={body_height}");
+                }
+            }
+
+            // Set unsized cells to remainder size
+            let TableIterMut { rows, headings } = self.table_iter_mut();
+
+            let unsized_col_count = col_sizes.iter().filter(|x| x.is_none()).count();
+            let sized_width: f32 = col_sizes.iter().flatten().sum();
+
+            #[allow(clippy::cast_precision_loss)]
+            let evenly_split_remaining_size = if unsized_col_count == 0 {
+                0.0
+            } else {
+                (container_width - sized_width) / (unsized_col_count as f32)
+            };
+
+            #[allow(clippy::cast_precision_loss)]
+            let evenly_split_increase_size = if unsized_col_count == 0 {
+                (container_width - sized_width) / (col_count as f32)
+            } else {
+                0.0
+            };
+
+            log::debug!("calc_table: col_sizes={:?}", col_sizes);
+
+            if let Some(headings) = headings {
+                for heading in headings {
+                    for (th, size) in heading.zip(&col_sizes) {
+                        if let Some(size) = size {
+                            th.calculated_width = Some(*size + evenly_split_increase_size);
+                        } else {
+                            th.calculated_width = Some(evenly_split_remaining_size);
+                        }
+                    }
+                }
+            }
+
+            for row in rows {
+                for (td, size) in row.zip(&col_sizes) {
+                    if let Some(size) = size {
+                        td.calculated_width = Some(*size + evenly_split_increase_size);
+                    } else {
+                        td.calculated_width = Some(evenly_split_remaining_size);
+                    }
+                }
+            }
+
+            (body_height, heading_height)
+        };
+
+        let Self::Table { element: container } = self else {
+            panic!("Not a table");
+        };
+
+        container
+            .calculated_height
+            .replace(heading_height.unwrap_or(0.0) + body_height);
+
+        {
+            for element in &mut container.elements {
+                match element {
+                    Self::THead { element } => {
+                        if element.width.is_none() {
+                            element.calculated_width.replace(container_width);
+                        }
+                        if element.height.is_none() {
+                            element
+                                .calculated_height
+                                .replace(heading_height.unwrap_or(0.0));
+                        }
+
+                        for element in element
+                            .elements
+                            .iter_mut()
+                            .filter_map(|x| x.container_element_mut())
+                        {
+                            if element.width.is_none() {
+                                element.calculated_width.replace(container_width);
+                            }
+                            if element.height.is_none() {
+                                element.calculated_height.replace(
+                                    element
+                                        .elements
+                                        .iter()
+                                        .filter_map(|x| x.container_element())
+                                        .find_map(|x| x.calculated_height)
+                                        .unwrap_or(0.0),
+                                );
+                            }
+                        }
+                    }
+                    Self::TBody { element } => {
+                        if element.width.is_none() {
+                            element.calculated_width.replace(container_width);
+                        }
+                        if element.height.is_none() {
+                            element.calculated_height.replace(body_height);
+                        }
+
+                        for element in element
+                            .elements
+                            .iter_mut()
+                            .filter_map(|x| x.container_element_mut())
+                        {
+                            if element.width.is_none() {
+                                element.calculated_width.replace(container_width);
+                            }
+                            if element.height.is_none() {
+                                element.calculated_height.replace(
+                                    element
+                                        .elements
+                                        .iter()
+                                        .filter_map(|x| x.container_element())
+                                        .find_map(|x| x.calculated_height)
+                                        .unwrap_or(0.0),
+                                );
+                            }
+                        }
+                    }
+                    Self::TR { element } => {
+                        if element.width.is_none() {
+                            element.calculated_width.replace(container_width);
+                        }
+                        if element.height.is_none() {
+                            element.calculated_height.replace(
+                                element
+                                    .elements
+                                    .iter()
+                                    .filter_map(|x| x.container_element())
+                                    .find_map(|x| x.calculated_height)
+                                    .unwrap_or(0.0),
+                            );
+                        }
+                    }
+                    _ => {
+                        panic!("Invalid table element: {element}");
+                    }
+                }
+            }
+        }
+
+        let TableIterMut { rows, headings } = self.table_iter_mut();
+
+        if let Some(headings) = headings {
+            for heading in headings {
+                for th in heading {
+                    th.calc();
+                }
+            }
+        }
+
+        for row in rows {
+            for td in row {
+                td.calc();
+            }
+        }
+    }
 }
 
 impl Calc for ContainerElement {
@@ -39,7 +358,7 @@ impl ContainerElement {
 
         let direction = self.direction;
 
-        let (mut sized_elements, mut unsized_elements): (Vec<_>, Vec<_>) =
+        let (sized_elements, unsized_elements): (Vec<_>, Vec<_>) =
             self.elements.iter_mut().partition(|x| {
                 x.container_element().is_some_and(|x| match direction {
                     LayoutDirection::Row => x.width.is_some(),
@@ -48,14 +367,14 @@ impl ContainerElement {
             });
 
         let remainder = Self::calc_sized_element_sizes(
-            &mut sized_elements,
+            sized_elements.into_iter(),
             direction,
             container_width,
             container_height,
         );
 
         Self::calc_unsized_element_sizes(
-            &mut unsized_elements,
+            unsized_elements.into_iter(),
             direction,
             container_width,
             container_height,
@@ -112,8 +431,50 @@ impl ContainerElement {
         }
     }
 
-    fn calc_sized_element_sizes(
-        elements: &mut [&mut Element],
+    fn calc_sized_element_width(&mut self, container_width: f32) -> f32 {
+        let width = calc_number(self.width.unwrap(), container_width);
+        self.calculated_width.replace(width);
+        width
+    }
+
+    fn calc_sized_element_height(&mut self, container_height: f32) -> f32 {
+        let height = calc_number(self.height.unwrap(), container_height);
+        self.calculated_height.replace(height);
+        height
+    }
+
+    fn calc_sized_element_size(
+        &mut self,
+        direction: LayoutDirection,
+        container_width: f32,
+        container_height: f32,
+    ) -> f32 {
+        match direction {
+            LayoutDirection::Row => {
+                let width = calc_number(self.width.unwrap(), container_width);
+                let height = self
+                    .height
+                    .map_or(container_height, |x| calc_number(x, container_height));
+                self.calculated_width.replace(width);
+                self.calculated_height.replace(height);
+            }
+            LayoutDirection::Column => {
+                let width = self
+                    .width
+                    .map_or(container_width, |x| calc_number(x, container_width));
+                let height = calc_number(self.height.unwrap(), container_height);
+                self.calculated_width.replace(width);
+                self.calculated_height.replace(height);
+            }
+        }
+        match direction {
+            LayoutDirection::Row => self.calculated_width.unwrap_or(0.0),
+            LayoutDirection::Column => self.calculated_height.unwrap_or(0.0),
+        }
+    }
+
+    fn calc_sized_element_sizes<'a>(
+        elements: impl Iterator<Item = &'a mut Element>,
         direction: LayoutDirection,
         container_width: f32,
         container_height: f32,
@@ -125,44 +486,44 @@ impl ContainerElement {
             LayoutDirection::Column => container_height,
         };
 
-        for element in elements
-            .iter_mut()
-            .filter_map(|x| x.container_element_mut())
-        {
-            match direction {
-                LayoutDirection::Row => {
-                    let width = calc_number(element.width.unwrap(), container_width);
-                    let height = element
-                        .height
-                        .map_or(container_height, |x| calc_number(x, container_height));
-                    element.calculated_width.replace(width);
-                    element.calculated_height.replace(height);
-                    element.calc_inner();
-                    remainder -= width;
-                }
-                LayoutDirection::Column => {
-                    let width = element
-                        .width
-                        .map_or(container_width, |x| calc_number(x, container_width));
-                    let height = calc_number(element.height.unwrap(), container_height);
-                    element.calculated_width.replace(width);
-                    element.calculated_height.replace(height);
-                    element.calc_inner();
-                    remainder -= height;
-                }
+        for element in elements {
+            if let Some(container) = element.container_element_mut() {
+                remainder -=
+                    container.calc_sized_element_size(direction, container_width, container_height);
             }
+
+            element.calc();
         }
 
         remainder
     }
 
-    fn calc_unsized_element_sizes(
-        elements: &mut [&mut Element],
+    fn calc_unsized_element_size(&mut self, remainder: f32) {
+        let (Some(container_width), Some(container_height)) = (
+            self.calculated_width_minus_padding(),
+            self.calculated_height_minus_padding(),
+        ) else {
+            moosicbox_assert::die_or_panic!(
+                    "calc_unsized_element_size requires calculated_width and calculated_height to be set"
+                );
+        };
+        Self::calc_unsized_element_sizes(
+            self.elements.iter_mut(),
+            self.direction,
+            container_width,
+            container_height,
+            remainder,
+        );
+    }
+
+    fn calc_unsized_element_sizes<'a>(
+        elements: impl Iterator<Item = &'a mut Element>,
         direction: LayoutDirection,
         container_width: f32,
         container_height: f32,
         remainder: f32,
     ) {
+        let elements = elements.collect_vec();
         #[allow(clippy::cast_precision_loss)]
         let evenly_split_remaining_size = remainder / (elements.len() as f32);
 
@@ -182,32 +543,31 @@ impl ContainerElement {
             )
         );
 
-        for element in elements
-            .iter_mut()
-            .filter_map(|x| x.container_element_mut())
-        {
-            match direction {
-                LayoutDirection::Row => {
-                    let height = element
-                        .height
-                        .map_or(container_height, |x| calc_number(x, container_height));
-                    element.calculated_height.replace(height);
-                    element
-                        .calculated_width
-                        .replace(evenly_split_remaining_size);
-                    element.calc_inner();
-                }
-                LayoutDirection::Column => {
-                    let width = element
-                        .width
-                        .map_or(container_width, |x| calc_number(x, container_width));
-                    element.calculated_width.replace(width);
-                    element
-                        .calculated_height
-                        .replace(evenly_split_remaining_size);
-                    element.calc_inner();
+        for element in elements {
+            if let Some(container) = element.container_element_mut() {
+                match direction {
+                    LayoutDirection::Row => {
+                        let height = container
+                            .height
+                            .map_or(container_height, |x| calc_number(x, container_height));
+                        container.calculated_height.replace(height);
+                        container
+                            .calculated_width
+                            .replace(evenly_split_remaining_size);
+                    }
+                    LayoutDirection::Column => {
+                        let width = container
+                            .width
+                            .map_or(container_width, |x| calc_number(x, container_width));
+                        container.calculated_width.replace(width);
+                        container
+                            .calculated_height
+                            .replace(evenly_split_remaining_size);
+                    }
                 }
             }
+
+            element.calc();
         }
     }
 
@@ -3357,6 +3717,1516 @@ mod test {
                         },
                     }
                 ],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_can_calc_table_column_and_row_sizes() {
+        let mut container = ContainerElement {
+            elements: vec![Element::Table {
+                element: ContainerElement {
+                    elements: vec![
+                        Element::TR {
+                            element: ContainerElement {
+                                elements: vec![
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Div {
+                                                element: ContainerElement {
+                                                    elements: vec![],
+                                                    width: Some(Number::Integer(40)),
+                                                    height: Some(Number::Integer(10)),
+                                                    ..Default::default()
+                                                },
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Div {
+                                                element: ContainerElement {
+                                                    elements: vec![],
+                                                    width: Some(Number::Integer(30)),
+                                                    height: Some(Number::Integer(20)),
+                                                    ..Default::default()
+                                                },
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                ],
+                                ..Default::default()
+                            },
+                        },
+                        Element::TR {
+                            element: ContainerElement {
+                                elements: vec![
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Div {
+                                                element: ContainerElement {
+                                                    elements: vec![],
+                                                    width: Some(Number::Integer(10)),
+                                                    height: Some(Number::Integer(40)),
+                                                    ..Default::default()
+                                                },
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Div {
+                                                element: ContainerElement {
+                                                    elements: vec![],
+                                                    width: Some(Number::Integer(20)),
+                                                    height: Some(Number::Integer(30)),
+                                                    ..Default::default()
+                                                },
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                ],
+                                ..Default::default()
+                            },
+                        },
+                    ],
+                    ..Default::default()
+                },
+            }],
+            calculated_width: Some(70.0),
+            calculated_height: Some(80.0),
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![Element::Table {
+                    element: ContainerElement {
+                        elements: vec![
+                            Element::TR {
+                                element: ContainerElement {
+                                    elements: vec![
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: vec![Element::Div {
+                                                    element: ContainerElement {
+                                                        elements: vec![],
+                                                        calculated_width: Some(40.0),
+                                                        calculated_height: Some(10.0),
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                }],
+                                                calculated_width: Some(40.0),
+                                                calculated_height: Some(20.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: vec![Element::Div {
+                                                    element: ContainerElement {
+                                                        elements: vec![],
+                                                        calculated_width: Some(30.0),
+                                                        calculated_height: Some(20.0),
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                }],
+                                                calculated_width: Some(30.0),
+                                                calculated_height: Some(20.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                    ],
+                                    calculated_width: Some(70.0),
+                                    calculated_height: Some(20.0),
+                                    ..container.elements[0].container_element().unwrap().elements[0]
+                                        .container_element()
+                                        .unwrap()
+                                        .clone()
+                                },
+                            },
+                            Element::TR {
+                                element: ContainerElement {
+                                    elements: vec![
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: vec![Element::Div {
+                                                    element: ContainerElement {
+                                                        elements: vec![],
+                                                        calculated_width: Some(10.0),
+                                                        calculated_height: Some(40.0),
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                }],
+                                                calculated_width: Some(40.0),
+                                                calculated_height: Some(40.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: vec![Element::Div {
+                                                    element: ContainerElement {
+                                                        elements: vec![],
+                                                        calculated_width: Some(20.0),
+                                                        calculated_height: Some(30.0),
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                }],
+                                                calculated_width: Some(30.0),
+                                                calculated_height: Some(40.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                    ],
+                                    calculated_width: Some(70.0),
+                                    calculated_height: Some(40.0),
+                                    ..container.elements[0].container_element().unwrap().elements[1]
+                                        .container_element()
+                                        .unwrap()
+                                        .clone()
+                                },
+                            },
+                        ],
+                        calculated_width: Some(70.0),
+                        calculated_height: Some(20.0 + 40.0),
+                        ..container.elements[0].container_element().unwrap().clone()
+                    },
+                }],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_can_calc_table_column_and_row_sizes_and_expand_to_fill_width() {
+        let mut container = ContainerElement {
+            elements: vec![Element::Table {
+                element: ContainerElement {
+                    elements: vec![
+                        Element::TR {
+                            element: ContainerElement {
+                                elements: vec![
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Div {
+                                                element: ContainerElement {
+                                                    elements: vec![],
+                                                    width: Some(Number::Integer(40)),
+                                                    height: Some(Number::Integer(10)),
+                                                    ..Default::default()
+                                                },
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Div {
+                                                element: ContainerElement {
+                                                    elements: vec![],
+                                                    width: Some(Number::Integer(30)),
+                                                    height: Some(Number::Integer(20)),
+                                                    ..Default::default()
+                                                },
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                ],
+                                ..Default::default()
+                            },
+                        },
+                        Element::TR {
+                            element: ContainerElement {
+                                elements: vec![
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Div {
+                                                element: ContainerElement {
+                                                    elements: vec![],
+                                                    width: Some(Number::Integer(10)),
+                                                    height: Some(Number::Integer(40)),
+                                                    ..Default::default()
+                                                },
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Div {
+                                                element: ContainerElement {
+                                                    elements: vec![],
+                                                    width: Some(Number::Integer(20)),
+                                                    height: Some(Number::Integer(30)),
+                                                    ..Default::default()
+                                                },
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                ],
+                                ..Default::default()
+                            },
+                        },
+                    ],
+                    ..Default::default()
+                },
+            }],
+            calculated_width: Some(100.0),
+            calculated_height: Some(80.0),
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![Element::Table {
+                    element: ContainerElement {
+                        elements: vec![
+                            Element::TR {
+                                element: ContainerElement {
+                                    elements: vec![
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: vec![Element::Div {
+                                                    element: ContainerElement {
+                                                        elements: vec![],
+                                                        calculated_width: Some(40.0),
+                                                        calculated_height: Some(10.0),
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                }],
+                                                calculated_width: Some(55.0),
+                                                calculated_height: Some(20.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: vec![Element::Div {
+                                                    element: ContainerElement {
+                                                        elements: vec![],
+                                                        calculated_width: Some(30.0),
+                                                        calculated_height: Some(20.0),
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                }],
+                                                calculated_width: Some(45.0),
+                                                calculated_height: Some(20.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                    ],
+                                    calculated_width: Some(100.0),
+                                    calculated_height: Some(20.0),
+                                    ..container.elements[0].container_element().unwrap().elements[0]
+                                        .container_element()
+                                        .unwrap()
+                                        .clone()
+                                },
+                            },
+                            Element::TR {
+                                element: ContainerElement {
+                                    elements: vec![
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: vec![Element::Div {
+                                                    element: ContainerElement {
+                                                        elements: vec![],
+                                                        calculated_width: Some(10.0),
+                                                        calculated_height: Some(40.0),
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                }],
+                                                calculated_width: Some(55.0),
+                                                calculated_height: Some(40.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: vec![Element::Div {
+                                                    element: ContainerElement {
+                                                        elements: vec![],
+                                                        calculated_width: Some(20.0),
+                                                        calculated_height: Some(30.0),
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                }],
+                                                calculated_width: Some(45.0),
+                                                calculated_height: Some(40.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                    ],
+                                    calculated_width: Some(100.0),
+                                    calculated_height: Some(40.0),
+                                    ..container.elements[0].container_element().unwrap().elements[1]
+                                        .container_element()
+                                        .unwrap()
+                                        .clone()
+                                },
+                            },
+                        ],
+                        calculated_width: Some(100.0),
+                        calculated_height: Some(20.0 + 40.0),
+                        ..container.elements[0].container_element().unwrap().clone()
+                    },
+                }],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_can_calc_table_column_and_row_sizes_and_auto_size_unsized_cells() {
+        let mut container = ContainerElement {
+            elements: vec![Element::Table {
+                element: ContainerElement {
+                    elements: vec![
+                        Element::TR {
+                            element: ContainerElement {
+                                elements: vec![
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Div {
+                                                element: ContainerElement {
+                                                    elements: vec![],
+                                                    width: Some(Number::Integer(40)),
+                                                    height: Some(Number::Integer(10)),
+                                                    ..Default::default()
+                                                },
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Div {
+                                                element: ContainerElement {
+                                                    elements: vec![],
+                                                    ..Default::default()
+                                                },
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                ],
+                                ..Default::default()
+                            },
+                        },
+                        Element::TR {
+                            element: ContainerElement {
+                                elements: vec![
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Div {
+                                                element: ContainerElement {
+                                                    elements: vec![],
+                                                    ..Default::default()
+                                                },
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Div {
+                                                element: ContainerElement {
+                                                    elements: vec![],
+                                                    width: Some(Number::Integer(20)),
+                                                    height: Some(Number::Integer(30)),
+                                                    ..Default::default()
+                                                },
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                ],
+                                ..Default::default()
+                            },
+                        },
+                    ],
+                    ..Default::default()
+                },
+            }],
+            calculated_width: Some(100.0),
+            calculated_height: Some(80.0),
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![Element::Table {
+                    element: ContainerElement {
+                        elements: vec![
+                            Element::TR {
+                                element: ContainerElement {
+                                    elements: vec![
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: vec![Element::Div {
+                                                    element: ContainerElement {
+                                                        elements: vec![],
+                                                        calculated_width: Some(40.0),
+                                                        calculated_height: Some(10.0),
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                }],
+                                                calculated_width: Some(60.0),
+                                                calculated_height: Some(10.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: vec![Element::Div {
+                                                    element: ContainerElement {
+                                                        elements: vec![],
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                }],
+                                                calculated_width: Some(40.0),
+                                                calculated_height: Some(10.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                    ],
+                                    calculated_width: Some(100.0),
+                                    calculated_height: Some(10.0),
+                                    ..container.elements[0].container_element().unwrap().elements[0]
+                                        .container_element()
+                                        .unwrap()
+                                        .clone()
+                                },
+                            },
+                            Element::TR {
+                                element: ContainerElement {
+                                    elements: vec![
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: vec![Element::Div {
+                                                    element: ContainerElement {
+                                                        elements: vec![],
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                }],
+                                                calculated_width: Some(60.0),
+                                                calculated_height: Some(30.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: vec![Element::Div {
+                                                    element: ContainerElement {
+                                                        elements: vec![],
+                                                        calculated_width: Some(20.0),
+                                                        calculated_height: Some(30.0),
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                }],
+                                                calculated_width: Some(40.0),
+                                                calculated_height: Some(30.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                    ],
+                                    calculated_width: Some(100.0),
+                                    calculated_height: Some(30.0),
+                                    ..container.elements[0].container_element().unwrap().elements[1]
+                                        .container_element()
+                                        .unwrap()
+                                        .clone()
+                                },
+                            },
+                        ],
+                        calculated_width: Some(100.0),
+                        calculated_height: Some(10.0 + 30.0),
+                        ..container.elements[0].container_element().unwrap().clone()
+                    },
+                }],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_can_calc_table_column_and_row_sizes_and_auto_size_unsized_cells_when_all_are_unsized() {
+        let mut container = ContainerElement {
+            elements: vec![Element::Table {
+                element: ContainerElement {
+                    elements: vec![
+                        Element::TR {
+                            element: ContainerElement {
+                                elements: vec![
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Div {
+                                                element: ContainerElement::default(),
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Div {
+                                                element: ContainerElement::default(),
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                ],
+                                ..Default::default()
+                            },
+                        },
+                        Element::TR {
+                            element: ContainerElement {
+                                elements: vec![
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Div {
+                                                element: ContainerElement::default(),
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Div {
+                                                element: ContainerElement::default(),
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                ],
+                                ..Default::default()
+                            },
+                        },
+                    ],
+                    ..Default::default()
+                },
+            }],
+            calculated_width: Some(100.0),
+            calculated_height: Some(80.0),
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![Element::Table {
+                    element: ContainerElement {
+                        elements: vec![
+                            Element::TR {
+                                element: ContainerElement {
+                                    elements: vec![
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: vec![Element::Div {
+                                                    element: ContainerElement {
+                                                        elements: vec![],
+                                                        calculated_width: Some(50.0),
+                                                        calculated_height: Some(25.0),
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                }],
+                                                calculated_width: Some(50.0),
+                                                calculated_height: Some(25.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: vec![Element::Div {
+                                                    element: ContainerElement {
+                                                        elements: vec![],
+                                                        calculated_width: Some(50.0),
+                                                        calculated_height: Some(25.0),
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                }],
+                                                calculated_width: Some(50.0),
+                                                calculated_height: Some(25.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                    ],
+                                    calculated_width: Some(100.0),
+                                    calculated_height: Some(25.0),
+                                    ..container.elements[0].container_element().unwrap().elements[0]
+                                        .container_element()
+                                        .unwrap()
+                                        .clone()
+                                },
+                            },
+                            Element::TR {
+                                element: ContainerElement {
+                                    elements: vec![
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: vec![Element::Div {
+                                                    element: ContainerElement {
+                                                        elements: vec![],
+                                                        calculated_width: Some(50.0),
+                                                        calculated_height: Some(25.0),
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                }],
+                                                calculated_width: Some(50.0),
+                                                calculated_height: Some(25.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: vec![Element::Div {
+                                                    element: ContainerElement {
+                                                        elements: vec![],
+                                                        calculated_width: Some(50.0),
+                                                        calculated_height: Some(25.0),
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                }],
+                                                calculated_width: Some(50.0),
+                                                calculated_height: Some(25.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                    ],
+                                    calculated_width: Some(100.0),
+                                    calculated_height: Some(25.0),
+                                    ..container.elements[0].container_element().unwrap().elements[1]
+                                        .container_element()
+                                        .unwrap()
+                                        .clone()
+                                },
+                            },
+                        ],
+                        calculated_width: Some(100.0),
+                        calculated_height: Some(25.0 + 25.0),
+                        ..container.elements[0].container_element().unwrap().clone()
+                    },
+                }],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_can_calc_table_column_and_row_sizes_and_auto_size_raw_data() {
+        let mut container = ContainerElement {
+            elements: vec![Element::Table {
+                element: ContainerElement {
+                    elements: vec![
+                        Element::TR {
+                            element: ContainerElement {
+                                elements: vec![
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Raw {
+                                                value: "test".to_string(),
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Raw {
+                                                value: "test".to_string(),
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                ],
+                                ..Default::default()
+                            },
+                        },
+                        Element::TR {
+                            element: ContainerElement {
+                                elements: vec![
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Raw {
+                                                value: "test".to_string(),
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                    Element::TD {
+                                        element: ContainerElement {
+                                            elements: vec![Element::Raw {
+                                                value: "test".to_string(),
+                                            }],
+                                            ..ContainerElement::default()
+                                        },
+                                    },
+                                ],
+                                ..Default::default()
+                            },
+                        },
+                    ],
+                    ..Default::default()
+                },
+            }],
+            calculated_width: Some(100.0),
+            calculated_height: Some(80.0),
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![Element::Table {
+                    element: ContainerElement {
+                        elements: vec![
+                            Element::TR {
+                                element: ContainerElement {
+                                    elements: vec![
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements
+                                                    .clone(),
+                                                calculated_width: Some(50.0),
+                                                calculated_height: Some(25.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements
+                                                    .clone(),
+                                                calculated_width: Some(50.0),
+                                                calculated_height: Some(25.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                    ],
+                                    calculated_width: Some(100.0),
+                                    calculated_height: Some(25.0),
+                                    ..container.elements[0].container_element().unwrap().elements[0]
+                                        .container_element()
+                                        .unwrap()
+                                        .clone()
+                                },
+                            },
+                            Element::TR {
+                                element: ContainerElement {
+                                    elements: vec![
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements
+                                                    .clone(),
+                                                calculated_width: Some(50.0),
+                                                calculated_height: Some(25.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                        Element::TD {
+                                            element: ContainerElement {
+                                                elements: container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements
+                                                    .clone(),
+                                                calculated_width: Some(50.0),
+                                                calculated_height: Some(25.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            },
+                                        },
+                                    ],
+                                    calculated_width: Some(100.0),
+                                    calculated_height: Some(25.0),
+                                    ..container.elements[0].container_element().unwrap().elements[1]
+                                        .container_element()
+                                        .unwrap()
+                                        .clone()
+                                },
+                            },
+                        ],
+                        calculated_width: Some(100.0),
+                        calculated_height: Some(25.0 + 25.0),
+                        ..container.elements[0].container_element().unwrap().clone()
+                    },
+                }],
+                ..container
+            }
+        );
+    }
+    #[test_log::test]
+    fn calc_can_calc_table_column_and_row_sizes_with_tbody() {
+        let mut container = ContainerElement {
+            elements: vec![Element::Table {
+                element: ContainerElement {
+                    elements: vec![Element::TBody {
+                        element: ContainerElement {
+                            elements: vec![
+                                Element::TR {
+                                    element: ContainerElement {
+                                        elements: vec![
+                                            Element::TD {
+                                                element: ContainerElement {
+                                                    elements: vec![Element::Raw {
+                                                        value: "test".to_string(),
+                                                    }],
+                                                    ..ContainerElement::default()
+                                                },
+                                            },
+                                            Element::TD {
+                                                element: ContainerElement {
+                                                    elements: vec![Element::Raw {
+                                                        value: "test".to_string(),
+                                                    }],
+                                                    ..ContainerElement::default()
+                                                },
+                                            },
+                                        ],
+                                        ..Default::default()
+                                    },
+                                },
+                                Element::TR {
+                                    element: ContainerElement {
+                                        elements: vec![
+                                            Element::TD {
+                                                element: ContainerElement {
+                                                    elements: vec![Element::Raw {
+                                                        value: "test".to_string(),
+                                                    }],
+                                                    ..ContainerElement::default()
+                                                },
+                                            },
+                                            Element::TD {
+                                                element: ContainerElement {
+                                                    elements: vec![Element::Raw {
+                                                        value: "test".to_string(),
+                                                    }],
+                                                    ..ContainerElement::default()
+                                                },
+                                            },
+                                        ],
+                                        ..Default::default()
+                                    },
+                                },
+                            ],
+                            ..Default::default()
+                        },
+                    }],
+                    ..Default::default()
+                },
+            }],
+            calculated_width: Some(100.0),
+            calculated_height: Some(80.0),
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![Element::Table {
+                    element: ContainerElement {
+                        elements: vec![Element::TBody {
+                            element: ContainerElement {
+                                elements: vec![
+                                    Element::TR {
+                                        element: ContainerElement {
+                                            elements: vec![
+                                                Element::TD {
+                                                    element: ContainerElement {
+                                                        elements: container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements
+                                                            .clone(),
+                                                        calculated_width: Some(50.0),
+                                                        calculated_height: Some(25.0),
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                },
+                                                Element::TD {
+                                                    element: ContainerElement {
+                                                        elements: container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements
+                                                            .clone(),
+                                                        calculated_width: Some(50.0),
+                                                        calculated_height: Some(25.0),
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                },
+                                            ],
+                                            calculated_width: Some(100.0),
+                                            calculated_height: Some(25.0),
+                                            ..container.elements[0]
+                                                .container_element()
+                                                .unwrap()
+                                                .elements[0]
+                                                .container_element()
+                                                .unwrap()
+                                                .elements[0]
+                                                .container_element()
+                                                .unwrap()
+                                                .clone()
+                                        },
+                                    },
+                                    Element::TR {
+                                        element: ContainerElement {
+                                            elements: vec![
+                                                Element::TD {
+                                                    element: ContainerElement {
+                                                        elements: container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements
+                                                            .clone(),
+                                                        calculated_width: Some(50.0),
+                                                        calculated_height: Some(25.0),
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                },
+                                                Element::TD {
+                                                    element: ContainerElement {
+                                                        elements: container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements
+                                                            .clone(),
+                                                        calculated_width: Some(50.0),
+                                                        calculated_height: Some(25.0),
+                                                        ..container.elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[0]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .elements[1]
+                                                            .container_element()
+                                                            .unwrap()
+                                                            .clone()
+                                                    },
+                                                },
+                                            ],
+                                            calculated_width: Some(100.0),
+                                            calculated_height: Some(25.0),
+                                            ..container.elements[0]
+                                                .container_element()
+                                                .unwrap()
+                                                .elements[0]
+                                                .container_element()
+                                                .unwrap()
+                                                .elements[1]
+                                                .container_element()
+                                                .unwrap()
+                                                .clone()
+                                        },
+                                    },
+                                ],
+                                calculated_width: Some(100.0),
+                                calculated_height: Some(25.0 + 25.0),
+                                ..container.elements[0].container_element().unwrap().elements[0]
+                                    .container_element()
+                                    .unwrap()
+                                    .clone()
+                            },
+                        }],
+                        ..container.elements[0].container_element().unwrap().clone()
+                    },
+                }],
                 ..container
             }
         );

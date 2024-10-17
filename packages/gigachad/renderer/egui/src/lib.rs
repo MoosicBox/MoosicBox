@@ -11,7 +11,7 @@ use eframe::egui::{self, Response, Ui, Widget};
 use flume::{Receiver, Sender};
 use gigachad_renderer::viewport::immediate::{Pos, Viewport, ViewportListener};
 pub use gigachad_renderer::*;
-use gigachad_transformer::{calc::Calc, ContainerElement, Element, LayoutDirection};
+use gigachad_transformer::{calc::Calc, ContainerElement, Element, LayoutDirection, TableIter};
 use itertools::Itertools;
 
 #[derive(Clone)]
@@ -822,66 +822,20 @@ impl EguiApp {
         handler: Option<&Handler>,
         viewport: Option<&Viewport>,
     ) {
-        let container = element.container_element().expect("Not a table");
+        let TableIter { rows, headings } = element.table_iter();
 
-        let mut rows_builder: Option<Vec<Box<dyn Iterator<Item = &ContainerElement>>>> = None;
-        let mut headings: Option<Box<dyn Iterator<Item = &ContainerElement>>> = None;
-        let mut rows: Box<dyn Iterator<Item = Box<dyn Iterator<Item = &ContainerElement>>>> =
-            Box::new(vec![].into_iter());
-
-        for element in &container.elements {
-            match element {
-                Element::THead { element } => {
-                    headings = Some(Box::new(
-                        element
-                            .elements
-                            .iter()
-                            .filter_map(|x| x.container_element()),
-                    ));
-                }
-                Element::TBody { element } => {
-                    rows = Box::new(
-                        element
-                            .elements
-                            .iter()
-                            .filter_map(|x| x.container_element())
-                            .map(|x| {
-                                Box::new(x.elements.iter().filter_map(|x| x.container_element()))
-                                    as Box<dyn Iterator<Item = &ContainerElement>>
-                            }),
-                    );
-                }
-                Element::TR { element } => {
-                    if let Some(builder) = &mut rows_builder {
-                        builder.push(Box::new(
-                            element
-                                .elements
-                                .iter()
-                                .filter_map(|x| x.container_element()),
-                        ));
-                    }
-                }
-                _ => {
-                    panic!("Invalid table element: {element}");
-                }
-            }
-        }
-
-        if let Some(rows_builder) = rows_builder {
-            rows = Box::new(rows_builder.into_iter());
-        }
-
-        let grid = egui::Grid::new(format!("grid-{}", container.id));
+        let grid = egui::Grid::new(format!("grid-{}", element.container_element().unwrap().id));
 
         grid.show(ui, |ui| {
             if let Some(headings) = headings {
                 for heading in headings {
-                    egui::Frame::none().show(ui, |ui| {
-                        self.render_container(ctx, ui, heading, handler, viewport);
-                    });
+                    for th in heading {
+                        egui::Frame::none().show(ui, |ui| {
+                            self.render_container(ctx, ui, th, handler, viewport);
+                        });
+                    }
+                    ui.end_row();
                 }
-
-                ui.end_row();
             }
             for row in rows {
                 for td in row {
