@@ -231,12 +231,13 @@ impl EguiApp {
 
     async fn listen(&self) {
         while let Ok(event) = self.event_receiver.recv_async().await {
-            log::debug!("received event {event:?}");
+            log::trace!("received event {event:?}");
             match event {
                 AppEvent::LoadImage { source } => {
                     let images = self.images.clone();
                     let ctx = self.ctx.clone();
                     if let Some(bytes) = moosicbox_app_native_image::get_image(&source) {
+                        log::trace!("loading image {source}");
                         images
                             .write()
                             .unwrap()
@@ -247,7 +248,7 @@ impl EguiApp {
                         }
                     } else {
                         moosicbox_task::spawn("renderer: load_image", async move {
-                            log::debug!("loading image {source}");
+                            log::trace!("loading image {source}");
                             match reqwest::get(&source).await {
                                 Ok(response) => {
                                     if !response.status().is_success() {
@@ -266,12 +267,12 @@ impl EguiApp {
                                             }
                                         }
                                         Err(e) => {
-                                            log::error!("Failed to fetch image: {e:?}");
+                                            log::error!("Failed to fetch image ({source}): {e:?}");
                                         }
                                     }
                                 }
                                 Err(e) => {
-                                    log::error!("Failed to fetch image: {e:?}");
+                                    log::error!("Failed to fetch image ({source}): {e:?}");
                                 }
                             }
                         });
@@ -750,7 +751,8 @@ impl EguiApp {
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
     ) {
-        log::debug!("render_element: rect={rect:?}");
+        log::trace!("render_element: rect={rect:?}");
+
         let response: Option<Response> = match element {
             Element::Table { .. } => {
                 self.render_table(ctx, ui, element, handler, viewport);
