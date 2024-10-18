@@ -6,6 +6,12 @@ use moosicbox_app_native_image::image;
 use moosicbox_library_models::{ApiAlbum, ApiLibraryAlbum, ApiTrack};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 
+macro_rules! public_img {
+    ($path:expr $(,)?) => {
+        image!(concat!("../../../../../app-website/public/img/", $path))
+    };
+}
+
 #[must_use]
 pub fn sidebar_navigation() -> Markup {
     html! {
@@ -13,11 +19,12 @@ pub fn sidebar_navigation() -> Markup {
             div class="navigation-bar" {
                 div class="navigation-bar-header" {
                     a href="/" sx-dir="row" {
+                        @let size = 36;
                         img
-                            sx-width=(36)
-                            sx-height=(36)
+                            sx-width=(size)
+                            sx-height=(size)
                             class="navigation-bar-header-home-link-logo-icon"
-                            src=(image!("../../../../../app-website/public/img/icon128.png"));
+                            src=(public_img!("icon128.png"));
 
                         h1 class="navigation-bar-header-home-link-text" {
                             ("MoosicBox")
@@ -72,19 +79,19 @@ pub fn player() -> Markup {
                     img
                         sx-width=(size)
                         sx-height=(size)
-                        src=(image!("../../../../../app-website/public/img/chevron-left-white.svg"));
+                        src=(public_img!("chevron-left-white.svg"));
                 }
                 div sx-width=(size) sx-height=(size) {
                     img
                         sx-width=(size)
                         sx-height=(size)
-                        src=(image!("../../../../../app-website/public/img/pause-button-white.svg"));
+                        src=(public_img!("pause-button-white.svg"));
                 }
                 div sx-width=(size) sx-height=(size) {
                     img
                         sx-width=(size)
                         sx-height=(size)
-                        src=(image!("../../../../../app-website/public/img/chevron-right-white.svg"));
+                        src=(public_img!("chevron-right-white.svg"));
                 }
             }
             div sx-dir="row" {
@@ -93,25 +100,25 @@ pub fn player() -> Markup {
                     img
                         sx-width=(size)
                         sx-height=(size)
-                        src=(image!("../../../../../app-website/public/img/audio-white.svg"));
+                        src=(public_img!("audio-white.svg"));
                 }
                 div sx-width=(size) sx-height=(size) {
                     img
                         sx-width=(size)
                         sx-height=(size)
-                        src=(image!("../../../../../app-website/public/img/speaker-white.svg"));
+                        src=(public_img!("speaker-white.svg"));
                 }
                 div sx-width=(size) sx-height=(size) {
                     img
                         sx-width=(size)
                         sx-height=(size)
-                        src=(image!("../../../../../app-website/public/img/sessions-white.svg"));
+                        src=(public_img!("sessions-white.svg"));
                 }
                 div sx-width=(size) sx-height=(size) {
                     img
                         sx-width=(size)
                         sx-height=(size)
-                        src=(image!("../../../../../app-website/public/img/playlist-white.svg"));
+                        src=(public_img!("playlist-white.svg"));
                 }
             }
         }
@@ -160,7 +167,7 @@ fn album_cover_url(album: &ApiLibraryAlbum, width: u16, height: u16) -> String {
             album.album_id
         )
     } else {
-        image!("../../../../../app-website/public/img/album.svg").to_string()
+        public_img!("album.svg").to_string()
     }
 }
 
