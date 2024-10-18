@@ -160,7 +160,7 @@ fn album_cover_url(album: &ApiLibraryAlbum, width: u16, height: u16) -> String {
             album.album_id
         )
     } else {
-        "/img/album.svg".to_string()
+        image!("../../../../../app-website/public/img/album.svg").to_string()
     }
 }
 
