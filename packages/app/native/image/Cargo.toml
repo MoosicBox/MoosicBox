@@ -1,0 +1,19 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["gui", "web-programming"]
+description = "MoosicBox App Image package"
+edition     = "2021"
+keywords    = ["gui", "image", "web"]
+license     = "MPL-2.0"
+name        = "moosicbox_app_native_image"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+bytes = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = []

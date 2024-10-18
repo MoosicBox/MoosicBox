@@ -5711,6 +5711,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_app_native_image"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+]
+
+[[package]]
 name = "moosicbox_app_native_lib"
 version = "0.1.0"
 dependencies = [
