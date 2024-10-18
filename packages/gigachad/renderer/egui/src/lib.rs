@@ -394,11 +394,17 @@ impl EguiApp {
                         .scroll_bar_visibility(
                             egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
                         )
-                        .show(ui, {
+                        .show_viewport(ui, {
                             let viewport = Some(&viewport);
-                            move |ui| {
+                            move |ui, rect| {
                                 self.render_container_contents(
-                                    ctx, ui, container, handler, viewport, true,
+                                    ctx,
+                                    ui,
+                                    container,
+                                    handler,
+                                    viewport,
+                                    Some(rect),
+                                    true,
                                 );
                             }
                         })
@@ -414,11 +420,17 @@ impl EguiApp {
                         .scroll_bar_visibility(
                             egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
                         )
-                        .show(ui, {
+                        .show_viewport(ui, {
                             let viewport = Some(&viewport);
-                            move |ui| {
+                            move |ui, rect| {
                                 self.render_container_contents(
-                                    ctx, ui, container, handler, viewport, true,
+                                    ctx,
+                                    ui,
+                                    container,
+                                    handler,
+                                    viewport,
+                                    Some(rect),
+                                    true,
                                 );
                             }
                         })
@@ -442,11 +454,17 @@ impl EguiApp {
                                     .scroll_bar_visibility(
                                         egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
                                     )
-                                    .show(ui, {
+                                    .show_viewport(ui, {
                                         let viewport = Some(&viewport);
-                                        move |ui| {
+                                        move |ui, rect| {
                                             self.render_container_contents(
-                                                ctx, ui, container, handler, viewport, true,
+                                                ctx,
+                                                ui,
+                                                container,
+                                                handler,
+                                                viewport,
+                                                Some(rect),
+                                                true,
                                             );
                                         }
                                     })
@@ -474,11 +492,17 @@ impl EguiApp {
                                     .scroll_bar_visibility(
                                         egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
                                     )
-                                    .show(ui, {
+                                    .show_viewport(ui, {
                                         let viewport = Some(&viewport);
-                                        move |ui| {
+                                        move |ui, rect| {
                                             self.render_container_contents(
-                                                ctx, ui, container, handler, viewport, true,
+                                                ctx,
+                                                ui,
+                                                container,
+                                                handler,
+                                                viewport,
+                                                Some(rect),
+                                                true,
                                             );
                                         }
                                     })
@@ -495,11 +519,17 @@ impl EguiApp {
                         .scroll_bar_visibility(
                             egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
                         )
-                        .show(ui, {
+                        .show_viewport(ui, {
                             let viewport = Some(&viewport);
-                            move |ui| {
+                            move |ui, rect| {
                                 self.render_container_contents(
-                                    ctx, ui, container, handler, viewport, false,
+                                    ctx,
+                                    ui,
+                                    container,
+                                    handler,
+                                    viewport,
+                                    Some(rect),
+                                    false,
                                 );
                             }
                         })
@@ -512,11 +542,17 @@ impl EguiApp {
                         .scroll_bar_visibility(
                             egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
                         )
-                        .show(ui, {
+                        .show_viewport(ui, {
                             let viewport = Some(&viewport);
-                            move |ui| {
+                            move |ui, rect| {
                                 self.render_container_contents(
-                                    ctx, ui, container, handler, viewport, false,
+                                    ctx,
+                                    ui,
+                                    container,
+                                    handler,
+                                    viewport,
+                                    Some(rect),
+                                    false,
                                 );
                             }
                         })
@@ -529,11 +565,17 @@ impl EguiApp {
                         .scroll_bar_visibility(
                             egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
                         )
-                        .show(ui, {
+                        .show_viewport(ui, {
                             let viewport = Some(&viewport);
-                            move |ui| {
+                            move |ui, rect| {
                                 self.render_container_contents(
-                                    ctx, ui, container, handler, viewport, true,
+                                    ctx,
+                                    ui,
+                                    container,
+                                    handler,
+                                    viewport,
+                                    Some(rect),
+                                    true,
                                 );
                             }
                         })
@@ -546,11 +588,17 @@ impl EguiApp {
                         .scroll_bar_visibility(
                             egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
                         )
-                        .show(ui, {
+                        .show_viewport(ui, {
                             let viewport = Some(&viewport);
-                            move |ui| {
+                            move |ui, rect| {
                                 self.render_container_contents(
-                                    ctx, ui, container, handler, viewport, true,
+                                    ctx,
+                                    ui,
+                                    container,
+                                    handler,
+                                    viewport,
+                                    Some(rect),
+                                    true,
                                 );
                             }
                         })
@@ -558,7 +606,9 @@ impl EguiApp {
                     self.update_scroll_container(container, viewport, state);
                 }
                 (_, _) => {
-                    self.render_container_contents(ctx, ui, container, handler, viewport, false);
+                    self.render_container_contents(
+                        ctx, ui, container, handler, viewport, None, false,
+                    );
                 }
             }
         });
@@ -568,6 +618,7 @@ impl EguiApp {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_container_contents(
         &self,
         ctx: &egui::Context,
@@ -575,6 +626,7 @@ impl EguiApp {
         container: &ContainerElement,
         handler: Option<&Handler>,
         viewport: Option<&Viewport>,
+        rect: Option<egui::Rect>,
         vscroll: bool,
     ) {
         if let Some(width) = container.calculated_width {
@@ -616,13 +668,13 @@ impl EguiApp {
                     ui.vertical(move |ui| {
                         for row in rows {
                             ui.horizontal(move |ui| {
-                                self.render_elements_ref(ctx, ui, &row, handler, viewport);
+                                self.render_elements_ref(ctx, ui, &row, handler, viewport, rect);
                             });
                         }
                     });
                 } else {
                     ui.horizontal(move |ui| {
-                        self.render_elements(ctx, ui, &container.elements, handler, viewport);
+                        self.render_elements(ctx, ui, &container.elements, handler, viewport, rect);
                     });
                 }
             }
@@ -647,13 +699,13 @@ impl EguiApp {
                     ui.horizontal(move |ui| {
                         for col in cols {
                             ui.vertical(move |ui| {
-                                self.render_elements_ref(ctx, ui, &col, handler, viewport);
+                                self.render_elements_ref(ctx, ui, &col, handler, viewport, rect);
                             });
                         }
                     });
                 } else {
                     ui.vertical(move |ui| {
-                        self.render_elements(ctx, ui, &container.elements, handler, viewport);
+                        self.render_elements(ctx, ui, &container.elements, handler, viewport, rect);
                     });
                 }
             }
@@ -667,9 +719,10 @@ impl EguiApp {
         elements: &[Element],
         handler: Option<&Handler>,
         viewport: Option<&Viewport>,
+        rect: Option<egui::Rect>,
     ) {
         for element in elements {
-            self.render_element(ctx, ui, element, handler, viewport);
+            self.render_element(ctx, ui, element, handler, viewport, rect);
         }
     }
 
@@ -680,9 +733,10 @@ impl EguiApp {
         elements: &[&Element],
         handler: Option<&Handler>,
         viewport: Option<&Viewport>,
+        rect: Option<egui::Rect>,
     ) {
         for element in elements {
-            self.render_element(ctx, ui, element, handler, viewport);
+            self.render_element(ctx, ui, element, handler, viewport, rect);
         }
     }
 
@@ -694,7 +748,9 @@ impl EguiApp {
         element: &Element,
         handler: Option<&Handler>,
         viewport: Option<&Viewport>,
+        rect: Option<egui::Rect>,
     ) {
+        log::debug!("render_element: rect={rect:?}");
         let response: Option<Response> = match element {
             Element::Table { .. } => {
                 self.render_table(ctx, ui, element, handler, viewport);
