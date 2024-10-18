@@ -34,7 +34,7 @@ eframe = { workspace = true, default-features = false, features = [
     "__screenshot",
     "default",
 ] }
-egui_extras = { workspace = true, features = ["image"] }
+egui_extras = { workspace = true, features = ["image", "svg"] }
 flume = { workspace = true }
 image = { workspace = true, features = ["webp"] }
 itertools = { workspace = true }
