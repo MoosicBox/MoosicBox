@@ -56,6 +56,12 @@ pub enum LoadImageError {
 }
 
 #[derive(Debug, Clone)]
+pub enum ImageSource {
+    Bytes { bytes: Arc<Bytes>, source: String },
+    Url(String),
+}
+
+#[derive(Debug, Clone)]
 pub enum AppEvent {
     Resize {},
     MouseWheel {},
@@ -64,13 +70,13 @@ pub enum AppEvent {
     },
     RegisterImage {
         viewport: Option<Viewport>,
-        source: String,
+        source: ImageSource,
         width: Option<f32>,
         height: Option<f32>,
         frame: Frame,
     },
     LoadImage {
-        source: String,
+        source: ImageSource,
         width: Option<f32>,
         height: Option<f32>,
         frame: Frame,
@@ -82,7 +88,7 @@ pub enum AppEvent {
 
 #[derive(Debug, Clone)]
 pub struct RegisteredImage {
-    source: String,
+    source: ImageSource,
     width: Option<f32>,
     height: Option<f32>,
     frame: Frame,
@@ -192,7 +198,7 @@ impl FltkRenderer {
     fn register_image(
         &self,
         viewport: Option<Viewport>,
-        source: String,
+        source: ImageSource,
         width: Option<f32>,
         height: Option<f32>,
         frame: &Frame,
@@ -231,36 +237,56 @@ impl FltkRenderer {
     }
 
     async fn load_image(
-        source: String,
+        source: ImageSource,
         width: Option<f32>,
         height: Option<f32>,
         mut frame: Frame,
     ) -> Result<(), LoadImageError> {
-        type ImageCache = LazyLock<Arc<tokio::sync::RwLock<HashMap<String, Bytes>>>>;
+        type ImageCache =
+            LazyLock<Arc<tokio::sync::RwLock<HashMap<String, (Arc<Bytes>, u32, u32)>>>>;
         static IMAGE_CACHE: ImageCache =
             LazyLock::new(|| Arc::new(tokio::sync::RwLock::new(HashMap::new())));
 
-        let key = format!("{source}:{width:?}:{height:?}");
+        let uri = match &source {
+            ImageSource::Bytes { source, .. } | ImageSource::Url(source) => source,
+        };
+
+        let key = format!("{uri}:{width:?}:{height:?}");
 
         let cached_image = { IMAGE_CACHE.read().await.get(&key).cloned() };
 
-        let data = if let Some(data) = cached_image {
-            data
-        } else {
-            let data = reqwest::get(source).await?.bytes().await?;
-            IMAGE_CACHE.write().await.insert(key, data.clone());
+        let rgb_image = {
+            let (bytes, width, height) = if let Some((bytes, width, height)) = cached_image {
+                (bytes, width, height)
+            } else {
+                let image = match source {
+                    ImageSource::Bytes { bytes, .. } => {
+                        image::load_from_memory_with_format(&bytes, image::ImageFormat::WebP)?
+                    }
+                    ImageSource::Url(source) => image::load_from_memory_with_format(
+                        &reqwest::get(source).await?.bytes().await?,
+                        image::ImageFormat::WebP,
+                    )?,
+                };
+                let width = image.width();
+                let height = image.height();
+                let bytes = Arc::new(Bytes::from(image.into_bytes()));
+                IMAGE_CACHE
+                    .write()
+                    .await
+                    .insert(key, (bytes.clone(), width, height));
+                (bytes, width, height)
+            };
 
-            data
+            RgbImage::new(
+                &bytes,
+                width.try_into().unwrap(),
+                height.try_into().unwrap(),
+                enums::ColorDepth::Rgb8,
+            )?
         };
 
-        let image = image::load_from_memory_with_format(&data, image::ImageFormat::WebP)?;
-        let image = RgbImage::new(
-            image.as_bytes(),
-            image.width().try_into().unwrap(),
-            image.height().try_into().unwrap(),
-            enums::ColorDepth::Rgb8,
-        )?;
-        let image = SharedImage::from_image(image)?;
+        let image = SharedImage::from_image(rgb_image)?;
 
         if width.is_some() || height.is_some() {
             #[allow(clippy::cast_possible_truncation)]
@@ -851,10 +877,41 @@ impl FltkRenderer {
                 }
 
                 if let Some(source) = source {
-                    if source.starts_with("http") {
+                    if let Some(bytes) = moosicbox_app_native_image::get_image(source) {
+                        // let image = RgbImage::new(&bytes, 100, 100, enums::ColorDepth::Rgb8)?;
+
+                        // if width.is_some() || height.is_some() {
+                        //     #[allow(clippy::cast_possible_truncation)]
+                        //     let width =
+                        //         calc_number(element.width.unwrap_or_default(), context.width)
+                        //             .round() as i32;
+                        //     #[allow(clippy::cast_possible_truncation)]
+                        //     let height =
+                        //         calc_number(element.height.unwrap_or_default(), context.height)
+                        //             .round() as i32;
+
+                        //     frame.set_size(width, height);
+                        // }
+
+                        // frame.set_image_scaled(Some(image));
                         if let Err(e) = event_sender.send(AppEvent::RegisterImage {
                             viewport: viewport.deref().clone(),
-                            source: source.to_owned(),
+                            source: ImageSource::Bytes {
+                                bytes,
+                                source: source.to_owned(),
+                            },
+                            width: element.width.map(|_| width.unwrap()),
+                            height: element.height.map(|_| height.unwrap()),
+                            frame: frame.clone(),
+                        }) {
+                            log::error!(
+                                "Failed to send LoadImage event with source={source}: {e:?}"
+                            );
+                        }
+                    } else if source.starts_with("http") {
+                        if let Err(e) = event_sender.send(AppEvent::RegisterImage {
+                            viewport: viewport.deref().clone(),
+                            source: ImageSource::Url(source.to_owned()),
                             width: element.width.map(|_| width.unwrap()),
                             height: element.height.map(|_| height.unwrap()),
                             frame: frame.clone(),
@@ -864,42 +921,43 @@ impl FltkRenderer {
                             );
                         }
                     } else if let Ok(manifest_path) = std::env::var("CARGO_MANIFEST_DIR") {
-                        let Ok(path) = std::path::PathBuf::from_str(&manifest_path);
+                        #[allow(irrefutable_let_patterns)]
+                        if let Ok(path) = std::path::PathBuf::from_str(&manifest_path) {
+                            let source = source
+                                .chars()
+                                .skip_while(|x| *x == '/' || *x == '\\')
+                                .collect::<String>();
 
-                        let source = source
-                            .chars()
-                            .skip_while(|x| *x == '/' || *x == '\\')
-                            .collect::<String>();
+                            if let Some(path) = path
+                                .parent()
+                                .and_then(|x| x.parent())
+                                .map(|x| x.join("app-website").join("public").join(source))
+                            {
+                                if let Ok(path) = path.canonicalize() {
+                                    if path.is_file() {
+                                        let image = SharedImage::load(path)?;
 
-                        if let Some(path) = path
-                            .parent()
-                            .and_then(|x| x.parent())
-                            .map(|x| x.join("app-website").join("public").join(source))
-                        {
-                            if let Ok(path) = path.canonicalize() {
-                                if path.is_file() {
-                                    let image = SharedImage::load(path)?;
+                                        if width.is_some() || height.is_some() {
+                                            #[allow(clippy::cast_possible_truncation)]
+                                            let width = calc_number(
+                                                element.width.unwrap_or_default(),
+                                                context.width,
+                                            )
+                                            .round()
+                                                as i32;
+                                            #[allow(clippy::cast_possible_truncation)]
+                                            let height = calc_number(
+                                                element.height.unwrap_or_default(),
+                                                context.height,
+                                            )
+                                            .round()
+                                                as i32;
 
-                                    if width.is_some() || height.is_some() {
-                                        #[allow(clippy::cast_possible_truncation)]
-                                        let width = calc_number(
-                                            element.width.unwrap_or_default(),
-                                            context.width,
-                                        )
-                                        .round()
-                                            as i32;
-                                        #[allow(clippy::cast_possible_truncation)]
-                                        let height = calc_number(
-                                            element.height.unwrap_or_default(),
-                                            context.height,
-                                        )
-                                        .round()
-                                            as i32;
+                                            frame.set_size(width, height);
+                                        }
 
-                                        frame.set_size(width, height);
+                                        frame.set_image_scaled(Some(image));
                                     }
-
-                                    frame.set_image_scaled(Some(image));
                                 }
                             }
                         }

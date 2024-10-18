@@ -3777,6 +3777,7 @@ dependencies = [
  "gigachad_transformer",
  "image",
  "log",
+ "moosicbox_app_native_image",
  "moosicbox_assert",
  "moosicbox_task",
  "reqwest 0.12.8",
