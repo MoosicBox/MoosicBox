@@ -11,6 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
+moosicbox_app_native_image = { version = "0.1.0", path = "../image", default-features = false }
 moosicbox_library_models = { version = "0.1.0", path = "../../../library/models", default-features = false }
 moosicbox_menu_models = { version = "0.1.0", path = "../../../menu/models", default-features = false, features = [
     "api",

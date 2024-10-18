@@ -2,6 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use maud::{html, Markup};
+use moosicbox_app_native_image::image;
 use moosicbox_library_models::{ApiAlbum, ApiLibraryAlbum, ApiTrack};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 
@@ -13,10 +14,10 @@ pub fn sidebar_navigation() -> Markup {
                 div class="navigation-bar-header" {
                     a href="/" sx-dir="row" {
                         img
-                            sx-width="36"
-                            sx-height="36"
+                            sx-width=(36)
+                            sx-height=(36)
                             class="navigation-bar-header-home-link-logo-icon"
-                            src="/img/icon128.png";
+                            src=(image!("../../../../../app-website/public/img/icon128.png"));
 
                         h1 class="navigation-bar-header-home-link-text" {
                             ("MoosicBox")

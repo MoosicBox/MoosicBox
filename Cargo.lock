@@ -5742,6 +5742,7 @@ name = "moosicbox_app_native_ui"
 version = "0.1.0"
 dependencies = [
  "maud",
+ "moosicbox_app_native_image",
  "moosicbox_library_models",
  "moosicbox_menu_models",
 ]
