@@ -66,7 +66,7 @@ pub fn sidebar_navigation() -> Markup {
 #[must_use]
 pub fn player() -> Markup {
     html! {
-        div sx-height="100" sx-dir="row" {
+        div sx-height=(100) sx-dir="row" {
             div sx-dir="row" {
                 @let size = 70;
                 div sx-width=(size) sx-height=(size) {
@@ -128,7 +128,7 @@ pub fn player() -> Markup {
 #[must_use]
 pub fn footer() -> Markup {
     html! {
-        footer sx-height="100" {
+        footer sx-height=(100) {
             (player())
         }
     }
