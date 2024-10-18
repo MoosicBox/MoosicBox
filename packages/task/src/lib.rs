@@ -237,3 +237,69 @@ where
     };
     local_set.spawn_local(future)
 }
+
+#[cfg(tokio_unstable)]
+pub fn block_on<Fut>(name: &str, future: Fut) -> Fut::Output
+where
+    Fut: futures::Future + 'static,
+    Fut::Output: 'static,
+{
+    block_on_runtime(name, &tokio::runtime::Handle::current(), future)
+}
+
+#[cfg(not(tokio_unstable))]
+pub fn block_on<Fut>(name: &str, future: Fut) -> Fut::Output
+where
+    Fut: futures::Future + 'static,
+    Fut::Output: 'static,
+{
+    block_on_runtime(name, &tokio::runtime::Handle::current(), future)
+}
+
+#[cfg(tokio_unstable)]
+pub fn block_on_runtime<Fut>(
+    name: &str,
+    handle: &tokio::runtime::Handle,
+    future: Fut,
+) -> Fut::Output
+where
+    Fut: futures::Future + 'static,
+    Fut::Output: 'static,
+{
+    log::trace!("block_on start: {name}");
+    #[cfg(debug_assertions)]
+    let future = {
+        let name = name.to_owned();
+        async move {
+            let response = future.await;
+            log::trace!("block_on finished: {name}");
+
+            response
+        }
+    };
+    handle.block_on(future)
+}
+
+#[cfg(not(tokio_unstable))]
+pub fn block_on_runtime<Fut>(
+    name: &str,
+    handle: &tokio::runtime::Handle,
+    future: Fut,
+) -> Fut::Output
+where
+    Fut: futures::Future + 'static,
+    Fut::Output: 'static,
+{
+    log::trace!("block_on start: {name}");
+    #[cfg(debug_assertions)]
+    let future = {
+        let name = name.to_owned();
+        async move {
+            let response = future.await;
+            log::trace!("block_on finished: {name}");
+
+            response
+        }
+    };
+    handle.block_on(future)
+}
