@@ -3799,6 +3799,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "gigachad_renderer_htmx"
+version = "0.1.0"
+dependencies = [
+ "actix-cors",
+ "actix-web",
+ "async-trait",
+ "flume",
+ "gigachad_renderer",
+ "gigachad_router",
+ "gigachad_transformer",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_env_utils",
+ "moosicbox_logging",
+ "moosicbox_middleware",
+ "moosicbox_task",
+ "tokio",
+]
+
+[[package]]
+name = "gigachad_router"
+version = "0.1.0"
+dependencies = [
+ "flume",
+ "futures",
+ "gigachad_transformer",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_task",
+ "pretty_assertions",
+ "qstring",
+ "test-log",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "gigachad_transformer"
 version = "0.1.0"
 dependencies = [
@@ -5751,17 +5788,15 @@ dependencies = [
 name = "moosicbox_app_native_lib"
 version = "0.1.0"
 dependencies = [
- "flume",
- "futures",
  "gigachad_renderer",
  "gigachad_renderer_egui",
  "gigachad_renderer_fltk",
- "gigachad_transformer",
+ "gigachad_renderer_htmx",
+ "gigachad_router",
  "log",
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_task",
- "qstring",
  "thiserror",
  "tokio",
 ]

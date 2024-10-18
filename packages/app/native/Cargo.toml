@@ -58,13 +58,14 @@ reqwest = { workspace = true, features = ["json"] }
 tokio   = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
-default = ["egui-wgpu", "fltk", "unsafe"]
+default = ["egui-wgpu", "fltk", "htmx", "unsafe"]
 
 fail-on-warnings = []
 
 egui      = ["moosicbox_app_native_lib/egui"]
 egui-wgpu = ["egui", "moosicbox_app_native_lib/egui-wgpu"]
 fltk      = ["moosicbox_app_native_lib/fltk"]
+htmx      = ["moosicbox_app_native_lib/htmx"]
 
 bundled = ["dep:moosicbox_app_native_bundled"]
 

@@ -1,3 +1,6 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+
 use std::{
     collections::HashMap,
     pin::Pin,
@@ -8,6 +11,7 @@ use flume::{Receiver, SendError, Sender};
 use futures::Future;
 use gigachad_transformer::ContainerElement;
 use qstring::QString;
+use thiserror::Error;
 use tokio::task::JoinHandle;
 
 pub type RouteFunc = Arc<
@@ -164,6 +168,16 @@ impl From<Vec<String>> for RoutePath {
     }
 }
 
+#[derive(Debug, Error)]
+pub enum NavigateError {
+    #[error("Invalid path")]
+    InvalidPath,
+    #[error("Handler error")]
+    Handler,
+    #[error(transparent)]
+    Send(#[from] SendError<ContainerElement>),
+}
+
 #[derive(Clone)]
 pub struct Router {
     routes: Arc<RwLock<Vec<(RoutePath, RouteFunc)>>>,
@@ -220,7 +234,40 @@ impl Router {
     /// # Panics
     ///
     /// Will panic if routes `RwLock` is poisoned.
-    pub async fn navigate(&mut self, path: &str) -> Result<(), SendError<ContainerElement>> {
+    pub async fn navigate(&mut self, path: &str) -> Result<ContainerElement, NavigateError> {
+        let req = RouteRequest::from_path(path);
+        let handler = {
+            self.routes
+                .read()
+                .unwrap()
+                .iter()
+                .find(|(route, _)| route.matches(&req.path))
+                .cloned()
+                .map(|(_, handler)| handler)
+        };
+
+        Ok(if let Some(handler) = handler {
+            match handler(req).await {
+                Ok(elements) => elements,
+                Err(e) => {
+                    log::error!("Failed to fetch route elements: {e:?}");
+                    return Err(NavigateError::Handler);
+                }
+            }
+        } else {
+            log::warn!("Invalid navigation path={path:?}");
+            return Err(NavigateError::InvalidPath);
+        })
+    }
+
+    /// # Errors
+    ///
+    /// Will error if `Renderer` implementation fails to render the navigation result.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if routes `RwLock` is poisoned.
+    pub async fn navigate_send(&mut self, path: &str) -> Result<(), NavigateError> {
         let elements = {
             let req = RouteRequest::from_path(path);
             let handler = {
@@ -237,12 +284,12 @@ impl Router {
                     Ok(elements) => elements,
                     Err(e) => {
                         log::error!("Failed to fetch route elements: {e:?}");
-                        return Ok(());
+                        return Err(NavigateError::Handler);
                     }
                 }
             } else {
                 log::warn!("Invalid navigation path={path:?}");
-                return Ok(());
+                return Err(NavigateError::InvalidPath);
             }
         };
 
@@ -273,7 +320,7 @@ impl Router {
         let mut router = self.clone();
         moosicbox_task::spawn_on("NativeApp navigate_spawn", handle, async move {
             router
-                .navigate(&path)
+                .navigate_send(&path)
                 .await
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)
         })

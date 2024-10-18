@@ -33,6 +33,8 @@ members = [
     "packages/gigachad/renderer",
     "packages/gigachad/renderer/egui",
     "packages/gigachad/renderer/fltk",
+    "packages/gigachad/renderer/htmx",
+    "packages/gigachad/router",
     "packages/gigachad/transformer",
     "packages/image",
     "packages/json_utils",

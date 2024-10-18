@@ -4,15 +4,17 @@
 use std::sync::Arc;
 
 use gigachad_renderer::{RenderRunner, Renderer};
+use gigachad_router::Router;
 use moosicbox_env_utils::default_env_usize;
-use router::Router;
 use thiserror::Error;
 use tokio::{runtime::Runtime, sync::RwLock};
 
-pub mod router;
+pub use gigachad_router as router;
 
 #[derive(Debug, Error)]
 pub enum NativeAppError {
+    #[error("Runtime required")]
+    RuntimeRequired,
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error + Send>),
 }
@@ -116,49 +118,66 @@ impl NativeAppBuilder {
     pub async fn start(self) -> Result<NativeApp, NativeAppError> {
         let router = self.router.unwrap();
 
-        let renderer = self.renderer.unwrap_or_else(|| {
-            if cfg!(feature = "egui") {
-                #[cfg(feature = "egui")]
-                {
-                    let renderer = gigachad_renderer_egui::EguiRenderer::new();
-                    moosicbox_task::spawn("egui navigation listener", {
-                        let renderer = renderer.clone();
-                        let mut router = router.clone();
-                        async move {
-                            while let Some(path) = renderer.wait_for_navigation().await {
-                                if let Err(e) = router.navigate(&path).await {
-                                    log::error!("Failed to navigate: {e:?}");
+        let renderer = self.renderer.map_or_else(
+            || {
+                #[allow(unreachable_code)]
+                Ok(if cfg!(feature = "egui") {
+                    #[cfg(feature = "egui")]
+                    {
+                        let renderer = gigachad_renderer_egui::EguiRenderer::new();
+                        moosicbox_task::spawn("egui navigation listener", {
+                            let renderer = renderer.clone();
+                            let mut router = router.clone();
+                            async move {
+                                while let Some(path) = renderer.wait_for_navigation().await {
+                                    if let Err(e) = router.navigate_send(&path).await {
+                                        log::error!("Failed to navigate: {e:?}");
+                                    }
                                 }
                             }
-                        }
-                    });
-                    Box::new(renderer) as Box<dyn Renderer>
-                }
-                #[cfg(not(feature = "egui"))]
-                unreachable!()
-            } else if cfg!(feature = "fltk") {
-                #[cfg(feature = "fltk")]
-                {
-                    let renderer = gigachad_renderer_fltk::FltkRenderer::new();
-                    moosicbox_task::spawn("fltk navigation listener", {
-                        let renderer = renderer.clone();
-                        let mut router = router.clone();
-                        async move {
-                            while let Some(path) = renderer.wait_for_navigation().await {
-                                if let Err(e) = router.navigate(&path).await {
-                                    log::error!("Failed to navigate: {e:?}");
+                        });
+                        Box::new(renderer) as Box<dyn Renderer>
+                    }
+                    #[cfg(not(feature = "egui"))]
+                    unreachable!()
+                } else if cfg!(feature = "fltk") {
+                    #[cfg(feature = "fltk")]
+                    {
+                        let renderer = gigachad_renderer_fltk::FltkRenderer::new();
+                        moosicbox_task::spawn("fltk navigation listener", {
+                            let renderer = renderer.clone();
+                            let mut router = router.clone();
+                            async move {
+                                while let Some(path) = renderer.wait_for_navigation().await {
+                                    if let Err(e) = router.navigate_send(&path).await {
+                                        log::error!("Failed to navigate: {e:?}");
+                                    }
                                 }
                             }
-                        }
-                    });
-                    Box::new(renderer) as Box<dyn Renderer>
-                }
-                #[cfg(not(feature = "fltk"))]
-                unreachable!()
-            } else {
-                panic!("Missing renderer")
-            }
-        });
+                        });
+                        Box::new(renderer) as Box<dyn Renderer>
+                    }
+                    #[cfg(not(feature = "fltk"))]
+                    unreachable!()
+                } else if cfg!(feature = "htmx") {
+                    #[cfg(feature = "htmx")]
+                    {
+                        let runtime = self
+                            .runtime
+                            .clone()
+                            .ok_or(NativeAppError::RuntimeRequired)?;
+                        let renderer =
+                            gigachad_renderer_htmx::HtmxRenderer::new(router.clone(), runtime);
+                        Box::new(renderer) as Box<dyn Renderer>
+                    }
+                    #[cfg(not(feature = "htmx"))]
+                    unreachable!()
+                } else {
+                    panic!("Missing renderer")
+                })
+            },
+            Ok::<_, NativeAppError>,
+        );
 
         let mut app = NativeApp {
             x: self.x,
@@ -166,7 +185,7 @@ impl NativeAppBuilder {
             width: self.width,
             height: self.height,
             router,
-            renderer: Arc::new(RwLock::new(renderer)),
+            renderer: Arc::new(RwLock::new(renderer?)),
             runtime_handle: self.runtime_handle,
             runtime: self.runtime,
         };
