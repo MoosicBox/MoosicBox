@@ -3758,6 +3758,7 @@ dependencies = [
  "image",
  "itertools 0.13.0",
  "log",
+ "moosicbox_app_native_image",
  "moosicbox_assert",
  "moosicbox_logging",
  "moosicbox_task",

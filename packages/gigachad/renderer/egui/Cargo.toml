@@ -22,6 +22,7 @@ gigachad_transformer = { version = "0.1.0", path = "../../transformer", default-
     "html",
     "id",
 ] }
+moosicbox_app_native_image = { version = "0.1.0", path = "../../../app/native/image", default-features = false }
 moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
 moosicbox_logging = { version = "0.1.0", path = "../../../logging", default-features = false, features = [
     "macros",

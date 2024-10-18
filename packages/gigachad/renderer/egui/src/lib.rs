@@ -236,35 +236,46 @@ impl EguiApp {
                 AppEvent::LoadImage { source } => {
                     let images = self.images.clone();
                     let ctx = self.ctx.clone();
-                    moosicbox_task::spawn("renderer: load_image", async move {
-                        log::debug!("loading image {source}");
-                        match reqwest::get(&source).await {
-                            Ok(response) => {
-                                if !response.status().is_success() {
-                                    return;
-                                }
+                    if let Some(bytes) = moosicbox_app_native_image::get_image(&source) {
+                        images
+                            .write()
+                            .unwrap()
+                            .insert(source, AppImage::Bytes(bytes.to_vec().into()));
 
-                                match response.bytes().await {
-                                    Ok(bytes) => {
-                                        images
-                                            .write()
-                                            .unwrap()
-                                            .insert(source, AppImage::Bytes(bytes.to_vec().into()));
+                        if let Some(ctx) = &*ctx.read().unwrap() {
+                            ctx.request_repaint();
+                        }
+                    } else {
+                        moosicbox_task::spawn("renderer: load_image", async move {
+                            log::debug!("loading image {source}");
+                            match reqwest::get(&source).await {
+                                Ok(response) => {
+                                    if !response.status().is_success() {
+                                        return;
+                                    }
 
-                                        if let Some(ctx) = &*ctx.read().unwrap() {
-                                            ctx.request_repaint();
+                                    match response.bytes().await {
+                                        Ok(bytes) => {
+                                            images.write().unwrap().insert(
+                                                source,
+                                                AppImage::Bytes(bytes.to_vec().into()),
+                                            );
+
+                                            if let Some(ctx) = &*ctx.read().unwrap() {
+                                                ctx.request_repaint();
+                                            }
+                                        }
+                                        Err(e) => {
+                                            log::error!("Failed to fetch image: {e:?}");
                                         }
                                     }
-                                    Err(e) => {
-                                        log::error!("Failed to fetch image: {e:?}");
-                                    }
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to fetch image: {e:?}");
                                 }
                             }
-                            Err(e) => {
-                                log::error!("Failed to fetch image: {e:?}");
-                            }
-                        }
-                    });
+                        });
+                    }
                 }
             }
         }
