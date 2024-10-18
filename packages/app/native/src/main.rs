@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use moosicbox_app_native_lib::router::Router;
 use moosicbox_env_utils::{default_env_usize, option_env_i32, option_env_u16};
-use moosicbox_library_models::ApiAlbum;
+use moosicbox_library_models::{ApiAlbum, ApiArtist};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_paging::Page;
 
@@ -90,8 +90,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .try_into()?
             })
         })
-        .with_route("/artists", |_| async {
-            moosicbox_app_native_ui::artists().into_string().try_into()
+        .with_route("/artists", |req| async move {
+            Ok::<_, Box<dyn std::error::Error>>(
+                if let Some(artist_id) = req.query.get("artistId") {
+                    let response = reqwest::get(format!(
+                        "{}/menu/artist?moosicboxProfile=master&artistId={artist_id}",
+                        std::env::var("MOOSICBOX_HOST")
+                            .as_deref()
+                            .unwrap_or("http://localhost:8500")
+                    ))
+                    .await?;
+
+                    if !response.status().is_success() {
+                        log::debug!("Error: {}", response.status());
+                    }
+
+                    let artist: ApiArtist = response.json().await?;
+
+                    log::debug!("artist: {artist:?}");
+
+                    moosicbox_app_native_ui::artist(artist)
+                        .into_string()
+                        .try_into()?
+                } else {
+                    let response = reqwest::get(format!(
+                        "{}/menu/artists?moosicboxProfile=master&offset=0&limit=2000",
+                        std::env::var("MOOSICBOX_HOST")
+                            .as_deref()
+                            .unwrap_or("http://localhost:8500")
+                    ))
+                    .await?;
+
+                    if !response.status().is_success() {
+                        log::debug!("Error: {}", response.status());
+                    }
+
+                    let artists: Vec<ApiArtist> = response.json().await?;
+
+                    log::trace!("artists: {artists:?}");
+
+                    moosicbox_app_native_ui::artists(artists)
+                        .into_string()
+                        .try_into()?
+                },
+            )
         });
 
     let mut app = moosicbox_app_native_lib::NativeAppBuilder::new()
