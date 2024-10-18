@@ -181,6 +181,38 @@ fn album_cover_img(album: &ApiLibraryAlbum, size: u16) -> Markup {
     }
 }
 
+trait TimeFormat {
+    fn into_formatted(self) -> String;
+}
+
+impl TimeFormat for f32 {
+    fn into_formatted(self) -> String {
+        f64::from(self).into_formatted()
+    }
+}
+
+impl TimeFormat for f64 {
+    fn into_formatted(self) -> String {
+        #[allow(clippy::cast_sign_loss)]
+        #[allow(clippy::cast_possible_truncation)]
+        (self.round() as u64).into_formatted()
+    }
+}
+
+impl TimeFormat for u64 {
+    fn into_formatted(self) -> String {
+        let hours = self / 60 / 60;
+        let minutes = self / 60;
+        let seconds = self % 60;
+
+        if hours > 0 {
+            format!("{hours}:{minutes}:{seconds:0>2}")
+        } else {
+            format!("{minutes}:{seconds:0>2}")
+        }
+    }
+}
+
 #[must_use]
 pub fn album_page_content(album: ApiAlbum, versions: &[ApiAlbumVersion]) -> Markup {
     let ApiAlbum::Library(album) = album;
@@ -221,7 +253,7 @@ pub fn album_page_content(album: ApiAlbum, versions: &[ApiAlbumVersion]) -> Mark
                                 td { (track.number) }
                                 td { (track.title) }
                                 td { (track.artist) }
-                                td { (track.duration) }
+                                td { (track.duration.into_formatted()) }
                             }
                         }
                     }
