@@ -1,7 +1,7 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["gui"]
-description = "MoosicBox native fltk App package"
+description = "MoosicBox native App package"
 edition     = "2021"
 keywords    = ["app", "desktop", "gui", "native"]
 license     = "MPL-2.0"
