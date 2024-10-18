@@ -736,9 +736,11 @@ impl EguiApp {
                             egui::Image::from_bytes(source, egui::load::Bytes::Shared(bytes));
 
                         if element.width.is_some() {
+                            ui.set_width(element.calculated_width.unwrap());
                             image = image.max_width(element.calculated_width.unwrap());
                         }
                         if element.height.is_some() {
+                            ui.set_height(element.calculated_height.unwrap());
                             image = image.max_height(element.calculated_height.unwrap());
                         }
 
