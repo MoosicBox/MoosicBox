@@ -242,8 +242,9 @@ impl FltkRenderer {
         height: Option<f32>,
         mut frame: Frame,
     ) -> Result<(), LoadImageError> {
-        type ImageCache =
-            LazyLock<Arc<tokio::sync::RwLock<HashMap<String, (Arc<Bytes>, u32, u32)>>>>;
+        type ImageCache = LazyLock<
+            Arc<tokio::sync::RwLock<HashMap<String, (Arc<Bytes>, u32, u32, enums::ColorDepth)>>>,
+        >;
         static IMAGE_CACHE: ImageCache =
             LazyLock::new(|| Arc::new(tokio::sync::RwLock::new(HashMap::new())));
 
@@ -256,33 +257,37 @@ impl FltkRenderer {
         let cached_image = { IMAGE_CACHE.read().await.get(&key).cloned() };
 
         let rgb_image = {
-            let (bytes, width, height) = if let Some((bytes, width, height)) = cached_image {
-                (bytes, width, height)
-            } else {
-                let image = match source {
-                    ImageSource::Bytes { bytes, .. } => {
-                        image::load_from_memory_with_format(&bytes, image::ImageFormat::WebP)?
-                    }
-                    ImageSource::Url(source) => image::load_from_memory_with_format(
-                        &reqwest::get(source).await?.bytes().await?,
-                        image::ImageFormat::WebP,
-                    )?,
+            let (bytes, width, height, depth) =
+                if let Some((bytes, width, height, depth)) = cached_image {
+                    (bytes, width, height, depth)
+                } else {
+                    let image = match source {
+                        ImageSource::Bytes { bytes, .. } => image::load_from_memory(&bytes)?,
+                        ImageSource::Url(source) => {
+                            image::load_from_memory(&reqwest::get(source).await?.bytes().await?)?
+                        }
+                    };
+                    let width = image.width();
+                    let height = image.height();
+                    let depth = match image.color() {
+                        image::ColorType::Rgba8
+                        | image::ColorType::Rgba16
+                        | image::ColorType::Rgba32F => enums::ColorDepth::Rgba8,
+                        _ => enums::ColorDepth::Rgb8,
+                    };
+                    let bytes = Arc::new(Bytes::from(image.into_bytes()));
+                    IMAGE_CACHE
+                        .write()
+                        .await
+                        .insert(key, (bytes.clone(), width, height, depth));
+                    (bytes, width, height, depth)
                 };
-                let width = image.width();
-                let height = image.height();
-                let bytes = Arc::new(Bytes::from(image.into_bytes()));
-                IMAGE_CACHE
-                    .write()
-                    .await
-                    .insert(key, (bytes.clone(), width, height));
-                (bytes, width, height)
-            };
 
             RgbImage::new(
                 &bytes,
                 width.try_into().unwrap(),
                 height.try_into().unwrap(),
-                enums::ColorDepth::Rgb8,
+                depth,
             )?
         };
 
