@@ -379,7 +379,18 @@ pub fn albums_page_content() -> Markup {
     html! {
         h1 sx-height=(36) { ("Albums") }
         div sx-dir="row" sx-overflow-x="wrap" sx-overflow-y="show" {
-            div hx-get=(PreEscaped(format!("/albums-list-start?limit=100&size={size}"))) {}
+            div
+                hx-get=(pre_escaped!("/albums-list-start?limit=100&size={size}"))
+                sx-dir="row"
+                sx-overflow-x="wrap"
+                sx-overflow-y="show"
+            {
+                @for _ in 0..100 {
+                    div sx-width=(size) sx-height=(size + 30) {
+                        img src=(public_img!("album.svg")) sx-width=(size) sx-height=(size);
+                    }
+                }
+            }
         }
     }
 }
