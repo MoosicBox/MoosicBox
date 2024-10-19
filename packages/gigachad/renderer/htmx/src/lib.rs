@@ -81,7 +81,6 @@ pub async fn catchall_endpoint(
     };
     let container = app
         .router
-        .clone()
         .navigate(&format!("{}{}", req.path(), query_string))
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to navigate: {e:?}")))?;
