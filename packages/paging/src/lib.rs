@@ -166,6 +166,18 @@ impl<T> Page<T> {
         }
     }
 
+    pub fn remaining(&self) -> Option<u32> {
+        match self {
+            Self::WithTotal {
+                total,
+                offset,
+                limit,
+                ..
+            } => Some(*total - *offset - *limit),
+            Self::WithHasMore { .. } => None,
+        }
+    }
+
     pub fn items(self) -> Vec<T> {
         match self {
             Self::WithTotal { items, .. } => items,
