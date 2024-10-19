@@ -101,6 +101,12 @@ impl LayoutPosition {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Route {
+    Get { route: String },
+    Post { route: String },
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ContainerElement {
     #[cfg(feature = "id")]
@@ -111,6 +117,7 @@ pub struct ContainerElement {
     pub overflow_y: LayoutOverflow,
     pub width: Option<Number>,
     pub height: Option<Number>,
+    pub route: Option<Route>,
     pub padding_left: Option<f32>,
     pub padding_right: Option<f32>,
     pub padding_top: Option<f32>,
@@ -203,7 +210,7 @@ pub enum Element {
 
 #[derive(Default)]
 struct Attrs {
-    values: Vec<(String, Box<dyn Display>)>,
+    values: Vec<(String, String)>,
 }
 
 impl Attrs {
@@ -241,13 +248,13 @@ impl Attrs {
         }
     }
 
-    fn add<K: Into<String>, V: Display + 'static>(&mut self, name: K, value: V) {
-        self.values.push((name.into(), Box::new(value)));
+    fn add<K: Into<String>, V: Display>(&mut self, name: K, value: V) {
+        self.values.push((name.into(), value.to_string()));
     }
 
-    fn add_opt<K: Into<String>, V: Display + 'static>(&mut self, name: K, value: Option<V>) {
+    fn add_opt<K: Into<String>, V: Display>(&mut self, name: K, value: Option<V>) {
         if let Some(value) = value {
-            self.values.push((name.into(), Box::new(value)));
+            self.values.push((name.into(), value.to_string()));
         }
     }
 }
@@ -255,6 +262,17 @@ impl Attrs {
 impl ContainerElement {
     fn attrs(&self, with_debug_attrs: bool) -> Attrs {
         let mut attrs = Attrs { values: vec![] };
+
+        if let Some(route) = &self.route {
+            match route {
+                Route::Get { route } => {
+                    attrs.add("hx-get", route);
+                }
+                Route::Post { route } => {
+                    attrs.add("hx-post", route);
+                }
+            }
+        }
 
         if self.direction == LayoutDirection::Row {
             attrs.add("sx-dir", "row");

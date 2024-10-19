@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use thiserror::Error;
 use tl::{Children, HTMLTag, Node, NodeHandle, ParseError, Parser, ParserOptions};
 
-use crate::{LayoutDirection, LayoutOverflow, Number};
+use crate::{LayoutDirection, LayoutOverflow, Number, Route};
 
 impl TryFrom<String> for crate::ContainerElement {
     type Error = ParseError;
@@ -70,6 +70,22 @@ fn get_direction(tag: &HTMLTag) -> LayoutDirection {
         Some("row") => LayoutDirection::Row,
         Some("col") => LayoutDirection::Column,
         _ => LayoutDirection::default(),
+    }
+}
+
+fn get_route(tag: &HTMLTag) -> Option<Route> {
+    #[allow(clippy::option_if_let_else)]
+    #[allow(clippy::manual_map)]
+    if let Some(get) = get_tag_attr_value(tag, "hx-get") {
+        Some(Route::Get {
+            route: get.to_string(),
+        })
+    } else if let Some(post) = get_tag_attr_value(tag, "hx-post") {
+        Some(Route::Post {
+            route: post.to_string(),
+        })
+    } else {
+        None
     }
 }
 
@@ -142,6 +158,7 @@ fn parse_element(
         elements: parse_top_children(node.children(), parser),
         width: get_number(tag, "sx-width").ok(),
         height: get_number(tag, "sx-height").ok(),
+        route: get_route(tag),
         ..Default::default()
     }
 }
