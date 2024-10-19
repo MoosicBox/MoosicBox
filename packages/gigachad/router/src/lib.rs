@@ -234,7 +234,7 @@ impl Router {
     /// # Panics
     ///
     /// Will panic if routes `RwLock` is poisoned.
-    pub async fn navigate(&mut self, path: &str) -> Result<ContainerElement, NavigateError> {
+    pub async fn navigate(&self, path: &str) -> Result<ContainerElement, NavigateError> {
         let req = RouteRequest::from_path(path);
         let handler = {
             self.routes
