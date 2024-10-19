@@ -29,7 +29,7 @@ default = ["format", "id"]
 
 fail-on-warnings = []
 
-# simd = ["gigachad_transformer/simd"]
+simd = ["gigachad_transformer/simd"]
 
 format = ["gigachad_transformer/format"]
 
