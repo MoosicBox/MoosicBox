@@ -44,6 +44,9 @@ enum Commands {
         #[arg(long)]
         features: Option<String>,
 
+        #[arg(long)]
+        skip_features: Option<String>,
+
         #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
         output: OutputType,
     },
@@ -62,6 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             chunked,
             spread,
             features: specific_features,
+            skip_features,
             output,
         } => {
             let path = PathBuf::from_str(&file)?;
@@ -72,6 +76,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let specific_features =
                 specific_features.map(|x| x.split(",").map(|x| x.to_string()).collect_vec());
+
+            let skip_features =
+                skip_features.map(|x| x.split(",").map(|x| x.to_string()).collect_vec());
 
             match output {
                 OutputType::Json => {
@@ -113,8 +120,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 OutputType::Raw => {
-                    let features =
-                        fetch_features(&value, offset, max, specific_features.as_deref());
+                    let features = fetch_features(
+                        &value,
+                        offset,
+                        max,
+                        specific_features.as_deref(),
+                        skip_features.as_deref(),
+                    );
                     if chunked.is_some() {
                         panic!("chunked arg is not supported for raw output");
                     }
@@ -161,6 +173,7 @@ fn process_configs(
             cargo: None,
             name: None,
             ci_steps: None,
+            skip_features: None,
         }]
     };
 
@@ -172,15 +185,21 @@ fn process_configs(
         .and_then(|x| x.as_str())
         .map(|x| x.to_string())
     {
-        let features = process_features(
-            fetch_features(&value, offset, max, specific_features),
-            conf.as_ref()
-                .and_then(|x| x.parallelization.as_ref().map(|x| x.chunked))
-                .or(chunked),
-            spread,
-        );
-
         for config in configs {
+            let features = fetch_features(
+                &value,
+                offset,
+                max,
+                specific_features,
+                config.skip_features.as_deref(),
+            );
+            let features = process_features(
+                features,
+                conf.as_ref()
+                    .and_then(|x| x.parallelization.as_ref().map(|x| x.chunked))
+                    .or(chunked),
+                spread,
+            );
             match &features {
                 FeaturesList::Chunked(x) => {
                     for features in x {
@@ -377,6 +396,7 @@ fn fetch_features(
     offset: Option<u16>,
     max: Option<u16>,
     specific_features: Option<&[String]>,
+    skip_features: Option<&[String]>,
 ) -> Vec<String> {
     if let Some(features) = value.get("features") {
         if let Some(features) = features.as_table() {
@@ -385,6 +405,7 @@ fn fetch_features(
             features
                 .keys()
                 .filter(|x| !specific_features.as_ref().is_some_and(|s| !s.contains(x)))
+                .filter(|x| !skip_features.as_ref().is_some_and(|s| s.contains(x)))
                 .skip(offset)
                 .take(
                     max.map(|x| std::cmp::min(feature_count, x as usize))
@@ -479,6 +500,7 @@ pub struct ClippierConfiguration {
     env: Option<HashMap<String, ClippierEnv>>,
     dependencies: Option<Vec<CommandFilteredByFeatures>>,
     os: String,
+    skip_features: Option<Vec<String>>,
     name: Option<String>,
 }
 
