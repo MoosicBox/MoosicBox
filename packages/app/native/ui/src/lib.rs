@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::branches_sharing_code)]
 
-use maud::{html, Markup};
+use maud::{html, Markup, PreEscaped};
 use moosicbox_app_native_image::image;
 use moosicbox_library_models::{ApiAlbum, ApiArtist, ApiLibraryAlbum, ApiLibraryArtist, ApiTrack};
 use moosicbox_menu_models::api::ApiAlbumVersion;
@@ -298,27 +298,28 @@ pub fn album(album: ApiAlbum, versions: &[ApiAlbumVersion]) -> Markup {
 pub fn albums_list_start(albums: &Page<ApiAlbum>, size: u16) -> Markup {
     static MAX_PARALLEL_REQUESTS: u32 = 6;
     static MIN_PAGE_THRESHOLD: u32 = 30;
+    let limit = albums.limit();
+    let offset = albums.offset() + limit;
     let remaining = if albums.has_more() {
         albums.remaining().map_or_else(
             || {
                 html! {
-                    div hx-get={"/albums-list-start?offset="(albums.offset() + albums.limit())"&limit=100&size="(size)} {}
+                    div hx-get=(PreEscaped(format!("/albums-list-start?offset={offset}&limit={limit}&size={size}"))) {}
                 }
             },
             |remaining| {
-                let offset = albums.offset() + albums.limit();
                 let limit = remaining / MAX_PARALLEL_REQUESTS;
                 let last = limit + (remaining % MAX_PARALLEL_REQUESTS);
 
                 html! {
                     @if limit < MIN_PAGE_THRESHOLD {
-                        div hx-get={"/albums-list?offset="(offset)"&limit="(remaining + offset)"&size="(size)} {}
+                        div hx-get=(PreEscaped(format!("/albums-list?offset={offset}&limit={remaining}&size={size}"))) {}
                     } @else {
                         @for i in 0..MAX_PARALLEL_REQUESTS {
                             @if i == MAX_PARALLEL_REQUESTS - 1 {
-                                div hx-get={"/albums-list?offset="(offset + i * limit)"&limit="(last)"&size="(size)} {}
+                                div hx-get=(PreEscaped(format!("/albums-list?offset={}&limit={last}&size={size}", offset + i * limit))) {}
                             } @else {
-                                div hx-get={"/albums-list?offset="(offset + i * limit)"&limit="(limit)"&size="(size)} {}
+                                div hx-get=(PreEscaped(format!("/albums-list?offset={}&limit={limit}&size={size}", offset + i * limit))) {}
                             }
                         }
                     }
@@ -372,7 +373,7 @@ pub fn albums_page_content() -> Markup {
     html! {
         h1 { ("Albums") }
         div sx-dir="row" sx-overflow-x="wrap" sx-overflow-y="show" {
-            div hx-get={"/albums-list-start?limit=100&size="(size)} {}
+            div hx-get=(PreEscaped(format!("/albums-list-start?limit=100&size={size}"))) {}
         }
     }
 }
