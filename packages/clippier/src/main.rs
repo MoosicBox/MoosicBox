@@ -472,6 +472,7 @@ impl<T> Default for VecOrItem<T> {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct ClippierConfiguration {
     ci_steps: Option<VecOrItem<CommandFilteredByFeatures>>,
     cargo: Option<VecOrItem<String>>,
@@ -482,11 +483,13 @@ pub struct ClippierConfiguration {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct ParallelizationConfig {
     chunked: u16,
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct ClippierConf {
     ci_steps: Option<VecOrItem<CommandFilteredByFeatures>>,
     cargo: Option<VecOrItem<String>>,

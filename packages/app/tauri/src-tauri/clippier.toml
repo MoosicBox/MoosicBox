@@ -1,7 +1,7 @@
 [parallelization]
 chunked = 3
 
-[[ci_steps]]
+[[ci-steps]]
 command = '''
 ./free_disk_space.sh
 mkdir packages/app/tauri/dist
