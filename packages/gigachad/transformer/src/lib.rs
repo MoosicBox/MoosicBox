@@ -160,6 +160,10 @@ impl ContainerElement {
                 .find_map(|x| x.find_element_by_id_mut(id))
         }
     }
+
+    pub fn replace_with(&mut self, replacement: Self) {
+        *self = replacement;
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
