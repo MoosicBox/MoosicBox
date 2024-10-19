@@ -3828,9 +3828,7 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "moosicbox_task",
- "pretty_assertions",
  "qstring",
- "test-log",
  "thiserror",
  "tokio",
 ]

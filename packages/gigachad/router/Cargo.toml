@@ -24,10 +24,6 @@ qstring   = { workspace = true }
 thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
 
-[dev-dependencies]
-pretty_assertions = { workspace = true }
-test-log          = { workspace = true }
-
 [features]
 default = ["format", "id"]
 
